@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", "sans-serif";
+  --font-display: "Space Grotesk", "sans-serif";
+  --color-neo-bg: #f5f0e8;
+  --color-neo-primary: #1a1a1a;
+  --color-neo-yellow: #ffcc00;
+  --color-neo-red: #e63b2e;
+  --color-neo-blue: #0055ff;
+}
+
+body {
+  background-color: var(--color-neo-bg);
+  color: var(--color-neo-primary);
+  font-family: var(--font-sans);
+}
+
+.neo-shadow {
+  box-shadow: 6px 6px 0px 0px var(--color-neo-primary);
+}
+
+.neo-shadow-sm {
+  box-shadow: 4px 4px 0px 0px var(--color-neo-primary);
+}
+
+.neo-shadow-active {
+  box-shadow: 2px 2px 0px 0px var(--color-neo-primary);
+  transform: translate(4px, 4px);
+}
+
+.neo-border {
+  border: 3px solid var(--color-neo-primary);
+}
