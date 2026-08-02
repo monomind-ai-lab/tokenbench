@@ -6,10 +6,6 @@
 
 Acme Toolkit is a fast, accessible set of building blocks. Use the toolbar on the right to edit any block, drag the list to reorder, and export clean Markdown for your README.
 
-<p align="center">
-  <img alt="image" src="[https://placeholdpicsum.dev/photo/600/400](https://github.com/telldaren/ai-plan-calculator/blob/main/ai-plan-cal.png)" />
-</p>
-
 ## ✨ Key Features
 
 ### 1. 🏢 Comprehensive Multi-Provider Tiers
