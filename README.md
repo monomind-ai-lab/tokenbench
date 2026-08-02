@@ -1,10 +1,20 @@
-<p align="center">
-  <img alt="header" src="https://shieldcn.dev/header/gradient.svg?title=AI+Plan+Calculator&amp;subtitle=Choose+Subscription+Plans+based+on+API+Equivalent+Value&amp;mode=dark" />
-</p>
+# MonoMind AI Lab - Subscription Value Calculator
 
-## Overview
+> A financial intelligence tool for evaluating AI model subscriptions against pay-as-you-go API volume rates.
 
-Acme Toolkit is a fast, accessible set of building blocks. Use the toolbar on the right to edit any block, drag the list to reorder, and export clean Markdown for your README.
+![MonoMind AI Lab App Screenshot](./src/assets/images/app_screenshot_1785692027300.jpg)
+
+---
+
+## 💡 Overview
+
+**MonoMind AI Lab - Subscription Value Calculator** helps developer teams, researchers, and AI power users answer a critical financial question:
+
+* **"When does paying for a flat-rate AI subscription (e.g., Claude Pro/Team, ChatGPT Plus/Business, Z.AI Team) make financial sense compared to paying per token via OpenRouter API volume rates?"**
+
+The app fetches real-time OpenRouter model pricing, applies customized workload model weights, and dynamically calculates the exact breakeven point and financial savings.
+
+---
 
 ## ✨ Key Features
 

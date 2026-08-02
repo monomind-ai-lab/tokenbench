@@ -52,6 +52,33 @@ export default function App() {
           
           // Add models with correct provider IDs & market pricing
           const mockModels: OpenRouterModel[] = [
+            // Opencode Go models (https://opencode.ai/zen/go/v1/models)
+            { id: 'opencode-go/minimax-m3', name: 'MiniMax M3', pricing: { prompt: '0.0000008', completion: '0.0000024' }, context_length: 128000 },
+            { id: 'opencode-go/minimax-m2.7', name: 'MiniMax M2.7', pricing: { prompt: '0.0000005', completion: '0.0000015' }, context_length: 128000 },
+            { id: 'opencode-go/minimax-m2.5', name: 'MiniMax M2.5', pricing: { prompt: '0.0000003', completion: '0.000001' }, context_length: 128000 },
+            { id: 'opencode-go/kimi-k3', name: 'Kimi K3', pricing: { prompt: '0.0000012', completion: '0.0000036' }, context_length: 128000 },
+            { id: 'opencode-go/kimi-k2.7-code', name: 'Kimi K2.7 Code', pricing: { prompt: '0.000001', completion: '0.000003' }, context_length: 128000 },
+            { id: 'opencode-go/kimi-k2.6', name: 'Kimi K2.6', pricing: { prompt: '0.0000008', completion: '0.0000024' }, context_length: 128000 },
+            { id: 'opencode-go/kimi-k2.5', name: 'Kimi K2.5', pricing: { prompt: '0.0000005', completion: '0.0000015' }, context_length: 128000 },
+            { id: 'opencode-go/glm-5.2', name: 'GLM-5.2', pricing: { prompt: '0.000001', completion: '0.000002' }, context_length: 128000 },
+            { id: 'opencode-go/glm-5.1', name: 'GLM-5.1', pricing: { prompt: '0.000001', completion: '0.000002' }, context_length: 128000 },
+            { id: 'opencode-go/glm-5', name: 'GLM-5', pricing: { prompt: '0.0000008', completion: '0.0000016' }, context_length: 128000 },
+            { id: 'opencode-go/deepseek-v4-pro', name: 'DeepSeek V4 Pro', pricing: { prompt: '0.0000005', completion: '0.000002' }, context_length: 128000 },
+            { id: 'opencode-go/deepseek-v4-flash', name: 'DeepSeek V4 Flash', pricing: { prompt: '0.0000001', completion: '0.0000003' }, context_length: 128000 },
+            { id: 'opencode-go/qwen3.7-max', name: 'Qwen3.7 Max', pricing: { prompt: '0.0000016', completion: '0.0000064' }, context_length: 128000 },
+            { id: 'opencode-go/qwen3.7-plus', name: 'Qwen3.7 Plus', pricing: { prompt: '0.0000008', completion: '0.0000024' }, context_length: 128000 },
+            { id: 'opencode-go/qwen3.6-plus', name: 'Qwen3.6 Plus', pricing: { prompt: '0.0000005', completion: '0.0000015' }, context_length: 128000 },
+            { id: 'opencode-go/qwen3.5-plus', name: 'Qwen3.5 Plus', pricing: { prompt: '0.0000003', completion: '0.0000009' }, context_length: 128000 },
+            { id: 'opencode-go/mimo-v2-pro', name: 'MiMo-V2-Pro', pricing: { prompt: '0.000001', completion: '0.000003' }, context_length: 128000 },
+            { id: 'opencode-go/mimo-v2-omni', name: 'MiMo-V2-Omni', pricing: { prompt: '0.0000008', completion: '0.0000024' }, context_length: 128000 },
+            { id: 'opencode-go/mimo-v2.5-pro', name: 'MiMo-V2.5-Pro', pricing: { prompt: '0.000001', completion: '0.000003' }, context_length: 128000 },
+            { id: 'opencode-go/mimo-v2.5', name: 'MiMo-V2.5', pricing: { prompt: '0.0000006', completion: '0.0000018' }, context_length: 128000 },
+            { id: 'opencode-go/hy3', name: 'Hy3', pricing: { prompt: '0.000001', completion: '0.000003' }, context_length: 128000 },
+            { id: 'opencode-go/hy3-preview', name: 'Hy3-Preview', pricing: { prompt: '0.0000008', completion: '0.0000024' }, context_length: 128000 },
+            { id: 'opencode-go/gpt-5.6-luna', name: 'GPT 5.6 Luna', pricing: { prompt: '0.0000025', completion: '0.000010' }, context_length: 128000 },
+            { id: 'opencode-go/grok-4.5', name: 'Grok 4.5', pricing: { prompt: '0.000003', completion: '0.000012' }, context_length: 128000 },
+
+            // Native provider standalone models
             { id: 'x-ai/grok-4.5', name: 'Grok 4.5', pricing: { prompt: '0.000003', completion: '0.000012' }, context_length: 128000 },
             { id: 'openai/gpt-5.6-luna', name: 'GPT 5.6 Luna', pricing: { prompt: '0.0000025', completion: '0.000010' }, context_length: 128000 },
             { id: 'zhipu/glm-5.2', name: 'GLM-5.2', pricing: { prompt: '0.000001', completion: '0.000002' }, context_length: 128000 },
@@ -86,8 +113,32 @@ export default function App() {
             if (m && m.id) modelMap.set(m.id, m);
           });
 
+          // Fetch live Opencode Go models from https://opencode.ai/zen/go/v1/models
+          fetch('https://opencode.ai/zen/go/v1/models')
+            .then(res => res.json())
+            .then(goData => {
+              if (goData && Array.isArray(goData.data)) {
+                goData.data.forEach((gm: { id: string }) => {
+                  if (gm && gm.id) {
+                    const fullId = `opencode-go/${gm.id}`;
+                    if (!modelMap.has(fullId)) {
+                      modelMap.set(fullId, {
+                        id: fullId,
+                        name: gm.id,
+                        pricing: { prompt: '0.000001', completion: '0.000003' },
+                        context_length: 128000
+                      });
+                    }
+                  }
+                });
+                setModels(Array.from(modelMap.values()));
+              }
+            })
+            .catch(() => {
+              // Silently fallback to mockModels if offline or CORS blocked
+            });
+
           setModels(Array.from(modelMap.values()));
-          setLoading(false);
           setLoading(false);
         } catch (e) {
           console.error("Failed to parse models:", e);
@@ -115,40 +166,15 @@ export default function App() {
     }
   }, [selectedPlan]);
 
-  const opencodeModelIds = useMemo(() => [
-    'x-ai/grok-4.5',
-    'openai/gpt-5.6-luna',
-    'zhipu/glm-5.2',
-    'zhipu/glm-5.1',
-    'moonshotai/kimi-k3',
-    'moonshotai/kimi-k2.7-code',
-    'moonshotai/kimi-k2.6',
-    'mimo/mimo-v2.5-pro',
-    'mimo/mimo-v2.5',
-    'qwen/qwen3.7-max',
-    'qwen/qwen3.7-plus',
-    'qwen/qwen3.6-plus',
-    'minimax/minimax-m3',
-    'minimax/minimax-m2.7',
-    'deepseek/deepseek-v4-pro',
-    'deepseek/deepseek-v4-flash',
-    'tencent/hy3',
-  ], []);
-
   const providerModels = useMemo(() => {
-    let filtered: OpenRouterModel[] = [];
-    if (selectedProvider.id === 'opencode-go') {
-      filtered = models.filter(m => opencodeModelIds.includes(m.id));
-    } else {
-      filtered = models.filter(m => m.id.startsWith(selectedProvider.prefix));
-    }
+    const filtered = models.filter(m => m.id.startsWith(selectedProvider.prefix));
     const seen = new Set<string>();
     return filtered.filter(m => {
       if (!m || !m.id || seen.has(m.id)) return false;
       seen.add(m.id);
       return true;
     });
-  }, [models, selectedProvider, opencodeModelIds]);
+  }, [models, selectedProvider]);
 
   // When provider changes, select the first 3 models by default (or all if < 3)
   useEffect(() => {
