@@ -32,7 +32,7 @@ export function AppShell({ children, theme, language, onThemeToggle, onLanguageC
           <nav className="primary-nav" aria-label="Primary navigation"><a href="#calculator" aria-current="page">Calculator</a><a href="#comparison">Comparison</a></nav>
           <div className="header-actions">
             <label className="language-control"><span className="sr-only">Language</span><select aria-label="Language" value={language} onChange={(event) => onLanguageChange(event.target.value)}>{LANGUAGES.map((item) => <option value={item.code} key={item.code}>{item.native}</option>)}</select></label>
-            <button type="button" className="icon-button" aria-label="Toggle dark theme" aria-pressed={theme === 'dark'} onClick={onThemeToggle}>{theme === 'dark' ? '☀' : '☾'}</button>
+            <button type="button" className="icon-button" aria-label={theme === 'dark' ? 'Toggle light theme' : 'Toggle dark theme'} aria-pressed={theme === 'dark'} onClick={onThemeToggle}>{theme === 'dark' ? '☀' : '☾'}</button>
           </div>
         </div>
       </header>

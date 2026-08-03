@@ -56,6 +56,7 @@ describe('responsive calculator app shell', () => {
     expect(usage).toHaveValue(4200000);
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(localStorage.getItem('ai-cost-engine:theme')).toBe('dark');
+    expect(screen.getByRole('button', { name: /Toggle light theme/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('combobox', { name: /Language/i })).toHaveValue('zh-TW');
   });
 
