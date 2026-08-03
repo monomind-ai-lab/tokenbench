@@ -158,21 +158,30 @@ async function refreshManual(providerId: string, env: IngestEnv): Promise<void> 
 }
 
 export default {
-  async scheduled(controller: { cron: string }, env: IngestEnv, ctx: { waitUntil(promise: Promise<unknown>): void }) {
+  async scheduled(controller: { cron?: string }, env: IngestEnv, ctx: { waitUntil(promise: Promise<unknown>): void }) {
     const guarded = (sourceId: string, operation: Promise<void>) => operation.catch(async (error) => recordRefreshFailure(env.CATALOG_DB, sourceId, error, new Date().toISOString()));
-    const guardedAutomatedRefresh = (sourceId: string, url: string, parse: (payload: unknown, observedAt: string) => ParsedSource) => {
+    const guardedAutomatedRefresh = (sourceId: string, url: string, parse: (payload: unknown, observedAt: string) => ParsedSource): Promise<void> => {
       if (!isAutomatedSourceAllowlisted(env, sourceId)) {
-        ctx.waitUntil(recordRefreshFailure(env.CATALOG_DB, sourceId, new Error(`${sourceId} is not allowlisted for automated refresh`), new Date().toISOString()));
-        return;
+        return recordRefreshFailure(env.CATALOG_DB, sourceId, new Error(`${sourceId} is not allowlisted for automated refresh`), new Date().toISOString());
       }
-      ctx.waitUntil(guarded(sourceId, refreshSource(url, sourceId, parse, env)));
+      return guarded(sourceId, refreshSource(url, sourceId, parse, env));
     };
-    if (controller.cron === '0 */6 * * *') guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
-    else if (controller.cron === '30 */6 * * *') guardedAutomatedRefresh('opencode-zen', OPENCODE_URL, parseOpenCodeModels);
-    else {
+    const refreshRotatingManualSource = () => {
       const hour = new Date().getUTCHours();
       const providerId = MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length];
-      ctx.waitUntil(guarded(`${providerId}-subscription`, refreshManual(providerId, env)));
+      return guarded(`${providerId}-subscription`, refreshManual(providerId, env));
+    };
+    if (controller.cron === '0 */6 * * *') ctx.waitUntil(guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels));
+    else if (controller.cron === '30 */6 * * *') ctx.waitUntil(guardedAutomatedRefresh('opencode-zen', OPENCODE_URL, parseOpenCodeModels));
+    else if (controller.cron === '0 */3 * * *') ctx.waitUntil(refreshRotatingManualSource());
+    else {
+      // Cloudflare's dashboard test event omits the configured cron expression.
+      // Run sources serially so every revision copies the one published immediately before it.
+      ctx.waitUntil((async () => {
+        await guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
+        await guardedAutomatedRefresh('opencode-zen', OPENCODE_URL, parseOpenCodeModels);
+        await refreshRotatingManualSource();
+      })());
     }
   },
 };

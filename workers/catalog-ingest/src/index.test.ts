@@ -274,4 +274,36 @@ describe('catalog ingestion', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('refreshes both official catalogs for a dashboard test event with no cron expression', async () => {
+    const database = createStatefulD1();
+    const originalFetch = globalThis.fetch;
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => ({
+      ok: true,
+      status: 200,
+      json: async () => String(url).includes('openrouter.ai')
+        ? openRouterPayload
+        : { data: [{ id: 'opencode/zen', name: 'Zen', pricing: { input: '0.000001', output: '0.000002' } }] },
+    }));
+    globalThis.fetch = fetchImpl as unknown as typeof fetch;
+    let work: Promise<unknown> | undefined;
+    try {
+      await worker.scheduled({}, {
+        CATALOG_DB: database.db,
+        SOURCE_SNAPSHOTS: { put: async () => undefined },
+        AUTOMATED_SOURCE_IDS: 'openrouter-models,opencode-zen',
+      }, { waitUntil: (promise) => { work = promise; } });
+      await work;
+      expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
+        'https://openrouter.ai/api/v1/models',
+        'https://opencode.ai/zen/v1/models',
+      ]);
+      expect(database.state.rows).toEqual(expect.arrayContaining([
+        expect.stringMatching(/:source:openrouter-models$/),
+        expect.stringMatching(/:source:opencode-zen$/),
+      ]));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
