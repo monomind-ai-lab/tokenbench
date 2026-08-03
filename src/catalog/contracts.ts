@@ -48,7 +48,7 @@ export interface SourceProvenance {
   providerId: string;
   sourceUrl: string;
   observedAt: string;
-  sourceKind: 'official_json' | 'manual_manifest';
+  sourceKind: 'official_json' | 'official_html' | 'manual_manifest';
   confidence: 'official' | 'manual_verified';
   snapshotKey?: string;
   contentHash?: string;

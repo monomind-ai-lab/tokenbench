@@ -36,6 +36,13 @@ describe('catalog validation', () => {
     })).toMatchObject({ plans: [{ billingCycle: 'monthly', supportedModelIds: ['gpt-4o'] }] });
   });
 
+  it('accepts official HTML pricing evidence', () => {
+    expect(validateCatalogResponse({
+      ...validCatalog,
+      provenance: [{ ...validCatalog.provenance[0], sourceKind: 'official_html', evidenceLocator: 'Models pricing table' }],
+    }).provenance[0].sourceKind).toBe('official_html');
+  });
+
   it('rejects duplicate stable offer IDs', () => {
     expect(() => validateCatalogResponse({ ...validCatalog, plans: [...validCatalog.plans, validCatalog.plans[0]] }))
       .toThrow('Duplicate plan id: openai:plus');

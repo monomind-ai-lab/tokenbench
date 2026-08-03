@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import worker, { buildManualSubscriptionSource, parseOpenCodeModels, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
+import worker, { buildManualSubscriptionSource, parseOpenCodeCatalog, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
 
 interface Statement { sql: string; values: unknown[] }
 interface RefreshState { lastSuccessAt: string | null; lastRevision: string | null; lastError: string | null }
@@ -79,6 +79,12 @@ function stateSnapshot(database: ReturnType<typeof createStatefulD1>) {
 }
 
 const openRouterPayload = { data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001' } }] };
+const openCodeModelsPayload = { data: [{ id: 'opencode/zen', object: 'model', owned_by: 'opencode' }] };
+const openCodePricingHtml = `
+  <table><tr><th>MODEL</th><th>MODEL ID</th><th>ENDPOINT</th><th>AI SDK PACKAGE</th></tr>
+    <tr><td>Zen</td><td>opencode/zen</td><td>https://opencode.ai/zen/v1/responses</td><td>@ai-sdk/openai</td></tr></table>
+  <table><tr><th>MODEL</th><th>INPUT</th><th>OUTPUT</th><th>CACHED READ</th><th>CACHED WRITE</th></tr>
+    <tr><td>Zen</td><td>$1.00</td><td>$2.00</td><td>$0.20</td><td>-</td></tr></table>`;
 
 async function runScheduledOpenRouter({
   database,
@@ -106,25 +112,35 @@ async function runScheduledOpenRouter({
 
 describe('catalog ingestion', () => {
   it('parses official OpenRouter pricing into integer micro-dollars per million', () => {
-    expect(parseOpenRouterModels({ data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001', input_cache_read: '0.00000125' } }] }, '2026-08-03T00:00:00.000Z'))
-      .toMatchObject({ modelOffers: [{ id: 'openai:openai/gpt-4o:openrouter', inputMicroDollarsPerMillion: 2_500_000, cachedInputMicroDollarsPerMillion: 1_250_000, outputMicroDollarsPerMillion: 10_000_000 }] });
+    expect(parseOpenRouterModels({ data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', context_length: 128_000, top_provider: { max_completion_tokens: 16_000 }, pricing: { prompt: '0.0000025', completion: '0.00001', input_cache_read: '0.00000125' } }] }, '2026-08-03T00:00:00.000Z'))
+      .toMatchObject({ modelOffers: [{ id: 'openai:openai/gpt-4o:openrouter', inputMicroDollarsPerMillion: 2_500_000, cachedInputMicroDollarsPerMillion: 1_250_000, outputMicroDollarsPerMillion: 10_000_000, contextWindowTokens: 128_000, maxOutputTokens: 16_000, availability: 'available' }] });
   });
 
   it('rejects malformed official adapter payloads', () => {
-    expect(() => parseOpenCodeModels({ data: [{ id: 'missing-prices', name: 'Missing prices' }] }, '2026-08-03T00:00:00.000Z'))
-      .toThrow('OpenCode model pricing is required');
+    expect(() => parseOpenCodeCatalog({ data: [{ object: 'model' }] }, openCodePricingHtml, '2026-08-03T00:00:00.000Z'))
+      .toThrow('OpenCode model id is required');
   });
 
   it('uses the Zen pay-as-you-go catalog instead of the separate OpenCode Go subscription route', () => {
-    expect(parseOpenCodeModels({ data: [{ id: 'opencode/zen', name: 'Zen', pricing: { input: '0.000001', output: '0.000002' } }] }, '2026-08-03T00:00:00.000Z').source.sourceUrl)
-      .toBe('https://opencode.ai/zen/v1/models');
+    expect(parseOpenCodeCatalog(openCodeModelsPayload, openCodePricingHtml, '2026-08-03T00:00:00.000Z'))
+      .toMatchObject({
+        source: { sourceUrl: 'https://opencode.ai/docs/zen/', sourceKind: 'official_html' },
+        modelOffers: [{ inputMicroDollarsPerMillion: 1_000_000, cachedInputMicroDollarsPerMillion: 200_000, outputMicroDollarsPerMillion: 2_000_000 }],
+      });
   });
 
   it('rejects zero-offer upstream payloads so they cannot replace a last-known-good revision', () => {
     expect(() => parseOpenRouterModels({ data: [] }, '2026-08-03T00:00:00.000Z'))
       .toThrow('OpenRouter payload must contain at least one model offer');
-    expect(() => parseOpenCodeModels({ data: [] }, '2026-08-03T00:00:00.000Z'))
-      .toThrow('OpenCode payload must contain at least one model offer');
+    expect(() => parseOpenCodeCatalog({ data: [] }, openCodePricingHtml, '2026-08-03T00:00:00.000Z'))
+      .toThrow('OpenCode pricing tables contain no exact available offers');
+  });
+
+  it('excludes OpenRouter meta-routes whose official price is the -1 sentinel', () => {
+    expect(parseOpenRouterModels({ data: [
+      ...openRouterPayload.data,
+      { id: 'openrouter/auto', name: 'Auto Router', pricing: { prompt: '-1', completion: '-1' } },
+    ] }, '2026-08-03T00:00:00.000Z').modelOffers).toHaveLength(1);
   });
 
   it('accepts equivalent official decimal price strings with trailing zero precision', () => {
@@ -312,13 +328,15 @@ describe('catalog ingestion', () => {
   it('refreshes both official catalogs for a dashboard test event with no cron expression', async () => {
     const database = createStatefulD1();
     const originalFetch = globalThis.fetch;
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => ({
-      ok: true,
-      status: 200,
-      json: async () => String(url).includes('openrouter.ai')
-        ? openRouterPayload
-        : { data: [{ id: 'opencode/zen', name: 'Zen', pricing: { input: '0.000001', output: '0.000002' } }] },
-    }));
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const sourceUrl = String(url);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => sourceUrl.includes('openrouter.ai') ? openRouterPayload : openCodeModelsPayload,
+        text: async () => openCodePricingHtml,
+      };
+    });
     globalThis.fetch = fetchImpl as unknown as typeof fetch;
     let work: Promise<unknown> | undefined;
     try {
@@ -331,6 +349,7 @@ describe('catalog ingestion', () => {
       expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
         'https://openrouter.ai/api/v1/models',
         'https://opencode.ai/zen/v1/models',
+        'https://opencode.ai/docs/zen/',
       ]);
       expect(database.state.rows).toEqual(expect.arrayContaining([
         expect.stringMatching(/:source:openrouter-models$/),

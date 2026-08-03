@@ -93,7 +93,7 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     for (const key of ['id', 'providerId'] as const) requireString(source[key], `${name}.${key}`);
     requireFiniteIsoTimestamp(source.observedAt, `${name}.observedAt`);
     requireUrl(source.sourceUrl, `${name}.sourceUrl`);
-    if (!['official_json', 'manual_manifest'].includes(source.sourceKind)) fail(`${name}.sourceKind is invalid`);
+    if (!['official_json', 'official_html', 'manual_manifest'].includes(source.sourceKind)) fail(`${name}.sourceKind is invalid`);
     if (!['official', 'manual_verified'].includes(source.confidence)) fail(`${name}.confidence is invalid`);
     for (const key of ['contentHash', 'parserVersion', 'evidenceLocator'] as const) validateOptionalString(source[key], `${name}.${key}`);
     if (source.reviewStatus !== undefined && !['verified', 'needs_review', 'rejected'].includes(source.reviewStatus)) fail(`${name}.reviewStatus is invalid`);
