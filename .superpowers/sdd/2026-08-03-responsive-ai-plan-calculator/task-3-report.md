@@ -54,3 +54,22 @@ npm run build                   Vite production build passed
 npx wrangler deploy --dry-run  Worker bundle and provisioned D1/R2 bindings validated; no deployment
 git diff --check                passed
 ```
+
+## Luna re-review test-harness closure (Task dcdb935f220e)
+
+- Replaced SQL-collecting worker fakes with a genuinely stateful D1 transaction harness that applies every publication statement to a staged clone and commits only after the full batch completes. It injects a mid-batch D1 failure and proves no pending candidate revision or candidate rows leak into the active state; the prior active revision and prior refresh success/revision are retained while scheduled error recording adds the failure reason.
+- Scheduled regressions now exercise malformed JSON/HTML, changed schema, duplicate offer IDs, AbortController timeout, R2 snapshot failure, and D1 publication failure against that same state model. The R2 case specifically runs through `scheduled`, proving its error is recorded rather than relying on a direct publication call.
+- Browser regressions retain all five width checks and now assert actual computed `3px solid` focus outlines after keyboard Tab reaches provider, plan, model, number, and range controls. They also verify a visible, focusable evidence link exposes an HTTPS destination with safe new-tab attributes.
+
+### Re-review validation
+
+```text
+npm test                        9 files, 59 tests passed with clean output
+npm run test:browser            13 local-Chrome checks passed
+npm run lint                    tsc --noEmit passed
+npm run build                   Vite production build passed
+rtk npx wrangler deploy --dry-run --config workers/catalog-ingest/wrangler.toml
+                                Run from repository root; Worker bundle plus `CATALOG_DB`, `SOURCE_SNAPSHOTS`,
+                                and `AUTOMATED_SOURCE_IDS="openrouter-models,opencode-zen"` validated; no deployment
+git diff --check                passed
+```

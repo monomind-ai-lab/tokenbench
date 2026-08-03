@@ -26,9 +26,11 @@ async function tabTo(page: Page, selector: string) {
     await page.keyboard.press('Tab');
     const focused = await page.evaluate((target) => {
       const element = document.activeElement as HTMLElement | null;
-      return Boolean(element?.matches(target) && element.matches(':focus-visible'));
+      if (!element?.matches(target) || !element.matches(':focus-visible')) return null;
+      const style = getComputedStyle(element);
+      return { outlineWidth: style.outlineWidth, outlineStyle: style.outlineStyle, outlineColor: style.outlineColor };
     }, selector);
-    if (focused) return;
+    if (focused) return focused;
   }
   throw new Error(`Tab did not reach visible focus for ${selector}`);
 }
@@ -73,13 +75,25 @@ test.describe('responsive calculator browser harness', () => {
       await page.setViewportSize({ width: viewport.width, height: 1000 });
       await openCalculator(page);
       await page.locator('body').click({ position: { x: 2, y: 2 } });
-      await tabTo(page, 'input[name="provider"]');
-      await tabTo(page, 'input[name="plan"]');
-      await tabTo(page, 'input[type="checkbox"]');
-      await tabTo(page, '#monthly-tokens');
-      await tabTo(page, 'input[type="range"]');
+      for (const selector of ['input[name="provider"]', 'input[name="plan"]', 'input[type="checkbox"]', '#monthly-tokens', 'input[type="range"]']) {
+        expect(await tabTo(page, selector)).toEqual(expect.objectContaining({ outlineWidth: '3px', outlineStyle: 'solid' }));
+      }
     });
   }
+
+  test('renders usable source evidence links for published offers', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await openCalculator(page);
+    const evidenceLinks = page.getByRole('link', { name: /View evidence for/i });
+    expect(await evidenceLinks.count()).toBeGreaterThan(0);
+    const first = evidenceLinks.first();
+    await expect(first).toBeVisible();
+    await expect(first).toHaveAttribute('href', /^https:\/\//);
+    await expect(first).toHaveAttribute('target', '_blank');
+    await expect(first).toHaveAttribute('rel', 'noreferrer');
+    await first.focus();
+    await expect(first).toBeFocused();
+  });
 
   test('persists dark theme and applies the selected language without changing the catalog controls', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });

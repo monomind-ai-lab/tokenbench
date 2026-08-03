@@ -1,6 +1,104 @@
 import { describe, expect, it, vi } from 'vitest';
 import worker, { buildManualSubscriptionSource, parseOpenCodeModels, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
 
+interface Statement { sql: string; values: unknown[] }
+interface RefreshState { lastSuccessAt: string | null; lastRevision: string | null; lastError: string | null }
+
+function createStatefulD1(options: { failAfterStatement?: number } = {}) {
+  const state = {
+    activeRevision: 'rev-known-good',
+    revisions: { 'rev-known-good': 'published' as const } as Record<string, 'published' | 'pending' | 'superseded'>,
+    rows: ['rev-known-good:seed'],
+    refreshState: {
+      'openrouter-models': { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: null },
+    } as Record<string, RefreshState>,
+    batchCalls: 0,
+  };
+
+  const apply = (draft: typeof state, statement: Statement) => {
+    const { sql, values } = statement;
+    if (sql.startsWith('INSERT INTO catalog_revisions')) {
+      draft.revisions[String(values[0])] = 'pending';
+    } else if (sql.includes('INSERT INTO source_records') && sql.includes('VALUES')) {
+      draft.rows.push(`${values[0]}:source:${values[1]}`);
+    } else if (sql.includes('INSERT INTO plan_offers') && sql.includes('VALUES')) {
+      draft.rows.push(`${values[0]}:plan:${values[1]}`);
+    } else if (sql.includes('INSERT INTO model_offers') && sql.includes('VALUES')) {
+      draft.rows.push(`${values[0]}:model:${values[1]}`);
+    } else if (sql.includes("UPDATE catalog_revisions SET publication_state = 'superseded'")) {
+      Object.keys(draft.revisions).forEach((revision) => {
+        if (draft.revisions[revision] === 'published') draft.revisions[revision] = 'superseded';
+      });
+    } else if (sql.includes("UPDATE catalog_revisions SET publication_state = 'published'")) {
+      draft.revisions[String(values[0])] = 'published';
+    } else if (sql.includes('catalog_publication_state')) {
+      draft.activeRevision = String(values[0]);
+    } else if (sql.includes('source_refresh_state')) {
+      const sourceId = String(values[0]);
+      const refresh = draft.refreshState[sourceId] ?? { lastSuccessAt: null, lastRevision: null, lastError: null };
+      if (sql.includes('last_error = excluded.last_error')) {
+        refresh.lastError = String(values[1]);
+      } else {
+        refresh.lastSuccessAt = String(values[1]);
+        refresh.lastRevision = String(values[2]);
+        refresh.lastError = null;
+      }
+      draft.refreshState[sourceId] = refresh;
+    }
+  };
+
+  return {
+    state,
+    db: {
+      prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; },
+      async batch(statements: unknown[]) {
+        state.batchCalls += 1;
+        const draft = structuredClone(state);
+        for (const [index, statement] of (statements as Statement[]).entries()) {
+          apply(draft, statement);
+          if (options.failAfterStatement === index + 1) throw new Error('D1 transaction rolled back');
+        }
+        Object.assign(state, draft);
+      },
+    },
+  };
+}
+
+function stateSnapshot(database: ReturnType<typeof createStatefulD1>) {
+  return {
+    activeRevision: database.state.activeRevision,
+    pendingRevisionIds: Object.entries(database.state.revisions).filter(([, publicationState]) => publicationState === 'pending').map(([revision]) => revision),
+    candidateRows: database.state.rows.filter((row) => row.startsWith('rev_')),
+    refreshState: database.state.refreshState['openrouter-models'],
+  };
+}
+
+const openRouterPayload = { data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001' } }] };
+
+async function runScheduledOpenRouter({
+  database,
+  json = async () => openRouterPayload,
+  put = async () => undefined,
+}: {
+  database: ReturnType<typeof createStatefulD1>;
+  json?: () => Promise<unknown>;
+  put?: () => Promise<unknown>;
+}) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => ({ ok: true, status: 200, json })) as unknown as typeof fetch;
+  let work: Promise<unknown> | undefined;
+  try {
+    await worker.scheduled(
+      { cron: '0 */6 * * *' },
+      { CATALOG_DB: database.db, SOURCE_SNAPSHOTS: { put }, AUTOMATED_SOURCE_IDS: 'openrouter-models' },
+      { waitUntil: (promise) => { work = promise; } },
+    );
+    await work;
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
 describe('catalog ingestion', () => {
   it('parses official OpenRouter pricing into integer micro-dollars per million', () => {
     expect(parseOpenRouterModels({ data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001', input_cache_read: '0.00000125' } }] }, '2026-08-03T00:00:00.000Z'))
@@ -41,123 +139,104 @@ describe('catalog ingestion', () => {
     expect(buildManualSubscriptionSource('xai', '2026-08-03T00:00:00.000Z').plans).toEqual([]);
   });
 
-  it('snapshots validated evidence before atomically publishing a revision', async () => {
-    const calls: string[] = [];
+  it('snapshots source data before publishing one atomic candidate revision', async () => {
+    const database = createStatefulD1();
+    const snapshots: string[] = [];
+    const parsed = parseOpenRouterModels(openRouterPayload, '2026-08-03T00:00:00.000Z');
     const result = await publishValidatedSource({
-      db: {
-        prepare(sql: string) { return { bind: () => ({ sql }) }; },
-        batch: async (statements: { sql: string }[]) => { calls.push(...statements.map(({ sql }) => sql)); },
-      },
-      snapshots: { put: async (key: string) => { calls.push(`snapshot:${key}`); } },
-      source: { source: { id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt: '2026-08-03T00:00:00.000Z', sourceKind: 'official_json', confidence: 'official' }, plans: [], modelOffers: [] },
-      rawPayload: { data: [] },
+      db: database.db,
+      snapshots: { put: async (key: string) => { snapshots.push(key); } },
+      source: parsed,
+      rawPayload: openRouterPayload,
       now: '2026-08-03T00:00:00.000Z',
     });
-    expect(calls[0]).toMatch(/^snapshot:openrouter-models\/2026-08-03\//);
-    expect(calls.join('\n')).toContain("publication_state = 'published'");
-    expect(result.revision).toMatch(/^rev_/);
-  });
-
-  it('leaves the last-known-good revision active when snapshotting fails', async () => {
-    await expect(publishValidatedSource({
-      db: { prepare: () => ({ bind: () => ({}) }), batch: async () => { throw new Error('must not publish'); } },
-      snapshots: { put: async () => { throw new Error('R2 unavailable'); } },
-      source: { source: { id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt: '2026-08-03T00:00:00.000Z', sourceKind: 'official_json', confidence: 'official' }, plans: [], modelOffers: [] },
-      rawPayload: { data: [] }, now: '2026-08-03T00:00:00.000Z',
-    })).rejects.toThrow('R2 unavailable');
-  });
-
-  it('records an actionable source refresh error without publishing a replacement revision', async () => {
-    const calls: string[] = [];
-    await recordRefreshFailure({ prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; }, batch: async (statements: { sql: string; values: unknown[] }[]) => { calls.push(...statements.map(({ sql, values }) => `${sql}:${values.join('|')}`)); } }, 'opencode-zen', 'timeout', '2026-08-03T00:00:00.000Z');
-    expect(calls.join('\n')).toContain('last_error');
-    expect(calls.join('\n')).not.toContain("publication_state = 'published'");
-  });
-
-  it('copies other validated source records into the candidate revision before publication', async () => {
-    const calls: string[] = [];
-    await publishValidatedSource({
-      db: { prepare(sql: string) { return { bind: () => ({ sql }) }; }, batch: async (statements: { sql: string }[]) => { calls.push(...statements.map(({ sql }) => sql)); } },
-      snapshots: { put: async () => undefined },
-      source: { source: { id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt: '2026-08-03T00:00:00.000Z', sourceKind: 'official_json', confidence: 'official' }, plans: [], modelOffers: [] },
-      rawPayload: { data: [] }, now: '2026-08-03T00:00:00.000Z',
+    expect(snapshots[0]).toMatch(/^openrouter-models\/2026-08-03\//);
+    expect(stateSnapshot(database)).toEqual({
+      activeRevision: result.revision,
+      pendingRevisionIds: [],
+      candidateRows: expect.arrayContaining([`${result.revision}:source:openrouter-models`, `${result.revision}:model:openai:openai/gpt-4o:openrouter`]),
+      refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: result.revision, lastError: null },
     });
-    expect(calls.join('\n')).toContain('INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis');
-    expect(calls.join('\n')).toContain('source_id != ?');
   });
 
   it.each([
-    ['malformed JSON', async () => { throw new Error('unexpected HTML response'); }, 'unexpected HTML response'],
+    ['malformed JSON/HTML', async () => { throw new Error('unexpected HTML response'); }, 'unexpected HTML response'],
     ['changed schema', async () => ({ models: [] }), 'OpenRouter payload must contain data'],
-    ['duplicate offer ids', async () => ({ data: [
-      { id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001' } },
-      { id: 'openai/gpt-4o', name: 'GPT-4o duplicate', pricing: { prompt: '0.0000025', completion: '0.00001' } },
+    ['duplicate offer IDs', async () => ({ data: [
+      ...openRouterPayload.data,
+      { ...openRouterPayload.data[0], name: 'Duplicate GPT-4o' },
     ] }), 'Duplicate model offer id: openai:openai/gpt-4o:openrouter'],
-  ])('preserves active publication and records refresh state for %s upstream data', async (_caseName, json, expectedError) => {
-    const state = { activeRevision: 'rev-known-good', lastError: '' };
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => ({ ok: true, status: 200, json })) as unknown as typeof fetch;
-    const db = {
-      prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; },
-      async batch(statements: { sql: string; values: unknown[] }[]) {
-        const joined = statements.map(({ sql }) => sql).join('\n');
-        if (joined.includes('source_refresh_state')) state.lastError = String(statements[0].values.at(-1));
-        else throw new Error('unexpected publication attempt');
-      },
-    };
-    let work: Promise<unknown> | undefined;
-    try {
-      await worker.scheduled({ cron: '0 */6 * * *' }, { CATALOG_DB: db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' }, { waitUntil: (promise) => { work = promise; } });
-      await work;
-      expect(state).toEqual({ activeRevision: 'rev-known-good', lastError: expect.stringContaining(expectedError) });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+  ])('preserves active revision, candidate rows, and prior refresh facts for %s', async (_caseName, json, expectedError) => {
+    const database = createStatefulD1();
+    await runScheduledOpenRouter({ database, json });
+    expect(stateSnapshot(database)).toEqual({
+      activeRevision: 'rev-known-good',
+      pendingRevisionIds: [],
+      candidateRows: [],
+      refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: expect.stringContaining(expectedError) },
+    });
   });
 
-  it('uses the AbortController timeout and leaves state unchanged when the upstream stalls', async () => {
+  it('records scheduled R2 snapshot failure while preserving the published revision and pending state', async () => {
+    const database = createStatefulD1();
+    await runScheduledOpenRouter({ database, put: async () => { throw new Error('R2 unavailable'); } });
+    expect(stateSnapshot(database)).toEqual({
+      activeRevision: 'rev-known-good',
+      pendingRevisionIds: [],
+      candidateRows: [],
+      refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: 'R2 unavailable' },
+    });
+  });
+
+  it('treats a mid-publication D1 failure as atomic and records its scheduled refresh error', async () => {
+    const database = createStatefulD1({ failAfterStatement: 4 });
+    await runScheduledOpenRouter({ database });
+    expect(database.state.batchCalls).toBe(2);
+    expect(stateSnapshot(database)).toEqual({
+      activeRevision: 'rev-known-good',
+      pendingRevisionIds: [],
+      candidateRows: [],
+      refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: 'D1 transaction rolled back' },
+    });
+  });
+
+  it('uses the AbortController timeout and keeps the published transaction state intact', async () => {
     vi.useFakeTimers();
-    const state = { activeRevision: 'rev-known-good', lastError: '' };
+    const database = createStatefulD1();
     const originalFetch = globalThis.fetch;
     globalThis.fetch = ((_url, init) => new Promise((_resolve, reject) => {
       (init?.signal as AbortSignal).addEventListener('abort', () => reject(new Error(String(init?.signal?.reason))));
     })) as typeof fetch;
-    const db = {
-      prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; },
-      async batch(statements: { sql: string; values: unknown[] }[]) { state.lastError = String(statements[0].values.at(-1)); },
-    };
     let work: Promise<unknown> | undefined;
     try {
-      await worker.scheduled({ cron: '0 */6 * * *' }, { CATALOG_DB: db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' }, { waitUntil: (promise) => { work = promise; } });
+      await worker.scheduled(
+        { cron: '0 */6 * * *' },
+        { CATALOG_DB: database.db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' },
+        { waitUntil: (promise) => { work = promise; } },
+      );
       await vi.advanceTimersByTimeAsync(20_000);
       await work;
-      expect(state).toEqual({ activeRevision: 'rev-known-good', lastError: expect.stringContaining('upstream timeout') });
+      expect(stateSnapshot(database)).toEqual({
+        activeRevision: 'rev-known-good',
+        pendingRevisionIds: [],
+        candidateRows: [],
+        refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: expect.stringContaining('upstream timeout') },
+      });
     } finally {
       globalThis.fetch = originalFetch;
       vi.useRealTimers();
     }
   });
 
-  it('treats D1 publication as atomic: a failed candidate keeps the active revision and records the error', async () => {
-    const state = { activeRevision: 'rev-known-good', lastError: '' };
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = (async () => ({ ok: true, status: 200, json: async () => ({ data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001' } }] }) })) as unknown as typeof fetch;
-    const db = {
-      prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; },
-      async batch(statements: { sql: string; values: unknown[] }[]) {
-        const joined = statements.map(({ sql }) => sql).join('\n');
-        if (joined.includes('publication_state')) throw new Error('D1 transaction rolled back');
-        state.lastError = String(statements[0].values.at(-1));
-      },
-    };
-    let work: Promise<unknown> | undefined;
-    try {
-      await worker.scheduled({ cron: '0 */6 * * *' }, { CATALOG_DB: db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' }, { waitUntil: (promise) => { work = promise; } });
-      await work;
-      expect(state).toEqual({ activeRevision: 'rev-known-good', lastError: 'D1 transaction rolled back' });
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+  it('records an explicit refresh failure in the stateful D1 harness without publication', async () => {
+    const database = createStatefulD1();
+    await recordRefreshFailure(database.db, 'openrouter-models', 'timeout', '2026-08-03T00:00:00.000Z');
+    expect(stateSnapshot(database)).toMatchObject({
+      activeRevision: 'rev-known-good',
+      pendingRevisionIds: [],
+      candidateRows: [],
+      refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: 'timeout' },
+    });
   });
 
   it('does not fetch an upstream catalog until its source is explicitly allowlisted', async () => {
