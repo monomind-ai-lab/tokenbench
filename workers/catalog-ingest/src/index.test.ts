@@ -245,10 +245,20 @@ describe('catalog ingestion', () => {
   it('invokes the Workers global fetch with the required global receiver', async () => {
     const database = createStatefulD1();
     const originalFetch = globalThis.fetch;
+    const originalSetTimeout = globalThis.setTimeout;
+    const originalClearTimeout = globalThis.clearTimeout;
     globalThis.fetch = vi.fn(function (this: unknown) {
       if (this !== globalThis) throw new Error('Illegal invocation');
       return Promise.resolve({ ok: true, status: 200, json: async () => openRouterPayload } as Response);
     }) as unknown as typeof fetch;
+    globalThis.setTimeout = vi.fn(function (this: unknown, handler: () => void, timeout?: number) {
+      if (this !== globalThis) throw new Error('Illegal invocation');
+      return originalSetTimeout(handler, timeout);
+    }) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = vi.fn(function (this: unknown, timeout?: ReturnType<typeof setTimeout>) {
+      if (this !== globalThis) throw new Error('Illegal invocation');
+      return originalClearTimeout(timeout);
+    }) as unknown as typeof clearTimeout;
     let work: Promise<unknown> | undefined;
     try {
       await worker.scheduled(
@@ -261,6 +271,8 @@ describe('catalog ingestion', () => {
       expect(database.state.refreshState['openrouter-models'].lastRevision).toMatch(/^rev_/);
     } finally {
       globalThis.fetch = originalFetch;
+      globalThis.setTimeout = originalSetTimeout;
+      globalThis.clearTimeout = originalClearTimeout;
     }
   });
 

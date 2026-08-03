@@ -12,8 +12,8 @@ export interface RefreshDependencies {
   fetchImpl: typeof fetch;
   now: () => string;
   createAbortController: () => AbortController;
-  setTimeoutImpl: typeof setTimeout;
-  clearTimeoutImpl: typeof clearTimeout;
+  setTimeoutImpl: (handler: () => void, timeout: number) => ReturnType<typeof setTimeout>;
+  clearTimeoutImpl: (timeout: ReturnType<typeof setTimeout>) => void;
 }
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/models';
@@ -130,8 +130,8 @@ export async function refreshSource(
     fetchImpl: (input, init) => globalThis.fetch(input, init),
     now: () => new Date().toISOString(),
     createAbortController: () => new AbortController(),
-    setTimeoutImpl: setTimeout,
-    clearTimeoutImpl: clearTimeout,
+    setTimeoutImpl: (handler, timeout) => globalThis.setTimeout(handler, timeout),
+    clearTimeoutImpl: (timeout) => globalThis.clearTimeout(timeout),
   },
 ): Promise<void> {
   const abort = dependencies.createAbortController();
