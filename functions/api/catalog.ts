@@ -19,13 +19,13 @@ interface SourceRow { id: string; provider_id: string; source_url: string; obser
 interface PlanRow { id: string; provider_id: string; display_name: string; monthly_cost_micro_dollars: number; currency: 'USD'; entitlement_json: string; source_id: string }
 interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; output_micro_dollars_per_million: number; source_id: string }
 
-async function all<T>(db: D1Database, query: string, revision: string): Promise<T[]> {
-  return (await db.prepare(query).bind(revision).all()).results as T[];
+async function all<T>(db: D1Database, query: string, ...values: unknown[]): Promise<T[]> {
+  return (await db.prepare(query).bind(...values).all()).results as T[];
 }
 
 export async function readPublishedCatalog(db: D1Database): Promise<CatalogResponse | null> {
   const revisions = await all<RevisionRow>(db,
-    "SELECT revision, published_at, checked_at FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1", '');
+    "SELECT revision, published_at, checked_at FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1");
   const revision = revisions[0];
   if (!revision) return null;
 

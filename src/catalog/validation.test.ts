@@ -42,4 +42,19 @@ describe('catalog validation', () => {
       plans: [{ ...validCatalog.plans[0], sourceId: 'missing' }],
     })).toThrow('plans[0].sourceId must refer to provenance');
   });
+
+  it('rejects invalid provenance enums and mismatched model basis-route pairs', () => {
+    expect(() => validateCatalogResponse({
+      ...validCatalog,
+      provenance: [{ ...validCatalog.provenance[0], sourceKind: 'unverified' }],
+    })).toThrow('provenance[0].sourceKind is invalid');
+    expect(() => validateCatalogResponse({
+      ...validCatalog,
+      provenance: [{ ...validCatalog.provenance[0], confidence: 'claimed' }],
+    })).toThrow('provenance[0].confidence is invalid');
+    expect(() => validateCatalogResponse({
+      ...validCatalog,
+      modelOffers: [{ ...validCatalog.modelOffers[0], pricingBasis: 'openrouter', route: 'direct_provider' }],
+    })).toThrow('modelOffers[0].pricingBasis and route must match');
+  });
 });

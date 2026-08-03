@@ -1,4 +1,5 @@
 import type { ModelOffer, PlanOffer, SourceProvenance } from '../../../src/catalog/contracts';
+import { buildManualSubscriptionSource as buildManifest, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from '../../../src/catalog/manual-manifests';
 import { validateCatalogResponse } from '../../../src/catalog/validation';
 
 type BoundStatement = unknown;
@@ -14,8 +15,9 @@ const OPENCODE_URL = 'https://opencode.ai/zen/go/v1/models';
 function microDollarsPerMillion(value: unknown, label: string): number {
   if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) throw new Error(`${label} pricing is required`);
   const [whole, fraction = ''] = value.split('.');
-  if (fraction.slice(12).replace(/0/g, '') !== '') throw new Error(`${label} pricing exceeds micro-dollar precision`);
-  const scaled = BigInt(whole) * 1_000_000_000_000n + BigInt(fraction.padEnd(12, '0'));
+  const significantFraction = fraction.replace(/0+$/, '');
+  if (significantFraction.length > 12) throw new Error(`${label} pricing exceeds micro-dollar precision`);
+  const scaled = BigInt(whole) * 1_000_000_000_000n + BigInt(significantFraction.padEnd(12, '0'));
   if (scaled > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error(`${label} pricing is too large`);
   return Number(scaled);
 }
@@ -110,21 +112,14 @@ async function refresh(url: string, parse: (payload: unknown, observedAt: string
   await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source: parse(rawPayload, now), rawPayload, now });
 }
 
-const subscriptionSources: Record<string, SourceProvenance> = {
-  alibaba: { id: 'alibaba-subscription', providerId: 'alibaba', sourceUrl: 'https://www.alibabacloud.com/campaign/ai-scene-coding', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  anthropic: { id: 'anthropic-subscription', providerId: 'anthropic', sourceUrl: 'https://www.anthropic.com/pricing', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  deepseek: { id: 'deepseek-api', providerId: 'deepseek', sourceUrl: 'https://api-docs.deepseek.com/quick_start/pricing', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  xai: { id: 'xai-subscription', providerId: 'xai', sourceUrl: 'https://x.ai/pricing', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  kimi: { id: 'kimi-api', providerId: 'kimi', sourceUrl: 'https://kimi.com/help/kimi-api/api-pricing', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  openai: { id: 'openai-subscription', providerId: 'openai', sourceUrl: 'https://openai.com/chatgpt/pricing/', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  zai: { id: 'zai-subscription', providerId: 'zai', sourceUrl: 'https://z.ai/subscribe', observedAt: '', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-};
+export function buildManualSubscriptionSource(providerId: string, observedAt: string): ParsedSource {
+  return buildManifest(providerId, observedAt);
+}
 
 async function refreshManual(providerId: string, env: IngestEnv): Promise<void> {
   const now = new Date().toISOString();
-  const source = subscriptionSources[providerId];
-  if (!source) throw new Error(`No manual manifest for ${providerId}`);
-  await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source: { source: { ...source, observedAt: now }, plans: [], modelOffers: [] }, rawPayload: { providerId, records: [] }, now });
+  const source = buildManualSubscriptionSource(providerId, now);
+  await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source, rawPayload: { providerId, plans: source.plans, modelOffers: source.modelOffers }, now });
 }
 
 export default {
@@ -133,7 +128,7 @@ export default {
     else if (controller.cron === '30 */6 * * *') ctx.waitUntil(refresh(OPENCODE_URL, parseOpenCodeModels, env));
     else {
       const hour = new Date().getUTCHours();
-      ctx.waitUntil(refreshManual(Object.keys(subscriptionSources)[Math.floor(hour / 3) % Object.keys(subscriptionSources).length], env));
+      ctx.waitUntil(refreshManual(MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length], env));
     }
   },
 };

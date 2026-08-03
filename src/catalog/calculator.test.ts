@@ -47,6 +47,7 @@ describe('catalog calculator', () => {
   it('returns the break-even token count at a fixed plan cost boundary', () => {
     expect(breakEvenTokens(20_000_000, 4_000_000)).toBe(5_000_000);
     expect(breakEvenTokens(20_000_000, 0)).toBeNull();
+    expect(breakEvenTokens(10_000_000, 3_000_000)).toBe(3_333_334);
   });
 
   it('suppresses maximum plan value for variable entitlements', () => {
@@ -63,6 +64,15 @@ describe('catalog calculator', () => {
   it('redistributes model shares proportionally and preserves 10,000 basis points', () => {
     expect(redistributeModelMix({ alpha: 6_000, beta: 3_000, gamma: 1_000 }, 'alpha', 5_000))
       .toEqual({ alpha: 5_000, beta: 3_750, gamma: 1_250 });
+  });
+
+  it('rejects incomplete mixes and invalid redistribution targets', () => {
+    expect(() => weightedModelCost([{ model: alpha, shareBasisPoints: 9_999 }], 5_000))
+      .toThrow('Model mix must total 10,000 basis points');
+    expect(() => redistributeModelMix({ alpha: 10_000 }, 'alpha', 9_000))
+      .toThrow('A single-model mix must remain at 10,000 basis points');
+    expect(() => redistributeModelMix({ alpha: 10_000 }, 'missing', 5_000))
+      .toThrow('Changed model must exist in the current mix');
   });
 
   it('recommends the lowest monthly cost and surfaces variable entitlement caveats', () => {

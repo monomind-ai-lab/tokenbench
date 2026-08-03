@@ -44,6 +44,11 @@ function validateModelOffer(value: unknown, index: number, sourceIds: Set<string
   if (!['direct_provider', 'openrouter', 'opencode_zen'].includes(offer.route)) fail(`${name}.route is invalid`);
   if (offer.currency !== 'USD') fail(`${name}.currency must be USD`);
   if (offer.unit !== 'micro_dollars_per_million_tokens') fail(`${name}.unit is invalid`);
+  if ((offer.pricingBasis === 'direct_provider_api' && offer.route !== 'direct_provider')
+    || (offer.pricingBasis === 'openrouter' && offer.route !== 'openrouter')
+    || (offer.pricingBasis === 'opencode_zen' && offer.route !== 'opencode_zen')) {
+    fail(`${name}.pricingBasis and route must match`);
+  }
   requireNonNegativeInteger(offer.inputMicroDollarsPerMillion, `${name}.inputMicroDollarsPerMillion`);
   requireNonNegativeInteger(offer.outputMicroDollarsPerMillion, `${name}.outputMicroDollarsPerMillion`);
   if (offer.cachedInputMicroDollarsPerMillion !== undefined) {
@@ -69,6 +74,8 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     const name = `provenance[${index}]`;
     for (const key of ['id', 'providerId', 'observedAt'] as const) requireString(source[key], `${name}.${key}`);
     requireUrl(source.sourceUrl, `${name}.sourceUrl`);
+    if (!['official_json', 'manual_manifest'].includes(source.sourceKind)) fail(`${name}.sourceKind is invalid`);
+    if (!['official', 'manual_verified'].includes(source.confidence)) fail(`${name}.confidence is invalid`);
     if (sourceIds.has(source.id)) fail(`Duplicate provenance id: ${source.id}`);
     sourceIds.add(source.id);
   });

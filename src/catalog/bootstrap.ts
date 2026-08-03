@@ -1,29 +1,24 @@
 import type { CatalogResponse, SourceProvenance } from './contracts';
+import { buildManualSubscriptionSource, MANUAL_BOOTSTRAP_MODEL_OFFERS, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from './manual-manifests';
 
 const observedAt = '2026-08-03T00:00:00.000Z';
+const manualSources = MANUAL_SUBSCRIPTION_PROVIDER_IDS.map((providerId) => buildManualSubscriptionSource(providerId, observedAt));
 
 const provenance: SourceProvenance[] = [
-  ['alibaba-subscription', 'alibaba', 'https://www.alibabacloud.com/campaign/ai-scene-coding'],
-  ['anthropic-subscription', 'anthropic', 'https://www.anthropic.com/pricing'],
-  ['deepseek-api', 'deepseek', 'https://api-docs.deepseek.com/quick_start/pricing'],
-  ['xai-subscription', 'xai', 'https://x.ai/pricing'],
-  ['kimi-api', 'kimi', 'https://kimi.com/help/kimi-api/api-pricing'],
-  ['openai-subscription', 'openai', 'https://openai.com/chatgpt/pricing/'],
-  ['opencode-zen', 'opencode', 'https://opencode.ai/docs/zen'],
-  ['zai-subscription', 'zai', 'https://z.ai/subscribe'],
-  ['openrouter-models', 'openrouter', 'https://openrouter.ai/api/v1/models'],
-].map(([id, providerId, sourceUrl]) => ({
-  id,
-  providerId,
-  sourceUrl,
-  observedAt,
-  sourceKind: id === 'openrouter-models' || id === 'opencode-zen' ? 'official_json' as const : 'manual_manifest' as const,
-  confidence: 'manual_verified' as const,
-}));
+  ...manualSources.map(({ source }) => source),
+  {
+    id: 'opencode-zen', providerId: 'opencode', sourceUrl: 'https://opencode.ai/docs/zen', observedAt,
+    sourceKind: 'official_json', confidence: 'official',
+  },
+  {
+    id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+    sourceKind: 'official_json', confidence: 'official',
+  },
+];
 
 /**
- * This fallback deliberately carries source records only. It never guesses token
- * prices or subscription entitlements when the published D1 revision is absent.
+ * This fallback contains only manually verified, source-linked records. Variable
+ * entitlements remain variable; it never invents token caps or model prices.
  */
 export const BOOTSTRAP_CATALOG: CatalogResponse = {
   revision: 'bootstrap-2026-08-03',
@@ -31,9 +26,9 @@ export const BOOTSTRAP_CATALOG: CatalogResponse = {
   freshness: {
     status: 'bootstrap',
     checkedAt: observedAt,
-    message: 'D1 has no published catalog. Source records are manually verified; offers await ingestion.',
+    message: 'D1 has no published catalog. Serving manually verified bootstrap offers until ingestion publishes a revision.',
   },
-  plans: [],
-  modelOffers: [],
+  plans: manualSources.flatMap(({ plans }) => plans),
+  modelOffers: MANUAL_BOOTSTRAP_MODEL_OFFERS,
   provenance,
 };

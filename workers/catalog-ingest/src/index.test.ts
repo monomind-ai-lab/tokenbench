@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseOpenCodeModels, parseOpenRouterModels, publishValidatedSource } from './index';
+import { buildManualSubscriptionSource, parseOpenCodeModels, parseOpenRouterModels, publishValidatedSource } from './index';
 
 describe('catalog ingestion', () => {
   it('parses official OpenRouter pricing into integer micro-dollars per million', () => {
@@ -10,6 +10,17 @@ describe('catalog ingestion', () => {
   it('rejects malformed official adapter payloads', () => {
     expect(() => parseOpenCodeModels({ data: [{ id: 'missing-prices', name: 'Missing prices' }] }, '2026-08-03T00:00:00.000Z'))
       .toThrow('OpenCode model pricing is required');
+  });
+
+  it('accepts equivalent official decimal price strings with trailing zero precision', () => {
+    const payload = { data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.000002500000000', completion: '0.000010000000000' } }] };
+    expect(parseOpenRouterModels(payload, '2026-08-03T00:00:00.000Z').modelOffers[0])
+      .toMatchObject({ inputMicroDollarsPerMillion: 2_500_000, outputMicroDollarsPerMillion: 10_000_000 });
+  });
+
+  it('builds source-linked manually verified subscription offers instead of an empty source', () => {
+    expect(buildManualSubscriptionSource('openai', '2026-08-03T00:00:00.000Z'))
+      .toMatchObject({ source: { id: 'openai-subscription', confidence: 'manual_verified' }, plans: expect.arrayContaining([expect.objectContaining({ id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, sourceId: 'openai-subscription' })]) });
   });
 
   it('snapshots validated evidence before atomically publishing a revision', async () => {

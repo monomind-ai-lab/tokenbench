@@ -36,3 +36,8 @@ Implement the verified AI plan catalog domain, Pages catalog endpoint, scheduled
 ## Outcome
 
 Ready to commit as Task 1 data pipeline. No Cloudflare resources or vault content were changed.
+
+## Fix round 1
+
+- Repaired the published-revision D1 binding contract, exact decimal price parsing, useful source-linked manual bootstrap/ingestion manifests, break-even ceiling behavior, mix invariants, and catalog validation pairs/enums.
+- Added regression coverage; final verification passed: 23 tests, lint, production build, and whitespace check.

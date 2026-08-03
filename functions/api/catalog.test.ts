@@ -17,12 +17,17 @@ const model = {
 };
 
 function d1(rows: Record<string, unknown[]>) {
+  const bindings: { sql: string; values: unknown[] }[] = [];
   return {
+    bindings,
     prepare(sql: string) {
       const key = sql.includes('catalog_revisions') ? 'revision'
         : sql.includes('source_records') ? 'sources'
           : sql.includes('plan_offers') ? 'plans' : 'models';
-      return { bind: () => ({ all: async () => ({ results: rows[key] ?? [] }) }) };
+      return { bind: (...values: unknown[]) => {
+        bindings.push({ sql, values });
+        return { all: async () => ({ results: rows[key] ?? [] }) };
+      } };
     },
   };
 }
@@ -47,12 +52,19 @@ describe('GET /api/catalog', () => {
     expect(response.status).toBe(304);
   });
 
+  it('does not bind values to the published-revision query without placeholders', async () => {
+    const database = d1({ revision: [{ revision: 'rev-1', published_at: '2026-08-03T00:00:00.000Z', checked_at: '2026-08-03T01:00:00.000Z' }], sources: [source], plans: [plan], models: [model] });
+    await onRequestGet({ request: new Request('https://example.com/api/catalog'), env: { CATALOG_DB: database } });
+    expect(database.bindings.find(({ sql }) => sql.includes('catalog_revisions'))?.values).toEqual([]);
+  });
+
   it('falls back to the marked bootstrap catalog when D1 is unavailable or unseeded', async () => {
     const response = await onRequestGet({ request: new Request('https://example.com/api/catalog'), env: {} });
-    const body = await response.json() as { freshness: { status: string }; provenance: unknown[] };
+    const body = await response.json() as { freshness: { status: string }; provenance: unknown[]; plans: { providerId: string }[] };
     expect(response.status).toBe(200);
     expect(body.freshness.status).toBe('bootstrap');
     expect(body.provenance).toHaveLength(9);
+    expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'kimi', 'xai', 'openai', 'zai']));
   });
 
   it('marks a published revision stale when its refresh timestamp exceeds one day', async () => {
