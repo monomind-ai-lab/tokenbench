@@ -107,8 +107,8 @@ export function parseOpenCodeCatalog(modelsPayload: unknown, pricingHtml: string
     return (entry as { id: string }).id;
   }));
   const tables = htmlTables(pricingHtml);
-  const modelTable = tables.find((table) => table[0]?.join('|') === 'MODEL|MODEL ID|ENDPOINT|AI SDK PACKAGE');
-  const pricingTable = tables.find((table) => table[0]?.join('|') === 'MODEL|INPUT|OUTPUT|CACHED READ|CACHED WRITE');
+  const modelTable = tables.find((table) => table[0]?.map((cell) => cell.toUpperCase()).join('|') === 'MODEL|MODEL ID|ENDPOINT|AI SDK PACKAGE');
+  const pricingTable = tables.find((table) => table[0]?.map((cell) => cell.toUpperCase()).join('|') === 'MODEL|INPUT|OUTPUT|CACHED READ|CACHED WRITE');
   if (!modelTable || !pricingTable) throw new Error('OpenCode pricing tables are required');
   const idsByName = new Map(modelTable.slice(1).map((row) => [row[0], row[1]]));
   const modelOffers = pricingTable.slice(1).flatMap((row): ModelOffer[] => {

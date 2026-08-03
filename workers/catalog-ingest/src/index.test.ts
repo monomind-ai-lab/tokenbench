@@ -81,9 +81,9 @@ function stateSnapshot(database: ReturnType<typeof createStatefulD1>) {
 const openRouterPayload = { data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001' } }] };
 const openCodeModelsPayload = { data: [{ id: 'opencode/zen', object: 'model', owned_by: 'opencode' }] };
 const openCodePricingHtml = `
-  <table><tr><th>MODEL</th><th>MODEL ID</th><th>ENDPOINT</th><th>AI SDK PACKAGE</th></tr>
+  <table><tr><th>Model</th><th>Model ID</th><th>Endpoint</th><th>AI SDK Package</th></tr>
     <tr><td>Zen</td><td>opencode/zen</td><td>https://opencode.ai/zen/v1/responses</td><td>@ai-sdk/openai</td></tr></table>
-  <table><tr><th>MODEL</th><th>INPUT</th><th>OUTPUT</th><th>CACHED READ</th><th>CACHED WRITE</th></tr>
+  <table><tr><th>Model</th><th>Input</th><th>Output</th><th>Cached Read</th><th>Cached Write</th></tr>
     <tr><td>Zen</td><td>$1.00</td><td>$2.00</td><td>$0.20</td><td>-</td></tr></table>`;
 
 async function runScheduledOpenRouter({
