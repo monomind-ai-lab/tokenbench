@@ -106,6 +106,24 @@ test.describe('responsive calculator browser harness', () => {
     }
   });
 
+  test('desktop calculator does not cover the comparison after scrolling to it', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await openCalculator(page);
+
+    const comparisonOwnsVisibleContent = await page.evaluate(() => {
+      const comparison = document.querySelector('#comparison');
+      if (!comparison) return false;
+      comparison.scrollIntoView({ block: 'start', behavior: 'instant' });
+      const rect = comparison.getBoundingClientRect();
+      const sampleX = Math.min(window.innerWidth - 1, rect.left + 120);
+      const sampleY = Math.min(window.innerHeight - 1, Math.max(90, rect.top + 120));
+      const topElement = document.elementFromPoint(sampleX, sampleY);
+      return topElement ? comparison.contains(topElement) : false;
+    });
+
+    expect(comparisonOwnsVisibleContent).toBe(true);
+  });
+
   test('persists dark theme and applies the selected language without changing the catalog controls', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page);

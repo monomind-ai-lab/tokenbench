@@ -193,7 +193,6 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 @keyframes shimmer { to { background-position: -200% 0; } }
 
 @media (min-width: 1024px) {
-  .controls-panel { position: sticky; top: calc(var(--header-height) + 12px); z-index: 10; }
   .results-content { grid-template-columns: minmax(280px, 4fr) minmax(0, 8fr); align-items: stretch; }
   .metrics-grid { grid-template-columns: 1fr; }
   .trend-panel { display: flex; flex-direction: column; justify-content: center; }
