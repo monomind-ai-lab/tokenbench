@@ -143,6 +143,22 @@ describe('catalog ingestion', () => {
     ] }, '2026-08-03T00:00:00.000Z').modelOffers).toHaveLength(1);
   });
 
+  it('maps known OpenRouter model owners to stable subscription provider identities', () => {
+    const parsed = parseOpenRouterModels({ data: [
+      { id: 'qwen/qwen-plus', name: 'Qwen Plus', pricing: { prompt: '0.000001', completion: '0.000002' } },
+      { id: 'x-ai/grok', name: 'Grok', pricing: { prompt: '0.000001', completion: '0.000002' } },
+      { id: 'moonshotai/kimi', name: 'Kimi', pricing: { prompt: '0.000001', completion: '0.000002' } },
+      { id: 'z-ai/glm', name: 'GLM', pricing: { prompt: '0.000001', completion: '0.000002' } },
+    ] }, '2026-08-03T00:00:00.000Z');
+
+    expect(parsed.modelOffers.map((offer) => [offer.modelId, offer.providerId])).toEqual([
+      ['qwen/qwen-plus', 'alibaba'],
+      ['x-ai/grok', 'xai'],
+      ['moonshotai/kimi', 'kimi'],
+      ['z-ai/glm', 'zai'],
+    ]);
+  });
+
   it('accepts equivalent official decimal price strings with trailing zero precision', () => {
     const payload = { data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.000002500000000', completion: '0.000010000000000' } }] };
     expect(parseOpenRouterModels(payload, '2026-08-03T00:00:00.000Z').modelOffers[0])
@@ -354,6 +370,10 @@ describe('catalog ingestion', () => {
       expect(database.state.rows).toEqual(expect.arrayContaining([
         expect.stringMatching(/:source:openrouter-models$/),
         expect.stringMatching(/:source:opencode-zen$/),
+        expect.stringMatching(/:source:alibaba-subscription$/),
+        expect.stringMatching(/:source:anthropic-subscription$/),
+        expect.stringMatching(/:source:openai-subscription$/),
+        expect.stringMatching(/:plan:anthropic:pro$/),
       ]));
     } finally {
       globalThis.fetch = originalFetch;

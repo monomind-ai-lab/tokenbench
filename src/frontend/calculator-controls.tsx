@@ -63,7 +63,7 @@ export function CalculatorControls({
       <div className="control-grid">
         <fieldset className="control-block">
           <legend>Provider selection</legend>
-          <p className="field-help">Providers are derived from the current catalog. No fallback offers are added.</p>
+          <p className="field-help">Only providers with verified subscription plans are shown. API-only model owners remain available in the comparison below.</p>
           <div className="choice-list provider-list">
             {providerIds.map((providerId) => <ProviderChoice key={providerId} providerId={providerId} selected={selectedProviderId === providerId} onChange={() => onProviderChange(providerId)} />)}
           </div>

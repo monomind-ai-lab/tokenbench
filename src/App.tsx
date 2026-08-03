@@ -49,7 +49,7 @@ export default function App() {
 
   const providerIds = useMemo(() => {
     if (!catalog) return [];
-    return Array.from(new Set([...catalog.plans.map((plan) => plan.providerId), ...catalog.modelOffers.map((offer) => offer.providerId)]))
+    return Array.from(new Set(catalog.plans.map((plan) => plan.providerId)))
       .sort((a, b) => providerLabel(a).localeCompare(providerLabel(b)));
   }, [catalog]);
 

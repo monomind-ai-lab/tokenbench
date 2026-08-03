@@ -29,6 +29,26 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByText('Availability: available')).toBeInTheDocument();
   });
 
+  it('does not present API-only model owners as subscription plan providers', async () => {
+    const apiOnlyOffer = {
+      ...FRONTEND_TEST_CATALOG.modelOffers[1],
+      id: 'provider-b:beta:openrouter',
+      providerId: 'provider-b',
+      displayName: 'Beta via OpenRouter',
+      modelId: 'beta',
+    };
+    respondWithCatalog({
+      ...FRONTEND_TEST_CATALOG,
+      modelOffers: [...FRONTEND_TEST_CATALOG.modelOffers, apiOnlyOffer],
+    });
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /API-equivalent value/i });
+    const providerGroup = screen.getByRole('group', { name: /Provider selection/i });
+    expect(within(providerGroup).getByRole('radio', { name: 'Provider A' })).toBeInTheDocument();
+    expect(within(providerGroup).queryByRole('radio', { name: 'Provider B' })).not.toBeInTheDocument();
+  });
+
   it('redistributes selected model usage and changes derived values when a preset is edited', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /API-equivalent value/i });

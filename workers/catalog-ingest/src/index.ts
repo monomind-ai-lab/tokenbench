@@ -34,6 +34,17 @@ function microDollarsPerMillion(value: unknown, label: string): number {
   return Number(scaled);
 }
 
+function canonicalOpenRouterProviderId(modelId: string): string {
+  const owner = (modelId.includes('/') ? modelId.split('/')[0] : 'openrouter').replace(/^~/, '');
+  const aliases: Record<string, string> = {
+    qwen: 'alibaba',
+    'x-ai': 'xai',
+    moonshotai: 'kimi',
+    'z-ai': 'zai',
+  };
+  return aliases[owner] ?? owner;
+}
+
 function parseModels(
   payload: unknown,
   observedAt: string,
@@ -53,7 +64,7 @@ function parseModels(
     if (typeof model.id !== 'string' || !model.id || typeof model.name !== 'string' || !model.name) throw new Error(`${label} model id and name are required`);
     const pricing = model.pricing;
     if (!pricing) throw new Error(`${label} model pricing is required`);
-    const providerId = model.id.includes('/') ? model.id.split('/')[0] : source.providerId;
+    const providerId = route === 'openrouter' ? canonicalOpenRouterProviderId(model.id) : source.providerId;
     const input = pricing.prompt ?? pricing.input;
     const output = pricing.completion ?? pricing.output;
     const cached = pricing.input_cache_read ?? pricing.cached_input;
@@ -270,7 +281,10 @@ export default {
       ctx.waitUntil((async () => {
         await guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
         await (isAutomatedSourceAllowlisted(env, 'opencode-zen') ? guarded('opencode-zen', refreshOpenCode(env)) : recordRefreshFailure(env.CATALOG_DB, 'opencode-zen', new Error('opencode-zen is not allowlisted for automated refresh'), new Date().toISOString()));
-        await refreshRotatingManualSource();
+        for (const providerId of MANUAL_SUBSCRIPTION_PROVIDER_IDS) {
+          if (buildManualSubscriptionSource(providerId, new Date().toISOString()).plans.length === 0) continue;
+          await guarded(`${providerId}-subscription`, refreshManual(providerId, env));
+        }
       })());
     }
   },
