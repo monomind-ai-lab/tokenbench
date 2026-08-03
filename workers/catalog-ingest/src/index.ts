@@ -127,7 +127,7 @@ export async function refreshSource(
   parse: (payload: unknown, observedAt: string) => ParsedSource,
   env: IngestEnv,
   dependencies: RefreshDependencies = {
-    fetchImpl: fetch,
+    fetchImpl: (input, init) => globalThis.fetch(input, init),
     now: () => new Date().toISOString(),
     createAbortController: () => new AbortController(),
     setTimeoutImpl: setTimeout,

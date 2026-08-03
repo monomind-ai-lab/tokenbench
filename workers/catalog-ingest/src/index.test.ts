@@ -242,6 +242,28 @@ describe('catalog ingestion', () => {
     }
   });
 
+  it('invokes the Workers global fetch with the required global receiver', async () => {
+    const database = createStatefulD1();
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(function (this: unknown) {
+      if (this !== globalThis) throw new Error('Illegal invocation');
+      return Promise.resolve({ ok: true, status: 200, json: async () => openRouterPayload } as Response);
+    }) as unknown as typeof fetch;
+    let work: Promise<unknown> | undefined;
+    try {
+      await worker.scheduled(
+        { cron: '0 */6 * * *' },
+        { CATALOG_DB: database.db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' },
+        { waitUntil: (promise) => { work = promise; } },
+      );
+      await work;
+      expect(database.state.refreshState['openrouter-models'].lastError).toBeNull();
+      expect(database.state.refreshState['openrouter-models'].lastRevision).toMatch(/^rev_/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('records an explicit refresh failure in the stateful D1 harness without publication', async () => {
     const database = createStatefulD1();
     await recordRefreshFailure(database.db, 'openrouter-models', 'timeout', '2026-08-03T00:00:00.000Z');
