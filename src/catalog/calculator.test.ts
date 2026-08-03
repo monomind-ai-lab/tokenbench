@@ -94,4 +94,17 @@ describe('catalog calculator', () => {
       kind: 'api', recommendedPlanId: null, expectedMonthlyCostMicroDollars: 12_000_000,
     });
   });
+
+  it('identifies a fixed but unsupported subscription separately from a variable entitlement', () => {
+    expect(recommendCostFirst([
+      { id: 'openai:fixed-but-unsupported', monthlyCostMicroDollars: 1_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 }, supportedModelIds: ['different-model'] },
+      { id: 'openai:variable', monthlyCostMicroDollars: 1_000_000, entitlement: { kind: 'rolling_limit', description: 'Usage limits apply.' }, supportedModelIds: ['gpt-alpha'] },
+    ], 12_000_000, 5_000_000, ['gpt-alpha'])).toMatchObject({
+      kind: 'api',
+      caveats: [
+        'openai:fixed-but-unsupported does not publish support for the selected model mix and is not comparable to this workload.',
+        'openai:variable has a variable usage limit and is not comparable to this workload.',
+      ],
+    });
+  });
 });

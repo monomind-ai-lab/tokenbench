@@ -23,6 +23,14 @@ async function all<T>(db: D1Database, query: string, ...values: unknown[]): Prom
   return (await db.prepare(query).bind(...values).all()).results as T[];
 }
 
+function parseStoredJson<T>(value: string, field: string): T {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw new Error(`Published catalog ${field} contains invalid JSON`);
+  }
+}
+
 export async function readPublishedCatalog(db: D1Database): Promise<CatalogResponse | null> {
   const revisions = await all<RevisionRow>(db,
     "SELECT revision, published_at, checked_at FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1");
@@ -49,7 +57,7 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
     plans: plans.map((plan): PlanOffer => ({
       id: plan.id, providerId: plan.provider_id, displayName: plan.display_name,
       monthlyCostMicroDollars: plan.monthly_cost_micro_dollars, currency: plan.currency,
-      pricingBasis: 'subscription', route: 'subscription', entitlement: JSON.parse(plan.entitlement_json), ...(plan.billing_cycle ? { billingCycle: plan.billing_cycle } : {}), ...(plan.supported_model_ids_json ? { supportedModelIds: JSON.parse(plan.supported_model_ids_json) } : {}), sourceId: plan.source_id,
+      pricingBasis: 'subscription', route: 'subscription', entitlement: parseStoredJson<PlanOffer['entitlement']>(plan.entitlement_json, 'entitlement_json'), ...(plan.billing_cycle ? { billingCycle: plan.billing_cycle } : {}), ...(plan.supported_model_ids_json ? { supportedModelIds: parseStoredJson<string[]>(plan.supported_model_ids_json, 'supported_model_ids_json') } : {}), sourceId: plan.source_id,
     })),
     modelOffers: models.map((model): ModelOffer => ({
       id: model.id, providerId: model.provider_id, displayName: model.display_name, modelId: model.model_id,

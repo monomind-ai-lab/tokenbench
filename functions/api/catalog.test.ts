@@ -74,4 +74,17 @@ describe('GET /api/catalog', () => {
     });
     await expect(response.json()).resolves.toMatchObject({ revision: 'old-rev', freshness: { status: 'stale' } });
   });
+
+  it.each([
+    ['malformed entitlement JSON', { ...plan, entitlement_json: '<html>upstream error</html>' }],
+    ['malformed supported-model metadata', { ...plan, supported_model_ids_json: '{not-json' }],
+  ])('contains %s in the safe bootstrap fallback', async (_caseName, malformedPlan) => {
+    const response = await onRequestGet({
+      request: new Request('https://example.com/api/catalog'),
+      env: { CATALOG_DB: d1({ revision: [{ revision: 'rev-1', published_at: '2026-08-03T00:00:00.000Z', checked_at: '2026-08-03T01:00:00.000Z' }], sources: [source], plans: [malformedPlan], models: [model] }) },
+    });
+    await expect(response.json()).resolves.toMatchObject({
+      freshness: { status: 'bootstrap', message: 'Published catalog unavailable; serving checked-in bootstrap source records.' },
+    });
+  });
 });

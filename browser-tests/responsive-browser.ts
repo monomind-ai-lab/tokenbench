@@ -9,16 +9,28 @@ const viewports = [
   { width: 1440, layout: 'wide', cards: false },
 ] as const;
 
-async function openCalculator(page: Page) {
+async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, status = 200, expectCalculator = true) {
   await page.route('https://*/*', (route) => route.abort());
   await page.route('http://127.0.0.1:4173/api/catalog', (route) => route.fulfill({
-    status: 200,
+    status,
     contentType: 'application/json',
-    headers: { etag: `"${FRONTEND_TEST_CATALOG.revision}"` },
-    body: JSON.stringify(FRONTEND_TEST_CATALOG),
+    headers: { etag: `"${catalog.revision}"` },
+    body: JSON.stringify(catalog),
   }));
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /API-equivalent value/i })).toBeVisible();
+  if (expectCalculator) await expect(page.getByRole('heading', { name: /API-equivalent value/i })).toBeVisible();
+}
+
+async function tabTo(page: Page, selector: string) {
+  for (let index = 0; index < 180; index += 1) {
+    await page.keyboard.press('Tab');
+    const focused = await page.evaluate((target) => {
+      const element = document.activeElement as HTMLElement | null;
+      return Boolean(element?.matches(target) && element.matches(':focus-visible'));
+    }, selector);
+    if (focused) return;
+  }
+  throw new Error(`Tab did not reach visible focus for ${selector}`);
 }
 
 test.describe('responsive calculator browser harness', () => {
@@ -56,28 +68,54 @@ test.describe('responsive calculator browser harness', () => {
     });
   }
 
-  test('keyboard Tab navigation reaches language, theme, and evidence links with visible focus', async ({ page }) => {
+  for (const viewport of viewports) {
+    test(`${viewport.width}px keyboard Tab reaches provider, plan, model, and workload controls with visible focus`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: 1000 });
+      await openCalculator(page);
+      await page.locator('body').click({ position: { x: 2, y: 2 } });
+      await tabTo(page, 'input[name="provider"]');
+      await tabTo(page, 'input[name="plan"]');
+      await tabTo(page, 'input[type="checkbox"]');
+      await tabTo(page, '#monthly-tokens');
+      await tabTo(page, 'input[type="range"]');
+    });
+  }
+
+  test('persists dark theme and applies the selected language without changing the catalog controls', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page);
-    await page.locator('body').click({ position: { x: 2, y: 2 } });
+    const initialProvider = await page.locator('input[name="provider"]:checked').inputValue();
+    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-TW');
+    await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW');
+    await expect(page.locator('input[name="provider"]:checked')).toHaveValue(initialProvider);
+  });
 
-    const seen = new Map<string, { focusVisible: boolean; outlineWidth: string }>();
-    for (let index = 0; index < 140 && seen.size < 3; index += 1) {
-      await page.keyboard.press('Tab');
-      const focused = await page.evaluate(() => {
-        const element = document.activeElement as HTMLElement | null;
-        if (!element) return null;
-        const label = element.getAttribute('aria-label') ?? '';
-        const key = label.startsWith('View evidence') ? 'evidence' : label === 'Language' ? 'language' : label === 'Toggle dark theme' ? 'theme' : '';
-        if (!key) return null;
-        const style = getComputedStyle(element);
-        return { key, focusVisible: element.matches(':focus-visible'), outlineWidth: style.outlineWidth };
-      });
-      if (focused) seen.set(focused.key, focused);
-    }
+  test('renders loading, empty, error, bootstrap, and stale catalog states', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await page.route('https://*/*', (route) => route.abort());
+    await page.route('http://127.0.0.1:4173/api/catalog', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FRONTEND_TEST_CATALOG) });
+    });
+    const navigation = page.goto('/');
+    await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
+    await navigation;
+    await expect(page.getByRole('heading', { name: /API-equivalent value/i })).toBeVisible();
 
-    expect(seen.get('language')).toEqual(expect.objectContaining({ focusVisible: true, outlineWidth: '3px' }));
-    expect(seen.get('theme')).toEqual(expect.objectContaining({ focusVisible: true, outlineWidth: '3px' }));
-    expect(seen.get('evidence')).toEqual(expect.objectContaining({ focusVisible: true, outlineWidth: '3px' }));
+    await page.unrouteAll();
+    await openCalculator(page, { ...FRONTEND_TEST_CATALOG, plans: [], modelOffers: [] }, 200, false);
+    await expect(page.getByText('No providers available')).toBeVisible();
+
+    await page.unrouteAll();
+    await page.evaluate(() => window.localStorage.clear());
+    await openCalculator(page, FRONTEND_TEST_CATALOG, 503, false);
+    await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
+    await expect(page.getByText('bootstrap', { exact: true })).toBeVisible();
+
+    await page.unrouteAll();
+    await openCalculator(page, { ...FRONTEND_TEST_CATALOG, freshness: { status: 'stale', checkedAt: '2026-08-02T00:00:00.000Z' } });
+    await expect(page.getByText('The published catalog is stale; verify pricing before making a decision.')).toBeVisible();
   });
 });

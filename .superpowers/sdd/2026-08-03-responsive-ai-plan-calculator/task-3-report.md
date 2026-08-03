@@ -35,3 +35,22 @@ git diff --check     passed
 ## Remaining external actions
 
 Apply migration `0002_catalog_metadata.sql` to the provisioned D1 database, confirm `CATALOG_DB` and `SOURCE_SNAPSHOTS` bindings in both Pages environments, configure the R2 lifecycle retention policy, and enable the documented Pages/Worker Builds settings for `main`. No Cloudflare deployment or dashboard mutation was performed by this task.
+
+## Audit remediation (Task 469a8d9ced63)
+
+- Removed the obsolete fabricated provider/price/token catalogue from `src/types.ts`; the module now exposes language data only, while a regression validates the checked-in bootstrap with the source-link validator.
+- Validation now requires finite ISO timestamps and enforces provenance ownership for subscription/direct offers while retaining OpenRouter/OpenCode route ownership. Stored D1 JSON is parsed through a safe boundary before catalog validation, so malformed entitlement or supported-model metadata returns the marked bootstrap fallback instead of an unhandled response.
+- Upstream adapters reject empty offer sets; malformed JSON/HTML, schema drift, duplicate IDs, R2/D1 failures, and timeout paths are covered with stateful tests that retain the active revision and record source refresh errors. The fetch seam is injected through `refreshSource`, and scheduled automated sources now require an explicit `AUTOMATED_SOURCE_IDS` allowlist.
+- Recommendations distinguish a provider that does not publish support for the selected model mix from one with a variable or insufficient entitlement. Browser coverage now runs real Chrome at 320, 375, 768, 1024, and 1440px, Tabs through the calculator controls, and validates dark/language, loading, empty, error/bootstrap, and stale behavior with output under `/tmp`.
+- Deployment documentation makes Wrangler configuration authoritative for bindings and records the robots/terms allowlist gate: the approved OpenRouter Models API and OpenCode JSON model endpoint are configured to refresh on schedule, while HTML, unstable, and unapproved adapters require review and manual fallback. No Cloudflare resource was changed.
+
+### Remediation validation
+
+```text
+npm test                        9 files, 60 tests passed with clean output
+npm run test:browser            12 local-Chrome responsive, keyboard, and state tests passed
+npm run lint                    tsc --noEmit passed
+npm run build                   Vite production build passed
+npx wrangler deploy --dry-run  Worker bundle and provisioned D1/R2 bindings validated; no deployment
+git diff --check                passed
+```

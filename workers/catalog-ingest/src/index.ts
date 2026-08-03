@@ -6,11 +6,22 @@ type BoundStatement = unknown;
 interface D1Database { prepare(sql: string): { bind(...values: unknown[]): BoundStatement }; batch(statements: BoundStatement[]): Promise<unknown> }
 interface R2Bucket { put(key: string, value: string, options?: { httpMetadata?: { contentType: string } }): Promise<unknown> }
 
-export interface IngestEnv { CATALOG_DB: D1Database; SOURCE_SNAPSHOTS: R2Bucket }
+export interface IngestEnv { CATALOG_DB: D1Database; SOURCE_SNAPSHOTS: R2Bucket; AUTOMATED_SOURCE_IDS?: string }
 export interface ParsedSource { source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }
+export interface RefreshDependencies {
+  fetchImpl: typeof fetch;
+  now: () => string;
+  createAbortController: () => AbortController;
+  setTimeoutImpl: typeof setTimeout;
+  clearTimeoutImpl: typeof clearTimeout;
+}
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/models';
 const OPENCODE_URL = 'https://opencode.ai/zen/v1/models';
+
+function isAutomatedSourceAllowlisted(env: IngestEnv, sourceId: string): boolean {
+  return env.AUTOMATED_SOURCE_IDS?.split(',').map((id) => id.trim()).includes(sourceId) ?? false;
+}
 
 function microDollarsPerMillion(value: unknown, label: string): number {
   if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) throw new Error(`${label} pricing is required`);
@@ -54,6 +65,7 @@ function parseModels(
       outputMicroDollarsPerMillion: microDollarsPerMillion(output, label), sourceId,
     };
   });
+  if (modelOffers.length === 0) throw new Error(`${label} payload must contain at least one model offer`);
   return { source, plans: [], modelOffers };
 }
 
@@ -109,14 +121,30 @@ export async function recordRefreshFailure(db: D1Database, sourceId: string, err
   await db.batch([db.prepare('INSERT INTO source_refresh_state (source_id, last_success_at, last_revision, last_error) VALUES (?, NULL, NULL, ?) ON CONFLICT(source_id) DO UPDATE SET last_error = excluded.last_error').bind(sourceId, message.slice(0, 1_000))]);
 }
 
-async function refresh(url: string, sourceId: string, parse: (payload: unknown, observedAt: string) => ParsedSource, env: IngestEnv): Promise<void> {
-  const abort = new AbortController();
-  const timeout = setTimeout(() => abort.abort('upstream timeout'), 20_000);
-  const response = await fetch(url, { signal: abort.signal }).finally(() => clearTimeout(timeout));
-  if (!response.ok) throw new Error(`Catalog source ${url} returned ${response.status}`);
-  const now = new Date().toISOString();
-  const rawPayload = await response.json();
-  await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source: parse(rawPayload, now), rawPayload, now });
+export async function refreshSource(
+  url: string,
+  sourceId: string,
+  parse: (payload: unknown, observedAt: string) => ParsedSource,
+  env: IngestEnv,
+  dependencies: RefreshDependencies = {
+    fetchImpl: fetch,
+    now: () => new Date().toISOString(),
+    createAbortController: () => new AbortController(),
+    setTimeoutImpl: setTimeout,
+    clearTimeoutImpl: clearTimeout,
+  },
+): Promise<void> {
+  const abort = dependencies.createAbortController();
+  const timeout = dependencies.setTimeoutImpl(() => abort.abort('upstream timeout'), 20_000);
+  try {
+    const response = await dependencies.fetchImpl(url, { signal: abort.signal });
+    if (!response.ok) throw new Error(`Catalog source ${url} returned ${response.status}`);
+    const now = dependencies.now();
+    const rawPayload = await response.json();
+    await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source: parse(rawPayload, now), rawPayload, now });
+  } finally {
+    dependencies.clearTimeoutImpl(timeout);
+  }
 }
 
 export function buildManualSubscriptionSource(providerId: string, observedAt: string): ParsedSource {
@@ -132,8 +160,15 @@ async function refreshManual(providerId: string, env: IngestEnv): Promise<void> 
 export default {
   async scheduled(controller: { cron: string }, env: IngestEnv, ctx: { waitUntil(promise: Promise<unknown>): void }) {
     const guarded = (sourceId: string, operation: Promise<void>) => operation.catch(async (error) => recordRefreshFailure(env.CATALOG_DB, sourceId, error, new Date().toISOString()));
-    if (controller.cron === '0 */6 * * *') ctx.waitUntil(guarded('openrouter-models', refresh(OPENROUTER_URL, 'openrouter-models', parseOpenRouterModels, env)));
-    else if (controller.cron === '30 */6 * * *') ctx.waitUntil(guarded('opencode-zen', refresh(OPENCODE_URL, 'opencode-zen', parseOpenCodeModels, env)));
+    const guardedAutomatedRefresh = (sourceId: string, url: string, parse: (payload: unknown, observedAt: string) => ParsedSource) => {
+      if (!isAutomatedSourceAllowlisted(env, sourceId)) {
+        ctx.waitUntil(recordRefreshFailure(env.CATALOG_DB, sourceId, new Error(`${sourceId} is not allowlisted for automated refresh`), new Date().toISOString()));
+        return;
+      }
+      ctx.waitUntil(guarded(sourceId, refreshSource(url, sourceId, parse, env)));
+    };
+    if (controller.cron === '0 */6 * * *') guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
+    else if (controller.cron === '30 */6 * * *') guardedAutomatedRefresh('opencode-zen', OPENCODE_URL, parseOpenCodeModels);
     else {
       const hour = new Date().getUTCHours();
       const providerId = MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length];

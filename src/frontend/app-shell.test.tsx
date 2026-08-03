@@ -90,6 +90,6 @@ describe('responsive calculator app shell', () => {
   it('does not present the cheapest subscription as an overall recommendation when access is variable', async () => {
     render(<App />);
     expect(await screen.findByText(/recommended API route/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/variable usage limit and is not comparable/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/does not publish support for the selected model mix/i).length).toBeGreaterThan(0);
   });
 });

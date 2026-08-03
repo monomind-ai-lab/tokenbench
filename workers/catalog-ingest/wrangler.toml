@@ -2,6 +2,9 @@ name = "ai-plan-catalog-ingest"
 main = "src/index.ts"
 compatibility_date = "2026-08-03"
 
+[vars]
+AUTOMATED_SOURCE_IDS = "openrouter-models,opencode-zen"
+
 [[d1_databases]]
 binding = "CATALOG_DB"
 database_name = "ai-plan-catalog"

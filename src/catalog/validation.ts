@@ -8,6 +8,13 @@ function requireString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) fail(`${name} must be a non-empty string`);
 }
 
+function requireFiniteIsoTimestamp(value: unknown, name: string): asserts value is string {
+  requireString(value, name);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) {
+    fail(`${name} must be a finite ISO timestamp`);
+  }
+}
+
 function requireNonNegativeInteger(value: unknown, name: string): asserts value is number {
   if (!Number.isInteger(value) || (value as number) < 0) fail(`${name} must be a non-negative integer`);
 }
@@ -72,25 +79,26 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
   if (!value || typeof value !== 'object') fail('catalog must be an object');
   const catalog = value as CatalogResponse;
   requireString(catalog.revision, 'revision');
-  requireString(catalog.publishedAt, 'publishedAt');
+  requireFiniteIsoTimestamp(catalog.publishedAt, 'publishedAt');
   if (!catalog.freshness || typeof catalog.freshness !== 'object') fail('freshness must be an object');
   if (!['fresh', 'stale', 'bootstrap'].includes(catalog.freshness.status)) fail('freshness.status is invalid');
-  requireString(catalog.freshness.checkedAt, 'freshness.checkedAt');
+  requireFiniteIsoTimestamp(catalog.freshness.checkedAt, 'freshness.checkedAt');
   if (!Array.isArray(catalog.provenance) || !Array.isArray(catalog.plans) || !Array.isArray(catalog.modelOffers)) {
     fail('catalog records must be arrays');
   }
 
-  const sourceIds = new Set<string>();
+  const sourceProviders = new Map<string, string>();
   catalog.provenance.forEach((source, index) => {
     const name = `provenance[${index}]`;
-    for (const key of ['id', 'providerId', 'observedAt'] as const) requireString(source[key], `${name}.${key}`);
+    for (const key of ['id', 'providerId'] as const) requireString(source[key], `${name}.${key}`);
+    requireFiniteIsoTimestamp(source.observedAt, `${name}.observedAt`);
     requireUrl(source.sourceUrl, `${name}.sourceUrl`);
     if (!['official_json', 'manual_manifest'].includes(source.sourceKind)) fail(`${name}.sourceKind is invalid`);
     if (!['official', 'manual_verified'].includes(source.confidence)) fail(`${name}.confidence is invalid`);
     for (const key of ['contentHash', 'parserVersion', 'evidenceLocator'] as const) validateOptionalString(source[key], `${name}.${key}`);
     if (source.reviewStatus !== undefined && !['verified', 'needs_review', 'rejected'].includes(source.reviewStatus)) fail(`${name}.reviewStatus is invalid`);
-    if (sourceIds.has(source.id)) fail(`Duplicate provenance id: ${source.id}`);
-    sourceIds.add(source.id);
+    if (sourceProviders.has(source.id)) fail(`Duplicate provenance id: ${source.id}`);
+    sourceProviders.set(source.id, source.providerId);
   });
 
   const planIds = new Set<string>();
@@ -104,14 +112,19 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     validateOptionalStringArray(plan.supportedModelIds, `${name}.supportedModelIds`);
     if (plan.currency !== 'USD' || plan.pricingBasis !== 'subscription' || plan.route !== 'subscription') fail(`${name} has invalid pricing metadata`);
     validateEntitlement(plan.entitlement, `${name}.entitlement`);
-    if (!sourceIds.has(plan.sourceId)) fail(`${name}.sourceId must refer to provenance`);
+    const sourceProvider = sourceProviders.get(plan.sourceId);
+    if (!sourceProvider) fail(`${name}.sourceId must refer to provenance`);
+    if (sourceProvider !== plan.providerId) fail(`${name}.sourceId must belong to provider ${plan.providerId}`);
   });
 
   const modelIds = new Set<string>();
   catalog.modelOffers.forEach((model, index) => {
     if (modelIds.has(model.id)) fail(`Duplicate model offer id: ${model.id}`);
     modelIds.add(model.id);
-    validateModelOffer(model, index, sourceIds);
+    validateModelOffer(model, index, new Set(sourceProviders.keys()));
+    const sourceProvider = sourceProviders.get(model.sourceId);
+    const expectedSourceProvider = model.route === 'direct_provider' ? model.providerId : model.route === 'openrouter' ? 'openrouter' : 'opencode';
+    if (sourceProvider !== expectedSourceProvider) fail(`modelOffers[${index}].sourceId must belong to provider ${expectedSourceProvider}`);
   });
   return catalog;
 }

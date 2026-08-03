@@ -66,4 +66,21 @@ describe('catalog validation', () => {
       modelOffers: [{ ...validCatalog.modelOffers[0], pricingBasis: 'openrouter', route: 'direct_provider' }],
     })).toThrow('modelOffers[0].pricingBasis and route must match');
   });
+
+  it('rejects non-finite timestamps and source records that do not belong to their offer provider', () => {
+    expect(() => validateCatalogResponse({ ...validCatalog, publishedAt: 'not-a-date' }))
+      .toThrow('publishedAt must be a finite ISO timestamp');
+    expect(() => validateCatalogResponse({
+      ...validCatalog,
+      provenance: [{ ...validCatalog.provenance[0], observedAt: '2026-99-99T00:00:00.000Z' }],
+    })).toThrow('provenance[0].observedAt must be a finite ISO timestamp');
+    expect(() => validateCatalogResponse({
+      ...validCatalog,
+      plans: [{ ...validCatalog.plans[0], providerId: 'anthropic' }],
+    })).toThrow('plans[0].sourceId must belong to provider anthropic');
+    expect(() => validateCatalogResponse({
+      ...validCatalog,
+      modelOffers: [{ ...validCatalog.modelOffers[0], providerId: 'anthropic' }],
+    })).toThrow('modelOffers[0].sourceId must belong to provider anthropic');
+  });
 });
