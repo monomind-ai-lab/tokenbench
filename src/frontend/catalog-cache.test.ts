@@ -25,7 +25,7 @@ describe('catalog cache and conditional revalidation', () => {
     expect(result.catalog).toEqual(FRONTEND_TEST_CATALOG);
     expect(result.fromCache).toBe(false);
     expect(result.lastSuccessfulRefreshAt).toBe('2026-08-03T02:00:00.000Z');
-    expect(cache.setItem).toHaveBeenCalledWith('ai-cost-engine:catalog:v1', expect.stringContaining('test-revision'));
+    expect(cache.setItem).toHaveBeenCalledWith('ai-cost-engine:catalog:v2', expect.stringContaining('test-revision'));
   });
 
   it('revalidates cached data with If-None-Match and keeps state on 304', async () => {
@@ -38,12 +38,12 @@ describe('catalog cache and conditional revalidation', () => {
       headers: expect.objectContaining({ 'If-None-Match': '"test-revision"' }),
     }));
     expect(result.catalog.revision).toBe(FRONTEND_TEST_CATALOG.revision);
-    expect(result.catalog.freshness.checkedAt).toBe('2026-08-03T02:00:00.000Z');
+    expect(result.catalog.freshness.checkedAt).toBe(FRONTEND_TEST_CATALOG.freshness.checkedAt);
     expect(result.fromCache).toBe(true);
     expect(result.lastSuccessfulRefreshAt).toBe('2026-08-03T02:00:00.000Z');
   });
 
-  it('persists refreshed metadata and the current ETag after a 304 response', async () => {
+  it('persists refresh timing without pretending the upstream catalog was checked again on a 304', async () => {
     const cache = storage(JSON.stringify({ catalog: FRONTEND_TEST_CATALOG, etag: '"old-revision"', fetchedAt: '2026-08-03T01:00:00.000Z' }));
     const fetchImpl = vi.fn().mockResolvedValue(new Response(null, { status: 304, headers: { etag: '"refreshed-revision"' } }));
 
@@ -51,10 +51,10 @@ describe('catalog cache and conditional revalidation', () => {
     const writes = vi.mocked(cache.setItem).mock.calls;
     const persisted = JSON.parse(writes.at(-1)?.[1] ?? '{}') as { catalog?: { freshness?: { checkedAt?: string } }; etag?: string; fetchedAt?: string };
 
-    expect(result.catalog.freshness.checkedAt).toBe('2026-08-03T02:00:00.000Z');
+    expect(result.catalog.freshness.checkedAt).toBe(FRONTEND_TEST_CATALOG.freshness.checkedAt);
     expect(persisted.fetchedAt).toBe('2026-08-03T02:00:00.000Z');
     expect(persisted.etag).toBe('"refreshed-revision"');
-    expect(persisted.catalog?.freshness?.checkedAt).toBe('2026-08-03T02:00:00.000Z');
+    expect(persisted.catalog?.freshness?.checkedAt).toBe(FRONTEND_TEST_CATALOG.freshness.checkedAt);
   });
 
   it('uses only the checked-in verified bootstrap with an explicit notice when no network/cache exists', async () => {

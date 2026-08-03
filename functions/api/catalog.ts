@@ -89,7 +89,7 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
   const filtered = filterByProvider(catalog, new URL(request.url).searchParams.get('provider'));
   const etag = `"${filtered.revision}"`;
   const headers = new Headers({
-    'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
+    'Cache-Control': 'public, max-age=0, must-revalidate',
     ETag: etag,
     Vary: 'Accept-Encoding',
   });

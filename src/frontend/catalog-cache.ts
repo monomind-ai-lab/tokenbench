@@ -2,7 +2,7 @@ import { BOOTSTRAP_CATALOG } from '../catalog/bootstrap';
 import type { CatalogFreshness, CatalogResponse } from '../catalog/contracts';
 import { validateCatalogResponse } from '../catalog/validation';
 
-export const CATALOG_CACHE_KEY = 'ai-cost-engine:catalog:v1';
+export const CATALOG_CACHE_KEY = 'ai-cost-engine:catalog:v2';
 
 export interface CatalogStorage {
   getItem(key: string): string | null;
@@ -75,11 +75,11 @@ export async function loadCatalog(options: CatalogLoadOptions = {}): Promise<Cat
   if (cached?.etag) headers['If-None-Match'] = cached.etag;
 
   try {
-    const response = await fetchImpl(url, { headers });
+    const response = await fetchImpl(url, { headers, cache: 'no-cache' });
     const refreshedAt = now();
     if (response.status === 304 && cached) {
       const etag = response.headers.get('etag') ?? cached.etag;
-      const catalog = withFreshness(cached.catalog, cached.catalog.freshness.status, refreshedAt);
+      const catalog = cached.catalog;
       writeCache(storage, cacheKey, { catalog, etag, fetchedAt: refreshedAt });
       return {
         catalog,

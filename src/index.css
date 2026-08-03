@@ -76,11 +76,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .status-error { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); border-color: var(--danger); }
 
 .page-main { width: min(100% - 48px, 1440px); margin: 0 auto; padding: 28px 0 64px; }
-.content-stack, .analysis-stack { display: grid; gap: 24px; }
-.intro-panel { display: flex; justify-content: space-between; gap: 32px; padding: clamp(20px, 4vw, 40px); border: 1px solid var(--outline); border-radius: var(--radius); background: linear-gradient(135deg, var(--surface), var(--surface-low)); box-shadow: var(--shadow); }
+.content-stack, .analysis-stack { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.intro-panel { min-width: 0; display: flex; justify-content: space-between; gap: 32px; padding: clamp(20px, 4vw, 40px); border: 1px solid var(--outline); border-radius: var(--radius); background: linear-gradient(135deg, var(--surface), var(--surface-low)); box-shadow: var(--shadow); }
 .intro-panel h2 { max-width: 740px; margin: 5px 0 12px; font-family: 'Space Grotesk', sans-serif; font-size: clamp(1.8rem, 4vw, 3.3rem); line-height: 1.04; letter-spacing: -0.05em; }
 .intro-panel p:not(.eyebrow) { max-width: 720px; margin: 0; color: var(--muted); line-height: 1.65; }
-.eyebrow { margin: 0; color: var(--primary-strong); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
+.eyebrow { margin: 0; overflow-wrap: anywhere; color: var(--primary-strong); font-size: 0.74rem; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; }
 .intro-meta { max-width: 260px; display: flex; flex-direction: column; justify-content: center; gap: 10px; color: var(--muted); font-size: 0.8rem; line-height: 1.5; }
 .freshness-chip { width: fit-content; padding: 5px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .freshness-fresh { color: var(--primary-contrast); background: var(--primary); }
