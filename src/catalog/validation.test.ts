@@ -27,6 +27,15 @@ describe('catalog validation', () => {
     expect(validateCatalogResponse(validCatalog)).toEqual(validCatalog);
   });
 
+  it('accepts explicit catalog metadata needed to evaluate plan eligibility and evidence', () => {
+    expect(validateCatalogResponse({
+      ...validCatalog,
+      provenance: [{ ...validCatalog.provenance[0], contentHash: 'sha256:abc', parserVersion: 'v1', evidenceLocator: 'table/pricing', reviewStatus: 'verified' }],
+      plans: [{ ...validCatalog.plans[0], billingCycle: 'monthly', supportedModelIds: ['gpt-4o'] }],
+      modelOffers: [{ ...validCatalog.modelOffers[0], contextWindowTokens: 128_000, maxOutputTokens: 16_000, availability: 'available' }],
+    })).toMatchObject({ plans: [{ billingCycle: 'monthly', supportedModelIds: ['gpt-4o'] }] });
+  });
+
   it('rejects duplicate stable offer IDs', () => {
     expect(() => validateCatalogResponse({ ...validCatalog, plans: [...validCatalog.plans, validCatalog.plans[0]] }))
       .toThrow('Duplicate plan id: openai:plus');

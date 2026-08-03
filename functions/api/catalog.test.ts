@@ -3,17 +3,17 @@ import { onRequestGet } from './catalog';
 
 const source = {
   id: 'openai-api', provider_id: 'openai', source_url: 'https://platform.openai.com/docs/pricing',
-  observed_at: '2026-08-03T00:00:00.000Z', source_kind: 'official_json', confidence: 'official', snapshot_key: null,
+  observed_at: '2026-08-03T00:00:00.000Z', source_kind: 'official_json', confidence: 'official', snapshot_key: null, content_hash: 'sha256:abc', parser_version: 'v1', evidence_locator: 'pricing/table', review_status: 'verified',
 };
 const plan = {
   id: 'openai:plus', provider_id: 'openai', display_name: 'Plus', monthly_cost_micro_dollars: 20_000_000,
-  currency: 'USD', entitlement_json: JSON.stringify({ kind: 'rolling_limit', description: 'Usage limits apply.' }), source_id: 'openai-api',
+  currency: 'USD', entitlement_json: JSON.stringify({ kind: 'rolling_limit', description: 'Usage limits apply.' }), billing_cycle: 'monthly', supported_model_ids_json: JSON.stringify(['gpt-4o']), source_id: 'openai-api',
 };
 const model = {
   id: 'openai:gpt-4o:direct', provider_id: 'openai', display_name: 'GPT-4o', model_id: 'gpt-4o',
   pricing_basis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens',
   input_micro_dollars_per_million: 2_500_000, cached_input_micro_dollars_per_million: null,
-  output_micro_dollars_per_million: 10_000_000, source_id: 'openai-api',
+  output_micro_dollars_per_million: 10_000_000, context_window_tokens: 128_000, max_output_tokens: 16_000, availability: 'available', source_id: 'openai-api',
 };
 
 function d1(rows: Record<string, unknown[]>) {
@@ -41,7 +41,7 @@ describe('GET /api/catalog', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('etag')).toBe('"rev-1"');
     expect(response.headers.get('cache-control')).toContain('public');
-    await expect(response.json()).resolves.toMatchObject({ revision: 'rev-1', plans: [{ id: 'openai:plus' }], modelOffers: [{ id: 'openai:gpt-4o:direct' }] });
+    await expect(response.json()).resolves.toMatchObject({ revision: 'rev-1', provenance: [{ contentHash: 'sha256:abc', reviewStatus: 'verified' }], plans: [{ id: 'openai:plus', billingCycle: 'monthly', supportedModelIds: ['gpt-4o'] }], modelOffers: [{ id: 'openai:gpt-4o:direct', contextWindowTokens: 128_000, availability: 'available' }] });
   });
 
   it('returns 304 when the client has the current revision', async () => {
@@ -64,7 +64,7 @@ describe('GET /api/catalog', () => {
     expect(response.status).toBe(200);
     expect(body.freshness.status).toBe('bootstrap');
     expect(body.provenance).toHaveLength(9);
-    expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'kimi', 'xai', 'openai', 'zai']));
+    expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'openai']));
   });
 
   it('marks a published revision stale when its refresh timestamp exceeds one day', async () => {

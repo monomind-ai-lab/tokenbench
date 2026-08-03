@@ -75,13 +75,23 @@ describe('catalog calculator', () => {
       .toThrow('Changed model must exist in the current mix');
   });
 
-  it('recommends the lowest monthly cost and surfaces variable entitlement caveats', () => {
+  it('recommends the lowest eligible workload cost instead of the cheapest variable subscription', () => {
     expect(recommendCostFirst([
-      { id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'rolling_limit', description: 'Rolling limit' } },
-      { id: 'anthropic:pro', monthlyCostMicroDollars: 25_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 } },
-    ])).toEqual({
-      recommendedPlanId: 'openai:plus',
-      caveats: ['openai:plus has a variable usage limit; no maximum plan value is calculated.'],
+      { id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'rolling_limit', description: 'Rolling limit' }, supportedModelIds: ['gpt-alpha'] },
+      { id: 'anthropic:pro', monthlyCostMicroDollars: 25_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 }, supportedModelIds: ['gpt-alpha'] },
+    ], 30_000_000, 5_000_000, ['gpt-alpha'])).toEqual({
+      kind: 'subscription',
+      recommendedPlanId: 'anthropic:pro',
+      expectedMonthlyCostMicroDollars: 25_000_000,
+      caveats: ['openai:plus has a variable usage limit and is not comparable to this workload.'],
+    });
+  });
+
+  it('keeps API billing as the recommendation when no subscription entitlement is eligible', () => {
+    expect(recommendCostFirst([
+      { id: 'openai:pro', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'guardrail_limited', description: 'Guardrails' }, supportedModelIds: ['gpt-alpha'] },
+    ], 12_000_000, 5_000_000, ['gpt-alpha'])).toMatchObject({
+      kind: 'api', recommendedPlanId: null, expectedMonthlyCostMicroDollars: 12_000_000,
     });
   });
 });

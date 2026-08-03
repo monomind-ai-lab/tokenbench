@@ -32,6 +32,7 @@ export interface CalculatorSnapshot {
   monthlyApiCostMicroDollars: number;
   breakEvenTokens: number | null;
   maximumPlanValueMicroDollars: number | null;
+  monthlyTokens: number;
   chartPoints: ChartPoint[];
 }
 
@@ -116,6 +117,7 @@ export function buildCalculatorSnapshot({
     monthlyApiCostMicroDollars: apiEquivalentValueMicroDollars,
     breakEvenTokens: breakEven,
     maximumPlanValueMicroDollars: maximum,
+    monthlyTokens: safeMonthlyTokens,
     chartPoints,
   };
 }

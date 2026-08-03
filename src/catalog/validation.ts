@@ -12,6 +12,14 @@ function requireNonNegativeInteger(value: unknown, name: string): asserts value 
   if (!Number.isInteger(value) || (value as number) < 0) fail(`${name} must be a non-negative integer`);
 }
 
+function validateOptionalString(value: unknown, name: string): void {
+  if (value !== undefined) requireString(value, name);
+}
+
+function validateOptionalStringArray(value: unknown, name: string): void {
+  if (value !== undefined && (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || !item))) fail(`${name} must be an array of non-empty strings`);
+}
+
 function requireUrl(value: unknown, name: string): void {
   requireString(value, name);
   try {
@@ -54,6 +62,9 @@ function validateModelOffer(value: unknown, index: number, sourceIds: Set<string
   if (offer.cachedInputMicroDollarsPerMillion !== undefined) {
     requireNonNegativeInteger(offer.cachedInputMicroDollarsPerMillion, `${name}.cachedInputMicroDollarsPerMillion`);
   }
+  if (offer.contextWindowTokens !== undefined) requireNonNegativeInteger(offer.contextWindowTokens, `${name}.contextWindowTokens`);
+  if (offer.maxOutputTokens !== undefined) requireNonNegativeInteger(offer.maxOutputTokens, `${name}.maxOutputTokens`);
+  if (offer.availability !== undefined && !['available', 'limited', 'deprecated'].includes(offer.availability)) fail(`${name}.availability is invalid`);
   if (!sourceIds.has(offer.sourceId)) fail(`${name}.sourceId must refer to provenance`);
 }
 
@@ -76,6 +87,8 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     requireUrl(source.sourceUrl, `${name}.sourceUrl`);
     if (!['official_json', 'manual_manifest'].includes(source.sourceKind)) fail(`${name}.sourceKind is invalid`);
     if (!['official', 'manual_verified'].includes(source.confidence)) fail(`${name}.confidence is invalid`);
+    for (const key of ['contentHash', 'parserVersion', 'evidenceLocator'] as const) validateOptionalString(source[key], `${name}.${key}`);
+    if (source.reviewStatus !== undefined && !['verified', 'needs_review', 'rejected'].includes(source.reviewStatus)) fail(`${name}.reviewStatus is invalid`);
     if (sourceIds.has(source.id)) fail(`Duplicate provenance id: ${source.id}`);
     sourceIds.add(source.id);
   });
@@ -87,6 +100,8 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     if (planIds.has(plan.id)) fail(`Duplicate plan id: ${plan.id}`);
     planIds.add(plan.id);
     requireNonNegativeInteger(plan.monthlyCostMicroDollars, `${name}.monthlyCostMicroDollars`);
+    if (plan.billingCycle !== undefined && !['monthly', 'annual', 'other'].includes(plan.billingCycle)) fail(`${name}.billingCycle is invalid`);
+    validateOptionalStringArray(plan.supportedModelIds, `${name}.supportedModelIds`);
     if (plan.currency !== 'USD' || plan.pricingBasis !== 'subscription' || plan.route !== 'subscription') fail(`${name} has invalid pricing metadata`);
     validateEntitlement(plan.entitlement, `${name}.entitlement`);
     if (!sourceIds.has(plan.sourceId)) fail(`${name}.sourceId must refer to provenance`);

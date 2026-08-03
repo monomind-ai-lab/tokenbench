@@ -4,7 +4,7 @@ import { ConfidenceLabel, EmptyState, EvidenceLink, SectionCard, providerLabel }
 
 function OfferCells({ offer, catalog }: { offer: ModelOffer; catalog: CatalogResponse }) {
   return <>
-    <td data-label="Model"><strong>{offer.displayName}</strong><small>{offer.modelId}</small></td>
+    <td data-label="Model"><strong>{offer.displayName}</strong><small>{offer.modelId}</small><small>Availability: {offer.availability ?? 'not published'}</small></td>
     <td data-label="Input / 1M">{formatCurrencyMicroDollars(offer.inputMicroDollarsPerMillion)}</td>
     <td data-label="Output / 1M">{formatCurrencyMicroDollars(offer.outputMicroDollarsPerMillion)}</td>
     <td data-label="Confidence"><ConfidenceLabel catalog={catalog} sourceId={offer.sourceId} /></td>
@@ -33,7 +33,7 @@ function BasisComparison({ basis, offers, catalog }: { basis: ModelOffer['pricin
         <tbody>{offers.map((offer) => <tr key={offer.id}><OfferCells offer={offer} catalog={catalog} /></tr>)}</tbody>
       </table>
       <div className="comparison-cards">
-        {offers.map((offer) => <article className="offer-card" data-testid="offer-card" key={offer.id}><h4>{offer.displayName}</h4><p>{offer.modelId}</p><dl><div><dt>Input / 1M</dt><dd>{formatCurrencyMicroDollars(offer.inputMicroDollarsPerMillion)}</dd></div><div><dt>Output / 1M</dt><dd>{formatCurrencyMicroDollars(offer.outputMicroDollarsPerMillion)}</dd></div></dl><div className="card-meta"><ConfidenceLabel catalog={catalog} sourceId={offer.sourceId} /><EvidenceLink catalog={catalog} sourceId={offer.sourceId} /></div></article>)}
+        {offers.map((offer) => <article className="offer-card" data-testid="offer-card" key={offer.id}><h4>{offer.displayName}</h4><p>{offer.modelId} · Availability: {offer.availability ?? 'not published'}</p><dl><div><dt>Input / 1M</dt><dd>{formatCurrencyMicroDollars(offer.inputMicroDollarsPerMillion)}</dd></div><div><dt>Output / 1M</dt><dd>{formatCurrencyMicroDollars(offer.outputMicroDollarsPerMillion)}</dd></div></dl><div className="card-meta"><ConfidenceLabel catalog={catalog} sourceId={offer.sourceId} /><EvidenceLink catalog={catalog} sourceId={offer.sourceId} /></div></article>)}
       </div>
     </section>
   );

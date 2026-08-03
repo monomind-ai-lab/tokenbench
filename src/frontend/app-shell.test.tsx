@@ -26,6 +26,7 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'OpenRouter API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /evidence/i }).length).toBeGreaterThan(0);
+    expect(screen.getByText('Availability: available')).toBeInTheDocument();
   });
 
   it('redistributes selected model usage and changes derived values when a preset is edited', async () => {
@@ -84,5 +85,11 @@ describe('responsive calculator app shell', () => {
     const ranges = screen.getAllByRole('slider');
     expect(ranges.length).toBeGreaterThan(0);
     expect(ranges.every((range) => window.getComputedStyle(range).minHeight === '44px')).toBe(true);
+  });
+
+  it('does not present the cheapest subscription as an overall recommendation when access is variable', async () => {
+    render(<App />);
+    expect(await screen.findByText(/recommended API route/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/variable usage limit and is not comparable/i).length).toBeGreaterThan(0);
   });
 });

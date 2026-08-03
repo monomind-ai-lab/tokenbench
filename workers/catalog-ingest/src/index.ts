@@ -10,7 +10,7 @@ export interface IngestEnv { CATALOG_DB: D1Database; SOURCE_SNAPSHOTS: R2Bucket 
 export interface ParsedSource { source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/models';
-const OPENCODE_URL = 'https://opencode.ai/zen/go/v1/models';
+const OPENCODE_URL = 'https://opencode.ai/zen/v1/models';
 
 function microDollarsPerMillion(value: unknown, label: string): number {
   if (typeof value !== 'string' || !/^\d+(?:\.\d+)?$/.test(value)) throw new Error(`${label} pricing is required`);
@@ -87,13 +87,13 @@ export async function publishValidatedSource({
   const revision = `rev_${now.replace(/[-:.TZ]/g, '')}_${hash.slice(0, 12)}`;
   const statements: BoundStatement[] = [
     db.prepare('INSERT INTO catalog_revisions (revision, published_at, checked_at, publication_state) VALUES (?, ?, ?, ?)').bind(revision, now, now, 'pending'),
-    db.prepare("INSERT INTO source_records (revision, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key) SELECT ?, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key FROM source_records WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND id != ?").bind(revision, source.source.id),
-    db.prepare("INSERT INTO plan_offers (revision, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, source_id) SELECT ?, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, source_id FROM plan_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
-    db.prepare("INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, source_id) SELECT ?, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, source_id FROM model_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
-    db.prepare('INSERT INTO source_records (revision, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, source.source.id, source.source.providerId, source.source.sourceUrl, source.source.observedAt, source.source.sourceKind, source.source.confidence, snapshotKey),
+    db.prepare("INSERT INTO source_records (revision, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key, content_hash, parser_version, evidence_locator, review_status) SELECT ?, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key, content_hash, parser_version, evidence_locator, review_status FROM source_records WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND id != ?").bind(revision, source.source.id),
+    db.prepare("INSERT INTO plan_offers (revision, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, billing_cycle, supported_model_ids_json, source_id) SELECT ?, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, billing_cycle, supported_model_ids_json, source_id FROM plan_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
+    db.prepare("INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, source_id) SELECT ?, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, source_id FROM model_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
+    db.prepare('INSERT INTO source_records (revision, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key, content_hash, parser_version, evidence_locator, review_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, source.source.id, source.source.providerId, source.source.sourceUrl, source.source.observedAt, source.source.sourceKind, source.source.confidence, snapshotKey, source.source.contentHash ?? `sha256:${hash}`, source.source.parserVersion ?? 'adapter-v1', source.source.evidenceLocator ?? null, source.source.reviewStatus ?? 'verified'),
   ];
-  for (const plan of source.plans) statements.push(db.prepare('INSERT INTO plan_offers (revision, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, plan.id, plan.providerId, plan.displayName, plan.monthlyCostMicroDollars, plan.currency, JSON.stringify(plan.entitlement), plan.sourceId));
-  for (const model of source.modelOffers) statements.push(db.prepare('INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, model.id, model.providerId, model.displayName, model.modelId, model.pricingBasis, model.route, model.currency, model.unit, model.inputMicroDollarsPerMillion, model.cachedInputMicroDollarsPerMillion ?? null, model.outputMicroDollarsPerMillion, model.sourceId));
+  for (const plan of source.plans) statements.push(db.prepare('INSERT INTO plan_offers (revision, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, billing_cycle, supported_model_ids_json, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, plan.id, plan.providerId, plan.displayName, plan.monthlyCostMicroDollars, plan.currency, JSON.stringify(plan.entitlement), plan.billingCycle ?? null, plan.supportedModelIds ? JSON.stringify(plan.supportedModelIds) : null, plan.sourceId));
+  for (const model of source.modelOffers) statements.push(db.prepare('INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, model.id, model.providerId, model.displayName, model.modelId, model.pricingBasis, model.route, model.currency, model.unit, model.inputMicroDollarsPerMillion, model.cachedInputMicroDollarsPerMillion ?? null, model.outputMicroDollarsPerMillion, model.contextWindowTokens ?? null, model.maxOutputTokens ?? null, model.availability ?? null, model.sourceId));
   statements.push(
     db.prepare("UPDATE catalog_revisions SET publication_state = 'superseded' WHERE publication_state = 'published'").bind(),
     db.prepare("UPDATE catalog_revisions SET publication_state = 'published' WHERE revision = ?").bind(revision),
@@ -104,8 +104,15 @@ export async function publishValidatedSource({
   return { revision, snapshotKey };
 }
 
-async function refresh(url: string, parse: (payload: unknown, observedAt: string) => ParsedSource, env: IngestEnv): Promise<void> {
-  const response = await fetch(url);
+export async function recordRefreshFailure(db: D1Database, sourceId: string, error: unknown, now: string): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error);
+  await db.batch([db.prepare('INSERT INTO source_refresh_state (source_id, last_success_at, last_revision, last_error) VALUES (?, NULL, NULL, ?) ON CONFLICT(source_id) DO UPDATE SET last_error = excluded.last_error').bind(sourceId, message.slice(0, 1_000))]);
+}
+
+async function refresh(url: string, sourceId: string, parse: (payload: unknown, observedAt: string) => ParsedSource, env: IngestEnv): Promise<void> {
+  const abort = new AbortController();
+  const timeout = setTimeout(() => abort.abort('upstream timeout'), 20_000);
+  const response = await fetch(url, { signal: abort.signal }).finally(() => clearTimeout(timeout));
   if (!response.ok) throw new Error(`Catalog source ${url} returned ${response.status}`);
   const now = new Date().toISOString();
   const rawPayload = await response.json();
@@ -124,11 +131,13 @@ async function refreshManual(providerId: string, env: IngestEnv): Promise<void> 
 
 export default {
   async scheduled(controller: { cron: string }, env: IngestEnv, ctx: { waitUntil(promise: Promise<unknown>): void }) {
-    if (controller.cron === '0 */6 * * *') ctx.waitUntil(refresh(OPENROUTER_URL, parseOpenRouterModels, env));
-    else if (controller.cron === '30 */6 * * *') ctx.waitUntil(refresh(OPENCODE_URL, parseOpenCodeModels, env));
+    const guarded = (sourceId: string, operation: Promise<void>) => operation.catch(async (error) => recordRefreshFailure(env.CATALOG_DB, sourceId, error, new Date().toISOString()));
+    if (controller.cron === '0 */6 * * *') ctx.waitUntil(guarded('openrouter-models', refresh(OPENROUTER_URL, 'openrouter-models', parseOpenRouterModels, env)));
+    else if (controller.cron === '30 */6 * * *') ctx.waitUntil(guarded('opencode-zen', refresh(OPENCODE_URL, 'opencode-zen', parseOpenCodeModels, env)));
     else {
       const hour = new Date().getUTCHours();
-      ctx.waitUntil(refreshManual(MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length], env));
+      const providerId = MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length];
+      ctx.waitUntil(guarded(`${providerId}-subscription`, refreshManual(providerId, env)));
     }
   },
 };

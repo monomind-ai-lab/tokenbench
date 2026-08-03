@@ -19,6 +19,9 @@ export interface PlanOffer {
   pricingBasis: 'subscription';
   route: 'subscription';
   entitlement: PlanEntitlement;
+  /** Omitted only when the provider has not published these facts. */
+  billingCycle?: 'monthly' | 'annual' | 'other';
+  supportedModelIds?: string[];
   sourceId: string;
 }
 
@@ -34,6 +37,9 @@ export interface ModelOffer {
   inputMicroDollarsPerMillion: number;
   cachedInputMicroDollarsPerMillion?: number;
   outputMicroDollarsPerMillion: number;
+  contextWindowTokens?: number;
+  maxOutputTokens?: number;
+  availability?: 'available' | 'limited' | 'deprecated';
   sourceId: string;
 }
 
@@ -45,6 +51,10 @@ export interface SourceProvenance {
   sourceKind: 'official_json' | 'manual_manifest';
   confidence: 'official' | 'manual_verified';
   snapshotKey?: string;
+  contentHash?: string;
+  parserVersion?: string;
+  evidenceLocator?: string;
+  reviewStatus?: 'verified' | 'needs_review' | 'rejected';
 }
 
 export interface CatalogFreshness {
@@ -71,4 +81,5 @@ export interface RecommendationCandidate {
   id: string;
   monthlyCostMicroDollars: number;
   entitlement: PlanEntitlement;
+  supportedModelIds?: string[];
 }

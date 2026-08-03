@@ -74,6 +74,9 @@ export const FRONTEND_TEST_CATALOG: CatalogResponse = {
       unit: 'micro_dollars_per_million_tokens',
       inputMicroDollarsPerMillion: 2_000_000,
       outputMicroDollarsPerMillion: 8_000_000,
+      contextWindowTokens: 128_000,
+      maxOutputTokens: 16_000,
+      availability: 'available',
       sourceId: 'provider-a-direct',
     },
     {

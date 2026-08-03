@@ -15,9 +15,9 @@ interface Env {
 }
 
 interface RevisionRow { revision: string; published_at: string; checked_at: string }
-interface SourceRow { id: string; provider_id: string; source_url: string; observed_at: string; source_kind: SourceProvenance['sourceKind']; confidence: SourceProvenance['confidence']; snapshot_key: string | null }
-interface PlanRow { id: string; provider_id: string; display_name: string; monthly_cost_micro_dollars: number; currency: 'USD'; entitlement_json: string; source_id: string }
-interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; output_micro_dollars_per_million: number; source_id: string }
+interface SourceRow { id: string; provider_id: string; source_url: string; observed_at: string; source_kind: SourceProvenance['sourceKind']; confidence: SourceProvenance['confidence']; snapshot_key: string | null; content_hash: string | null; parser_version: string | null; evidence_locator: string | null; review_status: SourceProvenance['reviewStatus'] | null }
+interface PlanRow { id: string; provider_id: string; display_name: string; monthly_cost_micro_dollars: number; currency: 'USD'; entitlement_json: string; billing_cycle: PlanOffer['billingCycle'] | null; supported_model_ids_json: string | null; source_id: string }
+interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; output_micro_dollars_per_million: number; context_window_tokens: number | null; max_output_tokens: number | null; availability: ModelOffer['availability'] | null; source_id: string }
 
 async function all<T>(db: D1Database, query: string, ...values: unknown[]): Promise<T[]> {
   return (await db.prepare(query).bind(...values).all()).results as T[];
@@ -44,19 +44,19 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
       : { status: 'fresh', checkedAt: revision.checked_at },
     provenance: sources.map((source) => ({
       id: source.id, providerId: source.provider_id, sourceUrl: source.source_url, observedAt: source.observed_at,
-      sourceKind: source.source_kind, confidence: source.confidence, ...(source.snapshot_key ? { snapshotKey: source.snapshot_key } : {}),
+      sourceKind: source.source_kind, confidence: source.confidence, ...(source.snapshot_key ? { snapshotKey: source.snapshot_key } : {}), ...(source.content_hash ? { contentHash: source.content_hash } : {}), ...(source.parser_version ? { parserVersion: source.parser_version } : {}), ...(source.evidence_locator ? { evidenceLocator: source.evidence_locator } : {}), ...(source.review_status ? { reviewStatus: source.review_status } : {}),
     })),
     plans: plans.map((plan): PlanOffer => ({
       id: plan.id, providerId: plan.provider_id, displayName: plan.display_name,
       monthlyCostMicroDollars: plan.monthly_cost_micro_dollars, currency: plan.currency,
-      pricingBasis: 'subscription', route: 'subscription', entitlement: JSON.parse(plan.entitlement_json), sourceId: plan.source_id,
+      pricingBasis: 'subscription', route: 'subscription', entitlement: JSON.parse(plan.entitlement_json), ...(plan.billing_cycle ? { billingCycle: plan.billing_cycle } : {}), ...(plan.supported_model_ids_json ? { supportedModelIds: JSON.parse(plan.supported_model_ids_json) } : {}), sourceId: plan.source_id,
     })),
     modelOffers: models.map((model): ModelOffer => ({
       id: model.id, providerId: model.provider_id, displayName: model.display_name, modelId: model.model_id,
       pricingBasis: model.pricing_basis, route: model.route, currency: model.currency, unit: model.unit,
       inputMicroDollarsPerMillion: model.input_micro_dollars_per_million,
       ...(model.cached_input_micro_dollars_per_million === null ? {} : { cachedInputMicroDollarsPerMillion: model.cached_input_micro_dollars_per_million }),
-      outputMicroDollarsPerMillion: model.output_micro_dollars_per_million, sourceId: model.source_id,
+      outputMicroDollarsPerMillion: model.output_micro_dollars_per_million, ...(model.context_window_tokens === null ? {} : { contextWindowTokens: model.context_window_tokens }), ...(model.max_output_tokens === null ? {} : { maxOutputTokens: model.max_output_tokens }), ...(model.availability ? { availability: model.availability } : {}), sourceId: model.source_id,
     })),
   });
 }

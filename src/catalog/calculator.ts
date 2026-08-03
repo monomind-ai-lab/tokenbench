@@ -71,15 +71,28 @@ export function redistributeModelMix(
   return next;
 }
 
-export function recommendCostFirst(candidates: RecommendationCandidate[]): {
+export function recommendCostFirst(candidates: RecommendationCandidate[], apiMonthlyCostMicroDollars: number, monthlyTokens: number, selectedModelIds: string[]): {
+  kind: 'api' | 'subscription';
   recommendedPlanId: string | null;
+  expectedMonthlyCostMicroDollars: number;
   caveats: string[];
 } {
-  const recommended = [...candidates].sort((a, b) => a.monthlyCostMicroDollars - b.monthlyCostMicroDollars)[0];
-  if (!recommended) return { recommendedPlanId: null, caveats: ['No verified plan offers are available.'] };
-
-  const caveats = recommended.entitlement.kind === 'fixed_tokens'
-    ? []
-    : [`${recommended.id} has a variable usage limit; no maximum plan value is calculated.`];
-  return { recommendedPlanId: recommended.id, caveats };
+  const caveats: string[] = [];
+  const eligible = candidates.filter((candidate) => {
+    const supportsSelection = candidate.supportedModelIds?.length
+      ? selectedModelIds.every((modelId) => candidate.supportedModelIds?.includes(modelId))
+      : false;
+    const hasPublishedCapacity = candidate.entitlement.kind === 'fixed_tokens'
+      && candidate.entitlement.monthlyTokens >= monthlyTokens;
+    if (!supportsSelection || !hasPublishedCapacity) {
+      caveats.push(`${candidate.id} has a variable usage limit and is not comparable to this workload.`);
+      return false;
+    }
+    return true;
+  });
+  const recommended = eligible.sort((a, b) => a.monthlyCostMicroDollars - b.monthlyCostMicroDollars)[0];
+  if (!recommended || apiMonthlyCostMicroDollars <= recommended.monthlyCostMicroDollars) {
+    return { kind: 'api', recommendedPlanId: null, expectedMonthlyCostMicroDollars: apiMonthlyCostMicroDollars, caveats: [...new Set(caveats)] };
+  }
+  return { kind: 'subscription', recommendedPlanId: recommended.id, expectedMonthlyCostMicroDollars: recommended.monthlyCostMicroDollars, caveats: [...new Set(caveats)] };
 }

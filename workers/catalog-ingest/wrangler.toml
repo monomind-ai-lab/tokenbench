@@ -5,7 +5,7 @@ compatibility_date = "2026-08-03"
 [[d1_databases]]
 binding = "CATALOG_DB"
 database_name = "ai-plan-catalog"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "a80143b2-519b-4cf1-a153-0d38b3d1b053"
 migrations_dir = "../../migrations"
 
 [[r2_buckets]]

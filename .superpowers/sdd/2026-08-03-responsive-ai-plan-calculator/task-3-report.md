@@ -1,0 +1,37 @@
+# Task 3 implementation report: integrated production readiness
+
+## Executive summary
+
+Task 3 reconciles the catalog pipeline, application semantics, and Cloudflare deployment configuration with the approved plan. It adds compatible metadata storage and API mappings, corrects the OpenCode Zen route, makes failed upstream refreshes record actionable state without replacing the active revision, and prevents a variable subscription fee from being presented as the overall recommendation. All repository checks pass: 48 Vitest tests, six Chrome browser tests, TypeScript lint, production build, and whitespace validation.
+
+## Verified source decisions
+
+- Alibaba Coding Plan Pro is retained at $50/month with published request quotas and exact supported model names from `https://www.alibabacloud.com/help/en/model-studio/coding-plan`; it remains a variable/request-limited entitlement, never a token quota.
+- Claude Pro ($20/month), Max 5x ($100/month), and Max 20x ($200/month) are retained from the current Claude Help Center plan table at `https://support.claude.com/en/articles/11049762-choose-a-claude-plan`; no fixed token allowance is inferred.
+- ChatGPT Pro 5x ($100/month) and 20x ($200/month) are retained as guardrail-limited from `https://help.openai.com/en/articles/9793128-chatgpt-pro`. DeepSeek-V4-Flash direct API rates remain $0.14 input, $0.0028 cached input, and $0.28 output per million tokens with its published 1M context and 384K maximum output at `https://api-docs.deepseek.com/quick_start/pricing/`.
+- xAI, Kimi, and Z.AI remain source-linked but provenance-only until a current official source safely establishes a plan name and price; no stale manual subscription row remains. OpenCode Zen uses `https://opencode.ai/zen/v1/models`, while the Go route is intentionally not treated as Zen pay-as-you-go pricing.
+
+## Integration changes
+
+- Added optional, validated contracts and D1/API persistence for plan billing cycle and supported models; model context, maximum output, and availability; and provenance content hash, parser version, evidence locator, and review status. The frontend exposes model availability and uses supported-model metadata when evaluating subscription eligibility.
+- The recommendation now compares the active workload API estimate only with subscription offers that both publish support for all selected models and a sufficient fixed token entitlement; otherwise it recommends the calculated API route and surfaces access, route, freshness, and confidence caveats rather than relabeling the cheapest subscription as a cost-first result.
+- Worker publication still writes snapshots before publication, now records fetch/timeout/parse/schema failure detail in `source_refresh_state`, and keeps the active revision unchanged on failure. The provisioned D1 ID and Pages/Worker `SOURCE_SNAPSHOTS` binding are configured, and the deployment guide documents exact Pages and Workers Builds dashboard actions for `main`.
+
+## TDD evidence
+
+- RED/GREEN tests first demonstrated that variable subscriptions won a lowest-fee recommendation, the OpenCode Go endpoint was used, manually retained pricing was stale, and refresh failure metadata was absent.
+- Further RED/GREEN API and component tests demonstrated omitted catalog metadata mapping and absent availability rendering; the resulting behavior is now covered in calculator, validation, worker, API, and app-shell tests.
+
+## Validation
+
+```text
+npm test             8 files, 48 tests passed with clean output
+npm run test:browser 6 local-Chrome responsive and keyboard tests passed
+npm run lint         tsc --noEmit passed
+npm run build        Vite production build passed
+git diff --check     passed
+```
+
+## Remaining external actions
+
+Apply migration `0002_catalog_metadata.sql` to the provisioned D1 database, confirm `CATALOG_DB` and `SOURCE_SNAPSHOTS` bindings in both Pages environments, configure the R2 lifecycle retention policy, and enable the documented Pages/Worker Builds settings for `main`. No Cloudflare deployment or dashboard mutation was performed by this task.

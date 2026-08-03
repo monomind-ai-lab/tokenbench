@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildManualSubscriptionSource, parseOpenCodeModels, parseOpenRouterModels, publishValidatedSource } from './index';
+import { buildManualSubscriptionSource, parseOpenCodeModels, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
 
 describe('catalog ingestion', () => {
   it('parses official OpenRouter pricing into integer micro-dollars per million', () => {
@@ -12,6 +12,11 @@ describe('catalog ingestion', () => {
       .toThrow('OpenCode model pricing is required');
   });
 
+  it('uses the Zen pay-as-you-go catalog instead of the separate OpenCode Go subscription route', () => {
+    expect(parseOpenCodeModels({ data: [] }, '2026-08-03T00:00:00.000Z').source.sourceUrl)
+      .toBe('https://opencode.ai/zen/v1/models');
+  });
+
   it('accepts equivalent official decimal price strings with trailing zero precision', () => {
     const payload = { data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.000002500000000', completion: '0.000010000000000' } }] };
     expect(parseOpenRouterModels(payload, '2026-08-03T00:00:00.000Z').modelOffers[0])
@@ -20,7 +25,13 @@ describe('catalog ingestion', () => {
 
   it('builds source-linked manually verified subscription offers instead of an empty source', () => {
     expect(buildManualSubscriptionSource('openai', '2026-08-03T00:00:00.000Z'))
-      .toMatchObject({ source: { id: 'openai-subscription', confidence: 'manual_verified' }, plans: expect.arrayContaining([expect.objectContaining({ id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, sourceId: 'openai-subscription' })]) });
+      .toMatchObject({ source: { id: 'openai-subscription', confidence: 'manual_verified' }, plans: expect.arrayContaining([expect.objectContaining({ id: 'openai:pro-5x', monthlyCostMicroDollars: 100_000_000, sourceId: 'openai-subscription' })]) });
+  });
+
+  it('retains only currently verified manual subscription prices', () => {
+    expect(buildManualSubscriptionSource('alibaba', '2026-08-03T00:00:00.000Z').plans)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'alibaba:coding-plan-pro', monthlyCostMicroDollars: 50_000_000 })]));
+    expect(buildManualSubscriptionSource('xai', '2026-08-03T00:00:00.000Z').plans).toEqual([]);
   });
 
   it('snapshots validated evidence before atomically publishing a revision', async () => {
@@ -47,6 +58,13 @@ describe('catalog ingestion', () => {
       source: { source: { id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt: '2026-08-03T00:00:00.000Z', sourceKind: 'official_json', confidence: 'official' }, plans: [], modelOffers: [] },
       rawPayload: { data: [] }, now: '2026-08-03T00:00:00.000Z',
     })).rejects.toThrow('R2 unavailable');
+  });
+
+  it('records an actionable source refresh error without publishing a replacement revision', async () => {
+    const calls: string[] = [];
+    await recordRefreshFailure({ prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; }, batch: async (statements: { sql: string; values: unknown[] }[]) => { calls.push(...statements.map(({ sql, values }) => `${sql}:${values.join('|')}`)); } }, 'opencode-zen', 'timeout', '2026-08-03T00:00:00.000Z');
+    expect(calls.join('\n')).toContain('last_error');
+    expect(calls.join('\n')).not.toContain("publication_state = 'published'");
   });
 
   it('copies other validated source records into the candidate revision before publication', async () => {
