@@ -14,6 +14,7 @@ function createStatefulD1(options: { failAfterStatement?: number } = {}) {
     } as Record<string, RefreshState>,
     batchCalls: 0,
   };
+  let lastStagedState: typeof state | undefined;
 
   const apply = (draft: typeof state, statement: Statement) => {
     const { sql, values } = statement;
@@ -56,11 +57,15 @@ function createStatefulD1(options: { failAfterStatement?: number } = {}) {
         const draft = structuredClone(state);
         for (const [index, statement] of (statements as Statement[]).entries()) {
           apply(draft, statement);
-          if (options.failAfterStatement === index + 1) throw new Error('D1 transaction rolled back');
+          if (options.failAfterStatement === index + 1) {
+            lastStagedState = structuredClone(draft);
+            throw new Error('D1 transaction rolled back');
+          }
         }
         Object.assign(state, draft);
       },
     },
+    get lastStagedState() { return lastStagedState; },
   };
 }
 
@@ -188,10 +193,19 @@ describe('catalog ingestion', () => {
     });
   });
 
-  it('treats a mid-publication D1 failure as atomic and records its scheduled refresh error', async () => {
-    const database = createStatefulD1({ failAfterStatement: 4 });
+  it('rolls back a D1 failure after candidate rows, publication state, and active-pointer mutations are staged', async () => {
+    const database = createStatefulD1({ failAfterStatement: 9 });
     await runScheduledOpenRouter({ database });
     expect(database.state.batchCalls).toBe(2);
+    const staged = (database as unknown as { lastStagedState?: { activeRevision: string; revisions: Record<string, string>; rows: string[] } }).lastStagedState;
+    expect(staged).toMatchObject({
+      activeRevision: expect.stringMatching(/^rev_/),
+      revisions: expect.objectContaining({ 'rev-known-good': 'superseded' }),
+    });
+    expect(staged?.rows).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^rev_.+:source:openrouter-models$/),
+      expect.stringMatching(/^rev_.+:model:openai:openai\/gpt-4o:openrouter$/),
+    ]));
     expect(stateSnapshot(database)).toEqual({
       activeRevision: 'rev-known-good',
       pendingRevisionIds: [],

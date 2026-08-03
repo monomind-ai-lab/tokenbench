@@ -35,6 +35,15 @@ async function tabTo(page: Page, selector: string) {
   throw new Error(`Tab did not reach visible focus for ${selector}`);
 }
 
+function expectVisibleFocus(style: { outlineWidth: string; outlineStyle: string; outlineColor: string }) {
+  expect(style.outlineStyle).toBe('solid');
+  expect(Number.parseFloat(style.outlineWidth)).toBeGreaterThan(0);
+  const color = style.outlineColor.replace(/\s/g, '');
+  expect(color).not.toBe('');
+  expect(color).not.toBe('transparent');
+  expect(color).not.toBe('rgba(0,0,0,0)');
+}
+
 test.describe('responsive calculator browser harness', () => {
   for (const viewport of viewports) {
     test(`${viewport.width}px renders the expected mode without document overflow`, async ({ page }) => {
@@ -81,7 +90,7 @@ test.describe('responsive calculator browser harness', () => {
     });
   }
 
-  test('renders usable source evidence links for published offers', async ({ page }) => {
+  test('reaches language, theme, and usable evidence links with a visible keyboard focus outline', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page);
     const evidenceLinks = page.getByRole('link', { name: /View evidence for/i });
@@ -91,8 +100,10 @@ test.describe('responsive calculator browser harness', () => {
     await expect(first).toHaveAttribute('href', /^https:\/\//);
     await expect(first).toHaveAttribute('target', '_blank');
     await expect(first).toHaveAttribute('rel', 'noreferrer');
-    await first.focus();
-    await expect(first).toBeFocused();
+    await page.locator('body').click({ position: { x: 2, y: 2 } });
+    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle dark theme"]', 'a.evidence-link']) {
+      expectVisibleFocus(await tabTo(page, selector));
+    }
   });
 
   test('persists dark theme and applies the selected language without changing the catalog controls', async ({ page }) => {

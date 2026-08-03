@@ -55,6 +55,23 @@ npx wrangler deploy --dry-run  Worker bundle and provisioned D1/R2 bindings vali
 git diff --check                passed
 ```
 
+## Luna final re-review closure (Task 87f6631a3600)
+
+- The stateful transaction regression now throws at statement 9, after candidate source and model rows, prior-revision supersede, candidate publication, and active-pointer mutation have all been applied to the staged clone. The committed state remains on `rev-known-good`, has no pending candidate revision or rows, retains the previous refresh success/revision, and receives only the scheduled failure message.
+- Header and evidence accessibility coverage now uses actual keyboard Tab traversal rather than programmatic `.focus()`. It verifies computed `:focus-visible` outlines for the language selector, theme toggle, and evidence link are solid, nonzero-width, and nontransparent, while all five responsive primary-control tests remain in place.
+
+### Final re-review validation
+
+```text
+npm test                        9 files, 59 tests passed with clean output
+npm run test:browser            13 local-Chrome checks passed
+npm run lint                    tsc --noEmit passed
+npm run build                   Vite production build passed
+rtk npx wrangler deploy --dry-run --config workers/catalog-ingest/wrangler.toml
+                                Run from repository root; Worker bindings validated without deployment
+git diff --check                passed
+```
+
 ## Luna re-review test-harness closure (Task dcdb935f220e)
 
 - Replaced SQL-collecting worker fakes with a genuinely stateful D1 transaction harness that applies every publication statement to a staged clone and commits only after the full batch completes. It injects a mid-batch D1 failure and proves no pending candidate revision or candidate rows leak into the active state; the prior active revision and prior refresh success/revision are retained while scheduled error recording adds the failure reason.
