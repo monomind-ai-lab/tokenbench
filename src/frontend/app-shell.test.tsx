@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
+import '../index.css';
 
 function respondWithCatalog(catalog = FRONTEND_TEST_CATALOG) {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(catalog), {
@@ -76,16 +77,12 @@ describe('responsive calculator app shell', () => {
     expect(screen.getAllByTestId('offer-card').length).toBeGreaterThan(0);
   });
 
-  it('keeps primary controls keyboard focusable', async () => {
+  it('gives every range control a minimum 44px touch target', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /API-equivalent value/i });
 
-    const provider = screen.getByRole('radio', { name: /Provider A/i });
-    provider.focus();
-    expect(document.activeElement).toBe(provider);
-
-    const theme = screen.getByRole('button', { name: /Toggle dark theme/i });
-    theme.focus();
-    expect(document.activeElement).toBe(theme);
+    const ranges = screen.getAllByRole('slider');
+    expect(ranges.length).toBeGreaterThan(0);
+    expect(ranges.every((range) => window.getComputedStyle(range).minHeight === '44px')).toBe(true);
   });
 });

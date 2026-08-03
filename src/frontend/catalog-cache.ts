@@ -78,12 +78,14 @@ export async function loadCatalog(options: CatalogLoadOptions = {}): Promise<Cat
     const response = await fetchImpl(url, { headers });
     const refreshedAt = now();
     if (response.status === 304 && cached) {
-      const catalog = cached.catalog;
+      const etag = response.headers.get('etag') ?? cached.etag;
+      const catalog = withFreshness(cached.catalog, cached.catalog.freshness.status, refreshedAt);
+      writeCache(storage, cacheKey, { catalog, etag, fetchedAt: refreshedAt });
       return {
         catalog,
         fromCache: true,
         status: catalog.freshness.status,
-        etag: response.headers.get('etag') ?? cached.etag,
+        etag,
         lastSuccessfulRefreshAt: refreshedAt,
         notice: catalog.freshness.status === 'stale' ? 'The catalog is stale; the last verified revision is shown.' : undefined,
       };

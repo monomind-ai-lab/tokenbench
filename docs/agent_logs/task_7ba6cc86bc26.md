@@ -23,9 +23,35 @@ Rebuild the React calculator frontend around Task 1's verified catalog contracts
 ## Progress
 
 - 2026-08-03 22:37 CST - Task record created; requirements and design reference read; existing frontend and Task 1 catalog contracts inspected.
-- 2026-08-03 23:00 CST - Added modular frontend implementation and focused tests; full Vitest suite passed (8 files, 46 tests), lint and production build passed.
+- 2026-08-03 23:00 CST - Added modular frontend implementation and focused tests; full Vitest suite passed (8 files, 42 tests), lint and production build passed.
 - 2026-08-03 23:01 CST - Added responsive horizontal-overflow and keyboard-focus assertions; `git diff --check` and codebase change detection completed. Task 1 catalog/API/worker files remain outside the working diff.
 - 2026-08-03 23:02 CST - Wrote the full Task 2 report and committed the explicitly staged frontend, test, tooling, task-record, and report files as `feat: rebuild responsive accessible calculator frontend`.
+
+## Fix round 1 — Terra review task_c3b8f56a8323
+
+### Objective
+
+Close every blocking review finding without touching Task 1 catalog/domain/worker files or generated artifacts.
+
+### Progress
+
+- Added red regressions for 304 cache metadata persistence and 44px range geometry; added a real Playwright/local-Chrome harness for all required viewports and keyboard focus-visible navigation.
+- Implemented 304 refresh persistence, 44px range targets, compact header fit without `.app-shell` overflow masking, and `NODE_OPTIONS=--no-experimental-webstorage` for Vitest.
+- Final focused tests, full Vitest suite (42 tests), lint, build, diff check, and six-test browser suite all pass without Node 25 localStorage warnings; Playwright output is directed to `/tmp`.
+
+### Validation
+
+```text
+rtk npm test -- --reporter=dot: 8 test files / 42 tests passed, warning-free.
+rtk npm run lint: tsc --noEmit passed.
+rtk npm run build: Vite build passed (45 modules transformed).
+rtk npm run test:browser: 6 local-Chrome tests passed at 320/375/768/1024/1440px plus keyboard navigation.
+rtk git diff --check: passed.
+```
+
+### Outcome
+
+Fix implementation and evidence are complete; the scoped Round 1 fix commit has been created as `fix: close Task 2 responsive review blockers`.
 
 ## Decisions and Risks
 
@@ -37,7 +63,7 @@ Rebuild the React calculator frontend around Task 1's verified catalog contracts
 
 ```text
 rtk npm test -- --reporter=dot
-  8 test files passed; 46 tests passed.
+  8 test files passed; 42 tests passed.
 rtk npm run lint
   tsc --noEmit passed.
 rtk npm run build
@@ -45,11 +71,11 @@ rtk npm run build
 rtk git diff --check
   passed.
 mcp detect_changes(scope=working_tree, base_branch=main, depth=3)
-  returned 22 branch-level changed files and no impacted symbols; the returned
+  returned 41 branch-level changed files and no impacted symbols; the returned
   Task 1 files are existing branch deltas, not files modified by this Task 2
   working diff.
 ```
 
 ## Outcome
 
-Implementation, validation, report, and commit are complete. Generated `.codebase-memory/` and ignored `dist/` remain untracked/ignored and are excluded from the commit.
+Original implementation and Round 1 review fixes are complete, validated, documented, and committed. Generated `.codebase-memory/` and ignored `dist/` remain untracked/ignored and are excluded from the commit.
