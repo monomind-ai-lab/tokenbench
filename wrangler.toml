@@ -1,0 +1,9 @@
+name = "ai-plan-calculator"
+compatibility_date = "2026-08-03"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "CATALOG_DB"
+database_name = "ai-plan-catalog"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"

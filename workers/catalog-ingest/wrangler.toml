@@ -1,0 +1,16 @@
+name = "ai-plan-catalog-ingest"
+main = "src/index.ts"
+compatibility_date = "2026-08-03"
+
+[[d1_databases]]
+binding = "CATALOG_DB"
+database_name = "ai-plan-catalog"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "../../migrations"
+
+[[r2_buckets]]
+binding = "SOURCE_SNAPSHOTS"
+bucket_name = "ai-plan-catalog-snapshots"
+
+[triggers]
+crons = ["0 */6 * * *", "30 */6 * * *", "0 */3 * * *"]
