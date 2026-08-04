@@ -2,7 +2,7 @@ import { Boxes, CreditCard, GitBranch, SlidersHorizontal } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
 import { UI_COPY } from '../data/mockData';
 import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints } from './calculator-state';
-import { paidIndividualPlans } from './plan-filter';
+import { isApiOnlyProvider, paidIndividualPlans } from './plan-filter';
 import type { CalculatorControlsProps } from './types';
 import { EmptyState, providerLabel } from './ui';
 
@@ -19,6 +19,7 @@ interface ProviderChoiceProps {
   readonly key?: string;
   readonly providerId: string;
   readonly selected: boolean;
+  readonly apiOnly: boolean;
   readonly onChange: () => void;
 }
 
@@ -36,11 +37,11 @@ interface ModelChoiceProps {
   readonly onChange: () => void;
 }
 
-function ProviderChoice({ providerId, selected, onChange }: ProviderChoiceProps) {
+function ProviderChoice({ providerId, selected, apiOnly, onChange }: ProviderChoiceProps) {
   return (
     <label className={`choice-card ${selected ? 'choice-selected' : ''}`}>
       <input type="radio" name="provider" value={providerId} checked={selected} onChange={onChange} />
-      <span>{providerLabel(providerId)}</span>
+      <span className="choice-main"><strong>{providerLabel(providerId)}</strong>{apiOnly ? <small>API pricing only · no paid plan</small> : null}</span>
       {selected ? <span className="choice-check" aria-hidden="true">✓</span> : null}
     </label>
   );
@@ -92,9 +93,9 @@ export function CalculatorControls({
       <div className="control-grid">
         <fieldset className="control-block">
           <legend><span className="control-legend"><GitBranch size={18} aria-hidden="true" />{UI_COPY.providerSelection}</span></legend>
-          <p className="field-help">Verified providers with paid individual subscriptions.</p>
+          <p className="field-help">Paid individual subscriptions plus API-only providers with verified model pricing.</p>
           <div className="choice-list provider-list">
-            {providerIds.map((providerId) => <ProviderChoice key={providerId} providerId={providerId} selected={selectedProviderId === providerId} onChange={() => onProviderChange(providerId)} />)}
+            {providerIds.map((providerId) => <ProviderChoice key={providerId} providerId={providerId} apiOnly={isApiOnlyProvider(providerId)} selected={selectedProviderId === providerId} onChange={() => onProviderChange(providerId)} />)}
           </div>
           {providerIds.length === 0 ? <EmptyState title="No providers available" description="Refresh the catalog to load verified providers." /> : null}
         </fieldset>

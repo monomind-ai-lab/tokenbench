@@ -31,6 +31,30 @@ function parseStoredJson<T>(value: string, field: string): T {
   }
 }
 
+/**
+ * D1 revisions can predate a checked-in manual subscription manifest. Overlay
+ * the verified monthly plans at read time so a newly deployed Pages build does
+ * not hide plans until the next scheduled worker run. Models remain entirely
+ * revisioned in D1; this overlay is intentionally limited to subscriptions.
+ */
+function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogResponse {
+  const manualPlansById = new Map(BOOTSTRAP_CATALOG.plans.map((plan) => [plan.id, plan]));
+  const plans = [
+    ...manualPlansById.values(),
+    ...catalog.plans.filter((plan) => !manualPlansById.has(plan.id)),
+  ];
+  const sourceIds = new Set([...manualPlansById.values()].map((plan) => plan.sourceId));
+  const existingSourceIds = new Set(catalog.provenance.map((source) => source.id));
+  const manualSources = BOOTSTRAP_CATALOG.provenance.filter((source) => sourceIds.has(source.id) && !existingSourceIds.has(source.id));
+  return validateCatalogResponse({
+    ...catalog,
+    // Keep the upstream revision visible while making the overlay cache-keyed.
+    revision: `${catalog.revision}+manual-${BOOTSTRAP_CATALOG.revision}`,
+    plans,
+    provenance: [...catalog.provenance, ...manualSources],
+  });
+}
+
 export async function readPublishedCatalog(db: D1Database): Promise<CatalogResponse | null> {
   const revisions = await all<RevisionRow>(db,
     "SELECT revision, published_at, checked_at FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1");
@@ -86,6 +110,7 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
       catalog = { ...BOOTSTRAP_CATALOG, freshness: { ...BOOTSTRAP_CATALOG.freshness, message: 'Published catalog unavailable; serving checked-in bootstrap source records.' } };
     }
   }
+  if (catalog !== BOOTSTRAP_CATALOG) catalog = mergeManualSubscriptionPlans(catalog);
   const filtered = filterByProvider(catalog, new URL(request.url).searchParams.get('provider'));
   const etag = `"${filtered.revision}"`;
   const headers = new Headers({

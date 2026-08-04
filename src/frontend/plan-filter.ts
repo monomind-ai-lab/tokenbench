@@ -2,6 +2,13 @@ import type { PlanOffer } from '../catalog/contracts';
 
 const NON_INDIVIDUAL_PLAN_PATTERN = /\b(?:business|education|enterprise|organization|organisation|school|seat|team|workspace)\b/i;
 
+/** Providers with verified model/API pricing but no paid individual subscription. */
+export const API_ONLY_PROVIDER_IDS = ['deepseek'] as const;
+
+export function isApiOnlyProvider(providerId: string): boolean {
+  return (API_ONLY_PROVIDER_IDS as readonly string[]).includes(providerId);
+}
+
 /**
  * The catalog only ingests explicitly verified consumer subscriptions. Keep a
  * defensive boundary here so a free, annual-only, or organization plan cannot

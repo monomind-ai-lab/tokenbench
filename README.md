@@ -17,14 +17,15 @@ Variable, rolling, credit-based, and guardrail-limited subscriptions stay explic
 The plan selector admits only verified, non-zero, monthly individual subscriptions. Current manual manifests cover:
 
 - Alibaba Cloud Coding Plan Pro
+- Alibaba Cloud Token Plan Personal Edition Lite, Standard, and Pro
 - Claude Pro and Max individual tiers
-- Google AI Plus, Pro, and Ultra individual tiers
-- SuperGrok
-- Kimi Moderato, Allegretto, Allegro, and Vivace
-- ChatGPT Plus and Pro individual tiers
-- Z.AI Lite, Pro, and Max
+- Gemini (Google AI) Plus, Pro, and Ultra individual tiers
+- Grok (x.ai) SuperGrok
+- Moonshot (Kimi) Moderato, Allegretto, Allegro, and Vivace
+- ChatGPT Go, Plus, and Pro individual tiers
+- z.ai (GLM) Lite, Pro, and Max
 
-DeepSeek remains API-only because no verified paid individual subscription is published in the catalog. Live API prices retain distinct direct-provider, OpenRouter, and OpenCode Zen identities.
+DeepSeek remains API-only because no verified paid individual subscription is published in the catalog; it is still available as a selectable direct/API provider. Live API prices retain distinct direct-provider, OpenRouter, and OpenCode Zen identities.
 
 Every catalog record links back to its evidence source. Manual price manifests are kept separate from the live API adapters and are published through the same validated, revisioned catalog pipeline.
 

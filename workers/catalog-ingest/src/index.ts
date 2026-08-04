@@ -1,5 +1,5 @@
 import type { ModelOffer, PlanOffer, SourceProvenance } from '../../../src/catalog/contracts';
-import { buildManualSubscriptionSource as buildManifest, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from '../../../src/catalog/manual-manifests';
+import { buildManualSubscriptionSource as buildManifest, buildManualSubscriptionSources as buildManifests, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from '../../../src/catalog/manual-manifests';
 import { validateCatalogResponse } from '../../../src/catalog/validation';
 
 type BoundStatement = unknown;
@@ -252,10 +252,15 @@ export function buildManualSubscriptionSource(providerId: string, observedAt: st
   return buildManifest(providerId, observedAt);
 }
 
+export function buildManualSubscriptionSources(providerId: string, observedAt: string): ParsedSource[] {
+  return buildManifests(providerId, observedAt);
+}
+
 async function refreshManual(providerId: string, env: IngestEnv): Promise<void> {
   const now = new Date().toISOString();
-  const source = buildManualSubscriptionSource(providerId, now);
-  await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source, rawPayload: { providerId, plans: source.plans, modelOffers: source.modelOffers }, now });
+  for (const source of buildManifests(providerId, now)) {
+    await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source, rawPayload: { providerId, plans: source.plans, modelOffers: source.modelOffers }, now });
+  }
 }
 
 export default {
@@ -283,9 +288,9 @@ export default {
         await guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
         await (isAutomatedSourceAllowlisted(env, 'opencode-zen') ? guarded('opencode-zen', refreshOpenCode(env)) : recordRefreshFailure(env.CATALOG_DB, 'opencode-zen', new Error('opencode-zen is not allowlisted for automated refresh'), new Date().toISOString()));
         for (const providerId of MANUAL_SUBSCRIPTION_PROVIDER_IDS) {
-          const source = buildManualSubscriptionSource(providerId, new Date().toISOString());
-          if (source.plans.length === 0) continue;
-          await guarded(source.source.id, refreshManual(providerId, env));
+          const sources = buildManifests(providerId, new Date().toISOString());
+          if (sources.every((source) => source.plans.length === 0 && source.modelOffers.length === 0)) continue;
+          await guarded(sources[0].source.id, refreshManual(providerId, env));
         }
       })());
     }

@@ -9,7 +9,7 @@ import {
 } from './frontend/calculator-state';
 import { Comparison } from './frontend/comparison';
 import { AppShell } from './frontend/app-shell';
-import { paidIndividualPlans } from './frontend/plan-filter';
+import { API_ONLY_PROVIDER_IDS, paidIndividualPlans } from './frontend/plan-filter';
 import { ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
 import { Skeleton } from './frontend/ui';
 import { useCatalog } from './frontend/use-catalog';
@@ -49,7 +49,9 @@ export default function App() {
 
   const providerIds = useMemo(() => {
     if (!catalog) return [];
-    return Array.from(new Set(paidIndividualPlans(catalog.plans).map((plan) => plan.providerId)))
+    const paidProviderIds = paidIndividualPlans(catalog.plans).map((plan) => plan.providerId);
+    const apiOnlyProviderIds = API_ONLY_PROVIDER_IDS.filter((providerId) => catalog.modelOffers.some((offer) => offer.providerId === providerId));
+    return Array.from(new Set([...paidProviderIds, ...apiOnlyProviderIds]))
       .sort((a, b) => providerLabel(a).localeCompare(providerLabel(b)));
   }, [catalog]);
 

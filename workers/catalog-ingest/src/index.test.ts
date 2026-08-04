@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import worker, { buildManualSubscriptionSource, parseOpenCodeCatalog, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
+import worker, { buildManualSubscriptionSource, buildManualSubscriptionSources, parseOpenCodeCatalog, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
 
 interface Statement { sql: string; values: unknown[] }
 interface RefreshState { lastSuccessAt: string | null; lastRevision: string | null; lastError: string | null }
@@ -168,6 +168,7 @@ describe('catalog ingestion', () => {
   it('builds source-linked manually verified subscription offers instead of an empty source', () => {
     expect(buildManualSubscriptionSource('openai', '2026-08-03T00:00:00.000Z'))
       .toMatchObject({ source: { id: 'openai-subscription', confidence: 'manual_verified' }, plans: expect.arrayContaining([
+        expect.objectContaining({ id: 'openai:go', monthlyCostMicroDollars: 8_000_000, sourceId: 'openai-subscription' }),
         expect.objectContaining({ id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, sourceId: 'openai-subscription' }),
         expect.objectContaining({ id: 'openai:pro-5x', monthlyCostMicroDollars: 100_000_000, sourceId: 'openai-subscription' }),
       ]) });
@@ -176,6 +177,11 @@ describe('catalog ingestion', () => {
   it('retains only currently verified manual subscription prices', () => {
     expect(buildManualSubscriptionSource('alibaba', '2026-08-03T00:00:00.000Z').plans)
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'alibaba:coding-plan-pro', monthlyCostMicroDollars: 50_000_000 })]));
+    expect(buildManualSubscriptionSources('alibaba', '2026-08-03T00:00:00.000Z').map(({ source, plans }) => [source.id, plans.map((plan) => plan.id)]))
+      .toEqual(expect.arrayContaining([
+        ['alibaba-subscription', ['alibaba:coding-plan-pro']],
+        ['alibaba-token-subscription', ['alibaba:token-plan-lite', 'alibaba:token-plan-standard', 'alibaba:token-plan-pro']],
+      ]));
     expect(buildManualSubscriptionSource('google', '2026-08-03T00:00:00.000Z').plans)
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'google:ai-pro', monthlyCostMicroDollars: 19_990_000 })]));
     expect(buildManualSubscriptionSource('xai', '2026-08-03T00:00:00.000Z').plans)

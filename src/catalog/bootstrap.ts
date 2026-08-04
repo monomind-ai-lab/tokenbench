@@ -1,8 +1,8 @@
 import type { CatalogResponse, SourceProvenance } from './contracts';
-import { buildManualSubscriptionSource, MANUAL_BOOTSTRAP_MODEL_OFFERS, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from './manual-manifests';
+import { buildManualSubscriptionSources, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from './manual-manifests';
 
 const observedAt = '2026-08-04T00:00:00.000Z';
-const manualSources = MANUAL_SUBSCRIPTION_PROVIDER_IDS.map((providerId) => buildManualSubscriptionSource(providerId, observedAt));
+const manualSources = MANUAL_SUBSCRIPTION_PROVIDER_IDS.flatMap((providerId) => buildManualSubscriptionSources(providerId, observedAt));
 
 const provenance: SourceProvenance[] = [
   ...manualSources.map(({ source }) => source),
@@ -29,6 +29,6 @@ export const BOOTSTRAP_CATALOG: CatalogResponse = {
     message: 'D1 has no published catalog. Serving manually verified bootstrap offers until ingestion publishes a revision.',
   },
   plans: manualSources.flatMap(({ plans }) => plans),
-  modelOffers: MANUAL_BOOTSTRAP_MODEL_OFFERS,
+  modelOffers: manualSources.flatMap(({ modelOffers }) => modelOffers),
   provenance,
 };

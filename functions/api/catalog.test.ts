@@ -39,14 +39,21 @@ describe('GET /api/catalog', () => {
       env: { CATALOG_DB: d1({ revision: [{ revision: 'rev-1', published_at: '2026-08-03T00:00:00.000Z', checked_at: '2026-08-03T01:00:00.000Z' }], sources: [source], plans: [plan], models: [model] }) },
     });
     expect(response.status).toBe(200);
-    expect(response.headers.get('etag')).toBe('"rev-1"');
+    expect(response.headers.get('etag')).toBe('"rev-1+manual-bootstrap-2026-08-04"');
     expect(response.headers.get('cache-control')).toContain('public');
-    await expect(response.json()).resolves.toMatchObject({ revision: 'rev-1', provenance: [{ contentHash: 'sha256:abc', reviewStatus: 'verified' }], plans: [{ id: 'openai:plus', billingCycle: 'monthly', supportedModelIds: ['gpt-4o'] }], modelOffers: [{ id: 'openai:gpt-4o:direct', contextWindowTokens: 128_000, availability: 'available' }] });
+    const body = await response.json() as { revision: string; provenance: Array<Record<string, unknown>>; plans: Array<Record<string, unknown>>; modelOffers: Array<Record<string, unknown>> };
+    expect(body.revision).toBe('rev-1+manual-bootstrap-2026-08-04');
+    expect(body.provenance).toEqual(expect.arrayContaining([expect.objectContaining({ contentHash: 'sha256:abc', reviewStatus: 'verified' })]));
+    expect(body.plans).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'openai:go', monthlyCostMicroDollars: 8_000_000 }),
+      expect.objectContaining({ id: 'openai:plus', monthlyCostMicroDollars: 20_000_000 }),
+    ]));
+    expect(body.modelOffers).toEqual([expect.objectContaining({ id: 'openai:gpt-4o:direct', contextWindowTokens: 128_000, availability: 'available' })]);
   });
 
   it('returns 304 when the client has the current revision', async () => {
     const response = await onRequestGet({
-      request: new Request('https://example.com/api/catalog', { headers: { 'If-None-Match': '"rev-1"' } }),
+      request: new Request('https://example.com/api/catalog', { headers: { 'If-None-Match': '"rev-1+manual-bootstrap-2026-08-04"' } }),
       env: { CATALOG_DB: d1({ revision: [{ revision: 'rev-1', published_at: '2026-08-03T00:00:00.000Z', checked_at: '2026-08-03T01:00:00.000Z' }], sources: [source], plans: [plan], models: [model] }) },
     });
     expect(response.status).toBe(304);
@@ -63,7 +70,7 @@ describe('GET /api/catalog', () => {
     const body = await response.json() as { freshness: { status: string }; provenance: unknown[]; plans: { providerId: string }[] };
     expect(response.status).toBe(200);
     expect(body.freshness.status).toBe('bootstrap');
-    expect(body.provenance).toHaveLength(10);
+    expect(body.provenance).toHaveLength(11);
     expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'google', 'xai', 'kimi', 'openai', 'zai']));
   });
 
@@ -72,7 +79,7 @@ describe('GET /api/catalog', () => {
       request: new Request('https://example.com/api/catalog'),
       env: { CATALOG_DB: d1({ revision: [{ revision: 'old-rev', published_at: '2020-01-01T00:00:00.000Z', checked_at: '2020-01-01T00:00:00.000Z' }], sources: [source], plans: [plan], models: [model] }) },
     });
-    await expect(response.json()).resolves.toMatchObject({ revision: 'old-rev', freshness: { status: 'stale' } });
+    await expect(response.json()).resolves.toMatchObject({ revision: 'old-rev+manual-bootstrap-2026-08-04', freshness: { status: 'stale' } });
   });
 
   it.each([
