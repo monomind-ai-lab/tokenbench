@@ -1,37 +1,34 @@
-import type { CatalogResponse, ModelOffer, PlanOffer } from '../catalog/contracts';
+import type { CatalogResponse, PlanOffer } from '../catalog/contracts';
 import type { InitialSelection, WorkloadPreset } from './calculator-state';
 
 export interface CalculatorControlsProps {
-  catalog: CatalogResponse;
-  providerIds: string[];
-  selectedProviderId: string;
-  selectedPlanId: string;
-  selectedModelIds: string[];
-  modelMixBasisPoints: Record<string, number>;
-  inputShareBasisPoints: number;
-  monthlyTokens: number;
-  onProviderChange(providerId: string): void;
-  onPlanChange(planId: string): void;
-  onModelToggle(modelId: string): void;
-  onModelShareChange(modelId: string, shareBasisPoints: number): void;
-  onInputShareChange(value: number): void;
-  onMonthlyTokensChange(value: number): void;
-  onPresetChange(preset: WorkloadPreset): void;
+  readonly catalog: CatalogResponse;
+  readonly providerIds: string[];
+  readonly selectedProviderId: string;
+  readonly selectedPlanId: string;
+  readonly selectedModelIds: string[];
+  readonly modelMixBasisPoints: Record<string, number>;
+  readonly inputShareBasisPoints: number;
+  readonly monthlyTokens: number;
+  readonly onProviderChange: (providerId: string) => void;
+  readonly onPlanChange: (planId: string) => void;
+  readonly onModelToggle: (modelId: string) => void;
+  readonly onModelShareChange: (modelId: string, shareBasisPoints: number) => void;
+  readonly onInputShareChange: (value: number) => void;
+  readonly onMonthlyTokensChange: (value: number) => void;
+  readonly onPresetChange: (preset: WorkloadPreset) => void;
 }
 
 export interface ResultsDashboardProps {
-  catalog: CatalogResponse;
-  selectedProviderId: string;
-  selectedPlan?: PlanOffer;
-  selectedModelOffers: ModelOffer[];
-  snapshot: ReturnType<typeof import('./calculator-state').buildCalculatorSnapshot>;
+  readonly selectedPlan?: PlanOffer;
+  readonly snapshot: ReturnType<typeof import('./calculator-state').buildCalculatorSnapshot>;
 }
 
 export interface EmptySelectionProps {
-  title: string;
-  description: string;
-  actionLabel?: string;
-  onAction?: () => void;
+  readonly title: string;
+  readonly description: string;
+  readonly actionLabel?: string;
+  readonly onAction?: () => void;
 }
 
 export type SelectionState = InitialSelection;

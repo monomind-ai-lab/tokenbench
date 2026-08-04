@@ -7,6 +7,7 @@ export function providerLabel(providerId: string): string {
     alibaba: 'Alibaba Cloud',
     anthropic: 'Anthropic',
     deepseek: 'DeepSeek',
+    google: 'Google AI',
     kimi: 'Kimi',
     openai: 'OpenAI',
     xai: 'xAI',

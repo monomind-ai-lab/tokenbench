@@ -21,7 +21,7 @@ describe('responsive calculator app shell', () => {
   it('renders derived metrics, evidence links, and separated pricing basis comparisons', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /API-equivalent value/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /API[- ]equivalent value/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Direct provider API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenRouter API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
@@ -43,15 +43,33 @@ describe('responsive calculator app shell', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: /API-equivalent value/i });
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     const providerGroup = screen.getByRole('group', { name: /Provider selection/i });
     expect(within(providerGroup).getByRole('radio', { name: 'Provider A' })).toBeInTheDocument();
     expect(within(providerGroup).queryByRole('radio', { name: 'Provider B' })).not.toBeInTheDocument();
   });
 
+  it('limits plan selection to paid individual subscriptions', async () => {
+    respondWithCatalog({
+      ...FRONTEND_TEST_CATALOG,
+      plans: [
+        ...FRONTEND_TEST_CATALOG.plans,
+        { ...FRONTEND_TEST_CATALOG.plans[0], id: 'provider-a:free', displayName: 'Free', monthlyCostMicroDollars: 0 },
+        { ...FRONTEND_TEST_CATALOG.plans[0], id: 'provider-a:team', displayName: 'Team', monthlyCostMicroDollars: 90_000_000 },
+      ],
+    });
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /API Equivalent Value/i });
+    const planGroup = screen.getByRole('group', { name: /Plan Selection/i });
+    expect(within(planGroup).getByRole('radio', { name: /Starter/i })).toBeInTheDocument();
+    expect(within(planGroup).queryByRole('radio', { name: /Free/i })).not.toBeInTheDocument();
+    expect(within(planGroup).queryByRole('radio', { name: /Team/i })).not.toBeInTheDocument();
+  });
+
   it('redistributes selected model usage and changes derived values when a preset is edited', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /API-equivalent value/i });
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
 
     const modelGroup = screen.getByRole('group', { name: /Model selection/i });
     const checkboxes = within(modelGroup).getAllByRole('checkbox');
@@ -63,11 +81,16 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByLabelText(/Input share/i)).toHaveAttribute('aria-valuenow', '80');
     fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '3000000' } });
     expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue(3000000);
+
+    const usageRange = screen.getByRole('slider', { name: /Monthly usage range/i });
+    fireEvent.change(usageRange, { target: { value: '50000000' } });
+    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue(50000000);
+    expect(usageRange).toHaveAttribute('aria-valuetext', '50,000,000 tokens');
   });
 
   it('keeps calculator state while switching language and persists the dark theme', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /API-equivalent value/i });
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     const usage = screen.getByLabelText(/Expected monthly usage/i);
     fireEvent.change(usage, { target: { value: '4200000' } });
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
@@ -88,29 +111,38 @@ describe('responsive calculator app shell', () => {
     const retry = screen.getByRole('button', { name: /Retry loading catalog/i });
     respondWithCatalog();
     fireEvent.click(retry);
-    await waitFor(() => expect(screen.getByRole('heading', { name: /API-equivalent value/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeInTheDocument());
   });
 
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);
-    await screen.findByRole('heading', { name: /API-equivalent value/i });
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     expect(document.querySelector('[data-layout="compact"]')).toBeInTheDocument();
     expect(screen.getAllByTestId('offer-card').length).toBeGreaterThan(0);
   });
 
   it('gives every range control a minimum 44px touch target', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /API-equivalent value/i });
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
 
     const ranges = screen.getAllByRole('slider');
     expect(ranges.length).toBeGreaterThan(0);
     expect(ranges.every((range) => window.getComputedStyle(range).minHeight === '44px')).toBe(true);
   });
 
-  it('does not present the cheapest subscription as an overall recommendation when access is variable', async () => {
+  it('shows savings and separate full-width plan and API pricing panels with selected models highlighted', async () => {
     render(<App />);
-    expect(await screen.findByText(/recommended API route/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/does not publish support for the selected model mix/i).length).toBeGreaterThan(0);
+    const savingsHeading = await screen.findByRole('heading', { name: /Est\. Monthly Savings/i });
+    expect(savingsHeading).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Cost-first recommendation/i })).not.toBeInTheDocument();
+
+    const planHeading = screen.getByRole('heading', { name: /Individual Subscription Plans/i });
+    const apiHeading = screen.getByRole('heading', { name: /^API Prices$/i });
+    const planPanel = planHeading.closest('section');
+    const apiPanel = apiHeading.closest('section');
+    expect(planPanel).not.toBe(apiPanel);
+    expect(apiPanel?.querySelectorAll('tr[data-selected="true"]')).toHaveLength(3);
+    expect(apiPanel?.querySelectorAll('tr[data-selected="true"] .selected-badge')).toHaveLength(3);
   });
 });

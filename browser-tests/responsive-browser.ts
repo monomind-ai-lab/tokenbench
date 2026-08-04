@@ -18,7 +18,7 @@ async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, statu
     body: JSON.stringify(catalog),
   }));
   await page.goto('/');
-  if (expectCalculator) await expect(page.getByRole('heading', { name: /API-equivalent value/i })).toBeVisible();
+  if (expectCalculator) await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 }
 
 async function tabTo(page: Page, selector: string) {
@@ -59,7 +59,7 @@ test.describe('responsive calculator browser harness', () => {
         actions: document.querySelector('.header-actions')?.getBoundingClientRect().toJSON(),
         rangeHeights: Array.from(document.querySelectorAll<HTMLInputElement>("input[type='range']")).map((input) => input.getBoundingClientRect().height),
         controlsColumns: getComputedStyle(document.querySelector('.control-grid') as Element).gridTemplateColumns,
-        resultsColumns: getComputedStyle(document.querySelector('.results-content') as Element).gridTemplateColumns,
+        resultsColumns: getComputedStyle(document.querySelector('.results-grid') as Element).gridTemplateColumns,
         comparisonTableDisplay: getComputedStyle(document.querySelector('.comparison-table') as Element).display,
         comparisonCardsDisplay: getComputedStyle(document.querySelector('.comparison-cards') as Element).display,
       }));
@@ -69,7 +69,7 @@ test.describe('responsive calculator browser harness', () => {
       expect(dimensions.comparisonCardsDisplay).toBe(viewport.cards ? 'grid' : 'none');
       expect(dimensions.comparisonTableDisplay).toBe(viewport.cards ? 'none' : 'table');
       expect(dimensions.controlsColumns.split(' ').length).toBe(viewport.width >= 768 ? 2 : 1);
-      expect(dimensions.resultsColumns.split(' ').length).toBe(viewport.width >= 1024 ? 2 : 1);
+      expect(dimensions.resultsColumns.split(' ').length).toBe(viewport.width >= 800 ? 2 : 1);
 
       if (viewport.width < 768) {
         expect(dimensions.header?.right).toBeLessThanOrEqual(dimensions.clientWidth + 0.5);
@@ -139,13 +139,12 @@ test.describe('responsive calculator browser harness', () => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await page.route('https://*/*', (route) => route.abort());
     await page.route('http://127.0.0.1:4173/api/catalog', async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FRONTEND_TEST_CATALOG) });
     });
-    const navigation = page.goto('/');
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
-    await navigation;
-    await expect(page.getByRole('heading', { name: /API-equivalent value/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, plans: [], modelOffers: [] }, 200, false);
@@ -155,7 +154,8 @@ test.describe('responsive calculator browser harness', () => {
     await page.evaluate(() => window.localStorage.clear());
     await openCalculator(page, FRONTEND_TEST_CATALOG, 503, false);
     await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
-    await expect(page.getByText('bootstrap', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Individual Subscription Plans/i })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('checked-in verified bootstrap');
 
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, freshness: { status: 'stale', checkedAt: '2026-08-02T00:00:00.000Z' } });

@@ -9,8 +9,8 @@ import {
 } from './frontend/calculator-state';
 import { Comparison } from './frontend/comparison';
 import { AppShell } from './frontend/app-shell';
-import { Recommendation } from './frontend/recommendation';
-import { ResultsDashboard, selectedOffersForProvider, selectedPlanForProvider } from './frontend/results-dashboard';
+import { paidIndividualPlans } from './frontend/plan-filter';
+import { ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
 import { Skeleton } from './frontend/ui';
 import { useCatalog } from './frontend/use-catalog';
 import type { WorkloadPreset } from './frontend/calculator-state';
@@ -49,7 +49,7 @@ export default function App() {
 
   const providerIds = useMemo(() => {
     if (!catalog) return [];
-    return Array.from(new Set(catalog.plans.map((plan) => plan.providerId)))
+    return Array.from(new Set(paidIndividualPlans(catalog.plans).map((plan) => plan.providerId)))
       .sort((a, b) => providerLabel(a).localeCompare(providerLabel(b)));
   }, [catalog]);
 
@@ -58,7 +58,7 @@ export default function App() {
     const providerWithModels = providerIds.find((providerId) => catalog.modelOffers.some((offer) => offer.providerId === providerId));
     const nextProvider = selectedProviderId && providerIds.includes(selectedProviderId) ? selectedProviderId : providerWithModels ?? providerIds[0];
     if (nextProvider !== selectedProviderId) setSelectedProviderId(nextProvider);
-    const providerPlans = catalog.plans.filter((plan) => plan.providerId === nextProvider);
+    const providerPlans = paidIndividualPlans(catalog.plans, nextProvider);
     const planStillAvailable = providerPlans.some((plan) => plan.id === selectedPlanId);
     if (!planStillAvailable) setSelectedPlanId(providerPlans[0]?.id ?? '');
     const providerModels = catalog.modelOffers.filter((offer) => offer.providerId === nextProvider);
@@ -73,7 +73,6 @@ export default function App() {
 
   const selectedPlan = catalog ? selectedPlanForProvider(catalog.plans, selectedProviderId, selectedPlanId) : undefined;
   const providerModels = catalog?.modelOffers.filter((offer) => offer.providerId === selectedProviderId) ?? [];
-  const selectedModelOffers = catalog ? selectedOffersForProvider(catalog.modelOffers, selectedProviderId, selection.selectedModelIds) : [];
   const snapshot = useMemo(() => buildCalculatorSnapshot({
     modelOffers: providerModels,
     selectedModelIds: selection.selectedModelIds,
@@ -86,7 +85,7 @@ export default function App() {
   const handleProviderChange = (providerId: string) => {
     if (!catalog) return;
     setSelectedProviderId(providerId);
-    const plans = catalog.plans.filter((plan) => plan.providerId === providerId);
+    const plans = paidIndividualPlans(catalog.plans, providerId);
     setSelectedPlanId(plans[0]?.id ?? '');
     setSelection(createInitialSelection(catalog.modelOffers.filter((offer) => offer.providerId === providerId)));
   };
@@ -125,10 +124,9 @@ export default function App() {
     <AppShell theme={theme} language={language} onThemeToggle={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} onLanguageChange={handleLanguageChange} catalogPhase={phase} notice={notice} error={error} lastSuccessfulRefreshAt={lastSuccessfulRefreshAt} onRetry={retry}>
       {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
       {catalog ? <div className="content-stack">
-        <section className="intro-panel"><div><p className="eyebrow">Current catalog · {catalog.revision}</p><h2>Model plan value, derived from evidence.</h2><p>Estimate API-equivalent value and break-even volume for the workload you actually expect. Subscription limits stay conditional when providers do not publish fixed token caps.</p></div><div className="intro-meta"><span className={`freshness-chip freshness-${catalog.freshness.status}`}>{catalog.freshness.status}</span><span>{catalog.freshness.message ?? 'Catalog source records are available.'}</span></div></section>
         <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
-        <ResultsDashboard catalog={catalog} selectedProviderId={selectedProviderId} selectedPlan={selectedPlan} selectedModelOffers={selectedModelOffers} snapshot={snapshot} />
-        <div id="comparison" className="analysis-stack"><Comparison catalog={catalog} selectedProviderId={selectedProviderId} /><Recommendation catalog={catalog} providerId={selectedProviderId} snapshot={snapshot} /></div>
+        <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
+        <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} />
       </div> : null}
     </AppShell>
   );

@@ -20,10 +20,17 @@
         } catch (e) {}
       })();
     </script>
-    <title>MonoMind AI Lab - Subscription Value Calculator</title>
+    <title>AI Cost Engine · Plan Value Calculator</title>
+    <script>
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem('ai-cost-engine:theme') === 'dark' ? 'dark' : 'light';
+      } catch (e) {
+        document.documentElement.dataset.theme = 'light';
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
       /* Hide Google Translate top banner and widget frame */
       .goog-te-banner-frame,
@@ -55,7 +62,7 @@
         }, 'google_translate_element');
       }
     </script>
-    <script type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script async defer type="text/javascript" src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
   </head>
   <body>
     <div id="google_translate_element"></div>
@@ -63,4 +70,3 @@
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

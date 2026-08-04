@@ -1,0 +1,100 @@
+{
+  "projectId": "15996347374407149271",
+  "source": {
+    "light": ".stitch/designs/calculator-light.html",
+    "dark": ".stitch/designs/calculator-dark.html"
+  },
+  "layout": {
+    "gridColumns": 12,
+    "containerMax": "1280px",
+    "desktopGutter": "24px",
+    "desktopMargin": "32px",
+    "mobileMargin": "16px",
+    "baseSpacing": "4px"
+  },
+  "themes": {
+    "light": {
+      "name": "Modern Professional",
+      "colors": {
+        "background": "#f9f9ff",
+        "surface": "#f9f9ff",
+        "surfaceContainerLowest": "#ffffff",
+        "surfaceContainerLow": "#f1f3fc",
+        "surfaceContainer": "#ebedf7",
+        "surfaceContainerHigh": "#e6e8f1",
+        "surfaceContainerHighest": "#e0e2eb",
+        "onSurface": "#181c22",
+        "onSurfaceVariant": "#414753",
+        "outline": "#717785",
+        "outlineVariant": "#c1c6d5",
+        "primary": "#005ab4",
+        "primaryContainer": "#0a73e0",
+        "onPrimary": "#ffffff",
+        "primaryFixed": "#d6e3ff",
+        "primaryFixedDim": "#aac7ff",
+        "secondary": "#465f88",
+        "secondaryContainer": "#b6d0ff",
+        "tertiary": "#964400",
+        "tertiaryContainer": "#bd5700",
+        "error": "#ba1a1a"
+      },
+      "fontFamilies": {
+        "headline": "Inter",
+        "body": "Inter",
+        "label": "Inter"
+      },
+      "borderRadius": {
+        "small": "4px",
+        "default": "8px",
+        "card": "16px",
+        "largeCard": "24px",
+        "pill": "9999px"
+      }
+    },
+    "dark": {
+      "name": "Obsidian Flux",
+      "colors": {
+        "background": "#131315",
+        "surface": "#131315",
+        "surfaceContainerLowest": "#0e0e10",
+        "surfaceContainerLow": "#1c1b1d",
+        "surfaceContainer": "#201f22",
+        "surfaceContainerHigh": "#2a2a2c",
+        "surfaceContainerHighest": "#353437",
+        "onSurface": "#e5e1e4",
+        "onSurfaceVariant": "#c2c6d6",
+        "outline": "#8c909f",
+        "outlineVariant": "#424754",
+        "primary": "#adc6ff",
+        "primaryContainer": "#4d8eff",
+        "onPrimary": "#002e6a",
+        "primaryFixed": "#d8e2ff",
+        "primaryFixedDim": "#adc6ff",
+        "secondary": "#c8c6c9",
+        "secondaryContainer": "#47464a",
+        "tertiary": "#c7c5d0",
+        "tertiaryContainer": "#90909a",
+        "error": "#ffb4ab"
+      },
+      "fontFamilies": {
+        "headline": "Geist",
+        "body": "Geist",
+        "label": "JetBrains Mono"
+      },
+      "fontSizes": {
+        "headlineXL": "48px",
+        "headlineLG": "32px",
+        "headlineMobile": "24px",
+        "body": "16px",
+        "bodySmall": "14px",
+        "labelMono": "12px"
+      },
+      "borderRadius": {
+        "small": "4px",
+        "default": "8px",
+        "card": "12px",
+        "pill": "9999px"
+      }
+    }
+  }
+}

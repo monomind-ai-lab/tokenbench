@@ -1,13 +1,42 @@
+import { Boxes, CreditCard, GitBranch, SlidersHorizontal } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
+import { UI_COPY } from '../data/mockData';
 import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints } from './calculator-state';
+import { paidIndividualPlans } from './plan-filter';
 import type { CalculatorControlsProps } from './types';
-import { EmptyState, SectionCard, providerLabel } from './ui';
+import { EmptyState, providerLabel } from './ui';
 
 function inputId(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-');
 }
 
-function ProviderChoice({ providerId, selected, onChange }: { providerId: string; selected: boolean; onChange(): void; key?: string }) {
+// Keep the range useful for the common workload band while the number field
+// remains available for larger, exact token budgets.
+const MONTHLY_TOKENS_RANGE_MAX = 100_000_000;
+const MONTHLY_TOKENS_RANGE_STEP = 100_000;
+
+interface ProviderChoiceProps {
+  readonly key?: string;
+  readonly providerId: string;
+  readonly selected: boolean;
+  readonly onChange: () => void;
+}
+
+interface PlanChoiceProps {
+  readonly key?: string;
+  readonly plan: PlanOffer;
+  readonly selected: boolean;
+  readonly onChange: () => void;
+}
+
+interface ModelChoiceProps {
+  readonly key?: string;
+  readonly model: ModelOffer;
+  readonly selected: boolean;
+  readonly onChange: () => void;
+}
+
+function ProviderChoice({ providerId, selected, onChange }: ProviderChoiceProps) {
   return (
     <label className={`choice-card ${selected ? 'choice-selected' : ''}`}>
       <input type="radio" name="provider" value={providerId} checked={selected} onChange={onChange} />
@@ -17,7 +46,7 @@ function ProviderChoice({ providerId, selected, onChange }: { providerId: string
   );
 }
 
-function PlanChoice({ plan, selected, onChange }: { plan: PlanOffer; selected: boolean; onChange(): void; key?: string }) {
+function PlanChoice({ plan, selected, onChange }: PlanChoiceProps) {
   return (
     <label className={`choice-card plan-choice ${selected ? 'choice-selected' : ''}`}>
       <input type="radio" name="plan" value={plan.id} checked={selected} onChange={onChange} />
@@ -27,7 +56,7 @@ function PlanChoice({ plan, selected, onChange }: { plan: PlanOffer; selected: b
   );
 }
 
-function ModelChoice({ model, selected, onChange }: { model: ModelOffer; selected: boolean; onChange(): void; key?: string }) {
+function ModelChoice({ model, selected, onChange }: ModelChoiceProps) {
   return (
     <label className={`model-choice ${selected ? 'choice-selected' : ''}`}>
       <input type="checkbox" checked={selected} onChange={onChange} />
@@ -54,16 +83,16 @@ export function CalculatorControls({
   onMonthlyTokensChange,
   onPresetChange,
 }: CalculatorControlsProps) {
-  const plans = catalog.plans.filter((plan) => plan.providerId === selectedProviderId);
+  const plans = paidIndividualPlans(catalog.plans, selectedProviderId);
   const models = catalog.modelOffers.filter((model) => model.providerId === selectedProviderId);
   const selectedModels = models.filter((model) => selectedModelIds.includes(model.id));
 
   return (
-    <SectionCard className="controls-panel" title="Calculator controls" description="Choose a provider, verified plan, and current model workload.">
+    <section className="controls-panel" aria-label="Calculator controls">
       <div className="control-grid">
         <fieldset className="control-block">
-          <legend>Provider selection</legend>
-          <p className="field-help">Only providers with verified subscription plans are shown. API-only model owners remain available in the comparison below.</p>
+          <legend><span className="control-legend"><GitBranch size={18} aria-hidden="true" />{UI_COPY.providerSelection}</span></legend>
+          <p className="field-help">Verified providers with paid individual subscriptions.</p>
           <div className="choice-list provider-list">
             {providerIds.map((providerId) => <ProviderChoice key={providerId} providerId={providerId} selected={selectedProviderId === providerId} onChange={() => onProviderChange(providerId)} />)}
           </div>
@@ -71,8 +100,8 @@ export function CalculatorControls({
         </fieldset>
 
         <fieldset className="control-block">
-          <legend>Plan selection</legend>
-          <p className="field-help">Plan limits remain tied to their published entitlement type.</p>
+          <legend><span className="control-legend"><CreditCard size={18} aria-hidden="true" />{UI_COPY.planSelection}</span></legend>
+          <p className="field-help">Monthly consumer plans only; published limits remain explicit.</p>
           <div className="choice-list plan-list">
             {plans.map((plan) => <PlanChoice key={plan.id} plan={plan} selected={plan.id === selectedPlanId} onChange={() => onPlanChange(plan.id)} />)}
           </div>
@@ -80,7 +109,7 @@ export function CalculatorControls({
         </fieldset>
 
         <fieldset className="control-block model-block">
-          <legend>Model selection</legend>
+          <legend><span className="control-legend"><Boxes size={18} aria-hidden="true" />{UI_COPY.modelSelection}</span></legend>
           <p className="field-help">Select one or more offers. Direct, OpenRouter, and OpenCode Zen identities stay separate.</p>
           <div className="model-list">
             {models.map((model) => <ModelChoice key={model.id} model={model} selected={selectedModelIds.includes(model.id)} onChange={() => onModelToggle(model.id)} />)}
@@ -89,7 +118,7 @@ export function CalculatorControls({
         </fieldset>
 
         <fieldset className="control-block usage-block" aria-describedby="usage-help">
-          <legend>Workload and usage</legend>
+          <legend><span className="control-legend"><SlidersHorizontal size={18} aria-hidden="true" />{UI_COPY.workloadUsage}</span></legend>
           <p id="usage-help" className="field-help">Presets are starting points; every value remains editable.</p>
           <div className="preset-row" aria-label="Workload presets">
             <span className="preset-label">Presets</span>
@@ -99,6 +128,20 @@ export function CalculatorControls({
           </div>
 
           <div className="field-label"><label htmlFor="monthly-tokens">Expected monthly usage</label><output id="monthly-tokens-output">{monthlyTokens.toLocaleString()} tokens</output></div>
+          <input
+            id="monthly-tokens-range"
+            className="usage-range"
+            type="range"
+            min="0"
+            max={MONTHLY_TOKENS_RANGE_MAX}
+            step={MONTHLY_TOKENS_RANGE_STEP}
+            value={Math.min(monthlyTokens, MONTHLY_TOKENS_RANGE_MAX)}
+            aria-label="Monthly usage range"
+            aria-describedby="monthly-tokens-output"
+            aria-valuetext={`${monthlyTokens.toLocaleString()} tokens`}
+            onChange={(event) => onMonthlyTokensChange(Number(event.target.value))}
+          />
+          <div className="range-caption"><span>0 tokens</span><span>100M tokens</span></div>
           <input id="monthly-tokens" className="number-input" type="number" min="0" max="1000000000000" step="1000" value={monthlyTokens} aria-describedby="monthly-tokens-output" onChange={(event) => onMonthlyTokensChange(Number(event.target.value))} />
 
           <div className="field-label"><label htmlFor="input-share">Input share</label><output id="input-share-output">{formatPercentBasisPoints(inputShareBasisPoints)} input / {formatPercentBasisPoints(10_000 - inputShareBasisPoints)} output</output></div>
@@ -121,6 +164,6 @@ export function CalculatorControls({
           </div>
         </fieldset>
       </div>
-    </SectionCard>
+    </section>
   );
 }

@@ -38,6 +38,8 @@ describe('frontend calculator state', () => {
 
     expect(snapshot.costPerMillionMicroDollars).toBe(4_416_475);
     expect(snapshot.apiEquivalentValueMicroDollars).toBe(8_832_950);
+    expect(snapshot.estimatedMonthlySavingsMicroDollars).toBe(-31_167_050);
+    expect(snapshot.efficiencyBasisPoints).toBe(-35_285);
     expect(snapshot.breakEvenTokens).toBe(9_056_997);
     expect(snapshot.maximumPlanValueMicroDollars).toBe(44_164_750);
     expect(snapshot.chartPoints).toHaveLength(5);

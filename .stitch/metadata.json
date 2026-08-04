@@ -1,0 +1,45 @@
+{
+  "projectId": "15996347374407149271",
+  "title": "Functional AI Plan Calculator",
+  "deviceType": "DESKTOP",
+  "Last Sync Time": "2026-08-04T06:04:16Z",
+  "retrieval": {
+    "method": "Authenticated Stitch project export",
+    "archive": "/Users/daren/Downloads/stitch_functional_ai_plan_calculator.zip",
+    "note": "The Stitch SDK namespace was discovered successfully. Existing-project reads required OAuth, so the authenticated Stitch UI export was used to retrieve the exact HTML, screenshots, and design systems."
+  },
+  "screens": {
+    "calculator-dark": {
+      "id": "ai_plan_calculator_deep_dark_neutral_refresh",
+      "label": "AI Plan Calculator - Deep Dark Neutral Refresh",
+      "sourceScreen": null,
+      "dimensions": {
+        "width": 841,
+        "height": 1600
+      },
+      "canvasPosition": {
+        "x": 0,
+        "y": 0
+      },
+      "html": ".stitch/designs/calculator-dark.html",
+      "screenshot": ".stitch/designs/calculator-dark.png",
+      "designSystem": "Obsidian Flux"
+    },
+    "calculator-light": {
+      "id": "ai_plan_calculator_refined_value_trend_analysis",
+      "label": "AI Plan Calculator - Refined Value Trend Analysis",
+      "sourceScreen": null,
+      "dimensions": {
+        "width": 1280,
+        "height": 2432
+      },
+      "canvasPosition": {
+        "x": 0,
+        "y": 1664
+      },
+      "html": ".stitch/designs/calculator-light.html",
+      "screenshot": ".stitch/designs/calculator-light.png",
+      "designSystem": "Modern Professional"
+    }
+  }
+}

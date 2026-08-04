@@ -63,8 +63,8 @@ describe('GET /api/catalog', () => {
     const body = await response.json() as { freshness: { status: string }; provenance: unknown[]; plans: { providerId: string }[] };
     expect(response.status).toBe(200);
     expect(body.freshness.status).toBe('bootstrap');
-    expect(body.provenance).toHaveLength(9);
-    expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'openai']));
+    expect(body.provenance).toHaveLength(10);
+    expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'google', 'xai', 'kimi', 'openai', 'zai']));
   });
 
   it('marks a published revision stale when its refresh timestamp exceeds one day', async () => {

@@ -1,7 +1,7 @@
 import type { CatalogResponse, SourceProvenance } from './contracts';
 import { buildManualSubscriptionSource, MANUAL_BOOTSTRAP_MODEL_OFFERS, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from './manual-manifests';
 
-const observedAt = '2026-08-03T00:00:00.000Z';
+const observedAt = '2026-08-04T00:00:00.000Z';
 const manualSources = MANUAL_SUBSCRIPTION_PROVIDER_IDS.map((providerId) => buildManualSubscriptionSource(providerId, observedAt));
 
 const provenance: SourceProvenance[] = [
@@ -21,7 +21,7 @@ const provenance: SourceProvenance[] = [
  * entitlements remain variable; it never invents token caps or model prices.
  */
 export const BOOTSTRAP_CATALOG: CatalogResponse = {
-  revision: 'bootstrap-2026-08-03',
+  revision: 'bootstrap-2026-08-04',
   publishedAt: observedAt,
   freshness: {
     status: 'bootstrap',

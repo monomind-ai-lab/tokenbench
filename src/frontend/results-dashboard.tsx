@@ -1,55 +1,113 @@
+import { CircleDollarSign, TrendingUp, WalletCards } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
-import { formatCurrencyMicroDollars, formatTokens, type CalculatorSnapshot } from './calculator-state';
+import { UI_COPY } from '../data/mockData';
+import {
+  formatCurrencyMicroDollars,
+  formatSignedPercentBasisPoints,
+  formatTokens,
+  type CalculatorSnapshot,
+} from './calculator-state';
+import { isPaidIndividualPlan } from './plan-filter';
 import type { ResultsDashboardProps } from './types';
-import { EmptyState, SectionCard } from './ui';
+import { EmptyState } from './ui';
 
-function Metric({ label, value, detail, accent = false }: { label: string; value: string; detail?: string; accent?: boolean }) {
-  return <div className={`metric ${accent ? 'metric-accent' : ''}`}><h3 className="metric-label">{label}</h3><strong>{value}</strong>{detail ? <small>{detail}</small> : null}</div>;
+interface TrendChartProps {
+  readonly snapshot: CalculatorSnapshot;
 }
 
-function TrendChart({ snapshot }: { snapshot: CalculatorSnapshot }) {
+function TrendChart({ snapshot }: TrendChartProps) {
   const maxValue = Math.max(...snapshot.chartPoints.map((point) => point.valueMicroDollars), snapshot.apiEquivalentValueMicroDollars, 1);
+  const lastTokens = Math.max(snapshot.chartPoints.at(-1)?.tokens ?? snapshot.breakEvenTokens ?? 1, 1);
+
   return (
     <div className="trend-chart-wrap">
-      <div className="chart-axis" aria-hidden="true"><span>{formatCurrencyMicroDollars(maxValue)}</span><span>{formatCurrencyMicroDollars(Math.round(maxValue / 2))}</span><span>$0</span></div>
-      <div className="trend-chart" role="img" aria-label="API-equivalent value trend">
-        {snapshot.chartPoints.map((point) => (
-          <div className="chart-column" key={point.tokens} data-testid="chart-point">
-            <div className="chart-bar" style={{ height: `${Math.max(point.valueMicroDollars > 0 ? 4 : 0, (point.valueMicroDollars / maxValue) * 100)}%` }} title={`${formatTokens(point.tokens)}: ${formatCurrencyMicroDollars(point.valueMicroDollars)}`} />
+      <div className="chart-axis" aria-hidden="true">
+        <span>{formatCurrencyMicroDollars(maxValue)}</span>
+        <span>{formatCurrencyMicroDollars(Math.round(maxValue * 0.75))}</span>
+        <span>{formatCurrencyMicroDollars(Math.round(maxValue / 2))}</span>
+        <span>{formatCurrencyMicroDollars(Math.round(maxValue * 0.25))}</span>
+        <span>$0</span>
+      </div>
+      <div className="trend-chart" role="img" aria-label="API-equivalent value trend by expected monthly tokens">
+        {snapshot.chartPoints.map((point, index) => (
+          <div className={`chart-column ${index === 3 ? 'chart-column-current' : ''}`} key={`${point.tokens}-${index}`} data-testid="chart-point">
+            {index === 3 ? <span className="current-mix-label">Current mix</span> : null}
+            <div
+              className="chart-bar"
+              style={{ height: `${Math.max(point.valueMicroDollars > 0 ? 4 : 0, (point.valueMicroDollars / maxValue) * 100)}%` }}
+              title={`${formatTokens(point.tokens)}: ${formatCurrencyMicroDollars(point.valueMicroDollars)}`}
+            />
             <span>{formatTokens(point.tokens)}</span>
           </div>
         ))}
-        {snapshot.breakEvenTokens !== null ? <div className="break-even-marker" style={{ left: `${Math.min(100, Math.max(0, (snapshot.breakEvenTokens / Math.max(snapshot.chartPoints.at(-1)?.tokens ?? snapshot.breakEvenTokens, 1)) * 100))}%` }}><span>Break-even</span></div> : null}
+        {snapshot.breakEvenTokens !== null ? (
+          <div className="break-even-marker" style={{ left: `${Math.min(100, Math.max(0, (snapshot.breakEvenTokens / lastTokens) * 100))}%` }}>
+            <span>Breakeven: {formatTokens(snapshot.breakEvenTokens)}</span>
+          </div>
+        ) : null}
       </div>
     </div>
   );
 }
 
+function ValueSummary({ selectedPlan, snapshot }: ResultsDashboardProps) {
+  const savings = snapshot.estimatedMonthlySavingsMicroDollars;
+  const savingsTone = savings === null || savings === 0 ? 'neutral' : savings > 0 ? 'positive' : 'negative';
+
+  return (
+    <article className="value-summary-card">
+      <div className="value-summary-main">
+        <div className="value-metric">
+          <h2><CircleDollarSign aria-hidden="true" size={19} />{UI_COPY.apiEquivalentValue}</h2>
+          <strong>{formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)}</strong>
+          <span>Total market value at expected usage</span>
+        </div>
+        <div className="value-metric value-savings">
+          <h2><WalletCards aria-hidden="true" size={19} />{UI_COPY.estimatedMonthlySavings}</h2>
+          <strong data-savings-tone={savingsTone}>{formatCurrencyMicroDollars(savings)}</strong>
+          <span>{selectedPlan ? `API value minus ${selectedPlan.displayName}` : 'Select a plan to compare'}</span>
+        </div>
+      </div>
+      <div className="value-summary-footer">
+        <div>
+          <span>Breakeven point</span>
+          <strong>{formatTokens(snapshot.breakEvenTokens)}{snapshot.breakEvenTokens !== null ? ' tokens' : ''}</strong>
+        </div>
+        <div>
+          <span>Efficiency</span>
+          <strong>{formatSignedPercentBasisPoints(snapshot.efficiencyBasisPoints)}</strong>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export function ResultsDashboard({ selectedPlan, snapshot }: ResultsDashboardProps) {
   return (
-    <SectionCard className="results-panel" title="Results dashboard" description="Every metric is recalculated from the current catalog selection and workload.">
+    <section className="results-panel" aria-label="Calculated plan value">
       {snapshot.selectedOffers.length === 0 ? (
-        <EmptyState title="Select a verified model" description="Choose one or more models to calculate API-equivalent value, break-even, and the usage trend." />
+        <EmptyState title="Select a verified model" description="Choose one or more models to calculate API-equivalent value, savings, breakeven, and the usage trend." />
       ) : (
-        <div className="results-content">
-          <div className="metrics-grid">
-            <Metric label="API-equivalent value" value={formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)} detail="at expected monthly usage" accent />
-            <Metric label="Blended cost / 1M tokens" value={formatCurrencyMicroDollars(snapshot.costPerMillionMicroDollars)} detail="input/output mix weighted" />
-            <Metric label="Break-even" value={formatTokens(snapshot.breakEvenTokens)} detail={selectedPlan ? `against ${selectedPlan.displayName}` : 'Select a plan to compare'} />
-            <Metric label="Maximum plan value" value={formatCurrencyMicroDollars(snapshot.maximumPlanValueMicroDollars)} detail={selectedPlan?.entitlement.kind === 'fixed_tokens' ? 'fixed entitlement only' : 'variable limit; not calculated'} />
-          </div>
-          <div className="trend-panel">
-            <div className="panel-heading"><div><h3>Value trend analysis</h3><p>API-equivalent value derived from expected monthly tokens.</p></div></div>
+        <div className="results-grid">
+          <ValueSummary selectedPlan={selectedPlan} snapshot={snapshot} />
+          <article className="trend-panel">
+            <div className="trend-heading">
+              <div>
+                <h2>{UI_COPY.valueTrendAnalysis}</h2>
+                <p>API Equivalent Value ($) vs Est. Monthly Tokens</p>
+              </div>
+              <TrendingUp aria-hidden="true" size={21} />
+            </div>
             <TrendChart snapshot={snapshot} />
-          </div>
+          </article>
         </div>
       )}
-    </SectionCard>
+    </section>
   );
 }
 
 export function selectedPlanForProvider(plans: PlanOffer[], providerId: string, planId: string): PlanOffer | undefined {
-  return plans.find((plan) => plan.providerId === providerId && plan.id === planId);
+  return plans.find((plan) => plan.providerId === providerId && plan.id === planId && isPaidIndividualPlan(plan));
 }
 
 export function selectedOffersForProvider(offers: ModelOffer[], providerId: string, selectedIds: string[]): ModelOffer[] {

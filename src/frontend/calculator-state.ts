@@ -15,25 +15,27 @@ export const WORKLOAD_PRESETS: Record<WorkloadPreset, { label: string; inputShar
 };
 
 export interface InitialSelection {
-  selectedModelIds: string[];
-  modelMixBasisPoints: Record<string, number>;
+  readonly selectedModelIds: string[];
+  readonly modelMixBasisPoints: Record<string, number>;
 }
 
 export interface ChartPoint {
-  tokens: number;
-  valueMicroDollars: number;
+  readonly tokens: number;
+  readonly valueMicroDollars: number;
 }
 
 export interface CalculatorSnapshot {
-  selectedOffers: ModelOffer[];
-  mixEntries: ModelMixEntry[];
-  costPerMillionMicroDollars: number;
-  apiEquivalentValueMicroDollars: number;
-  monthlyApiCostMicroDollars: number;
-  breakEvenTokens: number | null;
-  maximumPlanValueMicroDollars: number | null;
-  monthlyTokens: number;
-  chartPoints: ChartPoint[];
+  readonly selectedOffers: ModelOffer[];
+  readonly mixEntries: ModelMixEntry[];
+  readonly costPerMillionMicroDollars: number;
+  readonly apiEquivalentValueMicroDollars: number;
+  readonly monthlyApiCostMicroDollars: number;
+  readonly estimatedMonthlySavingsMicroDollars: number | null;
+  readonly efficiencyBasisPoints: number | null;
+  readonly breakEvenTokens: number | null;
+  readonly maximumPlanValueMicroDollars: number | null;
+  readonly monthlyTokens: number;
+  readonly chartPoints: ChartPoint[];
 }
 
 type ModelPricingBasis = ModelOffer['pricingBasis'];
@@ -99,6 +101,12 @@ export function buildCalculatorSnapshot({
   const safeMonthlyTokens = Math.max(0, Math.round(monthlyTokens));
   const apiEquivalentValueMicroDollars = monthlyApiCostMicroDollars(costPerMillionMicroDollars, safeMonthlyTokens);
   const selectedPlanCost = selectedPlan?.monthlyCostMicroDollars ?? 0;
+  const estimatedMonthlySavings = hasCompleteMix && selectedPlan
+    ? apiEquivalentValueMicroDollars - selectedPlanCost
+    : null;
+  const efficiencyBasisPoints = estimatedMonthlySavings !== null && apiEquivalentValueMicroDollars > 0
+    ? Math.round((estimatedMonthlySavings / apiEquivalentValueMicroDollars) * 10_000)
+    : null;
   const breakEven = hasCompleteMix && selectedPlan ? breakEvenTokens(selectedPlanCost, costPerMillionMicroDollars) : null;
   const maximum = hasCompleteMix && selectedPlan
     ? maximumPlanValueMicroDollars(selectedPlan.entitlement, costPerMillionMicroDollars)
@@ -115,6 +123,8 @@ export function buildCalculatorSnapshot({
     costPerMillionMicroDollars,
     apiEquivalentValueMicroDollars,
     monthlyApiCostMicroDollars: apiEquivalentValueMicroDollars,
+    estimatedMonthlySavingsMicroDollars: estimatedMonthlySavings,
+    efficiencyBasisPoints,
     breakEvenTokens: breakEven,
     maximumPlanValueMicroDollars: maximum,
     monthlyTokens: safeMonthlyTokens,
@@ -137,6 +147,14 @@ export function formatTokens(tokens: number | null | undefined): string {
 
 export function formatPercentBasisPoints(value: number): string {
   return `${(value / 100).toFixed(value % 100 === 0 ? 0 : 1)}%`;
+}
+
+export function formatSignedPercentBasisPoints(value: number | null): string {
+  if (value === null) return 'Not calculated';
+  const formatted = formatPercentBasisPoints(Math.abs(value));
+  if (value > 0) return `+${formatted}`;
+  if (value < 0) return `−${formatted}`;
+  return formatted;
 }
 
 export function entitlementLabel(entitlement: PlanEntitlement): string {

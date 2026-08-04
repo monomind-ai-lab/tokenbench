@@ -270,7 +270,8 @@ export default {
     const refreshRotatingManualSource = () => {
       const hour = new Date().getUTCHours();
       const providerId = MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length];
-      return guarded(`${providerId}-subscription`, refreshManual(providerId, env));
+      const sourceId = buildManualSubscriptionSource(providerId, new Date().toISOString()).source.id;
+      return guarded(sourceId, refreshManual(providerId, env));
     };
     if (controller.cron === '0 */6 * * *') ctx.waitUntil(guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels));
     else if (controller.cron === '30 */6 * * *') ctx.waitUntil(isAutomatedSourceAllowlisted(env, 'opencode-zen') ? guarded('opencode-zen', refreshOpenCode(env)) : recordRefreshFailure(env.CATALOG_DB, 'opencode-zen', new Error('opencode-zen is not allowlisted for automated refresh'), new Date().toISOString()));
@@ -282,8 +283,9 @@ export default {
         await guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
         await (isAutomatedSourceAllowlisted(env, 'opencode-zen') ? guarded('opencode-zen', refreshOpenCode(env)) : recordRefreshFailure(env.CATALOG_DB, 'opencode-zen', new Error('opencode-zen is not allowlisted for automated refresh'), new Date().toISOString()));
         for (const providerId of MANUAL_SUBSCRIPTION_PROVIDER_IDS) {
-          if (buildManualSubscriptionSource(providerId, new Date().toISOString()).plans.length === 0) continue;
-          await guarded(`${providerId}-subscription`, refreshManual(providerId, env));
+          const source = buildManualSubscriptionSource(providerId, new Date().toISOString());
+          if (source.plans.length === 0) continue;
+          await guarded(source.source.id, refreshManual(providerId, env));
         }
       })());
     }

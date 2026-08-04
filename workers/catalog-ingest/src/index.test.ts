@@ -167,13 +167,23 @@ describe('catalog ingestion', () => {
 
   it('builds source-linked manually verified subscription offers instead of an empty source', () => {
     expect(buildManualSubscriptionSource('openai', '2026-08-03T00:00:00.000Z'))
-      .toMatchObject({ source: { id: 'openai-subscription', confidence: 'manual_verified' }, plans: expect.arrayContaining([expect.objectContaining({ id: 'openai:pro-5x', monthlyCostMicroDollars: 100_000_000, sourceId: 'openai-subscription' })]) });
+      .toMatchObject({ source: { id: 'openai-subscription', confidence: 'manual_verified' }, plans: expect.arrayContaining([
+        expect.objectContaining({ id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, sourceId: 'openai-subscription' }),
+        expect.objectContaining({ id: 'openai:pro-5x', monthlyCostMicroDollars: 100_000_000, sourceId: 'openai-subscription' }),
+      ]) });
   });
 
   it('retains only currently verified manual subscription prices', () => {
     expect(buildManualSubscriptionSource('alibaba', '2026-08-03T00:00:00.000Z').plans)
       .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'alibaba:coding-plan-pro', monthlyCostMicroDollars: 50_000_000 })]));
-    expect(buildManualSubscriptionSource('xai', '2026-08-03T00:00:00.000Z').plans).toEqual([]);
+    expect(buildManualSubscriptionSource('google', '2026-08-03T00:00:00.000Z').plans)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'google:ai-pro', monthlyCostMicroDollars: 19_990_000 })]));
+    expect(buildManualSubscriptionSource('xai', '2026-08-03T00:00:00.000Z').plans)
+      .toEqual([expect.objectContaining({ id: 'xai:supergrok', monthlyCostMicroDollars: 30_000_000 })]);
+    expect(buildManualSubscriptionSource('kimi', '2026-08-03T00:00:00.000Z').plans)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'kimi:vivace', monthlyCostMicroDollars: 199_000_000 })]));
+    expect(buildManualSubscriptionSource('zai', '2026-08-03T00:00:00.000Z').plans)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: 'zai:max', monthlyCostMicroDollars: 160_000_000 })]));
   });
 
   it('snapshots source data before publishing one atomic candidate revision', async () => {
