@@ -4,7 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "generate:guides": "tsx scripts/generate-guide-pages.ts",
+    "predev": "npm run generate:guides",
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "prebuild": "npm run generate:guides",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

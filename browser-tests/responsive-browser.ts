@@ -162,3 +162,49 @@ test.describe('responsive calculator browser harness', () => {
     await expect(page.getByText('The published catalog is stale; verify pricing before making a decision.')).toBeVisible();
   });
 });
+
+test.describe('guides browser harness', () => {
+  for (const width of [320, 768, 1440]) {
+    test(`${width}px guide hub stays readable without horizontal overflow`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.route('https://*/*', (route) => route.abort());
+      await page.goto('/guides/');
+
+      await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
+      await expect(page.locator('.guide-card')).toHaveCount(5);
+      await expect(page.getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
+      const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
+      expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+    });
+  }
+
+  test('article ships crawlable body, unique metadata, structured data, and cross-links', async ({ page, request }) => {
+    const path = '/guides/track-claude-code-usage/';
+    const response = await request.get(path);
+    const rawHtml = await response.text();
+    expect(rawHtml).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
+    expect(rawHtml).toContain('Official references');
+    expect(rawHtml).toContain('application/ld+json');
+
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.route('https://*/*', (route) => route.abort());
+    await page.goto(path);
+    await expect(page.getByRole('heading', { name: 'How to Track Claude Code Usage, Tokens, and Spend', level: 1 })).toBeVisible();
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://ai-plans.monomind.one${path}`);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /subscription limits differ from API billing/i);
+    await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(2);
+    await expect(page.getByRole('link', { name: /Models, usage, and limits/i })).toHaveAttribute('href', /^https:\/\/support\.claude\.com/);
+    await expect(page.getByRole('heading', { name: 'Related guides' })).toBeVisible();
+  });
+
+  test('guide theme control persists the selected dark mode', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await page.route('https://*/*', (route) => route.abort());
+    await page.goto('/guides/openrouter-guide-model-routing-cost-controls/');
+    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+});

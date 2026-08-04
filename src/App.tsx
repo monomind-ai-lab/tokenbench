@@ -15,37 +15,17 @@ import { Skeleton } from './frontend/ui';
 import { useCatalog } from './frontend/use-catalog';
 import type { WorkloadPreset } from './frontend/calculator-state';
 import { providerLabel } from './frontend/ui';
-
-type ThemeMode = 'light' | 'dark';
-
-function readStoredTheme(): ThemeMode {
-  try {
-    return window.localStorage.getItem('ai-cost-engine:theme') === 'dark' ? 'dark' : 'light';
-  } catch {
-    return 'light';
-  }
-}
-
-function readLanguage(): string {
-  const match = document.cookie.split('; ').find((cookie) => cookie.startsWith('googtrans='));
-  return match?.split('=')[1]?.split('/').at(-1) || 'en';
-}
+import { useSitePreferences } from './frontend/site-preferences';
 
 export default function App() {
   const catalogState = useCatalog();
   const { catalog, phase, notice, error, lastSuccessfulRefreshAt, retry } = catalogState;
-  const [theme, setTheme] = useState<ThemeMode>(readStoredTheme);
-  const [language, setLanguage] = useState(readLanguage);
+  const { theme, language, toggleTheme, changeLanguage } = useSitePreferences();
   const [selectedProviderId, setSelectedProviderId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [selection, setSelection] = useState({ selectedModelIds: [] as string[], modelMixBasisPoints: {} as Record<string, number> });
   const [inputShareBasisPoints, setInputShareBasisPoints] = useState(5_000);
   const [monthlyTokens, setMonthlyTokens] = useState(10_000_000);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try { window.localStorage.setItem('ai-cost-engine:theme', theme); } catch { /* Theme persistence is best effort. */ }
-  }, [theme]);
 
   const providerIds = useMemo(() => {
     if (!catalog) return [];
@@ -111,19 +91,8 @@ export default function App() {
     setMonthlyTokens(values.monthlyTokens);
   };
 
-  const handleLanguageChange = (nextLanguage: string) => {
-    setLanguage(nextLanguage);
-    document.documentElement.lang = nextLanguage;
-    document.cookie = `googtrans=/en/${nextLanguage}; path=/;`;
-    const translateSelect = document.querySelector('.goog-te-combo') as HTMLSelectElement | null;
-    if (translateSelect) {
-      translateSelect.value = nextLanguage;
-      translateSelect.dispatchEvent(new Event('change'));
-    }
-  };
-
   return (
-    <AppShell theme={theme} language={language} onThemeToggle={() => setTheme((current) => current === 'dark' ? 'light' : 'dark')} onLanguageChange={handleLanguageChange} catalogPhase={phase} notice={notice} error={error} lastSuccessfulRefreshAt={lastSuccessfulRefreshAt} onRetry={retry}>
+    <AppShell theme={theme} language={language} onThemeToggle={toggleTheme} onLanguageChange={changeLanguage} catalogPhase={phase} notice={notice} error={error} lastSuccessfulRefreshAt={lastSuccessfulRefreshAt} onRetry={retry}>
       {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
       {catalog ? <div className="content-stack">
         <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
