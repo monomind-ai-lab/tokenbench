@@ -58,6 +58,8 @@ export interface StoredBenchLmProjectionArtifact {
 }
 
 export type StoredBenchLmProjections = Readonly<Record<ArtifactName, StoredBenchLmProjectionArtifact>>;
+export type BenchLmPreparationInput = RawBenchLmArtifact | StoredBenchLmProjectionArtifact;
+export type BenchLmPreparationInputs = Readonly<Record<ArtifactName, BenchLmPreparationInput>>;
 
 interface PreparedArtifactState {
   artifact: PreparedBenchLmArtifact;
@@ -551,30 +553,88 @@ function canonicalProjection(value: unknown, artifact: ArtifactName): {
  * Projects exact upstream response bytes into the only BenchLM representation
  * permitted for R2 and normalization. Upstream JSON metadata is never trusted.
  */
-export async function prepareBenchLm(rawPayloads: RawBenchLmPayloads): Promise<PreparedBenchLmPayloads> {
-  if (!isRecord(rawPayloads)) fail('BenchLM raw payloads must be an object');
-  if (Object.prototype.hasOwnProperty.call(rawPayloads, 'speed')) fail('BenchLM speed.json is prohibited');
+async function prepareRawArtifact(
+  value: Record<string, unknown>,
+  artifact: ArtifactName,
+): Promise<PreparedArtifactDraft> {
+  const rawBytes = exactBytes(value.bytes, `BenchLM raw ${artifact}.bytes`);
+  const headers = parseHeaders(value.headers, artifact);
+  const canonical = canonicalProjection(decodeJson(rawBytes, `BenchLM raw ${artifact}.bytes`), artifact);
+  return {
+    payload: canonical.payload,
+    projectedBytes: canonical.bytes,
+    projectedJson: canonical.json,
+    projectedSha256: await sha256Hex(canonical.bytes),
+    originalSha256: await sha256Hex(rawBytes),
+    headers,
+  };
+}
 
-  const inputs = ARTIFACTS.map((artifact) => {
-    const rawArtifact = requireRecord(rawPayloads[artifact], `BenchLM raw ${artifact}`);
-    const rawBytes = exactBytes(rawArtifact.bytes, `BenchLM raw ${artifact}.bytes`);
-    const headers = parseHeaders(rawArtifact.headers, artifact);
-    const canonical = canonicalProjection(decodeJson(rawBytes, `BenchLM raw ${artifact}.bytes`), artifact);
-    return { artifact, rawBytes, headers, canonical };
-  });
+/**
+ * Rehydrates an immutable projection from trusted R2/source metadata. The exact
+ * stored bytes are re-hashed and must already be the canonical safe projection.
+ */
+async function rehydrateStoredArtifact(
+  value: Record<string, unknown>,
+  artifact: ArtifactName,
+): Promise<PreparedArtifactDraft> {
+  const projectedBytes = exactBytes(value.projectedBytes, `BenchLM stored ${artifact}.projectedBytes`);
+  const projectedSha256 = requireSha256Hex(value.projectedSha256, `BenchLM stored ${artifact}.projectedSha256`);
+  const originalSha256 = requireSha256Hex(value.originalSha256, `BenchLM stored ${artifact}.originalSha256`);
+  const headers = parseHeaders(value.headers, artifact);
+  const canonical = canonicalProjection(decodeJson(projectedBytes, `BenchLM stored ${artifact}.projectedBytes`), artifact);
+  if (!byteArraysEqual(projectedBytes, canonical.bytes)) {
+    fail(`BenchLM stored ${artifact} projected bytes are not the canonical safe projection`);
+  }
+  if (await sha256Hex(projectedBytes) !== projectedSha256) {
+    fail(`BenchLM stored ${artifact} projected content hash does not match its exact bytes`);
+  }
+  return {
+    payload: canonical.payload,
+    projectedBytes,
+    projectedJson: canonical.json,
+    projectedSha256,
+    originalSha256,
+    headers,
+  };
+}
 
-  const draftEntries = await Promise.all(inputs.map(async ({ artifact, rawBytes, headers, canonical }) => [
-    artifact,
-    {
-      payload: canonical.payload,
-      projectedBytes: canonical.bytes,
-      projectedJson: canonical.json,
-      projectedSha256: await sha256Hex(canonical.bytes),
-      originalSha256: await sha256Hex(rawBytes),
-      headers,
-    },
-  ] as const));
+async function prepareBenchLmInputs(
+  payloads: BenchLmPreparationInputs,
+  label: 'raw payloads' | 'stored projections' | 'mixed inputs',
+): Promise<PreparedBenchLmPayloads> {
+  if (!isRecord(payloads)) fail(`BenchLM ${label} must be an object`);
+  if (Object.prototype.hasOwnProperty.call(payloads, 'speed')) fail('BenchLM speed.json is prohibited');
+  const draftEntries = await Promise.all(ARTIFACTS.map(async (artifact) => {
+    const value = requireRecord(payloads[artifact], `BenchLM ${label} ${artifact}`);
+    const hasRawBytes = Object.prototype.hasOwnProperty.call(value, 'bytes');
+    const hasStoredBytes = Object.prototype.hasOwnProperty.call(value, 'projectedBytes');
+    if (hasRawBytes === hasStoredBytes) {
+      fail(`BenchLM ${label} ${artifact} must be exactly one raw or immutable stored artifact`);
+    }
+    return [artifact, hasRawBytes
+      ? await prepareRawArtifact(value, artifact)
+      : await rehydrateStoredArtifact(value, artifact)] as const;
+  }));
   return registerPreparedBundle(Object.fromEntries(draftEntries) as Record<ArtifactName, PreparedArtifactDraft>);
+}
+
+/**
+ * Projects exact upstream response bytes into the only BenchLM representation
+ * permitted for R2 and normalization. Upstream JSON metadata is never trusted.
+ */
+export async function prepareBenchLm(rawPayloads: RawBenchLmPayloads): Promise<PreparedBenchLmPayloads> {
+  return prepareBenchLmInputs(rawPayloads, 'raw payloads');
+}
+
+/**
+ * Rehydrates immutable projections and fresh raw artifacts as one verified
+ * bundle. parseBenchLm subsequently verifies the common generatedAt value.
+ */
+export async function prepareBenchLmMixed(
+  payloads: BenchLmPreparationInputs,
+): Promise<PreparedBenchLmPayloads> {
+  return prepareBenchLmInputs(payloads, 'mixed inputs');
 }
 
 /**
@@ -584,43 +644,7 @@ export async function prepareBenchLm(rawPayloads: RawBenchLmPayloads): Promise<P
 export async function rehydrateBenchLmProjections(
   storedPayloads: StoredBenchLmProjections,
 ): Promise<PreparedBenchLmPayloads> {
-  if (!isRecord(storedPayloads)) fail('BenchLM stored projections must be an object');
-  if (Object.prototype.hasOwnProperty.call(storedPayloads, 'speed')) fail('BenchLM speed.json is prohibited');
-
-  const inputs = ARTIFACTS.map((artifact) => {
-    const stored = requireRecord(storedPayloads[artifact], `BenchLM stored ${artifact}`);
-    const projectedBytes = exactBytes(stored.projectedBytes, `BenchLM stored ${artifact}.projectedBytes`);
-    const projectedSha256 = requireSha256Hex(
-      stored.projectedSha256,
-      `BenchLM stored ${artifact}.projectedSha256`,
-    );
-    const originalSha256 = requireSha256Hex(
-      stored.originalSha256,
-      `BenchLM stored ${artifact}.originalSha256`,
-    );
-    const headers = parseHeaders(stored.headers, artifact);
-    const decoded = decodeJson(projectedBytes, `BenchLM stored ${artifact}.projectedBytes`);
-    const canonical = canonicalProjection(decoded, artifact);
-    if (!byteArraysEqual(projectedBytes, canonical.bytes)) {
-      fail(`BenchLM stored ${artifact} projected bytes are not the canonical safe projection`);
-    }
-    return { artifact, projectedBytes, projectedSha256, originalSha256, headers, canonical };
-  });
-
-  const draftEntries = await Promise.all(inputs.map(async (input) => {
-    if (await sha256Hex(input.projectedBytes) !== input.projectedSha256) {
-      fail(`BenchLM stored ${input.artifact} projected content hash does not match its exact bytes`);
-    }
-    return [input.artifact, {
-      payload: input.canonical.payload,
-      projectedBytes: input.projectedBytes,
-      projectedJson: input.canonical.json,
-      projectedSha256: input.projectedSha256,
-      originalSha256: input.originalSha256,
-      headers: input.headers,
-    }] as const;
-  }));
-  return registerPreparedBundle(Object.fromEntries(draftEntries) as Record<ArtifactName, PreparedArtifactDraft>);
+  return prepareBenchLmInputs(storedPayloads, 'stored projections');
 }
 
 function safeBenchmarkCategories(items: unknown[]): Set<string> {

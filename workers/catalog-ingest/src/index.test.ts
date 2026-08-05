@@ -207,6 +207,35 @@ describe('catalog ingestion', () => {
     expect(storedText).toBe('{"data":[{"id":"openai/gpt-4o","name":"GPT-4o","pricing":{"prompt":"0.0000025","completion":"0.00001"}}]}');
   });
 
+  it('stops a chunked oversized OpenRouter response before buffering every byte', async () => {
+    const database = createStatefulD1();
+    const totalChunks = 64;
+    let emittedChunks = 0;
+    let cancelled = false;
+    const response = new Response(new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (emittedChunks === totalChunks) {
+          controller.close();
+          return;
+        }
+        emittedChunks += 1;
+        controller.enqueue(new Uint8Array(1024 * 1024));
+      },
+      cancel() {
+        cancelled = true;
+      },
+    }));
+
+    await runScheduledOpenRouter({ database, response });
+
+    expect(cancelled).toBe(true);
+    expect(emittedChunks).toBeLessThan(totalChunks);
+    expect(stateSnapshot(database)).toMatchObject({
+      activeRevision: 'rev-known-good',
+      refreshState: { lastError: expect.stringContaining('response exceeds 8388608 byte limit') },
+    });
+  });
+
   it('parses official OpenRouter pricing into integer micro-dollars per million', () => {
     expect(parseOpenRouterModels({ data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', context_length: 128_000, top_provider: { max_completion_tokens: 16_000 }, pricing: { prompt: '0.0000025', completion: '0.00001', input_cache_read: '0.00000125' } }] }, '2026-08-03T00:00:00.000Z'))
       .toMatchObject({ modelOffers: [{ id: 'openai:openai/gpt-4o:openrouter', inputMicroDollarsPerMillion: 2_500_000, cachedInputMicroDollarsPerMillion: 1_250_000, outputMicroDollarsPerMillion: 10_000_000, contextWindowTokens: 128_000, maxOutputTokens: 16_000, availability: 'available' }] });

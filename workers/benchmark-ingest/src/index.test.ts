@@ -91,11 +91,11 @@ function arenaResponse(
   offset = 0,
   count = 1,
   revision = 'lmarena-revision',
-  total: number | undefined = undefined,
+  total: number | null = offset + count,
 ): Response {
   return new Response(JSON.stringify({
     rows: arenaRows(subset, offset, count),
-    ...(total === undefined ? {} : { num_rows_total: total }),
+    ...(total === null ? {} : { num_rows_total: total }),
   }), {
     headers: { 'content-type': 'application/json', etag: `"${subset}-${offset}-etag"`, 'x-revision': revision },
   });
@@ -583,6 +583,88 @@ describe('atomic benchmark ingestion', () => {
     expect(events.slice(eventCountAfterFirst)).toEqual(['d1:refresh']);
   });
 
+  it('publishes a BenchLM bundle that combines immutable 304 projections with a fresh 200 artifact', async () => {
+    const { env, db } = seededEnvironment();
+    const first = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);
+    const changedPricing = JSON.parse(fixture('pricing')) as { items: Array<Record<string, unknown>> };
+    changedPricing.items[0].inputPrice = 2.75;
+    const fetchImpl = healthyFetch({
+      onRequest(url, init) {
+        if (!requestHeaders(init).get('if-none-match')) return undefined;
+        if (url.hostname === 'benchlm.ai') {
+          const artifact = url.pathname.match(/\/([^/]+)\.json$/)?.[1];
+          if (artifact === 'pricing') {
+            return new Response(JSON.stringify(changedPricing), {
+              headers: { etag: '"pricing-new-etag"' },
+            });
+          }
+          return new Response(null, { status: 304 });
+        }
+        if (url.hostname === 'raw.githubusercontent.com' || url.hostname === 'datasets-server.huggingface.co') {
+          return new Response(null, { status: 304 });
+        }
+        return undefined;
+      },
+    });
+
+    const second = await refreshBenchmarkRevision(env, dependencies(fetchImpl, () => '2026-08-05T13:00:00.000Z').dependencies);
+
+    expect(first.status).toBe('published');
+    expect(second).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    expect(second.revision).not.toBe(first.revision);
+    const firstSources = db.state.sourceRows.get(first.revision as string) ?? [];
+    const secondSources = db.state.sourceRows.get(second.revision as string) ?? [];
+    const secondBenchLm = secondSources.filter((source) => source.sourceId === 'benchlm');
+    expect(secondBenchLm).toHaveLength(5);
+    expect(secondBenchLm.every((source) => source.upstreamRevision === '2026-08-05T06:25:54.198Z')).toBe(true);
+    for (const artifact of benchLmArtifacts.filter((artifact) => artifact !== 'pricing')) {
+      expect(secondBenchLm.find((source) => source.artifactId === artifact)?.snapshotKey)
+        .toBe(firstSources.find((source) => source.sourceId === 'benchlm' && source.artifactId === artifact)?.snapshotKey);
+    }
+    expect(secondBenchLm.find((source) => source.artifactId === 'pricing')?.snapshotKey)
+      .not.toBe(firstSources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'pricing')?.snapshotKey);
+    expect(db.state.revisions.find((revision) => revision.revision === second.revision)?.generatedAt)
+      .toBe('2026-08-05T06:25:54.198Z');
+  });
+
+  it('does not overwrite immutable R2 provenance when only projected-away BenchLM bytes change', async () => {
+    const { env, db, r2, events } = seededEnvironment();
+    const first = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);
+    const firstSources = db.state.sourceRows.get(first.revision as string) ?? [];
+    const firstModels = firstSources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'models');
+    if (!firstModels) throw new Error('expected initial BenchLM models provenance');
+    const originalSnapshot = r2.objects.get(firstModels.snapshotKey);
+    const originalMetadata = originalSnapshot?.customMetadata.original_content_hash;
+    const originalBytes = originalSnapshot?.bytes.slice();
+    const changedModels = JSON.parse(fixture('models')) as { items: Array<Record<string, unknown>> };
+    changedModels.items[0].unreviewed_upstream_field = 'changed-but-projected-away';
+    const changedRawHash = sha256(new TextEncoder().encode(JSON.stringify(changedModels)));
+    const eventsAfterFirst = events.length;
+    const fetchImpl = healthyFetch({
+      onRequest(url, init) {
+        if (url.hostname === 'benchlm.ai' && url.pathname.endsWith('/models.json')) {
+          return new Response(JSON.stringify(changedModels), { headers: { etag: '"models-upstream-only-change"' } });
+        }
+        if (requestHeaders(init).get('if-none-match')
+          && (url.hostname === 'raw.githubusercontent.com' || url.hostname === 'datasets-server.huggingface.co')) {
+          return new Response(null, { status: 304 });
+        }
+        return undefined;
+      },
+    });
+
+    const second = await refreshBenchmarkRevision(env, dependencies(fetchImpl, () => '2026-08-05T13:00:00.000Z').dependencies);
+
+    expect(first.status).toBe('published');
+    expect(second).toMatchObject({ status: 'unchanged', revision: first.revision, error: null });
+    expect(changedRawHash).not.toBe(firstModels.originalContentHash);
+    const storedSnapshot = r2.objects.get(firstModels.snapshotKey);
+    expect(storedSnapshot?.bytes).toEqual(originalBytes);
+    expect(storedSnapshot?.customMetadata.original_content_hash).toBe(originalMetadata);
+    expect(storedSnapshot?.customMetadata.original_content_hash).toBe(firstModels.originalContentHash);
+    expect(events.slice(eventsAfterFirst)).toEqual(['d1:refresh']);
+  });
+
   it('rejects a contaminated legacy OpenRouter snapshot before upstream fetches', async () => {
     const legacyBytes = new TextEncoder().encode(openRouterRaw);
     const { env, db, r2 } = seededEnvironment({
@@ -692,6 +774,101 @@ describe('atomic benchmark ingestion', () => {
     expect(error?.length).toBeLessThanOrEqual(1_000);
   });
 
+  it('keeps a stalled benchmark body inside the 20-second retry deadline without leaking timers', async () => {
+    let leaderboardAttempts = 0;
+    let stalledBodyReads = 0;
+    let cancelledBodies = 0;
+    let missingDeadlines = 0;
+    let nextTimerId = 0;
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    const controllers: AbortController[] = [];
+    const activeTimers = new Map<AbortSignal, { id: number; handler: () => void; timeout: number }>();
+    const clearedTimers: number[] = [];
+    const retries: number[] = [];
+    const releaseStalledBodies = new Set<() => void>();
+    const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (!url.pathname.endsWith('/leaderboard.json')) return healthyFetch()(input, init);
+      leaderboardAttempts += 1;
+      const signal = init?.signal;
+      if (!signal) throw new Error('expected an abort signal for the stalled response');
+      let releasePull: ((fallback: boolean) => void) | undefined;
+      return new Response(new ReadableStream<Uint8Array>({
+        pull(controller) {
+          stalledBodyReads += 1;
+          const timer = activeTimers.get(signal);
+          if (timer) queueMicrotask(timer.handler);
+          else missingDeadlines += 1;
+          return new Promise<void>((resolve) => {
+            let released = false;
+            releasePull = (fallback) => {
+              if (released) return;
+              released = true;
+              releaseStalledBodies.delete(release);
+              if (fallback) {
+                controller.enqueue(new TextEncoder().encode('{}'));
+                controller.close();
+              }
+              resolve();
+            };
+            const release = () => releasePull?.(true);
+            releaseStalledBodies.add(release);
+            fallbackTimer ??= setTimeout(() => {
+              for (const release of releaseStalledBodies) release();
+            }, 25);
+          });
+        },
+        cancel() {
+          cancelledBodies += 1;
+          releasePull?.(false);
+        },
+      }), { headers: { etag: `"stalled-${leaderboardAttempts}"` } });
+    });
+    const { env, db } = seededEnvironment();
+
+    try {
+      const result = await refreshBenchmarkRevision(env, {
+        fetchImpl: fetchImpl as typeof fetch,
+        now: () => observedAt,
+        createAbortController: () => {
+          const controller = new AbortController();
+          controllers.push(controller);
+          return controller;
+        },
+        setTimeoutImpl: (handler, timeout) => {
+          const controller = controllers.at(-1);
+          if (!controller) throw new Error('expected a controller before scheduling the deadline');
+          const id = ++nextTimerId;
+          activeTimers.set(controller.signal, { id, handler, timeout });
+          return id as unknown as ReturnType<typeof setTimeout>;
+        },
+        clearTimeoutImpl: (timeout) => {
+          const id = Number(timeout);
+          const owner = [...activeTimers.entries()].find(([, timer]) => timer.id === id)?.[0];
+          if (owner) activeTimers.delete(owner);
+          clearedTimers.push(id);
+        },
+        sleep: async (timeout) => { retries.push(timeout); },
+        random: () => 0,
+      });
+
+      expect(result.status).toBe('failed');
+      expect(leaderboardAttempts).toBe(3);
+      expect(stalledBodyReads).toBe(3);
+      expect(cancelledBodies).toBe(3);
+      expect(missingDeadlines).toBe(0);
+      expect(retries).toEqual([250, 500]);
+      expect(clearedTimers).toHaveLength(nextTimerId);
+      expect(activeTimers).toHaveLength(0);
+      expect(result.error).toContain('timed out after 20000ms');
+      expect(result.error?.length).toBeLessThanOrEqual(1_000);
+      expect([...db.state.refreshRows.values()].some((row) => row.lastError === result.error)).toBe(true);
+    } finally {
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      for (const release of releaseStalledBodies) release();
+    }
+  });
+
   it('stops retrying a persistent 429 after the bounded retry budget and records last_error', async () => {
     let leaderboardAttempts = 0;
     const fetchImpl = healthyFetch({
@@ -753,6 +930,37 @@ describe('atomic benchmark ingestion', () => {
 
     expect(result.status).toBe('failed');
     expect(db.state.activeRevision).toBeNull();
+  });
+
+  it('rejects a short LMArena page sequence without a verified total instead of treating it as EOF', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const requestedOffsets: number[] = [];
+    const { env, db } = seededEnvironment({ activeBenchmark: previous });
+
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch({
+      onRequest(url) {
+        if (url.hostname !== 'datasets-server.huggingface.co') return undefined;
+        const subset = url.searchParams.get('config') ?? 'agent';
+        const offset = Number(url.searchParams.get('offset'));
+        if (subset !== 'text_style_control') return arenaResponse(subset, offset, 1, 'common-lmarena-revision', 1);
+        requestedOffsets.push(offset);
+        if (offset === 0) return arenaResponse(subset, offset, 100, 'common-lmarena-revision', null);
+        if (offset === 100) return arenaResponse(subset, offset, 1, 'common-lmarena-revision', null);
+        // This later page exists at the same revision, but a malicious short
+        // page at offset 100 must never be trusted to terminate pagination.
+        return arenaResponse(subset, offset, 1, 'common-lmarena-revision');
+      },
+    })).dependencies);
+
+    expect(result.status).toBe('failed');
+    expect(requestedOffsets).toEqual([0]);
+    expect(db.state.activeRevision).toBe(previous.revision);
+    expect(db.state.publicationBatchCalls).toBe(0);
+    expect(result.error).toMatch(/num_rows_total|total/i);
   });
 
   it('accepts sparse Dataset Viewer row_idx values when the declared filtered-row total is complete', async () => {
@@ -831,7 +1039,7 @@ describe('atomic benchmark ingestion', () => {
         if (subset !== 'text_style_control') return arenaResponse(subset ?? 'agent', offset, 1, 'common-lmarena-revision', 1);
         return offset === 0
           ? arenaResponse('text_style_control', 0, 100, 'common-lmarena-revision', 101)
-          : arenaResponse('text_style_control', 100, 0, 'common-lmarena-revision');
+          : arenaResponse('text_style_control', 100, 0, 'common-lmarena-revision', 101);
       },
     })).dependencies);
 

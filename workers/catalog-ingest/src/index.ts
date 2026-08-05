@@ -236,15 +236,40 @@ async function sha256(bytes: Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function parseBoundedJsonResponse(response: Response, label: string): Promise<{ bytes: Uint8Array; payload: unknown }> {
+async function readBoundedResponseBytes(response: Response, label: string): Promise<Uint8Array> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_CATALOG_RESPONSE_BYTES) {
     throw new Error(`${label} response exceeds ${MAX_CATALOG_RESPONSE_BYTES} byte limit`);
   }
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.byteLength > MAX_CATALOG_RESPONSE_BYTES) {
-    throw new Error(`${label} response exceeds ${MAX_CATALOG_RESPONSE_BYTES} byte limit`);
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > MAX_CATALOG_RESPONSE_BYTES) {
+        await reader.cancel('payload too large');
+        throw new Error(`${label} response exceeds ${MAX_CATALOG_RESPONSE_BYTES} byte limit`);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
   }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
+async function parseBoundedJsonResponse(response: Response, label: string): Promise<{ bytes: Uint8Array; payload: unknown }> {
+  const bytes = await readBoundedResponseBytes(response, label);
   let text: string;
   try {
     text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);

@@ -13,11 +13,9 @@ import { COMPARISON_ALLOWLIST } from '../../../src/benchmarks/comparison-allowli
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
 import {
   parseBenchLm,
-  prepareBenchLm,
-  rehydrateBenchLmProjections,
+  prepareBenchLmMixed,
+  type BenchLmPreparationInputs,
   type PreparedBenchLmPayloads,
-  type RawBenchLmPayloads,
-  type StoredBenchLmProjections,
 } from './benchlm';
 import {
   LMARENA_SUBSETS,
@@ -268,25 +266,63 @@ function requestHeaders(conditional?: StoredSourceRecord): Headers {
   return headers;
 }
 
-async function fetchWithRetry(
+function abortError(signal: AbortSignal): Error {
+  const reason = signal.reason;
+  return reason instanceof Error
+    ? reason
+    : new Error(typeof reason === 'string' && reason.length > 0 ? reason : 'upstream request aborted');
+}
+
+async function awaitWithAbort<T>(
+  operation: Promise<T>,
+  signal: AbortSignal,
+  onAbort?: () => void,
+): Promise<T> {
+  if (signal.aborted) {
+    onAbort?.();
+    throw abortError(signal);
+  }
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const settle = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener('abort', abort);
+      callback();
+    };
+    const abort = () => {
+      onAbort?.();
+      settle(() => reject(abortError(signal)));
+    };
+    signal.addEventListener('abort', abort, { once: true });
+    operation.then(
+      (value) => settle(() => resolve(value)),
+      (error) => settle(() => reject(error)),
+    );
+  });
+}
+
+async function fetchWithRetry<T>(
   url: string,
   sourceId: BenchmarkSourceRecord['sourceId'],
   artifactId: string,
   conditional: StoredSourceRecord | undefined,
   dependencies: RefreshDependencies,
-): Promise<Response> {
+  consume: (response: Response, signal: AbortSignal) => Promise<T>,
+): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
     const abort = dependencies.createAbortController();
     const timeout = dependencies.setTimeoutImpl(() => abort.abort('upstream timeout'), REQUEST_TIMEOUT_MS);
+    let retryResponse: Response | null = null;
     try {
       const response = await dependencies.fetchImpl(url, { headers: requestHeaders(conditional), signal: abort.signal });
-      if (response.ok || response.status === 304) return response;
+      if (response.ok || response.status === 304) return await consume(response, abort.signal);
       const transient = response.status === 429 || response.status === 408 || response.status >= 500;
       if (!transient || attempt === MAX_RETRIES) {
         throw new RefreshFailure(sourceId, artifactId, `${sourceId}/${artifactId} returned ${response.status}`);
       }
-      await dependencies.sleep(retryDelay(response, attempt, dependencies));
+      retryResponse = response;
     } catch (error) {
       lastError = error;
       if (error instanceof RefreshFailure) throw error;
@@ -296,30 +332,39 @@ async function fetchWithRetry(
           : `${sourceId}/${artifactId} request failed: ${error instanceof Error ? error.message : String(error)}`;
         throw new RefreshFailure(sourceId, artifactId, message);
       }
-      await dependencies.sleep(retryDelay(null, attempt, dependencies));
     } finally {
       dependencies.clearTimeoutImpl(timeout);
     }
+    await dependencies.sleep(retryDelay(retryResponse, attempt, dependencies));
   }
   throw new RefreshFailure(sourceId, artifactId, `Unexpected exhausted retry state: ${String(lastError)}`);
 }
 
-async function readBoundedResponse(response: Response, limit: number, label: string): Promise<Uint8Array> {
+async function readBoundedResponse(
+  response: Response,
+  limit: number,
+  label: string,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > limit) {
     throw new Error(`${label} response exceeds ${limit} byte limit`);
   }
   if (!response.body) {
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = new Uint8Array(await awaitWithAbort(response.arrayBuffer(), signal));
     if (bytes.byteLength > limit) throw new Error(`${label} response exceeds ${limit} byte limit`);
     return bytes;
   }
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let length = 0;
+  let cancellation: Promise<void> | null = null;
+  const cancelReader = () => {
+    cancellation ??= reader.cancel(abortError(signal)).then(() => undefined, () => undefined);
+  };
   try {
     while (true) {
-      const { done, value } = await reader.read();
+      const { done, value } = await awaitWithAbort(reader.read(), signal, cancelReader);
       if (done) break;
       length += value.byteLength;
       if (length > limit) {
@@ -329,6 +374,7 @@ async function readBoundedResponse(response: Response, limit: number, label: str
       chunks.push(value);
     }
   } finally {
+    if (cancellation) await cancellation;
     reader.releaseLock();
   }
   const bytes = new Uint8Array(length);
@@ -347,7 +393,11 @@ async function readStoredBytes(bucket: R2Bucket, source: StoredSourceRecord, lab
   if (await sha256Digest(bytes) !== source.contentHash) {
     throw new Error(`${label} immutable snapshot content hash does not match exact bytes`);
   }
-  return { bytes, metadata: object.customMetadata ?? {} };
+  const metadata = object.customMetadata ?? {};
+  if (metadata.original_content_hash !== source.originalContentHash) {
+    throw new Error(`${label} immutable snapshot original content hash does not match source provenance`);
+  }
+  return { bytes, metadata };
 }
 
 function sourceKey(sourceId: string, artifactId: string): string {
@@ -540,16 +590,20 @@ async function loadOpenRouterCatalog(bucket: R2Bucket, catalog: ActiveCatalogSou
 
 function sourceFromPreparedBenchLm(
   prepared: PreparedBenchLmPayloads,
-  includeEvidence: boolean,
+  freshArtifacts: ReadonlySet<BenchLmArtifact>,
+  snapshotKeys: Readonly<Record<BenchLmArtifact, string>>,
 ): EvidenceWrite[] {
-  if (!includeEvidence) return [];
-  return BENCHLM_ARTIFACTS.map((artifact) => ({
+  return BENCHLM_ARTIFACTS.filter((artifact) => freshArtifacts.has(artifact)).map((artifact) => ({
     sourceId: 'benchlm', artifactId: artifact,
-    snapshotKey: `benchmarks/benchlm/${artifact}/projected/${prepared[artifact].projectedSha256}.json`,
+    snapshotKey: snapshotKeys[artifact],
     bytes: new Uint8Array(prepared[artifact].projectedBytes),
     contentHash: `sha256:${prepared[artifact].projectedSha256}`,
     originalContentHash: `sha256:${prepared[artifact].originalSha256}`,
   }));
+}
+
+function benchLmSnapshotKey(artifact: BenchLmArtifact, prepared: PreparedBenchLmPayloads): string {
+  return `benchmarks/benchlm/${artifact}/projected/${prepared[artifact].projectedSha256}/original/${prepared[artifact].originalSha256}.json`;
 }
 
 async function prepareBenchLmSource(
@@ -560,47 +614,70 @@ async function prepareBenchLmSource(
 ): Promise<PreparedSource> {
   const responses = await Promise.all(BENCHLM_ARTIFACTS.map(async (artifact) => {
     const existing = previous.get(sourceKey('benchlm', artifact));
-    return [artifact, await fetchWithRetry(BENCHLM_URLS[artifact], 'benchlm', artifact, existing, dependencies), existing] as const;
+    const fetched = await fetchWithRetry(
+      BENCHLM_URLS[artifact],
+      'benchlm',
+      artifact,
+      existing,
+      dependencies,
+      async (response, signal) => ({
+        response,
+        bytes: response.status === 304
+          ? null
+          : await readBoundedResponse(response, MAX_BENCHLM_BYTES, `BenchLM ${artifact}`, signal),
+      }),
+    );
+    return [artifact, fetched, existing] as const;
   }));
-  const statuses = responses.map(([, response]) => response.status);
-  const all304 = statuses.every((status) => status === 304);
-  const all200 = statuses.every((status) => status === 200);
-  if (!all304 && !all200) {
-    throw new RefreshFailure('benchlm', 'bundle', 'BenchLM conditional responses must be all 200 or all 304');
+  const statuses = responses.map(([, fetched]) => fetched.response.status);
+  if (statuses.some((status) => status !== 200 && status !== 304)) {
+    throw new RefreshFailure('benchlm', 'bundle', 'BenchLM returned an unsupported conditional response status');
   }
   let prepared: PreparedBenchLmPayloads;
-  if (all304) {
-    if (responses.some(([, , existing]) => !existing)) {
-      throw new RefreshFailure('benchlm', 'bundle', 'BenchLM returned 304 without an immutable active snapshot');
-    }
-    const storedEntries = await Promise.all(responses.map(async ([artifact, , existing]) => {
-      const source = existing as StoredSourceRecord;
-      const { bytes } = await readStoredBytes(bucket, source, `BenchLM ${artifact}`);
+  const freshArtifacts = new Set<BenchLmArtifact>();
+  const artifactEntries = await Promise.all(responses.map(async ([artifact, fetched, existing]) => {
+    if (fetched.response.status === 304) {
+      if (!existing) throw new RefreshFailure('benchlm', artifact, 'BenchLM returned 304 without an immutable active snapshot');
+      const { bytes } = await readStoredBytes(bucket, existing, `BenchLM ${artifact}`);
       return [artifact, {
         projectedBytes: bytes,
-        projectedSha256: source.contentHash.slice('sha256:'.length),
-        originalSha256: source.originalContentHash.slice('sha256:'.length),
-        headers: { etag: source.etag, lastModified: source.lastModified },
+        projectedSha256: existing.contentHash.slice('sha256:'.length),
+        originalSha256: existing.originalContentHash.slice('sha256:'.length),
+        headers: { etag: existing.etag, lastModified: existing.lastModified },
       }] as const;
-    }));
-    try {
-      prepared = await rehydrateBenchLmProjections(Object.fromEntries(storedEntries) as StoredBenchLmProjections);
-    } catch (error) {
-      throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
     }
-  } else {
-    const rawEntries = await Promise.all(responses.map(async ([artifact, response]) => [artifact, {
-      bytes: await readBoundedResponse(response, MAX_BENCHLM_BYTES, `BenchLM ${artifact}`),
-      headers: { etag: response.headers.get('etag'), lastModified: response.headers.get('last-modified') },
-    }] as const));
-    try {
-      prepared = await prepareBenchLm(Object.fromEntries(rawEntries) as RawBenchLmPayloads);
-    } catch (error) {
-      throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
+    if (!fetched.bytes) throw new RefreshFailure('benchlm', artifact, 'BenchLM 200 response has no body bytes');
+    freshArtifacts.add(artifact);
+    return [artifact, {
+      bytes: fetched.bytes,
+      headers: { etag: fetched.response.headers.get('etag'), lastModified: fetched.response.headers.get('last-modified') },
+    }] as const;
+  }));
+  try {
+    prepared = await prepareBenchLmMixed(Object.fromEntries(artifactEntries) as BenchLmPreparationInputs);
+  } catch (error) {
+    throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
+  }
+  const snapshotKeys = {} as Record<BenchLmArtifact, string>;
+  for (const [artifact, fetched, existing] of responses) {
+    if (fetched.response.status === 304) {
+      if (!existing) throw new RefreshFailure('benchlm', artifact, 'BenchLM returned 304 without an immutable active snapshot');
+      snapshotKeys[artifact] = existing.snapshotKey;
+    } else {
+      snapshotKeys[artifact] = benchLmSnapshotKey(artifact, prepared);
     }
   }
   try {
-    return { batch: await parseBenchLm(prepared, observedAt), evidence: sourceFromPreparedBenchLm(prepared, all200) };
+    const parsed = await parseBenchLm(prepared, observedAt);
+    const batch = validateNormalizedSourceBatch({
+      ...parsed,
+      sources: parsed.sources.map((source) => {
+        const snapshotKey = snapshotKeys[source.artifactId as BenchLmArtifact];
+        if (!snapshotKey) throw new Error(`BenchLM ${source.artifactId} has no immutable snapshot key`);
+        return { ...source, snapshotKey };
+      }),
+    });
+    return { batch, evidence: sourceFromPreparedBenchLm(prepared, freshArtifacts, snapshotKeys) };
   } catch (error) {
     throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
   }
@@ -628,6 +705,10 @@ function projectLiteLlm(payload: unknown): Record<string, Record<string, unknown
   return Object.fromEntries(projected);
 }
 
+function liteLlmSnapshotKey(contentHash: string, originalContentHash: string): string {
+  return `benchmarks/litellm/model-prices/${contentHash.slice('sha256:'.length)}/original/${originalContentHash.slice('sha256:'.length)}.json`;
+}
+
 async function prepareLiteLlmSource(
   bucket: R2Bucket,
   previous: Map<string, StoredSourceRecord>,
@@ -635,7 +716,20 @@ async function prepareLiteLlmSource(
   dependencies: RefreshDependencies,
 ): Promise<PreparedSource> {
   const existing = previous.get(sourceKey('litellm', 'model-prices'));
-  const response = await fetchWithRetry(LITELLM_URL, 'litellm', 'model-prices', existing, dependencies);
+  const fetched = await fetchWithRetry(
+    LITELLM_URL,
+    'litellm',
+    'model-prices',
+    existing,
+    dependencies,
+    async (response, signal) => ({
+      response,
+      bytes: response.status === 304
+        ? null
+        : await readBoundedResponse(response, MAX_LITELLM_BYTES, 'LiteLLM', signal),
+    }),
+  );
+  const response = fetched.response;
   let projected: Record<string, Record<string, unknown>>;
   let contentHash: string;
   let originalContentHash: string;
@@ -655,7 +749,8 @@ async function prepareLiteLlmSource(
     lastModified = existing.lastModified;
     evidence = [];
   } else {
-    const raw = await readBoundedResponse(response, MAX_LITELLM_BYTES, 'LiteLLM');
+    if (!fetched.bytes) throw new RefreshFailure('litellm', 'model-prices', 'LiteLLM 200 response has no body bytes');
+    const raw = fetched.bytes;
     try {
       projected = projectLiteLlm(decodeJson(raw, 'LiteLLM response'));
     } catch (error) {
@@ -668,7 +763,7 @@ async function prepareLiteLlmSource(
     lastModified = response.headers.get('last-modified');
     evidence = [{
       sourceId: 'litellm', artifactId: 'model-prices',
-      snapshotKey: `benchmarks/litellm/model-prices/${contentHash.slice('sha256:'.length)}.json`,
+      snapshotKey: liteLlmSnapshotKey(contentHash, originalContentHash),
       bytes, contentHash, originalContentHash,
     }];
   }
@@ -692,7 +787,7 @@ function lmArenaAllowedFields(subset: LmArenaSubset): readonly string[] {
 
 interface ProjectedLmArenaPage {
   rows: unknown[];
-  num_rows_total?: number;
+  num_rows_total: number;
 }
 
 function projectLmArenaPage(payload: unknown, subset: LmArenaSubset, offset: number): ProjectedLmArenaPage {
@@ -700,10 +795,10 @@ function projectLmArenaPage(payload: unknown, subset: LmArenaSubset, offset: num
   if (!Array.isArray(document.rows)) throw new Error(`LMArena ${subset} response must contain rows`);
   if (document.rows.length > 100) throw new Error(`LMArena ${subset} response exceeds the 100-row page size`);
   const totalRows = document.num_rows_total;
-  if (totalRows !== undefined && (typeof totalRows !== 'number' || !Number.isSafeInteger(totalRows) || totalRows < 0)) {
-    throw new Error(`LMArena ${subset} num_rows_total must be a non-negative safe integer when provided`);
+  if (typeof totalRows !== 'number' || !Number.isSafeInteger(totalRows) || totalRows < 0) {
+    throw new Error(`LMArena ${subset} response requires a non-negative safe integer num_rows_total`);
   }
-  if (typeof totalRows === 'number' && offset > totalRows) {
+  if (offset > totalRows) {
     throw new Error(`LMArena ${subset} page offset exceeds declared num_rows_total`);
   }
   const rowIndexes = new Set<number>();
@@ -724,18 +819,20 @@ function projectLmArenaPage(payload: unknown, subset: LmArenaSubset, offset: num
     assertNoProhibitedData(projectedRow, `LMArena ${subset} row ${index}`);
     return { row_idx: rowIndex, row: projectedRow, truncated_cells: [] };
   }).sort((left, right) => left.row_idx - right.row_idx);
-  if (typeof totalRows === 'number') {
-    const expectedRows = Math.min(100, totalRows - offset);
-    if (rows.length !== expectedRows) {
-      throw new Error(`LMArena ${subset} page is missing rows required by num_rows_total`);
-    }
+  const expectedRows = Math.min(100, totalRows - offset);
+  if (rows.length !== expectedRows) {
+    throw new Error(`LMArena ${subset} page is missing rows required by num_rows_total`);
   }
-  if (typeof totalRows === 'number') return { rows, num_rows_total: totalRows };
-  return { rows };
+  return { rows, num_rows_total: totalRows };
 }
 
-function lmArenaSnapshotKey(subset: LmArenaSubset, offset: number, contentHash: string): string {
-  return `benchmarks/lmarena/${subset}/latest/overall/offset-${offset}-length-100/${contentHash.slice('sha256:'.length)}.json`;
+function lmArenaSnapshotKey(
+  subset: LmArenaSubset,
+  offset: number,
+  contentHash: string,
+  originalContentHash: string,
+): string {
+  return `benchmarks/lmarena/${subset}/latest/overall/offset-${offset}-length-100/${contentHash.slice('sha256:'.length)}/original/${originalContentHash.slice('sha256:'.length)}.json`;
 }
 
 async function reuseLmArenaPage(
@@ -762,7 +859,7 @@ async function reuseLmArenaPage(
     evidence: [],
     rowCount: projection.rows.length,
     revision: source.upstreamRevision,
-    totalRows: projection.num_rows_total ?? null,
+    totalRows: projection.num_rows_total,
   };
 }
 
@@ -781,13 +878,27 @@ async function fetchLmArenaSubset(
     const artifactId = lmArenaPageArtifactId(subset, 'latest', 'overall', offset, 100);
     const sourceUrl = lmArenaPageSourceUrl(subset, 'latest', 'overall', offset, 100);
     const existing = previous.get(sourceKey('lmarena', artifactId));
-    const response = await fetchWithRetry(sourceUrl, 'lmarena', artifactId, existing, dependencies);
+    const fetched = await fetchWithRetry(
+      sourceUrl,
+      'lmarena',
+      artifactId,
+      existing,
+      dependencies,
+      async (response, signal) => ({
+        response,
+        bytes: response.status === 304
+          ? null
+          : await readBoundedResponse(response, MAX_LMARENA_PAGE_BYTES, `LMArena ${artifactId}`, signal),
+      }),
+    );
+    const response = fetched.response;
     let page: LmArenaPage;
     if (response.status === 304) {
       if (!existing) throw new RefreshFailure('lmarena', artifactId, 'LMArena returned 304 without an immutable page snapshot');
       page = await reuseLmArenaPage(bucket, existing, subset, offset, observedAt);
     } else {
-      const raw = await readBoundedResponse(response, MAX_LMARENA_PAGE_BYTES, `LMArena ${artifactId}`);
+      if (!fetched.bytes) throw new RefreshFailure('lmarena', artifactId, 'LMArena 200 response has no body bytes');
+      const raw = fetched.bytes;
       const revision = response.headers.get('x-revision');
       if (revision === null || revision.trim().length === 0) {
         throw new RefreshFailure('lmarena', artifactId, 'LMArena response requires a non-null x-revision header');
@@ -810,7 +921,7 @@ async function fetchLmArenaSubset(
       const provenance = {
         artifactId, sourceUrl, subset, split: 'latest', category: 'overall', offset, length: 100,
         etag: response.headers.get('etag'), lastModified: response.headers.get('last-modified'), upstreamRevision: revision,
-        schemaVersion: null, snapshotKey: lmArenaSnapshotKey(subset, offset, contentHash), contentHash, originalContentHash,
+        schemaVersion: null, snapshotKey: lmArenaSnapshotKey(subset, offset, contentHash, originalContentHash), contentHash, originalContentHash,
       };
       try {
         page = {
@@ -818,32 +929,33 @@ async function fetchLmArenaSubset(
           evidence: [{ sourceId: 'lmarena', artifactId, snapshotKey: provenance.snapshotKey, bytes, contentHash, originalContentHash }],
           rowCount: projection.rows.length,
           revision,
-          totalRows: projection.num_rows_total ?? null,
+          totalRows: projection.num_rows_total,
         };
       } catch (error) {
         throw new RefreshFailure('lmarena', artifactId, error instanceof Error ? error.message : String(error));
       }
     }
-    if (page.totalRows !== null) {
-      if (declaredTotal !== null && declaredTotal !== page.totalRows) {
-        throw new RefreshFailure('lmarena', artifactId, 'LMArena pages disagree on num_rows_total');
-      }
-      declaredTotal = page.totalRows;
+    if (page.totalRows === null) {
+      throw new RefreshFailure('lmarena', artifactId, 'LMArena page has no verified num_rows_total');
     }
-    if (declaredTotal !== null) {
-      const expectedRows = Math.min(100, declaredTotal - offset);
-      if (page.rowCount !== expectedRows) {
-        throw new RefreshFailure('lmarena', artifactId, 'LMArena page is missing rows required by num_rows_total');
-      }
+    if (declaredTotal !== null && declaredTotal !== page.totalRows) {
+      throw new RefreshFailure('lmarena', artifactId, 'LMArena pages disagree on num_rows_total');
+    }
+    declaredTotal = page.totalRows;
+    const expectedRows = Math.min(100, declaredTotal - offset);
+    if (page.rowCount !== expectedRows) {
+      throw new RefreshFailure('lmarena', artifactId, 'LMArena page is missing rows required by num_rows_total');
     }
     if (page.rowCount === 0) break;
     pages.push(page);
-    if (declaredTotal !== null && offset + page.rowCount === declaredTotal) break;
-    if (page.rowCount < 100) break;
+    if (offset + page.rowCount === declaredTotal) break;
   }
   if (pages.length === 0) throw new RefreshFailure('lmarena', `${subset}:latest:overall`, 'LMArena subset has no complete page');
   if (pages.length === MAX_LMARENA_PAGES_PER_SUBSET && pages.at(-1)?.rowCount === 100) {
     throw new RefreshFailure('lmarena', `${subset}:latest:overall`, 'LMArena pagination exceeded the bounded page limit');
+  }
+  if (declaredTotal === null || pages.reduce((count, page) => count + page.rowCount, 0) !== declaredTotal) {
+    throw new RefreshFailure('lmarena', `${subset}:latest:overall`, 'LMArena pages do not cover the verified num_rows_total');
   }
   return pages;
 }
@@ -944,6 +1056,17 @@ async function writeEvidence(bucket: R2Bucket, sources: readonly BenchmarkSource
     }
     if (await sha256Digest(entry.bytes) !== entry.contentHash) {
       throw new Error(`Evidence ${entry.sourceId}/${entry.artifactId} bytes do not match content hash`);
+    }
+    const existing = await bucket.get(entry.snapshotKey);
+    if (existing) {
+      const existingBytes = new Uint8Array(await existing.arrayBuffer());
+      if (await sha256Digest(existingBytes) !== entry.contentHash) {
+        throw new Error(`Evidence ${entry.sourceId}/${entry.artifactId} immutable key has mismatched bytes`);
+      }
+      if (existing.customMetadata?.original_content_hash !== entry.originalContentHash) {
+        throw new Error(`Evidence ${entry.sourceId}/${entry.artifactId} immutable key has mismatched original provenance`);
+      }
+      continue;
     }
     await bucket.put(entry.snapshotKey, entry.bytes, {
       httpMetadata: { contentType: 'application/json' },
@@ -1131,7 +1254,6 @@ export async function refreshBenchmarkRevision(
     const pairs = deriveComparisonPairs(normalized);
     const contentHash = await combinedContentHash(catalog, normalized.sources);
     const evidence = [...benchLm.evidence, ...liteLlm.evidence, ...pages.flatMap((page) => page.evidence)];
-    await writeEvidence(env.SOURCE_SNAPSHOTS, normalized.sources, evidence);
     if (active?.contentHash === contentHash) {
       const unchangedStatements = [
         boundedStatement(env.CATALOG_DB, `UPDATE benchmark_revisions SET checked_at = ? WHERE revision = ?`, [checkedAt, active.revision]),
@@ -1145,6 +1267,7 @@ export async function refreshBenchmarkRevision(
     }
     const revision = `benchmark_${contentHash.slice('sha256:'.length, 'sha256:'.length + 32)}`;
     const generatedAt = normalized.sources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'leaderboard')?.upstreamRevision ?? checkedAt;
+    await writeEvidence(env.SOURCE_SNAPSHOTS, normalized.sources, evidence);
     await env.CATALOG_DB.batch(buildPublicationStatements(env.CATALOG_DB, revision, generatedAt, checkedAt, contentHash, catalog, normalized, pairs));
     return { status: 'published', revision, checkedAt, error: null };
   } catch (error) {
