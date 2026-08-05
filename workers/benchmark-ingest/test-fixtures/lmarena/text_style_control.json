@@ -1,0 +1,47 @@
+{
+  "provenance": {
+    "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=2",
+    "datasetUrl": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+    "licenseId": "CC-BY-4.0",
+    "split": "latest",
+    "category": "overall",
+    "upstreamRevision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0",
+    "responseHeaders": {
+      "x-revision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0"
+    },
+    "originalResponseSha256": "sha256:7a1d47296626545d34511798b615b7e37c61af3ddbc6e6ae86b40cab4f30b2f7",
+    "retrievedAt": "2026-08-05T10:20:10.000Z",
+    "projectionFields": [
+      "model_name",
+      "organization",
+      "license",
+      "rating",
+      "rating_lower",
+      "rating_upper",
+      "variance",
+      "vote_count",
+      "rank",
+      "category",
+      "leaderboard_publish_date"
+    ]
+  },
+  "rows": [
+    {
+      "row_idx": 0,
+      "row": {
+        "model_name": "claude-fable-5",
+        "organization": "anthropic",
+        "license": "Proprietary",
+        "rating": 1508.576862666775,
+        "rating_lower": 1502.750545162002,
+        "rating_upper": 1514.403180171548,
+        "variance": 8.836740741188125,
+        "vote_count": 17799,
+        "rank": 1,
+        "category": "overall",
+        "leaderboard_publish_date": "2026-08-03"
+      },
+      "truncated_cells": []
+    }
+  ]
+}
