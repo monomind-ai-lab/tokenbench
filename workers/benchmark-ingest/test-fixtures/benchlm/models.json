@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-05T00:00:00.000Z",
+  "sourceLastUpdated": "2026-08-05T00:00:00.000Z",
+  "canonicalUrl": "https://benchlm.ai/data/models.json",
+  "name": "BenchLM Models",
+  "description": "Reduced allowlist projection for parser tests.",
+  "sourceFiles": ["models.json"],
+  "counts": { "items": 2 },
+  "items": [
+    {
+      "canonicalModelKey": "model-a",
+      "slug": "model-a",
+      "model": "Model A",
+      "creator": "Acme",
+      "sourceType": "Proprietary",
+      "reasoningType": null,
+      "releaseDate": "2026-01-15",
+      "contextWindowTokens": 128000,
+      "evidenceStatus": "supported",
+      "rankingEligible": true,
+      "ranking": {
+        "categoryRankingEligible": { "coding": true, "reasoning": false }
+      },
+      "coverage": {
+        "trustedBenchmarkCount": 4,
+        "verifiedBenchmarkCount": 3
+      },
+      "scores": {
+        "rawOverallScore": 82.25,
+        "displayCategoryScores": { "coding": 79.5, "reasoning": null },
+        "verifiedDisplayCategoryScores": { "coding": 80.25, "reasoning": null }
+      }
+    },
+    {
+      "canonicalModelKey": "model-b",
+      "slug": "model-b",
+      "model": "Model B",
+      "creator": "Acme",
+      "sourceType": "Open Weight",
+      "reasoningType": null,
+      "releaseDate": null,
+      "contextWindowTokens": 0,
+      "evidenceStatus": "estimated",
+      "rankingEligible": true,
+      "ranking": {
+        "categoryRankingEligible": { "coding": true, "reasoning": false }
+      },
+      "coverage": {
+        "trustedBenchmarkCount": 2,
+        "verifiedBenchmarkCount": 1
+      },
+      "scores": {
+        "rawOverallScore": 71,
+        "displayCategoryScores": { "coding": 68, "reasoning": null },
+        "verifiedDisplayCategoryScores": { "coding": 69, "reasoning": null }
+      }
+    }
+  ],
+  "tokenbenchFixtureMetadata": {
+    "originalSha256": "156b89ea5b07166c40b18d6868ec8ba5527d9991cabe14378b6b8e340b093967",
+    "responseHeaders": { "etag": "\"329d611c37eaed33623407f995bb74ff\"" }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-05T00:00:00.000Z",
+  "sourceLastUpdated": "2026-08-05T00:00:00.000Z",
+  "canonicalUrl": "https://benchlm.ai/data/pricing.json",
+  "name": "BenchLM Pricing",
+  "description": "Reduced allowlist projection for parser tests.",
+  "sourceFiles": ["pricing.json"],
+  "counts": { "items": 2 },
+  "items": [
+    {
+      "canonicalModelKey": "model-a",
+      "slug": "model-a",
+      "model": "Model A",
+      "creator": "Acme",
+      "sourceType": "Proprietary",
+      "contextWindowTokens": 128000,
+      "inputPrice": 2.5,
+      "cachedInputPrice": 1.25,
+      "outputPrice": 10,
+      "hasNumericPricing": true,
+      "isFreePricing": false
+    },
+    {
+      "canonicalModelKey": "model-b",
+      "slug": "model-b",
+      "model": "Model B",
+      "creator": "Acme",
+      "sourceType": "Open Weight",
+      "contextWindowTokens": 0,
+      "inputPrice": null,
+      "cachedInputPrice": null,
+      "outputPrice": null,
+      "hasNumericPricing": false,
+      "isFreePricing": false
+    }
+  ],
+  "tokenbenchFixtureMetadata": {
+    "originalSha256": "b45aa63e36300093e674b4b8df59658bf68e4b8e34c6130fa73469fa5b18bb66",
+    "responseHeaders": { "etag": "\"9b3ed2fff10ed67eb64fa9f20d76b555\"" }
+  }
+}
