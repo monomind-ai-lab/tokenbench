@@ -492,14 +492,28 @@ test.describe('generated static route runtime', () => {
     }
   });
 
-  test('ships crawlable leaderboard HTML and replaces it with the interactive app when JavaScript executes', async ({ page, request }) => {
+  test('ships crawlable leaderboard HTML and replaces it with the interactive app when JavaScript executes', async ({ page, request, baseURL }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
-    await page.route('https://*/*', (route) => route.abort());
-    await page.route('**/api/benchmarks/leaderboards/**', (route) => route.fulfill({
+    if (!baseURL) throw new Error('Playwright baseURL is required for origin-scoped route stubs.');
+    const previewOrigin = new URL(baseURL).origin;
+    const browserContext = page.context();
+    await browserContext.route(/^https?:\/\//, (route) => (
+      new URL(route.request().url()).origin === previewOrigin ? route.fallback() : route.abort()
+    ));
+    await browserContext.route(`${previewOrigin}/api/benchmarks/leaderboards/**`, (route) => route.fulfill({
       status: 503,
       contentType: 'application/json',
       body: JSON.stringify({ error: 'Published benchmark data is unavailable.' }),
     }));
+
+    const externalNavigationResults = [];
+    for (const protocol of ['http', 'https']) {
+      const externalUrl = `${protocol}://external.example/api/benchmarks/leaderboards/llm-overall?profile=balanced`;
+      const externalPage = await browserContext.newPage();
+      externalNavigationResults.push(await externalPage.goto(externalUrl).then(() => 'fulfilled', () => 'aborted'));
+      await externalPage.close();
+    }
+    expect(externalNavigationResults).toEqual(['aborted', 'aborted']);
 
     for (const [pathname, h1] of hydratingLeaderboardRoutes) {
       const response = await request.get(pathname);
@@ -516,7 +530,9 @@ test.describe('generated static route runtime', () => {
       await expect(page.locator('#calculator'), pathname).toHaveCount(0);
       if (pathname !== '/leaderboards/') {
         await expect(page.getByRole('form', { name: 'Leaderboard filters' }), pathname).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Retry benchmark request' }), pathname).toBeVisible();
+        const unavailableState = page.getByRole('region', { name: `${h1} results` }).getByRole('status');
+        await expect(unavailableState.getByText('Unavailable', { exact: true }), pathname).toBeVisible();
+        await expect(unavailableState.getByRole('button', { name: 'Retry benchmark request' }), pathname).toBeVisible();
       }
     }
   });
