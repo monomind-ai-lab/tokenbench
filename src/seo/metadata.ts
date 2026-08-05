@@ -34,13 +34,16 @@ interface MetadataDefinition {
 
 const socialImage = `${SITE_CONFIG.origin}/og-guides.png`;
 
-function canonicalUrl(pathname: string): string {
+function canonicalUrl(pathname: string, trailingSlash = true): string {
   if (pathname === '/') return SITE_CONFIG.origin;
-  return `${SITE_CONFIG.origin}${pathname.endsWith('/') ? pathname : `${pathname}/`}`;
+  const normalizedPathname = trailingSlash
+    ? pathname.endsWith('/') ? pathname : `${pathname}/`
+    : pathname.replace(/\/+$/, '');
+  return `${SITE_CONFIG.origin}${normalizedPathname}`;
 }
 
-function makeMetadata(pathname: string, definition: MetadataDefinition): PageMetadata {
-  const canonical = canonicalUrl(pathname);
+function makeMetadata(pathname: string, definition: MetadataDefinition, trailingSlash = true): PageMetadata {
+  const canonical = canonicalUrl(pathname, trailingSlash);
   return {
     ...definition,
     robots: definition.robots ?? 'index,follow',
@@ -133,7 +136,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
       ...pageDefinitions.comparison,
       title: `${route.pair.replaceAll('-', ' ')} comparison | ${SITE_CONFIG.name}`,
       h1: `${route.pair.replaceAll('-', ' ')} comparison`,
-    });
+    }, false);
     case 'notFound': return makeMetadata('/', pageDefinitions.notFound);
   }
 }

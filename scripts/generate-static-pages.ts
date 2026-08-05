@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_CONFIG } from '../src/brand/site-config';
@@ -68,12 +68,6 @@ function structuredDataFor(route: AppRoute, metadata: PageMetadata): unknown[] {
   }];
 }
 
-function generatedTopLevelDirectories(): string[] {
-  return [...new Set(FIXED_ROUTES
-    .map(({ pathname }) => pathname.split('/').filter(Boolean)[0])
-    .filter((directory): directory is string => Boolean(directory)))];
-}
-
 function staticSitemap(): string {
   const urls = FIXED_ROUTES.map(({ route }) => metadataForRoute(route).canonical);
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -85,7 +79,6 @@ ${urls.map((url) => `  <url><loc>${escapeHtml(url)}</loc></url>`).join('\n')}
 
 export async function generateStaticPages(rootDir: string): Promise<void> {
   const inputs = staticHtmlEntries(rootDir);
-  await Promise.all(generatedTopLevelDirectories().map((directory) => rm(resolve(rootDir, directory), { recursive: true, force: true })));
 
   await Promise.all(FIXED_ROUTES.map(async ({ id, route }) => {
       if (route.kind === 'guides') return;

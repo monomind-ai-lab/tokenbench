@@ -1,10 +1,15 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateStaticPages } from './generate-static-pages';
 
 const outputRoots: string[] = [];
+const execFileAsync = promisify(execFile);
+const requireFromTest = createRequire(import.meta.url);
 
 afterEach(async () => {
   await Promise.all(outputRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -38,5 +43,34 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc>');
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
+  });
+
+  it('preserves unowned files inside generated route trees', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
+    outputRoots.push(root);
+    const leaderboardSentinel = join(root, 'leaderboards', 'editor-notes.txt');
+    const guideSentinel = join(root, 'guides', 'drafts', 'keep-me.txt');
+    await mkdir(join(root, 'leaderboards'), { recursive: true });
+    await mkdir(join(root, 'guides', 'drafts'), { recursive: true });
+    await writeFile(leaderboardSentinel, 'leaderboard notes');
+    await writeFile(guideSentinel, 'guide draft');
+
+    await generateStaticPages(root);
+
+    await expect(readFile(leaderboardSentinel, 'utf8')).resolves.toBe('leaderboard notes');
+    await expect(readFile(guideSentinel, 'utf8')).resolves.toBe('guide draft');
+  });
+
+  it('preserves unowned guide files when the guide CLI runs directly', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-guide-pages-'));
+    outputRoots.push(root);
+    const sentinel = join(root, 'guides', 'editor-notes.txt');
+    await mkdir(join(root, 'guides'), { recursive: true });
+    await writeFile(sentinel, 'keep this guide note');
+
+    const scriptPath = resolve(process.cwd(), 'scripts/generate-guide-pages.ts');
+    await execFileAsync(process.execPath, ['--import', requireFromTest.resolve('tsx'), scriptPath], { cwd: root });
+
+    await expect(readFile(sentinel, 'utf8')).resolves.toBe('keep this guide note');
   });
 });

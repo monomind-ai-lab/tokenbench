@@ -356,3 +356,52 @@ test.describe('guides browser harness', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 });
+
+test.describe('generated static route runtime', () => {
+  const staticOnlyRoutes = [
+    ['/tools/', 'AI cost decision tools'],
+    ['/compare/', 'Compare AI models and costs'],
+    ['/leaderboards/', 'AI model leaderboards'],
+    ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
+    ['/leaderboards/llm/coding/', 'AI coding model benchmarks'],
+    ['/leaderboards/llm/agentic/', 'AI agentic model benchmarks'],
+    ['/leaderboards/llm/human-preference/', 'Human preference AI model rankings'],
+    ['/leaderboards/llm/value/', 'AI model value frontier'],
+    ['/leaderboards/llm/pricing-context/', 'AI model pricing and context'],
+    ['/leaderboards/multimodal/vision-documents/', 'Vision and document AI benchmarks'],
+    ['/leaderboards/media/text-to-image/', 'Text-to-image model rankings'],
+    ['/leaderboards/media/image-editing/', 'AI image-editing model rankings'],
+    ['/leaderboards/media/text-to-video/', 'Text-to-video model rankings'],
+    ['/leaderboards/media/image-to-video/', 'Image-to-video model rankings'],
+    ['/leaderboards/media/video-editing/', 'AI video-editing model rankings'],
+  ] as const;
+
+  test('retains every route-correct static shell after browser JavaScript executes', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.route('https://*/*', (route) => route.abort());
+
+    for (const [pathname, h1] of staticOnlyRoutes) {
+      await page.goto(pathname);
+
+      await expect(page.locator('.static-page-shell'), pathname).toBeVisible();
+      await expect(page.getByRole('heading', { name: h1, level: 1 }), pathname).toBeVisible();
+      await expect(page.locator('h1'), pathname).toHaveCount(1);
+      await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+    }
+  });
+
+  test('does not mount the legacy calculator over server-rendered dynamic or unknown shells', async ({ page, request }) => {
+    await page.route('https://*/*', (route) => route.abort());
+    const shellResponse = await request.get('/compare/');
+    const shellHtml = await shellResponse.text();
+
+    for (const pathname of ['/compare/model-a-vs-model-b', '/not-a-tokenbench-route']) {
+      const url = `http://127.0.0.1:4173${pathname}`;
+      await page.route(url, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: shellHtml }));
+      await page.goto(pathname);
+      await expect(page.locator('.static-page-shell'), pathname).toBeVisible();
+      await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+      await page.unroute(url);
+    }
+  });
+});

@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_CONFIG } from '../src/brand/site-config';
@@ -105,7 +105,6 @@ export async function generateGuidePages(outputRoot: string): Promise<void> {
 
 async function runGuideGenerator(): Promise<void> {
   const outputRoot = resolve(process.cwd(), 'guides');
-  await rm(outputRoot, { recursive: true, force: true });
   await generateGuidePages(outputRoot);
   console.log(`Generated ${GUIDES.length + 1} guide pages.`);
 }

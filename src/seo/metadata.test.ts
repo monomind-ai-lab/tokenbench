@@ -63,4 +63,11 @@ describe('route metadata registry', () => {
     expect(page.h1).toBe('How to Track Claude Code Usage, Tokens, and Spend');
     expect(page.canonical).toBe(`${origin}/guides/track-claude-code-usage/`);
   });
+
+  it('keeps dynamic comparison canonical and Open Graph URLs slashless', () => {
+    const page = metadataForRoute({ kind: 'comparison', pair: 'a-vs-b' });
+
+    expect(page.canonical).toBe(`${origin}/compare/a-vs-b`);
+    expect(page.openGraph.url).toBe(`${origin}/compare/a-vs-b`);
+  });
 });
