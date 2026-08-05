@@ -118,6 +118,10 @@ describe('leaderboard mockups', () => {
     expect(disclosure?.hasAttribute('hidden')).toBe(false);
     expect(disclosureText).toMatch(/illustrative/i);
     expect(disclosureText).toMatch(/no active revision is represented/i);
+    expect(disclosureText).not.toMatch(/rank, capability, price, and freshness values remain Unavailable/i);
+    expect(disclosureText).toMatch(/ordinary entries[^.]*Unavailable[^.]*rank, capability, price, and freshness/i);
+    expect(disclosureText).toMatch(/estimated (?:entries|previews)[^.]*Unranked/i);
+    expect(disclosureText).toMatch(/not published (?:data|results)/i);
     expect(document.querySelector('.leaderboard-table')?.getAttribute('aria-describedby')).toBe(disclosureId);
     expect(document.querySelector('.leaderboard-mobile-cards')?.getAttribute('aria-describedby')).toBe(disclosureId);
   });
