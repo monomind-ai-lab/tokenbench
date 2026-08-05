@@ -478,10 +478,11 @@ export function validateNormalizedSourceBatch(value: unknown): NormalizedSourceB
     modelsByKey.set(model.modelKey, model);
     slugs.add(model.slug);
   });
+  const modelKeys = new Set(modelsByKey.keys());
 
   const metricIdentities = new Set<string>();
   batch.metrics.forEach((record, index) => {
-    const metric = validateMetric(record, index, sourceArtifacts, new Set(modelsByKey.keys()));
+    const metric = validateMetric(record, index, sourceArtifacts, modelKeys);
     const identity = `${metric.modelKey}\u0000${metric.metricKey}`;
     if (metricIdentities.has(identity)) fail(`Duplicate metric identity: ${metric.modelKey}/${metric.metricKey}`);
     metricIdentities.add(identity);
@@ -489,7 +490,7 @@ export function validateNormalizedSourceBatch(value: unknown): NormalizedSourceB
 
   const priceIdentities = new Set<string>();
   batch.priceChecks.forEach((record, index) => {
-    const price = validatePriceCheck(record, index, sourceArtifacts, new Set(modelsByKey.keys()));
+    const price = validatePriceCheck(record, index, sourceArtifacts, modelKeys);
     const identity = `${price.modelKey}\u0000${price.sourceId}\u0000${price.providerId}\u0000${price.routeId}`;
     if (priceIdentities.has(identity)) {
       fail(`Duplicate price-check identity: ${price.modelKey}/${price.sourceId}/${price.providerId}/${price.routeId}`);

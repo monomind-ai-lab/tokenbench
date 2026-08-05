@@ -951,7 +951,8 @@ async function fetchLmArenaSubset(
     if (offset + page.rowCount === declaredTotal) break;
   }
   if (pages.length === 0) throw new RefreshFailure('lmarena', `${subset}:latest:overall`, 'LMArena subset has no complete page');
-  if (pages.length === MAX_LMARENA_PAGES_PER_SUBSET && pages.at(-1)?.rowCount === 100) {
+  if (pages.length === MAX_LMARENA_PAGES_PER_SUBSET && pages.at(-1)?.rowCount === 100
+    && (declaredTotal === null || declaredTotal > pages.length * 100)) {
     throw new RefreshFailure('lmarena', `${subset}:latest:overall`, 'LMArena pagination exceeded the bounded page limit');
   }
   if (declaredTotal === null || pages.reduce((count, page) => count + page.rowCount, 0) !== declaredTotal) {

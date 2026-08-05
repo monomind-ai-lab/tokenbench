@@ -1024,6 +1024,31 @@ describe('atomic benchmark ingestion', () => {
     expect(sources.filter((source) => source.sourceId === 'lmarena').every((source) => source.upstreamRevision === 'common-lmarena-revision')).toBe(true);
   });
 
+  it('accepts a complete LMArena subset at the exact 200-page safety cap', async () => {
+    const requestedOffsets: number[] = [];
+    const { env, db } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch({
+      onRequest(url) {
+        if (url.hostname !== 'datasets-server.huggingface.co') return undefined;
+        const subset = url.searchParams.get('config') ?? 'agent';
+        const offset = Number(url.searchParams.get('offset'));
+        if (subset !== 'text_style_control') {
+          return arenaResponse(subset, offset, 1, 'common-lmarena-revision', 1);
+        }
+        requestedOffsets.push(offset);
+        return arenaResponse(subset, offset, 100, 'common-lmarena-revision', 20_000);
+      },
+    })).dependencies);
+
+    expect(result.status).toBe('published');
+    expect(requestedOffsets).toHaveLength(200);
+    expect(requestedOffsets[0]).toBe(0);
+    expect(requestedOffsets.at(-1)).toBe(19_900);
+    const sources = db.state.sourceRows.get(result.revision as string) ?? [];
+    expect(sources.filter((source) => source.sourceId === 'lmarena'
+      && source.artifactId.startsWith('text_style_control:'))).toHaveLength(200);
+  });
+
   it('preserves the active revision when a declared LMArena total has a missing required page', async () => {
     const previous: RevisionRow = {
       revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
