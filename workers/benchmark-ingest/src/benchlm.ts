@@ -22,27 +22,55 @@ const ARTIFACT_URLS: Record<ArtifactName, string> = {
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
 };
 
-export interface BenchLmPayloads {
-  leaderboard: unknown;
-  models: unknown;
-  pricing: unknown;
-  comparisons: unknown;
-  benchmarks: unknown;
-}
-
-interface ArtifactPayload {
-  schemaVersion: string;
-  generatedAt: string;
-  items: unknown[];
-  fixtureMetadata: FixtureMetadata;
-}
-
-interface FixtureMetadata {
-  projectedSha256: string;
-  originalSha256: string;
+export interface BenchLmTransportHeaders {
   etag: string | null;
   lastModified: string | null;
 }
+
+export interface RawBenchLmArtifact {
+  bytes: Uint8Array;
+  headers: BenchLmTransportHeaders;
+}
+
+export type RawBenchLmPayloads = Record<ArtifactName, RawBenchLmArtifact>;
+
+export interface BenchLmProjectedPayload {
+  schemaVersion: string;
+  generatedAt: string;
+  items: unknown[];
+}
+
+export interface PreparedBenchLmArtifact {
+  readonly payload: BenchLmProjectedPayload;
+  readonly projectedBytes: Uint8Array;
+  readonly projectedSha256: string;
+  readonly originalSha256: string;
+  readonly headers: Readonly<BenchLmTransportHeaders>;
+}
+
+export type PreparedBenchLmPayloads = Readonly<Record<ArtifactName, PreparedBenchLmArtifact>>;
+
+export interface StoredBenchLmProjectionArtifact {
+  readonly projectedBytes: Uint8Array;
+  readonly projectedSha256: string;
+  readonly originalSha256: string;
+  readonly headers: Readonly<BenchLmTransportHeaders>;
+}
+
+export type StoredBenchLmProjections = Readonly<Record<ArtifactName, StoredBenchLmProjectionArtifact>>;
+
+interface PreparedArtifactState {
+  artifact: PreparedBenchLmArtifact;
+  payload: BenchLmProjectedPayload;
+  projectedBytes: Uint8Array;
+  projectedJson: string;
+}
+
+interface PreparedBundleState {
+  artifacts: Record<ArtifactName, PreparedArtifactState>;
+}
+
+const preparedBundles = new WeakMap<object, PreparedBundleState>();
 
 interface SafeModelInput {
   sourceModelId: string;
@@ -119,37 +147,7 @@ function requireBoolean(value: unknown, label: string): boolean {
   return value;
 }
 
-function requireSha256Hex(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) {
-    fail(`${label} must be a lowercase SHA-256 hex digest`);
-  }
-  return value;
-}
-
-function parseFixtureMetadata(value: unknown, label: string): FixtureMetadata {
-  const metadata = requireRecord(value, `${label}.tokenbenchFixtureMetadata`);
-  if (metadata.projectionFormat !== 'UTF-8 JSON.stringify({schemaVersion,generatedAt,items})') {
-    fail(`${label}.tokenbenchFixtureMetadata.projectionFormat is invalid`);
-  }
-  const headers = requireRecord(metadata.responseHeaders, `${label}.tokenbenchFixtureMetadata.responseHeaders`);
-  if (!Object.prototype.hasOwnProperty.call(headers, 'etag') || !Object.prototype.hasOwnProperty.call(headers, 'lastModified')) {
-    fail(`${label}.tokenbenchFixtureMetadata.responseHeaders must include etag and lastModified`);
-  }
-  return {
-    projectedSha256: requireSha256Hex(
-      metadata.projectedSha256,
-      `${label}.tokenbenchFixtureMetadata.projectedSha256`,
-    ),
-    originalSha256: requireSha256Hex(
-      metadata.originalSha256,
-      `${label}.tokenbenchFixtureMetadata.originalSha256`,
-    ),
-    etag: requireNullableString(headers.etag, `${label}.tokenbenchFixtureMetadata.responseHeaders.etag`),
-    lastModified: requireNullableString(headers.lastModified, `${label}.tokenbenchFixtureMetadata.responseHeaders.lastModified`),
-  };
-}
-
-function parseArtifact(value: unknown, artifact: ArtifactName): ArtifactPayload {
+function parseArtifact(value: unknown, artifact: ArtifactName): BenchLmProjectedPayload {
   const payload = requireRecord(value, `BenchLM ${artifact}`);
   if (payload.schemaVersion !== '1.0') fail(`BenchLM ${artifact} schemaVersion must be 1.0`);
   const generatedAt = requireIsoTimestamp(payload.generatedAt, `BenchLM ${artifact}.generatedAt`);
@@ -158,23 +156,26 @@ function parseArtifact(value: unknown, artifact: ArtifactName): ArtifactPayload 
     schemaVersion: '1.0',
     generatedAt,
     items: payload.items,
-    fixtureMetadata: parseFixtureMetadata(payload.tokenbenchFixtureMetadata, `BenchLM ${artifact}`),
   };
 }
 
-function sourceRecord(artifact: ArtifactName, payload: ArtifactPayload, observedAt: string): BenchmarkSourceRecord {
+function sourceRecord(
+  artifact: ArtifactName,
+  prepared: PreparedBenchLmArtifact,
+  observedAt: string,
+): BenchmarkSourceRecord {
   return {
     sourceId: 'benchlm',
     artifactId: artifact,
     sourceUrl: ARTIFACT_URLS[artifact],
     observedAt,
-    etag: payload.fixtureMetadata.etag,
-    lastModified: payload.fixtureMetadata.lastModified,
-    upstreamRevision: payload.generatedAt,
-    schemaVersion: payload.schemaVersion,
-    snapshotKey: `benchmarks/benchlm/${artifact}/projected/${payload.fixtureMetadata.projectedSha256}.json`,
-    contentHash: `sha256:${payload.fixtureMetadata.projectedSha256}`,
-    originalContentHash: `sha256:${payload.fixtureMetadata.originalSha256}`,
+    etag: prepared.headers.etag,
+    lastModified: prepared.headers.lastModified,
+    upstreamRevision: prepared.payload.generatedAt,
+    schemaVersion: prepared.payload.schemaVersion,
+    snapshotKey: `benchmarks/benchlm/${artifact}/projected/${prepared.projectedSha256}.json`,
+    contentHash: `sha256:${prepared.projectedSha256}`,
+    originalContentHash: `sha256:${prepared.originalSha256}`,
     licenseId: 'MIT',
     attributionText: 'Data from BenchLM.ai',
   };
@@ -257,6 +258,354 @@ function definitionContainsProhibitedData(definition: Record<string, unknown>): 
     return false;
   };
   return containsProhibitedText(definition);
+}
+
+function sortedBooleanMap(value: unknown, label: string): Record<string, boolean> {
+  const parsed = parseBooleanMap(value, label);
+  return Object.fromEntries(Object.entries(parsed).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+}
+
+function sortedScoreMap(value: unknown, label: string): Record<string, number | null> {
+  const parsed = parseScoreMap(value, label);
+  return Object.fromEntries(Object.entries(parsed).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+}
+
+function projectLeaderboardItem(value: unknown, index: number): Record<string, unknown> {
+  const label = `BenchLM leaderboard.items[${index}]`;
+  const model = requireRecord(value, label);
+  requireSourceType(model.sourceType, `${label}.sourceType`);
+  requireEvidenceStatus(model.evidenceStatus, `${label}.evidenceStatus`);
+  return {
+    canonicalModelKey: requireString(model.canonicalModelKey, `${label}.canonicalModelKey`),
+    slug: requireString(model.slug, `${label}.slug`),
+    model: requireString(model.model, `${label}.model`),
+    creator: requireString(model.creator, `${label}.creator`),
+    sourceType: model.sourceType,
+    reasoningType: requireNullableString(model.reasoningType, `${label}.reasoningType`),
+    contextWindowTokens: nullablePositiveInteger(model.contextWindowTokens, `${label}.contextWindowTokens`),
+    evidenceStatus: model.evidenceStatus,
+    rankingEligible: requireBoolean(model.rankingEligible, `${label}.rankingEligible`),
+  };
+}
+
+function projectModelItem(value: unknown, index: number): Record<string, unknown> {
+  const label = `BenchLM models.items[${index}]`;
+  const model = requireRecord(value, label);
+  const ranking = requireRecord(model.ranking, `${label}.ranking`);
+  const coverage = requireRecord(model.coverage, `${label}.coverage`);
+  const scores = requireRecord(model.scores, `${label}.scores`);
+  requireSourceType(model.sourceType, `${label}.sourceType`);
+  requireEvidenceStatus(model.evidenceStatus, `${label}.evidenceStatus`);
+  return {
+    canonicalModelKey: requireString(model.canonicalModelKey, `${label}.canonicalModelKey`),
+    slug: requireString(model.slug, `${label}.slug`),
+    model: requireString(model.model, `${label}.model`),
+    creator: requireString(model.creator, `${label}.creator`),
+    sourceType: model.sourceType,
+    reasoningType: requireNullableString(model.reasoningType, `${label}.reasoningType`),
+    releaseDate: requireNullableString(model.releaseDate, `${label}.releaseDate`),
+    contextWindowTokens: nullablePositiveInteger(model.contextWindowTokens, `${label}.contextWindowTokens`),
+    evidenceStatus: model.evidenceStatus,
+    rankingEligible: requireBoolean(model.rankingEligible, `${label}.rankingEligible`),
+    ranking: {
+      categoryRankingEligible: sortedBooleanMap(
+        ranking.categoryRankingEligible,
+        `${label}.ranking.categoryRankingEligible`,
+      ),
+    },
+    coverage: {
+      trustedBenchmarkCount: requireNonNegativeInteger(
+        coverage.trustedBenchmarkCount,
+        `${label}.coverage.trustedBenchmarkCount`,
+      ),
+    },
+    scores: {
+      rawOverallScore: requireNullableScore(scores.rawOverallScore, `${label}.scores.rawOverallScore`),
+      displayCategoryScores: sortedScoreMap(
+        scores.displayCategoryScores,
+        `${label}.scores.displayCategoryScores`,
+      ),
+      verifiedDisplayCategoryScores: sortedScoreMap(
+        scores.verifiedDisplayCategoryScores,
+        `${label}.scores.verifiedDisplayCategoryScores`,
+      ),
+    },
+  };
+}
+
+function projectPricingItem(value: unknown, index: number): Record<string, unknown> {
+  const label = `BenchLM pricing.items[${index}]`;
+  const pricing = requireRecord(value, label);
+  requireSourceType(pricing.sourceType, `${label}.sourceType`);
+  return {
+    canonicalModelKey: requireString(pricing.canonicalModelKey, `${label}.canonicalModelKey`),
+    slug: requireNullableString(pricing.slug, `${label}.slug`),
+    model: requireString(pricing.model, `${label}.model`),
+    creator: requireString(pricing.creator, `${label}.creator`),
+    sourceType: pricing.sourceType,
+    contextWindowTokens: nullablePositiveInteger(pricing.contextWindowTokens, `${label}.contextWindowTokens`),
+    inputPrice: requireNullableScore(pricing.inputPrice, `${label}.inputPrice`),
+    cachedInputPrice: requireNullableScore(pricing.cachedInputPrice, `${label}.cachedInputPrice`),
+    outputPrice: requireNullableScore(pricing.outputPrice, `${label}.outputPrice`),
+    hasNumericPricing: requireBoolean(pricing.hasNumericPricing, `${label}.hasNumericPricing`),
+    isFreePricing: requireBoolean(pricing.isFreePricing, `${label}.isFreePricing`),
+  };
+}
+
+function projectComparisonItem(value: unknown, index: number): Record<string, unknown> {
+  const label = `BenchLM comparisons.items[${index}]`;
+  const comparison = requireRecord(value, label);
+  const modelA = requireRecord(comparison.modelA, `${label}.modelA`);
+  const modelB = requireRecord(comparison.modelB, `${label}.modelB`);
+  return {
+    slug: requireString(comparison.slug, `${label}.slug`),
+    modelA: {
+      canonicalModelKey: requireString(modelA.canonicalModelKey, `${label}.modelA.canonicalModelKey`),
+      slug: requireString(modelA.slug, `${label}.modelA.slug`),
+    },
+    modelB: {
+      canonicalModelKey: requireString(modelB.canonicalModelKey, `${label}.modelB.canonicalModelKey`),
+      slug: requireString(modelB.slug, `${label}.modelB.slug`),
+    },
+  };
+}
+
+function projectBenchmarkItem(value: unknown, index: number): Record<string, unknown> | null {
+  const label = `BenchLM benchmarks.items[${index}]`;
+  const definition = requireRecord(value, label);
+  const weight = definition.weight;
+  if (weight !== null && (typeof weight !== 'number' || !Number.isFinite(weight))) {
+    fail(`${label}.weight must be a finite number or null`);
+  }
+  if (definitionContainsProhibitedData(definition)) {
+    if (weight !== null && weight !== 0) {
+      fail('BenchLM prohibited benchmark definition has a non-zero weight');
+    }
+    return null;
+  }
+
+  const category = requireString(definition.category, `${label}.category`);
+  if (category === 'external') return null;
+  return {
+    category,
+    benchmarkKey: requireString(definition.benchmarkKey, `${label}.benchmarkKey`),
+    weight,
+  };
+}
+
+function projectArtifact(payload: BenchLmProjectedPayload, artifact: ArtifactName): BenchLmProjectedPayload {
+  let items: Record<string, unknown>[];
+  switch (artifact) {
+    case 'leaderboard':
+      items = payload.items.map(projectLeaderboardItem);
+      break;
+    case 'models':
+      items = payload.items.map(projectModelItem);
+      break;
+    case 'pricing':
+      items = payload.items.map(projectPricingItem);
+      break;
+    case 'comparisons':
+      items = payload.items.map(projectComparisonItem);
+      break;
+    case 'benchmarks':
+      items = payload.items
+        .map(projectBenchmarkItem)
+        .filter((item): item is Record<string, unknown> => item !== null);
+      break;
+  }
+  return {
+    schemaVersion: payload.schemaVersion,
+    generatedAt: payload.generatedAt,
+    items,
+  };
+}
+
+function parseHeaders(value: unknown, artifact: ArtifactName): Readonly<BenchLmTransportHeaders> {
+  const headers = requireRecord(value, `BenchLM ${artifact} transport headers`);
+  if (!Object.prototype.hasOwnProperty.call(headers, 'etag') || !Object.prototype.hasOwnProperty.call(headers, 'lastModified')) {
+    fail(`BenchLM ${artifact} transport headers must include etag and lastModified`);
+  }
+  return Object.freeze({
+    etag: requireNullableString(headers.etag, `BenchLM ${artifact} transport headers.etag`),
+    lastModified: requireNullableString(
+      headers.lastModified,
+      `BenchLM ${artifact} transport headers.lastModified`,
+    ),
+  });
+}
+
+function exactBytes(value: unknown, label: string): Uint8Array {
+  if (!(value instanceof Uint8Array)) fail(`${label} must be a Uint8Array`);
+  return new Uint8Array(value);
+}
+
+function decodeJson(bytes: Uint8Array, label: string): unknown {
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    fail(`${label} must be valid UTF-8`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    fail(`${label} must be valid JSON`);
+  }
+}
+
+function deepFreeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !ArrayBuffer.isView(value)) {
+    for (const nested of Object.values(value as Record<string, unknown>)) deepFreeze(nested);
+    Object.freeze(value);
+  }
+  return value;
+}
+
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const stableBuffer = new Uint8Array(bytes).buffer;
+  const digest = await crypto.subtle.digest('SHA-256', stableBuffer);
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function requireSha256Hex(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) {
+    fail(`${label} must be a lowercase SHA-256 hex digest`);
+  }
+  return value;
+}
+
+function byteArraysEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  return left.every((byte, index) => byte === right[index]);
+}
+
+interface PreparedArtifactDraft {
+  payload: BenchLmProjectedPayload;
+  projectedBytes: Uint8Array;
+  projectedJson: string;
+  projectedSha256: string;
+  originalSha256: string;
+  headers: Readonly<BenchLmTransportHeaders>;
+}
+
+function registerPreparedBundle(drafts: Record<ArtifactName, PreparedArtifactDraft>): PreparedBenchLmPayloads {
+  const stateArtifacts = {} as Record<ArtifactName, PreparedArtifactState>;
+  const exposedArtifacts = {} as Record<ArtifactName, PreparedBenchLmArtifact>;
+  for (const artifactName of ARTIFACTS) {
+    const draft = drafts[artifactName];
+    const payload = deepFreeze(draft.payload);
+    const projectedBytes = new Uint8Array(draft.projectedBytes);
+    const artifact = Object.freeze({
+      payload,
+      projectedBytes,
+      projectedSha256: draft.projectedSha256,
+      originalSha256: draft.originalSha256,
+      headers: draft.headers,
+    });
+    exposedArtifacts[artifactName] = artifact;
+    stateArtifacts[artifactName] = {
+      artifact,
+      payload,
+      projectedBytes: new Uint8Array(projectedBytes),
+      projectedJson: draft.projectedJson,
+    };
+  }
+  const prepared = Object.freeze(exposedArtifacts);
+  preparedBundles.set(prepared, { artifacts: stateArtifacts });
+  return prepared;
+}
+
+function canonicalProjection(value: unknown, artifact: ArtifactName): {
+  payload: BenchLmProjectedPayload;
+  bytes: Uint8Array;
+  json: string;
+} {
+  const parsed = parseArtifact(value, artifact);
+  const projection = projectArtifact(parsed, artifact);
+  const json = JSON.stringify(projection);
+  const bytes = new TextEncoder().encode(json);
+  return {
+    payload: JSON.parse(json) as BenchLmProjectedPayload,
+    bytes,
+    json,
+  };
+}
+
+/**
+ * Projects exact upstream response bytes into the only BenchLM representation
+ * permitted for R2 and normalization. Upstream JSON metadata is never trusted.
+ */
+export async function prepareBenchLm(rawPayloads: RawBenchLmPayloads): Promise<PreparedBenchLmPayloads> {
+  if (!isRecord(rawPayloads)) fail('BenchLM raw payloads must be an object');
+  if (Object.prototype.hasOwnProperty.call(rawPayloads, 'speed')) fail('BenchLM speed.json is prohibited');
+
+  const inputs = ARTIFACTS.map((artifact) => {
+    const rawArtifact = requireRecord(rawPayloads[artifact], `BenchLM raw ${artifact}`);
+    const rawBytes = exactBytes(rawArtifact.bytes, `BenchLM raw ${artifact}.bytes`);
+    const headers = parseHeaders(rawArtifact.headers, artifact);
+    const canonical = canonicalProjection(decodeJson(rawBytes, `BenchLM raw ${artifact}.bytes`), artifact);
+    return { artifact, rawBytes, headers, canonical };
+  });
+
+  const draftEntries = await Promise.all(inputs.map(async ({ artifact, rawBytes, headers, canonical }) => [
+    artifact,
+    {
+      payload: canonical.payload,
+      projectedBytes: canonical.bytes,
+      projectedJson: canonical.json,
+      projectedSha256: await sha256Hex(canonical.bytes),
+      originalSha256: await sha256Hex(rawBytes),
+      headers,
+    },
+  ] as const));
+  return registerPreparedBundle(Object.fromEntries(draftEntries) as Record<ArtifactName, PreparedArtifactDraft>);
+}
+
+/**
+ * Rehydrates an immutable projection from trusted R2/source metadata. The exact
+ * stored bytes are re-hashed and must already be the canonical safe projection.
+ */
+export async function rehydrateBenchLmProjections(
+  storedPayloads: StoredBenchLmProjections,
+): Promise<PreparedBenchLmPayloads> {
+  if (!isRecord(storedPayloads)) fail('BenchLM stored projections must be an object');
+  if (Object.prototype.hasOwnProperty.call(storedPayloads, 'speed')) fail('BenchLM speed.json is prohibited');
+
+  const inputs = ARTIFACTS.map((artifact) => {
+    const stored = requireRecord(storedPayloads[artifact], `BenchLM stored ${artifact}`);
+    const projectedBytes = exactBytes(stored.projectedBytes, `BenchLM stored ${artifact}.projectedBytes`);
+    const projectedSha256 = requireSha256Hex(
+      stored.projectedSha256,
+      `BenchLM stored ${artifact}.projectedSha256`,
+    );
+    const originalSha256 = requireSha256Hex(
+      stored.originalSha256,
+      `BenchLM stored ${artifact}.originalSha256`,
+    );
+    const headers = parseHeaders(stored.headers, artifact);
+    const decoded = decodeJson(projectedBytes, `BenchLM stored ${artifact}.projectedBytes`);
+    const canonical = canonicalProjection(decoded, artifact);
+    if (!byteArraysEqual(projectedBytes, canonical.bytes)) {
+      fail(`BenchLM stored ${artifact} projected bytes are not the canonical safe projection`);
+    }
+    return { artifact, projectedBytes, projectedSha256, originalSha256, headers, canonical };
+  });
+
+  const draftEntries = await Promise.all(inputs.map(async (input) => {
+    if (await sha256Hex(input.projectedBytes) !== input.projectedSha256) {
+      fail(`BenchLM stored ${input.artifact} projected content hash does not match its exact bytes`);
+    }
+    return [input.artifact, {
+      payload: input.canonical.payload,
+      projectedBytes: input.projectedBytes,
+      projectedJson: input.canonical.json,
+      projectedSha256: input.projectedSha256,
+      originalSha256: input.originalSha256,
+      headers: input.headers,
+    }] as const;
+  }));
+  return registerPreparedBundle(Object.fromEntries(draftEntries) as Record<ArtifactName, PreparedArtifactDraft>);
 }
 
 function safeBenchmarkCategories(items: unknown[]): Set<string> {
@@ -431,17 +780,65 @@ function toComparisonSeeds(items: unknown[], modelsBySourceId: Map<string, SafeM
   return seeds;
 }
 
-/**
- * Converts BenchLM's volatile export bundle into a persistence-safe, source-linked
- * batch. Only the documented allowlist is read from model rows; calibrated scores,
- * ranks, intervals, external groups, and speed evidence never enter the result.
- */
-export function parseBenchLm(payloads: BenchLmPayloads, observedAt: string): NormalizedSourceBatch {
-  if (!isRecord(payloads)) fail('BenchLM payloads must be an object');
-  if (Object.prototype.hasOwnProperty.call(payloads, 'speed')) fail('BenchLM speed.json is prohibited');
-  requireIsoTimestamp(observedAt, 'BenchLM observedAt');
+async function verifyPreparedBundle(payloads: PreparedBenchLmPayloads): Promise<{
+  artifacts: Record<ArtifactName, BenchLmProjectedPayload>;
+  prepared: PreparedBenchLmPayloads;
+}> {
+  if (!isRecord(payloads)) fail('BenchLM prepared payloads must be an object');
+  const state = preparedBundles.get(payloads);
+  if (!state) fail('BenchLM payloads must be created by a verified preparation boundary');
 
-  const artifacts = Object.fromEntries(ARTIFACTS.map((artifact) => [artifact, parseArtifact(payloads[artifact], artifact)])) as Record<ArtifactName, ArtifactPayload>;
+  const verifiedEntries = await Promise.all(ARTIFACTS.map(async (artifactName) => {
+    const artifact = payloads[artifactName];
+    const artifactState = state.artifacts[artifactName];
+    if (artifact !== artifactState.artifact || artifact.payload !== artifactState.payload) {
+      fail(`BenchLM ${artifactName} provenance does not match its prepared representation`);
+    }
+
+    const stableBytes = exactBytes(artifact.projectedBytes, `BenchLM prepared ${artifactName}.projectedBytes`);
+    const computedHash = await sha256Hex(stableBytes);
+    if (computedHash !== artifact.projectedSha256) {
+      fail(`BenchLM prepared ${artifactName} projected content hash does not match its exact bytes`);
+    }
+    if (!byteArraysEqual(stableBytes, artifact.projectedBytes)
+      || !byteArraysEqual(stableBytes, artifactState.projectedBytes)) {
+      fail(`BenchLM prepared ${artifactName} projected bytes changed after verification`);
+    }
+
+    const canonical = canonicalProjection(
+      decodeJson(stableBytes, `BenchLM prepared ${artifactName}.projectedBytes`),
+      artifactName,
+    );
+    if (!byteArraysEqual(stableBytes, canonical.bytes)
+      || canonical.json !== artifactState.projectedJson
+      || JSON.stringify(artifact.payload) !== canonical.json) {
+      fail(`BenchLM prepared ${artifactName} projected bytes are not the verified canonical projection`);
+    }
+    if (artifact.projectedSha256 !== artifactState.artifact.projectedSha256
+      || artifact.originalSha256 !== artifactState.artifact.originalSha256
+      || artifact.headers !== artifactState.artifact.headers) {
+      fail(`BenchLM ${artifactName} provenance changed after preparation`);
+    }
+    return [artifactName, canonical.payload] as const;
+  }));
+  return {
+    artifacts: Object.fromEntries(verifiedEntries) as Record<ArtifactName, BenchLmProjectedPayload>,
+    prepared: payloads,
+  };
+}
+
+/**
+ * Converts a cryptographically verified BenchLM projection into a source-linked
+ * batch. Every projected hash is recomputed from exact bytes immediately before
+ * normalization; calibrated scores, ranks, intervals, external groups, and speed
+ * evidence never enter the result.
+ */
+export async function parseBenchLm(
+  payloads: PreparedBenchLmPayloads,
+  observedAt: string,
+): Promise<NormalizedSourceBatch> {
+  requireIsoTimestamp(observedAt, 'BenchLM observedAt');
+  const { artifacts, prepared } = await verifyPreparedBundle(payloads);
   const generatedAt = artifacts.leaderboard.generatedAt;
   ARTIFACTS.forEach((artifact) => {
     if (artifacts[artifact].generatedAt !== generatedAt) {
@@ -454,7 +851,7 @@ export function parseBenchLm(payloads: BenchLmPayloads, observedAt: string): Nor
   if (modelsBySourceId.size !== safeModels.length) fail('BenchLM models must not duplicate canonicalModelKey');
 
   const batch: NormalizedSourceBatch = {
-    sources: ARTIFACTS.map((artifact) => sourceRecord(artifact, artifacts[artifact], observedAt)),
+    sources: ARTIFACTS.map((artifact) => sourceRecord(artifact, prepared[artifact], observedAt)),
     models: toBenchmarkModels(safeModels),
     metrics: toMetrics(safeModels, safeBenchmarkCategories(artifacts.benchmarks.items), generatedAt),
     priceChecks: toPriceChecks(artifacts.pricing.items, modelsBySourceId),

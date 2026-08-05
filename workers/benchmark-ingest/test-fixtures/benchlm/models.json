@@ -104,14 +104,5 @@
         "verifiedDisplayCategoryScores": { "coding": 76.4, "reasoning": 91.2 }
       }
     }
-  ],
-  "tokenbenchFixtureMetadata": {
-    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
-    "projectedSha256": "097167f10974af0504210c82b25c5cdff2f65642ad5e32eeab3139e367e0176c",
-    "originalSha256": "156b89ea5b07166c40b18d6868ec8ba5527d9991cabe14378b6b8e340b093967",
-    "responseHeaders": {
-      "etag": "W/\"329d611c37eaed33623407f995bb74ff\"",
-      "lastModified": null
-    }
-  }
+  ]
 }

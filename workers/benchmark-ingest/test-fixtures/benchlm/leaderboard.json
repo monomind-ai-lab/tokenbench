@@ -31,14 +31,5 @@
       "evidenceStatus": "estimated",
       "rankingEligible": true
     }
-  ],
-  "tokenbenchFixtureMetadata": {
-    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
-    "projectedSha256": "81e4d55d97ccc5ce117bdecf329853fb174b3042a6be0df803c65d4743fb93c7",
-    "originalSha256": "2e8855fc364abdff6a60cb6f46d175e068df033229063f16fa2899f8f8accbf6",
-    "responseHeaders": {
-      "etag": "W/\"943db87a096566b2b719e7d2f55da91d\"",
-      "lastModified": null
-    }
-  }
+  ]
 }

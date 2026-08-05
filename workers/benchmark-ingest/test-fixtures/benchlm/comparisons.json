@@ -13,14 +13,5 @@
       "modelA": { "canonicalModelKey": "model-b", "slug": "model-b" },
       "modelB": { "canonicalModelKey": "model-a", "slug": "model-a" }
     }
-  ],
-  "tokenbenchFixtureMetadata": {
-    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
-    "projectedSha256": "65f2217749005eab1b6ddb79a9e93dc182fa032e2252216f125ba38cb6a18f5e",
-    "originalSha256": "0092f9ab613c68045eadacefa7d63bb5bdfa3be17556afcb2e41e7cfed01e02f",
-    "responseHeaders": {
-      "etag": "W/\"21d8cd43230a3ff98a46c6df85018303\"",
-      "lastModified": null
-    }
-  }
+  ]
 }

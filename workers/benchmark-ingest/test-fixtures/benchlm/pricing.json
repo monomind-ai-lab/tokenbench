@@ -34,14 +34,5 @@
       "hasNumericPricing": false,
       "isFreePricing": false
     }
-  ],
-  "tokenbenchFixtureMetadata": {
-    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
-    "projectedSha256": "a55a21f484ebf14a91c876ec27df8d61687823e0c267468c2f4661b8c7715f74",
-    "originalSha256": "b45aa63e36300093e674b4b8df59658bf68e4b8e34c6130fa73469fa5b18bb66",
-    "responseHeaders": {
-      "etag": "W/\"9b3ed2fff10ed67eb64fa9f20d76b555\"",
-      "lastModified": null
-    }
-  }
+  ]
 }
