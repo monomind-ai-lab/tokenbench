@@ -6,6 +6,7 @@ import {
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
+import { type ArtifactProvenance, requireArtifactProvenance } from './source-provenance';
 
 export const LMARENA_SUBSETS = [
   'text_style_control',
@@ -217,12 +218,18 @@ function sourceUrlForSubset(subset: LmArenaSubset): string {
 
 /**
  * Normalizes one accepted LMArena subset. The Worker supplies the Dataset
- * Viewer `latest`/`overall` rows; fixture-stage source metadata is deliberately
- * provisional because transport validators and evidence hashes belong to Task 8.
+ * Viewer `latest`/`overall` rows and the exact per-artifact transport/evidence
+ * metadata that names the sanitized snapshot written by the Worker.
  */
-export function parseLmArenaSubset(subset: string, rows: unknown, observedAt: string): NormalizedSourceBatch {
+export function parseLmArenaSubset(
+  subset: string,
+  rows: unknown,
+  observedAt: string,
+  provenance: ArtifactProvenance,
+): NormalizedSourceBatch {
   if (!isLmArenaSubset(subset)) fail(`LMArena subset ${subset} is not accepted`);
   if (!Array.isArray(rows) || rows.length === 0) fail(`LMArena subset ${subset} must contain at least one row`);
+  const artifactProvenance = requireArtifactProvenance(provenance, 'LMArena');
 
   const artifactId = `${subset}-latest-overall`;
   const source: BenchmarkSourceRecord = {
@@ -230,12 +237,13 @@ export function parseLmArenaSubset(subset: string, rows: unknown, observedAt: st
     artifactId,
     sourceUrl: sourceUrlForSubset(subset),
     observedAt,
-    etag: null,
-    lastModified: null,
-    upstreamRevision: null,
-    schemaVersion: null,
-    snapshotKey: `benchmarks/lmarena/${subset}/latest/overall/provisional.json`,
-    contentHash: `sha256:provisional-lmarena-${subset}`,
+    etag: artifactProvenance.etag,
+    lastModified: artifactProvenance.lastModified,
+    upstreamRevision: artifactProvenance.upstreamRevision,
+    schemaVersion: artifactProvenance.schemaVersion,
+    snapshotKey: artifactProvenance.snapshotKey,
+    contentHash: artifactProvenance.contentHash,
+    originalContentHash: artifactProvenance.originalContentHash,
     licenseId: 'CC-BY-4.0',
     attributionText: 'Arena ratings from LMArena',
   };

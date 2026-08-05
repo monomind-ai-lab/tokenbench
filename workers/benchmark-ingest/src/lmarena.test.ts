@@ -36,13 +36,25 @@ interface DatasetViewerRow<T> {
   truncated_cells: unknown[];
 }
 
+interface ArtifactProvenanceFixture {
+  etag: string | null;
+  lastModified: string | null;
+  upstreamRevision: string | null;
+  schemaVersion: string | null;
+  snapshotKey: string;
+  contentHash: string;
+  originalContentHash: string;
+}
+
 function loadFixture<T>(relativePath: string): T {
   return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8')) as T;
 }
 
 const observedAt = '2026-08-05T00:00:00.000Z';
-const standardFixture = loadFixture<{ rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_style_control.json');
-const agentFixture = loadFixture<{ rows: DatasetViewerRow<AgentArenaRow>[] }>('../test-fixtures/lmarena/agent.json');
+const standardFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_style_control.json');
+const agentFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<AgentArenaRow>[] }>('../test-fixtures/lmarena/agent.json');
+const standardProvenance = standardFixture.provenance;
+const agentProvenance = agentFixture.provenance;
 
 describe('LMArena normalization', () => {
   it('locks the reviewed public Arena subsets', () => {
@@ -62,13 +74,17 @@ describe('LMArena normalization', () => {
   });
 
   it('maps standard ratings to Bradley-Terry Arena Score evidence with artifact attribution', () => {
-    const batch = parseLmArenaSubset('text_style_control', standardFixture.rows, observedAt);
+    const batch = parseLmArenaSubset('text_style_control', standardFixture.rows, observedAt, standardProvenance);
     const metric = batch.metrics[0];
 
     expect(batch.sources).toEqual([expect.objectContaining({
       sourceId: 'lmarena',
       artifactId: 'text_style_control-latest-overall',
       sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100',
+      snapshotKey: standardProvenance.snapshotKey,
+      contentHash: standardProvenance.contentHash,
+      originalContentHash: standardProvenance.originalContentHash,
+      upstreamRevision: standardProvenance.upstreamRevision,
       licenseId: 'CC-BY-4.0',
       attributionText: 'Arena ratings from LMArena',
     })]);
@@ -95,7 +111,7 @@ describe('LMArena normalization', () => {
   });
 
   it('maps Agent Arena scores to IPS evidence without calling them Arena Score', () => {
-    const batch = parseLmArenaSubset('agent', agentFixture.rows, observedAt);
+    const batch = parseLmArenaSubset('agent', agentFixture.rows, observedAt, agentProvenance);
     const metric = batch.metrics[0];
 
     expect(metric).toMatchObject({
@@ -124,7 +140,7 @@ describe('LMArena normalization', () => {
       rank: 25,
     };
 
-    const metric = parseLmArenaSubset('agent', [row], observedAt).metrics[0];
+    const metric = parseLmArenaSubset('agent', [row], observedAt, agentProvenance).metrics[0];
 
     expect(metric).toMatchObject({
       value: -0.0019042599988607666,
@@ -141,7 +157,7 @@ describe('LMArena normalization', () => {
       rating_upper: null,
     };
 
-    const metric = parseLmArenaSubset('text_style_control', [row], observedAt).metrics[0];
+    const metric = parseLmArenaSubset('text_style_control', [row], observedAt, standardProvenance).metrics[0];
 
     expect(metric.lower).toBeNull();
     expect(metric.upper).toBeNull();
@@ -151,7 +167,7 @@ describe('LMArena normalization', () => {
     const batch = parseLmArenaSubset('text_style_control', [{
       ...standardFixture.rows[0].row,
       license: 'Unknown',
-    }], observedAt);
+    }], observedAt, standardProvenance);
 
     expect(batch.models[0].sourceType).toBe('Unknown');
   });
@@ -159,7 +175,7 @@ describe('LMArena normalization', () => {
   it('preserves a source category for future filtered views without inventing a new route', () => {
     const row = { ...standardFixture.rows[0].row, category: 'creative_writing' };
 
-    const metric = parseLmArenaSubset('text_style_control', [row], observedAt).metrics[0];
+    const metric = parseLmArenaSubset('text_style_control', [row], observedAt, standardProvenance).metrics[0];
 
     expect(metric).toMatchObject({
       category: 'creative_writing',
@@ -171,21 +187,26 @@ describe('LMArena normalization', () => {
     expect(() => parseLmArenaSubset('text_style_control', [{
       ...standardFixture.rows[0],
       truncated_cells: ['rating'],
-    }], observedAt)).toThrow(/truncated/i);
+    }], observedAt, standardProvenance)).toThrow(/truncated/i);
   });
 
   it('rejects count fields that belong to the other Arena methodology', () => {
     expect(() => parseLmArenaSubset('text_style_control', [{
       ...standardFixture.rows[0].row,
       observation_count: 2,
-    }], observedAt)).toThrow(/does not accept agent counts/i);
+    }], observedAt, standardProvenance)).toThrow(/does not accept agent counts/i);
     expect(() => parseLmArenaSubset('agent', [{
       ...agentFixture.rows[0].row,
       vote_count: 2,
-    }], observedAt)).toThrow(/does not accept vote counts/i);
+    }], observedAt, agentProvenance)).toThrow(/does not accept vote counts/i);
   });
 
   it('rejects an Arena subset that is not on the reviewed allowlist', () => {
-    expect(() => parseLmArenaSubset('speech_to_text', standardFixture.rows, observedAt)).toThrow(/not accepted/i);
+    expect(() => parseLmArenaSubset('speech_to_text', standardFixture.rows, observedAt, standardProvenance)).toThrow(/not accepted/i);
+  });
+
+  it('requires explicit per-artifact provenance instead of emitting a durable placeholder', () => {
+    expect(() => parseLmArenaSubset('text_style_control', standardFixture.rows, observedAt, undefined as never))
+      .toThrow(/provenance is required/i);
   });
 });

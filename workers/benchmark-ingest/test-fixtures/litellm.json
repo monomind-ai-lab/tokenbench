@@ -5,7 +5,11 @@
     "licenseId": "MIT",
     "etag": "\"a19e0b7dcee6aad7dbc7683a95e34671347085bb50a6041f0ca0bf4c16b3f3cd\"",
     "lastModified": null,
-    "originalResponseSha256": "sha256:64c1cd8e97ecf9801c8cf66c66f16552168b08535230b8e0a5304fdee31a08b5",
+    "upstreamRevision": null,
+    "schemaVersion": null,
+    "snapshotKey": "benchmarks/litellm/model-prices/377120e920e9a4417ecdc8e9ce6642cea391a35b8e138e927a6dd3e46231c8e1.json",
+    "contentHash": "sha256:377120e920e9a4417ecdc8e9ce6642cea391a35b8e138e927a6dd3e46231c8e1",
+    "originalContentHash": "sha256:64c1cd8e97ecf9801c8cf66c66f16552168b08535230b8e0a5304fdee31a08b5",
     "retrievedAt": "2026-08-05T10:20:10.000Z",
     "projectionFields": [
       "litellm_provider",

@@ -6,6 +6,7 @@ import {
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
+import { type ArtifactProvenance, requireArtifactProvenance } from './source-provenance';
 
 const LITELLM_SOURCE_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const LITELLM_ARTIFACT_ID = 'model-prices';
@@ -74,18 +75,19 @@ function sourceSpecificSlug(sourceId: string, sourceModelId: string): string {
   return `source-${sourceId}-${encodeURIComponent(sourceModelId)}`;
 }
 
-function sourceRecord(observedAt: string): BenchmarkSourceRecord {
+function sourceRecord(observedAt: string, provenance: ArtifactProvenance): BenchmarkSourceRecord {
   return {
     sourceId: 'litellm',
     artifactId: LITELLM_ARTIFACT_ID,
     sourceUrl: LITELLM_SOURCE_URL,
     observedAt,
-    etag: null,
-    lastModified: null,
-    upstreamRevision: null,
-    schemaVersion: null,
-    snapshotKey: 'benchmarks/litellm/model-prices/provisional.json',
-    contentHash: 'sha256:provisional-litellm-model-prices',
+    etag: provenance.etag,
+    lastModified: provenance.lastModified,
+    upstreamRevision: provenance.upstreamRevision,
+    schemaVersion: provenance.schemaVersion,
+    snapshotKey: provenance.snapshotKey,
+    contentHash: provenance.contentHash,
+    originalContentHash: provenance.originalContentHash,
     licenseId: 'MIT',
     attributionText: 'LiteLLM corroboration',
   };
@@ -94,10 +96,17 @@ function sourceRecord(observedAt: string): BenchmarkSourceRecord {
 /**
  * Normalizes LiteLLM's official price/context document. It deliberately does
  * not establish a hosted route: all resulting prices remain corroborating
- * evidence until the publisher matches them to a current catalog route.
+ * evidence until the publisher matches them to a current catalog route. The
+ * caller must supply the exact persisted projection and original-response
+ * hashes; this normalizer never invents durable evidence metadata.
  */
-export function parseLiteLlmPrices(payload: unknown, observedAt: string): NormalizedSourceBatch {
+export function parseLiteLlmPrices(
+  payload: unknown,
+  observedAt: string,
+  provenance: ArtifactProvenance,
+): NormalizedSourceBatch {
   const document = requireRecord(payload, 'LiteLLM payload');
+  const artifactProvenance = requireArtifactProvenance(provenance, 'LiteLLM');
   const modelsByKey = new Map<string, BenchmarkModel>();
   const priceChecks: BenchmarkPriceCheck[] = [];
 
@@ -176,7 +185,7 @@ export function parseLiteLlmPrices(payload: unknown, observedAt: string): Normal
   if (modelsByKey.size === 0) fail('LiteLLM payload must contain at least one concrete model row');
 
   return validateNormalizedSourceBatch({
-    sources: [sourceRecord(observedAt)],
+    sources: [sourceRecord(observedAt, artifactProvenance)],
     models: [...modelsByKey.values()],
     metrics: [],
     priceChecks,

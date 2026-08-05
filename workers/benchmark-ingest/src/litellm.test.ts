@@ -2,16 +2,26 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseLiteLlmPrices } from './litellm';
 
+interface ArtifactProvenanceFixture {
+  etag: string | null;
+  lastModified: string | null;
+  upstreamRevision: string | null;
+  schemaVersion: string | null;
+  snapshotKey: string;
+  contentHash: string;
+  originalContentHash: string;
+}
+
 function loadFixture<T>(relativePath: string): T {
   return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8')) as T;
 }
 
 const observedAt = '2026-08-05T00:00:00.000Z';
-const fixture = loadFixture<{ payload: Record<string, unknown> }>('../test-fixtures/litellm.json');
+const fixture = loadFixture<{ provenance: ArtifactProvenanceFixture; payload: Record<string, unknown> }>('../test-fixtures/litellm.json');
 
 describe('LiteLLM normalization', () => {
   it('ignores sample_spec and converts per-token prices to per-million corroborating evidence', () => {
-    const batch = parseLiteLlmPrices(fixture.payload, observedAt);
+    const batch = parseLiteLlmPrices(fixture.payload, observedAt, fixture.provenance);
     const priced = batch.priceChecks.find((record) => record.sourceModelId === 'azure/codex-mini');
     const unpriced = batch.priceChecks.find((record) => record.sourceModelId === '1024-x-1024/dall-e-2');
 
@@ -20,6 +30,10 @@ describe('LiteLLM normalization', () => {
     expect(batch.sources).toEqual([expect.objectContaining({
       sourceId: 'litellm',
       artifactId: 'model-prices',
+      snapshotKey: fixture.provenance.snapshotKey,
+      contentHash: fixture.provenance.contentHash,
+      originalContentHash: fixture.provenance.originalContentHash,
+      etag: fixture.provenance.etag,
       licenseId: 'MIT',
       attributionText: 'LiteLLM corroboration',
     })]);
@@ -61,7 +75,7 @@ describe('LiteLLM normalization', () => {
         max_input_tokens: 0,
         max_output_tokens: -1,
       },
-    }, observedAt);
+    }, observedAt, fixture.provenance);
     const legacy = batch.priceChecks.find((record) => record.sourceModelId === 'legacy-model');
     const unavailable = batch.priceChecks.find((record) => record.sourceModelId === 'unavailable-limit-model');
 
@@ -84,14 +98,14 @@ describe('LiteLLM normalization', () => {
         mode: 'chat',
         input_cost_per_token: -0.000001,
       },
-    }, observedAt)).toThrow(/input_cost_per_token must be a non-negative finite number/i);
+    }, observedAt, fixture.provenance)).toThrow(/input_cost_per_token must be a non-negative finite number/i);
     expect(() => parseLiteLlmPrices({
       'nan-price': {
         litellm_provider: 'example',
         mode: 'chat',
         output_cost_per_token: Number.NaN,
       },
-    }, observedAt)).toThrow(/output_cost_per_token must be a non-negative finite number/i);
+    }, observedAt, fixture.provenance)).toThrow(/output_cost_per_token must be a non-negative finite number/i);
   });
 
   it('ignores the non-model fallback metadata carried by the official source', () => {
@@ -103,12 +117,17 @@ describe('LiteLLM normalization', () => {
         input_cost_per_token: 0,
         output_cost_per_token: 0,
       },
-    }, observedAt);
+    }, observedAt, fixture.provenance);
 
     expect(batch.models.map((model) => model.sourceModelId)).toEqual(['priced-model']);
     expect(batch.priceChecks[0]).toMatchObject({
       inputUsdPerMillion: 0,
       outputUsdPerMillion: 0,
     });
+  });
+
+  it('requires explicit per-artifact provenance instead of emitting a durable placeholder', () => {
+    expect(() => parseLiteLlmPrices(fixture.payload, observedAt, undefined as never))
+      .toThrow(/provenance is required/i);
   });
 });

@@ -3,13 +3,18 @@
     "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=2",
     "datasetUrl": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
     "licenseId": "CC-BY-4.0",
+    "etag": null,
+    "lastModified": null,
     "split": "latest",
     "category": "overall",
     "upstreamRevision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0",
     "responseHeaders": {
       "x-revision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0"
     },
-    "originalResponseSha256": "sha256:7a1d47296626545d34511798b615b7e37c61af3ddbc6e6ae86b40cab4f30b2f7",
+    "schemaVersion": null,
+    "snapshotKey": "benchmarks/lmarena/text_style_control/latest/overall/c98834ad309299d40eb84086c8cddc298b777bd05d5d33e8d59f9f6b75251093.json",
+    "contentHash": "sha256:c98834ad309299d40eb84086c8cddc298b777bd05d5d33e8d59f9f6b75251093",
+    "originalContentHash": "sha256:7a1d47296626545d34511798b615b7e37c61af3ddbc6e6ae86b40cab4f30b2f7",
     "retrievedAt": "2026-08-05T10:20:10.000Z",
     "projectionFields": [
       "model_name",
