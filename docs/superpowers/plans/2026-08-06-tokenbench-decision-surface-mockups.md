@@ -71,14 +71,14 @@ Task 2 owns the calculator worktree, Task 3 the compare worktree, and Task 4 the
 
 **Interfaces:**
 - Consumes: approved tokens and structure from `docs/superpowers/specs/2026-08-05-tokenbench-mockups-design.md`.
-- Produces: `validateMockupHtml(html: string, expected: MockupExpectation): string[]`, the shared stylesheet link `tokenbench-mockup.css`, and the shared behavior script `tokenbench-mockup.js` used by Tasks 2–4.
+- Produces: `validateMockupHtml(html: string, expected: MockupExpectation): string[]`, `validateMockupCss(css: string): string[]`, the shared stylesheet link `tokenbench-mockup.css`, and the shared behavior script `tokenbench-mockup.js` used by Tasks 2–4.
 
 - [ ] **Step 1: Write the failing contract tests**
 
 ```ts
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { validateMockupHtml } from './mockup-contract';
+import { validateMockupCss, validateMockupHtml } from './mockup-contract';
 
 const validHtml = `<!doctype html><html lang="en" data-theme="dark"><head>
 <link rel="stylesheet" href="tokenbench-mockup.css"></head><body><!--
@@ -102,11 +102,10 @@ describe('mockup contract', () => {
     expect(validateMockupHtml(validHtml, { h1: 'Fixture' })).toEqual([]);
   });
 
-  it('publishes the approved theme tokens and focus geometry', () => {
+  it('rejects a mutated theme contract and accepts the shipped stylesheet', () => {
+    expect(validateMockupCss(`:root { --bg: #ffffff; }`)).toEqual(expect.arrayContaining(['missing dark canvas #0f0f0f', 'missing light canvas #f7f8fc', 'missing 44px target rule', 'missing focus-visible rule']));
     const css = readFileSync('.stitch/designs/tokenbench-mockup.css', 'utf8');
-    for (const value of ['#0f0f0f', '#181818', '#0007cd', '#f7f8fc', '#ffffff', '#e0e5ff']) expect(css).toContain(value);
-    expect(css).toMatch(/min-height:\s*44px/);
-    expect(css).toContain(':focus-visible');
+    expect(validateMockupCss(css)).toEqual([]);
   });
 });
 ```
@@ -142,6 +141,23 @@ export function validateMockupHtml(html: string, expected: MockupExpectation): s
   if (!document.querySelector('[data-theme-toggle][aria-label]')) errors.push('missing semantic theme toggle');
   for (const section of expected.requiredSections ?? []) if (!document.querySelector(`[data-mockup-section="${section}"]`)) errors.push(`missing section: ${section}`);
   for (const element of document.querySelectorAll('link[href^="http"], script[src^="http"], img[src^="http"]')) errors.push(`external runtime asset: ${element.outerHTML}`);
+  return errors;
+}
+
+const cssRequirements = [
+  ['#0f0f0f', 'missing dark canvas #0f0f0f'],
+  ['#181818', 'missing dark surface #181818'],
+  ['#0007cd', 'missing primary #0007cd'],
+  ['#f7f8fc', 'missing light canvas #f7f8fc'],
+  ['#ffffff', 'missing light surface #ffffff'],
+  ['#e0e5ff', 'missing selected surface #e0e5ff'],
+] as const;
+
+export function validateMockupCss(css: string): string[] {
+  const errors = cssRequirements.filter(([value]) => !css.toLowerCase().includes(value)).map(([, error]) => error);
+  if (!/min-height:\s*44px/i.test(css)) errors.push('missing 44px target rule');
+  if (!/:focus-visible/i.test(css)) errors.push('missing focus-visible rule');
+  if (!/@media\s*\([^)]*max-width:\s*767px/i.test(css)) errors.push('missing mobile shell rule');
   return errors;
 }
 ```
