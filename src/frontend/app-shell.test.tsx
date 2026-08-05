@@ -30,7 +30,7 @@ describe('responsive calculator app shell', () => {
 
     expect(screen.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Calculate your costs' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
-    expect(screen.getByRole('heading', { name: 'Coding Value', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Overall Model Value', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Human Preference', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Image Generation', level: 3 })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();

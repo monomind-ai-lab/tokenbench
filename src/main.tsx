@@ -8,12 +8,16 @@ import './index.css';
 const route = matchRoute(window.location.pathname);
 const RootApp = route.kind === 'guides'
   ? GuidesApp
-  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator'
+  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
     ? App
     : null;
 
 if (RootApp) {
-  createRoot(document.getElementById('root')!).render(
+  const root = document.getElementById('root')!;
+  // Leaderboard static shells remain for no-JavaScript crawlers. Once their
+  // interactive route mounts, clear that fallback so it cannot duplicate UI.
+  if (route.kind === 'leaderboards' || route.kind === 'leaderboard') root.replaceChildren();
+  createRoot(root).render(
     <StrictMode>
       <RootApp />
     </StrictMode>,

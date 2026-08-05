@@ -1,5 +1,7 @@
 import { ArrowRight, BadgeDollarSign, Layers3, TrendingUp, Workflow } from 'lucide-react';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
+import { formatDateTime } from '../frontend/ui';
+import { useBenchmarkLeaderboard } from '../frontend/use-benchmarks';
 
 const FEATURE_CARDS = [
   {
@@ -26,24 +28,71 @@ const FEATURE_CARDS = [
 
 const TEASERS = [
   {
-    title: 'Coding Value',
-    description: 'Workload-aware coding capability and price context will appear after a supported benchmark revision is published.',
+    title: 'Overall Model Value',
+    description: 'Supported BenchLM overall capability and disclosed workload price context, without relabeling the value frontier as coding evidence.',
+    keyName: 'llm-value',
     href: LEADERBOARD_ROUTES['llm-value'].pathname,
+    supportedOnly: true,
   },
   {
     title: 'Human Preference',
     description: 'Human-preference evidence will be shown with its source timestamp and methodology when the published data is available.',
+    keyName: 'llm-human-preference',
     href: LEADERBOARD_ROUTES['llm-human-preference'].pathname,
+    supportedOnly: false,
   },
   {
     title: 'Image Generation',
     description: 'Image-generation evidence will remain unavailable until a supported source revision can be attributed and displayed.',
+    keyName: 'media-text-to-image',
     href: LEADERBOARD_ROUTES['media-text-to-image'].pathname,
+    supportedOnly: false,
   },
 ] as const;
 
 function TerminalPane({ label, children }: { readonly label: string; readonly children: string }) {
   return <article className="panel" aria-label={label}><pre><code>{children}</code></pre></article>;
+}
+
+function metricSummary(entry: { readonly metric: { readonly sourceId: string; readonly value: number } | null; readonly blendedCostPerMillion: number | null }) {
+  if (!entry.metric) return 'Metric Unavailable';
+  const metric = `${entry.metric.sourceId === 'lmarena' ? 'LMArena' : 'BenchLM'} ${entry.metric.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return entry.blendedCostPerMillion === null
+    ? metric
+    : `${metric} · $${entry.blendedCostPerMillion.toLocaleString(undefined, { maximumFractionDigits: 4 })} / 1M`;
+}
+
+type BenchmarkTeaserProps = typeof TEASERS[number] & { readonly key?: string };
+
+function BenchmarkTeaser({
+  title,
+  description,
+  keyName,
+  href,
+  supportedOnly,
+}: BenchmarkTeaserProps) {
+  const state = useBenchmarkLeaderboard(keyName, 'balanced', 3);
+  const entries = state.phase === 'ready' && state.envelope
+    ? state.envelope.data.entries.filter((entry) => supportedOnly ? entry.model.evidenceStatus === 'supported' : entry.model.evidenceStatus !== 'estimated').slice(0, 3)
+    : [];
+  const source = state.envelope?.attribution[0] ?? null;
+
+  return <article className="panel" role="listitem">
+    <h3>{title}</h3>
+    <p className="muted">{description}</p>
+    {state.phase === 'loading' ? <p role="status">Loading published benchmark data.</p> : null}
+    {state.phase === 'ready' && entries.length > 0 ? <>
+      <ol className="home-teaser-list" aria-label={`${title} published entries`}>
+        {entries.map((entry, index) => <li key={entry.model.modelKey}><span>{index + 1}. {entry.model.name}</span><small>{metricSummary(entry)}</small></li>)}
+      </ol>
+      <p className="home-teaser-meta">Fresh as of {formatDateTime(state.envelope?.freshness.checkedAt ?? null)}{source ? <> <span aria-hidden="true">·</span> <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></> : null}</p>
+    </> : null}
+    {state.phase === 'ready' && entries.length === 0 ? <p role="status">Unavailable — no supported published entries are available for this teaser.</p> : null}
+    {state.phase === 'stale' ? <p role="status">Stale benchmark data{state.envelope ? ` · checked ${formatDateTime(state.envelope.freshness.checkedAt)}` : ''}</p> : null}
+    {state.phase === 'unavailable' ? <p role="status">Unavailable — awaiting a valid published benchmark revision.</p> : null}
+    {state.phase === 'error' ? <p role="status">Benchmark data unavailable — open the full route to retry.</p> : null}
+    <a href={href}>View the full leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
+  </article>;
 }
 
 export function HomePage() {
@@ -79,16 +128,9 @@ export function HomePage() {
       </section>
 
       <section className="panel home-benchmark-section" aria-labelledby="home-benchmark-heading">
-        <div className="panel-heading"><div><span className="eyebrow">Benchmark signals</span><h2 id="home-benchmark-heading">Evidence when it is ready, not invented before it is</h2><p>These slots deliberately remain source-aware until TokenBench has a published, attributable benchmark revision to display.</p></div></div>
+        <div className="panel-heading"><div><span className="eyebrow">Benchmark signals</span><h2 id="home-benchmark-heading">Evidence when it is ready, not invented before it is</h2><p>Each teaser reads only a published cached revision and keeps stale, unavailable, and missing measurements explicit.</p></div></div>
         <div className="home-teaser-grid" role="list" aria-label="TokenBench benchmark teasers">
-          {TEASERS.map(({ title, description, href }) => (
-            <article className="panel" role="listitem" key={title}>
-              <h3>{title}</h3>
-              <p className="muted">{description}</p>
-              <p role="status">Awaiting a published benchmark revision.</p>
-              <a href={href}>View the methodology route <ArrowRight aria-hidden="true" size={14} /></a>
-            </article>
-          ))}
+          {TEASERS.map((teaser) => <BenchmarkTeaser key={teaser.keyName} {...teaser} />)}
         </div>
       </section>
 

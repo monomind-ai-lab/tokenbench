@@ -16,8 +16,9 @@ import { useSitePreferences } from './frontend/site-preferences';
 import { Skeleton, providerLabel } from './frontend/ui';
 import { useCatalog, type CatalogState } from './frontend/use-catalog';
 import { HomePage } from './pages/home-page';
+import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
 import { ToolsPage } from './pages/tools-page';
-import { matchRoute } from './routing/routes';
+import { matchRoute, type LeaderboardKey } from './routing/routes';
 import type { WorkloadPreset } from './frontend/calculator-state';
 
 type ActivePage = 'home' | 'tools' | 'compare' | 'leaderboards' | 'guides';
@@ -150,11 +151,21 @@ function ToolsRoute() {
   return <PageFrame activePage="tools"><ToolsPage /></PageFrame>;
 }
 
+function LeaderboardsRoute() {
+  return <PageFrame activePage="leaderboards"><LeaderboardDirectoryPage /></PageFrame>;
+}
+
+function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
+  return <PageFrame activePage="leaderboards"><LeaderboardPage keyName={keyName} /></PageFrame>;
+}
+
 export default function App() {
   const route = matchRoute(window.location.pathname);
 
   if (route.kind === 'home') return <HomeRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
+  if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
+  if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
   return null;
 }
