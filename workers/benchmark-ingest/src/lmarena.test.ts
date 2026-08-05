@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { validateNormalizedSourceBatch } from '../../../src/benchmarks/contracts';
 import { LMARENA_SUBSETS, parseLmArenaSubset } from './lmarena';
 
 interface StandardArenaRow {
@@ -37,6 +38,13 @@ interface DatasetViewerRow<T> {
 }
 
 interface ArtifactProvenanceFixture {
+  artifactId: string;
+  sourceUrl: string;
+  subset: string;
+  split: string;
+  category: string;
+  offset: number;
+  length: number;
   etag: string | null;
   lastModified: string | null;
   upstreamRevision: string | null;
@@ -52,7 +60,9 @@ function loadFixture<T>(relativePath: string): T {
 
 const observedAt = '2026-08-05T00:00:00.000Z';
 const standardFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_style_control.json');
+const laterStandardFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_style_control_page_100.json');
 const agentFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<AgentArenaRow>[] }>('../test-fixtures/lmarena/agent.json');
+const imageFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_to_image.json');
 const standardProvenance = standardFixture.provenance;
 const agentProvenance = agentFixture.provenance;
 
@@ -79,7 +89,7 @@ describe('LMArena normalization', () => {
 
     expect(batch.sources).toEqual([expect.objectContaining({
       sourceId: 'lmarena',
-      artifactId: 'text_style_control-latest-overall',
+      artifactId: 'text_style_control:latest:overall:rows-0-100',
       sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100',
       snapshotKey: standardProvenance.snapshotKey,
       contentHash: standardProvenance.contentHash,
@@ -92,7 +102,7 @@ describe('LMArena normalization', () => {
       modelKey: 'source:lmarena:claude-fable-5',
       evidenceStatus: 'source_only',
       rankingEligible: true,
-      sourceArtifactId: 'text_style_control-latest-overall',
+      sourceArtifactId: 'text_style_control:latest:overall:rows-0-100',
     });
     expect(metric).toMatchObject({
       metricKey: 'lmarena:text_style_control:overall',
@@ -172,15 +182,158 @@ describe('LMArena normalization', () => {
     expect(batch.models[0].sourceType).toBe('Unknown');
   });
 
-  it('preserves a source category for future filtered views without inventing a new route', () => {
+  it('accepts a future category only when its descriptor and exact URL name that filter', () => {
     const row = { ...standardFixture.rows[0].row, category: 'creative_writing' };
+    const creativeWritingArtifact = {
+      ...standardProvenance,
+      artifactId: 'text_style_control:latest:creative_writing:rows-0-100',
+      category: 'creative_writing',
+      sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27creative_writing%27&offset=0&length=100',
+      snapshotKey: standardProvenance.snapshotKey.replace('/overall/', '/creative_writing/'),
+    };
 
-    const metric = parseLmArenaSubset('text_style_control', [row], observedAt, standardProvenance).metrics[0];
+    const metric = parseLmArenaSubset('text_style_control', [row], observedAt, creativeWritingArtifact).metrics[0];
 
     expect(metric).toMatchObject({
       category: 'creative_writing',
       metricKey: 'lmarena:text_style_control:creative_writing',
     });
+  });
+
+  it('normalizes live blank and whitespace organization strings to explicit Unknown', () => {
+    expect(parseLmArenaSubset(
+      'text_style_control',
+      laterStandardFixture.rows,
+      observedAt,
+      laterStandardFixture.provenance,
+    ).models[0].creator).toBe('Unknown');
+    expect(parseLmArenaSubset(
+      'text_to_image',
+      imageFixture.rows,
+      observedAt,
+      imageFixture.provenance,
+    ).models[0].creator).toBe('Unknown');
+
+    const whitespaceRow = { ...laterStandardFixture.rows[0].row, organization: ' \t ' };
+    expect(parseLmArenaSubset(
+      'text_style_control',
+      [whitespaceRow],
+      observedAt,
+      laterStandardFixture.provenance,
+    ).models[0].creator).toBe('Unknown');
+  });
+
+  it('still rejects malformed non-string organization values', () => {
+    const malformedRow = { ...laterStandardFixture.rows[0].row, organization: 42 };
+
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      [malformedRow],
+      observedAt,
+      laterStandardFixture.provenance,
+    )).toThrow(/organization.*string/i);
+  });
+
+  it('keeps exact page URLs and distinct source-artifact identities when pages merge', () => {
+    const firstPage = parseLmArenaSubset('text_style_control', standardFixture.rows, observedAt, standardProvenance);
+    const secondPage = parseLmArenaSubset(
+      'text_style_control',
+      laterStandardFixture.rows,
+      observedAt,
+      laterStandardFixture.provenance,
+    );
+    const merged = validateNormalizedSourceBatch({
+      sources: [...firstPage.sources, ...secondPage.sources],
+      models: [...firstPage.models, ...secondPage.models],
+      metrics: [...firstPage.metrics, ...secondPage.metrics],
+      priceChecks: [],
+      comparisonSeeds: [],
+    });
+
+    expect(merged.sources.map(({ artifactId, sourceUrl }) => ({ artifactId, sourceUrl }))).toEqual([
+      {
+        artifactId: 'text_style_control:latest:overall:rows-0-100',
+        sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100',
+      },
+      {
+        artifactId: 'text_style_control:latest:overall:rows-100-200',
+        sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=100&length=100',
+      },
+    ]);
+  });
+
+  it('rejects a row whose category does not match its page descriptor', () => {
+    const mismatchedRow = { ...standardFixture.rows[0].row, category: 'creative_writing' };
+
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      [mismatchedRow],
+      observedAt,
+      standardProvenance,
+    )).toThrow(/row 0.*category.*descriptor/i);
+  });
+
+  it('rejects missing Hugging Face x-revision provenance', () => {
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      standardFixture.rows,
+      observedAt,
+      { ...standardProvenance, upstreamRevision: null },
+    )).toThrow(/x-revision/i);
+  });
+
+  it('rejects descriptor subset and exact URL query mismatches', () => {
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      standardFixture.rows,
+      observedAt,
+      {
+        ...standardProvenance,
+        subset: 'vision_style_control',
+        artifactId: 'vision_style_control:latest:overall:rows-0-100',
+        sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=vision_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100',
+      },
+    )).toThrow(/descriptor subset/i);
+
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      standardFixture.rows,
+      observedAt,
+      { ...standardProvenance, sourceUrl: standardProvenance.sourceUrl.replace('offset=0', 'offset=1') },
+    )).toThrow(/exact official.*URL/i);
+
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      standardFixture.rows,
+      observedAt,
+      { ...standardProvenance, artifactId: 'text_style_control-latest-overall' },
+    )).toThrow(/artifactId.*page bounds/i);
+  });
+
+  it('rejects page descriptors outside the frozen 100-row request grid', () => {
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      standardFixture.rows,
+      observedAt,
+      {
+        ...standardProvenance,
+        artifactId: 'text_style_control:latest:overall:rows-0-50',
+        sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=50',
+        length: 50,
+      },
+    )).toThrow(/length.*exactly 100/i);
+
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      standardFixture.rows,
+      observedAt,
+      {
+        ...standardProvenance,
+        artifactId: 'text_style_control:latest:overall:rows-50-150',
+        sourceUrl: 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=50&length=100',
+        offset: 50,
+      },
+    )).toThrow(/offset.*multiple of 100/i);
   });
 
   it('rejects truncated Dataset Viewer records rather than publishing incomplete evidence', () => {

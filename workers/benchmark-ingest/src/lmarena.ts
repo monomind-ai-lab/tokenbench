@@ -24,6 +24,21 @@ export const LMARENA_SUBSETS = [
 
 export type LmArenaSubset = typeof LMARENA_SUBSETS[number];
 
+/**
+ * Immutable identity and transport evidence for one Dataset Viewer page.
+ * Page scope is explicit so independently fetched pages cannot collapse onto
+ * the same durable source artifact.
+ */
+export interface LmArenaPageArtifact extends ArtifactProvenance {
+  artifactId: string;
+  sourceUrl: string;
+  subset: string;
+  split: string;
+  category: string;
+  offset: number;
+  length: number;
+}
+
 const LMARENA_FILTER_ORIGIN = 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset';
 
 type ArenaRow = Record<string, unknown>;
@@ -66,6 +81,11 @@ function hasOwn(record: ArenaRow, key: string): boolean {
 function requireString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim().length === 0) fail(`${label} must be a non-empty string`);
   return value;
+}
+
+function organizationOrUnknown(value: unknown, label: string): string {
+  if (typeof value !== 'string') fail(`${label} must be a string`);
+  return value.trim().length === 0 ? 'Unknown' : value;
 }
 
 function requireFiniteNonNegative(value: unknown, label: string): number {
@@ -156,7 +176,7 @@ function parseStandardRow(value: unknown, index: number): ParsedArenaRow {
   return {
     sourceModelId: requireString(row.model_name, `LMArena standard row ${index}.model_name`),
     name: requireString(row.model_name, `LMArena standard row ${index}.model_name`),
-    creator: requireString(row.organization, `LMArena standard row ${index}.organization`),
+    creator: organizationOrUnknown(row.organization, `LMArena standard row ${index}.organization`),
     sourceType: sourceTypeForLicense(row.license, `LMArena standard row ${index}.license`),
     category: requireString(row.category, `LMArena standard row ${index}.category`),
     sourceUpdatedAt: sourceTimestamp(row.leaderboard_publish_date, `LMArena standard row ${index}.leaderboard_publish_date`),
@@ -187,7 +207,7 @@ function parseAgentRow(value: unknown, index: number): ParsedArenaRow {
   return {
     sourceModelId: requireString(row.model_name, `LMArena agent row ${index}.model_name`),
     name: requireString(row.model_name, `LMArena agent row ${index}.model_name`),
-    creator: requireString(row.organization, `LMArena agent row ${index}.organization`),
+    creator: organizationOrUnknown(row.organization, `LMArena agent row ${index}.organization`),
     sourceType: sourceTypeForLicense(row.license, `LMArena agent row ${index}.license`),
     category: requireString(row.category, `LMArena agent row ${index}.category`),
     sourceUpdatedAt: sourceTimestamp(row.leaderboard_publish_date, `LMArena agent row ${index}.leaderboard_publish_date`),
@@ -212,30 +232,106 @@ function canonicalSlug(modelKey: string): string {
   return separator === -1 ? modelKey : modelKey.slice(separator + 1);
 }
 
-function sourceUrlForSubset(subset: LmArenaSubset): string {
-  return `${LMARENA_FILTER_ORIGIN}&config=${subset}&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100`;
+function encodeFilterValue(value: string): string {
+  return encodeURIComponent(value).replace(/'/g, '%27');
+}
+
+export function lmArenaPageArtifactId(
+  subset: LmArenaSubset,
+  split: string,
+  category: string,
+  offset: number,
+  length: number,
+): string {
+  return `${subset}:${split}:${encodeURIComponent(category)}:rows-${offset}-${offset + length}`;
+}
+
+export function lmArenaPageSourceUrl(
+  subset: LmArenaSubset,
+  split: string,
+  category: string,
+  offset: number,
+  length: number,
+): string {
+  const where = encodeFilterValue(`"category"='${category}'`);
+  return `${LMARENA_FILTER_ORIGIN}&config=${encodeURIComponent(subset)}&split=${encodeURIComponent(split)}&where=${where}&offset=${offset}&length=${length}`;
+}
+
+function requireLmArenaPageArtifact(
+  value: LmArenaPageArtifact | undefined,
+  requestedSubset: LmArenaSubset,
+): LmArenaPageArtifact {
+  const artifact = requireArtifactProvenance(value, 'LMArena') as LmArenaPageArtifact;
+  const descriptorSubset = requireString(artifact.subset, 'LMArena descriptor subset');
+  if (!isLmArenaSubset(descriptorSubset) || descriptorSubset !== requestedSubset) {
+    fail(`LMArena descriptor subset ${descriptorSubset} does not match requested subset ${requestedSubset}`);
+  }
+
+  const split = requireString(artifact.split, 'LMArena descriptor split');
+  if (split !== 'latest') fail('LMArena descriptor split must be latest');
+  const category = requireString(artifact.category, 'LMArena descriptor category');
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(category)) {
+    fail('LMArena descriptor category must be a safe Dataset Viewer filter value');
+  }
+  if (!Number.isSafeInteger(artifact.offset) || artifact.offset < 0) {
+    fail('LMArena descriptor offset must be a non-negative safe integer');
+  }
+  if (artifact.length !== 100) {
+    fail('LMArena descriptor length must be exactly 100');
+  }
+  if (artifact.offset % 100 !== 0) {
+    fail('LMArena descriptor offset must be a multiple of 100');
+  }
+  if (!Number.isSafeInteger(artifact.offset + artifact.length)) {
+    fail('LMArena descriptor page bounds must be safe integers');
+  }
+
+  const expectedArtifactId = lmArenaPageArtifactId(
+    requestedSubset,
+    split,
+    category,
+    artifact.offset,
+    artifact.length,
+  );
+  if (artifact.artifactId !== expectedArtifactId) {
+    fail(`LMArena descriptor artifactId must include its exact subset, split, category, and page bounds: ${expectedArtifactId}`);
+  }
+  const expectedSourceUrl = lmArenaPageSourceUrl(
+    requestedSubset,
+    split,
+    category,
+    artifact.offset,
+    artifact.length,
+  );
+  if (artifact.sourceUrl !== expectedSourceUrl) {
+    fail(`LMArena descriptor sourceUrl must equal the exact official Dataset Viewer URL: ${expectedSourceUrl}`);
+  }
+  if (typeof artifact.upstreamRevision !== 'string' || artifact.upstreamRevision.trim().length === 0) {
+    fail('LMArena provenance requires the non-null Hugging Face x-revision header');
+  }
+  return artifact;
 }
 
 /**
  * Normalizes one accepted LMArena subset. The Worker supplies the Dataset
- * Viewer `latest`/`overall` rows and the exact per-artifact transport/evidence
- * metadata that names the sanitized snapshot written by the Worker.
+ * Viewer rows and the exact per-page descriptor/transport evidence that names
+ * the sanitized snapshot written by the Worker.
  */
 export function parseLmArenaSubset(
   subset: string,
   rows: unknown,
   observedAt: string,
-  provenance: ArtifactProvenance,
+  provenance: LmArenaPageArtifact,
 ): NormalizedSourceBatch {
   if (!isLmArenaSubset(subset)) fail(`LMArena subset ${subset} is not accepted`);
   if (!Array.isArray(rows) || rows.length === 0) fail(`LMArena subset ${subset} must contain at least one row`);
-  const artifactProvenance = requireArtifactProvenance(provenance, 'LMArena');
+  const artifactProvenance = requireLmArenaPageArtifact(provenance, subset);
 
-  const artifactId = `${subset}-latest-overall`;
+  const artifactId = artifactProvenance.artifactId;
   const source: BenchmarkSourceRecord = {
     sourceId: 'lmarena',
     artifactId,
-    sourceUrl: sourceUrlForSubset(subset),
+    sourceUrl: artifactProvenance.sourceUrl,
     observedAt,
     etag: artifactProvenance.etag,
     lastModified: artifactProvenance.lastModified,
@@ -250,6 +346,11 @@ export function parseLmArenaSubset(
   const parsedRows = rows.map((row, index) => subset === 'agent'
     ? parseAgentRow(row, index)
     : parseStandardRow(row, index));
+  parsedRows.forEach((row, index) => {
+    if (row.category !== artifactProvenance.category) {
+      fail(`LMArena row ${index} category ${row.category} does not match descriptor category ${artifactProvenance.category}`);
+    }
+  });
   const modelsByKey = new Map<string, BenchmarkModel>();
   const metrics: BenchmarkMetric[] = [];
 

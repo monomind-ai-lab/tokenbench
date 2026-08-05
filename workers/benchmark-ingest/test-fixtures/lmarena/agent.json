@@ -1,21 +1,25 @@
 {
   "provenance": {
-    "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=agent&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=2",
+    "artifactId": "agent:latest:overall:rows-0-100",
+    "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=agent&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100",
     "datasetUrl": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
     "licenseId": "CC-BY-4.0",
     "etag": null,
     "lastModified": null,
     "split": "latest",
     "category": "overall",
+    "subset": "agent",
+    "offset": 0,
+    "length": 100,
     "upstreamRevision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0",
     "responseHeaders": {
       "x-revision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0"
     },
     "schemaVersion": null,
-    "snapshotKey": "benchmarks/lmarena/agent/latest/overall/189e9c36d22216a33325318128ebb15cc2cd0e6fa137d0534c5135c11a4d3222.json",
-    "contentHash": "sha256:189e9c36d22216a33325318128ebb15cc2cd0e6fa137d0534c5135c11a4d3222",
-    "originalContentHash": "sha256:808dc0ddafc93a20a1c52972c2fc1879f2ede5970059290d6d8f657989f6e16e",
-    "retrievedAt": "2026-08-05T10:20:10.000Z",
+    "snapshotKey": "benchmarks/lmarena/agent/latest/overall/offset-0-length-100/3f2c6e0b85579b74c6b8704cd800615c2b0a67169d10ee72d36e81d7e8267f14.json",
+    "contentHash": "sha256:3f2c6e0b85579b74c6b8704cd800615c2b0a67169d10ee72d36e81d7e8267f14",
+    "originalContentHash": "sha256:92bc654a76df181bda2212184722dbb5825d7c7d3d1bb80e76571da17144bc66",
+    "retrievedAt": "2026-08-05T10:57:48.000Z",
     "projectionFields": [
       "model_name",
       "organization",
