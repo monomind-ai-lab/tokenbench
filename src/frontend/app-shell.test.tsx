@@ -82,13 +82,15 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('button', { name: /Balanced/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('button', { name: /Input-heavy/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText(/Input share/i)).toHaveAttribute('aria-valuenow', '80');
-    fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '3000000' } });
-    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue(3000000);
+    const monthlyUsage = screen.getByLabelText(/Expected monthly usage/i);
+    expect(monthlyUsage.compareDocumentPosition(screen.getByText('Presets')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.change(monthlyUsage, { target: { value: '3000000' } });
+    expect(monthlyUsage).toHaveValue('3,000,000');
     expect(screen.getByRole('button', { name: /Input-heavy/i })).toHaveAttribute('aria-pressed', 'false');
 
     const usageRange = screen.getByRole('slider', { name: /Monthly usage range/i });
     fireEvent.change(usageRange, { target: { value: '50000000' } });
-    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue(50000000);
+    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue('50,000,000');
     expect(usageRange).toHaveAttribute('aria-valuetext', '50,000,000 tokens');
   });
 
@@ -100,9 +102,9 @@ describe('responsive calculator app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 
-    expect(usage).toHaveValue(4200000);
+    expect(usage).toHaveValue('4,200,000');
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('ai-cost-engine:theme')).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
     expect(screen.getByRole('button', { name: /Toggle light theme/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('combobox', { name: /Language/i })).toHaveValue('zh-TW');
   });

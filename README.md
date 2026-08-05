@@ -1,4 +1,4 @@
-# AI Cost Engine
+# TokenBench
 
 A responsive calculator for comparing verified paid individual AI subscriptions with current API token prices.
 

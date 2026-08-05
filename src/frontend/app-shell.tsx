@@ -29,7 +29,7 @@ interface SiteHeaderProps {
 export function SiteHeader({ theme, language, activePage, onThemeToggle, onLanguageChange }: SiteHeaderProps) {
   return <header className="top-header">
     <div className="header-inner">
-      <div className="brand-lockup"><a className="brand-name" href="/" aria-label="AI Cost Engine home">AI Cost Engine</a></div>
+      <div className="brand-lockup"><a className="brand-name" href="/" aria-label="TokenBench home">TokenBench</a></div>
       <nav className="primary-nav" aria-label="Primary navigation">
         <a href="/" aria-current={activePage === 'calculator' ? 'page' : undefined}>Calculator</a>
         <a href="/#comparison">Pricing</a>

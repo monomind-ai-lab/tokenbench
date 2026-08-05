@@ -26,19 +26,19 @@ function headMarkup({ title, description, canonical, type, structuredData }: { t
     <meta name="robots" content="index,follow,max-image-preview:large">
     <link rel="canonical" href="${canonical}">
     <meta property="og:type" content="${type}">
-    <meta property="og:site_name" content="AI Cost Engine">
+    <meta property="og:site_name" content="TokenBench">
     <meta property="og:title" content="${escapeHtml(title)}">
     <meta property="og:description" content="${escapeHtml(description)}">
     <meta property="og:url" content="${canonical}">
     <meta property="og:image" content="${SOCIAL_IMAGE}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="AI Cost Engine guides for spending smarter on AI">
+    <meta property="og:image:alt" content="TokenBench guides for spending smarter on AI">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="${escapeHtml(title)}">
     <meta name="twitter:description" content="${escapeHtml(description)}">
     <meta name="twitter:image" content="${SOCIAL_IMAGE}">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('ai-cost-engine:theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem('tokenbench:theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -52,7 +52,7 @@ function chrome(content: string): string {
   return `<div class="app-shell guides-shell">
       <a class="skip-link" href="#guide-content">Skip to guide content</a>
       <header class="top-header"><div class="header-inner">
-        <div class="brand-lockup"><a class="brand-name" href="/">AI Cost Engine</a></div>
+        <div class="brand-lockup"><a class="brand-name" href="/">TokenBench</a></div>
         <nav class="primary-nav" aria-label="Primary navigation"><a href="/">Calculator</a><a href="/#comparison">Pricing</a><a href="/guides/" aria-current="page">Guides</a></nav>
       </div></header>
       ${content}
@@ -94,7 +94,7 @@ async function createHub(): Promise<void> {
   const content = `<main id="guide-content" class="guides-main"><section class="guides-hero"><span class="eyebrow">AI bill playbook</span><h1>Spend smarter on AI</h1><p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p><div class="guides-hero-actions"><a class="button guide-primary-action" href="/#calculator">Open the calculator</a><span>5 field guides · Reviewed ${formatDate(GUIDES[0].updatedAt)}</span></div></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Guides</span><h2>Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div><div class="guide-grid">${GUIDES.map(guideCard).join('')}</div></section></main>`;
   const structuredData = [{ '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'AI Cost Optimization Guides', description, url: canonical, mainEntity: { '@type': 'ItemList', itemListElement: GUIDES.map((guide, index) => ({ '@type': 'ListItem', position: index + 1, name: guide.title, url: `${SITE_URL}${guidePath(guide.slug)}` })) } }];
   await mkdir(outputRoot, { recursive: true });
-  await writeFile(resolve(outputRoot, 'index.html'), documentHtml(headMarkup({ title: 'AI Cost Optimization Guides | AI Cost Engine', description, canonical, type: 'website', structuredData }), content));
+  await writeFile(resolve(outputRoot, 'index.html'), documentHtml(headMarkup({ title: 'AI Cost Optimization Guides | TokenBench', description, canonical, type: 'website', structuredData }), content));
 }
 
 async function createArticle(guide: GuideArticle): Promise<void> {
@@ -108,7 +108,7 @@ async function createArticle(guide: GuideArticle): Promise<void> {
   ];
   const articleDir = resolve(outputRoot, guide.slug);
   await mkdir(articleDir, { recursive: true });
-  await writeFile(resolve(articleDir, 'index.html'), documentHtml(headMarkup({ title: `${guide.seoTitle} | AI Cost Engine`, description: guide.description, canonical, type: 'article', structuredData }), content));
+  await writeFile(resolve(articleDir, 'index.html'), documentHtml(headMarkup({ title: `${guide.seoTitle} | TokenBench`, description: guide.description, canonical, type: 'article', structuredData }), content));
 }
 
 await rm(outputRoot, { recursive: true, force: true });

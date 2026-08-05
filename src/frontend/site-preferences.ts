@@ -4,7 +4,7 @@ export type ThemeMode = 'light' | 'dark';
 
 export function readStoredTheme(): ThemeMode {
   try {
-    return window.localStorage.getItem('ai-cost-engine:theme') === 'dark' ? 'dark' : 'light';
+    return window.localStorage.getItem('tokenbench:theme') === 'dark' ? 'dark' : 'light';
   } catch {
     return 'light';
   }
@@ -64,7 +64,7 @@ export function useSitePreferences() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { window.localStorage.setItem('ai-cost-engine:theme', theme); } catch { /* Theme persistence is best effort. */ }
+    try { window.localStorage.setItem('tokenbench:theme', theme); } catch { /* Theme persistence is best effort. */ }
   }, [theme]);
 
   useEffect(watchGoogleTranslateChrome, []);

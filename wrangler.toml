@@ -1,4 +1,4 @@
-name = "ai-plan-calculator"
+name = "tokenbench"
 compatibility_date = "2026-08-03"
 pages_build_output_dir = "dist"
 

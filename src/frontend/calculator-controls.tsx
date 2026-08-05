@@ -16,6 +16,13 @@ function inputId(value: string): string {
 const MONTHLY_TOKENS_RANGE_MAX = 100_000_000;
 const MONTHLY_TOKENS_RANGE_STEP = 100_000;
 
+function parseFormattedTokens(value: string): number | null {
+  const normalized = value.replaceAll(',', '').trim();
+  if (!/^\d+$/.test(normalized)) return normalized === '' ? 0 : null;
+  const parsed = Number(normalized);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
 interface ProviderChoiceProps {
   readonly key?: string;
   readonly providerId: string;
@@ -122,15 +129,6 @@ export function CalculatorControls({
 
         <fieldset className="control-block usage-block" aria-describedby="usage-help">
           <legend><span className="control-legend"><SlidersHorizontal size={18} aria-hidden="true" />{UI_COPY.workloadUsage}</span></legend>
-          <p id="usage-help" className="field-help">Presets are starting points; every value remains editable.</p>
-          <div className="preset-row" aria-label="Workload presets">
-            <span className="preset-label">Presets</span>
-            {(Object.entries(WORKLOAD_PRESETS) as [WorkloadPreset, (typeof WORKLOAD_PRESETS)[WorkloadPreset]][]).map(([preset, values]) => {
-              const selected = selectedPreset === preset;
-              return <button key={preset} type="button" className={`button button-small preset-button ${selected ? 'preset-selected' : ''}`} aria-pressed={selected} onClick={() => onPresetChange(preset)}>{values.label}</button>;
-            })}
-          </div>
-
           <div className="field-label"><label htmlFor="monthly-tokens">Expected monthly usage</label><output id="monthly-tokens-output">{monthlyTokens.toLocaleString()} tokens</output></div>
           <input
             id="monthly-tokens-range"
@@ -146,7 +144,19 @@ export function CalculatorControls({
             onChange={(event) => onMonthlyTokensChange(Number(event.target.value))}
           />
           <div className="range-caption"><span>0 tokens</span><span>100M tokens</span></div>
-          <input id="monthly-tokens" className="number-input" type="number" min="0" max="1000000000000" step="1000" value={monthlyTokens} aria-describedby="monthly-tokens-output" onChange={(event) => onMonthlyTokensChange(Number(event.target.value))} />
+          <input id="monthly-tokens" className="number-input" type="text" inputMode="numeric" pattern="[0-9,]*" autoComplete="off" value={monthlyTokens.toLocaleString('en-US')} aria-describedby="monthly-tokens-output" onChange={(event) => {
+            const parsed = parseFormattedTokens(event.target.value);
+            if (parsed !== null) onMonthlyTokensChange(parsed);
+          }} />
+
+          <p id="usage-help" className="field-help">Presets are starting points; every value remains editable.</p>
+          <div className="preset-row" aria-label="Workload presets">
+            <span className="preset-label">Presets</span>
+            {(Object.entries(WORKLOAD_PRESETS) as [WorkloadPreset, (typeof WORKLOAD_PRESETS)[WorkloadPreset]][]).map(([preset, values]) => {
+              const selected = selectedPreset === preset;
+              return <button key={preset} type="button" className={`button button-small preset-button ${selected ? 'preset-selected' : ''}`} aria-pressed={selected} onClick={() => onPresetChange(preset)}>{values.label}</button>;
+            })}
+          </div>
 
           <div className="field-label"><label htmlFor="input-share">Input share</label><output id="input-share-output">{formatPercentBasisPoints(inputShareBasisPoints)} input / {formatPercentBasisPoints(10_000 - inputShareBasisPoints)} output</output></div>
           <input id="input-share" type="range" min="0" max="100" step="1" value={inputShareBasisPoints / 100} aria-label="Input share" aria-valuenow={inputShareBasisPoints / 100} aria-valuetext={`${formatPercentBasisPoints(inputShareBasisPoints)} input`} onChange={(event) => onInputShareChange(Math.round(Number(event.target.value) * 100))} />

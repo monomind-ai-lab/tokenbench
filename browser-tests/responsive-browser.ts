@@ -177,10 +177,17 @@ test.describe('responsive calculator browser harness', () => {
     expect(choiceStyles.selectedShadow).toBe('none');
     expect(choiceStyles.selectedBorder).not.toBe(choiceStyles.unselectedBorder);
     expect(choiceStyles.selectedBackground).not.toBe(choiceStyles.unselectedBackground);
+    const monthlyUsage = page.getByLabel('Expected monthly usage');
+    const usagePosition = await page.getByText('Expected monthly usage').boundingBox();
+    const presetsPosition = await page.getByText('Presets', { exact: true }).boundingBox();
+    expect(usagePosition?.y).toBeLessThan(presetsPosition?.y ?? 0);
+    await expect(monthlyUsage).toHaveValue('10,000,000');
     await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Output-heavy' }).click();
     await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'false');
     await expect(page.getByRole('button', { name: 'Output-heavy' })).toHaveAttribute('aria-pressed', 'true');
+    await monthlyUsage.fill('12345678');
+    await expect(monthlyUsage).toHaveValue('12,345,678');
   });
 
   test('renders loading, empty, error, bootstrap, and stale catalog states', async ({ page }) => {

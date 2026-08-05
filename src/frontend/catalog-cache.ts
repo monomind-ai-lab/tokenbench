@@ -2,7 +2,7 @@ import { BOOTSTRAP_CATALOG } from '../catalog/bootstrap';
 import type { CatalogFreshness, CatalogResponse } from '../catalog/contracts';
 import { validateCatalogResponse } from '../catalog/validation';
 
-export const CATALOG_CACHE_KEY = 'ai-cost-engine:catalog:v2';
+export const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
 
 export interface CatalogStorage {
   getItem(key: string): string | null;

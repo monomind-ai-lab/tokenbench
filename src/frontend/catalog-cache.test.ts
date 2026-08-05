@@ -25,7 +25,7 @@ describe('catalog cache and conditional revalidation', () => {
     expect(result.catalog).toEqual(FRONTEND_TEST_CATALOG);
     expect(result.fromCache).toBe(false);
     expect(result.lastSuccessfulRefreshAt).toBe('2026-08-03T02:00:00.000Z');
-    expect(cache.setItem).toHaveBeenCalledWith('ai-cost-engine:catalog:v2', expect.stringContaining('test-revision'));
+    expect(cache.setItem).toHaveBeenCalledWith('tokenbench:catalog:v2', expect.stringContaining('test-revision'));
   });
 
   it('revalidates cached data with If-None-Match and keeps state on 304', async () => {
