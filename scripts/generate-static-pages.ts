@@ -26,7 +26,7 @@ function activeNavigation(route: AppRoute): StaticNavigationPage {
 }
 
 function pageIntro(metadata: PageMetadata, body: string): string {
-  return `<main id="page-content" class="page-main"><section class="content-stack static-page-content"><span class="eyebrow">${SITE_CONFIG.name}</span><h1>${escapeHtml(metadata.h1)}</h1>${body}</section></main>`;
+  return `<main id="page-content" class="page-main" tabindex="-1"><section class="content-stack static-page-content"><span class="eyebrow">${SITE_CONFIG.name}</span><h1>${escapeHtml(metadata.h1)}</h1>${body}</section></main>`;
 }
 
 function fixedPageContent(route: Exclude<AppRoute, { kind: 'guides' } | { kind: 'comparison' } | { kind: 'notFound' }>, metadata: PageMetadata): string {

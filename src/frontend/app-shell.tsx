@@ -41,11 +41,11 @@ interface SiteFooterProps {
 export function SiteHeader({ theme, language, activePage, onThemeToggle, onLanguageChange }: SiteHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  return <header className="top-header">
+  return <header className="top-header" onKeyDown={(event) => { if (event.key === 'Escape') setMobileMenuOpen(false); }}>
     <div className="header-inner">
       <div className="brand-lockup"><a className="brand-home" href="/" aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span><span className="brand-tagline">{SITE_CONFIG.tagline}</span></span></a></div>
       <button type="button" className="menu-button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
-      <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation" onKeyDown={(event) => { if (event.key === 'Escape') setMobileMenuOpen(false); }}>
+      <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
         <a href={ROUTE_PATHS.tools} aria-current={activePage === 'tools' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Tools</a>
         <a href={ROUTE_PATHS.compareHub} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Compare</a>
         <a href={ROUTE_PATHS.leaderboards} aria-current={activePage === 'leaderboards' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Leaderboards</a>
@@ -81,8 +81,8 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
       <a className="skip-link" href={`#${skipLinkTarget}`}>{skipLinkLabel}</a>
       <SiteHeader theme={theme} language={language} activePage={activePage} onThemeToggle={onThemeToggle} onLanguageChange={onLanguageChange} />
       {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
-      {notice ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
-      <main id="page-content" className="page-main">{children}</main>
+      {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
+      <main id="page-content" className="page-main" tabIndex={-1}>{children}</main>
       <SiteFooter status={catalogPhase ? `Catalog refresh: ${formatDateTime(lastSuccessfulRefreshAt)}${catalogPhase === 'loading' ? ' · Loading' : ''}` : 'Source-aware decision support.'} notice="Verify provider evidence before purchasing." />
     </div>
   );

@@ -31,6 +31,8 @@ describe('generateGuidePages', () => {
     ]);
 
     for (const html of [hub, article]) {
+      expect(html).toContain('id="page-content"');
+      expect(html).toContain('tabindex="-1"');
       expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
       expect(html).not.toContain('href="/#calculator"');
     }

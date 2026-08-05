@@ -214,6 +214,26 @@ describe('responsive calculator app shell', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeInTheDocument());
   });
 
+  it('announces one recovery banner when the fallback notice duplicates the catalog error', () => {
+    const unavailable = 'Catalog unavailable (network down). Showing only the checked-in verified bootstrap; retry to load the latest revision.';
+    render(<AppShell
+      activePage="tools"
+      catalogPhase="ready"
+      error={unavailable}
+      language="en"
+      lastSuccessfulRefreshAt={null}
+      notice={unavailable}
+      onLanguageChange={vi.fn()}
+      onRetry={vi.fn()}
+      onThemeToggle={vi.fn()}
+      theme="dark"
+    ><p>Calculator fallback</p></AppShell>);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(unavailable);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry loading catalog' })).toBeInTheDocument();
+  });
+
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);
