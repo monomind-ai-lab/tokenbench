@@ -2,10 +2,17 @@
 
 ## Status and scope
 
-This runbook is an evidence template and release procedure for TokenBench. At
-creation, it contains no completed Task 14 release evidence: no full local gate,
-Impeccable audit, remote migration, Worker deployment, controlled refresh, Pages
-deployment, domain change, redirect, or production smoke test has been recorded.
+This runbook records the completed local release-candidate checks for TokenBench
+through application commit `8281bcd` on 2026-08-06. The comparison implementation,
+expanded browser matrix, accessibility smoke pass, and two Impeccable UX/UI passes
+are complete. The progress board is not release evidence and was not changed by
+this audit.
+
+No external release action has been taken: the branch has not been pushed, the
+remote migration has not been applied, Workers and Pages have not been deployed,
+and no domain, redirect, controlled refresh, or production smoke operation has
+been performed. Those fields remain pending explicit authorization and observed
+production evidence.
 
 Do not replace pending fields with estimates, planned values, screenshots from a
 different build, or copied dashboard data. Record only observed evidence from
@@ -19,11 +26,11 @@ path and query to the canonical host with HTTP 301.
 
 | Input | Required evidence | Current status |
 | --- | --- | --- |
-| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | Pending |
-| Design baseline | [../DESIGN.md](../DESIGN.md) reviewed during both UX/UI passes. | Pending review |
-| Data-source policy | [data-sources.md](data-sources.md) reviewed for source, attribution, and Artificial Analysis restrictions. | Pending review |
-| Data-plane configuration | Root and Worker Wrangler bindings checked against the approved Cloudflare target. | Pending |
-| Comparison implementation | Integrated Pages Function, dynamic sitemap, canonicalization tests, and browser coverage. | Pending integration/verification |
+| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | Local application candidate `8281bcd`; push target and authorization pending. |
+| Design baseline | [../DESIGN.md](../DESIGN.md) reviewed during both UX/UI passes. | Reviewed in both passes; dark technical hierarchy and the approved light-mode adaptation verified. |
+| Data-source policy | [data-sources.md](data-sources.md) reviewed for source, attribution, and Artificial Analysis restrictions. | Reviewed; source allowlists, visible attribution, and the Artificial Analysis prohibition remain intact. |
+| Data-plane configuration | Root and Worker Wrangler bindings checked against the approved Cloudflare target. | Binding names, schedules, and shared D1/R2 names inspected locally; remote target/history confirmation pending authorization. |
+| Comparison implementation | Integrated Pages Function, dynamic sitemap, canonicalization tests, and browser coverage. | Integrated and verified, including a real handler-rendered document backed by deterministic fake D1 data before browser hydration. |
 
 Do not place Cloudflare API tokens, account identifiers, private dashboard URLs,
 or customer data in this document. The checked-in Wrangler configuration remains
@@ -45,12 +52,12 @@ git status --short
 
 | Gate | Required outcome | Recorded result |
 | --- | --- | --- |
-| Unit and API tests | Exit 0. | Pending; not run by this documentation-only stream. |
-| Type check | Exit 0. | Pending; not run by this documentation-only stream. |
-| Production build | Exit 0. | Pending; not run by this documentation-only stream. |
-| Responsive browser suite | Exit 0 across the expanded route, viewport, theme, and state matrix. | Pending; not run by this documentation-only stream. |
-| Diff check | Exit 0 with only intentional files. | Pending as a full release gate; a documentation-only diff check is not release evidence. |
-| Final worktree inspection | No unintended changes before the authorized release commit. | Pending. |
+| Unit and API tests | Exit 0. | Pass: 38 files, 480 tests. |
+| Type check | Exit 0. | Pass: `tsc --noEmit`. |
+| Production build | Exit 0. | Pass: Vite built 23 crawlable fixed pages and the application bundle. |
+| Responsive browser suite | Exit 0 across the expanded route, viewport, theme, and state matrix. | Pass: 37/37 Playwright tests, including 100 primary-route navigations. |
+| Diff check | Exit 0 with only intentional files. | Pass before the evidence commit; rerun in the final verification record. |
+| Final worktree inspection | No unintended changes before the authorized release commit. | Scoped application and browser commits verified; audit evidence/runbook remain the only expected documentation changes before their local commit. |
 
 The release gate must be rerun after integrating comparison, sitemap, browser,
 and configuration changes. A passing command from an earlier commit does not
@@ -65,16 +72,16 @@ claim a screenshot exists until its path or immutable review reference is added.
 
 | Route or state | Viewports | Themes | Pass 1 | Pass 2 | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| Home: / | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Tools: /tools/ | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Calculator: /tools/subscriptions-vs-apis/ | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Leaderboard directory: /leaderboards/ | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Data-dense LLM leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Media leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Compare hub: /compare/ | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Canonical indexable comparison selected from the active revision | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| Guide hub: /guides/ | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
-| One generated guide article | 320, 375, 768, 1024, 1440 | Light, dark | Pending | Pending | Not captured |
+| Home: / | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
+| Tools: /tools/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
+| Calculator: /tools/subscriptions-vs-apis/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 light](audit-evidence/2026-08-06/pass-1-calculator-390-light.png), [pass 2 light](audit-evidence/2026-08-06/pass-2-calculator-390-light.png) |
+| Leaderboard directory: /leaderboards/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
+| Data-dense LLM leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 dark](audit-evidence/2026-08-06/pass-1-coding-390-dark.png), [pass 2 dark](audit-evidence/2026-08-06/pass-2-coding-390-dark.png) |
+| Media leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Table/card and all-width regression](../browser-tests/responsive-browser.ts) |
+| Compare hub: /compare/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
+| Canonical indexable comparison selected from the active revision | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [390 dark](audit-evidence/2026-08-06/pass-2-comparison-390-dark.png), [1440 light](audit-evidence/2026-08-06/pass-2-comparison-1440-light.png), [handler regression](../browser-tests/responsive-browser.ts) |
+| Guide hub: /guides/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
+| One generated guide article | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 light](audit-evidence/2026-08-06/pass-1-article-390-light.png), [pass 2 light](audit-evidence/2026-08-06/pass-2-article-390-light.png) |
 
 Each pass must cover:
 
@@ -91,11 +98,24 @@ Each pass must cover:
 
 ### Findings log
 
-No findings are recorded yet because neither audit pass has run.
+The release gate is zero unresolved critical, high, or medium findings. The two
+passes used the Impeccable source detector, rendered Playwright coverage, and
+manual screenshot inspection. Impeccable's optional URL wrapper could not run
+because Puppeteer is not installed; no package was installed for the audit.
+Equivalent rendered checks used the repository's existing Playwright runtime.
 
 | Pass | Route | Viewport | Theme | Severity | Evidence screenshot or reference | Expected behavior | Disposition and regression test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| To record after audit | To record | To record | To record | To record | To record | To record | To record |
+| 1 | Shared chart surface | All | Both | Medium | [Browser regression](../browser-tests/responsive-browser.ts) | Avoid layout-thrashing height animation and respect reduced motion. | Removed the chart height transition; reduced-motion regression passes. |
+| 1 | Guide article | 390 | Light | Medium | [Article verification](audit-evidence/2026-08-06/pass-1-article-390-light.png) | Use a balanced elevated surface instead of a heavy asymmetric side border. | Replaced the four-pixel side border with the approved one-pixel tonal surface; pass 2 remains clean. |
+| 1 | Coding leaderboard | 390 | Dark | Medium | [Leaderboard verification](audit-evidence/2026-08-06/pass-1-coding-390-dark.png) | Methodology context should match the restrained dark-mode card language. | Replaced the heavy side rule with a one-pixel tonal border and approved radius. |
+| 1 | Calculator recovery state | 390 | Light | Medium | [Calculator verification](audit-evidence/2026-08-06/pass-1-calculator-390-light.png) | One failure should produce one recovery announcement. | Duplicate warning is suppressed when it repeats the catalog error; component regression added. |
+| 1 | Home skip link | 390 | Both | Medium | [Keyboard regression](../browser-tests/responsive-browser.ts) | Activating the skip link must move focus to the main landmark. | Confirmed red with focus on `BODY`; made React and generated main targets programmatically focusable; regression passes. |
+| 1 | Compact navigation | 375 | Both | Medium | [Keyboard regression](../browser-tests/responsive-browser.ts) | Escape from the focused menu toggle or an open navigation item must close the menu. | Confirmed red on the focused toggle; moved Escape handling to the shared header boundary; regression passes. |
+| 1 | Calculator trend chart | 1024 | Both | Medium | [Chart regression](../browser-tests/responsive-browser.ts), [pass 2 light](audit-evidence/2026-08-06/pass-2-calculator-390-light.png) | The text alternative must expose the plotted current token and API-equivalent values. | Added both formatted current values to the chart accessible name; regression passes. |
+| 1/2 | Shared dense data surfaces | All | Both | Low | [DESIGN.md](../DESIGN.md) | Compact labels, fluid display endpoints, semantic state tones, and tight radii should remain deliberate rather than accidental drift. | Retained 109 type-ramp, 15 radius, and 5 semantic-color detector notices. They implement the approved dense TokenBench mockups; caption semantics, contrast, hit targets, overflow, and responsive composition pass. |
+| 1/2 | Shared typography | All | Both | Low | [DESIGN.md typography](../DESIGN.md) | Use the documented brand typography or its declared open-source substitute. | Retained Inter: DESIGN.md explicitly declares it as the abcDiatype substitute; JetBrains Mono remains limited to technical surfaces. |
+| 1/2 | Negative resource-validation fixture | N/A | N/A | Low | [Fixture](../scripts/mockup-contract.test.ts) | Detector findings must distinguish shipped UI from deliberate invalid test input. | The reported broken image is a protocol-relative `srcset` inside a rejection test and is never shipped; no production change required. |
 
 Critical, high, and medium findings must be fixed and covered by a component or
 browser regression before pass 2 can pass. A low-severity finding may remain
