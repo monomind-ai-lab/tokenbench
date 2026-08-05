@@ -73,7 +73,10 @@ export interface BenchmarkSourceRecord {
   upstreamRevision: string | null;
   schemaVersion: string | null;
   snapshotKey: string;
+  /** SHA-256 of the exact sanitized snapshot bytes referenced by snapshotKey. */
   contentHash: string;
+  /** SHA-256 of the original upstream response before allowlist projection. */
+  originalContentHash: string;
   licenseId: BenchmarkLicenseId;
   attributionText: string;
 }
@@ -183,6 +186,12 @@ function requireNullableNonNegativeFiniteNumber(value: unknown, name: string): v
 function requireNullableString(value: unknown, name: string): void {
   if (value === null) return;
   requireString(value, name);
+}
+
+function requireSha256(value: unknown, name: string): asserts value is string {
+  if (typeof value !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+    fail(`${name} must be a sha256: digest`);
+  }
 }
 
 function requireIsoTimestamp(value: unknown, name: string): void {
@@ -297,10 +306,12 @@ function validateSourceRecord(value: unknown, index: number, sourceArtifacts: Se
     requireNullableString(source[key], `${name}.${key}`);
     if (source[key] !== null) assertNoProhibitedText(source[key], `${name}.${key}`);
   }
-  for (const key of ['snapshotKey', 'contentHash', 'attributionText'] as const) {
+  for (const key of ['snapshotKey', 'attributionText'] as const) {
     requireString(source[key], `${name}.${key}`);
     assertNoProhibitedText(source[key], `${name}.${key}`);
   }
+  requireSha256(source.contentHash, `${name}.contentHash`);
+  requireSha256(source.originalContentHash, `${name}.originalContentHash`);
   if (!['MIT', 'CC-BY-4.0', 'OpenRouter-ToS'].includes(source.licenseId)) fail(`${name}.licenseId is invalid`);
   if (source.licenseId !== sourceLicenses[source.sourceId]) fail(`${name}.licenseId does not match ${source.sourceId}`);
 

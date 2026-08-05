@@ -14,6 +14,8 @@ import {
 import { subscriptionPlanIdsForModel } from './subscription-model-map';
 
 const observedAt = '2026-08-05T00:00:00.000Z';
+const projectedHash = `sha256:${'a'.repeat(64)}`;
+const originalHash = `sha256:${'b'.repeat(64)}`;
 
 const validBatch = {
   sources: [
@@ -27,7 +29,8 @@ const validBatch = {
       upstreamRevision: null,
       schemaVersion: '1.0',
       snapshotKey: 'benchmarks/benchlm/leaderboard-v1.json',
-      contentHash: 'sha256:benchlm-leaderboard-v1',
+      contentHash: projectedHash,
+      originalContentHash: originalHash,
       licenseId: 'MIT',
       attributionText: 'Data from BenchLM.ai',
     },
@@ -41,7 +44,8 @@ const validBatch = {
       upstreamRevision: 'catalog-r1',
       schemaVersion: null,
       snapshotKey: 'catalog/openrouter/models-r1.json',
-      contentHash: 'sha256:openrouter-models-r1',
+      contentHash: `sha256:${'c'.repeat(64)}`,
+      originalContentHash: `sha256:${'d'.repeat(64)}`,
       licenseId: 'OpenRouter-ToS',
       attributionText: 'Catalog and pricing data from OpenRouter',
     },
@@ -121,7 +125,8 @@ const lmArenaSource = {
   upstreamRevision: 'lmarena-r1',
   schemaVersion: null,
   snapshotKey: 'benchmarks/lmarena/text-style-control-r1.json',
-  contentHash: 'sha256:lmarena-text-style-control-r1',
+  contentHash: `sha256:${'e'.repeat(64)}`,
+  originalContentHash: `sha256:${'f'.repeat(64)}`,
   licenseId: 'CC-BY-4.0',
   attributionText: 'Arena ratings from LMArena',
 };
@@ -173,6 +178,18 @@ describe('benchmark contracts', () => {
     expect(result.priceChecks[0].inputUsdPerMillion).toBe(0);
     expect(result.priceChecks[0].cachedInputUsdPerMillion).toBeNull();
     expect(result.sources[0].etag).toBeNull();
+    expect(result.sources[0]).toMatchObject({ contentHash: projectedHash, originalContentHash: originalHash });
+  });
+
+  it('requires real, separate SHA-256 evidence hashes for every source artifact', () => {
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [{ ...validBatch.sources[0], contentHash: 'sha256:pending-models' }, validBatch.sources[1]],
+    })).toThrow('sources[0].contentHash must be a sha256: digest');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [{ ...validBatch.sources[0], originalContentHash: 'not-a-hash' }, validBatch.sources[1]],
+    })).toThrow('sources[0].originalContentHash must be a sha256: digest');
   });
 
   it('rejects source records with prohibited Artificial Analysis identifiers or URLs', () => {

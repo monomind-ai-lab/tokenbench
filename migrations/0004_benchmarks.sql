@@ -27,7 +27,16 @@ CREATE TABLE IF NOT EXISTS benchmark_source_records (
   upstream_revision TEXT,
   schema_version TEXT,
   snapshot_key TEXT NOT NULL CHECK (length(trim(snapshot_key)) > 0),
-  content_hash TEXT NOT NULL CHECK (length(trim(content_hash)) > 0),
+  content_hash TEXT NOT NULL CHECK (
+    length(content_hash) = 71
+    AND substr(content_hash, 1, 7) = 'sha256:'
+    AND substr(content_hash, 8) NOT GLOB '*[^0-9a-f]*'
+  ),
+  original_content_hash TEXT NOT NULL CHECK (
+    length(original_content_hash) = 71
+    AND substr(original_content_hash, 1, 7) = 'sha256:'
+    AND substr(original_content_hash, 8) NOT GLOB '*[^0-9a-f]*'
+  ),
   license_id TEXT NOT NULL CHECK (license_id IN ('MIT', 'CC-BY-4.0', 'OpenRouter-ToS')),
   attribution_text TEXT NOT NULL CHECK (length(trim(attribution_text)) > 0),
   PRIMARY KEY (revision, source_id, artifact_id),

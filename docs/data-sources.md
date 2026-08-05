@@ -63,6 +63,12 @@ revision fails if such a definition has a non-null, non-zero weight. External
 groups are stripped. Curated BenchLM comparisons contribute pair identity only;
 TokenBench recomputes eligibility from safe metrics.
 
+Every source artifact records two distinct SHA-256 values: `contentHash` for
+the exact sanitized snapshot bytes referenced by its R2 key, and
+`originalContentHash` for the original upstream response before projection.
+Placeholders and raw hashes presented as sanitized snapshot hashes are rejected
+at the contract and D1 boundaries.
+
 OpenRouter is treated as catalog evidence, not benchmark evidence. Ingestion
 projects only `id`, `canonical_slug`, `name`, `created`, `description`,
 `context_length`, `architecture.modality`, `architecture.input_modalities`,
@@ -92,8 +98,9 @@ Allowed evidence is written to R2 before one transactional D1 publication
 batch. For BenchLM `models.json` and `benchmarks.json`, that evidence is the
 deterministic allowlist projection rather than the raw response bytes. Each
 source record has a source ID, artifact ID, URL, observed time, validators,
-snapshot key, content hash, license, and attribution. An unchanged combined
-hash updates `checked_at` without creating a duplicate benchmark revision.
+snapshot key, sanitized content hash, original-response content hash, license,
+and attribution. An unchanged combined hash updates `checked_at` without
+creating a duplicate benchmark revision.
 
 ## Sources excluded from v1
 
