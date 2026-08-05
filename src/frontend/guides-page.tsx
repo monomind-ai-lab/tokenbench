@@ -20,7 +20,7 @@ export function GuidesHub() {
       <span className="eyebrow"><BookOpen aria-hidden="true" size={16} /> AI bill playbook</span>
       <h1 id="guides-heading">Spend smarter on AI</h1>
       <p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p>
-      <div className="guides-hero-actions"><a className="button guide-primary-action" href="/#calculator">Open the calculator</a><span>5 field guides · Reviewed {formatGuideDate(GUIDES[0].updatedAt)}</span></div>
+      <div className="guides-hero-actions"><a className="button guide-primary-action" href="/tools/subscriptions-vs-apis/#calculator">Open the calculator</a><span>5 field guides · Reviewed {formatGuideDate(GUIDES[0].updatedAt)}</span></div>
     </section>
     <section className="guide-index" aria-labelledby="all-guides-heading">
       <div className="guide-index-heading"><div><span className="eyebrow">Guides</span><h2 id="all-guides-heading">Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div>
@@ -56,7 +56,7 @@ export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
         <div className="article-body">
           <aside className="takeaways" aria-labelledby="takeaways-heading"><span className="eyebrow">At a glance</span><h2 id="takeaways-heading">What you’ll learn</h2><ul>{guide.takeaways.map((takeaway) => <li key={takeaway}>{takeaway}</li>)}</ul></aside>
           {guide.sections.map((section) => <GuideSectionView key={section.id} section={section} />)}
-          <aside className="calculator-cta"><div><span className="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a className="button" href="/#calculator">Open calculator <ArrowRight aria-hidden="true" size={16} /></a></aside>
+          <aside className="calculator-cta"><div><span className="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a className="button" href="/tools/subscriptions-vs-apis/#calculator">Open calculator <ArrowRight aria-hidden="true" size={16} /></a></aside>
         </div>
         <aside className="article-toc" aria-label="On this page"><strong>On this page</strong><ol>{guide.sections.map((section) => <li key={section.id}><a href={`#${section.id}`}>{section.title.replace(/^\d+\.\s*/, '')}</a></li>)}</ol></aside>
       </div>

@@ -12,11 +12,58 @@ function respondWithCatalog(catalog = FRONTEND_TEST_CATALOG) {
   })));
 }
 
+function renderAt(pathname: string) {
+  window.history.replaceState({}, '', pathname);
+  return render(<App />);
+}
+
 describe('responsive calculator app shell', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.dataset.theme = 'light';
+    window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
     respondWithCatalog();
+  });
+
+  it('keeps the TokenBench home showcase separate from calculator controls', () => {
+    renderAt('/');
+
+    expect(screen.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Calculate your costs' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
+    expect(screen.getByRole('heading', { name: 'Coding Value', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Human Preference', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Image Generation', level: 3 })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
+  });
+
+  it('makes the tools directory link to the subscription versus API calculator', () => {
+    renderAt('/tools/');
+
+    expect(screen.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the calculator controls and results on their dedicated route', async () => {
+    renderAt('/tools/subscriptions-vs-apis/');
+
+    expect(screen.getByRole('heading', { name: 'Subscription vs. API cost calculator', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: /Provider selection/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Plan selection/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Model selection/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Expected monthly usage/i)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Calculated plan value/i })).toBeInTheDocument();
+  });
+
+  it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
+    renderAt('/tools/subscriptions-vs-apis/');
+
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '20000001' } });
+
+    const guidance = await screen.findByRole('status', { name: 'High-volume optimization guidance' });
+    expect(guidance).toHaveTextContent('At this volume, custom model routing, prompt caching, and agent pipelines may materially reduce spend.');
+    expect(within(guidance).getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
   });
 
   it('renders derived metrics, evidence links, and separated pricing basis comparisons', async () => {

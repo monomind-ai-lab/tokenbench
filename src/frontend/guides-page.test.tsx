@@ -20,6 +20,6 @@ describe('guides experience', () => {
     for (const section of guide.sections) expect(within(toc).getByRole('link', { name: section.title.replace(/^\d+\.\s*/, '') })).toHaveAttribute('href', `#${section.id}`);
     expect(screen.getAllByRole('link', { name: /Claude Code/i }).some((link) => link.getAttribute('href')?.startsWith('https://'))).toBe(true);
     expect(screen.getByRole('heading', { name: 'Related guides' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open calculator/i })).toHaveAttribute('href', '/#calculator');
+    expect(screen.getByRole('link', { name: /Open calculator/i })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
   });
 });

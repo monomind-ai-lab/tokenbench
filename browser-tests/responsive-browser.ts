@@ -17,7 +17,7 @@ async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, statu
     headers: { etag: `"${catalog.revision}"` },
     body: JSON.stringify(catalog),
   }));
-  await page.goto('/');
+  await page.goto('/tools/subscriptions-vs-apis/');
   if (expectCalculator) await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 }
 
@@ -272,7 +272,7 @@ test.describe('responsive calculator browser harness', () => {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FRONTEND_TEST_CATALOG) });
     });
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
     await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 
@@ -359,7 +359,6 @@ test.describe('guides browser harness', () => {
 
 test.describe('generated static route runtime', () => {
   const staticOnlyRoutes = [
-    ['/tools/', 'AI cost decision tools'],
     ['/compare/', 'Compare AI models and costs'],
     ['/leaderboards/', 'AI model leaderboards'],
     ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
@@ -403,5 +402,73 @@ test.describe('generated static route runtime', () => {
       await expect(page.locator('#calculator'), pathname).toHaveCount(0);
       await page.unroute(url);
     }
+  });
+});
+
+test.describe('home and tools route runtime', () => {
+  test('adapts the home decision showcase grids from desktop to mobile', async ({ page }) => {
+    await page.route('https://*/*', (route) => route.abort());
+
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeVisible();
+
+    const desktop = await page.evaluate(() => {
+      const columnsFor = (label: string) => {
+        const element = document.querySelector(`[aria-label="${label}"]`);
+        if (!element) throw new Error(`Missing ${label}`);
+        const styles = getComputedStyle(element);
+        return { display: styles.display, columns: styles.gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length };
+      };
+      return {
+        terminal: columnsFor('TokenBench decision workflow'),
+        features: columnsFor('TokenBench decision features'),
+        teasers: columnsFor('TokenBench benchmark teasers'),
+      };
+    });
+    expect(desktop.terminal).toEqual({ display: 'grid', columns: 2 });
+    expect(desktop.features).toEqual({ display: 'grid', columns: 4 });
+    expect(desktop.teasers).toEqual({ display: 'grid', columns: 3 });
+
+    await page.setViewportSize({ width: 768, height: 1000 });
+    const tablet = await page.evaluate(() => {
+      const columnsFor = (label: string) => {
+        const element = document.querySelector(`[aria-label="${label}"]`);
+        if (!element) throw new Error(`Missing ${label}`);
+        return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+      };
+      return {
+        terminal: columnsFor('TokenBench decision workflow'),
+        features: columnsFor('TokenBench decision features'),
+        teasers: columnsFor('TokenBench benchmark teasers'),
+      };
+    });
+    expect(tablet).toEqual({ terminal: 2, features: 2, teasers: 2 });
+
+    await page.setViewportSize({ width: 375, height: 1000 });
+    const mobile = await page.evaluate(() => {
+      const columnsFor = (label: string) => {
+        const element = document.querySelector(`[aria-label="${label}"]`);
+        if (!element) throw new Error(`Missing ${label}`);
+        return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+      };
+      return {
+        terminal: columnsFor('TokenBench decision workflow'),
+        features: columnsFor('TokenBench decision features'),
+        teasers: columnsFor('TokenBench benchmark teasers'),
+      };
+    });
+    expect(mobile).toEqual({ terminal: 1, features: 1, teasers: 1 });
+  });
+
+  test('mounts the interactive tools directory without replacing static-only routes', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.route('https://*/*', (route) => route.abort());
+    await page.goto('/tools/');
+
+    await expect(page.locator('.static-page-shell')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Available TokenBench tools' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
   });
 });

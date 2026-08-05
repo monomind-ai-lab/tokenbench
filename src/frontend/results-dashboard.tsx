@@ -102,6 +102,13 @@ export function ResultsDashboard({ selectedPlan, snapshot }: ResultsDashboardPro
           </article>
         </div>
       )}
+      {snapshot.monthlyTokens > 20_000_000 ? (
+        <aside className="panel agency-routing-notice" role="status" aria-label="High-volume optimization guidance">
+          <strong>High-volume optimization guidance</strong>
+          <p>At this volume, custom model routing, prompt caching, and agent pipelines may materially reduce spend.</p>
+          <a className="button" href="https://monomind.one/">Talk to MonoMind</a>
+        </aside>
+      ) : null}
     </section>
   );
 }

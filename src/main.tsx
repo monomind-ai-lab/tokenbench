@@ -8,7 +8,7 @@ import './index.css';
 const route = matchRoute(window.location.pathname);
 const RootApp = route.kind === 'guides'
   ? GuidesApp
-  : route.kind === 'home' || route.kind === 'calculator'
+  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator'
     ? App
     : null;
 

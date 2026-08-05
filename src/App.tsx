@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { redistributeModelMix } from './catalog/calculator';
 import { CalculatorControls } from './frontend/calculator-controls';
 import {
@@ -12,16 +12,50 @@ import { Comparison } from './frontend/comparison';
 import { AppShell } from './frontend/app-shell';
 import { API_ONLY_PROVIDER_IDS, paidIndividualPlans } from './frontend/plan-filter';
 import { ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
-import { Skeleton } from './frontend/ui';
-import { useCatalog } from './frontend/use-catalog';
-import type { WorkloadPreset } from './frontend/calculator-state';
-import { providerLabel } from './frontend/ui';
 import { useSitePreferences } from './frontend/site-preferences';
+import { Skeleton, providerLabel } from './frontend/ui';
+import { useCatalog, type CatalogState } from './frontend/use-catalog';
+import { HomePage } from './pages/home-page';
+import { ToolsPage } from './pages/tools-page';
+import { matchRoute } from './routing/routes';
+import type { WorkloadPreset } from './frontend/calculator-state';
 
-export default function App() {
-  const catalogState = useCatalog();
-  const { catalog, phase, notice, error, lastSuccessfulRefreshAt, retry } = catalogState;
+type ActivePage = 'home' | 'tools' | 'compare' | 'leaderboards' | 'guides';
+
+interface PageFrameProps {
+  readonly children: ReactNode;
+  readonly activePage: ActivePage;
+  readonly skipLinkTarget?: string;
+  readonly skipLinkLabel?: string;
+  readonly catalogState?: CatalogState;
+}
+
+function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalogState }: PageFrameProps) {
   const { theme, language, toggleTheme, changeLanguage } = useSitePreferences();
+
+  return (
+    <AppShell
+      theme={theme}
+      language={language}
+      activePage={activePage}
+      skipLinkTarget={skipLinkTarget}
+      skipLinkLabel={skipLinkLabel}
+      onThemeToggle={toggleTheme}
+      onLanguageChange={changeLanguage}
+      catalogPhase={catalogState?.phase}
+      notice={catalogState?.notice}
+      error={catalogState?.error}
+      lastSuccessfulRefreshAt={catalogState?.lastSuccessfulRefreshAt ?? null}
+      onRetry={catalogState?.retry}
+    >
+      {children}
+    </AppShell>
+  );
+}
+
+function CalculatorPage() {
+  const catalogState = useCatalog();
+  const { catalog, phase } = catalogState;
   const [selectedProviderId, setSelectedProviderId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [selection, setSelection] = useState({ selectedModelIds: [] as string[], modelMixBasisPoints: {} as Record<string, number> });
@@ -94,13 +128,33 @@ export default function App() {
   };
 
   return (
-    <AppShell theme={theme} language={language} onThemeToggle={toggleTheme} onLanguageChange={changeLanguage} catalogPhase={phase} notice={notice} error={error} lastSuccessfulRefreshAt={lastSuccessfulRefreshAt} onRetry={retry}>
-      {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
-      {catalog ? <div className="content-stack">
-        <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} selectedPreset={selectedPreset} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
-        <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
-        <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} />
-      </div> : null}
-    </AppShell>
+    <PageFrame activePage="tools" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
+      <section className="content-stack calculator-page" aria-labelledby="calculator-heading">
+        <h1 id="calculator-heading" className="sr-only">Subscription vs. API cost calculator</h1>
+        {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
+        {catalog ? <>
+          <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} selectedPreset={selectedPreset} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
+          <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
+          <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} />
+        </> : null}
+      </section>
+    </PageFrame>
   );
+}
+
+function HomeRoute() {
+  return <PageFrame activePage="home"><HomePage /></PageFrame>;
+}
+
+function ToolsRoute() {
+  return <PageFrame activePage="tools"><ToolsPage /></PageFrame>;
+}
+
+export default function App() {
+  const route = matchRoute(window.location.pathname);
+
+  if (route.kind === 'home') return <HomeRoute />;
+  if (route.kind === 'tools') return <ToolsRoute />;
+  if (route.kind === 'calculator') return <CalculatorPage />;
+  return null;
 }
