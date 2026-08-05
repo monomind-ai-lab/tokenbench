@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { onRequestGet as getBenchmarks } from './benchmarks';
+import {
+  readActiveBenchmarkSnapshot,
+  type ActiveBenchmarkSnapshot,
+} from '../_shared/benchmark-db';
+import {
+  buildBenchmarkSummaryData,
+  onRequestGet as getBenchmarks,
+} from './benchmarks';
 import { onRequestGet as getLeaderboard } from './benchmarks/leaderboards/[key]';
 import { onRequestGet as getModel } from './benchmarks/models/[slug]';
 
@@ -21,6 +28,17 @@ const REVISION_CONTENT_HASH = `sha256:${createHash('sha256').update(JSON.stringi
     { sourceId: 'openrouter', artifactId: OPENROUTER_ARTIFACT_ID, contentHash: OPENROUTER_CONTENT_HASH },
   ],
 })).digest('hex')}`;
+
+function countedArrayReads<T>(values: readonly T[]): { readonly array: readonly T[]; readonly reads: () => number } {
+  let reads = 0;
+  const array = new Proxy([...values], {
+    get(target, property, receiver) {
+      if (typeof property === 'string' && /^\d+$/.test(property)) reads += 1;
+      return Reflect.get(target, property, receiver) as unknown;
+    },
+  });
+  return { array, reads: () => reads };
+}
 
 const revision = {
   revision: REVISION,
@@ -436,6 +454,69 @@ async function model(slug: string, rows = publishedRows(), headers?: HeadersInit
 afterEach(() => vi.useRealTimers());
 
 describe('cached benchmark APIs', () => {
+  it('builds exact route availability while reading each complete fact collection only once', async () => {
+    const summaryMetrics = [
+      ...metrics.filter((candidate) => candidate.model_key !== 'provider:wrong-lens'),
+      { ...metrics[0], metric_key: 'benchlm:category:coding', category: 'coding', value: 88 },
+      { ...metrics[0], metric_key: 'benchlm:category:coding:secondary', category: 'coding', value: 86 },
+      { ...metrics[0], metric_key: 'benchlm:category:multimodal', category: 'multimodal', value: 87 },
+      { ...metrics[3], metric_key: 'benchlm:category:agentic', category: 'agentic' },
+      { ...metrics[4], metric_key: 'lmarena:text_to_image:overall', value: 1_100, rank: 2 },
+    ];
+    const summaryModels = models.map((candidate) => candidate.model_key === 'provider:alpha'
+      ? { ...candidate, ranking_eligible: 0 }
+      : candidate);
+    const snapshot = await readActiveBenchmarkSnapshot(d1(publishedRows({
+      models: summaryModels,
+      metrics: summaryMetrics,
+    })));
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) return;
+    const metricInput = countedArrayReads(snapshot.metrics);
+    const priceInput = countedArrayReads(snapshot.priceChecks);
+    const guardedSnapshot: ActiveBenchmarkSnapshot = {
+      ...snapshot,
+      metrics: metricInput.array,
+      priceChecks: priceInput.array,
+    };
+    const result = buildBenchmarkSummaryData(guardedSnapshot);
+
+    expect(metricInput.reads()).toBe(snapshot.metrics.length);
+    expect(priceInput.reads()).toBe(snapshot.priceChecks.length);
+    expect(result.routes.map((route) => route.key)).toEqual([
+      'llm-agentic',
+      'llm-coding',
+      'llm-human-preference',
+      'llm-overall',
+      'llm-pricing-context',
+      'llm-value',
+      'media-image-editing',
+      'media-image-to-video',
+      'media-text-to-image',
+      'media-text-to-video',
+      'media-video-editing',
+      'multimodal-vision-documents',
+    ]);
+    expect(Object.fromEntries(result.routes.map((route) => [route.key, route.available]))).toEqual({
+      'llm-agentic': false,
+      'llm-coding': true,
+      'llm-human-preference': true,
+      'llm-overall': true,
+      'llm-pricing-context': true,
+      'llm-value': true,
+      'media-image-editing': false,
+      'media-image-to-video': false,
+      'media-text-to-image': true,
+      'media-text-to-video': false,
+      'media-video-editing': false,
+      'multimodal-vision-documents': true,
+    });
+    expect(result.compareDirectory.models.find((model) => model.slug === 'alpha')?.metricCategories)
+      .toEqual(['coding', 'multimodal', 'overall']);
+    expect(result.compareDirectory.models.find((model) => model.slug === 'wrong-lens')?.metricCategories)
+      .toEqual(['agentic']);
+  });
+
   it('returns the exact JSON envelope and deterministic active-revision availability metadata', async () => {
     const response = await summary(publishedRows({ sources: [...sources].reverse() }));
 

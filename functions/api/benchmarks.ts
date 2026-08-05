@@ -1,4 +1,9 @@
-import { BENCHMARK_SOURCE_IDS, type BenchmarkSourceId } from '../../src/benchmarks/contracts';
+import {
+  BENCHMARK_SOURCE_IDS,
+  type BenchmarkMetric,
+  type BenchmarkPriceCheck,
+  type BenchmarkSourceId,
+} from '../../src/benchmarks/contracts';
 import { buildLeaderboard, LEADERBOARD_DEFINITIONS } from '../../src/benchmarks/leaderboards';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../src/routing/routes';
 import {
@@ -56,8 +61,44 @@ interface CompareDirectory {
   readonly indexablePairs: readonly CompareDirectoryPair[];
 }
 
+interface BenchmarkFactIndexes {
+  readonly metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>;
+  readonly pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>;
+  readonly metricCategoriesByModel: ReadonlyMap<string, readonly string[]>;
+}
+
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function indexBenchmarkFacts(
+  metrics: readonly BenchmarkMetric[],
+  priceChecks: readonly BenchmarkPriceCheck[],
+): BenchmarkFactIndexes {
+  const metricsByModel = new Map<string, BenchmarkMetric[]>();
+  const pricesByModel = new Map<string, BenchmarkPriceCheck[]>();
+  const categorySetsByModel = new Map<string, Set<string>>();
+
+  for (const metric of metrics) {
+    const modelMetrics = metricsByModel.get(metric.modelKey);
+    if (modelMetrics) modelMetrics.push(metric);
+    else metricsByModel.set(metric.modelKey, [metric]);
+
+    const categories = categorySetsByModel.get(metric.modelKey);
+    if (categories) categories.add(metric.category);
+    else categorySetsByModel.set(metric.modelKey, new Set([metric.category]));
+  }
+  for (const price of priceChecks) {
+    const modelPrices = pricesByModel.get(price.modelKey);
+    if (modelPrices) modelPrices.push(price);
+    else pricesByModel.set(price.modelKey, [price]);
+  }
+
+  const metricCategoriesByModel = new Map<string, readonly string[]>();
+  for (const [modelKey, categories] of categorySetsByModel) {
+    metricCategoriesByModel.set(modelKey, [...categories].sort(compareText));
+  }
+  return { metricsByModel, pricesByModel, metricCategoriesByModel };
 }
 
 function hasBenchLmEvidenceLens(definition: typeof LEADERBOARD_DEFINITIONS[LeaderboardKey]): boolean {
@@ -80,31 +121,36 @@ function sourceAvailability(snapshot: ActiveBenchmarkSnapshot): readonly SourceA
   });
 }
 
-function routeAvailability(snapshot: ActiveBenchmarkSnapshot): readonly RouteAvailability[] {
+function routeAvailability(
+  snapshot: ActiveBenchmarkSnapshot,
+  factIndexes: BenchmarkFactIndexes,
+): readonly RouteAvailability[] {
   return (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
     .slice()
     .sort(compareText)
     .map((key) => {
       const definition = LEADERBOARD_DEFINITIONS[key];
-      const result = buildLeaderboard(key, snapshot.models, snapshot.metrics, snapshot.priceChecks, 'balanced');
       return {
         key,
         kind: definition.kind,
         metricKeys: definition.metricKeys,
-        available: result.entries.length > 0,
+        // Availability is existential. Task 10 derives each row from one
+        // model's facts and frontier marking never removes a value row, so a
+        // one-model build is equivalent while keeping every scan model-local.
+        available: snapshot.models.some((model) => buildLeaderboard(
+          key,
+          [model],
+          factIndexes.metricsByModel.get(model.modelKey) ?? [],
+          factIndexes.pricesByModel.get(model.modelKey) ?? [],
+          'balanced',
+        ).entries.length > 0),
         supportsEstimated: hasBenchLmEvidenceLens(definition),
       };
     });
 }
 
-function compareDirectory(snapshot: ActiveBenchmarkSnapshot): CompareDirectory {
+function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: BenchmarkFactIndexes): CompareDirectory {
   const modelsByKey = new Map(snapshot.models.map((model) => [model.modelKey, model]));
-  const metricCategories = new Map(snapshot.models.map((model) => [
-    model.modelKey,
-    [...new Set(snapshot.metrics
-      .filter((metric) => metric.modelKey === model.modelKey)
-      .map((metric) => metric.category))].sort(compareText),
-  ]));
   const models = snapshot.models
     .slice()
     .sort((left, right) => compareText(left.slug, right.slug) || compareText(left.modelKey, right.modelKey))
@@ -114,7 +160,7 @@ function compareDirectory(snapshot: ActiveBenchmarkSnapshot): CompareDirectory {
       creator: model.creator,
       sourceType: model.sourceType,
       evidenceStatus: model.evidenceStatus,
-      metricCategories: metricCategories.get(model.modelKey) ?? [],
+      metricCategories: factIndexes.metricCategoriesByModel.get(model.modelKey) ?? [],
     }));
   const indexablePairs = snapshot.comparisonPairs
     .filter((pair) => pair.indexable === true)
@@ -142,6 +188,15 @@ function compareDirectory(snapshot: ActiveBenchmarkSnapshot): CompareDirectory {
   return { models, indexablePairs };
 }
 
+export function buildBenchmarkSummaryData(snapshot: ActiveBenchmarkSnapshot) {
+  const factIndexes = indexBenchmarkFacts(snapshot.metrics, snapshot.priceChecks);
+  return {
+    sources: sourceAvailability(snapshot),
+    routes: routeAvailability(snapshot, factIndexes),
+    compareDirectory: compareDirectory(snapshot, factIndexes),
+  };
+}
+
 export async function onRequestGet({ request, env }: { request: Request; env: BenchmarkApiEnv }): Promise<Response> {
   if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
 
@@ -154,11 +209,7 @@ export async function onRequestGet({ request, env }: { request: Request; env: Be
     if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
 
     return jsonBenchmarkResponse(
-      benchmarkEnvelope(snapshot, freshness, attributionForAllSources(snapshot), {
-        sources: sourceAvailability(snapshot),
-        routes: routeAvailability(snapshot),
-        compareDirectory: compareDirectory(snapshot),
-      }),
+      benchmarkEnvelope(snapshot, freshness, attributionForAllSources(snapshot), buildBenchmarkSummaryData(snapshot)),
       200,
       etag,
     );
