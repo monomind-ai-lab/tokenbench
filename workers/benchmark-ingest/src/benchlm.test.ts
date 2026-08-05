@@ -1,9 +1,19 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseBenchLm } from './benchlm';
 
 const observedAt = '2026-08-05T12:00:00.000Z';
+const artifactNames = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
+
+const projectedHashes = {
+  leaderboard: '81e4d55d97ccc5ce117bdecf329853fb174b3042a6be0df803c65d4743fb93c7',
+  models: '097167f10974af0504210c82b25c5cdff2f65642ad5e32eeab3139e367e0176c',
+  pricing: 'a55a21f484ebf14a91c876ec27df8d61687823e0c267468c2f4661b8c7715f74',
+  comparisons: '65f2217749005eab1b6ddb79a9e93dc182fa032e2252216f125ba38cb6a18f5e',
+  benchmarks: 'b113c3d220c6d177ae67f3b1b266c018110460d2d4f014836716e84d8d705180',
+} as const;
 
 function fixture(name: 'leaderboard' | 'models' | 'pricing' | 'comparisons' | 'benchmarks'): unknown {
   return JSON.parse(readFileSync(resolve(process.cwd(), `workers/benchmark-ingest/test-fixtures/benchlm/${name}.json`), 'utf8'));
@@ -17,6 +27,27 @@ function payloads() {
     comparisons: fixture('comparisons'),
     benchmarks: fixture('benchmarks'),
   };
+}
+
+function fixtureMetadata(source: ReturnType<typeof payloads>, artifact: typeof artifactNames[number]) {
+  return (source[artifact] as {
+    tokenbenchFixtureMetadata: {
+      projectionFormat: string;
+      projectedSha256: string;
+      originalSha256: string;
+      responseHeaders: { etag: string | null; lastModified: string | null };
+    };
+  }).tokenbenchFixtureMetadata;
+}
+
+function refreshProjectedHash(source: ReturnType<typeof payloads>, artifact: typeof artifactNames[number]): void {
+  const payload = source[artifact] as { schemaVersion: string; generatedAt: string; items: unknown[] };
+  const projectedBytes = JSON.stringify({
+    schemaVersion: payload.schemaVersion,
+    generatedAt: payload.generatedAt,
+    items: payload.items,
+  });
+  fixtureMetadata(source, artifact).projectedSha256 = createHash('sha256').update(projectedBytes, 'utf8').digest('hex');
 }
 
 describe('parseBenchLm', () => {
@@ -49,7 +80,7 @@ describe('parseBenchLm', () => {
       value: 80.25,
       rankingEligible: true,
     });
-    expect(batch.metrics.some((metric) => metric.metricKey.includes('reasoning'))).toBe(false);
+    expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a' && metric.metricKey.includes('reasoning'))).toBe(false);
     expect(batch.comparisonSeeds[0]).toMatchObject({
       pairSlug: 'model-a-vs-model-b',
       sourceArtifactId: 'comparisons',
@@ -59,7 +90,10 @@ describe('parseBenchLm', () => {
     expect(batch.sources[0]).toMatchObject({
       artifactId: 'leaderboard',
       attributionText: 'Data from BenchLM.ai',
-      etag: '"943db87a096566b2b719e7d2f55da91d"',
+      etag: 'W/"943db87a096566b2b719e7d2f55da91d"',
+      contentHash: `sha256:${projectedHashes.leaderboard}`,
+      originalContentHash: 'sha256:2e8855fc364abdff6a60cb6f46d175e068df033229063f16fa2899f8f8accbf6',
+      snapshotKey: `benchmarks/benchlm/leaderboard/projected/${projectedHashes.leaderboard}.json`,
     });
     expect(batch.priceChecks).toEqual([expect.objectContaining({
       modelKey: 'source:benchlm:model-a',
@@ -143,5 +177,104 @@ describe('parseBenchLm', () => {
     ((malformed.models as { items: Array<Record<string, unknown>> }).items[0]).contextWindowTokens = '128000';
 
     expect(() => parseBenchLm(malformed, observedAt)).toThrow(/contextWindowTokens must be an integer or null/i);
+  });
+
+  it('emits distinct projected and original hashes for every artifact', () => {
+    const source = payloads();
+    const batch = parseBenchLm(source, observedAt);
+
+    expect(batch.sources).toHaveLength(5);
+    for (const artifact of artifactNames) {
+      const metadata = fixtureMetadata(source, artifact);
+      expect(batch.sources.find((record) => record.artifactId === artifact)).toMatchObject({
+        contentHash: `sha256:${metadata.projectedSha256}`,
+        originalContentHash: `sha256:${metadata.originalSha256}`,
+        etag: metadata.responseHeaders.etag,
+        lastModified: metadata.responseHeaders.lastModified,
+        snapshotKey: `benchmarks/benchlm/${artifact}/projected/${metadata.projectedSha256}.json`,
+      });
+    }
+  });
+
+  it.each(artifactNames)('rejects %s before normalization when artifact metadata is missing', (artifact) => {
+    const source = payloads();
+    delete (source[artifact] as { tokenbenchFixtureMetadata?: unknown }).tokenbenchFixtureMetadata;
+
+    expect(() => parseBenchLm(source, observedAt)).toThrow(new RegExp(`BenchLM ${artifact}\\.tokenbenchFixtureMetadata`));
+  });
+
+  it('rejects malformed or non-lowercase artifact hashes', () => {
+    const badProjected = payloads();
+    fixtureMetadata(badProjected, 'models').projectedSha256 = 'A'.repeat(64);
+    expect(() => parseBenchLm(badProjected, observedAt)).toThrow(/projectedSha256/i);
+
+    const badOriginal = payloads();
+    fixtureMetadata(badOriginal, 'models').originalSha256 = 'not-a-hash';
+    expect(() => parseBenchLm(badOriginal, observedAt)).toThrow(/originalSha256/i);
+  });
+
+  it('keeps fixture projected hashes coupled to exact deterministic projection bytes', () => {
+    const source = payloads();
+    for (const artifact of artifactNames) {
+      const payload = source[artifact] as { schemaVersion: string; generatedAt: string; items: unknown[] };
+      const projectedBytes = JSON.stringify({
+        schemaVersion: payload.schemaVersion,
+        generatedAt: payload.generatedAt,
+        items: payload.items,
+      });
+      const metadata = fixtureMetadata(source, artifact);
+
+      expect(metadata.projectionFormat).toBe('UTF-8 JSON.stringify({schemaVersion,generatedAt,items})');
+      expect(createHash('sha256').update(projectedBytes, 'utf8').digest('hex')).toBe(projectedHashes[artifact]);
+      expect(metadata.projectedSha256).toBe(projectedHashes[artifact]);
+    }
+  });
+
+  it('maps current BenchLM nullable enums without making source-only rows rankable', () => {
+    const batch = parseBenchLm(payloads(), observedAt);
+    const pendingSourceType = batch.models.find((model) => model.sourceModelId === 'kimi-3');
+    const nullEvidence = batch.models.find((model) => model.sourceModelId === 'sakana-fugu-ultra');
+
+    expect(pendingSourceType).toMatchObject({
+      sourceType: 'Unknown',
+      evidenceStatus: 'supported',
+    });
+    expect(nullEvidence).toMatchObject({
+      sourceType: 'Proprietary',
+      evidenceStatus: 'source_only',
+      rankingEligible: false,
+    });
+    expect(batch.metrics.filter((metric) => metric.sourceModelId === 'sakana-fugu-ultra'))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ rankingEligible: false })]));
+    expect(batch.metrics.filter((metric) => metric.sourceModelId === 'sakana-fugu-ultra')
+      .every((metric) => metric.rankingEligible === false)).toBe(true);
+  });
+
+  it('rejects unreviewed non-null source and evidence enum values', () => {
+    const unknownSourceType = payloads();
+    ((unknownSourceType.models as { items: Array<Record<string, unknown>> }).items[0]).sourceType = 'Experimental';
+    expect(() => parseBenchLm(unknownSourceType, observedAt)).toThrow(/sourceType/i);
+
+    const unknownEvidence = payloads();
+    ((unknownEvidence.models as { items: Array<Record<string, unknown>> }).items[0]).evidenceStatus = 'pending';
+    expect(() => parseBenchLm(unknownEvidence, observedAt)).toThrow(/evidenceStatus/i);
+  });
+
+  it('keeps a safe category rankable when overall evidence is unavailable', () => {
+    const source = payloads();
+    const sourceModel = (source.models as { items: Array<Record<string, unknown>> }).items[0];
+    sourceModel.rankingEligible = false;
+    (sourceModel.scores as Record<string, unknown>).rawOverallScore = null;
+    (sourceModel.ranking as { categoryRankingEligible: Record<string, boolean> }).categoryRankingEligible.coding = true;
+    refreshProjectedHash(source, 'models');
+
+    const batch = parseBenchLm(source, observedAt);
+    const model = batch.models.find((record) => record.sourceModelId === 'model-a');
+    const overall = batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === 'overall');
+    const coding = batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === 'coding');
+
+    expect(model?.rankingEligible).toBe(false);
+    expect(overall).toBeUndefined();
+    expect(coding).toMatchObject({ value: 80.25, rankingEligible: true });
   });
 });

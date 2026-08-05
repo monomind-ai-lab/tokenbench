@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-05T00:00:00.000Z",
-  "sourceLastUpdated": "2026-08-05T00:00:00.000Z",
+  "generatedAt": "2026-08-05T06:25:54.198Z",
+  "sourceLastUpdated": "2026-08-05T06:25:54.198Z",
   "canonicalUrl": "https://benchlm.ai/data/pricing.json",
   "name": "BenchLM Pricing",
   "description": "Reduced allowlist projection for parser tests.",
@@ -36,7 +36,12 @@
     }
   ],
   "tokenbenchFixtureMetadata": {
+    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
+    "projectedSha256": "a55a21f484ebf14a91c876ec27df8d61687823e0c267468c2f4661b8c7715f74",
     "originalSha256": "b45aa63e36300093e674b4b8df59658bf68e4b8e34c6130fa73469fa5b18bb66",
-    "responseHeaders": { "etag": "\"9b3ed2fff10ed67eb64fa9f20d76b555\"" }
+    "responseHeaders": {
+      "etag": "W/\"9b3ed2fff10ed67eb64fa9f20d76b555\"",
+      "lastModified": null
+    }
   }
 }

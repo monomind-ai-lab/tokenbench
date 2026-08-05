@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-05T00:00:00.000Z",
-  "sourceLastUpdated": "2026-08-05T00:00:00.000Z",
+  "generatedAt": "2026-08-05T06:25:54.198Z",
+  "sourceLastUpdated": "2026-08-05T06:25:54.198Z",
   "canonicalUrl": "https://benchlm.ai/data/comparisons.json",
   "name": "BenchLM Comparisons",
   "description": "Reduced allowlist projection for parser tests.",
@@ -15,7 +15,12 @@
     }
   ],
   "tokenbenchFixtureMetadata": {
+    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
+    "projectedSha256": "65f2217749005eab1b6ddb79a9e93dc182fa032e2252216f125ba38cb6a18f5e",
     "originalSha256": "0092f9ab613c68045eadacefa7d63bb5bdfa3be17556afcb2e41e7cfed01e02f",
-    "responseHeaders": { "etag": "\"21d8cd43230a3ff98a46c6df85018303\"" }
+    "responseHeaders": {
+      "etag": "W/\"21d8cd43230a3ff98a46c6df85018303\"",
+      "lastModified": null
+    }
   }
 }

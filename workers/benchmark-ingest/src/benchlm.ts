@@ -34,11 +34,12 @@ interface ArtifactPayload {
   schemaVersion: string;
   generatedAt: string;
   items: unknown[];
-  fixtureMetadata: FixtureMetadata | null;
+  fixtureMetadata: FixtureMetadata;
 }
 
 interface FixtureMetadata {
-  originalSha256: string | null;
+  projectedSha256: string;
+  originalSha256: string;
   etag: string | null;
   lastModified: string | null;
 }
@@ -118,21 +119,33 @@ function requireBoolean(value: unknown, label: string): boolean {
   return value;
 }
 
-function parseFixtureMetadata(value: unknown, label: string): FixtureMetadata | null {
-  if (value === undefined) return null;
-  const metadata = requireRecord(value, `${label}.tokenbenchFixtureMetadata`);
-  const originalSha256 = metadata.originalSha256;
-  if (originalSha256 !== undefined && originalSha256 !== null
-    && (typeof originalSha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(originalSha256))) {
-    fail(`${label}.tokenbenchFixtureMetadata.originalSha256 must be a SHA-256 hex digest or null`);
+function requireSha256Hex(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) {
+    fail(`${label} must be a lowercase SHA-256 hex digest`);
   }
-  const headers = metadata.responseHeaders === undefined
-    ? null
-    : requireRecord(metadata.responseHeaders, `${label}.tokenbenchFixtureMetadata.responseHeaders`);
+  return value;
+}
+
+function parseFixtureMetadata(value: unknown, label: string): FixtureMetadata {
+  const metadata = requireRecord(value, `${label}.tokenbenchFixtureMetadata`);
+  if (metadata.projectionFormat !== 'UTF-8 JSON.stringify({schemaVersion,generatedAt,items})') {
+    fail(`${label}.tokenbenchFixtureMetadata.projectionFormat is invalid`);
+  }
+  const headers = requireRecord(metadata.responseHeaders, `${label}.tokenbenchFixtureMetadata.responseHeaders`);
+  if (!Object.prototype.hasOwnProperty.call(headers, 'etag') || !Object.prototype.hasOwnProperty.call(headers, 'lastModified')) {
+    fail(`${label}.tokenbenchFixtureMetadata.responseHeaders must include etag and lastModified`);
+  }
   return {
-    originalSha256: typeof originalSha256 === 'string' ? originalSha256.toLowerCase() : null,
-    etag: headers ? requireNullableString(headers.etag, `${label}.tokenbenchFixtureMetadata.responseHeaders.etag`) : null,
-    lastModified: headers ? requireNullableString(headers.lastModified, `${label}.tokenbenchFixtureMetadata.responseHeaders.lastModified`) : null,
+    projectedSha256: requireSha256Hex(
+      metadata.projectedSha256,
+      `${label}.tokenbenchFixtureMetadata.projectedSha256`,
+    ),
+    originalSha256: requireSha256Hex(
+      metadata.originalSha256,
+      `${label}.tokenbenchFixtureMetadata.originalSha256`,
+    ),
+    etag: requireNullableString(headers.etag, `${label}.tokenbenchFixtureMetadata.responseHeaders.etag`),
+    lastModified: requireNullableString(headers.lastModified, `${label}.tokenbenchFixtureMetadata.responseHeaders.lastModified`),
   };
 }
 
@@ -150,20 +163,18 @@ function parseArtifact(value: unknown, artifact: ArtifactName): ArtifactPayload 
 }
 
 function sourceRecord(artifact: ArtifactName, payload: ArtifactPayload, observedAt: string): BenchmarkSourceRecord {
-  const contentHash = payload.fixtureMetadata?.originalSha256
-    ? `sha256:${payload.fixtureMetadata.originalSha256}`
-    : `sha256:pending-${artifact}-${payload.generatedAt}`;
   return {
     sourceId: 'benchlm',
     artifactId: artifact,
     sourceUrl: ARTIFACT_URLS[artifact],
     observedAt,
-    etag: payload.fixtureMetadata?.etag ?? null,
-    lastModified: payload.fixtureMetadata?.lastModified ?? null,
+    etag: payload.fixtureMetadata.etag,
+    lastModified: payload.fixtureMetadata.lastModified,
     upstreamRevision: payload.generatedAt,
     schemaVersion: payload.schemaVersion,
-    snapshotKey: `benchmarks/benchlm/${artifact}/projected-${payload.generatedAt}.json`,
-    contentHash,
+    snapshotKey: `benchmarks/benchlm/${artifact}/projected/${payload.fixtureMetadata.projectedSha256}.json`,
+    contentHash: `sha256:${payload.fixtureMetadata.projectedSha256}`,
+    originalContentHash: `sha256:${payload.fixtureMetadata.originalSha256}`,
     licenseId: 'MIT',
     attributionText: 'Data from BenchLM.ai',
   };
@@ -171,12 +182,14 @@ function sourceRecord(artifact: ArtifactName, payload: ArtifactPayload, observed
 
 function requireSourceType(value: unknown, label: string): BenchmarkModel['sourceType'] {
   if (value === 'Proprietary' || value === 'Open Weight' || value === 'Unknown') return value;
-  fail(`${label} must be Proprietary, Open Weight, or Unknown`);
+  if (value === 'Pending') return 'Unknown';
+  fail(`${label} must be Proprietary, Open Weight, Unknown, or Pending`);
 }
 
 function requireEvidenceStatus(value: unknown, label: string): EvidenceStatus {
+  if (value === null) return 'source_only';
   if (value === 'supported' || value === 'estimated' || value === 'source_only') return value;
-  fail(`${label} must be supported, estimated, or source_only`);
+  fail(`${label} must be supported, estimated, source_only, or null`);
 }
 
 function parseBooleanMap(value: unknown, label: string): Record<string, boolean> {
@@ -336,7 +349,7 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
         sourceUpdatedAt: generatedAt,
         sourceModelId: model.sourceModelId,
         sourceArtifactId: 'models',
-        rankingEligible: modelRankingEligible && model.categoryRankingEligible[category] === true,
+        rankingEligible: model.evidenceStatus === 'supported' && model.categoryRankingEligible[category] === true,
         methodology: 'benchlm_raw_composite',
         observationCount: null,
         sessionCount: null,

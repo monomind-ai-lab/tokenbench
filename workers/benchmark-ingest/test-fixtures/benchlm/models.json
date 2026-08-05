@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0",
-  "generatedAt": "2026-08-05T00:00:00.000Z",
-  "sourceLastUpdated": "2026-08-05T00:00:00.000Z",
+  "generatedAt": "2026-08-05T06:25:54.198Z",
+  "sourceLastUpdated": "2026-08-05T06:25:54.198Z",
   "canonicalUrl": "https://benchlm.ai/data/models.json",
   "name": "BenchLM Models",
   "description": "Reduced allowlist projection for parser tests.",
   "sourceFiles": ["models.json"],
-  "counts": { "items": 2 },
+  "counts": { "items": 4 },
   "items": [
     {
       "canonicalModelKey": "model-a",
@@ -55,10 +55,63 @@
         "displayCategoryScores": { "coding": 68, "reasoning": null },
         "verifiedDisplayCategoryScores": { "coding": 69, "reasoning": null }
       }
+    },
+    {
+      "canonicalModelKey": "kimi-3",
+      "slug": "kimi-3",
+      "model": "Kimi K3",
+      "creator": "Moonshot AI",
+      "sourceType": "Pending",
+      "reasoningType": "Reasoning",
+      "releaseDate": "2026-07-16",
+      "contextWindowTokens": 1050000,
+      "evidenceStatus": "supported",
+      "rankingEligible": true,
+      "ranking": {
+        "categoryRankingEligible": { "coding": true, "reasoning": false }
+      },
+      "coverage": {
+        "trustedBenchmarkCount": 28,
+        "verifiedBenchmarkCount": 28
+      },
+      "scores": {
+        "rawOverallScore": 83,
+        "displayCategoryScores": { "coding": 65.4, "reasoning": null },
+        "verifiedDisplayCategoryScores": { "coding": null, "reasoning": null }
+      }
+    },
+    {
+      "canonicalModelKey": "sakana-fugu-ultra",
+      "slug": "sakana-fugu-ultra",
+      "model": "Sakana Fugu-Ultra",
+      "creator": "Sakana AI",
+      "sourceType": "Proprietary",
+      "reasoningType": "Reasoning",
+      "releaseDate": "2026-06-22",
+      "contextWindowTokens": 1000000,
+      "evidenceStatus": null,
+      "rankingEligible": false,
+      "ranking": {
+        "categoryRankingEligible": { "coding": false, "reasoning": false }
+      },
+      "coverage": {
+        "trustedBenchmarkCount": 10,
+        "verifiedBenchmarkCount": 10
+      },
+      "scores": {
+        "rawOverallScore": 80,
+        "displayCategoryScores": { "coding": 76.4, "reasoning": 91.2 },
+        "verifiedDisplayCategoryScores": { "coding": 76.4, "reasoning": 91.2 }
+      }
     }
   ],
   "tokenbenchFixtureMetadata": {
+    "projectionFormat": "UTF-8 JSON.stringify({schemaVersion,generatedAt,items})",
+    "projectedSha256": "097167f10974af0504210c82b25c5cdff2f65642ad5e32eeab3139e367e0176c",
     "originalSha256": "156b89ea5b07166c40b18d6868ec8ba5527d9991cabe14378b6b8e340b093967",
-    "responseHeaders": { "etag": "\"329d611c37eaed33623407f995bb74ff\"" }
+    "responseHeaders": {
+      "etag": "W/\"329d611c37eaed33623407f995bb74ff\"",
+      "lastModified": null
+    }
   }
 }
