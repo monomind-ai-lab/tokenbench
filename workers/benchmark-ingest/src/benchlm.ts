@@ -261,7 +261,10 @@ function definitionContainsProhibitedData(definition: Record<string, unknown>): 
 }
 
 function isExternalCategory(category: string): boolean {
-  return category.trim().toLowerCase() === 'external';
+  return category
+    .normalize('NFKC')
+    .replace(/[\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cf}]/gu, '')
+    .toLowerCase() === 'external';
 }
 
 function sortedBooleanMap(value: unknown, label: string): Record<string, boolean> {

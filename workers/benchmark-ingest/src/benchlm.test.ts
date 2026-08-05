@@ -251,6 +251,75 @@ describe('parseBenchLm', () => {
 });
 
 describe('prepareBenchLm', () => {
+  it('strips Unicode-obfuscated external categories without changing safe category identity', async () => {
+    const source = payloads();
+    const externalVariants = [
+      '\u200BExternal\u200B',
+      'Ex\u200Bternal',
+      '\u2066External\u2069',
+      '\uFEFFExternal\u00A0',
+      'Ｅｘｔｅｒｎａｌ',
+      'Ex\uFE0Fternal',
+      '\u2003External\u202F',
+      'Ex\uFEFFternal',
+      'Ex\u2003ternal',
+    ];
+    const safeCategory = ' Vision\u200BSafe ';
+    const model = (source.models as { items: Array<Record<string, unknown>> }).items[0];
+    const ranking = model.ranking as { categoryRankingEligible: Record<string, boolean> };
+    const scores = model.scores as {
+      displayCategoryScores: Record<string, number | null>;
+      verifiedDisplayCategoryScores: Record<string, number | null>;
+    };
+    ranking.categoryRankingEligible[safeCategory] = true;
+    scores.displayCategoryScores[safeCategory] = 9501;
+    scores.verifiedDisplayCategoryScores[safeCategory] = 9502;
+    externalVariants.forEach((category, index) => {
+      ranking.categoryRankingEligible[category] = true;
+      scores.displayCategoryScores[category] = 9600 + index;
+      scores.verifiedDisplayCategoryScores[category] = 9700 + index;
+    });
+    const definitions = source.benchmarks as { items: Array<Record<string, unknown>> };
+    definitions.items.push({ category: safeCategory, benchmarkKey: 'safe-zero-width-identity', weight: 1 });
+    [0, 2, 4, 6, 8].forEach((index) => definitions.items.push({
+      category: externalVariants[index],
+      benchmarkKey: `unicode-obfuscated-${index}`,
+      weight: 1,
+    }));
+
+    const prepared = await prepareBenchLm(rawBundleFromPayloads(source));
+    const batch = await parseBenchLm(prepared, observedAt);
+    const projectedModel = prepared.models.payload.items[0] as {
+      ranking: { categoryRankingEligible: Record<string, boolean> };
+      scores: {
+        displayCategoryScores: Record<string, number | null>;
+        verifiedDisplayCategoryScores: Record<string, number | null>;
+      };
+    };
+    const projectedText = `${new TextDecoder().decode(prepared.models.projectedBytes)}\n${new TextDecoder().decode(prepared.benchmarks.projectedBytes)}`;
+
+    expect(projectedModel.ranking.categoryRankingEligible).toEqual({
+      [safeCategory]: true,
+      coding: true,
+      reasoning: false,
+    });
+    expect(projectedModel.scores.displayCategoryScores).toEqual({
+      [safeCategory]: 9501,
+      coding: 79.5,
+      reasoning: null,
+    });
+    expect(projectedModel.scores.verifiedDisplayCategoryScores).toEqual({
+      [safeCategory]: 9502,
+      coding: 80.25,
+      reasoning: null,
+    });
+    for (const variant of externalVariants) expect(projectedText).not.toContain(variant);
+    expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === safeCategory))
+      .toMatchObject({ value: 9502, rankingEligible: true });
+    expect(batch.metrics.some((metric) => externalVariants.includes(metric.category))).toBe(false);
+    expect(batch.metrics.some((metric) => metric.value >= 9600 && metric.value < 9800)).toBe(false);
+  });
+
   it('strips every case and whitespace variant of external categories before persistence', async () => {
     const source = payloads();
     const model = (source.models as { items: Array<Record<string, unknown>> }).items[0];
@@ -437,6 +506,92 @@ describe('prepareBenchLm', () => {
 });
 
 describe('rehydrateBenchLmProjections', () => {
+  it('rejects valid-hash stored projections containing Unicode-obfuscated external categories', async () => {
+    const prepared = await prepareBenchLm(rawBundleFromPayloads(payloads()));
+    const stored = storedFromPrepared(prepared);
+    const categories = {
+      zeroWidthWrapped: '\u200BExternal\u200B',
+      zeroWidthInterspersed: 'Ex\u200Bternal',
+      bidiIsolates: '\u2066External\u2069',
+      bomInterspersed: 'Ex\uFEFFternal',
+      fullwidth: 'Ｅｘｔｅｒｎａｌ',
+      variationSelector: 'Ex\uFE0Fternal',
+      unicodeWhitespaceInterspersed: 'Ex\u2003ternal',
+    };
+    const modelProjection = JSON.parse(new TextDecoder().decode(stored.models.projectedBytes)) as {
+      items: Array<{
+        ranking: { categoryRankingEligible: Record<string, boolean> };
+        scores: {
+          displayCategoryScores: Record<string, number | null>;
+          verifiedDisplayCategoryScores: Record<string, number | null>;
+        };
+      }>;
+    };
+    modelProjection.items[0].ranking.categoryRankingEligible = {
+      [categories.unicodeWhitespaceInterspersed]: true,
+      [categories.zeroWidthInterspersed]: true,
+      [categories.variationSelector]: true,
+      [categories.bomInterspersed]: true,
+      coding: true,
+      reasoning: false,
+      [categories.zeroWidthWrapped]: true,
+      [categories.bidiIsolates]: true,
+      [categories.fullwidth]: true,
+    };
+    modelProjection.items[0].scores.displayCategoryScores = {
+      [categories.unicodeWhitespaceInterspersed]: 9801,
+      [categories.zeroWidthInterspersed]: 9802,
+      [categories.variationSelector]: 9803,
+      [categories.bomInterspersed]: 9804,
+      coding: 79.5,
+      reasoning: null,
+      [categories.zeroWidthWrapped]: 9805,
+      [categories.bidiIsolates]: 9806,
+      [categories.fullwidth]: 9807,
+    };
+    modelProjection.items[0].scores.verifiedDisplayCategoryScores = {
+      [categories.unicodeWhitespaceInterspersed]: 9901,
+      [categories.zeroWidthInterspersed]: 9902,
+      [categories.variationSelector]: 9903,
+      [categories.bomInterspersed]: 9904,
+      coding: 80.25,
+      reasoning: null,
+      [categories.zeroWidthWrapped]: 9905,
+      [categories.bidiIsolates]: 9906,
+      [categories.fullwidth]: 9907,
+    };
+    const benchmarkProjection = JSON.parse(new TextDecoder().decode(stored.benchmarks.projectedBytes)) as {
+      items: Array<Record<string, unknown>>;
+    };
+    [
+      categories.zeroWidthWrapped,
+      categories.bidiIsolates,
+      categories.fullwidth,
+      categories.unicodeWhitespaceInterspersed,
+    ].forEach((category, index) => benchmarkProjection.items.push({
+      category,
+      benchmarkKey: `unicode-rehydrated-${index}`,
+      weight: 1,
+    }));
+    const modelBytes = new TextEncoder().encode(JSON.stringify(modelProjection));
+    const benchmarkBytes = new TextEncoder().encode(JSON.stringify(benchmarkProjection));
+    const mutated = {
+      ...stored,
+      models: {
+        ...stored.models,
+        projectedBytes: modelBytes,
+        projectedSha256: createHash('sha256').update(modelBytes).digest('hex'),
+      },
+      benchmarks: {
+        ...stored.benchmarks,
+        projectedBytes: benchmarkBytes,
+        projectedSha256: createHash('sha256').update(benchmarkBytes).digest('hex'),
+      },
+    };
+
+    await expect(rehydrateBenchLmProjections(mutated)).rejects.toThrow(/canonical safe projection/i);
+  });
+
   it('re-hashes canonical R2 bytes before normalizing a stored snapshot', async () => {
     const prepared = await prepareBenchLm(rawBundleFromPayloads(payloads()));
     const rehydrated = await rehydrateBenchLmProjections(storedFromPrepared(prepared));
