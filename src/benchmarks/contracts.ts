@@ -230,6 +230,13 @@ function requireBenchmarkIdentifier(value: unknown, name: string): asserts value
   assertNoProhibitedIdentifier(value, name);
 }
 
+function requireBenchmarkDefinitionKey(value: unknown, name: string): asserts value is string {
+  requireBenchmarkIdentifier(value, name);
+  if (value.trim().toLowerCase().startsWith('aa')) {
+    fail(`${name} contains a prohibited Artificial Analysis identifier`);
+  }
+}
+
 function requireSourceId(value: unknown, name: string): asserts value is BenchmarkSourceId {
   requireIdentifier(value, name);
   if (/^aa(?:[-_:]|$)/i.test(value)) fail(`${name} contains a prohibited Artificial Analysis identifier`);
@@ -336,7 +343,7 @@ function validateMetric(
   const name = `metrics[${index}]`;
   const metric = requireRecord(value, name) as unknown as BenchmarkMetric;
   for (const key of ['modelKey', 'sourceModelId'] as const) requireIdentifier(metric[key], `${name}.${key}`);
-  requireBenchmarkIdentifier(metric.metricKey, `${name}.metricKey`);
+  requireBenchmarkDefinitionKey(metric.metricKey, `${name}.metricKey`);
   requireBenchmarkIdentifier(metric.category, `${name}.category`);
   if (!modelKeys.has(metric.modelKey)) fail(`${name}.modelKey must refer to a model`);
   requireNonNegativeFiniteNumber(metric.value, `${name}.value`);

@@ -198,6 +198,16 @@ describe('benchmark contracts', () => {
     })).toThrow(/prohibited/i);
   });
 
+  it.each([
+    'aabogus:overall',
+    'AABogus:overall',
+  ])('rejects benchmark metric namespace %s when an AA prefix is disguised', (metricKey) => {
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      metrics: [{ ...validBatch.metrics[0], metricKey }],
+    })).toThrow(/prohibited/i);
+  });
+
   it('accepts benign model identifiers whose spelling begins with aa', () => {
     const modelKey = 'aardvark:model-v1';
     const sourceModelId = 'provider/aardvark-model-v1';
