@@ -4,6 +4,7 @@ import { SITE_CONFIG } from '../brand/site-config';
 export type ThemeMode = 'light' | 'dark';
 
 export function readStoredTheme(): ThemeMode {
+  if (typeof window === 'undefined') return 'dark';
   try {
     return window.localStorage.getItem(SITE_CONFIG.themeStorageKey) === 'light' ? 'light' : 'dark';
   } catch {
@@ -12,6 +13,7 @@ export function readStoredTheme(): ThemeMode {
 }
 
 export function readLanguage(): string {
+  if (typeof document === 'undefined') return 'en';
   const match = document.cookie.split('; ').find((cookie) => cookie.startsWith('googtrans='));
   return match?.split('=')[1]?.split('/').at(-1) || 'en';
 }
@@ -61,13 +63,24 @@ export function setTranslatedLanguage(nextLanguage: string): void {
 }
 
 export function useSitePreferences() {
-  const [theme, setTheme] = useState<ThemeMode>(readStoredTheme);
-  const [language, setLanguage] = useState(readLanguage);
+  // Keep the first client render identical to SSR. Stored browser preferences
+  // reconcile after hydration, so a light theme or translated cookie cannot
+  // make React replace comparison-page HTML before it becomes interactive.
+  const [theme, setTheme] = useState<ThemeMode>('dark');
+  const [language, setLanguage] = useState('en');
+  const [preferencesReady, setPreferencesReady] = useState(false);
 
   useEffect(() => {
+    setTheme(readStoredTheme());
+    setLanguage(readLanguage());
+    setPreferencesReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
     document.documentElement.dataset.theme = theme;
     try { window.localStorage.setItem(SITE_CONFIG.themeStorageKey, theme); } catch { /* Theme persistence is best effort. */ }
-  }, [theme]);
+  }, [preferencesReady, theme]);
 
   useEffect(watchGoogleTranslateChrome, []);
 

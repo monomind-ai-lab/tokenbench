@@ -13,9 +13,12 @@ import { AppShell } from './frontend/app-shell';
 import { API_ONLY_PROVIDER_IDS, paidIndividualPlans } from './frontend/plan-filter';
 import { ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
 import { useSitePreferences } from './frontend/site-preferences';
+import { ComparisonPage } from './frontend/comparison-page';
+import type { ComparisonViewModel } from './frontend/comparison-contracts';
 import { Skeleton, providerLabel } from './frontend/ui';
 import { useCatalog, type CatalogState } from './frontend/use-catalog';
 import { HomePage } from './pages/home-page';
+import { CompareHubPage } from './pages/compare-hub-page';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
 import { ToolsPage } from './pages/tools-page';
 import { matchRoute, type LeaderboardKey } from './routing/routes';
@@ -151,6 +154,10 @@ function ToolsRoute() {
   return <PageFrame activePage="tools"><ToolsPage /></PageFrame>;
 }
 
+function CompareHubRoute() {
+  return <PageFrame activePage="compare"><CompareHubPage /></PageFrame>;
+}
+
 function LeaderboardsRoute() {
   return <PageFrame activePage="leaderboards"><LeaderboardDirectoryPage /></PageFrame>;
 }
@@ -159,12 +166,18 @@ function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
   return <PageFrame activePage="leaderboards"><LeaderboardPage keyName={keyName} /></PageFrame>;
 }
 
+/** Shared by the Pages Function SSR response and browser hydration. */
+export function ComparisonDetailApp({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
+  return <PageFrame activePage="compare"><ComparisonPage viewModel={viewModel} /></PageFrame>;
+}
+
 export default function App() {
   const route = matchRoute(window.location.pathname);
 
   if (route.kind === 'home') return <HomeRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
+  if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
   return null;

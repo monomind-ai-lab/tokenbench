@@ -92,6 +92,25 @@ function codingLeaderboardEnvelope() {
   };
 }
 
+function comparisonDirectoryEnvelope() {
+  const checkedAt = '2026-08-05T12:00:00.000Z';
+  return {
+    revision: 'published-revision-1',
+    publishedAt: checkedAt,
+    freshness: { status: 'fresh', checkedAt },
+    attribution: [],
+    data: {
+      compareDirectory: {
+        models: [
+          { slug: 'model-a', name: 'Model A', creator: 'Provider A', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding'] },
+          { slug: 'model-b', name: 'Model B', creator: 'Provider B', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding'] },
+        ],
+        indexablePairs: [{ pairSlug: 'model-a-vs-model-b', modelASlug: 'model-a', modelBSlug: 'model-b', featuredRank: 1, sharedMetricCount: 2 }],
+      },
+    },
+  };
+}
+
 async function openCodingLeaderboard(page: Page) {
   await page.route('https://*/*', (route) => route.abort());
   await page.route(/http:\/\/127\.0\.0\.1:4173\/api\/benchmarks\/leaderboards\/llm-coding\?.*/, (route) => route.fulfill({
@@ -458,10 +477,6 @@ test.describe('guides browser harness', () => {
 });
 
 test.describe('generated static route runtime', () => {
-  const staticOnlyRoutes = [
-    ['/compare/', 'Compare AI models and costs'],
-  ] as const;
-
   const hydratingLeaderboardRoutes = [
     ['/leaderboards/', 'AI model leaderboards'],
     ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
@@ -478,18 +493,42 @@ test.describe('generated static route runtime', () => {
     ['/leaderboards/media/video-editing/', 'AI video-editing model rankings'],
   ] as const;
 
-  test('retains every genuinely static-only shell after browser JavaScript executes', async ({ page }) => {
+  test('ships a raw crawlable compare hub, then mounts its active-revision directory without external requests', async ({ page, request, baseURL }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
-    await page.route('https://*/*', (route) => route.abort());
+    if (!baseURL) throw new Error('Playwright baseURL is required for origin-scoped route stubs.');
+    const rawResponse = await request.get('/compare/');
+    const rawHtml = await rawResponse.text();
+    expect(rawResponse.ok()).toBe(true);
+    expect(rawHtml).toContain('class="app-shell static-page-shell"');
+    expect(rawHtml).toContain('<h1>Compare AI models</h1>');
 
-    for (const [pathname, h1] of staticOnlyRoutes) {
-      await page.goto(pathname);
+    const previewOrigin = new URL(baseURL).origin;
+    const browserContext = page.context();
+    await browserContext.route(/^https?:\/\//, (route) => (
+      new URL(route.request().url()).origin === previewOrigin ? route.fallback() : route.abort()
+    ));
+    await browserContext.route(`${previewOrigin}/api/benchmarks**`, (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(comparisonDirectoryEnvelope()),
+    }));
 
-      await expect(page.locator('.static-page-shell'), pathname).toBeVisible();
-      await expect(page.getByRole('heading', { name: h1, level: 1 }), pathname).toBeVisible();
-      await expect(page.locator('h1'), pathname).toHaveCount(1);
-      await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+    const externalNavigationResults = [];
+    for (const protocol of ['http', 'https']) {
+      const externalPage = await browserContext.newPage();
+      externalNavigationResults.push(await externalPage.goto(`${protocol}://external.example/api/benchmarks`).then(() => 'fulfilled', () => 'aborted'));
+      await externalPage.close();
     }
+    expect(externalNavigationResults).toEqual(['aborted', 'aborted']);
+
+    await page.goto('/compare/');
+    await expect(page.locator('.static-page-shell')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Compare AI models', level: 1 })).toBeVisible();
+    await expect(page.getByText('Published revision: published-revision-1')).toBeVisible();
+    await page.getByRole('combobox', { name: 'First model' }).fill('model-a');
+    await page.getByRole('combobox', { name: 'Second model' }).fill('model-b');
+    await expect(page.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
+    await expect(page.locator('#calculator')).toHaveCount(0);
   });
 
   test('ships crawlable leaderboard HTML and replaces it with the interactive app when JavaScript executes', async ({ page, request, baseURL }) => {

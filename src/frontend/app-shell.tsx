@@ -64,10 +64,14 @@ export function SiteFooter({ status, notice }: SiteFooterProps) {
 }
 
 export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, lastSuccessfulRefreshAt, onRetry }: AppShellProps) {
-  const [layout, setLayout] = useState(() => getResponsiveLayout(typeof window === 'undefined' ? 1440 : window.innerWidth));
+  // Match server markup on the first client render; the viewport sync happens
+  // after hydration so narrow comparison pages are never abandoned in a
+  // mismatched wide-shell DOM.
+  const [layout, setLayout] = useState(() => getResponsiveLayout(1440));
 
   useEffect(() => {
     const updateLayout = () => setLayout(getResponsiveLayout(window.innerWidth));
+    updateLayout();
     window.addEventListener('resize', updateLayout);
     return () => window.removeEventListener('resize', updateLayout);
   }, []);

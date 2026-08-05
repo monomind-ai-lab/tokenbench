@@ -32,6 +32,7 @@ describe('crawlable static-page generator', () => {
     await generateStaticPages(root);
 
     const home = await readFile(join(root, 'index.html'), 'utf8');
+    const compareHub = await readFile(join(root, 'compare/index.html'), 'utf8');
     const leaderboard = await readFile(join(root, 'leaderboards/llm/overall/index.html'), 'utf8');
     const guide = await readFile(join(root, 'guides/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
@@ -40,6 +41,9 @@ describe('crawlable static-page generator', () => {
     expect(home).toContain('<link rel="canonical" href="https://tokenbench.monomind.one">');
     expect(home).toContain('<script type="application/ld+json">');
     expect(home).toContain('TokenBench');
+
+    expect(compareHub).toContain('<h1>Compare AI models</h1>');
+    expect(compareHub).toContain('Compare evidence, not a fabricated universal score');
 
     expect(leaderboard).toContain('<h1>Overall AI model benchmarks</h1>');
     expect(leaderboard).toContain('Live ranking data is not embedded in this static shell.');

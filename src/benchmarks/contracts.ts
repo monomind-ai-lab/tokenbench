@@ -8,6 +8,21 @@ export type BenchmarkLicenseId = 'MIT' | 'CC-BY-4.0' | 'OpenRouter-ToS';
 export type BenchmarkPublicationState = 'pending' | 'published' | 'superseded' | 'failed';
 
 /**
+ * Matches SQLite BINARY ordering for UTF-8 text, including model keys that
+ * contain non-ASCII code points. Comparison-pair persistence and SSR must
+ * share this rule so their canonical A/B orientation cannot drift.
+ */
+export function compareUtf8Binary(left: string, right: string): number {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  const length = Math.min(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index += 1) {
+    if (leftBytes[index] !== rightBytes[index]) return leftBytes[index] < rightBytes[index] ? -1 : 1;
+  }
+  return leftBytes.length === rightBytes.length ? 0 : leftBytes.length < rightBytes.length ? -1 : 1;
+}
+
+/**
  * Immutable revision metadata. `catalogRevision` and `openrouterContentHash`
  * bind price-route evidence to the exact sanitized catalog revision used when
  * this benchmark revision was published.
@@ -446,7 +461,7 @@ function validateComparisonSeed(
   const modelA = modelsByKey.get(seed.modelAKey);
   const modelB = modelsByKey.get(seed.modelBKey);
   if (!modelA || !modelB) fail(`${name} model keys must refer to models`);
-  if (seed.modelAKey >= seed.modelBKey) fail(`${name}.modelAKey must sort before ${name}.modelBKey`);
+  if (compareUtf8Binary(seed.modelAKey, seed.modelBKey) >= 0) fail(`${name}.modelAKey must sort before ${name}.modelBKey`);
   if (seed.pairSlug !== `${modelA.slug}-vs-${modelB.slug}`) fail(`${name}.pairSlug must use canonical model slugs`);
   requireSourceId(seed.sourceId, `${name}.sourceId`);
   requireKnownArtifact(sourceArtifacts, seed.sourceId, seed.sourceArtifactId, name);
@@ -522,7 +537,7 @@ export function validateBenchmarkComparisonPair(value: unknown): BenchmarkCompar
   for (const key of ['pairSlug', 'modelAKey', 'modelBKey'] as const) {
     requireIdentifier(pair[key], key);
   }
-  if (pair.modelAKey >= pair.modelBKey) fail('modelAKey must sort before modelBKey');
+  if (compareUtf8Binary(pair.modelAKey, pair.modelBKey) >= 0) fail('modelAKey must sort before modelBKey');
   requireBoolean(pair.indexable, 'indexable');
   requireString(pair.eligibilityReason, 'eligibilityReason');
   assertNoProhibitedText(pair.eligibilityReason, 'eligibilityReason');

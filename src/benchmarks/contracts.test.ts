@@ -8,6 +8,7 @@ import {
   sourceSpecificModelKey,
 } from './model-aliases';
 import {
+  compareUtf8Binary,
   validateBenchmarkComparisonPair,
   validateNormalizedSourceBatch,
 } from './contracts';
@@ -424,6 +425,41 @@ describe('benchmark contracts', () => {
         sourceModelAId: 'openai/gpt-4o',
         sourceModelBId: 'anthropic/claude-3-7-sonnet',
       }],
+    })).toThrow('comparisonSeeds[0].modelAKey must sort before comparisonSeeds[0].modelBKey');
+  });
+
+  it('uses UTF-8 binary model-key ordering rather than JavaScript UTF-16 ordering for canonical pairs', () => {
+    // U+10000 sorts before U+E000 as UTF-16 code units (a surrogate sorts
+    // before E000), but SQLite BINARY/UTF-8 sorts U+E000 first (EE < F0).
+    const utf8First = 'provider:\uE000';
+    const utf16First = 'provider:\u{10000}';
+    expect(utf16First < utf8First).toBe(true);
+    expect(compareUtf8Binary(utf8First, utf16First)).toBeLessThan(0);
+
+    const unicodeModels = [
+      { ...validBatch.models[0], modelKey: utf8First, slug: 'private-use', sourceModelId: 'provider/private-use' },
+      { ...validBatch.models[0], modelKey: utf16First, slug: 'astral', sourceModelId: 'provider/astral' },
+    ];
+    const seed = {
+      pairSlug: 'private-use-vs-astral',
+      modelAKey: utf8First,
+      modelBKey: utf16First,
+      sourceId: 'benchlm',
+      sourceArtifactId: 'leaderboard-v1',
+      sourceModelAId: 'provider/private-use',
+      sourceModelBId: 'provider/astral',
+      featuredRank: 1,
+    };
+
+    expect(validateNormalizedSourceBatch({
+      ...validBatch,
+      models: [...validBatch.models, ...unicodeModels],
+      comparisonSeeds: [seed],
+    }).comparisonSeeds[0]).toMatchObject(seed);
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      models: [...validBatch.models, ...unicodeModels],
+      comparisonSeeds: [{ ...seed, modelAKey: utf16First, modelBKey: utf8First, pairSlug: 'astral-vs-private-use' }],
     })).toThrow('comparisonSeeds[0].modelAKey must sort before comparisonSeeds[0].modelBKey');
   });
 

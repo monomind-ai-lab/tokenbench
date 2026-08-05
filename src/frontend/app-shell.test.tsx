@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, createElement, StrictMode } from 'react';
+import { hydrateRoot, type Root } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
-import { SiteHeader } from './app-shell';
+import { AppShell, SiteHeader } from './app-shell';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import '../index.css';
 
@@ -217,6 +220,39 @@ describe('responsive calculator app shell', () => {
     await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     expect(document.querySelector('[data-layout="compact"]')).toBeInTheDocument();
     expect(screen.getAllByTestId('offer-card').length).toBeGreaterThan(0);
+  });
+
+  it('hydrates compact clients from a wide SSR shell without leaving a layout mismatch behind', async () => {
+    const shell = (children = createElement('p', null, 'Server comparison content')) => createElement(AppShell, {
+      activePage: 'compare',
+      children,
+      language: 'en',
+      lastSuccessfulRefreshAt: null,
+      onLanguageChange: vi.fn(),
+      onThemeToggle: vi.fn(),
+      theme: 'dark',
+    });
+    vi.stubGlobal('window', undefined);
+    vi.stubGlobal('document', undefined);
+    const serverMarkup = renderToString(createElement(StrictMode, null, shell()));
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+    const container = document.createElement('div');
+    container.innerHTML = serverMarkup;
+    document.body.append(container);
+    const recoverable = vi.fn();
+    let root: Root | undefined;
+
+    await act(async () => {
+      root = hydrateRoot(container, createElement(StrictMode, null, shell()), { onRecoverableError: recoverable });
+    });
+
+    expect(serverMarkup).toContain('data-layout="wide"');
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(container.querySelector('.app-shell')).toHaveAttribute('data-layout', 'compact');
+
+    await act(async () => root?.unmount());
+    container.remove();
   });
 
   it('gives every range control a minimum 44px touch target', async () => {
