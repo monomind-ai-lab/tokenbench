@@ -11,7 +11,7 @@ FIRST VIEWPORT: Shared shell above the task workspace.
 FORM: Decision workstation; approved 2026-08-06.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
 --><a class="skip-link" href="#page-content">Skip to page content</a>
-<header><a class="brand-home" href="/">TokenBench</a><nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation"><a href="/tools/">Tools</a><a href="/compare/">Compare</a><a href="/leaderboards/">Leaderboards</a><a href="/guides/">Guides</a></nav><button class="menu-button" data-menu-toggle aria-controls="primary-navigation" aria-expanded="false">Menu</button><button data-theme-toggle aria-label="Toggle light theme">Theme</button></header>
+<header><a class="brand-home" href="/">TokenBench</a><nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation"><a href="/tools/">Tools</a><a href="/compare/">Compare</a><a href="/leaderboards/">Leaderboards</a><a href="/guides/">Guides</a></nav><button class="menu-button" data-menu-toggle aria-controls="primary-navigation" aria-expanded="false">Menu</button><label class="language-control"><select aria-label="Language"><option value="en">English</option></select></label><button data-theme-toggle aria-label="Toggle light theme">Theme</button></header>
 <main id="page-content"><h1>Fixture</h1></main><script src="tokenbench-mockup.js"></script></body></html>`;
 
 describe('mockup contract', () => {
@@ -29,6 +29,11 @@ describe('mockup contract', () => {
       .toEqual(expect.arrayContaining(['missing primary navigation behavior hook']));
     expect(validateMockupHtml(validHtml.replace(' data-menu-toggle', ''), { h1: 'Fixture' }))
       .toEqual(expect.arrayContaining(['missing menu toggle behavior hook']));
+  });
+
+  it('requires an accessible language selector in the shared shell', () => {
+    expect(validateMockupHtml(validHtml.replace(' aria-label="Language"', ' aria-label="Locale"'), { h1: 'Fixture' }))
+      .toEqual(expect.arrayContaining(['missing accessible language control']));
   });
 
   it('accepts body whitespace before the direction contract but not meaningful text', () => {

@@ -5,6 +5,7 @@ import { LEADERBOARD_ROUTES } from '../src/routing/routes';
 import { validateMockupHtml } from './mockup-contract';
 
 const directoryHtml = readFileSync('.stitch/designs/leaderboards-directory.html', 'utf8');
+const compareHtml = readFileSync('.stitch/designs/compare-detail.html', 'utf8');
 const valueHtml = readFileSync('.stitch/designs/leaderboard-value.html', 'utf8');
 const expectedRoutePaths = [
   '/leaderboards/llm/overall/',
@@ -46,6 +47,33 @@ function mobileCardFacts(card: Element): string[] {
   ];
 }
 
+function headerControlFacts(document: Document) {
+  const menuButton = document.querySelector<HTMLButtonElement>('button.header-tool.menu-button[data-menu-toggle]');
+  const languageSelect = document.querySelector<HTMLSelectElement>('label.language-control select[aria-label="Language"]');
+  const themeButton = document.querySelector<HTMLButtonElement>('button.header-tool.icon-button[data-theme-toggle]');
+
+  return {
+    menu: {
+      ariaControls: menuButton?.getAttribute('aria-controls'),
+      ariaExpanded: menuButton?.getAttribute('aria-expanded'),
+      ariaLabel: menuButton?.getAttribute('aria-label'),
+      hasIcon: !!menuButton?.querySelector('svg[aria-hidden="true"]'),
+    },
+    language: languageSelect
+      ? {
+        hasIcon: !!languageSelect.closest('.language-control')?.querySelector('svg[aria-hidden="true"]'),
+        hasScreenReaderLabel: normalizeText(languageSelect.closest('.language-control')?.querySelector('.sr-only')?.textContent),
+        options: [...languageSelect.options].map((option) => ({ value: option.value, text: normalizeText(option.textContent) })),
+      }
+      : null,
+    theme: {
+      ariaLabel: themeButton?.getAttribute('aria-label'),
+      hasIcon: !!themeButton?.querySelector('svg[aria-hidden="true"]'),
+      screenReaderLabel: normalizeText(themeButton?.querySelector('.sr-only')?.textContent),
+    },
+  };
+}
+
 describe('leaderboard mockups', () => {
   it('maps every registered evidence lens to its exact canonical path, href, and summary without ranks', () => {
     const document = new JSDOM(directoryHtml).window.document;
@@ -67,7 +95,7 @@ describe('leaderboard mockups', () => {
     expect(document.querySelector('[data-rank]')).toBeNull();
   });
 
-  it('keeps all seven desktop row facts equivalent to every mobile card', () => {
+  it('keeps the approved seven-field evidence schema equivalent on desktop and mobile', () => {
     const document = new JSDOM(valueHtml).window.document;
     const desktopRows = [...document.querySelectorAll<HTMLTableRowElement>('tbody tr')];
     const mobileCards = [...document.querySelectorAll('[data-mobile-rank-card]')];
@@ -76,22 +104,77 @@ describe('leaderboard mockups', () => {
 
     expect(validateMockupHtml(valueHtml, { h1: 'AI model value frontier', requiredSections: ['route-summary', 'filters', 'rankings', 'related', 'monomind'] })).toEqual([]);
     expect([...document.querySelectorAll('table thead th[scope="col"]')].map((header) => normalizeText(header.textContent))).toEqual([
-      'Rank',
-      'Model label',
-      'Workload lens',
+      'Rank / status',
+      'Model / provider',
       'Capability evidence',
       'Workload price',
-      'Freshness',
+      'Declared context',
       'Evidence state',
+      'Source / publication / freshness',
     ]);
     expect(desktopRows).toHaveLength(mobileCards.length);
     expect(desktopFacts.every((facts) => facts.length === 7)).toBe(true);
     expect(mobileFacts.every((facts) => facts.length === 7)).toBe(true);
     expect(mobileFacts).toEqual(desktopFacts);
+    expect(desktopFacts).toEqual([
+      [
+        'Unavailable',
+        'OpenAI GPT-4o Provider: OpenAI',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Source: Unavailable Publication: Unavailable Freshness: Unavailable',
+      ],
+      [
+        'Unavailable',
+        'Anthropic Claude 3.5 Sonnet Provider: Anthropic',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Source: Unavailable Publication: Unavailable Freshness: Unavailable',
+      ],
+      [
+        'Unavailable',
+        'Google Gemini 1.5 Pro Provider: Google',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Source: Unavailable Publication: Unavailable Freshness: Unavailable',
+      ],
+      [
+        'Unranked',
+        'BenchLM estimated preview Provider: Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Unavailable',
+        'Estimated preview',
+        'Source: BenchLM Publication: Unavailable Freshness: Unavailable',
+      ],
+    ]);
 
     const bodyText = normalizeText(document.body.textContent);
-    expect(bodyText).toContain('never presents an opaque universal value score');
     expect(bodyText).not.toMatch(/Best overall/i);
+  });
+
+  it('uses a visible methodology statement to reject an opaque universal value score', () => {
+    const document = new JSDOM(valueHtml).window.document;
+    const methodology = document.querySelector<HTMLElement>('aside.leaderboard-value-methodology[data-value-methodology]');
+
+    expect(methodology).not.toBeNull();
+    expect(methodology?.hasAttribute('hidden')).toBe(false);
+    expect(methodology?.getAttribute('aria-hidden')).not.toBe('true');
+    expect(normalizeText(methodology?.textContent)).toMatch(/does not calculate an opaque universal value score/i);
+  });
+
+  it('uses the same semantic header controls as compare, including its language selector', () => {
+    const valueDocument = new JSDOM(valueHtml).window.document;
+    const compareDocument = new JSDOM(compareHtml).window.document;
+
+    expect(headerControlFacts(valueDocument)).toEqual(headerControlFacts(compareDocument));
+    expect(valueDocument.querySelector('label.language-control select[aria-label="Language"]')).not.toBeNull();
   });
 
   it('keeps both estimated representations literally unranked', () => {
@@ -117,11 +200,12 @@ describe('leaderboard mockups', () => {
     expect(disclosureId).not.toBe('');
     expect(disclosure?.hasAttribute('hidden')).toBe(false);
     expect(disclosureText).toMatch(/illustrative/i);
-    expect(disclosureText).toMatch(/no active revision is represented/i);
-    expect(disclosureText).not.toMatch(/rank, capability, price, and freshness values remain Unavailable/i);
-    expect(disclosureText).toMatch(/ordinary entries[^.]*Unavailable[^.]*rank, capability, price, and freshness/i);
-    expect(disclosureText).toMatch(/estimated (?:entries|previews)[^.]*Unranked/i);
-    expect(disclosureText).toMatch(/not published (?:data|results)/i);
+    expect(disclosureText).toMatch(/no active revision exists/i);
+    expect(disclosureText).toMatch(/ordinary entries[^.]*Unavailable[^.]*rank, capability, workload price, declared context, source, publication, and freshness/i);
+    expect(disclosureText).toMatch(/estimated preview[^.]*Unranked[^.]*Estimated preview/i);
+    expect(disclosureText).toMatch(/BenchLM[^.]*source/i);
+    expect(disclosureText).toMatch(/publication and freshness[^.]*Unavailable/i);
+    expect(disclosureText).toMatch(/neither a published result nor a winner claim/i);
     expect(document.querySelector('.leaderboard-table')?.getAttribute('aria-describedby')).toBe(disclosureId);
     expect(document.querySelector('.leaderboard-mobile-cards')?.getAttribute('aria-describedby')).toBe(disclosureId);
   });

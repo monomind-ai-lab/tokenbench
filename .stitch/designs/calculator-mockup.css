@@ -1,12 +1,5 @@
 .calculator-page { gap: 24px; }
 .calculator-disclosure { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
-.brand-lockup { min-width: 0; display: flex; align-items: center; }
-.brand-home { gap: 10px; color: var(--text); text-decoration: none; }
-.brand-home img { width: 28px; height: 28px; object-fit: contain; }
-.brand-copy { min-width: 0; display: grid; gap: 1px; }
-.brand-name { color: inherit; font-size: 18px; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; }
-.brand-tagline { overflow: hidden; color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
-.brand-home:hover { color: var(--primary-strong); }
 .calculator-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .selection-panel { min-width: 0; padding: 22px; }
 .model-panel, .usage-panel { min-height: 394px; }
@@ -104,8 +97,12 @@
 
 .recommendation-panel { display: grid; gap: 14px; align-items: start; }
 .recommendation-panel p { max-width: 72ch; margin: 0; color: var(--muted); line-height: 1.55; }
-.recommendation-link { display: inline-flex; align-items: center; justify-content: center; width: fit-content; padding: 0 14px; color: var(--text); text-decoration: none; }
-.recommendation-link:hover { border-color: var(--primary); color: var(--primary); }
+.recommendation-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.recommendation-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px; border: 1px solid var(--outline); border-radius: 8px; color: var(--text); font-weight: 700; text-decoration: none; }
+.recommendation-action[data-action-priority='primary'] { border-color: var(--primary); background: var(--primary); color: #fff; }
+.recommendation-action[data-action-priority='primary']:hover { background: var(--primary-strong); border-color: var(--primary-strong); color: #fff; }
+.recommendation-action[data-action-priority='secondary'] { background: var(--surface); }
+.recommendation-action[data-action-priority='secondary']:hover { border-color: var(--primary); color: var(--primary); }
 .mockup-footer.app-footer { align-items: flex-start; font-size: 10px; }
 .footer-brand,
 .footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
@@ -144,4 +141,6 @@
   .chart-series { gap: 6px; }
   .break-even-marker span { font-size: 9px; }
   .chart-current-label { font-size: 9px; }
+  .recommendation-actions { gap: 8px; }
+  .recommendation-action { flex: 1 1 148px; }
 }

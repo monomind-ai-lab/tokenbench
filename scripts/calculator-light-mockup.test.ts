@@ -26,6 +26,12 @@ describe('light calculator mockup', () => {
     expect([...document.querySelectorAll('nav a')].map((item) => item.textContent?.trim())).toEqual(['Tools', 'Compare', 'Leaderboards', 'Guides']);
   });
 
+  it('keeps one accessible language control in the production shell', () => {
+    const languageControls = document.querySelectorAll('header select[aria-label="Language"]');
+    expect(languageControls).toHaveLength(1);
+    expect(languageControls[0]?.closest('.language-control')).not.toBeNull();
+  });
+
   it('keeps decisive non-color states and the dark result hierarchy', () => {
     expect(document.querySelectorAll('.mockup-choice[aria-checked="true"]')).toHaveLength(4);
     expect(document.querySelector('.value-summary-card')).not.toBeNull();
@@ -65,6 +71,19 @@ describe('light calculator mockup', () => {
     }))).toEqual([
       { href: '#page-content', resolves: true },
       { href: '#selections', resolves: true },
+    ]);
+  });
+
+  it('offers distinct selection-review and methodology recommendation actions', () => {
+    const actions = [...document.querySelectorAll<HTMLAnchorElement>('.recommendation-actions[role="group"] a')];
+    expect(actions).toHaveLength(2);
+    expect(actions.map((action) => ({
+      label: action.textContent?.trim(),
+      href: action.getAttribute('href'),
+      priority: action.getAttribute('data-action-priority'),
+    }))).toEqual([
+      { label: 'Review selections', href: '#selections', priority: 'primary' },
+      { label: 'Review methodology', href: '/methodology/', priority: 'secondary' },
     ]);
   });
 

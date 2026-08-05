@@ -21,7 +21,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
     <div class="mockup-header-inner">
       <div class="brand-lockup">
         <a class="brand-home" href="/" aria-label="TokenBench home">
-          <img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+          <img src="../../public/brand/monomind-tokenbench.png" alt="MonoMind monogram">
           <span class="brand-copy">
             <span class="brand-name">TokenBench</span>
             <span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span>
@@ -252,16 +252,35 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <section class="mockup-panel comparison-section" data-mockup-section="provenance" aria-labelledby="provenance-heading">
         <div class="section-heading">
           <h2 id="provenance-heading">Evidence provenance</h2>
-          <p class="section-copy">Source roles are named here without asserting that either source has published a value for this pair.</p>
+          <p class="section-copy">Source roles and evidence-status metadata stay explicit without asserting that either source has published a value for this pair.</p>
         </div>
-        <dl class="provenance-list">
+        <dl class="provenance-metadata" aria-label="Provenance metadata">
           <div>
-            <dt>BenchLM</dt>
-            <dd>Supplies metric names and methodology context when an eligible source metric is represented.</dd>
+            <dt>Source</dt>
+            <dd>
+              <ul class="provenance-source-roles">
+                <li>
+                  <strong>BenchLM</strong>
+                  <span>Supplies metric names and methodology context when an eligible source metric is represented.</span>
+                </li>
+                <li>
+                  <strong>OpenRouter</strong>
+                  <span>Supplies route-level catalog, pricing, and declared-context context when an eligible route record is represented.</span>
+                </li>
+              </ul>
+            </dd>
           </div>
           <div>
-            <dt>OpenRouter</dt>
-            <dd>Supplies route-level catalog, pricing, and declared-context context when an eligible route record is represented.</dd>
+            <dt>Publication time</dt>
+            <dd data-missing>Unavailable</dd>
+          </div>
+          <div>
+            <dt>Freshness</dt>
+            <dd data-missing>Unavailable</dd>
+          </div>
+          <div>
+            <dt>Methodology</dt>
+            <dd>No active revision</dd>
           </div>
         </dl>
       </section>

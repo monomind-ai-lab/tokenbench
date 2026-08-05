@@ -20,7 +20,18 @@
     <a class="skip-link" href="#page-content">Skip to page content</a>
     <header class="mockup-header">
       <div class="mockup-header-inner">
-        <a class="brand-home" href="/" aria-label="TokenBench home">TokenBench</a>
+        <div class="brand-lockup">
+          <a class="brand-home" href="/" aria-label="TokenBench home">
+            <img src="../../public/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+            <span class="brand-copy">
+              <span class="brand-name">TokenBench</span>
+              <span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span>
+            </span>
+          </a>
+        </div>
+        <button class="header-tool menu-button" type="button" data-menu-toggle aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
         <nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation">
           <a href="/tools/">Tools</a>
           <a href="/compare/">Compare</a>
@@ -28,8 +39,27 @@
           <a href="/guides/">Guides</a>
         </nav>
         <div class="header-actions">
-          <button class="menu-button mockup-control" type="button" data-menu-toggle aria-controls="primary-navigation" aria-expanded="false">Menu</button>
-          <button class="mockup-control" type="button" data-theme-toggle aria-label="Toggle light theme" aria-pressed="true">Theme</button>
+          <label class="language-control">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.4 3.2 2.5 5.9 5.5 7.2M11 5c-.4 3.2-2.5 5.9-5.5 7.2M13 21l4-10 4 10M14.5 17h5"/></svg>
+            <span class="sr-only">Language</span>
+            <select aria-label="Language">
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
+              <option value="zh-TW">繁體中文</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="ja">日本語</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="fi">Suomi</option>
+              <option value="pl">Polski</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <button class="header-tool icon-button" type="button" data-theme-toggle aria-label="Toggle light theme">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
+            <span class="sr-only">Theme</span>
+          </button>
         </div>
       </div>
     </header>
@@ -38,7 +68,9 @@
       <section class="leaderboard-hero" data-mockup-section="route-summary" aria-labelledby="value-title">
         <h1 id="value-title">AI model value frontier</h1>
         <p class="leaderboard-summary">Value views compare supported capability evidence with stated workload costs and never present an unsupported universal value score.</p>
-        <p class="leaderboard-summary">This route never presents an opaque universal value score; it keeps source-aware capability evidence and stated workload costs visible as separate inputs.</p>
+        <aside class="leaderboard-value-methodology" data-value-methodology aria-label="Value methodology">
+          <p><strong>Methodology.</strong> This view does not calculate an opaque universal value score. It keeps capability evidence and the declared workload price separate, with unavailable evidence left visible.</p>
+        </aside>
       </section>
 
       <section class="leaderboard-filter-rail" data-mockup-section="filters" aria-labelledby="filter-title">
@@ -73,56 +105,56 @@
 
       <section class="leaderboard-section" data-mockup-section="rankings" aria-labelledby="rankings-title">
         <h2 id="rankings-title" class="leaderboard-section-heading">Evidence rows</h2>
-        <p id="value-evidence-disclosure" class="leaderboard-evidence-disclosure" data-evidence-disclosure>Illustrative rows only. No active revision is represented: ordinary entries show Unavailable for rank, capability, price, and freshness. Estimated previews remain Unranked and are not published results.</p>
+        <p id="value-evidence-disclosure" class="leaderboard-evidence-disclosure" data-evidence-disclosure>Illustrative rows only. No active revision exists: ordinary entries use Unavailable for rank, capability, workload price, declared context, source, publication, and freshness. The estimated preview is Unranked, has the evidence state Estimated preview, and identifies BenchLM only as a source; its publication and freshness remain Unavailable. It is neither a published result nor a winner claim.</p>
         <div class="leaderboard-table-wrap">
           <table class="leaderboard-table" aria-labelledby="rankings-title" aria-describedby="value-evidence-disclosure">
             <thead>
               <tr>
-                <th scope="col">Rank</th>
-                <th scope="col">Model label</th>
-                <th scope="col">Workload lens</th>
+                <th scope="col">Rank / status</th>
+                <th scope="col">Model / provider</th>
                 <th scope="col">Capability evidence</th>
                 <th scope="col">Workload price</th>
-                <th scope="col">Freshness</th>
+                <th scope="col">Declared context</th>
                 <th scope="col">Evidence state</th>
+                <th scope="col">Source / publication / freshness</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td data-rank>Unavailable</td>
-                <th scope="row">OpenAI GPT-4o</th>
-                <td>General use</td>
+                <th scope="row"><span class="leaderboard-model-name">OpenAI GPT-4o</span> <span class="leaderboard-provider">Provider: OpenAI</span></th>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
               </tr>
               <tr>
                 <td data-rank>Unavailable</td>
-                <th scope="row">Anthropic Claude 3.5 Sonnet</th>
-                <td>General use</td>
+                <th scope="row"><span class="leaderboard-model-name">Anthropic Claude 3.5 Sonnet</span> <span class="leaderboard-provider">Provider: Anthropic</span></th>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
               </tr>
               <tr>
                 <td data-rank>Unavailable</td>
-                <th scope="row">Google Gemini 1.5 Pro</th>
-                <td>General use</td>
+                <th scope="row"><span class="leaderboard-model-name">Google Gemini 1.5 Pro</span> <span class="leaderboard-provider">Provider: Google</span></th>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
               </tr>
               <tr data-estimated>
                 <td data-rank>Unranked</td>
-                <th scope="row">BenchLM estimated preview<span class="leaderboard-estimate-label">Shown only to make the opt-in state visible</span></th>
-                <td>General use</td>
+                <th scope="row"><span class="leaderboard-model-name">BenchLM estimated preview</span> <span class="leaderboard-provider">Provider: Unavailable</span> <span class="leaderboard-estimate-label">Shown only to make the opt-in state visible</span></th>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Unavailable</td>
                 <td>Estimated preview</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: BenchLM</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
               </tr>
             </tbody>
           </table>
@@ -131,54 +163,54 @@
         <div class="leaderboard-mobile-cards" aria-label="Value evidence rows for narrow screens" aria-describedby="value-evidence-disclosure">
           <article class="leaderboard-mobile-card" data-mobile-rank-card>
             <header class="leaderboard-mobile-card-header">
-              <h3>OpenAI GPT-4o</h3>
+              <h3><span class="leaderboard-model-name">OpenAI GPT-4o</span> <span class="leaderboard-provider">Provider: OpenAI</span></h3>
               <span class="leaderboard-mobile-rank" data-rank>Unavailable</span>
             </header>
             <dl>
-              <div><dt>Workload lens</dt><dd>General use</dd></div>
               <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
-              <div><dt>Freshness</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Evidence state</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
             </dl>
           </article>
           <article class="leaderboard-mobile-card" data-mobile-rank-card>
             <header class="leaderboard-mobile-card-header">
-              <h3>Anthropic Claude 3.5 Sonnet</h3>
+              <h3><span class="leaderboard-model-name">Anthropic Claude 3.5 Sonnet</span> <span class="leaderboard-provider">Provider: Anthropic</span></h3>
               <span class="leaderboard-mobile-rank" data-rank>Unavailable</span>
             </header>
             <dl>
-              <div><dt>Workload lens</dt><dd>General use</dd></div>
               <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
-              <div><dt>Freshness</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Evidence state</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
             </dl>
           </article>
           <article class="leaderboard-mobile-card" data-mobile-rank-card>
             <header class="leaderboard-mobile-card-header">
-              <h3>Google Gemini 1.5 Pro</h3>
+              <h3><span class="leaderboard-model-name">Google Gemini 1.5 Pro</span> <span class="leaderboard-provider">Provider: Google</span></h3>
               <span class="leaderboard-mobile-rank" data-rank>Unavailable</span>
             </header>
             <dl>
-              <div><dt>Workload lens</dt><dd>General use</dd></div>
               <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
-              <div><dt>Freshness</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Evidence state</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
             </dl>
           </article>
           <article class="leaderboard-mobile-card" data-mobile-rank-card data-estimated>
             <header class="leaderboard-mobile-card-header">
-              <h3>BenchLM estimated preview<span class="leaderboard-estimate-label">Shown only to make the opt-in state visible</span></h3>
+              <h3><span class="leaderboard-model-name">BenchLM estimated preview</span> <span class="leaderboard-provider">Provider: Unavailable</span> <span class="leaderboard-estimate-label">Shown only to make the opt-in state visible</span></h3>
               <span class="leaderboard-mobile-rank" data-rank>Unranked</span>
             </header>
             <dl>
-              <div><dt>Workload lens</dt><dd>General use</dd></div>
               <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
-              <div><dt>Freshness</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
               <div><dt>Evidence state</dt><dd>Estimated preview</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: BenchLM</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
             </dl>
           </article>
         </div>
@@ -200,8 +232,8 @@
     </main>
 
     <footer class="mockup-footer">
-      <span>TokenBench — The Decision Engine for AI Costs &amp; Model Benchmarks.</span>
-      <a href="/leaderboards/">Leaderboard directory</a>
+      <div class="footer-brand"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a><span>Source-aware decision support.</span></div>
+      <div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div>
     </footer>
     <script src="tokenbench-mockup.js"></script>
   </body>

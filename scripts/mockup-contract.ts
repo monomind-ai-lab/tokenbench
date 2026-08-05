@@ -42,6 +42,7 @@ export function validateMockupHtml(html: string, expected: MockupExpectation): s
   else if (!primaryNav.matches('.primary-nav[data-primary-nav]')) errors.push('missing primary navigation behavior hook');
   if (!document.querySelector('[data-menu-toggle]')) errors.push('missing menu toggle behavior hook');
   if (!document.querySelector('[data-theme-toggle][aria-label]')) errors.push('missing semantic theme toggle');
+  if (!document.querySelector('select[aria-label="Language"]')) errors.push('missing accessible language control');
   for (const section of expected.requiredSections ?? []) if (!document.querySelector(`[data-mockup-section="${section}"]`)) errors.push(`missing section: ${section}`);
   for (const [selector, attributes] of runtimeResourceSelectors) {
     for (const element of document.querySelectorAll(selector)) {

@@ -5,7 +5,10 @@
   border-bottom: 1px solid var(--outline);
 }
 
+.brand-lockup { min-width: 0; display: flex; align-items: center; }
+
 .brand-home {
+  gap: 10px;
   color: var(--text);
   font-size: 1rem;
   font-weight: 800;
@@ -13,7 +16,14 @@
   text-decoration: none;
 }
 
+.brand-home img { width: 28px; height: 28px; object-fit: contain; }
+.brand-copy { min-width: 0; display: grid; gap: 1px; }
+.brand-name { font-weight: 800; line-height: 1; }
+.brand-tagline { color: var(--muted); font-size: 8px; line-height: 1.2; letter-spacing: .02em; }
+
 .brand-home:hover { color: var(--primary-strong); }
+
+.footer-brand, .footer-links { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
 
 .mockup-footer a {
   color: var(--primary-strong);
@@ -43,6 +53,20 @@
   font-size: 1rem;
   line-height: 1.6;
 }
+
+.leaderboard-value-methodology {
+  max-width: 72ch;
+  margin: 0;
+  padding: 4px 0 4px 16px;
+  border-left: 1px solid var(--primary-strong);
+  color: var(--text);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.leaderboard-value-methodology p { margin: 0; }
+
+.leaderboard-value-methodology strong { color: var(--primary-strong); }
 
 .leaderboard-section {
   display: grid;
@@ -268,12 +292,32 @@
   font-weight: 700;
 }
 
+.leaderboard-model-name,
+.leaderboard-provider,
+.leaderboard-source-metadata { display: block; }
+
+.leaderboard-provider,
+.leaderboard-source-metadata {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.leaderboard-source-metadata {
+  display: grid;
+  gap: 2px;
+}
+
 .leaderboard-table tbody td {
   min-width: 130px;
   color: var(--muted);
   font-size: 0.875rem;
   line-height: 1.45;
 }
+
+.leaderboard-table tbody td:last-child { min-width: 200px; }
 
 .leaderboard-table tbody tr:last-child th,
 .leaderboard-table tbody tr:last-child td { border-bottom: 0; }
@@ -377,6 +421,7 @@
 }
 
 @media (max-width: 639px) {
+  .brand-tagline { display: none; }
   .leaderboard-directory-grid, .leaderboard-filter-grid { grid-template-columns: 1fr; }
   .leaderboard-hero h1 { font-size: clamp(2rem, 11vw, 2.75rem); }
   .leaderboard-route-card,
