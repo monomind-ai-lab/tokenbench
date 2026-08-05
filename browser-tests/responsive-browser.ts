@@ -101,8 +101,72 @@ test.describe('responsive calculator browser harness', () => {
     await expect(first).toHaveAttribute('target', '_blank');
     await expect(first).toHaveAttribute('rel', 'noreferrer');
     await page.locator('body').click({ position: { x: 2, y: 2 } });
-    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle dark theme"]', 'a.evidence-link']) {
+    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle light theme"]', 'a.evidence-link']) {
       expectVisibleFocus(await tabTo(page, selector));
+    }
+  });
+
+  test('keeps dark foreground accents readable while retaining the exact primary background', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCalculator(page);
+    await page.locator('a.evidence-link').first().hover();
+
+    const styles = await page.evaluate(() => {
+      const parseColor = (color: string) => {
+        const channels = color.match(/[\d.]+/g)?.map(Number) ?? [];
+        return { red: channels[0] ?? 0, green: channels[1] ?? 0, blue: channels[2] ?? 0, alpha: channels[3] ?? 1 };
+      };
+      const backgroundFor = (element: Element) => {
+        let current: Element | null = element;
+        while (current) {
+          const background = getComputedStyle(current).backgroundColor;
+          if (parseColor(background).alpha > 0.99) return background;
+          current = current.parentElement;
+        }
+        return getComputedStyle(document.body).backgroundColor;
+      };
+      const luminance = (color: string) => {
+        const { red, green, blue } = parseColor(color);
+        const convert = (channel: number) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * convert(red) + 0.7152 * convert(green) + 0.0722 * convert(blue);
+      };
+      const sample = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing contrast sample: ${selector}`);
+        const foreground = getComputedStyle(element).color;
+        const background = backgroundFor(element);
+        const lighter = Math.max(luminance(foreground), luminance(background));
+        const darker = Math.min(luminance(foreground), luminance(background));
+        return { foreground, background, ratio: (lighter + 0.05) / (darker + 0.05) };
+      };
+
+      return {
+        primaryBackground: getComputedStyle(document.querySelector('.value-summary-card') as Element).backgroundColor,
+        samples: [sample('a.evidence-link'), sample('.control-block legend'), sample('.choice-check'), sample('.field-label output')],
+      };
+    });
+
+    expect(styles.primaryBackground).toBe('rgb(0, 7, 205)');
+    for (const sample of styles.samples) expect(sample.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test('gives the shared skip and brand links 44px targets', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await openCalculator(page);
+
+    const targets = await page.evaluate(() => ['.skip-link', '.brand-home'].map((selector) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error(`Missing target: ${selector}`);
+      const bounds = element.getBoundingClientRect();
+      return { selector, width: bounds.width, height: bounds.height };
+    }));
+
+    for (const target of targets) {
+      expect(target.width, `${target.selector} width`).toBeGreaterThanOrEqual(44);
+      expect(target.height, `${target.selector} height`).toBeGreaterThanOrEqual(44);
     }
   });
 
@@ -124,11 +188,22 @@ test.describe('responsive calculator browser harness', () => {
     expect(comparisonOwnsVisibleContent).toBe(true);
   });
 
-  test('persists dark theme and applies the selected language without changing the catalog controls', async ({ page }) => {
+  test('defaults dark, persists both theme choices, and changes language without resetting catalog controls', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page);
     const initialProvider = await page.locator('input[name="provider"]:checked').inputValue();
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.getByRole('button', { name: 'Toggle light theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
+    await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-TW');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW');
@@ -227,7 +302,16 @@ test.describe('guides browser harness', () => {
 
       await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
       await expect(page.locator('.guide-card')).toHaveCount(5);
+      if (width < 768) {
+        const menu = page.getByRole('button', { name: 'Open navigation' });
+        await menu.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('button', { name: 'Close navigation' })).toHaveAttribute('aria-expanded', 'true');
+      }
       await expect(page.getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
+      await expect(page.getByRole('link', { name: 'Sources' })).toHaveAttribute('href', '/sources/');
+      await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/');
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
     });
@@ -253,12 +337,21 @@ test.describe('guides browser harness', () => {
     await expect(page.getByRole('heading', { name: 'Related guides' })).toBeVisible();
   });
 
-  test('guide theme control persists the selected dark mode', async ({ page }) => {
+  test('guide theme control defaults dark and persists both theme choices', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await page.route('https://*/*', (route) => route.abort());
     await page.goto('/guides/openrouter-guide-model-routing-cost-controls/');
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.getByRole('button', { name: 'Toggle light theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });

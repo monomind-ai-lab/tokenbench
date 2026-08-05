@@ -27,6 +27,11 @@ interface SiteHeaderProps {
   readonly onLanguageChange: (language: string) => void;
 }
 
+interface SiteFooterProps {
+  readonly status: ReactNode;
+  readonly notice: ReactNode;
+}
+
 export function SiteHeader({ theme, language, activePage, onThemeToggle, onLanguageChange }: SiteHeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -48,6 +53,10 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
   </header>;
 }
 
+export function SiteFooter({ status, notice }: SiteFooterProps) {
+  return <footer className="app-footer"><div className="footer-brand"><a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a><span>{status}</span></div><div className="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>{notice}</span></div></footer>;
+}
+
 export function AppShell({ children, theme, language, onThemeToggle, onLanguageChange, catalogPhase, notice, error, lastSuccessfulRefreshAt, onRetry }: AppShellProps) {
   const [layout, setLayout] = useState(() => getResponsiveLayout(typeof window === 'undefined' ? 1440 : window.innerWidth));
 
@@ -64,7 +73,7 @@ export function AppShell({ children, theme, language, onThemeToggle, onLanguageC
       {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
       {notice ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
       <main id="calculator" className="page-main"><h1 className="sr-only">AI plan value calculator</h1>{children}</main>
-      <footer className="app-footer"><div className="footer-brand"><a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a><span>Catalog refresh: {formatDateTime(lastSuccessfulRefreshAt)}{catalogPhase === 'loading' ? ' · Loading' : ''}</span></div><div className="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div></footer>
+      <SiteFooter status={`Catalog refresh: ${formatDateTime(lastSuccessfulRefreshAt)}${catalogPhase === 'loading' ? ' · Loading' : ''}`} notice="Verify provider evidence before purchasing." />
     </div>
   );
 }
