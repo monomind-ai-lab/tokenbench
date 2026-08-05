@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { SiteHeader } from './app-shell';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import '../index.css';
 
@@ -27,6 +28,48 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /evidence/i }).length).toBeGreaterThan(0);
     expect(screen.getByText('Availability: available')).toBeInTheDocument();
+  });
+
+  it('renders the TokenBench shared chrome with its canonical navigation', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
+    expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
+    expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('ToolsCompareLeaderboardsGuides');
+  });
+
+  it('defaults to dark and persists both TokenBench theme choices', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle dark theme' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+  });
+
+  it('opens and closes primary navigation with its accessible mobile menu control', () => {
+    render(<SiteHeader theme="dark" language="en" activePage="tools" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
+
+    const menu = document.querySelector<HTMLButtonElement>('.menu-button');
+    if (!menu) throw new Error('Expected an accessible mobile navigation control');
+    expect(menu).toHaveAttribute('aria-label', 'Open navigation');
+    expect(menu).toHaveAttribute('aria-controls', 'primary-navigation');
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.keyDown(screen.getByRole('navigation', { name: 'Primary navigation' }), { key: 'Escape' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('does not present API-only model owners as subscription plan providers', async () => {
@@ -94,11 +137,12 @@ describe('responsive calculator app shell', () => {
     expect(usageRange).toHaveAttribute('aria-valuetext', '50,000,000 tokens');
   });
 
-  it('keeps calculator state while switching language and persists the dark theme', async () => {
+  it('keeps calculator state while switching language and returns to the dark theme', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     const usage = screen.getByLabelText(/Expected monthly usage/i);
     fireEvent.change(usage, { target: { value: '4200000' } });
+    fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 

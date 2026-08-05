@@ -20,36 +20,38 @@
         } catch (e) {}
       })();
     </script>
-    <title>TokenBench · Plan Value Calculator</title>
-    <meta name="description" content="Compare paid individual AI plans with direct API pricing, model mix, expected monthly token usage, and estimated savings.">
+    <title>TokenBench · The Decision Engine for AI Costs &amp; Model Benchmarks</title>
+    <meta name="description" content="The Decision Engine for AI Costs &amp; Model Benchmarks. Compare paid individual AI plans with direct API pricing, model mix, expected monthly token usage, and estimated savings.">
     <meta name="robots" content="index,follow,max-image-preview:large">
-    <link rel="canonical" href="https://ai-plans.monomind.one/">
+    <link rel="canonical" href="https://tokenbench.monomind.one">
+    <link rel="icon" href="/favicon.png" type="image/png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="TokenBench">
-    <meta property="og:title" content="TokenBench · Plan Value Calculator">
+    <meta property="og:title" content="TokenBench · The Decision Engine for AI Costs &amp; Model Benchmarks">
     <meta property="og:description" content="Compare paid individual AI plans with API-equivalent value and estimated monthly savings.">
-    <meta property="og:url" content="https://ai-plans.monomind.one/">
-    <meta property="og:image" content="https://ai-plans.monomind.one/og-guides.png">
+    <meta property="og:url" content="https://tokenbench.monomind.one">
+    <meta property="og:image" content="https://tokenbench.monomind.one/og-guides.png">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="TokenBench · Plan Value Calculator">
+    <meta name="twitter:title" content="TokenBench · The Decision Engine for AI Costs &amp; Model Benchmarks">
     <meta name="twitter:description" content="Compare AI subscriptions, API prices, and estimated monthly savings.">
-    <meta name="twitter:image" content="https://ai-plans.monomind.one/og-guides.png">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"TokenBench","url":"https://ai-plans.monomind.one/","applicationCategory":"FinanceApplication","description":"Compare paid individual AI plans with direct API pricing and estimated monthly savings."}</script>
+    <meta name="twitter:image" content="https://tokenbench.monomind.one/og-guides.png">
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"TokenBench","url":"https://tokenbench.monomind.one","applicationCategory":"FinanceApplication","description":"The Decision Engine for AI Costs & Model Benchmarks."}</script>
     <script>
       try {
-        document.documentElement.dataset.theme = localStorage.getItem('tokenbench:theme') === 'dark' ? 'dark' : 'light';
+        document.documentElement.dataset.theme = localStorage.getItem('tokenbench:theme') === 'light' ? 'light' : 'dark';
       } catch (e) {
-        document.documentElement.dataset.theme = 'light';
+        document.documentElement.dataset.theme = 'dark';
       }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
       /* Hide Google Translate top banner and widget frame */
       .goog-te-banner-frame,
       .goog-te-banner-frame.skiptranslate,
       iframe.goog-te-banner-frame,
+      .skiptranslate iframe,
       body > .skiptranslate,
       .VIpgJd-ZVi9od-ORHb-OEVmcd,
       .VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
@@ -58,7 +60,9 @@
       .goog-te-spinner-pos {
         display: none !important;
       }
-      body {
+      body,
+      body.translated-ltr,
+      body.translated-rtl {
         top: 0px !important;
         position: static !important;
       }

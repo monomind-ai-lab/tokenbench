@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { suppressGoogleTranslateChrome } from './site-preferences';
+import { setTranslatedLanguage, suppressGoogleTranslateChrome } from './site-preferences';
 
 describe('Google Translate chrome suppression', () => {
   it('hides injected configuration UI and resets its page offset', () => {
@@ -17,5 +17,15 @@ describe('Google Translate chrome suppression', () => {
     expect(document.body.style.getPropertyValue('top')).toBe('0px');
     expect(document.body.style.getPropertyPriority('top')).toBe('important');
     expect(document.documentElement.style.getPropertyValue('margin-top')).toBe('0px');
+  });
+
+  it('keeps language changes from restoring a translated page offset', () => {
+    document.body.style.top = '40px';
+
+    setTranslatedLanguage('zh-TW');
+
+    expect(document.documentElement.lang).toBe('zh-TW');
+    expect(document.body.style.getPropertyValue('top')).toBe('0px');
+    expect(document.body.style.getPropertyPriority('top')).toBe('important');
   });
 });

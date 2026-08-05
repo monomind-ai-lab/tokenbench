@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
+import { SITE_CONFIG } from '../brand/site-config';
 
 export type ThemeMode = 'light' | 'dark';
 
 export function readStoredTheme(): ThemeMode {
   try {
-    return window.localStorage.getItem('tokenbench:theme') === 'dark' ? 'dark' : 'light';
+    return window.localStorage.getItem(SITE_CONFIG.themeStorageKey) === 'light' ? 'light' : 'dark';
   } catch {
-    return 'light';
+    return 'dark';
   }
 }
 
@@ -17,6 +18,7 @@ export function readLanguage(): string {
 
 const GOOGLE_TRANSLATE_CHROME = [
   '.goog-te-banner-frame',
+  '.skiptranslate iframe',
   '.VIpgJd-ZVi9od-ORHb-OEVmcd',
   '.VIpgJd-ZVi9od-aZ2wEe-wOHMyf',
   'body > .skiptranslate',
@@ -64,7 +66,7 @@ export function useSitePreferences() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    try { window.localStorage.setItem('tokenbench:theme', theme); } catch { /* Theme persistence is best effort. */ }
+    try { window.localStorage.setItem(SITE_CONFIG.themeStorageKey, theme); } catch { /* Theme persistence is best effort. */ }
   }, [theme]);
 
   useEffect(watchGoogleTranslateChrome, []);
