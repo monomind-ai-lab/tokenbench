@@ -1,9 +1,68 @@
+.brand-lockup {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
 .brand-home {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   color: var(--text);
-  font-size: 1rem;
+  text-decoration: none;
+}
+
+.brand-home img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.brand-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.brand-name {
+  color: inherit;
+  font-size: 1.1rem;
   font-weight: 800;
   letter-spacing: -.035em;
-  text-decoration: none;
+  white-space: nowrap;
+}
+
+.brand-tagline {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .47rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-home:hover {
+  color: var(--primary-strong);
+}
+
+.menu-button {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.primary-nav {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.header-actions {
+  grid-column: 3;
+  grid-row: 1;
 }
 
 .header-tool {
@@ -26,6 +85,7 @@
 }
 
 .header-tool svg,
+.language-control svg,
 .swap-control svg {
   width: 18px;
   height: 18px;
@@ -34,6 +94,24 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
+}
+
+.language-control {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+}
+
+.language-control select {
+  max-width: 92px;
+  min-height: 44px;
+  padding: 7px 22px 7px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: .75rem;
 }
 
 .compare-page {
@@ -220,7 +298,7 @@
   display: grid;
   gap: 6px;
   padding: 14px 16px;
-  border-left: 3px solid var(--primary);
+  border-left: 1px solid var(--primary);
   background: color-mix(in srgb, var(--selected) 46%, var(--surface));
 }
 
@@ -269,17 +347,19 @@
 
 .guide-list a,
 .inline-action,
-.breadcrumb a,
-.mockup-footer a {
+.breadcrumb a {
   color: var(--primary-strong);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 
 .guide-list a {
-  display: inline;
-  min-height: auto;
-  min-width: 0;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
   font-weight: 750;
 }
 
@@ -328,9 +408,10 @@
 }
 
 .breadcrumb a {
-  display: inline;
-  min-width: 0;
-  min-height: auto;
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .breadcrumb-separator {
@@ -507,9 +588,20 @@
 
 .workload-option input {
   flex: 0 0 auto;
-  min-height: auto;
-  margin: 2px 0 0;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  appearance: none;
+  background: radial-gradient(circle, transparent 0 5px, var(--muted) 6px 7px, transparent 8px);
   accent-color: var(--primary);
+}
+
+.workload-option input:checked {
+  background: radial-gradient(circle, var(--primary-strong) 0 4px, transparent 5px, var(--primary-strong) 6px 7px, transparent 8px);
 }
 
 .workload-option span {
@@ -547,9 +639,37 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  min-width: 0;
-  min-height: auto;
+  min-width: 44px;
+  min-height: 44px;
   font-weight: 750;
+}
+
+.mockup-footer {
+  padding: 22px 0 34px;
+  gap: 16px;
+  font-size: .72rem;
+}
+
+.footer-brand,
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.mockup-footer a {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.mockup-footer a:hover {
+  color: var(--primary-strong);
 }
 
 .provenance-list {
@@ -593,6 +713,37 @@
 }
 
 @media (max-width: 767px) {
+  .mockup-header-inner {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 4px;
+  }
+
+  .brand-tagline {
+    display: none;
+  }
+
+  .menu-button {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .header-actions {
+    grid-column: 3;
+    grid-row: 1;
+    gap: 0;
+  }
+
+  .language-control svg {
+    display: none;
+  }
+
+  .language-control select {
+    width: 58px;
+    padding-inline: 2px;
+    font-size: .66rem;
+  }
+
   .workspace-panel,
   .empty-reviewed,
   .guide-panel,
