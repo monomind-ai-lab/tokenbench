@@ -193,10 +193,82 @@ function isMetricForEntryDefinition(
     && (entry.model.evidenceStatus !== 'source_only' || entry.model.sourceId === 'lmarena');
 }
 
+function isSameMetric(
+  left: NonNullable<LeaderboardEntry['metric']>,
+  right: NonNullable<LeaderboardEntry['metric']>,
+): boolean {
+  return left.modelKey === right.modelKey
+    && left.metricKey === right.metricKey
+    && left.category === right.category
+    && left.value === right.value
+    && left.rank === right.rank
+    && left.lower === right.lower
+    && left.upper === right.upper
+    && left.voteCount === right.voteCount
+    && left.unit === right.unit
+    && left.sourceId === right.sourceId
+    && left.sourceUpdatedAt === right.sourceUpdatedAt
+    && left.sourceModelId === right.sourceModelId
+    && left.sourceArtifactId === right.sourceArtifactId
+    && left.rankingEligible === right.rankingEligible
+    && left.methodology === right.methodology
+    && left.observationCount === right.observationCount
+    && left.sessionCount === right.sessionCount;
+}
+
+function hasModelMatchedPrimaryOpenRouterPrice(entry: LeaderboardEntry): boolean {
+  return entry.primaryPrice !== null
+    && entry.primaryPrice.modelKey === entry.model.modelKey
+    && entry.primaryPrice.sourceId === 'openrouter'
+    && entry.primaryPrice.verificationStatus === 'primary';
+}
+
+function hasNonNegativeBlendedCost(entry: LeaderboardEntry): boolean {
+  return typeof entry.blendedCostPerMillion === 'number'
+    && Number.isFinite(entry.blendedCostPerMillion)
+    && entry.blendedCostPerMillion >= 0;
+}
+
+function hasNoDisplayedPrice(entry: LeaderboardEntry): boolean {
+  return entry.primaryPrice === null && entry.blendedCostPerMillion === null;
+}
+
+function hasRouteKindEntryInvariants(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
+  switch (definition.kind) {
+    case 'pricing-context':
+      return entry.model.evidenceStatus !== 'estimated'
+        && entry.metric === null
+        && entry.metrics.length === 0
+        && hasModelMatchedPrimaryOpenRouterPrice(entry)
+        && hasNonNegativeBlendedCost(entry)
+        && entry.sourceRank === null
+        && !entry.onValueFrontier;
+    case 'value':
+      if (entry.model.evidenceStatus === 'estimated') return true;
+      return hasModelMatchedPrimaryOpenRouterPrice(entry)
+        && hasNonNegativeBlendedCost(entry)
+        && entry.sourceRank === null;
+    case 'benchlm':
+      return hasNoDisplayedPrice(entry)
+        && entry.sourceRank === null
+        && !entry.onValueFrontier;
+    case 'lmarena':
+    case 'multimodal':
+      return hasNoDisplayedPrice(entry) && !entry.onValueFrontier;
+  }
+}
+
 function isEntryForDefinition(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
-  if (definition.kind === 'pricing-context') return entry.metric === null && entry.metrics.length === 0;
+  if (!hasRouteKindEntryInvariants(entry, definition)) return false;
+  if (definition.kind === 'pricing-context') return true;
   if (entry.metric === null || entry.metric.modelKey !== entry.model.modelKey || !isMetricForEntryDefinition(entry, entry.metric, definition)) return false;
-  return entry.metrics.every((metric) => metric.modelKey === entry.model.modelKey && isMetricForEntryDefinition(entry, metric, definition));
+  if (entry.metrics.length === 0 || !isSameMetric(entry.metric, entry.metrics[0])) return false;
+  const metricKeys = new Set<string>();
+  return entry.metrics.every((metric) => {
+    if (metricKeys.has(metric.metricKey)) return false;
+    metricKeys.add(metric.metricKey);
+    return metric.modelKey === entry.model.modelKey && isMetricForEntryDefinition(entry, metric, definition);
+  });
 }
 
 function isFreshness(value: unknown): value is BenchmarkFreshness {
@@ -221,17 +293,15 @@ function hasApplicableAttribution(
   definition: LeaderboardDefinition,
   entries: readonly LeaderboardEntry[],
 ): boolean {
-  if (definition.sourceId !== undefined) {
-    return attribution.some((source) => source.sourceId === definition.sourceId);
-  }
-
-  const activeMetricSources = new Set<string>();
+  const displayedSources = new Set<string>();
+  if (definition.sourceId !== undefined) displayedSources.add(definition.sourceId);
   for (const entry of entries) {
-    if (entry.metric !== null) activeMetricSources.add(entry.metric.sourceId);
-    for (const metric of entry.metrics) activeMetricSources.add(metric.sourceId);
+    if (entry.metric !== null) displayedSources.add(entry.metric.sourceId);
+    for (const metric of entry.metrics) displayedSources.add(metric.sourceId);
+    if (entry.primaryPrice !== null) displayedSources.add(entry.primaryPrice.sourceId);
   }
-  if (activeMetricSources.size > 0) {
-    return [...activeMetricSources].every((sourceId) => attribution.some((source) => source.sourceId === sourceId));
+  if (displayedSources.size > 0) {
+    return [...displayedSources].every((sourceId) => attribution.some((source) => source.sourceId === sourceId));
   }
 
   return definition.kind === 'multimodal'

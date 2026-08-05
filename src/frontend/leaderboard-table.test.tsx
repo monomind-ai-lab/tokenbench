@@ -16,6 +16,26 @@ import { LeaderboardTable } from './leaderboard-table';
 const ISO_TIME = '2026-08-05T12:00:00.000Z';
 
 function entry(overrides: Partial<LeaderboardEntry> = {}): LeaderboardEntry {
+  const defaultMetric: NonNullable<LeaderboardEntry['metric']> = {
+    modelKey: 'model-a',
+    metricKey: 'benchlm:category:coding',
+    category: 'coding',
+    value: 83.2,
+    rank: null,
+    lower: null,
+    upper: null,
+    voteCount: null,
+    unit: 'score',
+    sourceId: 'benchlm',
+    sourceUpdatedAt: ISO_TIME,
+    sourceModelId: 'model-a',
+    sourceArtifactId: 'benchlm-models',
+    rankingEligible: true,
+    methodology: 'benchlm_raw_composite',
+    observationCount: null,
+    sessionCount: null,
+  };
+  const metric = overrides.metric === undefined ? defaultMetric : overrides.metric;
   return {
     model: {
       modelKey: 'model-a',
@@ -35,32 +55,36 @@ function entry(overrides: Partial<LeaderboardEntry> = {}): LeaderboardEntry {
       sourceModelId: 'model-a',
       sourceArtifactId: 'benchlm-models',
     },
-    metric: {
-      modelKey: 'model-a',
-      metricKey: 'benchlm:category:coding',
-      category: 'coding',
-      value: 83.2,
-      rank: null,
-      lower: null,
-      upper: null,
-      voteCount: null,
-      unit: 'score',
-      sourceId: 'benchlm',
-      sourceUpdatedAt: ISO_TIME,
-      sourceModelId: 'model-a',
-      sourceArtifactId: 'benchlm-models',
-      rankingEligible: true,
-      methodology: 'benchlm_raw_composite',
-      observationCount: null,
-      sessionCount: null,
-    },
-    metrics: [],
     primaryPrice: null,
     blendedCostPerMillion: null,
     contextWindowTokens: null,
     sourceRank: null,
     onValueFrontier: false,
     ...overrides,
+    metric,
+    metrics: overrides.metrics ?? (metric === null ? [] : [{ ...metric }]),
+  };
+}
+
+function primaryOpenRouterPrice(): NonNullable<LeaderboardEntry['primaryPrice']> {
+  return {
+    modelKey: 'model-a',
+    sourceId: 'openrouter',
+    providerId: 'openrouter',
+    inputUsdPerMillion: 1,
+    cachedInputUsdPerMillion: null,
+    outputUsdPerMillion: 5,
+    contextWindowTokens: 128_000,
+    verificationStatus: 'primary',
+    routeId: 'openrouter:model-a',
+    sourceModelId: 'model-a',
+    canonicalSlug: 'model-a',
+    maxInputTokens: 126_000,
+    maxOutputTokens: 2_000,
+    inputModalities: ['text'],
+    outputModalities: ['text'],
+    supportedParameters: ['temperature'],
+    sourceArtifactId: 'openrouter-models',
   };
 }
 
@@ -83,14 +107,20 @@ function apiEnvelope(
     'llm-human-preference': { kind: 'lmarena', sourceId: 'lmarena', metricKeys: ['lmarena:text_style_control:overall'], defaultSort: 'rank-asc' },
     'media-text-to-image': { kind: 'lmarena', sourceId: 'lmarena', metricKeys: ['lmarena:text_to_image:overall'], defaultSort: 'rank-asc' },
   };
-  const attribution = key === 'llm-human-preference' || key.startsWith('media-')
+  const sourceAttribution = key === 'llm-human-preference' || key.startsWith('media-')
     ? { sourceId: 'lmarena', label: 'Arena ratings from LMArena', url: 'https://lmarena.ai/leaderboard', updatedAt: ISO_TIME }
     : { sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data', updatedAt: ISO_TIME };
+  const attribution = key === 'llm-value'
+    ? [
+      sourceAttribution,
+      { sourceId: 'openrouter', label: 'Catalog and pricing data from OpenRouter', url: 'https://openrouter.ai/models', updatedAt: ISO_TIME },
+    ]
+    : [sourceAttribution];
   return {
     revision: 'published-revision-1',
     publishedAt: ISO_TIME,
     freshness,
-    attribution: [attribution],
+    attribution,
     data: { key, profile, definition: definitions[key] ?? definitions['llm-coding'], entries },
   };
 }
@@ -341,7 +371,14 @@ describe('leaderboard routes and honest home teasers', () => {
   it('labels live llm-value rows as overall model value and keeps stale teasers unavailable', async () => {
     const fetchMock = vi.fn((input: string) => {
       if (input.includes('llm-value')) return Promise.resolve(jsonResponse(apiEnvelope('llm-value', 'balanced', [
-        entry({ model: { ...entry().model, name: 'Overall Value Model' }, metric: { ...entry().metric!, metricKey: 'benchlm:overall:raw', value: 90 } }),
+        entry({
+          model: { ...entry().model, name: 'Overall Value Model' },
+          metric: { ...entry().metric!, metricKey: 'benchlm:overall:raw', category: 'overall', value: 90 },
+          primaryPrice: primaryOpenRouterPrice(),
+          blendedCostPerMillion: 2,
+          contextWindowTokens: 128_000,
+          onValueFrontier: true,
+        }),
       ])));
       if (input.includes('llm-human-preference')) return Promise.resolve(jsonResponse(apiEnvelope('llm-human-preference', 'balanced', [
         entry({ model: { ...entry().model, name: 'Human Preference Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_style_control:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 } }),
