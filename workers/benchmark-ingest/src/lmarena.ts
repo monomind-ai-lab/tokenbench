@@ -61,6 +61,11 @@ interface ParsedArenaRow {
   unit: BenchmarkMetric['unit'];
 }
 
+interface ValidatedDatasetViewerRow {
+  rowIdx: number;
+  row: ArenaRow;
+}
+
 function fail(message: string): never {
   throw new Error(message);
 }
@@ -156,19 +161,33 @@ function assertAbsent(row: ArenaRow, fields: readonly string[], message: string)
   if (fields.some((field) => hasOwn(row, field))) fail(message);
 }
 
-function datasetViewerRow(value: unknown, index: number): ArenaRow {
+function datasetViewerRow(
+  value: unknown,
+  index: number,
+  artifact: LmArenaPageArtifact,
+): ValidatedDatasetViewerRow {
   const envelope = requireRecord(value, `LMArena row ${index}`);
-  // Hugging Face Dataset Viewer `/filter` responses wrap each source record in
-  // `{ row_idx, row, truncated_cells }`. Keeping direct-row support makes the
-  // normalizer usable for the Worker projection without changing the facts.
-  if (!hasOwn(envelope, 'row')) return envelope;
+  if (!hasOwn(envelope, 'row') || !hasOwn(envelope, 'row_idx') || !hasOwn(envelope, 'truncated_cells')) {
+    fail(`LMArena row ${index} must be a Dataset Viewer envelope`);
+  }
+  if (!Number.isSafeInteger(envelope.row_idx)) {
+    fail(`LMArena row ${index}.row_idx must be an integer`);
+  }
+  const rowIdx = envelope.row_idx as number;
+  const pageEnd = artifact.offset + artifact.length;
+  if (rowIdx < artifact.offset || rowIdx >= pageEnd) {
+    fail(`LMArena row ${index}.row_idx ${rowIdx} must be in descriptor range [${artifact.offset}, ${pageEnd})`);
+  }
   if (!Array.isArray(envelope.truncated_cells)) fail(`LMArena row ${index}.truncated_cells must be an array`);
   if (envelope.truncated_cells.length > 0) fail(`LMArena row ${index} contains truncated cells`);
-  return requireRecord(envelope.row, `LMArena row ${index}.row`);
+  return {
+    rowIdx,
+    row: requireRecord(envelope.row, `LMArena row ${index}.row`),
+  };
 }
 
 function parseStandardRow(value: unknown, index: number): ParsedArenaRow {
-  const row = datasetViewerRow(value, index);
+  const row = requireRecord(value, `LMArena standard row ${index}`);
   assertAbsent(row, ['score', 'score_ci_lower', 'score_ci_upper', 'observation_count', 'session_count'],
     `LMArena standard row ${index} does not accept agent counts or IPS score fields`);
   const [lower, upper] = optionalInterval(row, 'rating_lower', 'rating_upper', `LMArena standard row ${index}`);
@@ -193,7 +212,7 @@ function parseStandardRow(value: unknown, index: number): ParsedArenaRow {
 }
 
 function parseAgentRow(value: unknown, index: number): ParsedArenaRow {
-  const row = datasetViewerRow(value, index);
+  const row = requireRecord(value, `LMArena agent row ${index}`);
   assertAbsent(row, ['rating', 'rating_lower', 'rating_upper', 'variance', 'vote_count'],
     `LMArena agent row ${index} does not accept vote counts or Bradley-Terry rating fields`);
   const [lower, upper] = optionalInterval(
@@ -343,9 +362,16 @@ export function parseLmArenaSubset(
     licenseId: 'CC-BY-4.0',
     attributionText: 'Arena ratings from LMArena',
   };
-  const parsedRows = rows.map((row, index) => subset === 'agent'
-    ? parseAgentRow(row, index)
-    : parseStandardRow(row, index));
+  const rowIndexes = new Set<number>();
+  const datasetRows = rows.map((row, index) => {
+    const datasetRow = datasetViewerRow(row, index, artifactProvenance);
+    if (rowIndexes.has(datasetRow.rowIdx)) fail(`Duplicate LMArena row_idx ${datasetRow.rowIdx}`);
+    rowIndexes.add(datasetRow.rowIdx);
+    return datasetRow;
+  });
+  const parsedRows = datasetRows.map((datasetRow, index) => subset === 'agent'
+    ? parseAgentRow(datasetRow.row, index)
+    : parseStandardRow(datasetRow.row, index));
   parsedRows.forEach((row, index) => {
     if (row.category !== artifactProvenance.category) {
       fail(`LMArena row ${index} category ${row.category} does not match descriptor category ${artifactProvenance.category}`);

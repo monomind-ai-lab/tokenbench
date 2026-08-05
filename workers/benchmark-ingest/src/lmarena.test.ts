@@ -58,6 +58,10 @@ function loadFixture<T>(relativePath: string): T {
   return JSON.parse(readFileSync(new URL(relativePath, import.meta.url), 'utf8')) as T;
 }
 
+function datasetViewerEnvelope<T>(row: T, rowIdx: number): DatasetViewerRow<T> {
+  return { row_idx: rowIdx, row, truncated_cells: [] };
+}
+
 const observedAt = '2026-08-05T00:00:00.000Z';
 const standardFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_style_control.json');
 const laterStandardFixture = loadFixture<{ provenance: ArtifactProvenanceFixture; rows: DatasetViewerRow<StandardArenaRow>[] }>('../test-fixtures/lmarena/text_style_control_page_100.json');
@@ -150,7 +154,12 @@ describe('LMArena normalization', () => {
       rank: 25,
     };
 
-    const metric = parseLmArenaSubset('agent', [row], observedAt, agentProvenance).metrics[0];
+    const metric = parseLmArenaSubset(
+      'agent',
+      [datasetViewerEnvelope(row, agentFixture.rows[0].row_idx)],
+      observedAt,
+      agentProvenance,
+    ).metrics[0];
 
     expect(metric).toMatchObject({
       value: -0.0019042599988607666,
@@ -167,17 +176,22 @@ describe('LMArena normalization', () => {
       rating_upper: null,
     };
 
-    const metric = parseLmArenaSubset('text_style_control', [row], observedAt, standardProvenance).metrics[0];
+    const metric = parseLmArenaSubset(
+      'text_style_control',
+      [datasetViewerEnvelope(row, standardFixture.rows[0].row_idx)],
+      observedAt,
+      standardProvenance,
+    ).metrics[0];
 
     expect(metric.lower).toBeNull();
     expect(metric.upper).toBeNull();
   });
 
   it('keeps an explicitly unknown upstream license unknown', () => {
-    const batch = parseLmArenaSubset('text_style_control', [{
+    const batch = parseLmArenaSubset('text_style_control', [datasetViewerEnvelope({
       ...standardFixture.rows[0].row,
       license: 'Unknown',
-    }], observedAt, standardProvenance);
+    }, standardFixture.rows[0].row_idx)], observedAt, standardProvenance);
 
     expect(batch.models[0].sourceType).toBe('Unknown');
   });
@@ -192,7 +206,12 @@ describe('LMArena normalization', () => {
       snapshotKey: standardProvenance.snapshotKey.replace('/overall/', '/creative_writing/'),
     };
 
-    const metric = parseLmArenaSubset('text_style_control', [row], observedAt, creativeWritingArtifact).metrics[0];
+    const metric = parseLmArenaSubset(
+      'text_style_control',
+      [datasetViewerEnvelope(row, standardFixture.rows[0].row_idx)],
+      observedAt,
+      creativeWritingArtifact,
+    ).metrics[0];
 
     expect(metric).toMatchObject({
       category: 'creative_writing',
@@ -217,7 +236,7 @@ describe('LMArena normalization', () => {
     const whitespaceRow = { ...laterStandardFixture.rows[0].row, organization: ' \t ' };
     expect(parseLmArenaSubset(
       'text_style_control',
-      [whitespaceRow],
+      [datasetViewerEnvelope(whitespaceRow, laterStandardFixture.rows[0].row_idx)],
       observedAt,
       laterStandardFixture.provenance,
     ).models[0].creator).toBe('Unknown');
@@ -228,7 +247,7 @@ describe('LMArena normalization', () => {
 
     expect(() => parseLmArenaSubset(
       'text_style_control',
-      [malformedRow],
+      [datasetViewerEnvelope(malformedRow, laterStandardFixture.rows[0].row_idx)],
       observedAt,
       laterStandardFixture.provenance,
     )).toThrow(/organization.*string/i);
@@ -267,7 +286,7 @@ describe('LMArena normalization', () => {
 
     expect(() => parseLmArenaSubset(
       'text_style_control',
-      [mismatchedRow],
+      [datasetViewerEnvelope(mismatchedRow, standardFixture.rows[0].row_idx)],
       observedAt,
       standardProvenance,
     )).toThrow(/row 0.*category.*descriptor/i);
@@ -336,6 +355,70 @@ describe('LMArena normalization', () => {
     )).toThrow(/offset.*multiple of 100/i);
   });
 
+  it('rejects Dataset Viewer row indexes outside the described page bounds', () => {
+    for (const rowIdx of [99, 200]) {
+      expect(() => parseLmArenaSubset(
+        'text_style_control',
+        [datasetViewerEnvelope(laterStandardFixture.rows[0].row, rowIdx)],
+        observedAt,
+        laterStandardFixture.provenance,
+      )).toThrow(/row_idx.*range.*100.*200/i);
+    }
+  });
+
+  it('rejects non-integer Dataset Viewer row indexes', () => {
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      [datasetViewerEnvelope(laterStandardFixture.rows[0].row, 100.5)],
+      observedAt,
+      laterStandardFixture.provenance,
+    )).toThrow(/row_idx.*integer/i);
+  });
+
+  it('rejects direct rows that bypass the Dataset Viewer envelope', () => {
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      [laterStandardFixture.rows[0].row],
+      observedAt,
+      laterStandardFixture.provenance,
+    )).toThrow(/Dataset Viewer envelope/i);
+  });
+
+  it('rejects duplicate Dataset Viewer row indexes within one page', () => {
+    const duplicateIndexRow = {
+      ...standardFixture.rows[0],
+      row: {
+        ...standardFixture.rows[0].row,
+        model_name: 'claude-fable-5-duplicate-index',
+        rank: 2,
+      },
+    };
+
+    expect(() => parseLmArenaSubset(
+      'text_style_control',
+      [standardFixture.rows[0], duplicateIndexRow],
+      observedAt,
+      standardProvenance,
+    )).toThrow(/duplicate.*row_idx.*0/i);
+  });
+
+  it('accepts a sparse partial page without requiring contiguous row indexes', () => {
+    const sparseRow = datasetViewerEnvelope({
+      ...imageFixture.rows[0].row,
+      model_name: 'p-image-sparse-peer',
+      rank: 74,
+    }, 73);
+
+    const batch = parseLmArenaSubset(
+      'text_to_image',
+      [imageFixture.rows[0], sparseRow],
+      observedAt,
+      imageFixture.provenance,
+    );
+
+    expect(batch.metrics).toHaveLength(2);
+  });
+
   it('rejects truncated Dataset Viewer records rather than publishing incomplete evidence', () => {
     expect(() => parseLmArenaSubset('text_style_control', [{
       ...standardFixture.rows[0],
@@ -344,14 +427,14 @@ describe('LMArena normalization', () => {
   });
 
   it('rejects count fields that belong to the other Arena methodology', () => {
-    expect(() => parseLmArenaSubset('text_style_control', [{
+    expect(() => parseLmArenaSubset('text_style_control', [datasetViewerEnvelope({
       ...standardFixture.rows[0].row,
       observation_count: 2,
-    }], observedAt, standardProvenance)).toThrow(/does not accept agent counts/i);
-    expect(() => parseLmArenaSubset('agent', [{
+    }, standardFixture.rows[0].row_idx)], observedAt, standardProvenance)).toThrow(/does not accept agent counts/i);
+    expect(() => parseLmArenaSubset('agent', [datasetViewerEnvelope({
       ...agentFixture.rows[0].row,
       vote_count: 2,
-    }], observedAt, agentProvenance)).toThrow(/does not accept vote counts/i);
+    }, agentFixture.rows[0].row_idx)], observedAt, agentProvenance)).toThrow(/does not accept vote counts/i);
   });
 
   it('rejects an Arena subset that is not on the reviewed allowlist', () => {
