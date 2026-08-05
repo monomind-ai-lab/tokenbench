@@ -12,6 +12,7 @@ interface DirectoryModel {
   readonly creator: string;
   readonly sourceType: SourceType;
   readonly evidenceStatus: EvidenceStatus;
+  readonly utilitySelectable: boolean;
   readonly metricCategories: readonly string[];
 }
 
@@ -72,12 +73,13 @@ function isPositiveInteger(value: unknown): value is number {
 
 function parseDirectoryModel(value: unknown): DirectoryModel | null {
   if (!isRecord(value)) return null;
-  const { slug, name, creator, sourceType, evidenceStatus, metricCategories } = value;
+  const { slug, name, creator, sourceType, evidenceStatus, utilitySelectable, metricCategories } = value;
   if (!isText(slug)
     || !isText(name)
     || !isText(creator)
     || !isSourceType(sourceType)
     || !isEvidenceStatus(evidenceStatus)
+    || typeof utilitySelectable !== 'boolean'
     || !Array.isArray(metricCategories)
     || !metricCategories.every(isText)) return null;
   return {
@@ -86,6 +88,7 @@ function parseDirectoryModel(value: unknown): DirectoryModel | null {
     creator,
     sourceType,
     evidenceStatus,
+    utilitySelectable,
     metricCategories,
   };
 }
@@ -306,15 +309,17 @@ export function CompareHubPage() {
   const models = directory?.models ?? [];
   const pairs = directory?.indexablePairs ?? [];
   const modelsBySlug = useMemo(() => new Map(models.map((model) => [model.slug, model])), [models]);
+  const utilityModels = useMemo(() => models.filter((model) => model.utilitySelectable), [models]);
+  const utilityModelsBySlug = useMemo(() => new Map(utilityModels.map((model) => [model.slug, model])), [utilityModels]);
   const duplicateModelNames = useMemo(() => {
     const counts = new Map<string, number>();
-    models.forEach((model) => counts.set(model.name, (counts.get(model.name) ?? 0) + 1));
+    utilityModels.forEach((model) => counts.set(model.name, (counts.get(model.name) ?? 0) + 1));
     return new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name));
-  }, [models]);
-  const creators = useMemo(() => [...new Set(models.map((model) => model.creator))].sort(compareText), [models]);
-  const categories = useMemo(() => [...new Set(models.flatMap((model) => model.metricCategories))].sort(compareText), [models]);
-  const filteredModels = useMemo(() => models.filter((model) => (creatorFilter === '' || model.creator === creatorFilter)
-    && (categoryFilter === '' || model.metricCategories.includes(categoryFilter))), [categoryFilter, creatorFilter, models]);
+  }, [utilityModels]);
+  const creators = useMemo(() => [...new Set(utilityModels.map((model) => model.creator))].sort(compareText), [utilityModels]);
+  const categories = useMemo(() => [...new Set(utilityModels.flatMap((model) => model.metricCategories))].sort(compareText), [utilityModels]);
+  const filteredModels = useMemo(() => utilityModels.filter((model) => (creatorFilter === '' || model.creator === creatorFilter)
+    && (categoryFilter === '' || model.metricCategories.includes(categoryFilter))), [categoryFilter, creatorFilter, utilityModels]);
   const activeQuery = activePicker === 'first' ? firstSlug : activePicker === 'second' ? secondSlug : '';
   const selectableModels = useMemo(() => {
     const query = activeQuery.trim().toLocaleLowerCase();
@@ -323,8 +328,8 @@ export function CompareHubPage() {
       .some((value) => value.toLocaleLowerCase().includes(query)));
   }, [activeQuery, filteredModels]);
 
-  const first = modelsBySlug.get(firstSlug) ?? null;
-  const second = modelsBySlug.get(secondSlug) ?? null;
+  const first = utilityModelsBySlug.get(firstSlug) ?? null;
+  const second = utilityModelsBySlug.get(secondSlug) ?? null;
   const comparisonHref = first && second && first.slug !== second.slug ? comparisonPath(first, second, pairs) : null;
   const activeOption = activeOptionIndex >= 0 ? selectableModels[activeOptionIndex] : undefined;
   const activeOptionId = activeOption ? `comparison-model-option-${activeOptionIndex}` : undefined;

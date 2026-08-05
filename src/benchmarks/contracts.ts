@@ -1,4 +1,6 @@
 export const BENCHMARK_SOURCE_IDS = ['benchlm', 'lmarena', 'litellm', 'openrouter'] as const;
+/** Bump when derived benchmark records or their public route semantics change. */
+export const BENCHMARK_DERIVATION_SCHEMA_VERSION = '1';
 
 export type BenchmarkSourceId = typeof BENCHMARK_SOURCE_IDS[number];
 export type EvidenceStatus = 'supported' | 'estimated' | 'source_only';
@@ -212,12 +214,13 @@ export function resolveComparisonPairSlug(
 export function validateIndexableComparisonPairRoute(
   models: readonly BenchmarkModel[],
   pair: BenchmarkComparisonPair,
+  resolvePairSlug: ComparisonPairSlugResolver = createComparisonPairSlugResolver(models),
 ): void {
   if (!pair.indexable) return;
   if (!isComparisonPairRouteSafe(pair.pairSlug)) {
     fail('indexable pairSlug must be a route-safe URL segment');
   }
-  const resolved = resolveComparisonPairSlug(models, pair.pairSlug);
+  const resolved = resolvePairSlug(pair.pairSlug);
   if (!resolved) fail(`indexable comparison pair ${pair.pairSlug} must resolve uniquely through the comparison route`);
   if (resolved.modelA.modelKey !== pair.modelAKey
     || resolved.modelB.modelKey !== pair.modelBKey

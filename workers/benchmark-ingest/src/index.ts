@@ -6,6 +6,7 @@ import {
   type BenchmarkSourceRecord,
   type ComparisonSeed,
   type NormalizedSourceBatch,
+  BENCHMARK_DERIVATION_SCHEMA_VERSION,
   compareUtf8Binary,
   createComparisonPairSlugResolver,
   isComparisonPairRouteSafe,
@@ -1052,7 +1053,7 @@ export function deriveComparisonPairs(batch: NormalizedSourceBatch): BenchmarkCo
         ? 'supported-safe-shared-benchlm-categories'
         : 'route-ineligible';
     const pair = validateBenchmarkComparisonPair({ pairSlug, modelAKey: modelA.modelKey, modelBKey: modelB.modelKey, indexable, eligibilityReason, featuredRank: seed.featuredRank, sharedMetricCount });
-    validateIndexableComparisonPairRoute(batch.models, pair);
+    validateIndexableComparisonPairRoute(batch.models, pair, resolvePairSlug);
     records.set(`${pair.modelAKey}\u0000${pair.modelBKey}`, pair);
   }
   return [...records.values()].sort((left, right) => binaryCompare(left.pairSlug, right.pairSlug));
@@ -1062,6 +1063,14 @@ async function combinedContentHash(catalog: ActiveCatalogSource, sources: readon
   const artifacts = sources.map((source) => ({ sourceId: source.sourceId, artifactId: source.artifactId, contentHash: source.contentHash }))
     .sort((left, right) => binaryCompare(sourceKey(left.sourceId, left.artifactId), sourceKey(right.sourceId, right.artifactId)));
   return sha256Digest(jsonBytes({ catalogRevision: catalog.revision, openrouterContentHash: catalog.contentHash, artifacts }));
+}
+
+async function revisionIdForContentHash(contentHash: string): Promise<string> {
+  const fingerprint = await sha256Digest(jsonBytes({
+    derivationSchemaVersion: BENCHMARK_DERIVATION_SCHEMA_VERSION,
+    contentHash,
+  }));
+  return `benchmark_${fingerprint.slice('sha256:'.length, 'sha256:'.length + 32)}`;
 }
 
 async function writeEvidence(bucket: R2Bucket, sources: readonly BenchmarkSourceRecord[], evidence: readonly EvidenceWrite[]): Promise<void> {
@@ -1212,9 +1221,10 @@ export function buildPublicationStatements(
   batch: NormalizedSourceBatch,
   pairs: readonly BenchmarkComparisonPair[],
 ): BoundStatement[] {
+  const resolvePairSlug = createComparisonPairSlugResolver(batch.models);
   for (const value of pairs) {
     const pair = validateBenchmarkComparisonPair(value);
-    validateIndexableComparisonPairRoute(batch.models, pair);
+    validateIndexableComparisonPairRoute(batch.models, pair, resolvePairSlug);
   }
   const statements: BoundStatement[] = [
     boundedStatement(db, `INSERT INTO benchmark_revisions
@@ -1275,8 +1285,9 @@ export async function refreshBenchmarkRevision(
     const normalized = mergeNormalizedBatches([benchLm.batch, liteLlm.batch, openRouter, ...pages.map((page) => page.batch)]);
     const pairs = deriveComparisonPairs(normalized);
     const contentHash = await combinedContentHash(catalog, normalized.sources);
+    const revision = await revisionIdForContentHash(contentHash);
     const evidence = [...benchLm.evidence, ...liteLlm.evidence, ...pages.flatMap((page) => page.evidence)];
-    if (active?.contentHash === contentHash) {
+    if (active?.contentHash === contentHash && active.revision === revision) {
       const unchangedStatements = [
         boundedStatement(env.CATALOG_DB, `UPDATE benchmark_revisions SET checked_at = ? WHERE revision = ?`, [checkedAt, active.revision]),
         ...refreshSuccessStatements(env.CATALOG_DB, normalized.sources, checkedAt, active.revision),
@@ -1287,7 +1298,6 @@ export async function refreshBenchmarkRevision(
       await env.CATALOG_DB.batch(unchangedStatements);
       return { status: 'unchanged', revision: active.revision, checkedAt, error: null };
     }
-    const revision = `benchmark_${contentHash.slice('sha256:'.length, 'sha256:'.length + 32)}`;
     const generatedAt = normalized.sources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'leaderboard')?.upstreamRevision ?? checkedAt;
     await writeEvidence(env.SOURCE_SNAPSHOTS, normalized.sources, evidence);
     await env.CATALOG_DB.batch(buildPublicationStatements(env.CATALOG_DB, revision, generatedAt, checkedAt, contentHash, catalog, normalized, pairs));

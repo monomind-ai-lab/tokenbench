@@ -169,6 +169,17 @@ async function sitemap(rows = publishedRows()): Promise<{ readonly response: Res
 }
 
 describe('comparison sitemap', () => {
+  it('returns a non-cacheable unavailable response when the catalog binding is missing', async () => {
+    const response = await onRequestGet({
+      request: new Request(`${ORIGIN}/sitemaps/comparisons.xml`),
+      env: {},
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    await expect(response.text()).resolves.toBe(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n</urlset>\n`);
+  });
+
   it('lists only exact, canonical persisted indexable pairs in lexical order from the publication-pointer snapshot', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     try {

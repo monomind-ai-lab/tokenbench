@@ -49,6 +49,8 @@ interface CompareDirectoryModel {
   readonly creator: string;
   readonly sourceType: ActiveBenchmarkSnapshot['models'][number]['sourceType'];
   readonly evidenceStatus: ActiveBenchmarkSnapshot['models'][number]['evidenceStatus'];
+  /** True only when this model can safely form a utility route with every selectable peer. */
+  readonly utilitySelectable: boolean;
   readonly metricCategories: readonly string[];
 }
 
@@ -183,9 +185,19 @@ function utilityRouteModels(snapshot: ActiveBenchmarkSnapshot): readonly Benchma
 }
 
 function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: BenchmarkFactIndexes): CompareDirectory {
-  const routeModels = utilityRouteModels(snapshot);
-  const modelsByKey = new Map(routeModels.map((model) => [model.modelKey, model]));
-  const models = routeModels
+  const utilityModels = utilityRouteModels(snapshot);
+  const utilityModelKeys = new Set(utilityModels.map((model) => model.modelKey));
+  // A complex slug can be ambiguous as a free-form utility choice while still
+  // being the endpoint of one exact, server-validated published pair. Keep the
+  // latter as metadata so its reviewed link has labels, but do not expose it in
+  // the all-to-all selector.
+  const indexablePairModelKeys = new Set(snapshot.comparisonPairs
+    .filter((pair) => pair.indexable === true)
+    .flatMap((pair) => [pair.modelAKey, pair.modelBKey]));
+  const directoryModels = snapshot.models.filter((model) => utilityModelKeys.has(model.modelKey)
+    || indexablePairModelKeys.has(model.modelKey));
+  const modelsByKey = new Map(directoryModels.map((model) => [model.modelKey, model]));
+  const models = directoryModels
     .slice()
     .sort((left, right) => compareText(left.slug, right.slug) || compareText(left.modelKey, right.modelKey))
     .map((model) => ({
@@ -194,6 +206,7 @@ function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: Benchm
       creator: model.creator,
       sourceType: model.sourceType,
       evidenceStatus: model.evidenceStatus,
+      utilitySelectable: utilityModelKeys.has(model.modelKey),
       metricCategories: factIndexes.metricCategoriesByModel.get(model.modelKey) ?? [],
     }));
   const indexablePairs = snapshot.comparisonPairs

@@ -12,14 +12,26 @@ function comparisonSitemap(entries: readonly { readonly pairSlug: string; readon
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="${SITEMAP_NAMESPACE}">\n${urls.join('\n')}${urls.length === 0 ? '' : '\n'}</urlset>\n`;
 }
 
+function unavailableSitemapResponse(): Response {
+  return new Response(comparisonSitemap([]), {
+    status: 503,
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/xml; charset=utf-8',
+      Vary: 'Accept-Encoding',
+    },
+  });
+}
+
 /**
  * Emits only comparison rows from the published revision selected by the
  * publication pointer. The snapshot reader validates that each persisted slug
  * already matches its active models' canonical order.
  */
 export async function onRequestGet({ env }: { request: Request; env: BenchmarkApiEnv }): Promise<Response> {
+  if (!env.CATALOG_DB) return unavailableSitemapResponse();
   try {
-    const snapshot = env.CATALOG_DB ? await readActiveBenchmarkSnapshot(env.CATALOG_DB) : null;
+    const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
     const publishedAt = snapshot?.revision.publishedAt;
     const entries = snapshot && publishedAt
       ? snapshot.comparisonPairs
@@ -37,13 +49,6 @@ export async function onRequestGet({ env }: { request: Request; env: BenchmarkAp
       },
     });
   } catch {
-    return new Response(comparisonSitemap([]), {
-      status: 503,
-      headers: {
-        'Cache-Control': 'no-store',
-        'Content-Type': 'application/xml; charset=utf-8',
-        Vary: 'Accept-Encoding',
-      },
-    });
+    return unavailableSitemapResponse();
   }
 }

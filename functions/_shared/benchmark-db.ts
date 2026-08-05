@@ -1,6 +1,7 @@
 import {
   BENCHMARK_SOURCE_IDS,
   compareUtf8Binary,
+  createComparisonPairSlugResolver,
   validateBenchmarkComparisonPair,
   validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
@@ -343,6 +344,7 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
   await validateRevisionIntegrity(activeRevision, sources);
 
   const modelsByKey = new Map(models.map((model) => [model.modelKey, model]));
+  const resolvePairSlug = createComparisonPairSlugResolver(models);
   const comparisonPairs = pairRows.map(mapComparisonPair);
   comparisonPairs.forEach((pair) => {
     validateBenchmarkComparisonPair(pair);
@@ -354,7 +356,7 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
     if (pair.pairSlug !== `${modelA.slug}-vs-${modelB.slug}`) {
       fail(`comparison pair ${pair.pairSlug} does not use its active models' canonical slugs`);
     }
-    validateIndexableComparisonPairRoute(models, pair);
+    validateIndexableComparisonPairRoute(models, pair, resolvePairSlug);
   });
 
   return {

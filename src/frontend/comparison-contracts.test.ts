@@ -33,6 +33,22 @@ const openRouterSource = {
   attributionText: 'OpenRouter',
 };
 
+const lmArenaSource = {
+  sourceId: 'lmarena' as const,
+  artifactId: 'lmarena-text-style',
+  sourceUrl: 'https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset',
+  observedAt: '2026-08-05T12:00:00.000Z',
+  etag: null,
+  lastModified: null,
+  upstreamRevision: 'lmarena-r1',
+  schemaVersion: null,
+  snapshotKey: 'lmarena/text-style.json',
+  contentHash: `sha256:${'e'.repeat(64)}`,
+  originalContentHash: `sha256:${'f'.repeat(64)}`,
+  licenseId: 'CC-BY-4.0' as const,
+  attributionText: 'LMArena',
+};
+
 const viewModel = {
   revision: 'published-r1',
   publishedAt: '2026-08-05T12:00:00.000Z',
@@ -61,6 +77,97 @@ const viewModel = {
   relatedPairs: [],
   subscriptionMatch: null,
 } satisfies ComparisonViewModel;
+
+function metricRecord(
+  model: Record<string, any>,
+  metricKey: string,
+  category: string,
+  sourceId: 'benchlm' | 'lmarena',
+  sourceArtifactId: string,
+  methodology: 'benchlm_raw_composite' | 'bradley_terry',
+  unit: 'score' | 'arena_score',
+): Record<string, unknown> {
+  return {
+    modelKey: model.modelKey,
+    metricKey,
+    category,
+    value: 80,
+    rank: null,
+    lower: null,
+    upper: null,
+    voteCount: methodology === 'bradley_terry' ? 100 : null,
+    unit,
+    sourceId,
+    sourceUpdatedAt: viewModel.publishedAt,
+    sourceModelId: model.sourceModelId,
+    sourceArtifactId,
+    rankingEligible: true,
+    methodology,
+    observationCount: null,
+    sessionCount: null,
+  };
+}
+
+function priceCheckRecord(model: Record<string, any>, providerId: string, routeId: string): Record<string, unknown> {
+  return {
+    modelKey: model.modelKey,
+    sourceId: 'openrouter',
+    providerId,
+    routeId,
+    sourceModelId: model.sourceModelId,
+    sourceArtifactId: 'openrouter-catalog',
+    inputUsdPerMillion: 1,
+    cachedInputUsdPerMillion: null,
+    outputUsdPerMillion: 4,
+    contextWindowTokens: 128000,
+    verificationStatus: 'primary',
+    canonicalSlug: null,
+    maxInputTokens: null,
+    maxOutputTokens: null,
+    inputModalities: null,
+    outputModalities: null,
+    supportedParameters: null,
+  };
+}
+
+function orderedHydrationPayload(): Record<string, any> {
+  const payload = JSON.parse(JSON.stringify(viewModel)) as Record<string, any>;
+  const [modelA, modelB] = payload.models;
+  const modelC = { ...modelB, modelKey: 'provider:model-c', slug: 'model-c', name: 'Model C', sourceModelId: 'model-c' };
+  const modelD = { ...modelB, modelKey: 'provider:model-d', slug: 'model-d', name: 'Model D', sourceModelId: 'model-d' };
+  payload.metricRows = [
+    {
+      metricKey: 'benchlm:category:alpha', category: 'alpha', unit: 'score', sourceId: 'benchlm', methodology: 'benchlm_raw_composite',
+      modelA: metricRecord(modelA, 'benchlm:category:alpha', 'alpha', 'benchlm', 'benchlm-models', 'benchlm_raw_composite', 'score'),
+      modelB: null,
+    },
+    {
+      metricKey: 'lmarena:text-style:beta', category: 'beta', unit: 'arena_score', sourceId: 'lmarena', methodology: 'bradley_terry',
+      modelA: null,
+      modelB: metricRecord(modelB, 'lmarena:text-style:beta', 'beta', 'lmarena', 'lmarena-text-style', 'bradley_terry', 'arena_score'),
+    },
+  ];
+  payload.priceChecks = [
+    {
+      modelKey: modelA.modelKey,
+      checks: [
+        priceCheckRecord(modelA, 'alpha-provider', 'route-a'),
+        priceCheckRecord(modelA, 'beta-provider', 'route-b'),
+      ],
+    },
+    { modelKey: modelB.modelKey, checks: [] },
+  ];
+  payload.attribution = [benchLmSource, lmArenaSource, openRouterSource];
+  payload.methodology = [
+    { sourceId: 'benchlm', methodology: 'benchlm_raw_composite' },
+    { sourceId: 'lmarena', methodology: 'bradley_terry' },
+  ];
+  payload.relatedPairs = [
+    { pairSlug: 'model-a-vs-model-c', modelA, modelB: modelC, featuredRank: 1, sharedMetricCount: 2 },
+    { pairSlug: 'model-a-vs-model-d', modelA, modelB: modelD, featuredRank: null, sharedMetricCount: 2 },
+  ];
+  return payload;
+}
 
 describe('comparison SSR hydration contract', () => {
   it('accepts a complete server view model including explicit unavailable arrays', () => {
@@ -163,6 +270,90 @@ describe('comparison SSR hydration contract', () => {
       ...populated,
       methodology: [{ sourceId: 'lmarena', methodology: 'bradley_terry' }],
     })).toBeNull();
+  });
+
+  it('rejects attribution reordered away from the server source ordering', () => {
+    const payload = orderedHydrationPayload();
+
+    expect(parseComparisonViewModel(payload)).toEqual(payload);
+    expect(parseComparisonViewModel({ ...payload, attribution: [...payload.attribution].reverse() })).toBeNull();
+  });
+
+  it('rejects methodology reordered away from the server source ordering', () => {
+    const payload = orderedHydrationPayload();
+
+    expect(parseComparisonViewModel(payload)).toEqual(payload);
+    expect(parseComparisonViewModel({ ...payload, methodology: [...payload.methodology].reverse() })).toBeNull();
+  });
+
+  it('rejects metric rows reordered away from the server comparison ordering', () => {
+    const payload = orderedHydrationPayload();
+
+    expect(parseComparisonViewModel(payload)).toEqual(payload);
+    expect(parseComparisonViewModel({ ...payload, metricRows: [...payload.metricRows].reverse() })).toBeNull();
+  });
+
+  it('uses source artifact identity to preserve server metric-row ordering across model sides', () => {
+    const payload = orderedHydrationPayload();
+    const [modelA, modelB] = payload.models;
+    const leftOnly = {
+      metricKey: 'benchlm:category:shared', category: 'shared', unit: 'score', sourceId: 'benchlm', methodology: 'benchlm_raw_composite',
+      modelA: metricRecord(modelA, 'benchlm:category:shared', 'shared', 'benchlm', 'a-artifact', 'benchlm_raw_composite', 'score'),
+      modelB: null,
+    };
+    const rightOnly = {
+      metricKey: 'benchlm:category:shared', category: 'shared', unit: 'score', sourceId: 'benchlm', methodology: 'benchlm_raw_composite',
+      modelA: null,
+      modelB: metricRecord(modelB, 'benchlm:category:shared', 'shared', 'benchlm', 'z-artifact', 'benchlm_raw_composite', 'score'),
+    };
+    payload.metricRows = [leftOnly, rightOnly];
+    payload.methodology = [{ sourceId: 'benchlm', methodology: 'benchlm_raw_composite' }];
+    payload.attribution = [
+      { ...benchLmSource, artifactId: 'a-artifact' },
+      benchLmSource,
+      { ...benchLmSource, artifactId: 'z-artifact' },
+      openRouterSource,
+    ];
+
+    expect(parseComparisonViewModel(payload)).toEqual(payload);
+    expect(parseComparisonViewModel({ ...payload, metricRows: [rightOnly, leftOnly] })).toBeNull();
+  });
+
+  it('rejects duplicate metric row identities that the server never emits', () => {
+    const payload = orderedHydrationPayload();
+
+    expect(parseComparisonViewModel({ ...payload, metricRows: [...payload.metricRows, payload.metricRows[1]] })).toBeNull();
+  });
+
+  it('rejects price-check groups reordered away from the server comparison ordering', () => {
+    const payload = orderedHydrationPayload();
+    const reordered = JSON.parse(JSON.stringify(payload)) as Record<string, any>;
+    reordered.priceChecks[0].checks.reverse();
+
+    expect(parseComparisonViewModel(reordered)).toBeNull();
+  });
+
+  it('rejects duplicate price-check identities that the server never emits', () => {
+    const payload = orderedHydrationPayload();
+    const duplicate = JSON.parse(JSON.stringify(payload)) as Record<string, any>;
+    duplicate.priceChecks[0].checks.push(duplicate.priceChecks[0].checks[1]);
+
+    expect(parseComparisonViewModel(duplicate)).toBeNull();
+  });
+
+  it('rejects related comparisons reordered away from featured-rank server ordering', () => {
+    const payload = orderedHydrationPayload();
+
+    expect(parseComparisonViewModel(payload)).toEqual(payload);
+    expect(parseComparisonViewModel({ ...payload, relatedPairs: [...payload.relatedPairs].reverse() })).toBeNull();
+  });
+
+  it('requires a related comparison to embed the exact current model record', () => {
+    const payload = orderedHydrationPayload();
+    const altered = JSON.parse(JSON.stringify(payload)) as Record<string, any>;
+    altered.relatedPairs[0].modelA.creator = 'Altered Provider';
+
+    expect(parseComparisonViewModel(altered)).toBeNull();
   });
 
   it('rejects related comparison payloads that do not preserve the server route relationship', () => {

@@ -657,6 +657,47 @@ describe('atomic benchmark ingestion', () => {
     expect(events.slice(eventCountAfterFirst)).toEqual(['d1:refresh']);
   });
 
+  it('publishes a new immutable revision when unchanged source artifacts were hashed before the derivation schema version', async () => {
+    const { env, db, events } = seededEnvironment();
+    const first = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);
+    if (!first.revision) throw new Error('expected the initial benchmark revision');
+    const legacyArtifacts = (db.state.sourceRows.get(first.revision) ?? [])
+      .map((source) => ({ sourceId: source.sourceId, artifactId: source.artifactId, contentHash: source.contentHash }))
+      .sort((left, right) => {
+        const leftIdentity = `${left.sourceId}\u0000${left.artifactId}`;
+        const rightIdentity = `${right.sourceId}\u0000${right.artifactId}`;
+        return leftIdentity < rightIdentity ? -1 : leftIdentity > rightIdentity ? 1 : 0;
+      });
+    const legacyContentHash = sha256(new TextEncoder().encode(JSON.stringify({
+      catalogRevision: db.state.catalog.revision,
+      openrouterContentHash: db.state.catalog.contentHash,
+      artifacts: legacyArtifacts,
+    })));
+    const legacyRevision = db.state.revisions.find((revision) => revision.revision === first.revision);
+    if (!legacyRevision) throw new Error('expected the active revision record');
+    const legacyRevisionId = `benchmark_${legacyContentHash.slice('sha256:'.length, 'sha256:'.length + 32)}`;
+    const legacySources = db.state.sourceRows.get(first.revision);
+    if (!legacySources) throw new Error('expected active source records');
+    db.state.sourceRows.delete(first.revision);
+    db.state.sourceRows.set(legacyRevisionId, legacySources);
+    legacyRevision.revision = legacyRevisionId;
+    legacyRevision.contentHash = legacyContentHash;
+    db.state.activeRevision = legacyRevisionId;
+    const eventsAfterLegacyRevision = events.length;
+
+    const refreshed = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-05T13:00:00.000Z').dependencies,
+    );
+
+    expect(refreshed).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    expect(refreshed.revision).not.toBe(legacyRevisionId);
+    expect(db.state.revisions).toHaveLength(2);
+    expect(db.state.revisions.find((revision) => revision.revision === legacyRevisionId)?.publicationState).toBe('superseded');
+    expect(db.state.revisions.find((revision) => revision.revision === refreshed.revision)?.contentHash).toBe(legacyContentHash);
+    expect(events.slice(eventsAfterLegacyRevision)).toContain('d1:publication');
+  });
+
   it('publishes a BenchLM bundle that combines immutable 304 projections with a fresh 200 artifact', async () => {
     const { env, db } = seededEnvironment();
     const first = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);

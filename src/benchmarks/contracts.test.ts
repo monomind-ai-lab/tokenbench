@@ -9,7 +9,9 @@ import {
 } from './model-aliases';
 import {
   compareUtf8Binary,
+  createComparisonPairSlugResolver,
   resolveComparisonPairSlug,
+  type BenchmarkComparisonPair,
   type BenchmarkModel,
   validateBenchmarkComparisonPair,
   validateIndexableComparisonPairRoute,
@@ -520,6 +522,33 @@ describe('benchmark contracts', () => {
     expect(resolveComparisonPairSlug(models, ambiguous.pairSlug)).toBeNull();
     expect(() => validateIndexableComparisonPairRoute(models, ambiguous))
       .toThrow('must resolve uniquely through the comparison route');
+  });
+
+  it('reuses one supplied route resolver across a batch of indexable pairs', () => {
+    const template = validBatch.models[0] as BenchmarkModel;
+    const models: BenchmarkModel[] = [
+      { ...template, modelKey: 'provider:a', slug: 'a', sourceModelId: 'provider/a' },
+      { ...template, modelKey: 'provider:b', slug: 'b', sourceModelId: 'provider/b' },
+      { ...template, modelKey: 'provider:c', slug: 'c', sourceModelId: 'provider/c' },
+    ];
+    const pairs: BenchmarkComparisonPair[] = [
+      validateBenchmarkComparisonPair({ pairSlug: 'a-vs-b', modelAKey: 'provider:a', modelBKey: 'provider:b', indexable: true, eligibilityReason: 'eligible', featuredRank: null, sharedMetricCount: 2 }),
+      validateBenchmarkComparisonPair({ pairSlug: 'a-vs-c', modelAKey: 'provider:a', modelBKey: 'provider:c', indexable: true, eligibilityReason: 'eligible', featuredRank: null, sharedMetricCount: 2 }),
+    ];
+    let constructions = 0;
+    let resolutions = 0;
+    const resolver = (() => {
+      constructions += 1;
+      const actual = createComparisonPairSlugResolver(models);
+      return (pairSlug: string) => {
+        resolutions += 1;
+        return actual(pairSlug);
+      };
+    })();
+    pairs.forEach((pair) => validateIndexableComparisonPairRoute(models, pair, resolver));
+
+    expect(constructions).toBe(1);
+    expect(resolutions).toBe(pairs.length);
   });
 });
 

@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { BenchmarkMetric, BenchmarkModel, BenchmarkSourceRecord } from '../benchmarks/contracts';
 import { primaryHostedPriceForModel, type PrimaryHostedPrice, type WorkloadProfile } from '../benchmarks/value';
 import { ROUTE_PATHS } from '../routing/routes';
-import type { ComparisonMetricRow, ComparisonPriceChecks, ComparisonViewModel } from './comparison-contracts';
+import { comparisonMetricRowIdentity, type ComparisonMetricRow, type ComparisonPriceChecks, type ComparisonViewModel } from './comparison-contracts';
 
 const WORKLOAD_OPTIONS: readonly { readonly id: WorkloadProfile; readonly label: string; readonly description: string }[] = [
   { id: 'inputHeavy', label: 'Input-heavy', description: 'For work dominated by incoming context.' },
@@ -67,7 +67,7 @@ function stableDomId(prefix: string, value: string): string {
   return `${prefix}-${hex}`;
 }
 
-function tableModelLabel(models: readonly [BenchmarkModel, BenchmarkModel], index: 0 | 1): string {
+function modelDisplayLabel(models: readonly [BenchmarkModel, BenchmarkModel], index: 0 | 1): string {
   const model = models[index];
   return models[1 - index].name === model.name ? `${model.name} (${model.slug})` : model.name;
 }
@@ -89,17 +89,26 @@ function routeContext(route: PrimaryHostedPrice | null): ReactNode {
   return unavailable(contextWindowTokens === null ? 'Unavailable' : new Intl.NumberFormat('en-US').format(contextWindowTokens));
 }
 
-function PriceRouteContext({ model, route }: { readonly model: BenchmarkModel; readonly route: PrimaryHostedPrice | null }) {
+function PriceRouteContext({
+  models,
+  index,
+  route,
+}: {
+  readonly models: readonly [BenchmarkModel, BenchmarkModel];
+  readonly index: 0 | 1;
+  readonly route: PrimaryHostedPrice | null;
+}) {
   return <div className="comparison-route-context">
-    <strong>{model.name}</strong>
+    <strong>{modelDisplayLabel(models, index)}</strong>
     {route ? <code>{route.routeId}</code> : <span className="comparison-unavailable">No primary hosted route</span>}
   </div>;
 }
 
-function ModelIdentity({ model }: { readonly model: BenchmarkModel }) {
+function ModelIdentity({ models, index }: { readonly models: readonly [BenchmarkModel, BenchmarkModel]; readonly index: 0 | 1 }) {
+  const model = models[index];
   const headingId = stableDomId('comparison-model', model.modelKey);
   return <article className="comparison-model-identity" aria-labelledby={headingId}>
-    <h3 id={headingId}>{model.name}</h3>
+    <h3 id={headingId}>{modelDisplayLabel(models, index)}</h3>
     <dl>
       <div><dt>Creator</dt><dd>{model.creator}</dd></div>
       <div><dt>Model type</dt><dd>{model.sourceType}</dd></div>
@@ -108,18 +117,6 @@ function ModelIdentity({ model }: { readonly model: BenchmarkModel }) {
     </dl>
     <p className="comparison-identity-source">Source model: <code>{model.sourceModelId}</code></p>
   </article>;
-}
-
-function metricRowIdentity(row: ComparisonMetricRow): string {
-  return [
-    row.sourceId,
-    row.metricKey,
-    row.category,
-    row.unit,
-    row.methodology,
-    row.modelA?.sourceArtifactId ?? '',
-    row.modelB?.sourceArtifactId ?? '',
-  ].join('\u0000');
 }
 
 function SourceMetrics({ rows, models }: { readonly rows: readonly ComparisonMetricRow[]; readonly models: readonly [BenchmarkModel, BenchmarkModel] }) {
@@ -132,18 +129,18 @@ function SourceMetrics({ rows, models }: { readonly rows: readonly ComparisonMet
       <div className="comparison-table-wrap">
         <table className="comparison-table">
           <caption>Source metric comparison</caption>
-          <thead><tr><th scope="col">Metric</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{tableModelLabel(models, 0)}</th><th scope="col">{tableModelLabel(models, 1)}</th></tr></thead>
-          <tbody>{rows.map((row) => <tr key={metricRowIdentity(row)}>
+          <thead><tr><th scope="col">Metric</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{modelDisplayLabel(models, 0)}</th><th scope="col">{modelDisplayLabel(models, 1)}</th></tr></thead>
+          <tbody>{rows.map((row) => <tr key={comparisonMetricRowIdentity(row)}>
             <th scope="row"><code>{row.metricKey}</code></th><td>{row.sourceId}</td><td>{row.unit}</td><td>{metricValue(row.modelA)}</td><td>{metricValue(row.modelB)}</td>
           </tr>)}</tbody>
         </table>
       </div>
       <div className="comparison-mobile-cards" aria-label="Source metrics, ordered cards">
-        {rows.map((row) => <article className="comparison-mobile-card" key={metricRowIdentity(row)}>
+        {rows.map((row) => <article className="comparison-mobile-card" key={comparisonMetricRowIdentity(row)}>
           <h3><code>{row.metricKey}</code></h3>
           <dl>
             <div><dt>Source</dt><dd>{row.sourceId}</dd></div><div><dt>Category</dt><dd>{row.category}</dd></div><div><dt>Unit</dt><dd>{row.unit}</dd></div><div><dt>Methodology</dt><dd>{row.methodology}</dd></div>
-            <div><dt>{models[0].name}</dt><dd>{metricValue(row.modelA)}</dd></div><div><dt>{models[1].name}</dt><dd>{metricValue(row.modelB)}</dd></div>
+            <div><dt>{modelDisplayLabel(models, 0)}</dt><dd>{metricValue(row.modelA)}</dd></div><div><dt>{modelDisplayLabel(models, 1)}</dt><dd>{metricValue(row.modelB)}</dd></div>
           </dl>
         </article>)}
       </div>
@@ -201,15 +198,15 @@ function PricingContext({
     <div className="comparison-table-wrap">
       <table className="comparison-table">
         <caption>Route pricing and context comparison</caption>
-        <thead><tr><th scope="col">Field</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{tableModelLabel(models, 0)}</th><th scope="col">{tableModelLabel(models, 1)}</th></tr></thead>
+        <thead><tr><th scope="col">Field</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{modelDisplayLabel(models, 0)}</th><th scope="col">{modelDisplayLabel(models, 1)}</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th><td>OpenRouter</td><td>{row.unit}</td><td>{row.left}</td><td>{row.right}</td></tr>)}</tbody>
       </table>
     </div>
     <div className="comparison-mobile-cards" aria-label="Pricing and context, ordered cards">
-      {rows.map((row) => <article className="comparison-mobile-card" key={row.label}><h3>{row.label}</h3><dl><div><dt>Source</dt><dd>OpenRouter</dd></div><div><dt>Unit</dt><dd>{row.unit}</dd></div><div><dt>{models[0].name}</dt><dd>{row.mobileLeft}</dd></div><div><dt>{models[1].name}</dt><dd>{row.mobileRight}</dd></div></dl></article>)}
+      {rows.map((row) => <article className="comparison-mobile-card" key={row.label}><h3>{row.label}</h3><dl><div><dt>Source</dt><dd>OpenRouter</dd></div><div><dt>Unit</dt><dd>{row.unit}</dd></div><div><dt>{modelDisplayLabel(models, 0)}</dt><dd>{row.mobileLeft}</dd></div><div><dt>{modelDisplayLabel(models, 1)}</dt><dd>{row.mobileRight}</dd></div></dl></article>)}
     </div>
     <div className="comparison-route-list" aria-label="Primary hosted routes used for pricing">
-      <PriceRouteContext model={models[0]} route={routes[0]} /><PriceRouteContext model={models[1]} route={routes[1]} />
+      <PriceRouteContext index={0} models={models} route={routes[0]} /><PriceRouteContext index={1} models={models} route={routes[1]} />
     </div>
   </section>;
 }
@@ -267,14 +264,14 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
 
   return <div className="comparison-page comparison-detail-page">
     <section className="comparison-intro" aria-labelledby="comparison-detail-heading">
-      <nav className="comparison-breadcrumb" aria-label="Breadcrumb"><a href="/compare/">Compare</a><span aria-hidden="true">/</span><span aria-current="page">{models[0].name} vs {models[1].name}</span></nav>
-      <h1 id="comparison-detail-heading">{models[0].name} vs {models[1].name}</h1>
+      <nav className="comparison-breadcrumb" aria-label="Breadcrumb"><a href="/compare/">Compare</a><span aria-hidden="true">/</span><span aria-current="page">{modelDisplayLabel(models, 0)} vs {modelDisplayLabel(models, 1)}</span></nav>
+      <h1 id="comparison-detail-heading">{modelDisplayLabel(models, 0)} vs {modelDisplayLabel(models, 1)}</h1>
       <p>Read the named evidence fields, route context, and unavailable values before making a workload-specific judgment.</p>
     </section>
 
     <section className="comparison-panel comparison-section comparison-model-pair" aria-labelledby="comparison-model-pair-heading">
       <div className="comparison-section-heading"><h2 id="comparison-model-pair-heading">Model pair</h2><p>Identity panels have equal weight. The center marker only names the pairing; it does not declare a better model.</p></div>
-      <div className="comparison-model-pair-grid"><ModelIdentity model={models[0]} /><span className="comparison-versus-marker" aria-label="versus">VS</span><ModelIdentity model={models[1]} /></div>
+      <div className="comparison-model-pair-grid"><ModelIdentity index={0} models={models} /><span className="comparison-versus-marker" aria-label="versus">VS</span><ModelIdentity index={1} models={models} /></div>
     </section>
 
     <SourceMetrics models={models} rows={viewModel.metricRows} />

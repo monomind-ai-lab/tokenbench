@@ -3,14 +3,20 @@ import { renderToString } from 'react-dom/server';
 import { ComparisonDetailApp } from '../../src/App';
 import {
   compareUtf8Binary,
+  createComparisonPairSlugResolver,
   isComparisonPairRouteSafe,
-  resolveComparisonPairSlug,
   type BenchmarkComparisonPair,
   type BenchmarkMetric,
   type BenchmarkModel,
   type BenchmarkPriceCheck,
+  type ComparisonPairSlugResolver,
 } from '../../src/benchmarks/contracts';
 import {
+  compareComparisonMethodologies,
+  compareComparisonMetricRows,
+  compareComparisonPriceChecks,
+  compareComparisonSources,
+  compareRelatedComparisons,
   type ComparisonMethodology,
   type ComparisonMetricRow,
   type ComparisonPriceChecks,
@@ -71,8 +77,8 @@ function requestedPair(request: Request, parameter: unknown): RequestedPair | nu
   return { pairSlug: decoded, hasTrailingSlash };
 }
 
-function resolvePair(snapshot: ActiveBenchmarkSnapshot, pairSlug: string): ResolvedPair | null {
-  const resolved = resolveComparisonPairSlug(snapshot.models, pairSlug);
+function resolvePair(resolvePairSlug: ComparisonPairSlugResolver, pairSlug: string): ResolvedPair | null {
+  const resolved = resolvePairSlug(pairSlug);
   if (!resolved) return null;
   return {
     ...resolved,
@@ -107,9 +113,7 @@ function metricRows(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): 
         modelB,
       } satisfies ComparisonMetricRow;
     })
-    .sort((left, right) => compareUtf8Binary(left.metricKey, right.metricKey)
-      || compareUtf8Binary(left.sourceId, right.sourceId)
-      || compareUtf8Binary(left.category, right.category));
+    .sort(compareComparisonMetricRows);
 }
 
 function priceChecks(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): readonly [ComparisonPriceChecks, ComparisonPriceChecks] {
@@ -118,15 +122,13 @@ function priceChecks(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair):
     checks: snapshot.priceChecks
       .filter((check) => check.modelKey === modelKey)
       .slice()
-      .sort((left, right) => compareUtf8Binary(left.sourceId, right.sourceId)
-        || compareUtf8Binary(left.providerId, right.providerId)
-        || compareUtf8Binary(left.routeId, right.routeId)),
+      .sort(compareComparisonPriceChecks),
   });
   return [checksFor(resolved.modelA.modelKey), checksFor(resolved.modelB.modelKey)];
 }
 
-function exactCanonicalPair(snapshot: ActiveBenchmarkSnapshot, pair: BenchmarkComparisonPair): ResolvedPair | null {
-  const resolved = resolveComparisonPairSlug(snapshot.models, pair.pairSlug);
+function exactCanonicalPair(resolvePairSlug: ComparisonPairSlugResolver, pair: BenchmarkComparisonPair): ResolvedPair | null {
+  const resolved = resolvePairSlug(pair.pairSlug);
   if (!resolved
     || resolved.modelA.modelKey !== pair.modelAKey
     || resolved.modelB.modelKey !== pair.modelBKey
@@ -134,12 +136,16 @@ function exactCanonicalPair(snapshot: ActiveBenchmarkSnapshot, pair: BenchmarkCo
   return { ...resolved, canonicalPath: encodedPairPath(resolved.canonicalPairSlug) };
 }
 
-function relatedPairs(snapshot: ActiveBenchmarkSnapshot, current: ResolvedPair): readonly RelatedComparison[] {
+function relatedPairs(
+  snapshot: ActiveBenchmarkSnapshot,
+  current: ResolvedPair,
+  resolvePairSlug: ComparisonPairSlugResolver,
+): readonly RelatedComparison[] {
   const currentModelKeys = new Set([current.modelA.modelKey, current.modelB.modelKey]);
   return snapshot.comparisonPairs
     .filter((pair) => pair.indexable)
     .flatMap((pair) => {
-      const resolved = exactCanonicalPair(snapshot, pair);
+      const resolved = exactCanonicalPair(resolvePairSlug, pair);
       const sharedModelCount = resolved
         ? [resolved.modelA, resolved.modelB].filter((model) => currentModelKeys.has(model.modelKey)).length
         : 0;
@@ -154,14 +160,7 @@ function relatedPairs(snapshot: ActiveBenchmarkSnapshot, current: ResolvedPair):
         sharedMetricCount: pair.sharedMetricCount,
       } satisfies RelatedComparison];
     })
-    .sort((left, right) => {
-      if (left.featuredRank === null && right.featuredRank !== null) return 1;
-      if (left.featuredRank !== null && right.featuredRank === null) return -1;
-      if (left.featuredRank !== null && right.featuredRank !== null && left.featuredRank !== right.featuredRank) {
-        return left.featuredRank - right.featuredRank;
-      }
-      return compareUtf8Binary(left.pairSlug, right.pairSlug);
-    })
+    .sort(compareRelatedComparisons)
     .slice(0, RELATED_PAIR_LIMIT);
 }
 
@@ -174,7 +173,7 @@ function methodologies(rows: readonly ComparisonMetricRow[]): readonly Compariso
       seen.add(identity);
       return [{ sourceId: row.sourceId, methodology: row.methodology } satisfies ComparisonMethodology];
     })
-    .sort((left, right) => compareUtf8Binary(left.sourceId, right.sourceId) || compareUtf8Binary(left.methodology, right.methodology));
+    .sort(compareComparisonMethodologies);
 }
 
 function attribution(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair, rows: readonly ComparisonMetricRow[], prices: readonly ComparisonPriceChecks[]) {
@@ -187,7 +186,7 @@ function attribution(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair, 
   return snapshot.sources
     .filter((source) => references.has(`${source.sourceId}\u0000${source.artifactId}`) && isHttpsUrl(source.sourceUrl))
     .slice()
-    .sort((left, right) => compareUtf8Binary(left.sourceId, right.sourceId) || compareUtf8Binary(left.artifactId, right.artifactId));
+    .sort(compareComparisonSources);
 }
 
 function persistedPair(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): BenchmarkComparisonPair | null {
@@ -196,7 +195,11 @@ function persistedPair(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair
     && pair.pairSlug === resolved.canonicalPairSlug) ?? null;
 }
 
-function buildViewModel(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): ComparisonViewModel {
+function buildViewModel(
+  snapshot: ActiveBenchmarkSnapshot,
+  resolved: ResolvedPair,
+  resolvePairSlug: ComparisonPairSlugResolver,
+): ComparisonViewModel {
   const rows = metricRows(snapshot, resolved);
   const prices = priceChecks(snapshot, resolved);
   const savedPair = persistedPair(snapshot, resolved);
@@ -212,7 +215,7 @@ function buildViewModel(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPai
     attribution: attribution(snapshot, resolved, rows, prices),
     indexable: savedPair?.indexable === true,
     methodology: methodologies(rows),
-    relatedPairs: relatedPairs(snapshot, resolved),
+    relatedPairs: relatedPairs(snapshot, resolved, resolvePairSlug),
     subscriptionMatch: null,
   };
 }
@@ -359,7 +362,8 @@ export async function onRequestGet({
   try {
     const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
     if (!snapshot) return notFoundResponse();
-    const resolved = resolvePair(snapshot, requested.pairSlug);
+    const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
+    const resolved = resolvePair(resolvePairSlug, requested.pairSlug);
     if (!resolved) return notFoundResponse();
     if (requested.hasTrailingSlash || requested.pairSlug !== resolved.canonicalPairSlug) {
       return new Response(null, {
@@ -367,7 +371,7 @@ export async function onRequestGet({
         headers: { Location: resolved.canonicalPath },
       });
     }
-    const viewModel = buildViewModel(snapshot, resolved);
+    const viewModel = buildViewModel(snapshot, resolved, resolvePairSlug);
     return new Response(shellDocument(viewModel), {
       headers: {
         'Cache-Control': 'public, max-age=0, must-revalidate',

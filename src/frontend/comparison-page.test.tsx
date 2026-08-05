@@ -76,9 +76,9 @@ function directoryEnvelope(overrides: Record<string, unknown> = {}) {
     data: {
       compareDirectory: {
         models: [
-          { slug: 'model-a', name: 'Model A', creator: 'Provider A', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding', 'overall'] },
-          { slug: 'model-b', name: 'Model B', creator: 'Provider B', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding'] },
-          { slug: 'vision', name: 'Vision', creator: 'Provider B', sourceType: 'Open Weight', evidenceStatus: 'source_only', metricCategories: ['multimodal'] },
+          { slug: 'model-a', name: 'Model A', creator: 'Provider A', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding', 'overall'] },
+          { slug: 'model-b', name: 'Model B', creator: 'Provider B', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'] },
+          { slug: 'vision', name: 'Vision', creator: 'Provider B', sourceType: 'Open Weight', evidenceStatus: 'source_only', utilitySelectable: true, metricCategories: ['multimodal'] },
         ],
         indexablePairs: [{ pairSlug: 'model-a-vs-model-b', modelASlug: 'model-a', modelBSlug: 'model-b', featuredRank: 1, sharedMetricCount: 2 }],
       },
@@ -151,7 +151,7 @@ describe('comparison detail page', () => {
     expect(screen.getAllByText('benchlm:category:coding')).toHaveLength(4);
   });
 
-  it('uses safe stable identity IDs and disambiguates duplicate model names in comparison table headings', () => {
+  it('uses safe stable identity IDs and disambiguates duplicate model names in identity, table, and mobile labels', () => {
     const model = viewModel();
     const duplicateNameModel = {
       ...model.models[1],
@@ -171,7 +171,13 @@ describe('comparison detail page', () => {
 
     expect(screen.getAllByRole('columnheader', { name: 'Model A (model-a)' })).toHaveLength(2);
     expect(screen.getAllByRole('columnheader', { name: 'Model A (other-model)' })).toHaveLength(2);
-    const identityIds = screen.getAllByRole('heading', { level: 3, name: 'Model A' }).map((heading) => heading.id);
+    expect(screen.getByRole('heading', { level: 3, name: 'Model A (model-a)' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 3, name: 'Model A (other-model)' })).toBeVisible();
+    expect(within(screen.getByLabelText('Source metrics, ordered cards')).getByText('Model A (model-a)')).toBeVisible();
+    expect(within(screen.getByLabelText('Source metrics, ordered cards')).getByText('Model A (other-model)')).toBeVisible();
+    expect(within(screen.getByLabelText('Pricing and context, ordered cards')).getAllByText('Model A (model-a)')).toHaveLength(4);
+    expect(within(screen.getByLabelText('Pricing and context, ordered cards')).getAllByText('Model A (other-model)')).toHaveLength(4);
+    const identityIds = screen.getAllByRole('heading', { level: 3, name: /Model A \(/ }).map((heading) => heading.id);
     expect(identityIds).toHaveLength(2);
     expect(identityIds).toEqual(expect.arrayContaining([expect.stringMatching(/^comparison-model-[a-f0-9]+$/)]));
     expect(identityIds.join(' ')).not.toContain('provider:other model');
@@ -234,8 +240,8 @@ describe('compare hub', () => {
 
   it('keeps duplicate display names distinct by their canonical model slugs', async () => {
     const duplicateModels = [
-      { slug: 'alpha-model', name: 'Shared Model', creator: 'Provider A', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding'] },
-      { slug: 'zeta-model', name: 'Shared Model', creator: 'Provider B', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding'] },
+      { slug: 'alpha-model', name: 'Shared Model', creator: 'Provider A', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'] },
+      { slug: 'zeta-model', name: 'Shared Model', creator: 'Provider B', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'] },
     ];
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(directoryEnvelope({
       data: { compareDirectory: { models: duplicateModels, indexablePairs: [{ pairSlug: 'alpha-model-vs-zeta-model', modelASlug: 'alpha-model', modelBSlug: 'zeta-model', featuredRank: 1, sharedMetricCount: 2 }] } },
@@ -250,6 +256,27 @@ describe('compare hub', () => {
     fireEvent.change(second, { target: { value: 'alpha-model' } });
 
     expect(screen.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/alpha-model-vs-zeta-model');
+  });
+
+  it('retains a reviewed complex-slug pair without exposing that model as a utility selection', async () => {
+    const directoryModels = [
+      { slug: 'a', name: 'A', creator: 'Provider A', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'] },
+      { slug: 'a-vs-b', name: 'Complex', creator: 'Provider B', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: false, metricCategories: ['coding'] },
+      { slug: 'd', name: 'D', creator: 'Provider D', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'] },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(directoryEnvelope({
+      data: { compareDirectory: { models: directoryModels, indexablePairs: [{ pairSlug: 'a-vs-b-vs-d', modelASlug: 'a-vs-b', modelBSlug: 'd', featuredRank: 1, sharedMetricCount: 2 }] } },
+    })), { status: 200 })));
+    render(<CompareHubPage />);
+
+    const first = await screen.findByRole('combobox', { name: 'First model' });
+    const second = screen.getByRole('combobox', { name: 'Second model' });
+    expect(screen.queryByRole('option', { name: /Complex/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Complex vs D' })).toHaveAttribute('href', '/compare/a-vs-b-vs-d');
+
+    fireEvent.change(first, { target: { value: 'a-vs-b' } });
+    fireEvent.change(second, { target: { value: 'd' } });
+    expect(screen.queryByRole('link', { name: 'Compare selected models' })).not.toBeInTheDocument();
   });
 
   it('follows the combobox listbox keyboard pattern without nested option controls', async () => {
@@ -298,7 +325,7 @@ describe('compare hub', () => {
 
   it('caps the popular reviewed index at twelve server-ordered pairs', async () => {
     const models = Array.from({ length: 13 }, (_, index) => ({
-      slug: `model-${index}`, name: `Model ${index}`, creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['coding'],
+      slug: `model-${index}`, name: `Model ${index}`, creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'],
     }));
     const indexablePairs = Array.from({ length: 12 }, (_, index) => ({
       pairSlug: `model-${index}-vs-model-${index + 1}`,

@@ -573,11 +573,11 @@ describe('cached benchmark APIs', () => {
     expect(response.status).toBe(200);
     expect(body.data.compareDirectory).toEqual({
       models: [
-        { slug: 'alpha', name: 'Alpha', creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['overall'] },
-        { slug: 'arena', name: 'Arena', creator: 'LMArena', sourceType: 'Unknown', evidenceStatus: 'source_only', metricCategories: ['overall'] },
-        { slug: 'beta', name: 'Beta', creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['overall'] },
-        { slug: 'estimated', name: 'Estimated', creator: 'Provider', sourceType: 'Unknown', evidenceStatus: 'estimated', metricCategories: ['overall'] },
-        { slug: 'wrong-lens', name: 'Wrong lens', creator: 'Provider', sourceType: 'Unknown', evidenceStatus: 'estimated', metricCategories: ['reasoning'] },
+        { slug: 'alpha', name: 'Alpha', creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['overall'] },
+        { slug: 'arena', name: 'Arena', creator: 'LMArena', sourceType: 'Unknown', evidenceStatus: 'source_only', utilitySelectable: true, metricCategories: ['overall'] },
+        { slug: 'beta', name: 'Beta', creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['overall'] },
+        { slug: 'estimated', name: 'Estimated', creator: 'Provider', sourceType: 'Unknown', evidenceStatus: 'estimated', utilitySelectable: true, metricCategories: ['overall'] },
+        { slug: 'wrong-lens', name: 'Wrong lens', creator: 'Provider', sourceType: 'Unknown', evidenceStatus: 'estimated', utilitySelectable: true, metricCategories: ['reasoning'] },
       ],
       indexablePairs: [
         {
@@ -597,7 +597,7 @@ describe('cached benchmark APIs', () => {
       ],
     });
     body.data.compareDirectory.models.forEach((entry) => {
-      expect(Object.keys(entry).sort()).toEqual(['creator', 'evidenceStatus', 'metricCategories', 'name', 'slug', 'sourceType']);
+      expect(Object.keys(entry).sort()).toEqual(['creator', 'evidenceStatus', 'metricCategories', 'name', 'slug', 'sourceType', 'utilitySelectable']);
     });
     body.data.compareDirectory.indexablePairs.forEach((entry) => {
       expect(Object.keys(entry).sort()).toEqual(['featuredRank', 'modelASlug', 'modelBSlug', 'pairSlug', 'sharedMetricCount']);
@@ -904,6 +904,41 @@ describe('cached benchmark APIs', () => {
     expect(response.status).toBe(200);
     expect(slugs).toEqual(expect.arrayContaining(['a', 'c']));
     expect(slugs).not.toEqual(expect.arrayContaining(['a-vs-b', 'b-vs-c']));
+  });
+
+  it('retains an exact indexable complex-slug pair as non-selectable directory metadata', async () => {
+    const complexModels = [
+      { ...models[0], model_key: 'provider:a', slug: 'a', source_model_id: 'provider/a' },
+      { ...models[0], model_key: 'provider:complex', slug: 'a-vs-b', name: 'Complex', source_model_id: 'provider/complex' },
+      { ...models[0], model_key: 'provider:other-complex', slug: 'b-vs-c', name: 'Other complex', source_model_id: 'provider/other-complex' },
+      { ...models[0], model_key: 'provider:c', slug: 'c', source_model_id: 'provider/c' },
+      { ...models[0], model_key: 'provider:d', slug: 'd', name: 'D', source_model_id: 'provider/d' },
+    ];
+    const response = await summary(publishedRows({
+      models: [...models, ...complexModels],
+      pairs: [{
+        ...pairs[0],
+        pair_slug: 'a-vs-b-vs-d',
+        model_a_key: 'provider:complex',
+        model_b_key: 'provider:d',
+      }],
+    }));
+    const body = await response.json() as { data: { compareDirectory: {
+      models: Array<{ slug: string; utilitySelectable: boolean }>;
+      indexablePairs: Array<{ pairSlug: string; modelASlug: string; modelBSlug: string }>;
+    } } };
+
+    expect(response.status).toBe(200);
+    expect(body.data.compareDirectory.models).toEqual(expect.arrayContaining([
+      expect.objectContaining({ slug: 'a-vs-b', utilitySelectable: false }),
+      expect.objectContaining({ slug: 'd', utilitySelectable: true }),
+    ]));
+    expect(body.data.compareDirectory.models.map((model) => model.slug)).not.toContain('b-vs-c');
+    expect(body.data.compareDirectory.indexablePairs).toContainEqual(expect.objectContaining({
+      pairSlug: 'a-vs-b-vs-d',
+      modelASlug: 'a-vs-b',
+      modelBSlug: 'd',
+    }));
   });
 
   it('uses only registered route lenses and appends safe BenchLM estimates after supported rows', async () => {
