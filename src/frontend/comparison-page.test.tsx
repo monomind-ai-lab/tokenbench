@@ -124,6 +124,43 @@ describe('comparison detail page', () => {
     expect(screen.getByText('Data from BenchLM')).toBeVisible();
   });
 
+  it('disambiguates duplicate names in related comparison link labels', () => {
+    const model = viewModel();
+    const sharedA = { ...model.models[0], modelKey: 'provider:shared-a', slug: 'shared-a', name: 'Shared Model', sourceModelId: 'shared-a' };
+    const sharedB = { ...model.models[1], modelKey: 'provider:shared-b', slug: 'shared-b', name: 'Shared Model', sourceModelId: 'shared-b' };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      relatedPairs: [{
+        pairSlug: 'shared-a-vs-shared-b',
+        modelA: sharedA,
+        modelB: sharedB,
+        featuredRank: 1,
+        sharedMetricCount: 2,
+      }],
+    }} />);
+
+    expect(screen.getByRole('link', { name: 'Shared Model (shared-a) vs Shared Model (shared-b)' }))
+      .toHaveAttribute('href', '/compare/shared-a-vs-shared-b');
+  });
+
+  it('disambiguates same-named related models across multiple links', () => {
+    const model = viewModel();
+    const sharedX = { ...model.models[1], modelKey: 'provider:shared-x', slug: 'shared-x', name: 'Shared Model', sourceModelId: 'shared-x' };
+    const sharedY = { ...model.models[1], modelKey: 'provider:shared-y', slug: 'shared-y', name: 'Shared Model', sourceModelId: 'shared-y' };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      relatedPairs: [
+        { pairSlug: 'model-a-vs-shared-x', modelA: model.models[0], modelB: sharedX, featuredRank: 1, sharedMetricCount: 2 },
+        { pairSlug: 'model-a-vs-shared-y', modelA: model.models[0], modelB: sharedY, featuredRank: 2, sharedMetricCount: 2 },
+      ],
+    }} />);
+
+    expect(screen.getByRole('link', { name: 'Model A vs Shared Model (shared-x)' }))
+      .toHaveAttribute('href', '/compare/model-a-vs-shared-x');
+    expect(screen.getByRole('link', { name: 'Model A vs Shared Model (shared-y)' }))
+      .toHaveAttribute('href', '/compare/model-a-vs-shared-y');
+  });
+
   it('keeps route context separate from a model-declared context and keys metric identities completely', () => {
     const model = viewModel();
     render(<ComparisonPage viewModel={{

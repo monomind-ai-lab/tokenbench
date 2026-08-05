@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import type { BenchmarkMetric, BenchmarkModel, BenchmarkSourceRecord } from '../benchmarks/contracts';
 import { primaryHostedPriceForModel, type PrimaryHostedPrice, type WorkloadProfile } from '../benchmarks/value';
 import { ROUTE_PATHS } from '../routing/routes';
-import { comparisonMetricRowIdentity, type ComparisonMetricRow, type ComparisonPriceChecks, type ComparisonViewModel } from './comparison-contracts';
+import { comparisonMetricRowIdentity, type ComparisonMetricRow, type ComparisonPriceChecks, type ComparisonViewModel, type RelatedComparison } from './comparison-contracts';
 
 const WORKLOAD_OPTIONS: readonly { readonly id: WorkloadProfile; readonly label: string; readonly description: string }[] = [
   { id: 'inputHeavy', label: 'Input-heavy', description: 'For work dominated by incoming context.' },
@@ -70,6 +70,23 @@ function stableDomId(prefix: string, value: string): string {
 function modelDisplayLabel(models: readonly [BenchmarkModel, BenchmarkModel], index: 0 | 1): string {
   const model = models[index];
   return models[1 - index].name === model.name ? `${model.name} (${model.slug})` : model.name;
+}
+
+function duplicateRelatedModelNames(pairs: readonly RelatedComparison[]): ReadonlySet<string> {
+  const modelKeysByName = new Map<string, Set<string>>();
+  for (const pair of pairs) {
+    for (const model of [pair.modelA, pair.modelB]) {
+      const modelKeys = modelKeysByName.get(model.name) ?? new Set<string>();
+      modelKeys.add(model.modelKey);
+      modelKeysByName.set(model.name, modelKeys);
+    }
+  }
+  return new Set([...modelKeysByName].flatMap(([name, modelKeys]) => modelKeys.size > 1 ? [name] : []));
+}
+
+function relatedComparisonLabel(pair: RelatedComparison, duplicateNames: ReadonlySet<string>): string {
+  const modelLabel = (model: BenchmarkModel): string => duplicateNames.has(model.name) ? `${model.name} (${model.slug})` : model.name;
+  return `${modelLabel(pair.modelA)} vs ${modelLabel(pair.modelB)}`;
 }
 
 function selectedRoute(
@@ -250,10 +267,11 @@ function EvidenceProvenance({ viewModel }: { readonly viewModel: ComparisonViewM
 }
 
 function RelatedComparisons({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
+  const duplicateNames = duplicateRelatedModelNames(viewModel.relatedPairs);
   return <section className="comparison-panel comparison-section" aria-labelledby="comparison-related-heading">
     <div className="comparison-section-heading"><h2 id="comparison-related-heading">Related comparisons</h2><p>Only reviewed, evidence-qualified pairs appear in this area.</p></div>
     {viewModel.relatedPairs.length === 0 ? <div className="comparison-empty-state"><strong>No related reviewed comparisons are available.</strong><p>This empty state avoids implying an editorially reviewed or published matchup.</p></div> : <ul className="comparison-related-list">
-      {viewModel.relatedPairs.map((pair) => <li key={pair.pairSlug}><a href={`/compare/${encodeURIComponent(pair.pairSlug)}`}>{pair.modelA.name} vs {pair.modelB.name}</a><span>{pair.sharedMetricCount} shared source metric{pair.sharedMetricCount === 1 ? '' : 's'}</span></li>)}
+      {viewModel.relatedPairs.map((pair) => <li key={pair.pairSlug}><a href={`/compare/${encodeURIComponent(pair.pairSlug)}`}>{relatedComparisonLabel(pair, duplicateNames)}</a><span>{pair.sharedMetricCount} shared source metric{pair.sharedMetricCount === 1 ? '' : 's'}</span></li>)}
     </ul>}
   </section>;
 }

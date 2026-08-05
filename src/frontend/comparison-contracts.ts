@@ -346,15 +346,23 @@ function isRelatedComparison(
   currentPairSlug: string,
 ): value is RelatedComparison {
   if (!isRecord(value) || !isModel(value.modelA) || !isModel(value.modelB)) return false;
-  const sharedCurrentModels = [value.modelA, value.modelB]
-    .filter((model) => currentModels.some((current) => sameModelRecord(model, current)));
+  const currentModelsByKey = new Map(currentModels.map((model) => [model.modelKey, model]));
+  const relatedModels = [value.modelA, value.modelB];
+  const intersectingCurrentModels = relatedModels.filter((model) => currentModelsByKey.has(model.modelKey));
+  const sharedRelatedModel = intersectingCurrentModels.length === 1 ? intersectingCurrentModels[0] : null;
+  const correspondingCurrentModel = sharedRelatedModel === null
+    ? null
+    : currentModelsByKey.get(sharedRelatedModel.modelKey) ?? null;
   return isText(value.pairSlug)
     && isComparisonPairRouteSafe(value.pairSlug as string)
     && value.modelA.modelKey !== value.modelB.modelKey
     && compareUtf8Binary(value.modelA.modelKey, value.modelB.modelKey) < 0
     && value.pairSlug === `${value.modelA.slug}-vs-${value.modelB.slug}`
     && value.pairSlug !== currentPairSlug
-    && sharedCurrentModels.length === 1
+    && intersectingCurrentModels.length === 1
+    && sharedRelatedModel !== null
+    && correspondingCurrentModel !== null
+    && sameModelRecord(sharedRelatedModel, correspondingCurrentModel)
     && (value.featuredRank === null || (Number.isSafeInteger(value.featuredRank) && (value.featuredRank as number) > 0))
     && Number.isSafeInteger(value.sharedMetricCount)
     && (value.sharedMetricCount as number) >= 2;

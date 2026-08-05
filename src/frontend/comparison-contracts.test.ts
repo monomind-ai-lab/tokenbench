@@ -356,6 +356,42 @@ describe('comparison SSR hydration contract', () => {
     expect(parseComparisonViewModel(altered)).toBeNull();
   });
 
+  it('rejects a related pair with exact current A and a forged current-B record', () => {
+    const payload = orderedHydrationPayload();
+    const forgedCurrentB = {
+      ...payload.models[1],
+      name: 'Forged Model B',
+      slug: 'forged-model-b',
+    };
+    const forgedPair = {
+      pairSlug: 'model-a-vs-forged-model-b',
+      modelA: payload.models[0],
+      modelB: forgedCurrentB,
+      featuredRank: 1,
+      sharedMetricCount: 2,
+    };
+
+    expect(parseComparisonViewModel({ ...payload, relatedPairs: [forgedPair] })).toBeNull();
+  });
+
+  it('rejects a related pair with a forged current-A record and exact current B', () => {
+    const payload = orderedHydrationPayload();
+    const forgedCurrentA = {
+      ...payload.models[0],
+      name: 'Forged Model A',
+      slug: 'forged-model-a',
+    };
+    const forgedPair = {
+      pairSlug: 'forged-model-a-vs-model-b',
+      modelA: forgedCurrentA,
+      modelB: payload.models[1],
+      featuredRank: 1,
+      sharedMetricCount: 2,
+    };
+
+    expect(parseComparisonViewModel({ ...payload, relatedPairs: [forgedPair] })).toBeNull();
+  });
+
   it('rejects related comparison payloads that do not preserve the server route relationship', () => {
     const relatedModel = {
       ...viewModel.models[1],
