@@ -1,0 +1,21 @@
+name = "tokenbench-benchmark-ingest"
+main = "src/index.ts"
+compatibility_date = "2026-08-05"
+
+# This Worker uses D1 batches for atomic benchmark publications. Deploy it on
+# Workers Paid: the configured query budget relies on the Paid D1 allowance.
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "CATALOG_DB"
+database_name = "ai-plan-catalog"
+database_id = "a80143b2-519b-4cf1-a153-0d38b3d1b053"
+migrations_dir = "../../migrations"
+
+[[r2_buckets]]
+binding = "SOURCE_SNAPSHOTS"
+bucket_name = "ai-plan-catalog-snapshots"
+
+[triggers]
+crons = ["15 */12 * * *"]

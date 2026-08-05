@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import worker, { buildManualSubscriptionSource, buildManualSubscriptionSources, parseOpenCodeCatalog, parseOpenRouterModels, publishValidatedSource, recordRefreshFailure } from './index';
+import worker, { buildManualSubscriptionSource, buildManualSubscriptionSources, parseOpenCodeCatalog, parseOpenRouterModels, projectOpenRouterModelsPayload, publishValidatedSource, recordRefreshFailure } from './index';
 
 interface Statement { sql: string; values: unknown[] }
 interface RefreshState { lastSuccessAt: string | null; lastRevision: string | null; lastError: string | null }
@@ -90,13 +90,21 @@ async function runScheduledOpenRouter({
   database,
   json = async () => openRouterPayload,
   put = async () => undefined,
+  response,
 }: {
   database: ReturnType<typeof createStatefulD1>;
   json?: () => Promise<unknown>;
-  put?: () => Promise<unknown>;
+  put?: (
+    key: string,
+    value: string | ArrayBufferView,
+    options?: { httpMetadata?: { contentType: string }; customMetadata?: Record<string, string> },
+  ) => Promise<unknown>;
+  response?: Response;
 }) {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () => ({ ok: true, status: 200, json })) as unknown as typeof fetch;
+  globalThis.fetch = (async () => response ?? new Response(JSON.stringify(await json()), {
+    headers: { 'content-type': 'application/json' },
+  })) as unknown as typeof fetch;
   let work: Promise<unknown> | undefined;
   try {
     await worker.scheduled(
@@ -111,6 +119,94 @@ async function runScheduledOpenRouter({
 }
 
 describe('catalog ingestion', () => {
+  it('projects OpenRouter before parsing, hashing, and R2 storage', async () => {
+    const contaminated = {
+      data: [{
+        id: 'openai/gpt-4o',
+        canonical_slug: 'openai/gpt-4o',
+        name: 'GPT-4o',
+        created: 1_724_065_600,
+        description: 'A capable model',
+        context_length: 128_000,
+        architecture: {
+          modality: 'text->text',
+          input_modalities: ['text'],
+          output_modalities: ['text'],
+          tokenizer: 'o200k_base',
+          instruct_type: null,
+          unreviewed_architecture_fact: 'remove me',
+        },
+        pricing: {
+          prompt: '0.0000025',
+          completion: '0.00001',
+          input_cache_read: '0.00000125',
+          input_cache_write: '0.000003',
+          unreviewed_pricing_fact: 'remove me',
+        },
+        top_provider: {
+          context_length: 128_000,
+          max_completion_tokens: 16_000,
+          is_moderated: false,
+          unreviewed_provider_fact: 'remove me',
+        },
+        per_request_limits: null,
+        supported_parameters: ['tools'],
+        expiration_date: null,
+        knowledge_cutoff: '2024-06',
+        benchmarks: { artificial_analysis: { score: 99 } },
+        unknown_top_level_fact: 'remove me',
+      }],
+      unknown_envelope_fact: 'remove me',
+    };
+    const expectedBytes = new TextEncoder().encode('{"data":[{"id":"openai/gpt-4o","canonical_slug":"openai/gpt-4o","name":"GPT-4o","created":1724065600,"description":"A capable model","context_length":128000,"architecture":{"modality":"text->text","input_modalities":["text"],"output_modalities":["text"],"tokenizer":"o200k_base","instruct_type":null},"pricing":{"prompt":"0.0000025","completion":"0.00001","input_cache_read":"0.00000125","input_cache_write":"0.000003"},"top_provider":{"context_length":128000,"max_completion_tokens":16000,"is_moderated":false},"per_request_limits":null,"supported_parameters":["tools"],"expiration_date":null,"knowledge_cutoff":"2024-06"}]}');
+    const projected = projectOpenRouterModelsPayload(contaminated);
+    expect(new TextEncoder().encode(JSON.stringify(projected))).toEqual(expectedBytes);
+
+    const parsedBeforeStorage = parseOpenRouterModels(projected, '2026-08-05T00:00:00.000Z');
+    const stored: Array<string | ArrayBufferView> = [];
+    const database = createStatefulD1();
+    await publishValidatedSource({
+      db: database.db,
+      snapshots: { put: async (_key: string, value: string | ArrayBufferView) => { stored.push(value); } },
+      source: parsedBeforeStorage,
+      rawPayload: contaminated,
+      originalPayloadBytes: new TextEncoder().encode(JSON.stringify(contaminated)),
+      now: '2026-08-05T00:00:00.000Z',
+    });
+
+    const storedBytes = stored[0] instanceof Uint8Array
+      ? stored[0]
+      : new TextEncoder().encode(String(stored[0]));
+    expect(storedBytes).toEqual(expectedBytes);
+    const storedText = new TextDecoder().decode(storedBytes);
+    expect(storedText).not.toMatch(/benchmarks|artificial[ _-]?analysis|unknown_/i);
+    expect(parseOpenRouterModels(JSON.parse(storedText), '2026-08-05T00:00:00.000Z').modelOffers)
+      .toEqual(parsedBeforeStorage.modelOffers);
+  });
+
+  it('records the exact upstream OpenRouter byte hash only as projected-snapshot provenance', async () => {
+    const rawText = '{\n  "data": [ { "id": "openai/gpt-4o", "name": "GPT-4o", "pricing": { "prompt": "0.0000025", "completion": "0.00001" }, "benchmarks": { "artificial_analysis": { "score": 99 } } } ]\n}';
+    const rawBytes = new TextEncoder().encode(rawText);
+    const expectedOriginalHash = `sha256:${[...new Uint8Array(await crypto.subtle.digest('SHA-256', rawBytes))].map((byte) => byte.toString(16).padStart(2, '0')).join('')}`;
+    const writes: Array<{ value: string | ArrayBufferView; options?: { customMetadata?: Record<string, string> } }> = [];
+    const database = createStatefulD1();
+
+    await runScheduledOpenRouter({
+      database,
+      response: new Response(rawText, { headers: { 'content-type': 'application/json' } }),
+      put: async (_key: string, value: string | ArrayBufferView, options?: { customMetadata?: Record<string, string> }) => {
+        writes.push({ value, options });
+      },
+    });
+
+    expect(writes).toHaveLength(1);
+    expect(writes[0].options?.customMetadata?.original_content_hash).toBe(expectedOriginalHash);
+    const storedText = typeof writes[0].value === 'string'
+      ? writes[0].value
+      : new TextDecoder().decode(writes[0].value);
+    expect(storedText).toBe('{"data":[{"id":"openai/gpt-4o","name":"GPT-4o","pricing":{"prompt":"0.0000025","completion":"0.00001"}}]}');
+  });
+
   it('parses official OpenRouter pricing into integer micro-dollars per million', () => {
     expect(parseOpenRouterModels({ data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', context_length: 128_000, top_provider: { max_completion_tokens: 16_000 }, pricing: { prompt: '0.0000025', completion: '0.00001', input_cache_read: '0.00000125' } }] }, '2026-08-03T00:00:00.000Z'))
       .toMatchObject({ modelOffers: [{ id: 'openai:openai/gpt-4o:openrouter', inputMicroDollarsPerMillion: 2_500_000, cachedInputMicroDollarsPerMillion: 1_250_000, outputMicroDollarsPerMillion: 10_000_000, contextWindowTokens: 128_000, maxOutputTokens: 16_000, availability: 'available' }] });
@@ -201,6 +297,7 @@ describe('catalog ingestion', () => {
       snapshots: { put: async (key: string) => { snapshots.push(key); } },
       source: parsed,
       rawPayload: openRouterPayload,
+      originalPayloadBytes: new TextEncoder().encode(JSON.stringify(openRouterPayload)),
       now: '2026-08-03T00:00:00.000Z',
     });
     expect(snapshots[0]).toMatch(/^openrouter-models\/2026-08-03\//);
@@ -297,7 +394,9 @@ describe('catalog ingestion', () => {
     const originalClearTimeout = globalThis.clearTimeout;
     globalThis.fetch = vi.fn(function (this: unknown) {
       if (this !== globalThis) throw new Error('Illegal invocation');
-      return Promise.resolve({ ok: true, status: 200, json: async () => openRouterPayload } as Response);
+      return Promise.resolve(new Response(JSON.stringify(openRouterPayload), {
+        headers: { 'content-type': 'application/json' },
+      }));
     }) as unknown as typeof fetch;
     globalThis.setTimeout = vi.fn(function (this: unknown, handler: () => void, timeout?: number) {
       if (this !== globalThis) throw new Error('Illegal invocation');
@@ -362,12 +461,12 @@ describe('catalog ingestion', () => {
     const originalFetch = globalThis.fetch;
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       const sourceUrl = String(url);
-      return {
-        ok: true,
-        status: 200,
-        json: async () => sourceUrl.includes('openrouter.ai') ? openRouterPayload : openCodeModelsPayload,
-        text: async () => openCodePricingHtml,
-      };
+      return new Response(sourceUrl.includes('openrouter.ai')
+        ? JSON.stringify(openRouterPayload)
+        : sourceUrl.includes('opencode.ai/zen/v1/models')
+          ? JSON.stringify(openCodeModelsPayload)
+          : openCodePricingHtml,
+      { headers: { 'content-type': sourceUrl.includes('docs/zen') ? 'text/html' : 'application/json' } });
     });
     globalThis.fetch = fetchImpl as unknown as typeof fetch;
     let work: Promise<unknown> | undefined;

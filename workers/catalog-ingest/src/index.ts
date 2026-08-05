@@ -4,7 +4,13 @@ import { validateCatalogResponse } from '../../../src/catalog/validation';
 
 type BoundStatement = unknown;
 interface D1Database { prepare(sql: string): { bind(...values: unknown[]): BoundStatement }; batch(statements: BoundStatement[]): Promise<unknown> }
-interface R2Bucket { put(key: string, value: string, options?: { httpMetadata?: { contentType: string } }): Promise<unknown> }
+interface R2Bucket {
+  put(
+    key: string,
+    value: string | ArrayBufferView,
+    options?: { httpMetadata?: { contentType: string }; customMetadata?: Record<string, string> },
+  ): Promise<unknown>
+}
 
 export interface IngestEnv { CATALOG_DB: D1Database; SOURCE_SNAPSHOTS: R2Bucket; AUTOMATED_SOURCE_IDS?: string }
 export interface ParsedSource { source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }
@@ -19,6 +25,82 @@ export interface RefreshDependencies {
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/models';
 const OPENCODE_URL = 'https://opencode.ai/zen/v1/models';
 const OPENCODE_PRICING_URL = 'https://opencode.ai/docs/zen/';
+const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
+
+const OPENROUTER_IDENTITY_FIELDS = [
+  'id', 'canonical_slug', 'name', 'created', 'description', 'context_length',
+] as const;
+const OPENROUTER_TRAILING_FIELDS = [
+  'per_request_limits', 'supported_parameters', 'expiration_date', 'knowledge_cutoff',
+] as const;
+const OPENROUTER_ARCHITECTURE_FIELDS = [
+  'modality', 'input_modalities', 'output_modalities', 'tokenizer', 'instruct_type',
+] as const;
+const OPENROUTER_PRICING_FIELDS = [
+  'prompt', 'completion', 'input_cache_read', 'input_cache_write',
+] as const;
+const OPENROUTER_TOP_PROVIDER_FIELDS = [
+  'context_length', 'max_completion_tokens', 'is_moderated',
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function binaryCompare(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function projectRecordFields(
+  source: Record<string, unknown>,
+  fields: readonly string[],
+): Record<string, unknown> {
+  return Object.fromEntries(fields.flatMap((field) => Object.prototype.hasOwnProperty.call(source, field)
+    ? [[field, source[field]]]
+    : []));
+}
+
+function assertNoArtificialAnalysis(value: unknown): void {
+  const serialized = JSON.stringify(value)
+    .normalize('NFKC')
+    .replace(/[\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cf}_-]/gu, '')
+    .toLowerCase();
+  if (serialized.includes('artificialanalysis')) {
+    throw new Error('OpenRouter projection contains prohibited Artificial Analysis data');
+  }
+}
+
+/**
+ * The catalog is an evidence boundary: only this stable `{data:[...]}`
+ * projection may be parsed, hashed, or written to R2 for OpenRouter.
+ */
+export function projectOpenRouterModelsPayload(payload: unknown): { data: Record<string, unknown>[] } {
+  if (!isRecord(payload) || !Array.isArray(payload.data)) {
+    throw new Error('OpenRouter payload must contain data');
+  }
+
+  const data = payload.data.map((entry, index) => {
+    if (!isRecord(entry)) throw new Error(`OpenRouter model ${index} must be an object`);
+    if (typeof entry.id !== 'string' || entry.id.length === 0) {
+      throw new Error(`OpenRouter model ${index} id is required for projection`);
+    }
+    const projected = projectRecordFields(entry, OPENROUTER_IDENTITY_FIELDS);
+    for (const [field, fields] of [
+      ['architecture', OPENROUTER_ARCHITECTURE_FIELDS],
+      ['pricing', OPENROUTER_PRICING_FIELDS],
+      ['top_provider', OPENROUTER_TOP_PROVIDER_FIELDS],
+    ] as const) {
+      if (!Object.prototype.hasOwnProperty.call(entry, field)) continue;
+      if (!isRecord(entry[field])) throw new Error(`OpenRouter model ${index}.${field} must be an object`);
+      projected[field] = projectRecordFields(entry[field], fields);
+    }
+    Object.assign(projected, projectRecordFields(entry, OPENROUTER_TRAILING_FIELDS));
+    assertNoArtificialAnalysis(projected);
+    return projected;
+  }).sort((left, right) => binaryCompare(String(left.id), String(right.id)));
+
+  return { data };
+}
 
 function isAutomatedSourceAllowlisted(env: IngestEnv, sourceId: string): boolean {
   return env.AUTOMATED_SOURCE_IDS?.split(',').map((id) => id.trim()).includes(sourceId) ?? false;
@@ -149,24 +231,64 @@ export function parseOpenCodeCatalog(modelsPayload: unknown, pricingHtml: string
   };
 }
 
-async function sha256(value: string): Promise<string> {
-  const bytes = new TextEncoder().encode(value);
+async function sha256(bytes: Uint8Array): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+async function parseBoundedJsonResponse(response: Response, label: string): Promise<{ bytes: Uint8Array; payload: unknown }> {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_CATALOG_RESPONSE_BYTES) {
+    throw new Error(`${label} response exceeds ${MAX_CATALOG_RESPONSE_BYTES} byte limit`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MAX_CATALOG_RESPONSE_BYTES) {
+    throw new Error(`${label} response exceeds ${MAX_CATALOG_RESPONSE_BYTES} byte limit`);
+  }
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw new Error(`${label} response is not valid UTF-8`);
+  }
+  try {
+    return { bytes, payload: JSON.parse(text) };
+  } catch {
+    throw new Error(`${label} response is not valid JSON`);
+  }
+}
+
 export async function publishValidatedSource({
-  db, snapshots, source, rawPayload, now,
-}: { db: D1Database; snapshots: R2Bucket; source: ParsedSource; rawPayload: unknown; now: string }): Promise<{ revision: string; snapshotKey: string }> {
+  db, snapshots, source, rawPayload, originalPayloadBytes, now,
+}: {
+  db: D1Database;
+  snapshots: R2Bucket;
+  source: ParsedSource;
+  rawPayload: unknown;
+  originalPayloadBytes?: Uint8Array;
+  now: string;
+}): Promise<{ revision: string; snapshotKey: string }> {
   const catalog = {
     revision: 'validation', publishedAt: now, freshness: { status: 'fresh' as const, checkedAt: now },
     provenance: [source.source], plans: source.plans, modelOffers: source.modelOffers,
   };
   validateCatalogResponse(catalog);
-  const raw = JSON.stringify(rawPayload);
-  const hash = await sha256(raw);
+  const snapshotPayload = source.source.id === 'openrouter-models'
+    ? projectOpenRouterModelsPayload(rawPayload)
+    : rawPayload;
+  const raw = JSON.stringify(snapshotPayload);
+  const projectedBytes = new TextEncoder().encode(raw);
+  const hash = await sha256(projectedBytes);
+  let originalContentHash: string | null = null;
+  if (source.source.id === 'openrouter-models') {
+    if (!originalPayloadBytes) throw new Error('OpenRouter exact upstream bytes are required');
+    originalContentHash = `sha256:${await sha256(originalPayloadBytes)}`;
+  }
   const snapshotKey = `${source.source.id}/${now.slice(0, 10)}/${hash}.json`;
-  await snapshots.put(snapshotKey, raw, { httpMetadata: { contentType: 'application/json' } });
+  await snapshots.put(snapshotKey, projectedBytes, {
+    httpMetadata: { contentType: 'application/json' },
+    ...(originalContentHash === null ? {} : { customMetadata: { original_content_hash: originalContentHash } }),
+  });
 
   const revision = `rev_${now.replace(/[-:.TZ]/g, '')}_${hash.slice(0, 12)}`;
   const statements: BoundStatement[] = [
@@ -212,8 +334,15 @@ export async function refreshSource(
     const response = await dependencies.fetchImpl(url, { signal: abort.signal });
     if (!response.ok) throw new Error(`Catalog source ${url} returned ${response.status}`);
     const now = dependencies.now();
-    const rawPayload = await response.json();
-    await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source: parse(rawPayload, now), rawPayload, now });
+    const { bytes, payload } = await parseBoundedJsonResponse(response, `Catalog source ${url}`);
+    await publishValidatedSource({
+      db: env.CATALOG_DB,
+      snapshots: env.SOURCE_SNAPSHOTS,
+      source: parse(payload, now),
+      rawPayload: payload,
+      ...(sourceId === 'openrouter-models' ? { originalPayloadBytes: bytes } : {}),
+      now,
+    });
   } finally {
     dependencies.clearTimeoutImpl(timeout);
   }
