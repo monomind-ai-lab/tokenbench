@@ -9,7 +9,6 @@ import {
   isWorkloadProfile,
   paretoFrontier,
   primaryHostedPriceForModel,
-  primaryHostedRoutesForModel,
   type WorkloadProfile,
   type ValueCandidate,
 } from './value';
@@ -157,6 +156,7 @@ function isSupportedBenchLmMetric(model: BenchmarkModel, metric: BenchmarkMetric
     && metric.sourceId === 'benchlm'
     && metric.metricKey === metricKey
     && metric.methodology === 'benchlm_raw_composite'
+    && metric.unit === 'score'
     && metric.rankingEligible
     && isFiniteMetric(metric);
 }
@@ -168,6 +168,7 @@ function isExactLmArenaMetric(model: BenchmarkModel, metric: BenchmarkMetric, me
     && metric.sourceId === 'lmarena'
     && metric.metricKey === metricKey
     && metric.methodology === 'bradley_terry'
+    && metric.unit === 'arena_score'
     && metric.rankingEligible
     && isFiniteMetric(metric)
     && isPositiveRank(metric.rank);
@@ -345,11 +346,9 @@ function buildPricingContextLeaderboard(
     .sort(compareModels)
     .flatMap((model) => {
       if (!allowsPricingContext(model)) return [];
-      const routes = primaryHostedRoutesForModel(model.modelKey, prices, profile);
-      const primaryPrice = routes[0] ?? null;
-      if (!primaryPrice) return [];
       const hostedPrice = primaryHostedPriceForModel(model.modelKey, prices, profile);
-      return [makeEntry(model, null, [], primaryPrice, hostedPrice?.blendedCostPerMillion ?? null)];
+      if (!hostedPrice) return [];
+      return [makeEntry(model, null, [], hostedPrice.price, hostedPrice.blendedCostPerMillion)];
     });
   return sortLeaderboardEntries(entries, 'price-asc');
 }
@@ -400,7 +399,13 @@ function buildMultimodalLeaderboard(
 
 /**
  * Builds one transparent v1 leaderboard from a single immutable benchmark
- * revision. Callers must pass only facts from that same published revision.
+ * revision.
+ *
+ * Executable precondition owned by Task 9: the D1 query must select models,
+ * metrics, and prices through one active published revision and validate that
+ * revision's source-artifact hashes before calling this function. These fact
+ * interfaces carry no revision or content-hash field, so this pure derivation
+ * cannot detect or repair cross-revision input locally.
  */
 export function buildLeaderboard(
   key: LeaderboardKey,

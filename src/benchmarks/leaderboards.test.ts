@@ -117,6 +117,22 @@ describe('buildLeaderboard', () => {
     expect(result.entries[0]).toMatchObject({ blendedCostPerMillion: null, sourceRank: null });
   });
 
+  it('rejects non-score units from BenchLM routes and the BenchLM multimodal lens', () => {
+    const bench = model({ modelKey: 'bench', slug: 'bench' });
+    const wrongUnitOverall = metric({ modelKey: 'bench', sourceModelId: 'bench', unit: 'arena_score' });
+    const wrongUnitMultimodal = metric({
+      modelKey: 'bench',
+      sourceModelId: 'bench',
+      metricKey: 'benchlm:category:multimodal',
+      category: 'multimodal',
+      unit: 'arena_score',
+    });
+
+    expect(buildLeaderboard('llm-overall', [bench], [wrongUnitOverall], [], 'balanced').entries).toEqual([]);
+    expect(buildLeaderboard('multimodal-vision-documents', [bench], [wrongUnitMultimodal], [], 'balanced').entries)
+      .toEqual([]);
+  });
+
   it('requires the model-level overall eligibility for overall and value views only', () => {
     const categoryOnly = model({ modelKey: 'category-only', slug: 'category-only', rankingEligible: false });
     const metrics = [metric({ modelKey: 'category-only', sourceModelId: 'category-only', value: 90 })];
@@ -160,6 +176,40 @@ describe('buildLeaderboard', () => {
     expect(result.entries.map((entry) => entry.sourceRank)).toEqual([1, 1]);
   });
 
+  it('rejects non-arena-score units from LMArena routes and multimodal lenses', () => {
+    const arena = model({
+      modelKey: 'source:lmarena:arena',
+      slug: 'arena',
+      sourceId: 'lmarena',
+      evidenceStatus: 'source_only',
+    });
+    const wrongUnit = (metricKey: string) => metric({
+      modelKey: arena.modelKey,
+      sourceModelId: arena.sourceModelId,
+      metricKey,
+      sourceId: 'lmarena',
+      methodology: 'bradley_terry',
+      unit: 'score',
+      rank: 1,
+      value: 1_200,
+    });
+
+    expect(buildLeaderboard(
+      'llm-human-preference',
+      [arena],
+      [wrongUnit('lmarena:text_style_control:overall')],
+      [],
+      'balanced',
+    ).entries).toEqual([]);
+    expect(buildLeaderboard(
+      'multimodal-vision-documents',
+      [arena],
+      [wrongUnit('lmarena:vision_style_control:overall')],
+      [],
+      'balanced',
+    ).entries).toEqual([]);
+  });
+
   it('keeps a supported capability row when price is unavailable but excludes it from the value frontier', () => {
     const models = [model()];
     const metrics = [metric()];
@@ -192,18 +242,33 @@ describe('buildLeaderboard', () => {
       .toEqual([['alpha', true], ['zeta', true], ['economical', true], ['dominated', false]]);
   });
 
-  it('retains a primary OpenRouter route with missing money as an unavailable pricing-context row', () => {
+  it('accepts explicit finite zero pricing and keeps pricing context user-sortable', () => {
     const priced = model({ modelKey: 'priced', slug: 'priced' });
-    const unavailable = model({ modelKey: 'unavailable', slug: 'unavailable' });
-    const result = buildLeaderboard('llm-pricing-context', [unavailable, priced], [], [
+    const zero = model({ modelKey: 'zero', slug: 'zero' });
+    const result = buildLeaderboard('llm-pricing-context', [zero, priced], [], [
       price({ modelKey: 'priced', routeId: 'openrouter:priced', inputUsdPerMillion: 1, outputUsdPerMillion: 1, contextWindowTokens: 64_000 }),
-      price({ modelKey: 'unavailable', routeId: 'openrouter:unavailable', inputUsdPerMillion: null, outputUsdPerMillion: null, contextWindowTokens: 256_000 }),
+      price({ modelKey: 'zero', routeId: 'openrouter:zero', inputUsdPerMillion: 0, outputUsdPerMillion: 0, contextWindowTokens: 256_000 }),
     ], 'balanced');
 
     expect(result.entries.map((entry) => [entry.model.slug, entry.blendedCostPerMillion, entry.contextWindowTokens]))
-      .toEqual([['priced', 1, 64_000], ['unavailable', null, 256_000]]);
+      .toEqual([['zero', 0, 256_000], ['priced', 1, 64_000]]);
     expect(sortLeaderboardEntries(result.entries, 'context-desc').map((entry) => entry.model.slug))
-      .toEqual(['unavailable', 'priced']);
+      .toEqual(['zero', 'priced']);
+  });
+
+  it.each([
+    ['null input', null, 1],
+    ['null output', 1, null],
+    ['negative input', -1, 1],
+    ['negative output', 1, -1],
+    ['NaN input', Number.NaN, 1],
+    ['NaN output', 1, Number.NaN],
+    ['infinite input', Number.POSITIVE_INFINITY, 1],
+    ['infinite output', 1, Number.POSITIVE_INFINITY],
+  ] as const)('excludes a primary pricing-context route with %s money', (_label, input, output) => {
+    const malformed = price({ inputUsdPerMillion: input, outputUsdPerMillion: output });
+
+    expect(buildLeaderboard('llm-pricing-context', [model()], [], [malformed], 'balanced').entries).toEqual([]);
   });
 
   it('preserves a missing route context instead of substituting a different source value', () => {
