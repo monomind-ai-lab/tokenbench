@@ -1,3 +1,5 @@
+import type { LeaderboardKey } from '../routing/routes';
+
 export interface GuideSource {
   readonly label: string;
   readonly url: string;
@@ -19,6 +21,12 @@ export interface GuideSection {
   readonly sources?: GuideSource[];
 }
 
+export interface GuideContextualLink {
+  readonly leaderboard: LeaderboardKey;
+  readonly label: string;
+  readonly description: string;
+}
+
 export interface GuideArticle {
   readonly slug: string;
   readonly title: string;
@@ -32,6 +40,7 @@ export interface GuideArticle {
   readonly keywords: string[];
   readonly takeaways: string[];
   readonly sections: GuideSection[];
+  readonly contextualLinks: GuideContextualLink[];
   readonly relatedSlugs: string[];
 }
 
@@ -130,6 +139,13 @@ export const GUIDES: GuideArticle[] = [
         ],
       },
     ],
+    contextualLinks: [
+      {
+        leaderboard: 'llm-pricing-context',
+        label: 'Review AI model pricing and context',
+        description: 'Inspect route-specific provider pricing and declared context limits alongside your observed Claude Code workflow.',
+      },
+    ],
     relatedSlugs: ['monitor-openai-codex-usage', 'reduce-llm-api-costs-caching-batch-output-limits', 'openrouter-guide-model-routing-cost-controls'],
   },
   {
@@ -222,6 +238,13 @@ export const GUIDES: GuideArticle[] = [
         sources: [
           { label: 'OpenAI Usage API', url: 'https://platform.openai.com/docs/api-reference/usage' },
         ],
+      },
+    ],
+    contextualLinks: [
+      {
+        leaderboard: 'llm-pricing-context',
+        label: 'Review AI model pricing and context',
+        description: 'Compare provider route pricing and context declarations before treating one usage meter as an API estimate.',
       },
     ],
     relatedSlugs: ['track-claude-code-usage', 'reduce-llm-api-costs-caching-batch-output-limits', 'openrouter-guide-model-routing-cost-controls'],
@@ -317,6 +340,13 @@ export const GUIDES: GuideArticle[] = [
         sources: [
           { label: 'Provider logging and privacy controls', url: 'https://openrouter.ai/docs/guides/privacy/provider-logging' },
         ],
+      },
+    ],
+    contextualLinks: [
+      {
+        leaderboard: 'llm-pricing-context',
+        label: 'Review AI model pricing and context',
+        description: 'Review price and context declarations for the model routes you are considering before setting a routing policy.',
       },
     ],
     relatedSlugs: ['legitimate-free-ai-api-access-credits', 'reduce-llm-api-costs-caching-batch-output-limits', 'monitor-openai-codex-usage'],
@@ -423,6 +453,13 @@ export const GUIDES: GuideArticle[] = [
           'Test quota exhaustion as a normal product state.',
           'Review official terms again immediately before production launch.',
         ],
+      },
+    ],
+    contextualLinks: [
+      {
+        leaderboard: 'llm-pricing-context',
+        label: 'Review AI model pricing and context',
+        description: 'Use route-level pricing context to plan the paid path before a free-tier prototype reaches production traffic.',
       },
     ],
     relatedSlugs: ['openrouter-guide-model-routing-cost-controls', 'reduce-llm-api-costs-caching-batch-output-limits', 'track-claude-code-usage'],
@@ -538,6 +575,18 @@ export const GUIDES: GuideArticle[] = [
             ['Human review minutes', 'Captures cost shifted from inference to people.'],
           ],
         },
+      },
+    ],
+    contextualLinks: [
+      {
+        leaderboard: 'llm-coding',
+        label: 'Review AI coding model benchmarks',
+        description: 'Use coding benchmark context to decide which models deserve a workload-specific evaluation.',
+      },
+      {
+        leaderboard: 'llm-value',
+        label: 'Explore the LLM value frontier',
+        description: 'Compare disclosed workload costs and capability evidence without treating a leaderboard as a universal score.',
       },
     ],
     relatedSlugs: ['track-claude-code-usage', 'monitor-openai-codex-usage', 'openrouter-guide-model-routing-cost-controls'],

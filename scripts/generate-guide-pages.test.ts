@@ -4,6 +4,14 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateGuidePages } from './generate-guide-pages';
 
+const expectedLeaderboardPaths = {
+  'track-claude-code-usage': ['/leaderboards/llm/pricing-context/'],
+  'monitor-openai-codex-usage': ['/leaderboards/llm/pricing-context/'],
+  'openrouter-guide-model-routing-cost-controls': ['/leaderboards/llm/pricing-context/'],
+  'legitimate-free-ai-api-access-credits': ['/leaderboards/llm/pricing-context/'],
+  'reduce-llm-api-costs-caching-batch-output-limits': ['/leaderboards/llm/coding/', '/leaderboards/llm/value/'],
+} as const;
+
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -25,6 +33,25 @@ describe('generateGuidePages', () => {
     for (const html of [hub, article]) {
       expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
       expect(html).not.toContain('href="/#calculator"');
+    }
+  });
+
+  it('writes branded canonical articles with honest leaderboard context', async () => {
+    const outputRoot = await mkdtemp(join(tmpdir(), 'tokenbench-guide-pages-'));
+    temporaryRoots.push(outputRoot);
+
+    await generateGuidePages(outputRoot);
+
+    for (const [slug, paths] of Object.entries(expectedLeaderboardPaths)) {
+      const html = await readFile(join(outputRoot, slug, 'index.html'), 'utf8');
+
+      expect(html).toContain('TokenBench');
+      expect(html).not.toContain('AI Cost Engine');
+      expect(html).toContain(`<link rel="canonical" href="https://tokenbench.monomind.one/guides/${slug}/">`);
+      expect(html).toContain('"@type":"Article"');
+      expect(html).toContain('"@type":"BreadcrumbList"');
+      expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
+      for (const path of paths) expect(html).toContain(`href="${path}"`);
     }
   });
 });

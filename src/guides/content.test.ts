@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { LEADERBOARD_ROUTES } from '../routing/routes';
 import { GUIDES, GUIDE_BY_SLUG } from './content';
+
+const expectedContextualLeaderboards = {
+  'track-claude-code-usage': ['llm-pricing-context'],
+  'monitor-openai-codex-usage': ['llm-pricing-context'],
+  'openrouter-guide-model-routing-cost-controls': ['llm-pricing-context'],
+  'legitimate-free-ai-api-access-credits': ['llm-pricing-context'],
+  'reduce-llm-api-costs-caching-batch-output-limits': ['llm-coding', 'llm-value'],
+} as const;
 
 describe('guide catalog', () => {
   it('publishes five complete, uniquely routed guides', () => {
@@ -22,6 +31,16 @@ describe('guide catalog', () => {
       expect(sources.every((source) => source.url.startsWith('https://'))).toBe(true);
       expect(guide.relatedSlugs).toHaveLength(3);
       expect(guide.relatedSlugs.every((slug) => slug !== guide.slug && GUIDE_BY_SLUG.has(slug))).toBe(true);
+    }
+  });
+
+  it('gives every article an honest, route-registry-backed leaderboard context', () => {
+    for (const guide of GUIDES) {
+      const expectedKeys = expectedContextualLeaderboards[guide.slug as keyof typeof expectedContextualLeaderboards];
+      expect(guide.contextualLinks?.map((link) => link.leaderboard)).toEqual(expectedKeys);
+      for (const link of guide.contextualLinks ?? []) {
+        expect(LEADERBOARD_ROUTES[link.leaderboard]).toBeDefined();
+      }
     }
   });
 });

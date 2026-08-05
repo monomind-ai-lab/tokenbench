@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_CONFIG } from '../src/brand/site-config';
 import { GUIDES, guidePath, relatedGuides, type GuideArticle, type GuideSection } from '../src/guides/content';
+import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../src/routing/routes';
 import { metadataForRoute } from '../src/seo/metadata';
 import { documentHtml, escapeHtml, headMarkup, staticChrome } from '../src/seo/static-page';
 
@@ -26,7 +27,7 @@ function renderSection(section: GuideSection): string {
 
 function guideHubContent(): string {
   const metadata = metadataForRoute({ kind: 'guides' });
-  return `<main id="page-content" class="guides-main"><section class="guides-hero"><span class="eyebrow">AI bill playbook</span><h1>${escapeHtml(metadata.h1)}</h1><p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p><div class="guides-hero-actions"><a class="button guide-primary-action" href="/tools/subscriptions-vs-apis/#calculator">Open the calculator</a><span>5 field guides · Reviewed ${formatDate(GUIDES[0].updatedAt)}</span></div></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Guides</span><h2>Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div><div class="guide-grid">${GUIDES.map(guideCard).join('')}</div></section></main>`;
+  return `<main id="page-content" class="guides-main"><section class="guides-hero"><span class="eyebrow">AI bill playbook</span><h1>${escapeHtml(metadata.h1)}</h1><p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p><div class="guides-hero-actions"><a class="button guide-primary-action" href="${ROUTE_PATHS.calculator}#calculator">Open the calculator</a><span>5 field guides · Reviewed ${formatDate(GUIDES[0].updatedAt)}</span></div></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Guides</span><h2>Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div><div class="guide-grid">${GUIDES.map(guideCard).join('')}</div></section></main>`;
 }
 
 function guideHubStructuredData(): unknown[] {
@@ -49,10 +50,15 @@ function guideHubStructuredData(): unknown[] {
   }];
 }
 
+function contextualLinks(guide: GuideArticle): string {
+  const links = guide.contextualLinks.map((link) => `<li><a href="${LEADERBOARD_ROUTES[link.leaderboard].pathname}">${escapeHtml(link.label)}</a> — ${escapeHtml(link.description)}</li>`).join('');
+  return `<aside class="guide-callout decision-context" aria-labelledby="decision-context-heading"><span class="eyebrow">Decision context</span><h2 id="decision-context-heading">Related decision context</h2><p>Use these source-aware pages as a starting point, then inspect the published evidence and unavailable states before relying on a route.</p><ul>${links}</ul></aside>`;
+}
+
 function articleContent(guide: GuideArticle): string {
   const toc = `<aside class="article-toc" aria-label="On this page"><strong>On this page</strong><ol>${guide.sections.map((section) => `<li><a href="#${section.id}">${escapeHtml(section.title.replace(/^\d+\.\s*/, ''))}</a></li>`).join('')}</ol></aside>`;
   const related = relatedGuides(guide);
-  return `<main id="page-content" class="guides-main article-main"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/guides/">Guides</a><span>›</span><span aria-current="page">${escapeHtml(guide.category)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">${escapeHtml(guide.category)}</span><h1>${escapeHtml(guide.title)}</h1><p class="article-dek">${escapeHtml(guide.dek)}</p><div class="article-byline"><span>By ${SITE_CONFIG.parentName}</span><span>Updated ${formatDate(guide.updatedAt)}</span><span>${guide.readMinutes} min read</span></div></header><div class="article-layout"><div class="article-body"><aside class="takeaways"><span class="eyebrow">At a glance</span><h2>What you’ll learn</h2><ul>${guide.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join('')}</ul></aside>${guide.sections.map(renderSection).join('')}<aside class="calculator-cta"><div><span class="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a class="button" href="/tools/subscriptions-vs-apis/#calculator">Open calculator →</a></aside></div>${toc}</div></article><section class="related-guides"><div class="guide-index-heading"><div><span class="eyebrow">Keep optimizing</span><h2>Related guides</h2></div><a href="/guides/">View all guides</a></div><div class="related-grid">${related.map(guideCard).join('')}</div></section></main>`;
+  return `<main id="page-content" class="guides-main article-main"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="${ROUTE_PATHS.guides}">Guides</a><span>›</span><span aria-current="page">${escapeHtml(guide.category)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">${escapeHtml(guide.category)}</span><h1>${escapeHtml(guide.title)}</h1><p class="article-dek">${escapeHtml(guide.dek)}</p><div class="article-byline"><span>By ${SITE_CONFIG.parentName}</span><span>Updated ${formatDate(guide.updatedAt)}</span><span>${guide.readMinutes} min read</span></div></header><div class="article-layout"><div class="article-body"><aside class="takeaways"><span class="eyebrow">At a glance</span><h2>What you’ll learn</h2><ul>${guide.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join('')}</ul></aside>${guide.sections.map(renderSection).join('')}${contextualLinks(guide)}<aside class="calculator-cta"><div><span class="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a class="button" href="${ROUTE_PATHS.calculator}#calculator">Open calculator →</a></aside></div>${toc}</div></article><section class="related-guides"><div class="guide-index-heading"><div><span class="eyebrow">Keep optimizing</span><h2>Related guides</h2></div><a href="${ROUTE_PATHS.guides}">View all guides</a></div><div class="related-grid">${related.map(guideCard).join('')}</div></section></main>`;
 }
 
 function articleStructuredData(guide: GuideArticle): unknown[] {
