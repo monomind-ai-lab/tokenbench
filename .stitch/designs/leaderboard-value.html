@@ -73,9 +73,9 @@
 
       <section class="leaderboard-section" data-mockup-section="rankings" aria-labelledby="rankings-title">
         <h2 id="rankings-title" class="leaderboard-section-heading">Evidence rows</h2>
+        <p id="value-evidence-disclosure" class="leaderboard-evidence-disclosure" data-evidence-disclosure>Illustrative rows only. No active revision is represented, so rank, capability, price, and freshness values remain Unavailable.</p>
         <div class="leaderboard-table-wrap">
-          <table class="leaderboard-table">
-            <caption>Illustrative row density only. No active revision is represented, so evidence values remain unavailable.</caption>
+          <table class="leaderboard-table" aria-labelledby="rankings-title" aria-describedby="value-evidence-disclosure">
             <thead>
               <tr>
                 <th scope="col">Rank</th>
@@ -128,7 +128,7 @@
           </table>
         </div>
 
-        <div class="leaderboard-mobile-cards" aria-label="Value evidence rows for narrow screens">
+        <div class="leaderboard-mobile-cards" aria-label="Value evidence rows for narrow screens" aria-describedby="value-evidence-disclosure">
           <article class="leaderboard-mobile-card" data-mobile-rank-card>
             <header class="leaderboard-mobile-card-header">
               <h3>OpenAI GPT-4o</h3>
