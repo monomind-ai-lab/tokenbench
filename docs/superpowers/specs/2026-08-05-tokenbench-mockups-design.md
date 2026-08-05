@@ -1,8 +1,10 @@
 # TokenBench Decision-Surface Mockups Design
 
-**Status:** Approved direction; written specification pending user review
+**Status:** Approved for implementation
 
 **Date:** 2026-08-05
+
+**User approval:** 2026-08-06
 
 **Surfaces:** Calculator light theme, compare hub, comparison detail, leaderboard directory, value leaderboard
 
