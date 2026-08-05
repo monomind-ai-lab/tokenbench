@@ -460,6 +460,9 @@ test.describe('guides browser harness', () => {
 test.describe('generated static route runtime', () => {
   const staticOnlyRoutes = [
     ['/compare/', 'Compare AI models and costs'],
+  ] as const;
+
+  const hydratingLeaderboardRoutes = [
     ['/leaderboards/', 'AI model leaderboards'],
     ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
     ['/leaderboards/llm/coding/', 'AI coding model benchmarks'],
@@ -475,7 +478,7 @@ test.describe('generated static route runtime', () => {
     ['/leaderboards/media/video-editing/', 'AI video-editing model rankings'],
   ] as const;
 
-  test('retains every route-correct static shell after browser JavaScript executes', async ({ page }) => {
+  test('retains every genuinely static-only shell after browser JavaScript executes', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
     await page.route('https://*/*', (route) => route.abort());
 
@@ -486,6 +489,35 @@ test.describe('generated static route runtime', () => {
       await expect(page.getByRole('heading', { name: h1, level: 1 }), pathname).toBeVisible();
       await expect(page.locator('h1'), pathname).toHaveCount(1);
       await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+    }
+  });
+
+  test('ships crawlable leaderboard HTML and replaces it with the interactive app when JavaScript executes', async ({ page, request }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.route('https://*/*', (route) => route.abort());
+    await page.route('**/api/benchmarks/leaderboards/**', (route) => route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Published benchmark data is unavailable.' }),
+    }));
+
+    for (const [pathname, h1] of hydratingLeaderboardRoutes) {
+      const response = await request.get(pathname);
+      const rawHtml = await response.text();
+      expect(response.ok(), pathname).toBe(true);
+      expect(rawHtml, pathname).toContain('class="app-shell static-page-shell"');
+      expect(rawHtml, pathname).toContain(`<h1>${h1}</h1>`);
+
+      await page.goto(pathname);
+      await expect(page.locator('.static-page-shell'), pathname).toHaveCount(0);
+      await expect(page.locator('.app-shell'), pathname).toBeVisible();
+      await expect(page.getByRole('heading', { name: h1, level: 1 }), pathname).toBeVisible();
+      await expect(page.locator('h1'), pathname).toHaveCount(1);
+      await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+      if (pathname !== '/leaderboards/') {
+        await expect(page.getByRole('form', { name: 'Leaderboard filters' }), pathname).toBeVisible();
+        await expect(page.getByRole('button', { name: 'Retry benchmark request' }), pathname).toBeVisible();
+      }
     }
   });
 
