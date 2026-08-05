@@ -133,6 +133,54 @@ test.describe('responsive calculator browser harness', () => {
     await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-TW');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW');
     await expect(page.locator('input[name="provider"]:checked')).toHaveValue(initialProvider);
+
+    await page.evaluate(() => {
+      const banner = document.createElement('div');
+      banner.className = 'VIpgJd-ZVi9od-ORHb-OEVmcd';
+      document.body.style.top = '40px';
+      document.body.prepend(banner);
+    });
+    await expect.poll(() => page.locator('.VIpgJd-ZVi9od-ORHb-OEVmcd').evaluateAll((elements) => (
+      elements.length > 0 && elements.every((element) => getComputedStyle(element).display === 'none')
+    ))).toBe(true);
+    await expect.poll(() => page.evaluate(() => ({
+      top: document.body.style.getPropertyValue('top'),
+      priority: document.body.style.getPropertyPriority('top'),
+    }))).toEqual({ top: '0px', priority: 'important' });
+  });
+
+  test('uses reference-matched outlined choices and selected preset states', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCalculator(page, {
+      ...FRONTEND_TEST_CATALOG,
+      plans: [
+        ...FRONTEND_TEST_CATALOG.plans,
+        { ...FRONTEND_TEST_CATALOG.plans[0], id: 'provider-b:starter', providerId: 'provider-b', displayName: 'Provider B Starter' },
+      ],
+    });
+
+    const choiceStyles = await page.evaluate(() => {
+      const provider = getComputedStyle(document.querySelector('.provider-choice.choice-selected') as HTMLElement);
+      const selected = getComputedStyle(document.querySelector('.provider-choice.choice-selected') as HTMLElement);
+      const unselected = getComputedStyle(document.querySelector('.provider-choice:not(.choice-selected)') as HTMLElement);
+      return {
+        selectedRadius: provider.borderRadius,
+        selectedShadow: provider.boxShadow,
+        selectedBorder: selected.borderColor,
+        selectedBackground: selected.backgroundColor,
+        unselectedBorder: unselected.borderColor,
+        unselectedBackground: unselected.backgroundColor,
+      };
+    });
+
+    expect(choiceStyles.selectedRadius).toBe('4px');
+    expect(choiceStyles.selectedShadow).toBe('none');
+    expect(choiceStyles.selectedBorder).not.toBe(choiceStyles.unselectedBorder);
+    expect(choiceStyles.selectedBackground).not.toBe(choiceStyles.unselectedBackground);
+    await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Output-heavy' }).click();
+    await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.getByRole('button', { name: 'Output-heavy' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('renders loading, empty, error, bootstrap, and stale catalog states', async ({ page }) => {

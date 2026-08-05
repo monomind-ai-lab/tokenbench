@@ -65,6 +65,12 @@ export function applyWorkloadPreset(preset: WorkloadPreset) {
   return WORKLOAD_PRESETS[preset];
 }
 
+export function selectedWorkloadPreset(inputShareBasisPoints: number, monthlyTokens: number): WorkloadPreset | null {
+  const match = (Object.entries(WORKLOAD_PRESETS) as [WorkloadPreset, (typeof WORKLOAD_PRESETS)[WorkloadPreset]][])
+    .find(([, values]) => values.inputShareBasisPoints === inputShareBasisPoints && values.monthlyTokens === monthlyTokens);
+  return match?.[0] ?? null;
+}
+
 export function groupOffersByBasis(offers: ModelOffer[]): Record<ModelPricingBasis, ModelOffer[]> {
   const grouped: Record<ModelPricingBasis, ModelOffer[]> = {
     direct_provider_api: [],

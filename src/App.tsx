@@ -5,6 +5,7 @@ import {
   applyWorkloadPreset,
   buildCalculatorSnapshot,
   createInitialSelection,
+  selectedWorkloadPreset,
   toggleModelSelection,
 } from './frontend/calculator-state';
 import { Comparison } from './frontend/comparison';
@@ -26,6 +27,7 @@ export default function App() {
   const [selection, setSelection] = useState({ selectedModelIds: [] as string[], modelMixBasisPoints: {} as Record<string, number> });
   const [inputShareBasisPoints, setInputShareBasisPoints] = useState(5_000);
   const [monthlyTokens, setMonthlyTokens] = useState(10_000_000);
+  const selectedPreset = selectedWorkloadPreset(inputShareBasisPoints, monthlyTokens);
 
   const providerIds = useMemo(() => {
     if (!catalog) return [];
@@ -95,7 +97,7 @@ export default function App() {
     <AppShell theme={theme} language={language} onThemeToggle={toggleTheme} onLanguageChange={changeLanguage} catalogPhase={phase} notice={notice} error={error} lastSuccessfulRefreshAt={lastSuccessfulRefreshAt} onRetry={retry}>
       {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
       {catalog ? <div className="content-stack">
-        <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
+        <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} selectedPreset={selectedPreset} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
         <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
         <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} />
       </div> : null}

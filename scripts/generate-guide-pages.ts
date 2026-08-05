@@ -43,6 +43,8 @@ function headMarkup({ title, description, canonical, type, structuredData }: { t
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/src/index.css">
+    <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,ko,zh-TW,zh-CN,ja,es,fr,de,fi,pl,ru',autoDisplay:false},'google_translate_element')}</script>
+    <script async defer src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
     ${structuredData.map((data) => `<script type="application/ld+json">${jsonLd(data)}</script>`).join('\n    ')}`;
 }
 

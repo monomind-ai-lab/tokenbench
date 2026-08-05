@@ -10,6 +10,7 @@ export interface CalculatorControlsProps {
   readonly modelMixBasisPoints: Record<string, number>;
   readonly inputShareBasisPoints: number;
   readonly monthlyTokens: number;
+  readonly selectedPreset: WorkloadPreset | null;
   readonly onProviderChange: (providerId: string) => void;
   readonly onPlanChange: (planId: string) => void;
   readonly onModelToggle: (modelId: string) => void;

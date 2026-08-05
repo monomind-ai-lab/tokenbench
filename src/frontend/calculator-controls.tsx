@@ -1,7 +1,8 @@
-import { Boxes, CreditCard, GitBranch, SlidersHorizontal } from 'lucide-react';
+import { Boxes, CircleCheck, CreditCard, GitBranch, SlidersHorizontal } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
 import { UI_COPY } from '../data/mockData';
-import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints } from './calculator-state';
+import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints, WORKLOAD_PRESETS } from './calculator-state';
+import type { WorkloadPreset } from './calculator-state';
 import { isApiOnlyProvider, paidIndividualPlans } from './plan-filter';
 import type { CalculatorControlsProps } from './types';
 import { EmptyState, providerLabel } from './ui';
@@ -39,10 +40,10 @@ interface ModelChoiceProps {
 
 function ProviderChoice({ providerId, selected, apiOnly, onChange }: ProviderChoiceProps) {
   return (
-    <label className={`choice-card ${selected ? 'choice-selected' : ''}`}>
+    <label className={`choice-card provider-choice ${selected ? 'choice-selected' : ''}`}>
       <input type="radio" name="provider" value={providerId} checked={selected} onChange={onChange} />
       <span className="choice-main"><strong>{providerLabel(providerId)}</strong>{apiOnly ? <small>API pricing only · no paid plan</small> : null}</span>
-      {selected ? <span className="choice-check" aria-hidden="true">✓</span> : null}
+      {selected ? <CircleCheck className="choice-check" aria-hidden="true" size={14} strokeWidth={1.8} /> : null}
     </label>
   );
 }
@@ -76,6 +77,7 @@ export function CalculatorControls({
   modelMixBasisPoints,
   inputShareBasisPoints,
   monthlyTokens,
+  selectedPreset,
   onProviderChange,
   onPlanChange,
   onModelToggle,
@@ -123,9 +125,10 @@ export function CalculatorControls({
           <p id="usage-help" className="field-help">Presets are starting points; every value remains editable.</p>
           <div className="preset-row" aria-label="Workload presets">
             <span className="preset-label">Presets</span>
-            <button type="button" className="button button-small" onClick={() => onPresetChange('balanced')}>Balanced</button>
-            <button type="button" className="button button-small" onClick={() => onPresetChange('input-heavy')}>Input-heavy</button>
-            <button type="button" className="button button-small" onClick={() => onPresetChange('output-heavy')}>Output-heavy</button>
+            {(Object.entries(WORKLOAD_PRESETS) as [WorkloadPreset, (typeof WORKLOAD_PRESETS)[WorkloadPreset]][]).map(([preset, values]) => {
+              const selected = selectedPreset === preset;
+              return <button key={preset} type="button" className={`button button-small preset-button ${selected ? 'preset-selected' : ''}`} aria-pressed={selected} onClick={() => onPresetChange(preset)}>{values.label}</button>;
+            })}
           </div>
 
           <div className="field-label"><label htmlFor="monthly-tokens">Expected monthly usage</label><output id="monthly-tokens-output">{monthlyTokens.toLocaleString()} tokens</output></div>

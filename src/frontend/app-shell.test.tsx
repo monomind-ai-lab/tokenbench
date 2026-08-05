@@ -77,10 +77,14 @@ describe('responsive calculator app shell', () => {
     const usageMix = screen.getByRole('group', { name: /Model usage mix/i });
     expect(within(usageMix).getByLabelText(/Alpha Direct/)).toHaveAttribute('aria-valuenow', '50');
 
+    expect(screen.getByRole('button', { name: /Balanced/i })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: /Input-heavy/i }));
+    expect(screen.getByRole('button', { name: /Balanced/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Input-heavy/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByLabelText(/Input share/i)).toHaveAttribute('aria-valuenow', '80');
     fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '3000000' } });
     expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue(3000000);
+    expect(screen.getByRole('button', { name: /Input-heavy/i })).toHaveAttribute('aria-pressed', 'false');
 
     const usageRange = screen.getByRole('slider', { name: /Monthly usage range/i });
     fireEvent.change(usageRange, { target: { value: '50000000' } });

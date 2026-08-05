@@ -5,6 +5,7 @@ import {
   buildCalculatorSnapshot,
   createInitialSelection,
   groupOffersByBasis,
+  selectedWorkloadPreset,
 } from './calculator-state';
 
 describe('frontend calculator state', () => {
@@ -23,6 +24,9 @@ describe('frontend calculator state', () => {
     expect(applyWorkloadPreset('balanced')).toMatchObject({ inputShareBasisPoints: 5000 });
     expect(applyWorkloadPreset('input-heavy')).toMatchObject({ inputShareBasisPoints: 8000 });
     expect(applyWorkloadPreset('output-heavy')).toMatchObject({ inputShareBasisPoints: 3000 });
+    expect(selectedWorkloadPreset(5000, 10_000_000)).toBe('balanced');
+    expect(selectedWorkloadPreset(8000, 10_000_000)).toBe('input-heavy');
+    expect(selectedWorkloadPreset(8000, 3_000_000)).toBeNull();
   });
 
   it('derives the current API value, break-even, and fixed-plan maximum from state', () => {
