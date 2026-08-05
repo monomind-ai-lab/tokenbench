@@ -252,13 +252,20 @@ function requireNullableStringArray(value: unknown, name: string): void {
   value.forEach((item, index) => assertNoProhibitedText(item, `${name}[${index}]`));
 }
 
-function requireNullableInterval(lower: unknown, upper: unknown, name: string, lowerName: string, upperName: string): void {
+function requireNullableInterval(
+  lower: unknown,
+  upper: unknown,
+  name: string,
+  lowerName: string,
+  upperName: string,
+  allowNegative = false,
+): void {
   if (lower === null && upper === null) return;
   if (typeof lower !== 'number' || !Number.isFinite(lower) || typeof upper !== 'number' || !Number.isFinite(upper)) {
     fail(`${name} confidence bounds must both be null or finite numbers`);
   }
-  if (lower < 0) fail(`${lowerName} must be a non-negative finite number`);
-  if (upper < 0) fail(`${upperName} must be a non-negative finite number`);
+  if (!allowNegative && lower < 0) fail(`${lowerName} must be a non-negative finite number`);
+  if (!allowNegative && upper < 0) fail(`${upperName} must be a non-negative finite number`);
   if (lower > upper) fail(`${lowerName} must be less than or equal to ${upperName}`);
 }
 
@@ -347,16 +354,29 @@ function validateMetric(
   requireBenchmarkDefinitionKey(metric.metricKey, `${name}.metricKey`);
   requireBenchmarkIdentifier(metric.category, `${name}.category`);
   if (!modelKeys.has(metric.modelKey)) fail(`${name}.modelKey must refer to a model`);
-  requireNonNegativeFiniteNumber(metric.value, `${name}.value`);
+  if (!['benchlm_raw_composite', 'bradley_terry', 'ips'].includes(metric.methodology)) fail(`${name}.methodology is invalid`);
+  // Agent Arena's IPS estimator is centered around zero, so valid scores and
+  // confidence bounds may be negative. Capability and Arena-rating metrics may not.
+  const allowsSignedScores = metric.methodology === 'ips';
+  requireFiniteNumber(metric.value, `${name}.value`);
+  if (!allowsSignedScores && metric.value < 0) {
+    fail(`${name}.value must be a non-negative finite number`);
+  }
   requireNullablePositiveInteger(metric.rank, `${name}.rank`);
-  requireNullableInterval(metric.lower, metric.upper, name, `${name}.lower`, `${name}.upper`);
+  requireNullableInterval(
+    metric.lower,
+    metric.upper,
+    name,
+    `${name}.lower`,
+    `${name}.upper`,
+    allowsSignedScores,
+  );
   requireNullableNonNegativeInteger(metric.voteCount, `${name}.voteCount`);
   if (!['score', 'arena_score', 'rank', 'usd_per_million_tokens', 'tokens'].includes(metric.unit)) fail(`${name}.unit is invalid`);
   requireSourceId(metric.sourceId, `${name}.sourceId`);
   requireIsoTimestamp(metric.sourceUpdatedAt, `${name}.sourceUpdatedAt`);
   requireKnownArtifact(sourceArtifacts, metric.sourceId, metric.sourceArtifactId, name);
   requireBoolean(metric.rankingEligible, `${name}.rankingEligible`);
-  if (!['benchlm_raw_composite', 'bradley_terry', 'ips'].includes(metric.methodology)) fail(`${name}.methodology is invalid`);
   requireNullableNonNegativeInteger(metric.observationCount, `${name}.observationCount`);
   requireNullableNonNegativeInteger(metric.sessionCount, `${name}.sessionCount`);
   if (metric.methodology === 'benchlm_raw_composite' && metric.sourceId !== 'benchlm') {

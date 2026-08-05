@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS benchmark_metrics (
   value REAL NOT NULL CHECK (
     typeof(value) IN ('integer', 'real')
     AND value = value
-    AND value >= 0
+    AND value >= CASE WHEN methodology = 'ips' THEN -1.7976931348623157e308 ELSE 0 END
     AND value <= 1.7976931348623157e308
   ),
   rank INTEGER CHECK (rank IS NULL OR (typeof(rank) = 'integer' AND rank > 0)),
@@ -113,11 +113,11 @@ CREATE TABLE IF NOT EXISTS benchmark_metrics (
     OR (
       typeof(lower_bound) IN ('integer', 'real')
       AND lower_bound = lower_bound
-      AND lower_bound >= 0
+      AND lower_bound >= CASE WHEN methodology = 'ips' THEN -1.7976931348623157e308 ELSE 0 END
       AND lower_bound <= 1.7976931348623157e308
       AND typeof(upper_bound) IN ('integer', 'real')
       AND upper_bound = upper_bound
-      AND upper_bound >= 0
+      AND upper_bound >= CASE WHEN methodology = 'ips' THEN -1.7976931348623157e308 ELSE 0 END
       AND upper_bound <= 1.7976931348623157e308
       AND lower_bound <= upper_bound
     )

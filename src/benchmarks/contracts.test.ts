@@ -295,6 +295,36 @@ describe('benchmark contracts', () => {
       ...validBatch,
       models: [{ ...validBatch.models[0], confidenceLower: -1, confidenceUpper: 1 }],
     })).toThrow('models[0].confidenceLower must be a non-negative finite number');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [...validBatch.sources, lmArenaSource],
+      metrics: [{ ...lmArenaMetric('bradley_terry'), value: -0.01 }],
+    })).toThrow('metrics[0].value must be a non-negative finite number');
+  });
+
+  it('preserves finite signed IPS scores and confidence bounds from Agent Arena', () => {
+    const metric = {
+      ...lmArenaMetric('ips'),
+      value: -0.0019042599988607666,
+      lower: -0.010797532242106361,
+      upper: 0.006989012244384828,
+      voteCount: null,
+      observationCount: 1_845_220,
+      sessionCount: 19_135,
+    };
+
+    const result = validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [...validBatch.sources, lmArenaSource],
+      metrics: [metric],
+    });
+
+    expect(result.metrics[0]).toMatchObject({
+      methodology: 'ips',
+      value: metric.value,
+      lower: metric.lower,
+      upper: metric.upper,
+    });
   });
 
   it('accepts evidence counts only for their matching arena methodology', () => {
