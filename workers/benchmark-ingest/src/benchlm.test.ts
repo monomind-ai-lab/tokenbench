@@ -251,6 +251,78 @@ describe('parseBenchLm', () => {
 });
 
 describe('prepareBenchLm', () => {
+  it('strips every case and whitespace variant of external categories before persistence', async () => {
+    const source = payloads();
+    const model = (source.models as { items: Array<Record<string, unknown>> }).items[0];
+    (model.ranking as Record<string, unknown>).categoryRankingEligible = {
+      coding: true,
+      reasoning: false,
+      External: true,
+      ' external ': true,
+      EXTERNAL: true,
+      ' Mixed Safe ': true,
+    };
+    (model.scores as Record<string, unknown>).displayCategoryScores = {
+      coding: 79.5,
+      reasoning: null,
+      External: 9101,
+      ' external ': 9102,
+      EXTERNAL: 9103,
+      ' Mixed Safe ': 9301,
+    };
+    (model.scores as Record<string, unknown>).verifiedDisplayCategoryScores = {
+      coding: 80.25,
+      reasoning: null,
+      External: 9201,
+      ' external ': 9202,
+      EXTERNAL: 9203,
+      ' Mixed Safe ': 9302,
+    };
+    (source.benchmarks as { items: Array<Record<string, unknown>> }).items.push(
+      { category: 'External', benchmarkKey: 'mixed-case-group', weight: 1 },
+      { category: ' external ', benchmarkKey: 'whitespace-group', weight: 1 },
+      { category: ' Mixed Safe ', benchmarkKey: 'mixed-safe', weight: 1 },
+    );
+
+    const prepared = await prepareBenchLm(rawBundleFromPayloads(source));
+    const batch = await parseBenchLm(prepared, observedAt);
+    const projectedModel = prepared.models.payload.items[0] as {
+      ranking: { categoryRankingEligible: Record<string, boolean> };
+      scores: {
+        displayCategoryScores: Record<string, number | null>;
+        verifiedDisplayCategoryScores: Record<string, number | null>;
+      };
+    };
+    const projectedBenchmarkCategories = prepared.benchmarks.payload.items
+      .map((item) => (item as { category: string }).category);
+    const projectedText = `${new TextDecoder().decode(prepared.models.projectedBytes)}\n${new TextDecoder().decode(prepared.benchmarks.projectedBytes)}`;
+
+    expect(projectedModel.ranking.categoryRankingEligible).toEqual({
+      ' Mixed Safe ': true,
+      coding: true,
+      reasoning: false,
+    });
+    expect(projectedModel.scores.displayCategoryScores).toEqual({
+      ' Mixed Safe ': 9301,
+      coding: 79.5,
+      reasoning: null,
+    });
+    expect(projectedModel.scores.verifiedDisplayCategoryScores).toEqual({
+      ' Mixed Safe ': 9302,
+      coding: 80.25,
+      reasoning: null,
+    });
+    expect(projectedBenchmarkCategories).toEqual(['coding', 'reasoning', ' Mixed Safe ']);
+    expect(projectedText).not.toMatch(/external/i);
+    expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === 'coding'))
+      .toMatchObject({ value: 80.25, rankingEligible: true });
+    expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === ' Mixed Safe '))
+      .toMatchObject({ value: 9302, rankingEligible: true });
+    expect(batch.metrics.some((metric) => metric.category.trim().toLowerCase() === 'external')).toBe(false);
+    expect(batch.metrics.some((metric) => [9101, 9102, 9103, 9201, 9202, 9203].includes(metric.value)))
+      .toBe(false);
+  });
+
   it('couples every provenance digest to the exact raw and projected bytes', async () => {
     const raw = rawBundleFromFixtureFiles();
     const prepared = await prepareBenchLm(raw);

@@ -260,14 +260,26 @@ function definitionContainsProhibitedData(definition: Record<string, unknown>): 
   return containsProhibitedText(definition);
 }
 
+function isExternalCategory(category: string): boolean {
+  return category.trim().toLowerCase() === 'external';
+}
+
 function sortedBooleanMap(value: unknown, label: string): Record<string, boolean> {
   const parsed = parseBooleanMap(value, label);
-  return Object.fromEntries(Object.entries(parsed).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+  return Object.fromEntries(
+    Object.entries(parsed)
+      .filter(([category]) => !isExternalCategory(category))
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+  );
 }
 
 function sortedScoreMap(value: unknown, label: string): Record<string, number | null> {
   const parsed = parseScoreMap(value, label);
-  return Object.fromEntries(Object.entries(parsed).sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0));
+  return Object.fromEntries(
+    Object.entries(parsed)
+      .filter(([category]) => !isExternalCategory(category))
+      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+  );
 }
 
 function projectLeaderboardItem(value: unknown, index: number): Record<string, unknown> {
@@ -385,7 +397,7 @@ function projectBenchmarkItem(value: unknown, index: number): Record<string, unk
   }
 
   const category = requireString(definition.category, `${label}.category`);
-  if (category === 'external') return null;
+  if (isExternalCategory(category)) return null;
   return {
     category,
     benchmarkKey: requireString(definition.benchmarkKey, `${label}.benchmarkKey`),
@@ -624,7 +636,7 @@ function safeBenchmarkCategories(items: unknown[]): Set<string> {
     }
     const category = requireString(definition.category, `BenchLM benchmarks.items[${index}].category`);
     requireString(definition.benchmarkKey, `BenchLM benchmarks.items[${index}].benchmarkKey`);
-    if (category !== 'external') categories.add(category);
+    if (!isExternalCategory(category)) categories.add(category);
   });
   return categories;
 }
