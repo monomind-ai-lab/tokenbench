@@ -203,6 +203,8 @@ describe('benchmark contracts', () => {
     'AABogus:overall',
     'benchlm:aabogus:overall',
     'lmarena:AABogus:overall',
+    'benchlm/aabogus/overall',
+    'lmarena/AABogus/overall',
   ])('rejects benchmark metric namespace %s when an AA prefix is disguised', (metricKey) => {
     expect(() => validateNormalizedSourceBatch({
       ...validBatch,
