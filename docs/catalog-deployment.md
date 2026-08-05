@@ -1,27 +1,145 @@
-# AI plan catalog deployment
+# TokenBench catalog and benchmark deployment
 
-The checked-in source must be deployed separately from Cloudflare resource setup. Do not run deployment or dashboard mutations from an implementation task.
+This document describes the TokenBench data plane and its release controls. It
+does not authorize remote commands, dashboard changes, or production data
+changes. Follow [the deployment runbook](tokenbench-deployment.md) for the
+required local evidence and explicit authorization checkpoints.
 
-## One-time Cloudflare setup
+## Components and bindings
 
-1. The provisioned D1 database ID is `a80143b2-519b-4cf1-a153-0d38b3d1b053`; keep that exact ID in both Wrangler files and run `npx wrangler d1 migrations apply ai-plan-catalog --remote --config wrangler.toml` from the repository root.
-2. Create R2 bucket `ai-plan-catalog-snapshots`. Configure its lifecycle policy in the Cloudflare dashboard to expire objects after the approved retention period (default recommendation: 90 days); snapshots use immutable `source/date/content-hash.json` keys.
-3. `wrangler.toml` and `workers/catalog-ingest/wrangler.toml` are the source of truth for Wrangler-managed D1 and R2 bindings. Do not create a second, divergent binding in the dashboard for a Wrangler deployment; use **Settings → Functions** only to verify that the deployed Pages project exposes `CATALOG_DB` and `SOURCE_SNAPSHOTS` with the checked-in names. Keep the current production project and custom domain unchanged.
-4. Deploy the Pages site from repository root with `npm run build && npx wrangler pages deploy dist --project-name <existing-project>`. Pages Functions will expose `GET /api/catalog`.
-5. Deploy the Worker from `workers/catalog-ingest` with `npx wrangler deploy`. Bind its D1 and R2 resources exactly as configured. The cron triggers run the approved official JSON model adapters every six hours (OpenRouter on the hour and OpenCode at the 30-minute offset) and rotate the manual subscription manifest every three hours.
+The checked-in Wrangler files are the source of truth for binding names and
+resource configuration:
 
-## Workers Builds
+| Component | Configuration | Role | Required bindings |
+| --- | --- | --- | --- |
+| Cloudflare Pages | [../wrangler.toml](../wrangler.toml) | Serves the built site and Pages APIs. | CATALOG_DB, SOURCE_SNAPSHOTS |
+| Catalog ingestion Worker | [../workers/catalog-ingest/wrangler.toml](../workers/catalog-ingest/wrangler.toml) | Publishes catalog revisions from approved sources and reviewed manifests. | CATALOG_DB, SOURCE_SNAPSHOTS |
+| Benchmark ingestion Worker | [../workers/benchmark-ingest/wrangler.toml](../workers/benchmark-ingest/wrangler.toml) | Publishes benchmark revisions and comparison eligibility from approved evidence. | CATALOG_DB, SOURCE_SNAPSHOTS |
 
-For automatic deployments, connect the repository's `main` branch in **Workers & Pages → the existing Pages project → Settings → Builds**, set build root to the repository root, build command to `npm run build`, and output directory to `dist`. Configure the standalone Worker in **Workers & Pages → the ingest Worker → Settings → Builds** with production branch `main`, root directory `workers/catalog-ingest`, and deploy command `npx wrangler deploy`; confirm the D1 and R2 bindings in both preview and production environments before enabling builds.
+All three components must bind the same approved D1 database and R2 bucket
+under the exact names CATALOG_DB and SOURCE_SNAPSHOTS. Do not create divergent
+dashboard-only bindings, copy credentials into this document, or change a
+resource identifier without a reviewed configuration change. The authenticated
+operator must verify the deployed binding names before enabling or changing
+schedules.
 
-## Operational invariant
+## Database migration
 
-Raw evidence is written to R2 before D1 publication. Each candidate source is validated before a single D1 batch inserts records and switches the active revision; fetch, parsing, schema, R2, or D1 failure records an actionable source refresh error while leaving the last published revision intact. Bootstrap contains only the small source-linked manually verified set checked into `src/catalog/manual-manifests.ts`; providers without a safely verified offer stay provenance-only.
+The root migration sequence is append-only. Migration
+[../migrations/0004_benchmarks.sql](../migrations/0004_benchmarks.sql) adds the
+benchmark revision, source record, model, metric, price-check, comparison-pair,
+refresh-state, and active-publication tables. It depends on the existing catalog
+revision tables and must be applied to the same D1 database used by Pages and
+both Workers.
 
-## Automated-source allowlist and manual fallback
+Run local migration checks during development. An explicitly authorized
+production operator may apply the remote migration from the repository root:
 
-No browser scraping is permitted. The Worker `AUTOMATED_SOURCE_IDS` allowlist explicitly enables the approved official JSON adapters, `openrouter-models` and `opencode-zen`, and rejects any other automated source with an actionable refresh-state error instead of a request.
+~~~sh
+npx wrangler d1 migrations apply ai-plan-catalog --remote
+~~~
 
-Before adding any HTML, browser, unstable, or otherwise unapproved adapter, record the reviewer, date, endpoint, robots result, and terms result in the deployment change record; only then add its source ID to `AUTOMATED_SOURCE_IDS`. This review must confirm the exact endpoint, cadence, snapshot storage, attribution, and downstream redistribution are permitted. The approved JSON adapters are not HTML scraping and remain scheduled as configured.
+Before deploying benchmark code, record operator-approved evidence that
+0004_benchmarks.sql appears exactly once in the remote migration history. Do
+not attempt a destructive schema rollback. If a later correction is necessary,
+use an approved additive migration and preserve the original migration record.
 
-Until then, use a manually reviewed manifest: preserve the last published revision on a fetch or validation failure, add only a source-linked record with an evidence URL and review status, and leave a provider provenance-only when an accurate current offer cannot be verified. Never substitute a stale price, inferred token allowance, or zero-offer upstream response for the published catalog.
+## Scheduled ingestion
+
+| Worker | Cron | Work performed | Operational constraint |
+| --- | --- | --- | --- |
+| tokenbench-catalog-ingest | 0 */6 * * * | Refreshes the approved OpenRouter model catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
+| tokenbench-catalog-ingest | 30 */6 * * * | Refreshes the approved OpenCode Zen catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
+| tokenbench-catalog-ingest | 0 */3 * * * | Rotates the reviewed manual subscription manifest. | Unverified providers remain provenance-only. |
+| tokenbench-benchmark-ingest | 15 */12 * * * | Refreshes approved BenchLM, LMArena, LiteLLM, and catalog-correlated route evidence. | This Worker is scheduled-only; its fetch handler intentionally returns 405. |
+
+There is no public HTTP endpoint for a benchmark refresh. A controlled refresh
+must use an authorized Cloudflare scheduling or dashboard mechanism, not a
+browser request to the Worker. Record the mechanism, time, operator, and result
+in the deployment runbook.
+
+From the repository root, the corresponding deployment commands are:
+
+~~~sh
+npx wrangler deploy --config workers/catalog-ingest/wrangler.toml
+npx wrangler deploy --config workers/benchmark-ingest/wrangler.toml
+~~~
+
+Run either command only with explicit Cloudflare deployment authorization. A
+catalog Worker deployment is required when its implementation or configuration
+changes; a benchmark Worker deployment is required before relying on benchmark
+publication behavior from a changed build.
+
+## Publication and integrity invariants
+
+Catalog ingestion validates an approved source or reviewed manual manifest,
+writes raw evidence to R2, and then publishes a D1 revision atomically. A fetch,
+validation, R2, or D1 failure records an actionable source refresh error while
+the last published catalog revision remains active.
+
+Benchmark ingestion follows the same publication boundary:
+
+1. It reads the active catalog revision, fetches only approved source artifacts,
+   and validates source, license, and data-contract rules.
+2. It writes immutable evidence snapshots and content-hash metadata to R2
+   before publication.
+3. It inserts a complete benchmark revision and related records in one D1 batch,
+   then switches benchmark_publication_state only after that batch succeeds.
+4. It records a failure in benchmark_refresh_state without replacing a previous
+   published revision.
+
+Post-refresh verification must confirm an active published benchmark revision,
+expected source records, reachable R2 snapshot keys, and empty last_error values
+for the refreshed artifacts. A failed or incomplete refresh is not eligible for
+Pages deployment evidence.
+
+Source permissions, required attribution, safe projections, and the prohibition
+on Artificial Analysis data are defined in
+[data-sources.md](data-sources.md). Do not widen an ingestion allowlist or add
+browser scraping without the separate review described there.
+
+## Pages APIs and comparison delivery
+
+The browser reads published data through Pages APIs:
+
+| Surface | Release contract |
+| --- | --- |
+| GET /api/catalog | Active catalog revision and its response validators. |
+| GET /api/benchmarks | Benchmark summary, source availability, leaderboard availability, and compare-directory data for the active benchmark revision. |
+| GET /api/benchmarks/leaderboards/:key | A workload-profiled, paginated leaderboard with source attribution and ETag support. |
+| GET /api/benchmarks/models/:slug | Evidence, metrics, route pricing facts, and related comparison pairs for one known model. |
+| /compare/:pair/ | A Pages Function target for canonical, server-rendered comparison pages. Valid non-indexable pairs remain useful with noindex,follow; reverse pairs redirect and invalid pairs return 404. |
+| /sitemaps/comparisons.xml | A dynamic sitemap target containing only canonical, indexable comparison pairs. |
+
+The comparison route and dynamic sitemap are release dependencies, not evidence
+that a currently unchecked-out build is production-ready. They must be tested
+against the integrated Pages Function implementation before deployment. A
+matching If-None-Match header on a published benchmark API response must produce
+304; no browser flow may make an upstream benchmark-provider request.
+
+## Ordered release checks
+
+1. Run the complete local gate and two documented UX/UI audit passes from the
+   integrated tree.
+2. Obtain authorization to commit and push the validated release.
+3. Obtain separate authorization and target confirmation for the remote D1
+   migration; verify 0004_benchmarks.sql once.
+4. Deploy any changed ingestion Worker. For benchmark changes, run one approved
+   controlled refresh and verify revision, source, R2, and refresh-state
+   integrity before deploying Pages.
+5. Build and deploy Pages only after the database and Worker checks succeed:
+
+   ~~~sh
+   npm run build
+   npx wrangler pages deploy dist --project-name tokenbench
+   ~~~
+
+6. With separate domain and redirect authorization, attach the canonical
+   TokenBench domain, retain the legacy hostname long enough to redirect, and
+   configure the approved path-and-query-preserving 301.
+7. Run the production smoke checks and record real results, deployment
+   identifiers, and any rollback decision in the runbook.
+
+The canonical production origin is https://tokenbench.monomind.one. The legacy
+ai-plans.monomind.one hostname must redirect to the equivalent canonical path
+and query with HTTP 301; preview and localhost hosts must not be redirected.
