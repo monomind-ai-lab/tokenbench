@@ -232,7 +232,8 @@ function requireBenchmarkIdentifier(value: unknown, name: string): asserts value
 
 function requireBenchmarkDefinitionKey(value: unknown, name: string): asserts value is string {
   requireBenchmarkIdentifier(value, name);
-  if (value.trim().toLowerCase().startsWith('aa')) {
+  const namespaceParts = value.trim().toLowerCase().split(/[:/]/);
+  if (namespaceParts.some((part) => part.startsWith('aa'))) {
     fail(`${name} contains a prohibited Artificial Analysis identifier`);
   }
 }
