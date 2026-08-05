@@ -1,5 +1,12 @@
 .calculator-page { gap: 24px; }
 .calculator-disclosure { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.brand-lockup { min-width: 0; display: flex; align-items: center; }
+.brand-home { gap: 10px; color: var(--text); text-decoration: none; }
+.brand-home img { width: 28px; height: 28px; object-fit: contain; }
+.brand-copy { min-width: 0; display: grid; gap: 1px; }
+.brand-name { color: inherit; font-size: 18px; font-weight: 800; letter-spacing: -.035em; white-space: nowrap; }
+.brand-tagline { overflow: hidden; color: var(--muted); font-size: 8px; font-weight: 600; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
+.brand-home:hover { color: var(--primary-strong); }
 .calculator-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
 .selection-panel { min-width: 0; padding: 22px; }
 .model-panel, .usage-panel { min-height: 394px; }
@@ -34,7 +41,8 @@
 .choice-row input[type='radio'],
 .choice-row input[type='checkbox'] { width: 18px; min-width: 18px; min-height: 18px; height: 18px; margin: 0; accent-color: var(--primary); }
 .choice-label { min-width: 0; font-size: 14px; line-height: 1.25; }
-.choice-check { width: 18px; height: 18px; color: var(--primary); }
+.choice-check { width: 18px; height: 18px; color: var(--primary); visibility: hidden; }
+.mockup-choice[aria-checked='true'] .choice-check { visibility: visible; }
 .mockup-choice[aria-checked='true'] .choice-label { font-weight: 750; }
 
 .usage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; margin-top: 20px; }
@@ -98,6 +106,12 @@
 .recommendation-panel p { max-width: 72ch; margin: 0; color: var(--muted); line-height: 1.55; }
 .recommendation-link { display: inline-flex; align-items: center; justify-content: center; width: fit-content; padding: 0 14px; color: var(--text); text-decoration: none; }
 .recommendation-link:hover { border-color: var(--primary); color: var(--primary); }
+.mockup-footer.app-footer { align-items: flex-start; font-size: 10px; }
+.footer-brand,
+.footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.footer-links { justify-content: flex-end; }
+.mockup-footer a { display: inline-flex; align-items: center; color: var(--muted); font-weight: 700; text-decoration: none; }
+.mockup-footer a:hover { color: var(--primary-strong); }
 
 @media (max-width: 799px) {
   .calculator-grid, .result-layout { grid-template-columns: 1fr; }
@@ -107,6 +121,7 @@
   .trend-heading,
   .section-heading { align-items: start; flex-direction: column; gap: 10px; }
   .section-tag { align-self: start; }
+  .footer-links { justify-content: flex-start; }
   .pricing-panel { overflow: visible; }
   .pricing-table,
   .pricing-table tbody,

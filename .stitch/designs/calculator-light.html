@@ -19,7 +19,12 @@
     <a class="skip-link" href="#page-content">Skip to page content</a>
     <header class="mockup-header">
       <div class="mockup-header-inner">
-        <a class="brand-home" href="/" aria-label="TokenBench home">TokenBench</a>
+        <div class="brand-lockup">
+          <a class="brand-home" href="/" aria-label="TokenBench home">
+            <img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+            <span class="brand-copy"><span class="brand-name">TokenBench</span><span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span></span>
+          </a>
+        </div>
         <nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation">
           <a href="/tools/" aria-current="page">Tools</a>
           <a href="/compare/">Compare</a>
@@ -37,7 +42,7 @@
       <h1 class="sr-only">Subscription vs API value calculator</h1>
       <p class="calculator-disclosure">All numeric values show an illustrative calculator state, not published benchmark evidence.</p>
 
-      <section class="calculator-grid" data-mockup-section="selections" aria-label="Calculator selections">
+      <section id="selections" class="calculator-grid" data-mockup-section="selections" aria-label="Calculator selections">
         <fieldset class="mockup-panel selection-panel">
           <legend>Provider selection</legend>
           <div class="choice-list">
@@ -49,14 +54,17 @@
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="radio" name="provider" value="openai">
               <span class="choice-label">OpenAI (GPT-4o)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="radio" name="provider" value="anthropic">
               <span class="choice-label">Anthropic (Claude)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="radio" name="provider" value="google">
               <span class="choice-label">Google Cloud (Gemini)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
           </div>
         </fieldset>
@@ -67,6 +75,7 @@
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="radio" name="plan" value="starter">
               <span class="choice-label">Starter ($100/mo)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="true">
               <input type="radio" name="plan" value="enterprise" checked>
@@ -76,6 +85,7 @@
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="radio" name="plan" value="unlimited">
               <span class="choice-label">Unlimited ($8,500/mo)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
           </div>
         </fieldset>
@@ -97,22 +107,27 @@
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="checkbox" name="model" value="qwen-turbo">
               <span class="choice-label">Qwen-Turbo</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="checkbox" name="model" value="qwen-long">
               <span class="choice-label">Qwen-Long</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="checkbox" name="model" value="gpt-4o">
               <span class="choice-label">GPT-4o</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="checkbox" name="model" value="claude-3-5-sonnet">
               <span class="choice-label">Claude 3.5 Sonnet</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
             <label class="mockup-choice choice-row" aria-checked="false">
               <input type="checkbox" name="model" value="llama-3-1-70b">
               <span class="choice-label">Llama 3.1 70B</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </label>
           </div>
         </fieldset>
@@ -240,10 +255,25 @@
       </section>
     </main>
 
-    <footer class="mockup-footer">
-      <span>© 2026 MonoMind AI Lab</span>
-      <span>Decision evidence stays attached to the calculation.</span>
+    <footer class="mockup-footer app-footer">
+      <div class="footer-brand"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a><span>Source-aware decision support.</span></div>
+      <div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div>
     </footer>
     <script src="tokenbench-mockup.js"></script>
+    <script>
+      (() => {
+        const choiceInputSelector = '.mockup-choice input[type="radio"], .mockup-choice input[type="checkbox"]';
+        const syncChoices = () => {
+          document.querySelectorAll('.mockup-choice').forEach((row) => {
+            const input = row.querySelector('input[type="radio"], input[type="checkbox"]');
+            row.setAttribute('aria-checked', String(Boolean(input?.checked)));
+          });
+        };
+        document.querySelector('#selections')?.addEventListener('change', (event) => {
+          if (event.target instanceof HTMLInputElement && event.target.matches(choiceInputSelector)) syncChoices();
+        });
+        syncChoices();
+      })();
+    </script>
   </body>
 </html>
