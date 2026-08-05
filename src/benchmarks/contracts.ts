@@ -1,0 +1,443 @@
+export const BENCHMARK_SOURCE_IDS = ['benchlm', 'lmarena', 'litellm', 'openrouter'] as const;
+
+export type BenchmarkSourceId = typeof BENCHMARK_SOURCE_IDS[number];
+export type EvidenceStatus = 'supported' | 'estimated' | 'source_only';
+export type MetricUnit = 'score' | 'arena_score' | 'rank' | 'usd_per_million_tokens' | 'tokens';
+export type BenchmarkMethodology = 'benchlm_raw_composite' | 'bradley_terry' | 'ips';
+export type BenchmarkLicenseId = 'MIT' | 'CC-BY-4.0' | 'OpenRouter-ToS';
+export type BenchmarkPublicationState = 'pending' | 'published' | 'superseded' | 'failed';
+
+/**
+ * Immutable revision metadata. `catalogRevision` and `openrouterContentHash`
+ * bind price-route evidence to the exact sanitized catalog revision used when
+ * this benchmark revision was published.
+ */
+export interface BenchmarkRevision {
+  revision: string;
+  generatedAt: string;
+  publishedAt: string | null;
+  checkedAt: string;
+  publicationState: BenchmarkPublicationState;
+  contentHash: string;
+  catalogRevision: string;
+  openrouterContentHash: string;
+}
+
+export interface BenchmarkModel {
+  modelKey: string;
+  slug: string;
+  name: string;
+  creator: string;
+  sourceType: 'Proprietary' | 'Open Weight' | 'Unknown';
+  reasoningType: string | null;
+  releaseDate: string | null;
+  contextWindowTokens: number | null;
+  evidenceStatus: EvidenceStatus;
+  rankingEligible: boolean;
+  confidenceLower: number | null;
+  confidenceUpper: number | null;
+  benchmarkCount: number;
+  sourceId: BenchmarkSourceId;
+  sourceModelId: string;
+  sourceArtifactId: string;
+}
+
+export interface BenchmarkMetric {
+  modelKey: string;
+  metricKey: string;
+  category: string;
+  value: number;
+  rank: number | null;
+  lower: number | null;
+  upper: number | null;
+  voteCount: number | null;
+  unit: MetricUnit;
+  sourceId: BenchmarkSourceId;
+  sourceUpdatedAt: string;
+  sourceModelId: string;
+  sourceArtifactId: string;
+  rankingEligible: boolean;
+  methodology: BenchmarkMethodology;
+  observationCount: number | null;
+  sessionCount: number | null;
+}
+
+/** One immutable upstream artifact, never an aggregate source summary. */
+export interface BenchmarkSourceRecord {
+  sourceId: BenchmarkSourceId;
+  artifactId: string;
+  sourceUrl: string;
+  observedAt: string;
+  etag: string | null;
+  lastModified: string | null;
+  upstreamRevision: string | null;
+  schemaVersion: string | null;
+  snapshotKey: string;
+  contentHash: string;
+  licenseId: BenchmarkLicenseId;
+  attributionText: string;
+}
+
+export interface BenchmarkPriceCheck {
+  modelKey: string;
+  sourceId: BenchmarkSourceId;
+  providerId: string;
+  inputUsdPerMillion: number | null;
+  cachedInputUsdPerMillion: number | null;
+  outputUsdPerMillion: number | null;
+  contextWindowTokens: number | null;
+  verificationStatus: 'primary' | 'corroborating' | 'conflict';
+  routeId: string;
+  sourceModelId: string;
+  canonicalSlug: string | null;
+  maxInputTokens: number | null;
+  maxOutputTokens: number | null;
+  inputModalities: readonly string[] | null;
+  outputModalities: readonly string[] | null;
+  supportedParameters: readonly string[] | null;
+  sourceArtifactId: string;
+}
+
+export interface ComparisonSeed {
+  pairSlug: string;
+  modelAKey: string;
+  modelBKey: string;
+  sourceId: BenchmarkSourceId;
+  sourceArtifactId: string;
+  sourceModelAId: string;
+  sourceModelBId: string;
+  featuredRank: number | null;
+}
+
+export interface NormalizedSourceBatch {
+  sources: BenchmarkSourceRecord[];
+  models: BenchmarkModel[];
+  metrics: BenchmarkMetric[];
+  priceChecks: BenchmarkPriceCheck[];
+  comparisonSeeds: ComparisonSeed[];
+}
+
+const sourceLicenses: Record<BenchmarkSourceId, BenchmarkLicenseId> = {
+  benchlm: 'MIT',
+  lmarena: 'CC-BY-4.0',
+  litellm: 'MIT',
+  openrouter: 'OpenRouter-ToS',
+};
+
+function fail(message: string): never {
+  throw new Error(message);
+}
+
+function requireRecord(value: unknown, name: string): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail(`${name} must be an object`);
+  return value as Record<string, unknown>;
+}
+
+function requireString(value: unknown, name: string): asserts value is string {
+  if (typeof value !== 'string' || value.trim().length === 0) fail(`${name} must be a non-empty string`);
+}
+
+function requireBoolean(value: unknown, name: string): asserts value is boolean {
+  if (typeof value !== 'boolean') fail(`${name} must be a boolean`);
+}
+
+function requireFiniteNumber(value: unknown, name: string): asserts value is number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${name} must be a finite number`);
+}
+
+function requireNonNegativeInteger(value: unknown, name: string): asserts value is number {
+  if (!Number.isInteger(value) || (value as number) < 0) fail(`${name} must be a non-negative integer`);
+}
+
+function requireNullableNonNegativeInteger(value: unknown, name: string): void {
+  if (value === null) return;
+  if (!Number.isInteger(value) || (value as number) < 0) fail(`${name} must be a non-negative integer or null`);
+}
+
+function requireNullablePositiveInteger(value: unknown, name: string): void {
+  if (value === null) return;
+  if (!Number.isInteger(value) || (value as number) < 1) fail(`${name} must be a positive integer or null`);
+}
+
+function requireNullableNonNegativeFiniteNumber(value: unknown, name: string): void {
+  if (value === null) return;
+  if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${name} must be a finite number or null`);
+  if (value < 0) fail(`${name} must be a non-negative finite number or null`);
+}
+
+function requireNullableFiniteNumber(value: unknown, name: string): void {
+  if (value === null) return;
+  if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${name} must be a finite number or null`);
+}
+
+function requireNullableString(value: unknown, name: string): void {
+  if (value === null) return;
+  requireString(value, name);
+}
+
+function requireIsoTimestamp(value: unknown, name: string): void {
+  requireString(value, name);
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) {
+    fail(`${name} must be a finite ISO timestamp`);
+  }
+}
+
+function requireHttpsUrl(value: unknown, name: string): void {
+  requireString(value, name);
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') fail(`${name} must be an https URL`);
+  } catch {
+    fail(`${name} must be an https URL`);
+  }
+}
+
+function compact(value: string): string {
+  return value.toLowerCase().replace(/[\s_-]/g, '');
+}
+
+function assertNoProhibitedText(value: string, name: string): void {
+  if (compact(value).includes('artificialanalysis')) {
+    fail(`${name} contains prohibited Artificial Analysis data`);
+  }
+}
+
+function assertNoProhibitedIdentifier(value: string, name: string): void {
+  assertNoProhibitedText(value, name);
+  const identifierParts = value.trim().toLowerCase().split(/[:/]/);
+  if (identifierParts.some((part) => part.startsWith('aa'))) {
+    fail(`${name} contains a prohibited Artificial Analysis identifier`);
+  }
+}
+
+function requireIdentifier(value: unknown, name: string): asserts value is string {
+  requireString(value, name);
+  assertNoProhibitedIdentifier(value, name);
+}
+
+function requireSourceId(value: unknown, name: string): asserts value is BenchmarkSourceId {
+  requireIdentifier(value, name);
+  if (!(BENCHMARK_SOURCE_IDS as readonly string[]).includes(value)) fail(`${name} is invalid`);
+}
+
+function requireNullableStringArray(value: unknown, name: string): void {
+  if (value === null) return;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== 'string' || item.trim().length === 0)) {
+    fail(`${name} must be an array of non-empty strings or null`);
+  }
+  value.forEach((item, index) => assertNoProhibitedText(item, `${name}[${index}]`));
+}
+
+function requireNullableInterval(lower: unknown, upper: unknown, name: string, lowerName: string, upperName: string): void {
+  if (lower === null && upper === null) return;
+  if (typeof lower !== 'number' || !Number.isFinite(lower) || typeof upper !== 'number' || !Number.isFinite(upper)) {
+    fail(`${name} confidence bounds must both be null or finite numbers`);
+  }
+  if (lower > upper) fail(`${lowerName} must be less than or equal to ${upperName}`);
+}
+
+function artifactIdentity(sourceId: BenchmarkSourceId, artifactId: string): string {
+  return `${sourceId}\u0000${artifactId}`;
+}
+
+function requireKnownArtifact(
+  sourceArtifacts: Set<string>,
+  sourceId: BenchmarkSourceId,
+  artifactId: unknown,
+  name: string,
+): void {
+  requireIdentifier(artifactId, `${name}.sourceArtifactId`);
+  if (!sourceArtifacts.has(artifactIdentity(sourceId, artifactId))) {
+    fail(`${name}.sourceArtifactId must refer to a source artifact for ${sourceId}`);
+  }
+}
+
+function validateSourceRecord(value: unknown, index: number, sourceArtifacts: Set<string>): BenchmarkSourceRecord {
+  const name = `sources[${index}]`;
+  const source = requireRecord(value, name) as unknown as BenchmarkSourceRecord;
+  requireSourceId(source.sourceId, `${name}.sourceId`);
+  requireIdentifier(source.artifactId, `${name}.artifactId`);
+  requireHttpsUrl(source.sourceUrl, `${name}.sourceUrl`);
+  assertNoProhibitedText(source.sourceUrl, `${name}.sourceUrl`);
+  requireIsoTimestamp(source.observedAt, `${name}.observedAt`);
+  for (const key of ['etag', 'lastModified', 'upstreamRevision', 'schemaVersion'] as const) {
+    requireNullableString(source[key], `${name}.${key}`);
+    if (source[key] !== null) assertNoProhibitedText(source[key], `${name}.${key}`);
+  }
+  for (const key of ['snapshotKey', 'contentHash', 'attributionText'] as const) {
+    requireString(source[key], `${name}.${key}`);
+    assertNoProhibitedText(source[key], `${name}.${key}`);
+  }
+  if (!['MIT', 'CC-BY-4.0', 'OpenRouter-ToS'].includes(source.licenseId)) fail(`${name}.licenseId is invalid`);
+  if (source.licenseId !== sourceLicenses[source.sourceId]) fail(`${name}.licenseId does not match ${source.sourceId}`);
+
+  const identity = artifactIdentity(source.sourceId, source.artifactId);
+  if (sourceArtifacts.has(identity)) fail(`Duplicate source artifact: ${source.sourceId}/${source.artifactId}`);
+  sourceArtifacts.add(identity);
+  return source;
+}
+
+function validateModel(
+  value: unknown,
+  index: number,
+  sourceArtifacts: Set<string>,
+): BenchmarkModel {
+  const name = `models[${index}]`;
+  const model = requireRecord(value, name) as unknown as BenchmarkModel;
+  for (const key of ['modelKey', 'slug', 'sourceModelId'] as const) requireIdentifier(model[key], `${name}.${key}`);
+  for (const key of ['name', 'creator'] as const) {
+    requireString(model[key], `${name}.${key}`);
+    assertNoProhibitedText(model[key], `${name}.${key}`);
+  }
+  if (!['Proprietary', 'Open Weight', 'Unknown'].includes(model.sourceType)) fail(`${name}.sourceType is invalid`);
+  requireNullableString(model.reasoningType, `${name}.reasoningType`);
+  if (model.reasoningType !== null) assertNoProhibitedText(model.reasoningType, `${name}.reasoningType`);
+  requireNullableString(model.releaseDate, `${name}.releaseDate`);
+  requireNullableNonNegativeInteger(model.contextWindowTokens, `${name}.contextWindowTokens`);
+  if (!['supported', 'estimated', 'source_only'].includes(model.evidenceStatus)) fail(`${name}.evidenceStatus is invalid`);
+  requireBoolean(model.rankingEligible, `${name}.rankingEligible`);
+  requireNullableInterval(
+    model.confidenceLower,
+    model.confidenceUpper,
+    name,
+    `${name}.confidenceLower`,
+    `${name}.confidenceUpper`,
+  );
+  requireNonNegativeInteger(model.benchmarkCount, `${name}.benchmarkCount`);
+  requireSourceId(model.sourceId, `${name}.sourceId`);
+  requireKnownArtifact(sourceArtifacts, model.sourceId, model.sourceArtifactId, name);
+  return model;
+}
+
+function validateMetric(
+  value: unknown,
+  index: number,
+  sourceArtifacts: Set<string>,
+  modelKeys: Set<string>,
+): BenchmarkMetric {
+  const name = `metrics[${index}]`;
+  const metric = requireRecord(value, name) as unknown as BenchmarkMetric;
+  for (const key of ['modelKey', 'metricKey', 'sourceModelId'] as const) requireIdentifier(metric[key], `${name}.${key}`);
+  requireString(metric.category, `${name}.category`);
+  assertNoProhibitedText(metric.category, `${name}.category`);
+  if (!modelKeys.has(metric.modelKey)) fail(`${name}.modelKey must refer to a model`);
+  requireFiniteNumber(metric.value, `${name}.value`);
+  requireNullablePositiveInteger(metric.rank, `${name}.rank`);
+  requireNullableInterval(metric.lower, metric.upper, name, `${name}.lower`, `${name}.upper`);
+  requireNullableNonNegativeInteger(metric.voteCount, `${name}.voteCount`);
+  if (!['score', 'arena_score', 'rank', 'usd_per_million_tokens', 'tokens'].includes(metric.unit)) fail(`${name}.unit is invalid`);
+  requireSourceId(metric.sourceId, `${name}.sourceId`);
+  requireIsoTimestamp(metric.sourceUpdatedAt, `${name}.sourceUpdatedAt`);
+  requireKnownArtifact(sourceArtifacts, metric.sourceId, metric.sourceArtifactId, name);
+  requireBoolean(metric.rankingEligible, `${name}.rankingEligible`);
+  if (!['benchlm_raw_composite', 'bradley_terry', 'ips'].includes(metric.methodology)) fail(`${name}.methodology is invalid`);
+  requireNullableNonNegativeInteger(metric.observationCount, `${name}.observationCount`);
+  requireNullableNonNegativeInteger(metric.sessionCount, `${name}.sessionCount`);
+  return metric;
+}
+
+function validatePriceCheck(
+  value: unknown,
+  index: number,
+  sourceArtifacts: Set<string>,
+  modelKeys: Set<string>,
+): BenchmarkPriceCheck {
+  const name = `priceChecks[${index}]`;
+  const price = requireRecord(value, name) as unknown as BenchmarkPriceCheck;
+  for (const key of ['modelKey', 'providerId', 'routeId', 'sourceModelId'] as const) requireIdentifier(price[key], `${name}.${key}`);
+  if (!modelKeys.has(price.modelKey)) fail(`${name}.modelKey must refer to a model`);
+  requireSourceId(price.sourceId, `${name}.sourceId`);
+  requireNullableNonNegativeFiniteNumber(price.inputUsdPerMillion, `${name}.inputUsdPerMillion`);
+  requireNullableNonNegativeFiniteNumber(price.cachedInputUsdPerMillion, `${name}.cachedInputUsdPerMillion`);
+  requireNullableNonNegativeFiniteNumber(price.outputUsdPerMillion, `${name}.outputUsdPerMillion`);
+  requireNullableNonNegativeInteger(price.contextWindowTokens, `${name}.contextWindowTokens`);
+  if (!['primary', 'corroborating', 'conflict'].includes(price.verificationStatus)) fail(`${name}.verificationStatus is invalid`);
+  requireNullableString(price.canonicalSlug, `${name}.canonicalSlug`);
+  if (price.canonicalSlug !== null) assertNoProhibitedIdentifier(price.canonicalSlug, `${name}.canonicalSlug`);
+  requireNullableNonNegativeInteger(price.maxInputTokens, `${name}.maxInputTokens`);
+  requireNullableNonNegativeInteger(price.maxOutputTokens, `${name}.maxOutputTokens`);
+  for (const key of ['inputModalities', 'outputModalities', 'supportedParameters'] as const) {
+    requireNullableStringArray(price[key], `${name}.${key}`);
+  }
+  requireKnownArtifact(sourceArtifacts, price.sourceId, price.sourceArtifactId, name);
+  return price;
+}
+
+function validateComparisonSeed(
+  value: unknown,
+  index: number,
+  sourceArtifacts: Set<string>,
+  modelsByKey: Map<string, BenchmarkModel>,
+): ComparisonSeed {
+  const name = `comparisonSeeds[${index}]`;
+  const seed = requireRecord(value, name) as unknown as ComparisonSeed;
+  for (const key of ['pairSlug', 'modelAKey', 'modelBKey', 'sourceModelAId', 'sourceModelBId'] as const) {
+    requireIdentifier(seed[key], `${name}.${key}`);
+  }
+  const modelA = modelsByKey.get(seed.modelAKey);
+  const modelB = modelsByKey.get(seed.modelBKey);
+  if (!modelA || !modelB) fail(`${name} model keys must refer to models`);
+  if (seed.modelAKey >= seed.modelBKey) fail(`${name}.modelAKey must sort before ${name}.modelBKey`);
+  if (seed.pairSlug !== `${modelA.slug}-vs-${modelB.slug}`) fail(`${name}.pairSlug must use canonical model slugs`);
+  requireSourceId(seed.sourceId, `${name}.sourceId`);
+  requireKnownArtifact(sourceArtifacts, seed.sourceId, seed.sourceArtifactId, name);
+  requireNullablePositiveInteger(seed.featuredRank, `${name}.featuredRank`);
+  return seed;
+}
+
+/**
+ * Rejects unsafe or incomplete evidence before a source parser can publish it.
+ * The original batch is returned so deliberate nulls and literal zero prices
+ * remain distinguishable to every later derivation.
+ */
+export function validateNormalizedSourceBatch(value: unknown): NormalizedSourceBatch {
+  const batch = requireRecord(value, 'benchmark batch') as unknown as NormalizedSourceBatch;
+  if (!Array.isArray(batch.sources) || !Array.isArray(batch.models) || !Array.isArray(batch.metrics)
+    || !Array.isArray(batch.priceChecks) || !Array.isArray(batch.comparisonSeeds)) {
+    fail('benchmark batch collections must be arrays');
+  }
+
+  const sourceArtifacts = new Set<string>();
+  batch.sources.forEach((source, index) => validateSourceRecord(source, index, sourceArtifacts));
+
+  const modelsByKey = new Map<string, BenchmarkModel>();
+  const slugs = new Set<string>();
+  batch.models.forEach((record, index) => {
+    const model = validateModel(record, index, sourceArtifacts);
+    if (modelsByKey.has(model.modelKey)) fail(`Duplicate model key: ${model.modelKey}`);
+    if (slugs.has(model.slug)) fail(`Duplicate model slug: ${model.slug}`);
+    modelsByKey.set(model.modelKey, model);
+    slugs.add(model.slug);
+  });
+
+  const metricIdentities = new Set<string>();
+  batch.metrics.forEach((record, index) => {
+    const metric = validateMetric(record, index, sourceArtifacts, new Set(modelsByKey.keys()));
+    const identity = `${metric.modelKey}\u0000${metric.metricKey}`;
+    if (metricIdentities.has(identity)) fail(`Duplicate metric identity: ${metric.modelKey}/${metric.metricKey}`);
+    metricIdentities.add(identity);
+  });
+
+  const priceIdentities = new Set<string>();
+  batch.priceChecks.forEach((record, index) => {
+    const price = validatePriceCheck(record, index, sourceArtifacts, new Set(modelsByKey.keys()));
+    const identity = `${price.modelKey}\u0000${price.sourceId}\u0000${price.providerId}\u0000${price.routeId}`;
+    if (priceIdentities.has(identity)) {
+      fail(`Duplicate price-check identity: ${price.modelKey}/${price.sourceId}/${price.providerId}/${price.routeId}`);
+    }
+    priceIdentities.add(identity);
+  });
+
+  const pairSlugs = new Set<string>();
+  const pairIdentities = new Set<string>();
+  batch.comparisonSeeds.forEach((record, index) => {
+    const seed = validateComparisonSeed(record, index, sourceArtifacts, modelsByKey);
+    if (pairSlugs.has(seed.pairSlug)) fail(`Duplicate comparison pair slug: ${seed.pairSlug}`);
+    const identity = `${seed.modelAKey}\u0000${seed.modelBKey}`;
+    if (pairIdentities.has(identity)) fail(`Duplicate comparison identity: ${seed.modelAKey}/${seed.modelBKey}`);
+    pairSlugs.add(seed.pairSlug);
+    pairIdentities.add(identity);
+  });
+
+  return batch;
+}
