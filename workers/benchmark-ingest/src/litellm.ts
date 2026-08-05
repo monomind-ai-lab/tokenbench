@@ -3,6 +3,7 @@ import {
   type BenchmarkPriceCheck,
   type BenchmarkSourceRecord,
   type NormalizedSourceBatch,
+  compareUtf8Binary,
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
@@ -112,7 +113,7 @@ export function parseLiteLlmPrices(
 
   const entries = Object.entries(document)
     .filter(([sourceModelId]) => sourceModelId !== 'sample_spec')
-    .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0);
+    .sort(([left], [right]) => compareUtf8Binary(left, right));
 
   for (const [sourceModelId, value] of entries) {
     const row = requireRecord(value, `LiteLLM entry ${sourceModelId}`);

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { BenchmarkComparisonPair, NormalizedSourceBatch } from '../../../src/benchmarks/contracts';
-import worker, { buildPublicationStatements, refreshBenchmarkRevision } from './index';
+import worker, { buildPublicationStatements, deriveComparisonPairs, refreshBenchmarkRevision } from './index';
 
 const observedAt = '2026-08-05T12:00:00.000Z';
 const benchLmArtifacts = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
@@ -424,6 +424,80 @@ function jsonRowsFor(statements: readonly { sql: string; values: unknown[] }[], 
 }
 
 describe('atomic benchmark ingestion', () => {
+  it('derives canonical pairs in SQLite UTF-8 BINARY order when JavaScript UTF-16 order disagrees', () => {
+    // U+10000 begins with a UTF-16 surrogate (so JS sorts it first), while
+    // U+E000 has the lower UTF-8 byte sequence used by D1 SQLite BINARY.
+    const utf8First = 'provider:\uE000';
+    const utf16First = 'provider:\u{10000}';
+    const { batch } = liveScaleBatch();
+    const template = batch.models[0];
+    const pairs = deriveComparisonPairs({
+      ...batch,
+      models: [
+        { ...template, modelKey: utf8First, slug: 'private-use', sourceModelId: 'private-use' },
+        { ...template, modelKey: utf16First, slug: 'astral', sourceModelId: 'astral' },
+      ],
+      metrics: [],
+      priceChecks: [],
+      comparisonSeeds: [{
+        pairSlug: 'private-use-vs-astral',
+        modelAKey: utf8First,
+        modelBKey: utf16First,
+        sourceId: 'benchlm',
+        sourceArtifactId: 'comparisons',
+        sourceModelAId: 'private-use',
+        sourceModelBId: 'astral',
+        featuredRank: 1,
+      }],
+    });
+
+    expect(pairs).toEqual([expect.objectContaining({
+      pairSlug: 'private-use-vs-astral',
+      modelAKey: utf8First,
+      modelBKey: utf16First,
+    })]);
+  });
+
+  it('downgrades a quality-eligible but unroutable upstream pair instead of failing the publication refresh', () => {
+    const { batch } = liveScaleBatch();
+    const modelTemplate = batch.models[0];
+    const metricTemplate = batch.metrics[0];
+    const left = { ...modelTemplate, modelKey: 'provider:unsafe-left', slug: 'unsafe/left', sourceModelId: 'unsafe-left' };
+    const right = { ...modelTemplate, modelKey: 'provider:unsafe-right', slug: 'right', sourceModelId: 'unsafe-right' };
+    const metrics = ['benchlm:overall:raw', 'benchlm:category:coding', 'benchlm:category:reasoning']
+      .flatMap((metricKey) => [left, right].map((model) => ({
+        ...metricTemplate,
+        modelKey: model.modelKey,
+        metricKey,
+        category: metricKey.split(':').at(-1)!,
+        sourceModelId: model.sourceModelId,
+      })));
+
+    const pairs = deriveComparisonPairs({
+      ...batch,
+      models: [left, right],
+      metrics,
+      priceChecks: [],
+      comparisonSeeds: [{
+        pairSlug: 'unsafe/left-vs-right',
+        modelAKey: left.modelKey,
+        modelBKey: right.modelKey,
+        sourceId: 'benchlm',
+        sourceArtifactId: 'comparisons',
+        sourceModelAId: left.sourceModelId,
+        sourceModelBId: right.sourceModelId,
+        featuredRank: 1,
+      }],
+    });
+
+    expect(pairs).toEqual([expect.objectContaining({
+      pairSlug: 'unsafe/left-vs-right',
+      indexable: false,
+      eligibilityReason: 'route-ineligible',
+      sharedMetricCount: 2,
+    })]);
+  });
+
   it('serializes live-scale facts into a safe number of bounded D1 queries without dropping rows', () => {
     const { db } = createDatabase({}, []);
     const { batch, pairs } = liveScaleBatch();

@@ -149,11 +149,16 @@ function snapshot(overrides: Partial<ActiveBenchmarkSnapshot> = {}): ActiveBench
   };
 }
 
-async function request(pairValue: string, pathname = `/compare/${pairValue}`): Promise<Response> {
+async function request(pairValue: string, pathname = `/compare/${pairValue}`, parameter: string | undefined = undefined): Promise<Response> {
+  const requestObject = new Request(`https://tokenbench.monomind.one${pathname}`);
+  const remainder = new URL(requestObject.url).pathname.slice('/compare/'.length);
+  const encodedSegment = remainder.endsWith('/') ? remainder.slice(0, -1) : remainder;
   return onRequestGet({
-    request: new Request(`https://tokenbench.monomind.one${pathname}`),
+    request: requestObject,
     env: { CATALOG_DB: {} as never },
-    params: { pair: pairValue },
+    // Pages supplies the raw encoded route parameter. Tests can deliberately
+    // override it to prove the handler does not trust a mismatched value.
+    params: { pair: parameter === undefined ? encodedSegment : parameter },
   });
 }
 
@@ -240,9 +245,9 @@ describe('dynamic comparison Pages Function', () => {
     expect((await canonical.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Private use model vs Astral model</h1>');
   });
 
-  it('accepts encoded Unicode, query-marker, and fragment-marker slugs while publishing their encoded canonical path', async () => {
+  it('accepts the raw percent-encoded Pages parameter exactly once, including literal percent, Unicode, spaces, query, and fragment markers', async () => {
     const base = snapshot();
-    const modelA = model('provider:unicode-a', '模型?alpha', 'Unicode A');
+    const modelA = model('provider:unicode-a', '模型 %25 ?#', 'Unicode A');
     const modelB = model('provider:unicode-b', 'b#eta', 'Unicode B');
     const pairSlug = `${modelA.slug}-vs-${modelB.slug}`;
     readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({ models: [...base.models, modelA, modelB] }));
@@ -253,6 +258,26 @@ describe('dynamic comparison Pages Function', () => {
     expect(response.status).toBe(200);
     expect(html).toContain(`<link rel="canonical" href="https://tokenbench.monomind.one/compare/${encodeURIComponent(pairSlug)}">`);
     expect(html).toContain(`"canonicalPath":"/compare/${encodeURIComponent(pairSlug)}"`);
+  });
+
+  it('rejects malformed, double-decoded, mismatched, and slash-bearing route parameters', async () => {
+    const base = snapshot();
+    const slashModel = model('provider:slash', 'slash/part', 'Slash model');
+    const plainModel = model('provider:plain', 'plain', 'Plain model');
+    readActiveBenchmarkSnapshot.mockResolvedValue(snapshot({ models: [...base.models, slashModel, plainModel] }));
+
+    const malformed = await request('ignored', '/compare/zeta%ZZ-vs-alpha');
+    const mismatched = await request('zeta-vs-alpha', '/compare/zeta-vs-alpha', 'alpha-vs-zeta');
+    const doubleDecoded = await request('zeta-vs-alpha', '/compare/zeta-vs-alpha', 'zeta%2Dvs%2Dalpha');
+    const encodedSlash = await request(
+      `${slashModel.slug}-vs-${plainModel.slug}`,
+      `/compare/${encodeURIComponent(`${slashModel.slug}-vs-${plainModel.slug}`)}`,
+    );
+
+    for (const response of [malformed, mismatched, doubleDecoded, encodedSlash]) {
+      expect(response.status).toBe(404);
+      expect(await response.text()).toContain('<meta name="robots" content="noindex,follow">');
+    }
   });
 
   it('returns safe noindex 404s for self, unknown, malformed, control, slash, and ambiguous pair parameters', async () => {

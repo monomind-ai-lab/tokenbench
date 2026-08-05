@@ -137,6 +137,95 @@ export interface BenchmarkComparisonPair {
   sharedMetricCount: number;
 }
 
+const COMPARISON_PAIR_ROUTE_UNSAFE = /[\u0000-\u001f\u007f/]/;
+
+export interface ResolvedComparisonPair {
+  readonly modelA: BenchmarkModel;
+  readonly modelB: BenchmarkModel;
+  readonly canonicalPairSlug: string;
+}
+
+export type ComparisonPairSlugResolver = (pairSlug: string) => ResolvedComparisonPair | null;
+
+/**
+ * Only public, single-segment comparison routes may be indexed. Literal
+ * query and fragment characters are allowed because callers encode them,
+ * while slashes, controls, and unencodable surrogate values are not.
+ */
+export function isComparisonPairRouteSafe(pairSlug: string): boolean {
+  if (pairSlug.length === 0 || COMPARISON_PAIR_ROUTE_UNSAFE.test(pairSlug)) return false;
+  try {
+    encodeURIComponent(pairSlug);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves a route exactly as the Pages handler does. Model slugs may include
+ * `-vs-`, so every separator is considered and ambiguity is rejected.
+ */
+export function createComparisonPairSlugResolver(models: readonly BenchmarkModel[]): ComparisonPairSlugResolver {
+  const modelsBySlug = new Map<string, BenchmarkModel>();
+  for (const model of models) {
+    if (modelsBySlug.has(model.slug)) return () => null;
+    modelsBySlug.set(model.slug, model);
+  }
+
+  return (pairSlug) => {
+    if (!isComparisonPairRouteSafe(pairSlug)) return null;
+    const candidates: Array<{ readonly left: BenchmarkModel; readonly right: BenchmarkModel }> = [];
+    let splitAt = pairSlug.indexOf('-vs-');
+    while (splitAt >= 0) {
+      const left = modelsBySlug.get(pairSlug.slice(0, splitAt));
+      const right = modelsBySlug.get(pairSlug.slice(splitAt + 4));
+      if (left && right && left.modelKey !== right.modelKey) candidates.push({ left, right });
+      splitAt = pairSlug.indexOf('-vs-', splitAt + 1);
+    }
+    if (candidates.length !== 1) return null;
+
+    const candidate = candidates[0];
+    const [modelA, modelB] = compareUtf8Binary(candidate.left.modelKey, candidate.right.modelKey) < 0
+      ? [candidate.left, candidate.right]
+      : [candidate.right, candidate.left];
+    return {
+      modelA,
+      modelB,
+      canonicalPairSlug: `${modelA.slug}-vs-${modelB.slug}`,
+    };
+  };
+}
+
+export function resolveComparisonPairSlug(
+  models: readonly BenchmarkModel[],
+  pairSlug: string,
+): ResolvedComparisonPair | null {
+  return createComparisonPairSlugResolver(models)(pairSlug);
+}
+
+/**
+ * Indexable persistence is only valid when the exact public route resolves to
+ * the same canonical models. Nonindexable rows intentionally remain usable as
+ * internal/utility pair records even if no public route can serve them.
+ */
+export function validateIndexableComparisonPairRoute(
+  models: readonly BenchmarkModel[],
+  pair: BenchmarkComparisonPair,
+): void {
+  if (!pair.indexable) return;
+  if (!isComparisonPairRouteSafe(pair.pairSlug)) {
+    fail('indexable pairSlug must be a route-safe URL segment');
+  }
+  const resolved = resolveComparisonPairSlug(models, pair.pairSlug);
+  if (!resolved) fail(`indexable comparison pair ${pair.pairSlug} must resolve uniquely through the comparison route`);
+  if (resolved.modelA.modelKey !== pair.modelAKey
+    || resolved.modelB.modelKey !== pair.modelBKey
+    || resolved.canonicalPairSlug !== pair.pairSlug) {
+    fail(`indexable comparison pair ${pair.pairSlug} must use its active models' canonical route`);
+  }
+}
+
 export interface NormalizedSourceBatch {
   sources: BenchmarkSourceRecord[];
   models: BenchmarkModel[];
@@ -545,6 +634,9 @@ export function validateBenchmarkComparisonPair(value: unknown): BenchmarkCompar
   requireNonNegativeInteger(pair.sharedMetricCount, 'sharedMetricCount');
   if (pair.indexable && pair.sharedMetricCount < 2) {
     fail('sharedMetricCount must be at least 2 when indexable');
+  }
+  if (pair.indexable && !isComparisonPairRouteSafe(pair.pairSlug)) {
+    fail('indexable pairSlug must be a route-safe URL segment');
   }
   return pair;
 }

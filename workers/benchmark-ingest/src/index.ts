@@ -6,7 +6,11 @@ import {
   type BenchmarkSourceRecord,
   type ComparisonSeed,
   type NormalizedSourceBatch,
+  compareUtf8Binary,
+  createComparisonPairSlugResolver,
+  isComparisonPairRouteSafe,
   validateBenchmarkComparisonPair,
+  validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { COMPARISON_ALLOWLIST } from '../../../src/benchmarks/comparison-allowlist';
@@ -405,7 +409,7 @@ function sourceKey(sourceId: string, artifactId: string): string {
 }
 
 function binaryCompare(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
+  return compareUtf8Binary(left, right);
 }
 
 function toStoredSourceRecord(value: Record<string, unknown>): StoredSourceRecord {
@@ -1013,29 +1017,42 @@ function editorialSeeds(models: readonly BenchmarkModel[]): ComparisonSeed[] {
     const left = bySlug.get(leftSlug);
     const right = bySlug.get(rightSlug);
     if (!left || !right || left.modelKey === right.modelKey) return [];
-    const [modelA, modelB] = left.modelKey < right.modelKey ? [left, right] : [right, left];
+    const [modelA, modelB] = compareUtf8Binary(left.modelKey, right.modelKey) < 0 ? [left, right] : [right, left];
     return [{ pairSlug: `${modelA.slug}-vs-${modelB.slug}`, modelAKey: modelA.modelKey, modelBKey: modelB.modelKey, sourceId: 'benchlm', sourceArtifactId: 'comparisons', sourceModelAId: modelA.sourceModelId, sourceModelBId: modelB.sourceModelId, featuredRank: null }];
   });
 }
 
-function deriveComparisonPairs(batch: NormalizedSourceBatch): BenchmarkComparisonPair[] {
+export function deriveComparisonPairs(batch: NormalizedSourceBatch): BenchmarkComparisonPair[] {
   const byKey = new Map(batch.models.map((model) => [model.modelKey, model]));
+  const resolvePairSlug = createComparisonPairSlugResolver(batch.models);
   const records = new Map<string, BenchmarkComparisonPair>();
   for (const seed of [...batch.comparisonSeeds, ...editorialSeeds(batch.models)]) {
     const left = byKey.get(seed.modelAKey);
     const right = byKey.get(seed.modelBKey);
     if (!left || !right || left.modelKey === right.modelKey) continue;
-    const [modelA, modelB] = left.modelKey < right.modelKey ? [left, right] : [right, left];
+    const [modelA, modelB] = compareUtf8Binary(left.modelKey, right.modelKey) < 0 ? [left, right] : [right, left];
     const pairSlug = `${modelA.slug}-vs-${modelB.slug}`;
     const overall = batch.metrics.filter((metric) => metric.metricKey === 'benchlm:overall:raw' && metric.rankingEligible);
     const bothOverall = overall.some((metric) => metric.modelKey === modelA.modelKey) && overall.some((metric) => metric.modelKey === modelB.modelKey);
     const categoriesA = safeBenchLmCategories(batch.metrics, modelA.modelKey);
     const categoriesB = safeBenchLmCategories(batch.metrics, modelB.modelKey);
     const sharedMetricCount = [...categoriesA.keys()].filter((category) => categoriesB.has(category)).length;
-    const indexable = modelA.evidenceStatus === 'supported' && modelB.evidenceStatus === 'supported'
+    const qualityEligible = modelA.evidenceStatus === 'supported' && modelB.evidenceStatus === 'supported'
       && modelA.rankingEligible && modelB.rankingEligible && bothOverall && sharedMetricCount >= 2;
-    const eligibilityReason = indexable ? 'supported-safe-shared-benchlm-categories' : 'quality-gates-not-met';
+    const resolved = resolvePairSlug(pairSlug);
+    const routeEligible = isComparisonPairRouteSafe(pairSlug)
+      && resolved !== null
+      && resolved.modelA.modelKey === modelA.modelKey
+      && resolved.modelB.modelKey === modelB.modelKey
+      && resolved.canonicalPairSlug === pairSlug;
+    const indexable = qualityEligible && routeEligible;
+    const eligibilityReason = !qualityEligible
+      ? 'quality-gates-not-met'
+      : routeEligible
+        ? 'supported-safe-shared-benchlm-categories'
+        : 'route-ineligible';
     const pair = validateBenchmarkComparisonPair({ pairSlug, modelAKey: modelA.modelKey, modelBKey: modelB.modelKey, indexable, eligibilityReason, featuredRank: seed.featuredRank, sharedMetricCount });
+    validateIndexableComparisonPairRoute(batch.models, pair);
     records.set(`${pair.modelAKey}\u0000${pair.modelBKey}`, pair);
   }
   return [...records.values()].sort((left, right) => binaryCompare(left.pairSlug, right.pairSlug));
@@ -1195,6 +1212,10 @@ export function buildPublicationStatements(
   batch: NormalizedSourceBatch,
   pairs: readonly BenchmarkComparisonPair[],
 ): BoundStatement[] {
+  for (const value of pairs) {
+    const pair = validateBenchmarkComparisonPair(value);
+    validateIndexableComparisonPairRoute(batch.models, pair);
+  }
   const statements: BoundStatement[] = [
     boundedStatement(db, `INSERT INTO benchmark_revisions
       (revision, generated_at, published_at, checked_at, publication_state, content_hash, catalog_revision, openrouter_content_hash)

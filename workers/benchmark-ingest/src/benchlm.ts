@@ -6,6 +6,7 @@ import {
   type ComparisonSeed,
   type EvidenceStatus,
   type NormalizedSourceBatch,
+  compareUtf8Binary,
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { resolvedModelKey } from '../../../src/benchmarks/model-aliases';
@@ -274,7 +275,7 @@ function sortedBooleanMap(value: unknown, label: string): Record<string, boolean
   return Object.fromEntries(
     Object.entries(parsed)
       .filter(([category]) => !isExternalCategory(category))
-      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+      .sort(([left], [right]) => compareUtf8Binary(left, right)),
   );
 }
 
@@ -283,7 +284,7 @@ function sortedScoreMap(value: unknown, label: string): Record<string, number | 
   return Object.fromEntries(
     Object.entries(parsed)
       .filter(([category]) => !isExternalCategory(category))
-      .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0),
+      .sort(([left], [right]) => compareUtf8Binary(left, right)),
   );
 }
 
@@ -801,7 +802,7 @@ function toComparisonSeeds(items: unknown[], modelsBySourceId: Map<string, SafeM
     const second = modelsBySourceId.get(sourceModelBId);
     if (!first || !second || first.modelKey === second.modelKey) return;
 
-    const [modelARecord, modelBRecord] = first.modelKey < second.modelKey ? [first, second] : [second, first];
+    const [modelARecord, modelBRecord] = compareUtf8Binary(first.modelKey, second.modelKey) < 0 ? [first, second] : [second, first];
     const pairIdentity = `${modelARecord.modelKey}\u0000${modelBRecord.modelKey}`;
     if (seenPairs.has(pairIdentity)) return;
     seenPairs.add(pairIdentity);

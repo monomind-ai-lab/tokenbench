@@ -1,6 +1,8 @@
 import {
   BENCHMARK_SOURCE_IDS,
+  compareUtf8Binary,
   validateBenchmarkComparisonPair,
+  validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
   type BenchmarkComparisonPair,
   type BenchmarkLicenseId,
@@ -253,7 +255,7 @@ async function all<T>(db: D1Database, query: string, ...values: unknown[]): Prom
 }
 
 function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
+  return compareUtf8Binary(left, right);
 }
 
 function artifactIdentity(sourceId: BenchmarkSourceId, artifactId: string): string {
@@ -352,6 +354,7 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
     if (pair.pairSlug !== `${modelA.slug}-vs-${modelB.slug}`) {
       fail(`comparison pair ${pair.pairSlug} does not use its active models' canonical slugs`);
     }
+    validateIndexableComparisonPairRoute(models, pair);
   });
 
   return {

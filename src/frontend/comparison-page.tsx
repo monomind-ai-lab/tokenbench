@@ -61,6 +61,17 @@ function modelEvidenceLabel(model: BenchmarkModel): string {
   return 'Source only';
 }
 
+function stableDomId(prefix: string, value: string): string {
+  const encoded = new TextEncoder().encode(value);
+  const hex = [...encoded].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${prefix}-${hex}`;
+}
+
+function tableModelLabel(models: readonly [BenchmarkModel, BenchmarkModel], index: 0 | 1): string {
+  const model = models[index];
+  return models[1 - index].name === model.name ? `${model.name} (${model.slug})` : model.name;
+}
+
 function selectedRoute(
   group: ComparisonPriceChecks,
   model: BenchmarkModel,
@@ -86,8 +97,9 @@ function PriceRouteContext({ model, route }: { readonly model: BenchmarkModel; r
 }
 
 function ModelIdentity({ model }: { readonly model: BenchmarkModel }) {
-  return <article className="comparison-model-identity" aria-labelledby={`comparison-model-${model.modelKey}`}>
-    <h3 id={`comparison-model-${model.modelKey}`}>{model.name}</h3>
+  const headingId = stableDomId('comparison-model', model.modelKey);
+  return <article className="comparison-model-identity" aria-labelledby={headingId}>
+    <h3 id={headingId}>{model.name}</h3>
     <dl>
       <div><dt>Creator</dt><dd>{model.creator}</dd></div>
       <div><dt>Model type</dt><dd>{model.sourceType}</dd></div>
@@ -120,7 +132,7 @@ function SourceMetrics({ rows, models }: { readonly rows: readonly ComparisonMet
       <div className="comparison-table-wrap">
         <table className="comparison-table">
           <caption>Source metric comparison</caption>
-          <thead><tr><th scope="col">Metric</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{models[0].name}</th><th scope="col">{models[1].name}</th></tr></thead>
+          <thead><tr><th scope="col">Metric</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{tableModelLabel(models, 0)}</th><th scope="col">{tableModelLabel(models, 1)}</th></tr></thead>
           <tbody>{rows.map((row) => <tr key={metricRowIdentity(row)}>
             <th scope="row"><code>{row.metricKey}</code></th><td>{row.sourceId}</td><td>{row.unit}</td><td>{metricValue(row.modelA)}</td><td>{metricValue(row.modelB)}</td>
           </tr>)}</tbody>
@@ -189,7 +201,7 @@ function PricingContext({
     <div className="comparison-table-wrap">
       <table className="comparison-table">
         <caption>Route pricing and context comparison</caption>
-        <thead><tr><th scope="col">Field</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{models[0].name}</th><th scope="col">{models[1].name}</th></tr></thead>
+        <thead><tr><th scope="col">Field</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{tableModelLabel(models, 0)}</th><th scope="col">{tableModelLabel(models, 1)}</th></tr></thead>
         <tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th><td>OpenRouter</td><td>{row.unit}</td><td>{row.left}</td><td>{row.right}</td></tr>)}</tbody>
       </table>
     </div>

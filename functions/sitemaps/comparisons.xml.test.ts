@@ -215,6 +215,22 @@ describe('comparison sitemap', () => {
     await expect(response.text()).resolves.toContain(`<loc>${ORIGIN}/compare/alpha%20%3F%23-vs-beta%20%26%3C%22&apos;%F0%9F%98%80</loc><lastmod>${PUBLISHED_AT}</lastmod>`);
   });
 
+  it('does not publish an indexable sitemap URL when its persisted slug cannot resolve uniquely through the comparison route', async () => {
+    const ambiguousModels = [
+      model('a:one', 'a'),
+      model('b:two', 'a-vs-b'),
+      model('c:three', 'b-vs-c'),
+      model('d:four', 'c'),
+    ];
+    const { response } = await sitemap(publishedRows({
+      models: ambiguousModels,
+      pairs: [pair('a-vs-b-vs-c', 'a:one', 'c:three', 1)],
+    }));
+
+    expect(response.status).toBe(503);
+    await expect(response.text()).resolves.not.toContain('a-vs-b-vs-c');
+  });
+
   it('publishes the static and dynamic sitemap index entries and the canonical TokenBench robots sitemap URL', async () => {
     const [index, robots] = await Promise.all([
       readFile(resolve(process.cwd(), 'public/sitemap.xml'), 'utf8'),

@@ -150,6 +150,32 @@ describe('comparison detail page', () => {
     expect(within(screen.getByRole('table', { name: 'Route pricing and context comparison' })).getByText('64,000')).toBeVisible();
     expect(screen.getAllByText('benchlm:category:coding')).toHaveLength(4);
   });
+
+  it('uses safe stable identity IDs and disambiguates duplicate model names in comparison table headings', () => {
+    const model = viewModel();
+    const duplicateNameModel = {
+      ...model.models[1],
+      modelKey: 'provider:other model/\u{1f916}',
+      name: model.models[0].name,
+      slug: 'other-model',
+    };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      models: [model.models[0], duplicateNameModel],
+      priceChecks: [model.priceChecks[0], { ...model.priceChecks[1], modelKey: duplicateNameModel.modelKey, checks: [] }],
+      metricRows: [{
+        ...model.metricRows[0],
+        modelB: { ...model.metricRows[0].modelB!, modelKey: duplicateNameModel.modelKey, sourceModelId: duplicateNameModel.sourceModelId },
+      }],
+    }} />);
+
+    expect(screen.getAllByRole('columnheader', { name: 'Model A (model-a)' })).toHaveLength(2);
+    expect(screen.getAllByRole('columnheader', { name: 'Model A (other-model)' })).toHaveLength(2);
+    const identityIds = screen.getAllByRole('heading', { level: 3, name: 'Model A' }).map((heading) => heading.id);
+    expect(identityIds).toHaveLength(2);
+    expect(identityIds).toEqual(expect.arrayContaining([expect.stringMatching(/^comparison-model-[a-f0-9]+$/)]));
+    expect(identityIds.join(' ')).not.toContain('provider:other model');
+  });
 });
 
 describe('compare hub', () => {
@@ -218,8 +244,8 @@ describe('compare hub', () => {
 
     const first = await screen.findByRole('combobox', { name: 'First model' });
     const second = screen.getByRole('combobox', { name: 'Second model' });
-    expect(screen.getByRole('option', { name: 'Shared Model · Provider A' })).toBeVisible();
-    expect(screen.getByRole('option', { name: 'Shared Model · Provider B' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Shared Model · Provider A · alpha-model' })).toBeVisible();
+    expect(screen.getByRole('option', { name: 'Shared Model · Provider B · zeta-model' })).toBeVisible();
     fireEvent.change(first, { target: { value: 'zeta-model' } });
     fireEvent.change(second, { target: { value: 'alpha-model' } });
 

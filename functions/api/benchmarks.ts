@@ -1,6 +1,10 @@
 import {
   BENCHMARK_SOURCE_IDS,
+  compareUtf8Binary,
+  createComparisonPairSlugResolver,
+  isComparisonPairRouteSafe,
   type BenchmarkMetric,
+  type BenchmarkModel,
   type BenchmarkPriceCheck,
   type BenchmarkSourceId,
 } from '../../src/benchmarks/contracts';
@@ -68,7 +72,7 @@ interface BenchmarkFactIndexes {
 }
 
 function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
+  return compareUtf8Binary(left, right);
 }
 
 function indexBenchmarkFacts(
@@ -149,9 +153,39 @@ function routeAvailability(
     });
 }
 
+function resolvedUtilityPairIsExact(
+  resolvePairSlug: ReturnType<typeof createComparisonPairSlugResolver>,
+  left: BenchmarkModel,
+  right: BenchmarkModel,
+): boolean {
+  const resolved = resolvePairSlug(`${left.slug}-vs-${right.slug}`);
+  return resolved !== null
+    && ((resolved.modelA.modelKey === left.modelKey && resolved.modelB.modelKey === right.modelKey)
+      || (resolved.modelA.modelKey === right.modelKey && resolved.modelB.modelKey === left.modelKey));
+}
+
+/**
+ * The hub promises that two selectable models produce a useful utility route.
+ * Remove a model if either ordering with any other active model is unsafe or
+ * ambiguous in the same resolver used by the Pages function.
+ */
+function utilityRouteModels(snapshot: ActiveBenchmarkSnapshot): readonly BenchmarkModel[] {
+  const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
+  const simpleModels = snapshot.models.filter((model) => isComparisonPairRouteSafe(model.slug)
+    && !model.slug.includes('-vs-'));
+  const complexModels = snapshot.models.filter((candidate) => isComparisonPairRouteSafe(candidate.slug)
+    && candidate.slug.includes('-vs-')
+    && snapshot.models.every((other) => other.modelKey === candidate.modelKey
+      || (isComparisonPairRouteSafe(other.slug)
+        && resolvedUtilityPairIsExact(resolvePairSlug, candidate, other)
+        && resolvedUtilityPairIsExact(resolvePairSlug, other, candidate))));
+  return [...simpleModels, ...complexModels];
+}
+
 function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: BenchmarkFactIndexes): CompareDirectory {
-  const modelsByKey = new Map(snapshot.models.map((model) => [model.modelKey, model]));
-  const models = snapshot.models
+  const routeModels = utilityRouteModels(snapshot);
+  const modelsByKey = new Map(routeModels.map((model) => [model.modelKey, model]));
+  const models = routeModels
     .slice()
     .sort((left, right) => compareText(left.slug, right.slug) || compareText(left.modelKey, right.modelKey))
     .map((model) => ({
@@ -176,7 +210,7 @@ function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: Benchm
     .map((pair) => {
       const modelA = modelsByKey.get(pair.modelAKey);
       const modelB = modelsByKey.get(pair.modelBKey);
-      if (!modelA || !modelB) throw new Error('Indexable comparison pair refers to an unavailable model');
+      if (!modelA || !modelB) return null;
       return {
         pairSlug: pair.pairSlug,
         modelASlug: modelA.slug,
@@ -184,7 +218,8 @@ function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: Benchm
         featuredRank: pair.featuredRank,
         sharedMetricCount: pair.sharedMetricCount,
       };
-    });
+    })
+    .filter((pair): pair is CompareDirectoryPair => pair !== null);
   return { models, indexablePairs };
 }
 

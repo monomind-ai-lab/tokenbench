@@ -1,13 +1,14 @@
-import type {
-  BenchmarkMetric,
-  BenchmarkMethodology,
-  BenchmarkModel,
-  BenchmarkPriceCheck,
-  BenchmarkSourceId,
-  BenchmarkSourceRecord,
-  MetricUnit,
+import {
+  compareUtf8Binary,
+  isComparisonPairRouteSafe,
+  type BenchmarkMetric,
+  type BenchmarkMethodology,
+  type BenchmarkModel,
+  type BenchmarkPriceCheck,
+  type BenchmarkSourceId,
+  type BenchmarkSourceRecord,
+  type MetricUnit,
 } from '../benchmarks/contracts';
-
 export interface ComparisonMetricRow {
   readonly metricKey: string;
   readonly category: string;
@@ -211,17 +212,71 @@ function isMetricRow(value: unknown, models: readonly [BenchmarkModel, Benchmark
     && matchesLens(right as BenchmarkMetric | null, models[1]);
 }
 
-function isRelatedComparison(value: unknown): value is RelatedComparison {
-  if (!isRecord(value)) return false;
+function evidenceIdentity(sourceId: BenchmarkSourceId, artifactId: string): string {
+  return `${sourceId}\u0000${artifactId}`;
+}
+
+function exactAttribution(
+  attribution: readonly BenchmarkSourceRecord[],
+  models: readonly [BenchmarkModel, BenchmarkModel],
+  rows: readonly ComparisonMetricRow[],
+  prices: readonly ComparisonPriceChecks[],
+): boolean {
+  const referenced = new Set<string>([
+    ...models.map((model) => evidenceIdentity(model.sourceId, model.sourceArtifactId)),
+    ...rows.flatMap((row) => [row.modelA, row.modelB].flatMap((metric) => metric === null
+      ? []
+      : [evidenceIdentity(metric.sourceId, metric.sourceArtifactId)])),
+    ...prices.flatMap((group) => group.checks.map((check) => evidenceIdentity(check.sourceId, check.sourceArtifactId))),
+  ]);
+  if (attribution.length !== referenced.size) return false;
+  const found = new Set<string>();
+  return attribution.every((source) => {
+    const identity = evidenceIdentity(source.sourceId, source.artifactId);
+    if (!referenced.has(identity) || found.has(identity)) return false;
+    found.add(identity);
+    return true;
+  });
+}
+
+function methodologyIdentity(sourceId: BenchmarkSourceId, methodology: BenchmarkMethodology): string {
+  return `${sourceId}\u0000${methodology}`;
+}
+
+function exactMethodology(
+  methodology: readonly ComparisonMethodology[],
+  rows: readonly ComparisonMetricRow[],
+): boolean {
+  const referenced = new Set(rows.map((row) => methodologyIdentity(row.sourceId, row.methodology)));
+  if (methodology.length !== referenced.size) return false;
+  const found = new Set<string>();
+  return methodology.every((item) => {
+    const identity = methodologyIdentity(item.sourceId, item.methodology);
+    if (!referenced.has(identity) || found.has(identity)) return false;
+    found.add(identity);
+    return true;
+  });
+}
+
+function isRelatedComparison(
+  value: unknown,
+  currentModels: readonly [BenchmarkModel, BenchmarkModel],
+  currentPairSlug: string,
+): value is RelatedComparison {
+  if (!isRecord(value) || !isModel(value.modelA) || !isModel(value.modelB)) return false;
+  const currentKeys = new Set(currentModels.map((model) => model.modelKey));
+  const sharedCurrentModels = [value.modelA, value.modelB]
+    .filter((model) => currentKeys.has(model.modelKey));
   return isText(value.pairSlug)
-    && !/[\u0000-\u001f\u007f/]/.test(value.pairSlug as string)
-    && isModel(value.modelA)
-    && isModel(value.modelB)
+    && isComparisonPairRouteSafe(value.pairSlug as string)
     && value.modelA.modelKey !== value.modelB.modelKey
+    && compareUtf8Binary(value.modelA.modelKey, value.modelB.modelKey) < 0
     && value.pairSlug === `${value.modelA.slug}-vs-${value.modelB.slug}`
+    && value.pairSlug !== currentPairSlug
+    && sharedCurrentModels.length === 1
     && (value.featuredRank === null || (Number.isSafeInteger(value.featuredRank) && (value.featuredRank as number) > 0))
     && Number.isSafeInteger(value.sharedMetricCount)
-    && (value.sharedMetricCount as number) >= 0;
+    && (value.sharedMetricCount as number) >= 2;
 }
 
 /** Returns null rather than mounting over server HTML when embedded JSON is malformed. */
@@ -250,7 +305,10 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
     || value.subscriptionMatch !== null) return null;
 
   const models = value.models as unknown as readonly [BenchmarkModel, BenchmarkModel];
-  const expectedCanonicalPath = `/compare/${encodeURIComponent(`${models[0].slug}-vs-${models[1].slug}`)}`;
+  const currentPairSlug = `${models[0].slug}-vs-${models[1].slug}`;
+  if (compareUtf8Binary(models[0].modelKey, models[1].modelKey) >= 0
+    || !isComparisonPairRouteSafe(currentPairSlug)) return null;
+  const expectedCanonicalPath = `/compare/${encodeURIComponent(currentPairSlug)}`;
   if (value.canonicalPath !== expectedCanonicalPath) return null;
   if (!value.metricRows.every((row) => isMetricRow(row, models))) return null;
   if (!value.priceChecks.every((group, index) => isRecord(group)
@@ -258,11 +316,20 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
     && Array.isArray(group.checks)
     && group.checks.every((check) => isPriceCheck(check) && check.modelKey === models[index].modelKey))) return null;
   if (!value.attribution.every(isSourceRecord)) return null;
+  const metricRows = value.metricRows as unknown as readonly ComparisonMetricRow[];
+  const priceChecks = value.priceChecks as unknown as readonly ComparisonPriceChecks[];
+  const attribution = value.attribution as unknown as readonly BenchmarkSourceRecord[];
+  if (!exactAttribution(attribution, models, metricRows, priceChecks)) return null;
   if (!value.methodology.every((item) => isRecord(item)
     && isSourceId(item.sourceId)
     && typeof item.methodology === 'string'
     && METHODOLOGIES.has(item.methodology as BenchmarkMethodology))) return null;
-  if (!value.relatedPairs.every(isRelatedComparison)) return null;
+  const methodology = value.methodology as unknown as readonly ComparisonMethodology[];
+  if (!exactMethodology(methodology, metricRows)) return null;
+  if (value.relatedPairs.length > 6
+    || !value.relatedPairs.every((pair) => isRelatedComparison(pair, models, currentPairSlug))) return null;
+  const relatedPairSlugs = value.relatedPairs.map((pair) => (pair as RelatedComparison).pairSlug);
+  if (new Set(relatedPairSlugs).size !== relatedPairSlugs.length) return null;
 
   return value as unknown as ComparisonViewModel;
 }

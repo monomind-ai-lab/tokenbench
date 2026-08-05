@@ -9,7 +9,10 @@ import {
 } from './model-aliases';
 import {
   compareUtf8Binary,
+  resolveComparisonPairSlug,
+  type BenchmarkModel,
   validateBenchmarkComparisonPair,
+  validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
 } from './contracts';
 import { subscriptionPlanIdsForModel } from './subscription-model-map';
@@ -478,6 +481,45 @@ describe('benchmark contracts', () => {
       .toThrow('sharedMetricCount must be at least 2 when indexable');
     expect(validateBenchmarkComparisonPair({ ...pair, sharedMetricCount: 2 }).indexable).toBe(true);
     expect(validateBenchmarkComparisonPair({ ...pair, indexable: false }).sharedMetricCount).toBe(0);
+  });
+
+  it('keeps nonindexable comparison records permissive while rejecting unsafe indexable URL segments', () => {
+    const pair = {
+      pairSlug: 'claude/3-vs-gpt-4o',
+      modelAKey: 'anthropic:claude-3-7-sonnet',
+      modelBKey: 'openai:gpt-4o',
+      indexable: true,
+      eligibilityReason: 'eligible',
+      featuredRank: null,
+      sharedMetricCount: 2,
+    };
+
+    expect(() => validateBenchmarkComparisonPair(pair))
+      .toThrow('indexable pairSlug must be a route-safe URL segment');
+    expect(validateBenchmarkComparisonPair({ ...pair, indexable: false }).pairSlug).toBe('claude/3-vs-gpt-4o');
+  });
+
+  it('shares one unique route resolver between publication and Pages validation', () => {
+    const template = validBatch.models[0] as BenchmarkModel;
+    const models: BenchmarkModel[] = [
+      { ...template, modelKey: 'provider:a', slug: 'a', sourceModelId: 'provider/a' },
+      { ...template, modelKey: 'provider:b', slug: 'a-vs-b', sourceModelId: 'provider/b' },
+      { ...template, modelKey: 'provider:c', slug: 'b-vs-c', sourceModelId: 'provider/c' },
+      { ...template, modelKey: 'provider:d', slug: 'c', sourceModelId: 'provider/d' },
+    ];
+    const ambiguous = validateBenchmarkComparisonPair({
+      pairSlug: 'a-vs-b-vs-c',
+      modelAKey: 'provider:a',
+      modelBKey: 'provider:c',
+      indexable: true,
+      eligibilityReason: 'eligible',
+      featuredRank: null,
+      sharedMetricCount: 2,
+    });
+
+    expect(resolveComparisonPairSlug(models, ambiguous.pairSlug)).toBeNull();
+    expect(() => validateIndexableComparisonPairRoute(models, ambiguous))
+      .toThrow('must resolve uniquely through the comparison route');
   });
 });
 

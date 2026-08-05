@@ -504,22 +504,46 @@ test.describe('generated static route runtime', () => {
 
     const previewOrigin = new URL(baseURL).origin;
     const browserContext = page.context();
-    await browserContext.route(/^https?:\/\//, (route) => (
-      new URL(route.request().url()).origin === previewOrigin ? route.fallback() : route.abort()
-    ));
-    await browserContext.route(`${previewOrigin}/api/benchmarks**`, (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(comparisonDirectoryEnvelope()),
-    }));
-
-    const externalNavigationResults = [];
-    for (const protocol of ['http', 'https']) {
-      const externalPage = await browserContext.newPage();
-      externalNavigationResults.push(await externalPage.goto(`${protocol}://external.example/api/benchmarks`).then(() => 'fulfilled', () => 'aborted'));
-      await externalPage.close();
-    }
-    expect(externalNavigationResults).toEqual(['aborted', 'aborted']);
+    const approvedStaticExternalOrigins = new Set([
+      'https://fonts.googleapis.com',
+      'https://fonts.gstatic.com',
+      'https://translate.google.com',
+    ]);
+    const benchmarkProviderHostSuffixes = [
+      'benchlm.ai',
+      'lmarena.ai',
+      'openrouter.ai',
+      'huggingface.co',
+      'github.com',
+      'raw.githubusercontent.com',
+    ];
+    const benchmarkRequests: string[] = [];
+    const benchmarkProviderRequests: string[] = [];
+    const unexpectedRequests: string[] = [];
+    await browserContext.route(/^https?:\/\//, (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.origin !== previewOrigin) {
+        if (benchmarkProviderHostSuffixes.some((host) => requestUrl.hostname === host || requestUrl.hostname.endsWith(`.${host}`))) {
+          benchmarkProviderRequests.push(route.request().url());
+        }
+        if (approvedStaticExternalOrigins.has(requestUrl.origin)) return route.abort();
+        unexpectedRequests.push(route.request().url());
+        return route.abort();
+      }
+      if (requestUrl.pathname.startsWith('/api/')) {
+        benchmarkRequests.push(`${requestUrl.pathname}${requestUrl.search}`);
+        if (requestUrl.pathname === '/api/benchmarks' && requestUrl.search === '' && requestUrl.hash === '') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(comparisonDirectoryEnvelope()),
+          });
+        }
+        unexpectedRequests.push(route.request().url());
+        return route.abort();
+      }
+      return route.fallback();
+    });
 
     await page.goto('/compare/');
     await expect(page.locator('.static-page-shell')).toHaveCount(0);
@@ -529,6 +553,12 @@ test.describe('generated static route runtime', () => {
     await page.getByRole('combobox', { name: 'Second model' }).fill('model-b');
     await expect(page.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
     await expect(page.locator('#calculator')).toHaveCount(0);
+    // StrictMode may remount the effect in the development preview, but every
+    // same-origin API request must remain this one exact no-query endpoint.
+    expect(benchmarkRequests).not.toHaveLength(0);
+    expect(new Set(benchmarkRequests)).toEqual(new Set(['/api/benchmarks']));
+    expect(benchmarkProviderRequests).toEqual([]);
+    expect(unexpectedRequests).toEqual([]);
   });
 
   test('ships crawlable leaderboard HTML and replaces it with the interactive app when JavaScript executes', async ({ page, request, baseURL }) => {

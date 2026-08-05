@@ -3,10 +3,12 @@ import { renderToString } from 'react-dom/server';
 import { ComparisonDetailApp } from '../../src/App';
 import {
   compareUtf8Binary,
-  BenchmarkComparisonPair,
-  BenchmarkMetric,
-  BenchmarkModel,
-  BenchmarkPriceCheck,
+  isComparisonPairRouteSafe,
+  resolveComparisonPairSlug,
+  type BenchmarkComparisonPair,
+  type BenchmarkMetric,
+  type BenchmarkModel,
+  type BenchmarkPriceCheck,
 } from '../../src/benchmarks/contracts';
 import {
   type ComparisonMethodology,
@@ -25,7 +27,6 @@ import {
 } from '../_shared/benchmark-db';
 
 const COMPARE_PREFIX = '/compare/';
-const CONTROLS_OR_SLASH = /[\u0000-\u001f\u007f/]/;
 const RELATED_PAIR_LIMIT = 6;
 
 interface RequestedPair {
@@ -63,48 +64,19 @@ function requestedPair(request: Request, parameter: unknown): RequestedPair | nu
   } catch {
     return null;
   }
-  if (!isSafePairSlug(decoded) || (parameter !== undefined && parameter !== decoded)) return null;
+  // Cloudflare Pages leaves the route parameter percent-encoded. Compare it
+  // to the raw segment and decode only the URL segment once, never the param.
+  if (!isComparisonPairRouteSafe(decoded)
+    || (parameter !== undefined && (typeof parameter !== 'string' || parameter !== encodedSegment))) return null;
   return { pairSlug: decoded, hasTrailingSlash };
 }
 
-function isSafePairSlug(value: string): boolean {
-  return value.length > 0 && !CONTROLS_OR_SLASH.test(value);
-}
-
-/**
- * A slug can itself contain -vs-, so every literal split is considered. A
- * path resolves only when exactly one split names two distinct active models.
- */
 function resolvePair(snapshot: ActiveBenchmarkSnapshot, pairSlug: string): ResolvedPair | null {
-  if (!isSafePairSlug(pairSlug)) return null;
-  const modelsBySlug = new Map<string, BenchmarkModel>();
-  for (const model of snapshot.models) {
-    if (modelsBySlug.has(model.slug)) return null;
-    modelsBySlug.set(model.slug, model);
-  }
-
-  const candidates: Array<{ left: BenchmarkModel; right: BenchmarkModel }> = [];
-  let splitAt = pairSlug.indexOf('-vs-');
-  while (splitAt >= 0) {
-    const leftSlug = pairSlug.slice(0, splitAt);
-    const rightSlug = pairSlug.slice(splitAt + 4);
-    const left = modelsBySlug.get(leftSlug);
-    const right = modelsBySlug.get(rightSlug);
-    if (left && right && left.modelKey !== right.modelKey) candidates.push({ left, right });
-    splitAt = pairSlug.indexOf('-vs-', splitAt + 4);
-  }
-  if (candidates.length !== 1) return null;
-
-  const candidate = candidates[0];
-  const [modelA, modelB] = compareUtf8Binary(candidate.left.modelKey, candidate.right.modelKey) < 0
-    ? [candidate.left, candidate.right]
-    : [candidate.right, candidate.left];
-  const canonicalPairSlug = `${modelA.slug}-vs-${modelB.slug}`;
+  const resolved = resolveComparisonPairSlug(snapshot.models, pairSlug);
+  if (!resolved) return null;
   return {
-    modelA,
-    modelB,
-    canonicalPairSlug,
-    canonicalPath: encodedPairPath(canonicalPairSlug),
+    ...resolved,
+    canonicalPath: encodedPairPath(resolved.canonicalPairSlug),
   };
 }
 
@@ -154,13 +126,12 @@ function priceChecks(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair):
 }
 
 function exactCanonicalPair(snapshot: ActiveBenchmarkSnapshot, pair: BenchmarkComparisonPair): ResolvedPair | null {
-  const modelA = snapshot.models.find((model) => model.modelKey === pair.modelAKey);
-  const modelB = snapshot.models.find((model) => model.modelKey === pair.modelBKey);
-  if (!modelA || !modelB || modelA.modelKey === modelB.modelKey) return null;
-  if (compareUtf8Binary(modelA.modelKey, modelB.modelKey) >= 0) return null;
-  const canonicalPairSlug = `${modelA.slug}-vs-${modelB.slug}`;
-  if (pair.pairSlug !== canonicalPairSlug || !isSafePairSlug(pair.pairSlug)) return null;
-  return { modelA, modelB, canonicalPairSlug, canonicalPath: encodedPairPath(canonicalPairSlug) };
+  const resolved = resolveComparisonPairSlug(snapshot.models, pair.pairSlug);
+  if (!resolved
+    || resolved.modelA.modelKey !== pair.modelAKey
+    || resolved.modelB.modelKey !== pair.modelBKey
+    || resolved.canonicalPairSlug !== pair.pairSlug) return null;
+  return { ...resolved, canonicalPath: encodedPairPath(resolved.canonicalPairSlug) };
 }
 
 function relatedPairs(snapshot: ActiveBenchmarkSnapshot, current: ResolvedPair): readonly RelatedComparison[] {
@@ -169,9 +140,12 @@ function relatedPairs(snapshot: ActiveBenchmarkSnapshot, current: ResolvedPair):
     .filter((pair) => pair.indexable)
     .flatMap((pair) => {
       const resolved = exactCanonicalPair(snapshot, pair);
+      const sharedModelCount = resolved
+        ? [resolved.modelA, resolved.modelB].filter((model) => currentModelKeys.has(model.modelKey)).length
+        : 0;
       if (!resolved
         || resolved.canonicalPairSlug === current.canonicalPairSlug
-        || (!currentModelKeys.has(resolved.modelA.modelKey) && !currentModelKeys.has(resolved.modelB.modelKey))) return [];
+        || sharedModelCount !== 1) return [];
       return [{
         pairSlug: pair.pairSlug,
         modelA: resolved.modelA,

@@ -158,6 +158,11 @@ function modelLabel(model: DirectoryModel): string {
   return `${model.name} · ${model.creator}`;
 }
 
+function modelOptionLabel(model: DirectoryModel, duplicateNames: ReadonlySet<string>): string {
+  const label = modelLabel(model);
+  return duplicateNames.has(model.name) ? `${label} · ${model.slug}` : label;
+}
+
 function evidenceLabel(status: EvidenceStatus): string {
   if (status === 'supported') return 'Supported evidence';
   if (status === 'estimated') return 'Estimated evidence';
@@ -168,7 +173,9 @@ function modelPairLabel(pair: DirectoryPair, modelsBySlug: ReadonlyMap<string, D
   const modelA = modelsBySlug.get(pair.modelASlug);
   const modelB = modelsBySlug.get(pair.modelBSlug);
   if (!modelA || !modelB) return pair.pairSlug;
-  return `${modelA.name} vs ${modelB.name}`;
+  return modelA.name === modelB.name
+    ? `${modelA.name} (${modelA.slug}) vs ${modelB.name} (${modelB.slug})`
+    : `${modelA.name} vs ${modelB.name}`;
 }
 
 function formatDateTime(value: string): string {
@@ -299,6 +306,11 @@ export function CompareHubPage() {
   const models = directory?.models ?? [];
   const pairs = directory?.indexablePairs ?? [];
   const modelsBySlug = useMemo(() => new Map(models.map((model) => [model.slug, model])), [models]);
+  const duplicateModelNames = useMemo(() => {
+    const counts = new Map<string, number>();
+    models.forEach((model) => counts.set(model.name, (counts.get(model.name) ?? 0) + 1));
+    return new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name));
+  }, [models]);
   const creators = useMemo(() => [...new Set(models.map((model) => model.creator))].sort(compareText), [models]);
   const categories = useMemo(() => [...new Set(models.flatMap((model) => model.metricCategories))].sort(compareText), [models]);
   const filteredModels = useMemo(() => models.filter((model) => (creatorFilter === '' || model.creator === creatorFilter)
@@ -386,7 +398,7 @@ export function CompareHubPage() {
           <ModelCombobox activeOptionId={activeOptionId} activePicker={activePicker} label="Second model" onActivate={activatePicker} onBlur={() => { setActivePicker(null); setActiveOptionIndex(-1); }} onKeyDown={(event) => handleComboboxKeyDown('second', event)} onValueChange={(value) => updatePickerValue('second', value)} picker="second" value={secondSlug} />
         </div>
         <ul aria-label="Available models" className="comparison-model-options" id="comparison-model-options" role="listbox">
-          {selectableModels.map((model, index) => <li aria-label={modelLabel(model)} aria-selected={(activePicker === 'second' ? secondSlug : firstSlug) === model.slug} data-active={activeOption?.slug === model.slug} id={`comparison-model-option-${index}`} key={model.slug} onClick={() => chooseModel(model)} onMouseDown={(event) => event.preventDefault()} role="option">
+          {selectableModels.map((model, index) => <li aria-label={modelOptionLabel(model, duplicateModelNames)} aria-selected={(activePicker === 'second' ? secondSlug : firstSlug) === model.slug} data-active={activeOption?.slug === model.slug} id={`comparison-model-option-${index}`} key={model.slug} onClick={() => chooseModel(model)} onMouseDown={(event) => event.preventDefault()} role="option">
             <strong>{modelLabel(model)}</strong><span><code>{model.slug}</code> · {evidenceLabel(model.evidenceStatus)}</span>
           </li>)}
         </ul>

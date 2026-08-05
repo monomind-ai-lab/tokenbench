@@ -837,6 +837,75 @@ describe('cached benchmark APIs', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
   });
 
+  it.each([
+    ['slash', [
+      { ...models[0], model_key: 'provider:unsafe-left', slug: 'unsafe/left', source_model_id: 'provider/unsafe-left' },
+      { ...models[1], model_key: 'provider:unsafe-right', slug: 'right', source_model_id: 'provider/unsafe-right' },
+    ], {
+      ...pairs[0], pair_slug: 'unsafe/left-vs-right', model_a_key: 'provider:unsafe-left', model_b_key: 'provider:unsafe-right',
+    }],
+    ['control character', [
+      { ...models[0], model_key: 'provider:unsafe-control', slug: 'unsafe\u0000left', source_model_id: 'provider/unsafe-control' },
+      { ...models[1], model_key: 'provider:unsafe-right', slug: 'right', source_model_id: 'provider/unsafe-right' },
+    ], {
+      ...pairs[0], pair_slug: 'unsafe\u0000left-vs-right', model_a_key: 'provider:unsafe-control', model_b_key: 'provider:unsafe-right',
+    }],
+    ['ambiguous -vs- split', [
+      { ...models[0], model_key: 'provider:ambiguous-a', slug: 'a', source_model_id: 'provider/ambiguous-a' },
+      { ...models[0], model_key: 'provider:ambiguous-b', slug: 'a-vs-b', source_model_id: 'provider/ambiguous-b' },
+      { ...models[0], model_key: 'provider:ambiguous-c', slug: 'b-vs-c', source_model_id: 'provider/ambiguous-c' },
+      { ...models[0], model_key: 'provider:ambiguous-d', slug: 'c', source_model_id: 'provider/ambiguous-d' },
+    ], {
+      ...pairs[0], pair_slug: 'a-vs-b-vs-c', model_a_key: 'provider:ambiguous-a', model_b_key: 'provider:ambiguous-c',
+    }],
+  ])('rejects an active indexable comparison that cannot resolve through the %s route', async (_caseName, extraModels, unsafePair) => {
+    const response = await summary(publishedRows({
+      models: [...models, ...extraModels],
+      pairs: [unsafePair],
+    }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+  });
+
+  it('retains known nonindexable pairs even when their arbitrary slug cannot form a public route', async () => {
+    const unsafeModels = [
+      { ...models[0], model_key: 'provider:unsafe-left', slug: 'unsafe/left', source_model_id: 'provider/unsafe-left' },
+      { ...models[1], model_key: 'provider:unsafe-right', slug: 'right', source_model_id: 'provider/unsafe-right' },
+    ];
+    const response = await summary(publishedRows({
+      models: [...models, ...unsafeModels],
+      pairs: [{
+        ...pairs[0], pair_slug: 'unsafe/left-vs-right', model_a_key: 'provider:unsafe-left', model_b_key: 'provider:unsafe-right', indexable: 0,
+      }],
+    }));
+
+    expect(response.status).toBe(200);
+    const body = await response.json() as { data: { compareDirectory: {
+      models: Array<{ slug: string }>;
+      indexablePairs: unknown[];
+    } } };
+    expect(body.data.compareDirectory.indexablePairs).toEqual([]);
+    expect(body.data.compareDirectory.models.map((model) => model.slug)).not.toContain('unsafe/left');
+    expect(body.data.compareDirectory.models.map((model) => model.slug)).toContain('right');
+  });
+
+  it('keeps ambiguous utility-only model slugs out of hub selections while retaining simple routable neighbors', async () => {
+    const ambiguousModels = [
+      { ...models[0], model_key: 'provider:ambiguous-a', slug: 'a', source_model_id: 'provider/ambiguous-a' },
+      { ...models[0], model_key: 'provider:ambiguous-b', slug: 'a-vs-b', source_model_id: 'provider/ambiguous-b' },
+      { ...models[0], model_key: 'provider:ambiguous-c', slug: 'b-vs-c', source_model_id: 'provider/ambiguous-c' },
+      { ...models[0], model_key: 'provider:ambiguous-d', slug: 'c', source_model_id: 'provider/ambiguous-d' },
+    ];
+    const response = await summary(publishedRows({ models: [...models, ...ambiguousModels], pairs: [] }));
+    const body = await response.json() as { data: { compareDirectory: { models: Array<{ slug: string }> } } };
+    const slugs = body.data.compareDirectory.models.map((model) => model.slug);
+
+    expect(response.status).toBe(200);
+    expect(slugs).toEqual(expect.arrayContaining(['a', 'c']));
+    expect(slugs).not.toEqual(expect.arrayContaining(['a-vs-b', 'b-vs-c']));
+  });
+
   it('uses only registered route lenses and appends safe BenchLM estimates after supported rows', async () => {
     const normal = await leaderboard('llm-overall');
     const extended = await leaderboard('llm-overall', '?includeEstimated=1');
