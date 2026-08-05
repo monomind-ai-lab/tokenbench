@@ -330,7 +330,7 @@ test.describe('guides browser harness', () => {
     await page.goto(path);
     await expect(page.getByRole('heading', { name: 'How to Track Claude Code Usage, Tokens, and Spend', level: 1 })).toBeVisible();
     await expect(page.locator('h1')).toHaveCount(1);
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://ai-plans.monomind.one${path}`);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://tokenbench.monomind.one${path}`);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /subscription limits differ from API billing/i);
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(2);
     await expect(page.getByRole('link', { name: /Models, usage, and limits/i })).toHaveAttribute('href', /^https:\/\/support\.claude\.com/);

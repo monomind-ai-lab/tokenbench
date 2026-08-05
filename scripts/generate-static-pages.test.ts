@@ -1,15 +1,24 @@
-import { execFile } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
+import { FIXED_ROUTES } from '../src/routing/routes';
 import { generateStaticPages } from './generate-static-pages';
 
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
 const requireFromTest = createRequire(import.meta.url);
+
+function gitCheckIgnoreStatus(pathname: string): number | null {
+  const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', pathname], {
+    cwd: process.cwd(),
+  });
+  if (result.error) throw result.error;
+  return result.status;
+}
 
 afterEach(async () => {
   await Promise.all(outputRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
@@ -72,5 +81,23 @@ describe('crawlable static-page generator', () => {
     await execFileAsync(process.execPath, ['--import', requireFromTest.resolve('tsx'), scriptPath], { cwd: root });
 
     await expect(readFile(sentinel, 'utf8')).resolves.toBe('keep this guide note');
+  });
+
+  it('ignores every owned generated page without hiding unowned index pages', () => {
+    const generatedPages = FIXED_ROUTES
+      .filter(({ pathname }) => pathname !== '/')
+      .map(({ pathname }) => `${pathname.slice(1)}index.html`);
+    const unownedPages = [
+      'guides/drafts/index.html',
+      'leaderboards/llm/research-notes/index.html',
+      'leaderboards/media/drafts/index.html',
+    ] as const;
+
+    for (const pathname of generatedPages) {
+      expect(gitCheckIgnoreStatus(pathname), pathname).toBe(0);
+    }
+    for (const pathname of unownedPages) {
+      expect(gitCheckIgnoreStatus(pathname), pathname).toBe(1);
+    }
   });
 });
