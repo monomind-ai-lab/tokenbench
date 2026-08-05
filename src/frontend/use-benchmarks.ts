@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardDefinition, type LeaderboardEntry, type LeaderboardResult, type LeaderboardSort } from '../benchmarks/leaderboards';
 import { BENCHMARK_SOURCE_IDS } from '../benchmarks/contracts';
-import type { WorkloadProfile } from '../benchmarks/value';
+import { blendedCostPerMillion, type WorkloadProfile } from '../benchmarks/value';
 import type { LeaderboardKey } from '../routing/routes';
 
 export interface BenchmarkFreshness {
@@ -105,6 +105,7 @@ function isModel(value: unknown): boolean {
   return ['modelKey', 'slug', 'name', 'creator', 'sourceModelId', 'sourceArtifactId']
     .every((key) => isNonEmptyString(value[key]))
     && isEvidenceStatus(value.evidenceStatus)
+    && typeof value.rankingEligible === 'boolean'
     && isBenchmarkSourceId(value.sourceId);
 }
 
@@ -185,12 +186,18 @@ function isMetricForEntryDefinition(
 ): boolean {
   if (!isMetricForDefinition(metric, definition)) return false;
   if (metric.sourceId === 'benchlm') {
-    return entry.model.sourceId === 'benchlm'
-      && (entry.model.evidenceStatus === 'supported' || entry.model.evidenceStatus === 'estimated');
+    if (entry.model.sourceId !== 'benchlm') return false;
+    if (entry.model.evidenceStatus === 'estimated') return true;
+    return entry.model.evidenceStatus === 'supported'
+      && metric.rankingEligible === true
+      && (metric.metricKey !== 'benchlm:overall:raw' || entry.model.rankingEligible === true);
   }
   return metric.sourceId === 'lmarena'
     && entry.model.evidenceStatus !== 'estimated'
-    && (entry.model.evidenceStatus !== 'source_only' || entry.model.sourceId === 'lmarena');
+    && (entry.model.evidenceStatus !== 'source_only' || entry.model.sourceId === 'lmarena')
+    && metric.rankingEligible === true
+    && Number.isSafeInteger(metric.rank)
+    && (metric.rank as number) > 0;
 }
 
 function isSameMetric(
@@ -216,37 +223,57 @@ function isSameMetric(
     && left.sessionCount === right.sessionCount;
 }
 
-function hasModelMatchedPrimaryOpenRouterPrice(entry: LeaderboardEntry): boolean {
-  return entry.primaryPrice !== null
-    && entry.primaryPrice.modelKey === entry.model.modelKey
-    && entry.primaryPrice.sourceId === 'openrouter'
-    && entry.primaryPrice.verificationStatus === 'primary';
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
-function hasNonNegativeBlendedCost(entry: LeaderboardEntry): boolean {
-  return typeof entry.blendedCostPerMillion === 'number'
-    && Number.isFinite(entry.blendedCostPerMillion)
-    && entry.blendedCostPerMillion >= 0;
+function isNearlyEqual(left: number, right: number): boolean {
+  const scale = Math.max(1, Math.abs(left), Math.abs(right));
+  return Math.abs(left - right) <= Number.EPSILON * 8 * scale;
+}
+
+function validSelectedPriceContext(value: number | null): number | null {
+  return Number.isSafeInteger(value) && (value as number) > 0 ? value : null;
+}
+
+function hasModelMatchedPrimaryOpenRouterPrice(
+  entry: LeaderboardEntry,
+  profile: WorkloadProfile,
+): boolean {
+  const price = entry.primaryPrice;
+  if (price === null
+    || price.modelKey !== entry.model.modelKey
+    || price.sourceId !== 'openrouter'
+    || price.verificationStatus !== 'primary'
+    || !isNonNegativeFiniteNumber(price.inputUsdPerMillion)
+    || !isNonNegativeFiniteNumber(price.outputUsdPerMillion)
+    || !isNonNegativeFiniteNumber(entry.blendedCostPerMillion)) return false;
+  const expectedCost = blendedCostPerMillion(price.inputUsdPerMillion, price.outputUsdPerMillion, profile);
+  return isNearlyEqual(entry.blendedCostPerMillion, expectedCost)
+    && entry.contextWindowTokens === validSelectedPriceContext(price.contextWindowTokens);
 }
 
 function hasNoDisplayedPrice(entry: LeaderboardEntry): boolean {
   return entry.primaryPrice === null && entry.blendedCostPerMillion === null;
 }
 
-function hasRouteKindEntryInvariants(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
+function hasRouteKindEntryInvariants(
+  entry: LeaderboardEntry,
+  definition: LeaderboardDefinition,
+  profile: WorkloadProfile,
+): boolean {
   switch (definition.kind) {
     case 'pricing-context':
       return entry.model.evidenceStatus !== 'estimated'
+        && !(entry.model.evidenceStatus === 'source_only' && entry.model.sourceId === 'lmarena')
         && entry.metric === null
         && entry.metrics.length === 0
-        && hasModelMatchedPrimaryOpenRouterPrice(entry)
-        && hasNonNegativeBlendedCost(entry)
+        && hasModelMatchedPrimaryOpenRouterPrice(entry, profile)
         && entry.sourceRank === null
         && !entry.onValueFrontier;
     case 'value':
       if (entry.model.evidenceStatus === 'estimated') return true;
-      return hasModelMatchedPrimaryOpenRouterPrice(entry)
-        && hasNonNegativeBlendedCost(entry)
+      return hasModelMatchedPrimaryOpenRouterPrice(entry, profile)
         && entry.sourceRank === null;
     case 'benchlm':
       return hasNoDisplayedPrice(entry)
@@ -258,10 +285,20 @@ function hasRouteKindEntryInvariants(entry: LeaderboardEntry, definition: Leader
   }
 }
 
-function isEntryForDefinition(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
-  if (!hasRouteKindEntryInvariants(entry, definition)) return false;
+function hasConsistentSourceRank(entry: LeaderboardEntry): boolean {
+  if (entry.metric?.sourceId !== 'lmarena') return entry.sourceRank === null;
+  return entry.metric.rank !== null && entry.sourceRank === entry.metric.rank;
+}
+
+function isEntryForDefinition(
+  entry: LeaderboardEntry,
+  definition: LeaderboardDefinition,
+  profile: WorkloadProfile,
+): boolean {
+  if (!hasRouteKindEntryInvariants(entry, definition, profile)) return false;
   if (definition.kind === 'pricing-context') return true;
   if (entry.metric === null || entry.metric.modelKey !== entry.model.modelKey || !isMetricForEntryDefinition(entry, entry.metric, definition)) return false;
+  if (!hasConsistentSourceRank(entry)) return false;
   if (entry.metrics.length === 0 || !isSameMetric(entry.metric, entry.metrics[0])) return false;
   const metricKeys = new Set<string>();
   return entry.metrics.every((metric) => {
@@ -319,12 +356,17 @@ export function supportsEstimatedModels(key: LeaderboardKey): boolean {
 function isSafeEstimatedEntry(entry: LeaderboardEntry): boolean {
   return entry.model.evidenceStatus === 'estimated'
     && entry.model.sourceId === 'benchlm'
+    && entry.model.rankingEligible === false
     && entry.sourceRank === null
     && entry.primaryPrice === null
     && entry.blendedCostPerMillion === null
     && !entry.onValueFrontier
-    && entry.metric?.sourceId !== 'lmarena'
-    && entry.metrics.every((metric) => metric.sourceId === 'benchlm');
+    && entry.metric?.sourceId === 'benchlm'
+    && entry.metric.rankingEligible === false
+    && entry.metric.rank === null
+    && entry.metrics.every((metric) => metric.sourceId === 'benchlm'
+      && metric.rankingEligible === false
+      && metric.rank === null);
 }
 
 function hasSafeEstimatedSection(entries: readonly LeaderboardEntry[], includeEstimated: boolean): boolean {
@@ -356,7 +398,7 @@ function isLeaderboardEnvelope(
   const entries = value.data.entries as readonly LeaderboardEntry[];
   const attribution = value.attribution as readonly BenchmarkAttribution[];
   const definition = LEADERBOARD_DEFINITIONS[key];
-  return entries.every((entry) => isEntryForDefinition(entry, definition))
+  return entries.every((entry) => isEntryForDefinition(entry, definition, profile))
     && hasApplicableAttribution(attribution, definition, entries)
     && hasSafeEstimatedSection(entries, includeEstimated);
 }

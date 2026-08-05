@@ -64,6 +64,7 @@ export function serializeLeaderboardFilters(filters: LeaderboardFilterState): st
 export function visibleLeaderboardEntries(
   entries: readonly LeaderboardEntry[],
   filters: LeaderboardFilterState,
+  keyName: LeaderboardKey,
 ): readonly LeaderboardEntry[] {
   const query = filters.query.trim().toLocaleLowerCase();
   const matchesQuery = (entry: LeaderboardEntry) => {
@@ -75,7 +76,12 @@ export function visibleLeaderboardEntries(
   const estimates = filters.includeEstimated
     ? entries.filter((entry) => entry.model.evidenceStatus === 'estimated' && matchesQuery(entry)).slice().sort((left, right) => left.model.slug.localeCompare(right.model.slug))
     : [];
-  return [...sortLeaderboardEntries(ranked, filters.sort), ...estimates];
+  const keepsMultimodalLensOrder = keyName === 'multimodal-vision-documents'
+    && filters.sort === LEADERBOARD_DEFINITIONS[keyName].defaultSort;
+  return [
+    ...(keepsMultimodalLensOrder ? ranked : sortLeaderboardEntries(ranked, filters.sort)),
+    ...estimates,
+  ];
 }
 
 export function LeaderboardFilters({ keyName, filters, onChange }: LeaderboardFiltersProps) {
@@ -121,7 +127,11 @@ export function LeaderboardFilters({ keyName, filters, onChange }: LeaderboardFi
           const sort = event.target.value;
           if (isLeaderboardSort(sort)) update({ sort });
         }}>
-          {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>
+            {keyName === 'multimodal-vision-documents' && option.value === 'score-desc'
+              ? 'Source lens order'
+              : option.label}
+          </option>)}
         </select>
       </label>
 

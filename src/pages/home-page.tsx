@@ -75,7 +75,7 @@ function BenchmarkTeaser({
   const entries = state.phase === 'ready' && state.envelope
     ? state.envelope.data.entries.filter((entry) => supportedOnly ? entry.model.evidenceStatus === 'supported' : entry.model.evidenceStatus !== 'estimated').slice(0, 3)
     : [];
-  const source = state.envelope?.attribution[0] ?? null;
+  const attribution = state.envelope?.attribution ?? [];
 
   return <article className="panel" role="listitem">
     <h3>{title}</h3>
@@ -85,7 +85,7 @@ function BenchmarkTeaser({
       <ol className="home-teaser-list" aria-label={`${title} published entries`}>
         {entries.map((entry, index) => <li key={entry.model.modelKey}><span>{index + 1}. {entry.model.name}</span><small>{metricSummary(entry)}</small></li>)}
       </ol>
-      <p className="home-teaser-meta">Fresh as of {formatDateTime(state.envelope?.freshness.checkedAt ?? null)}{source ? <> <span aria-hidden="true">·</span> <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></> : null}</p>
+      <p className="home-teaser-meta">Fresh as of {formatDateTime(state.envelope?.freshness.checkedAt ?? null)}{attribution.map((source) => <span key={`${source.sourceId}-${source.url}`}> <span aria-hidden="true">·</span> <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></span>)}</p>
     </> : null}
     {state.phase === 'ready' && entries.length === 0 ? <p role="status">Unavailable — no supported published entries are available for this teaser.</p> : null}
     {state.phase === 'stale' ? <p role="status">Stale benchmark data{state.envelope ? ` · checked ${formatDateTime(state.envelope.freshness.checkedAt)}` : ''}</p> : null}

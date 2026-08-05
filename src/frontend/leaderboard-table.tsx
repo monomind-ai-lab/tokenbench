@@ -135,9 +135,12 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
 export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
   const orderDescriptionId = `leaderboard-order-${keyName}`;
-  const orderDescription = sort === 'pareto-score-desc'
-    ? 'Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'
-    : null;
+  const usesSourceLensOrder = keyName === 'multimodal-vision-documents' && sort === 'score-desc';
+  const orderDescription = usesSourceLensOrder
+    ? 'Current order preserves the published BenchLM multimodal, LMArena vision, and LMArena document lens groups.'
+    : sort === 'pareto-score-desc'
+      ? 'Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'
+      : null;
   let rankedPosition = 0;
   const rows = entries.map((entry) => ({ entry, position: isEstimated(entry) ? null : ++rankedPosition }));
   return <section className="leaderboard-results" aria-label={label}>
@@ -148,7 +151,7 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, publish
           <tr>
             <th scope="col" aria-sort={sortDirection(sort, 'rank-asc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button></th>
             <th scope="col">Model</th>
-            <th scope="col" aria-sort={sortDirection(sort, 'score-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label="Sort by metric">Metric</button></th>
+            <th scope="col" aria-sort={usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by metric'}>Metric</button></th>
             <th scope="col" aria-sort={sortDirection(sort, 'price-asc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('price-asc')} aria-label="Sort by blended cost">Blended cost</button></th>
             <th scope="col" aria-sort={sortDirection(sort, 'context-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button></th>
           </tr>

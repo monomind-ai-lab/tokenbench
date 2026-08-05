@@ -86,7 +86,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const route = LEADERBOARD_ROUTES[keyName];
   const [filters, setFilters] = useLeaderboardFilters(keyName);
   const state = useBenchmarkLeaderboard(keyName, filters.profile, 50, undefined, filters.includeEstimated);
-  const entries = state.envelope ? visibleLeaderboardEntries(state.envelope.data.entries, filters) : [];
+  const entries = state.envelope ? visibleLeaderboardEntries(state.envelope.data.entries, filters, keyName) : [];
 
   return <div className="content-stack leaderboard-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
@@ -106,7 +106,16 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       {state.phase === 'ready' && state.envelope ? (
         entries.length > 0
           ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} />
-          : <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
+          : <>
+            <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
+            <LeaderboardEvidence
+              publishedAt={state.envelope.publishedAt}
+              freshness={state.envelope.freshness}
+              attribution={state.envelope.attribution}
+              label="Filtered leaderboard evidence"
+              compact
+            />
+          </>
       ) : null}
       {state.phase === 'stale' && state.envelope ? <>
         <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />

@@ -190,6 +190,8 @@ describe('LeaderboardTable', () => {
     });
     renderTable('multimodal-vision-documents', 'score-desc', [multiLens]);
 
+    const metricSort = screen.getByRole('button', { name: 'Use source lens order' });
+    expect(metricSort.closest('th')).toHaveAttribute('aria-sort', 'other');
     expect(screen.getAllByText('BenchLM multimodal').length).toBeGreaterThan(1);
     expect(screen.getAllByText('LMArena vision').length).toBeGreaterThan(1);
     const cards = screen.getByRole('list', { name: 'Vision and document AI benchmark cards' });
@@ -297,11 +299,83 @@ describe('LeaderboardFilters', () => {
   it('filters estimated records only behind the explicit control and sorts matches deterministically', () => {
     const alpha = entry({ model: { ...entry().model, slug: 'alpha', name: 'Alpha', creator: 'Provider A' }, metric: { ...entry().metric!, value: 91 } });
     const beta = entry({ model: { ...entry().model, modelKey: 'beta', slug: 'beta', name: 'Beta', creator: 'Provider B', evidenceStatus: 'estimated' }, metric: { ...entry().metric!, modelKey: 'beta', sourceModelId: 'beta', value: 99 } });
-    const filtered = visibleLeaderboardEntries([beta, alpha], { ...DEFAULT_FILTERS, query: 'provider' });
+    const filtered = visibleLeaderboardEntries([beta, alpha], { ...DEFAULT_FILTERS, query: 'provider' }, 'llm-coding');
 
     expect(filtered.map((item) => item.model.slug)).toEqual(['alpha']);
-    expect(visibleLeaderboardEntries([beta, alpha], { ...DEFAULT_FILTERS, includeEstimated: true })
+    expect(visibleLeaderboardEntries([beta, alpha], { ...DEFAULT_FILTERS, includeEstimated: true }, 'llm-coding')
       .map((item) => item.model.slug)).toEqual(['alpha', 'beta']);
+  });
+
+  it('preserves Task 10 lens-group order for the multimodal default instead of comparing raw source scales', () => {
+    const benchLm = entry({
+      model: { ...entry().model, modelKey: 'benchlm-model', slug: 'benchlm-model' },
+      metric: {
+        ...entry().metric!,
+        modelKey: 'benchlm-model',
+        sourceModelId: 'benchlm-model',
+        metricKey: 'benchlm:category:multimodal',
+        category: 'multimodal',
+        value: 70,
+      },
+    });
+    const vision = entry({
+      model: {
+        ...entry().model,
+        modelKey: 'vision-model',
+        slug: 'vision-model',
+        sourceId: 'lmarena',
+        evidenceStatus: 'source_only',
+      },
+      metric: {
+        ...entry().metric!,
+        modelKey: 'vision-model',
+        sourceModelId: 'vision-model',
+        metricKey: 'lmarena:vision_style_control:overall',
+        value: 1_200,
+        rank: 2,
+        unit: 'arena_score',
+        sourceId: 'lmarena',
+        methodology: 'bradley_terry',
+      },
+      sourceRank: 2,
+    });
+    const document = entry({
+      model: {
+        ...entry().model,
+        modelKey: 'document-model',
+        slug: 'document-model',
+        sourceId: 'lmarena',
+        evidenceStatus: 'source_only',
+      },
+      metric: {
+        ...entry().metric!,
+        modelKey: 'document-model',
+        sourceModelId: 'document-model',
+        metricKey: 'lmarena:document_style_control:overall',
+        value: 1_100,
+        rank: 1,
+        unit: 'arena_score',
+        sourceId: 'lmarena',
+        methodology: 'bradley_terry',
+      },
+      sourceRank: 1,
+    });
+
+    expect(visibleLeaderboardEntries(
+      [benchLm, vision, document],
+      DEFAULT_FILTERS,
+      'multimodal-vision-documents',
+    ).map((item) => item.model.slug)).toEqual(['benchlm-model', 'vision-model', 'document-model']);
+  });
+
+  it('labels the multimodal default sort as source lens order', () => {
+    render(<LeaderboardFilters
+      keyName="multimodal-vision-documents"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+    />);
+
+    expect(screen.getByRole('option', { name: 'Source lens order' })).toBeInTheDocument();
   });
 });
 
@@ -358,6 +432,24 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(screen.queryByText('Model A')).not.toBeInTheDocument();
   });
 
+  it('keeps ready revision evidence visible when filters match zero rows', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding'))));
+    window.history.replaceState({}, '', '/leaderboards/llm/coding/?q=no-such-model');
+
+    render(<App />);
+
+    expect(await screen.findByRole('status')).toHaveTextContent('No published entries match these filters');
+    const evidence = screen.getByLabelText('Filtered leaderboard evidence');
+    expect(evidence).toHaveTextContent('Published');
+    expect(evidence).toHaveTextContent('Checked');
+    expect(evidence).toHaveTextContent('Fresh');
+    expect(evidence).toHaveTextContent('2026');
+    expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' }))
+      .toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(screen.queryByRole('table', { name: 'AI coding model benchmarks' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Model A')).not.toBeInTheDocument();
+  });
+
   it('renders the directory with registered category links without fixture rankings', () => {
     window.history.replaceState({}, '', '/leaderboards/');
 
@@ -381,12 +473,12 @@ describe('leaderboard routes and honest home teasers', () => {
         }),
       ])));
       if (input.includes('llm-human-preference')) return Promise.resolve(jsonResponse(apiEnvelope('llm-human-preference', 'balanced', [
-        entry({ model: { ...entry().model, name: 'Human Preference Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_style_control:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 } }),
+        entry({ model: { ...entry().model, name: 'Human Preference Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_style_control:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 }, sourceRank: 1 }),
       ])));
       return Promise.resolve(jsonResponse(apiEnvelope(
         'media-text-to-image',
         'balanced',
-        [entry({ model: { ...entry().model, name: 'Stale Image Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_to_image:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 } })],
+        [entry({ model: { ...entry().model, name: 'Stale Image Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_to_image:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 }, sourceRank: 1 })],
         { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z' },
       )));
     });
@@ -394,8 +486,15 @@ describe('leaderboard routes and honest home teasers', () => {
 
     render(<HomePage />);
 
-    expect(await screen.findByRole('heading', { name: 'Overall Model Value', level: 3 })).toBeInTheDocument();
+    const valueHeading = await screen.findByRole('heading', { name: 'Overall Model Value', level: 3 });
+    expect(valueHeading).toBeInTheDocument();
     expect(await screen.findByText(/Overall Value Model/)).toBeInTheDocument();
+    const valueTeaser = valueHeading.closest('article');
+    expect(valueTeaser).not.toBeNull();
+    expect(within(valueTeaser as HTMLElement).getByRole('link', { name: 'Data from BenchLM.ai' }))
+      .toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(within(valueTeaser as HTMLElement).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' }))
+      .toHaveAttribute('href', 'https://openrouter.ai/models');
     expect(screen.queryByRole('heading', { name: 'Coding Value', level: 3 })).not.toBeInTheDocument();
     expect(await screen.findByText(/Stale benchmark data/)).toBeInTheDocument();
     expect(screen.queryByText('Stale Image Model')).not.toBeInTheDocument();

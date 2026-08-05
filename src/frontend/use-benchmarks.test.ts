@@ -19,6 +19,13 @@ const OPENROUTER_ATTRIBUTION = {
   updatedAt: ISO_TIME,
 };
 
+const LMARENA_ATTRIBUTION = {
+  sourceId: 'lmarena',
+  label: 'Arena ratings from LMArena',
+  url: 'https://lmarena.ai/leaderboard',
+  updatedAt: ISO_TIME,
+};
+
 function benchMetric(overrides: Record<string, unknown> = {}) {
   return {
     modelKey: 'model-a',
@@ -179,7 +186,37 @@ function codingEnvelope(entryOverrides: Record<string, unknown> = {}) {
   };
 }
 
-function multimodalEnvelope(overrides: Record<string, unknown> = {}) {
+function overallEnvelope(entryOverrides: Record<string, unknown> = {}) {
+  const value = leaderboardEnvelope();
+  const currentEntry = value.data.entries[0];
+  return {
+    ...value,
+    attribution: [BENCHLM_ATTRIBUTION],
+    data: {
+      key: 'llm-overall',
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: ['benchlm:overall:raw'],
+        defaultSort: 'score-desc',
+      },
+      entries: [{
+        ...currentEntry,
+        primaryPrice: null,
+        blendedCostPerMillion: null,
+        contextWindowTokens: null,
+        onValueFrontier: false,
+        ...entryOverrides,
+      }],
+    },
+  };
+}
+
+function multimodalEnvelope(
+  overrides: Record<string, unknown> = {},
+  entryOverrides: Record<string, unknown> = {},
+) {
   const value = codingEnvelope();
   const currentEntry = value.data.entries[0];
   const metric = {
@@ -206,9 +243,62 @@ function multimodalEnvelope(overrides: Record<string, unknown> = {}) {
         ...currentEntry,
         metric,
         metrics: [{ ...metric }],
+        ...entryOverrides,
       }],
     },
     ...overrides,
+  };
+}
+
+function lmArenaEnvelope({
+  metricOverrides = {},
+  modelOverrides = {},
+  entryOverrides = {},
+}: {
+  readonly metricOverrides?: Record<string, unknown>;
+  readonly modelOverrides?: Record<string, unknown>;
+  readonly entryOverrides?: Record<string, unknown>;
+} = {}) {
+  const value = codingEnvelope();
+  const currentEntry = value.data.entries[0];
+  const metric = {
+    ...currentEntry.metric,
+    metricKey: 'lmarena:text_style_control:overall',
+    category: 'overall',
+    unit: 'arena_score',
+    sourceId: 'lmarena',
+    sourceArtifactId: 'lmarena-text-style',
+    methodology: 'bradley_terry',
+    rank: 1,
+    ...metricOverrides,
+  };
+  return {
+    ...value,
+    attribution: [LMARENA_ATTRIBUTION],
+    data: {
+      key: 'llm-human-preference',
+      profile: 'balanced',
+      definition: {
+        kind: 'lmarena',
+        sourceId: 'lmarena',
+        metricKeys: ['lmarena:text_style_control:overall'],
+        defaultSort: 'rank-asc',
+      },
+      entries: [{
+        ...currentEntry,
+        model: {
+          ...currentEntry.model,
+          sourceId: 'lmarena',
+          sourceArtifactId: 'lmarena-text-style',
+          evidenceStatus: 'source_only',
+          ...modelOverrides,
+        },
+        metric,
+        metrics: [{ ...metric }],
+        sourceRank: 1,
+        ...entryOverrides,
+      }],
+    },
   };
 }
 
@@ -250,6 +340,35 @@ function valueEnvelopeWithEntryOverrides(entryOverrides: Record<string, unknown>
   });
 }
 
+function valueEnvelopeForProfile(
+  profile: 'inputHeavy' | 'balanced' | 'outputHeavy',
+  blendedCostPerMillion: number,
+) {
+  const value = leaderboardEnvelope();
+  return leaderboardEnvelope({
+    data: {
+      ...value.data,
+      profile,
+      entries: [{ ...value.data.entries[0], blendedCostPerMillion }],
+    },
+  });
+}
+
+function pricingEnvelopeForProfile(
+  profile: 'inputHeavy' | 'balanced' | 'outputHeavy',
+  blendedCostPerMillion: number,
+) {
+  const value = pricingEnvelope();
+  return {
+    ...value,
+    data: {
+      ...value.data,
+      profile,
+      entries: [{ ...value.data.entries[0], blendedCostPerMillion }],
+    },
+  };
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -263,9 +382,7 @@ describe('useBenchmarkLeaderboard', () => {
   });
 
   it('encodes only the cached leaderboard route, profile, limit, cursor, and reviewed estimated flag', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(leaderboardEnvelope({
-      data: { ...leaderboardEnvelope().data, profile: 'inputHeavy' },
-    })));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(valueEnvelopeForProfile('inputHeavy', 1.4)));
     vi.stubGlobal('fetch', fetchMock);
 
     const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value', 'inputHeavy', 3, 'page/2', true));
@@ -297,6 +414,43 @@ describe('useBenchmarkLeaderboard', () => {
     expect(entry?.primaryPrice?.modelKey).toBe('model-a');
     expect(entry?.blendedCostPerMillion).toBe(2);
     expect(entry?.metric?.rank).toBeNull();
+  });
+
+  it.each([
+    ['value input price is missing', 'llm-value', 'balanced', valueEnvelopeWithEntryOverrides({
+      primaryPrice: primaryOpenRouterPrice({ inputUsdPerMillion: null }),
+    })],
+    ['value output price is missing', 'llm-value', 'balanced', valueEnvelopeWithEntryOverrides({
+      primaryPrice: primaryOpenRouterPrice({ outputUsdPerMillion: null }),
+    })],
+    ['value blended cost disagrees with its price', 'llm-value', 'balanced', valueEnvelopeWithEntryOverrides({
+      blendedCostPerMillion: 2.01,
+    })],
+    ['value blended cost uses the wrong workload profile', 'llm-value', 'inputHeavy', valueEnvelopeForProfile('inputHeavy', 2)],
+    ['value context disagrees with its selected price', 'llm-value', 'balanced', valueEnvelopeWithEntryOverrides({
+      contextWindowTokens: 64_000,
+    })],
+    ['value context survives a null selected-price context', 'llm-value', 'balanced', valueEnvelopeWithEntryOverrides({
+      primaryPrice: primaryOpenRouterPrice({ contextWindowTokens: null }),
+      contextWindowTokens: 64_000,
+    })],
+    ['pricing input price is missing', 'llm-pricing-context', 'balanced', pricingEnvelope({
+      primaryPrice: primaryOpenRouterPrice({ inputUsdPerMillion: null }),
+    })],
+    ['pricing blended cost disagrees with its price', 'llm-pricing-context', 'balanced', pricingEnvelope({
+      blendedCostPerMillion: 2.01,
+    })],
+    ['pricing blended cost uses the wrong workload profile', 'llm-pricing-context', 'outputHeavy', pricingEnvelopeForProfile('outputHeavy', 2)],
+    ['pricing context disagrees with its selected price', 'llm-pricing-context', 'balanced', pricingEnvelope({
+      contextWindowTokens: 64_000,
+    })],
+  ] as const)('rejects derived evidence when %s', async (_label, key, profile, payload) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(key, profile));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
   });
 
   it('keeps a stale revision out of the ready state', async () => {
@@ -485,6 +639,96 @@ describe('useBenchmarkLeaderboard', () => {
     expect(result.current.envelope).toBeNull();
   });
 
+  it.each([
+    ['an overall model is not ranking-eligible', 'llm-overall', overallEnvelope({
+      model: { ...supportedValueEntry().model, rankingEligible: false },
+    })],
+    ['a value model is not ranking-eligible', 'llm-value', valueEnvelopeWithEntryOverrides({
+      model: { ...supportedValueEntry().model, rankingEligible: false },
+    })],
+    ['an overall model uses a non-boolean eligibility marker', 'llm-overall', overallEnvelope({
+      model: { ...supportedValueEntry().model, rankingEligible: 'true' },
+    })],
+    ['a value metric is not ranking-eligible', 'llm-value', (() => {
+      const payload = leaderboardEnvelope();
+      const entry = payload.data.entries[0];
+      const metric = { ...entry.metric, rankingEligible: false };
+      return leaderboardEnvelope({
+        data: { ...payload.data, entries: [{ ...entry, metric, metrics: [{ ...metric }] }] },
+      });
+    })()],
+    ['a category metric is not ranking-eligible', 'llm-coding', (() => {
+      const payload = codingEnvelope();
+      const metric = { ...payload.data.entries[0].metric, rankingEligible: false };
+      return codingEnvelope({ metric, metrics: [{ ...metric }] });
+    })()],
+    ['a category model uses a non-boolean eligibility marker', 'llm-coding', codingEnvelope({
+      model: { ...supportedValueEntry().model, rankingEligible: 'false' },
+    })],
+    ['a multimodal category metric is not ranking-eligible', 'multimodal-vision-documents', (() => {
+      const payload = multimodalEnvelope();
+      const metric = { ...payload.data.entries[0].metric, rankingEligible: false };
+      return multimodalEnvelope({}, { metric, metrics: [{ ...metric }] });
+    })()],
+    ['a LMArena metric has no positive source rank', 'llm-human-preference', lmArenaEnvelope({
+      metricOverrides: { rank: null },
+      entryOverrides: { sourceRank: null },
+    })],
+    ['a LMArena metric is not ranking-eligible', 'llm-human-preference', lmArenaEnvelope({
+      metricOverrides: { rankingEligible: false },
+    })],
+    ['a LMArena metric uses a non-boolean eligibility marker', 'llm-human-preference', lmArenaEnvelope({
+      metricOverrides: { rankingEligible: 'true' },
+    })],
+    ['a LMArena source rank disagrees with its primary metric', 'llm-human-preference', lmArenaEnvelope({
+      entryOverrides: { sourceRank: 2 },
+    })],
+    ['a BenchLM-primary multimodal row carries a source rank', 'multimodal-vision-documents', multimodalEnvelope({}, {
+      sourceRank: 1,
+    })],
+    ['a pricing row uses a LMArena source-only model', 'llm-pricing-context', pricingEnvelope({
+      model: {
+        ...supportedValueEntry().model,
+        sourceId: 'lmarena',
+        evidenceStatus: 'source_only',
+        sourceArtifactId: 'lmarena-text-style',
+      },
+    })],
+    ['a pricing row uses a non-boolean eligibility marker', 'llm-pricing-context', pricingEnvelope({
+      model: { ...supportedValueEntry().model, rankingEligible: 'false' },
+    })],
+  ] as const)('rejects route ranking evidence when %s', async (_label, key, payload) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(key));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
+  it.each([
+    ['a BenchLM category model lacks overall eligibility', 'llm-coding', codingEnvelope({
+      model: { ...supportedValueEntry().model, rankingEligible: false },
+    })],
+    ['a multimodal BenchLM category model lacks overall eligibility', 'multimodal-vision-documents', multimodalEnvelope({}, {
+      model: { ...supportedValueEntry().model, rankingEligible: false },
+    })],
+    ['a supported canonical model carries exact LMArena evidence', 'llm-human-preference', lmArenaEnvelope({
+      modelOverrides: {
+        sourceId: 'benchlm',
+        sourceArtifactId: 'benchlm-models',
+        evidenceStatus: 'supported',
+      },
+    })],
+  ] as const)('preserves valid route evidence when %s', async (_label, key, payload) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(key));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.key).toBe(key);
+  });
+
   it('preserves the reviewed null-price value exception for appended estimates', async () => {
     const payload = leaderboardEnvelope();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(leaderboardEnvelope({
@@ -509,6 +753,45 @@ describe('useBenchmarkLeaderboard', () => {
       sourceRank: null,
       onValueFrontier: false,
     });
+  });
+
+  it.each([
+    ['model ranking eligibility', (() => {
+      const estimate = estimatedValueEntry();
+      return {
+        ...estimate,
+        model: { ...estimate.model, rankingEligible: true },
+      };
+    })()],
+    ['metric ranking eligibility', (() => {
+      const estimate = estimatedValueEntry();
+      const metric = { ...estimate.metric, rankingEligible: true };
+      return { ...estimate, metric, metrics: [{ ...metric }] };
+    })()],
+    ['a metric source rank', (() => {
+      const estimate = estimatedValueEntry();
+      const metric = { ...estimate.metric, rank: 1 };
+      return { ...estimate, metric, metrics: [{ ...metric }] };
+    })()],
+  ])('rejects an opted-in estimated row that hides %s', async (_label, estimate) => {
+    const payload = leaderboardEnvelope();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(leaderboardEnvelope({
+      data: {
+        ...payload.data,
+        entries: [payload.data.entries[0], estimate],
+      },
+    }))));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(
+      'llm-value',
+      'balanced',
+      50,
+      undefined,
+      true,
+    ));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
   });
 
   it.each([
