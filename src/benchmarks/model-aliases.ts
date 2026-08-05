@@ -15,7 +15,14 @@ export const EXACT_MODEL_ALIASES = MODEL_ALIASES;
 
 /** Returns a canonical key only for a byte-for-byte reviewed source ID. */
 export function resolveCanonicalModelKey(sourceId: BenchmarkSourceId, sourceModelId: string): string | null {
-  return EXACT_MODEL_ALIASES[sourceId][sourceModelId] ?? null;
+  if (!Object.prototype.hasOwnProperty.call(EXACT_MODEL_ALIASES, sourceId)) {
+    return null;
+  }
+
+  const sourceAliases = EXACT_MODEL_ALIASES[sourceId];
+  return Object.prototype.hasOwnProperty.call(sourceAliases, sourceModelId)
+    ? sourceAliases[sourceModelId]
+    : null;
 }
 
 /**

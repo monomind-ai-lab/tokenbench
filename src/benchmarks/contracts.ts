@@ -109,6 +109,16 @@ export interface ComparisonSeed {
   featuredRank: number | null;
 }
 
+export interface BenchmarkComparisonPair {
+  pairSlug: string;
+  modelAKey: string;
+  modelBKey: string;
+  indexable: boolean;
+  eligibilityReason: string;
+  featuredRank: number | null;
+  sharedMetricCount: number;
+}
+
 export interface NormalizedSourceBatch {
   sources: BenchmarkSourceRecord[];
   models: BenchmarkModel[];
@@ -145,6 +155,11 @@ function requireFiniteNumber(value: unknown, name: string): asserts value is num
   if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${name} must be a finite number`);
 }
 
+function requireNonNegativeFiniteNumber(value: unknown, name: string): asserts value is number {
+  requireFiniteNumber(value, name);
+  if (value < 0) fail(`${name} must be a non-negative finite number`);
+}
+
 function requireNonNegativeInteger(value: unknown, name: string): asserts value is number {
   if (!Number.isInteger(value) || (value as number) < 0) fail(`${name} must be a non-negative integer`);
 }
@@ -163,11 +178,6 @@ function requireNullableNonNegativeFiniteNumber(value: unknown, name: string): v
   if (value === null) return;
   if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${name} must be a finite number or null`);
   if (value < 0) fail(`${name} must be a non-negative finite number or null`);
-}
-
-function requireNullableFiniteNumber(value: unknown, name: string): void {
-  if (value === null) return;
-  if (typeof value !== 'number' || !Number.isFinite(value)) fail(`${name} must be a finite number or null`);
 }
 
 function requireNullableString(value: unknown, name: string): void {
@@ -205,18 +215,24 @@ function assertNoProhibitedText(value: string, name: string): void {
 function assertNoProhibitedIdentifier(value: string, name: string): void {
   assertNoProhibitedText(value, name);
   const identifierParts = value.trim().toLowerCase().split(/[:/]/);
-  if (identifierParts.some((part) => part.startsWith('aa'))) {
+  if (identifierParts.some((part) => /^aa(?:[-_]|$)/.test(part))) {
     fail(`${name} contains a prohibited Artificial Analysis identifier`);
   }
 }
 
 function requireIdentifier(value: unknown, name: string): asserts value is string {
   requireString(value, name);
+  assertNoProhibitedText(value, name);
+}
+
+function requireBenchmarkIdentifier(value: unknown, name: string): asserts value is string {
+  requireString(value, name);
   assertNoProhibitedIdentifier(value, name);
 }
 
 function requireSourceId(value: unknown, name: string): asserts value is BenchmarkSourceId {
   requireIdentifier(value, name);
+  if (/^aa(?:[-_:]|$)/i.test(value)) fail(`${name} contains a prohibited Artificial Analysis identifier`);
   if (!(BENCHMARK_SOURCE_IDS as readonly string[]).includes(value)) fail(`${name} is invalid`);
 }
 
@@ -233,6 +249,8 @@ function requireNullableInterval(lower: unknown, upper: unknown, name: string, l
   if (typeof lower !== 'number' || !Number.isFinite(lower) || typeof upper !== 'number' || !Number.isFinite(upper)) {
     fail(`${name} confidence bounds must both be null or finite numbers`);
   }
+  if (lower < 0) fail(`${lowerName} must be a non-negative finite number`);
+  if (upper < 0) fail(`${upperName} must be a non-negative finite number`);
   if (lower > upper) fail(`${lowerName} must be less than or equal to ${upperName}`);
 }
 
@@ -256,7 +274,7 @@ function validateSourceRecord(value: unknown, index: number, sourceArtifacts: Se
   const name = `sources[${index}]`;
   const source = requireRecord(value, name) as unknown as BenchmarkSourceRecord;
   requireSourceId(source.sourceId, `${name}.sourceId`);
-  requireIdentifier(source.artifactId, `${name}.artifactId`);
+  requireBenchmarkIdentifier(source.artifactId, `${name}.artifactId`);
   requireHttpsUrl(source.sourceUrl, `${name}.sourceUrl`);
   assertNoProhibitedText(source.sourceUrl, `${name}.sourceUrl`);
   requireIsoTimestamp(source.observedAt, `${name}.observedAt`);
@@ -293,7 +311,7 @@ function validateModel(
   requireNullableString(model.reasoningType, `${name}.reasoningType`);
   if (model.reasoningType !== null) assertNoProhibitedText(model.reasoningType, `${name}.reasoningType`);
   requireNullableString(model.releaseDate, `${name}.releaseDate`);
-  requireNullableNonNegativeInteger(model.contextWindowTokens, `${name}.contextWindowTokens`);
+  requireNullablePositiveInteger(model.contextWindowTokens, `${name}.contextWindowTokens`);
   if (!['supported', 'estimated', 'source_only'].includes(model.evidenceStatus)) fail(`${name}.evidenceStatus is invalid`);
   requireBoolean(model.rankingEligible, `${name}.rankingEligible`);
   requireNullableInterval(
@@ -317,11 +335,11 @@ function validateMetric(
 ): BenchmarkMetric {
   const name = `metrics[${index}]`;
   const metric = requireRecord(value, name) as unknown as BenchmarkMetric;
-  for (const key of ['modelKey', 'metricKey', 'sourceModelId'] as const) requireIdentifier(metric[key], `${name}.${key}`);
-  requireString(metric.category, `${name}.category`);
-  assertNoProhibitedText(metric.category, `${name}.category`);
+  for (const key of ['modelKey', 'sourceModelId'] as const) requireIdentifier(metric[key], `${name}.${key}`);
+  requireBenchmarkIdentifier(metric.metricKey, `${name}.metricKey`);
+  requireBenchmarkIdentifier(metric.category, `${name}.category`);
   if (!modelKeys.has(metric.modelKey)) fail(`${name}.modelKey must refer to a model`);
-  requireFiniteNumber(metric.value, `${name}.value`);
+  requireNonNegativeFiniteNumber(metric.value, `${name}.value`);
   requireNullablePositiveInteger(metric.rank, `${name}.rank`);
   requireNullableInterval(metric.lower, metric.upper, name, `${name}.lower`, `${name}.upper`);
   requireNullableNonNegativeInteger(metric.voteCount, `${name}.voteCount`);
@@ -333,6 +351,18 @@ function validateMetric(
   if (!['benchlm_raw_composite', 'bradley_terry', 'ips'].includes(metric.methodology)) fail(`${name}.methodology is invalid`);
   requireNullableNonNegativeInteger(metric.observationCount, `${name}.observationCount`);
   requireNullableNonNegativeInteger(metric.sessionCount, `${name}.sessionCount`);
+  if (metric.methodology === 'benchlm_raw_composite' && metric.sourceId !== 'benchlm') {
+    fail(`${name}.methodology benchlm_raw_composite requires sourceId benchlm`);
+  }
+  if ((metric.methodology === 'bradley_terry' || metric.methodology === 'ips') && metric.sourceId !== 'lmarena') {
+    fail(`${name}.methodology ${metric.methodology} requires sourceId lmarena`);
+  }
+  if (metric.methodology !== 'bradley_terry' && metric.voteCount !== null) {
+    fail(`${name}.voteCount is only valid for bradley_terry`);
+  }
+  if (metric.methodology !== 'ips' && (metric.observationCount !== null || metric.sessionCount !== null)) {
+    fail(`${name}.observationCount and ${name}.sessionCount are only valid for ips`);
+  }
   return metric;
 }
 
@@ -350,12 +380,12 @@ function validatePriceCheck(
   requireNullableNonNegativeFiniteNumber(price.inputUsdPerMillion, `${name}.inputUsdPerMillion`);
   requireNullableNonNegativeFiniteNumber(price.cachedInputUsdPerMillion, `${name}.cachedInputUsdPerMillion`);
   requireNullableNonNegativeFiniteNumber(price.outputUsdPerMillion, `${name}.outputUsdPerMillion`);
-  requireNullableNonNegativeInteger(price.contextWindowTokens, `${name}.contextWindowTokens`);
+  requireNullablePositiveInteger(price.contextWindowTokens, `${name}.contextWindowTokens`);
   if (!['primary', 'corroborating', 'conflict'].includes(price.verificationStatus)) fail(`${name}.verificationStatus is invalid`);
   requireNullableString(price.canonicalSlug, `${name}.canonicalSlug`);
   if (price.canonicalSlug !== null) assertNoProhibitedIdentifier(price.canonicalSlug, `${name}.canonicalSlug`);
-  requireNullableNonNegativeInteger(price.maxInputTokens, `${name}.maxInputTokens`);
-  requireNullableNonNegativeInteger(price.maxOutputTokens, `${name}.maxOutputTokens`);
+  requireNullablePositiveInteger(price.maxInputTokens, `${name}.maxInputTokens`);
+  requireNullablePositiveInteger(price.maxOutputTokens, `${name}.maxOutputTokens`);
   for (const key of ['inputModalities', 'outputModalities', 'supportedParameters'] as const) {
     requireNullableStringArray(price[key], `${name}.${key}`);
   }
@@ -440,4 +470,26 @@ export function validateNormalizedSourceBatch(value: unknown): NormalizedSourceB
   });
 
   return batch;
+}
+
+/**
+ * Enforces the minimum persistence invariant for derived comparison rows.
+ * Publication must additionally enforce supported models, ranking eligibility,
+ * safe shared categories, prohibited-metric rejection, and reviewed seeding.
+ */
+export function validateBenchmarkComparisonPair(value: unknown): BenchmarkComparisonPair {
+  const pair = requireRecord(value, 'comparison pair') as unknown as BenchmarkComparisonPair;
+  for (const key of ['pairSlug', 'modelAKey', 'modelBKey'] as const) {
+    requireIdentifier(pair[key], key);
+  }
+  if (pair.modelAKey >= pair.modelBKey) fail('modelAKey must sort before modelBKey');
+  requireBoolean(pair.indexable, 'indexable');
+  requireString(pair.eligibilityReason, 'eligibilityReason');
+  assertNoProhibitedText(pair.eligibilityReason, 'eligibilityReason');
+  requireNullablePositiveInteger(pair.featuredRank, 'featuredRank');
+  requireNonNegativeInteger(pair.sharedMetricCount, 'sharedMetricCount');
+  if (pair.indexable && pair.sharedMetricCount < 2) {
+    fail('sharedMetricCount must be at least 2 when indexable');
+  }
+  return pair;
 }

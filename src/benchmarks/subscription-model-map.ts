@@ -7,5 +7,7 @@ export const SUBSCRIPTION_MODEL_MAP: Record<string, readonly string[]> = {};
 const NO_VERIFIED_PLAN_OFFERS: readonly string[] = [];
 
 export function subscriptionPlanIdsForModel(modelKey: string): readonly string[] {
-  return SUBSCRIPTION_MODEL_MAP[modelKey] ?? NO_VERIFIED_PLAN_OFFERS;
+  return Object.prototype.hasOwnProperty.call(SUBSCRIPTION_MODEL_MAP, modelKey)
+    ? SUBSCRIPTION_MODEL_MAP[modelKey]
+    : NO_VERIFIED_PLAN_OFFERS;
 }

@@ -7,7 +7,10 @@ import {
   resolveCanonicalModelKey,
   sourceSpecificModelKey,
 } from './model-aliases';
-import { validateNormalizedSourceBatch } from './contracts';
+import {
+  validateBenchmarkComparisonPair,
+  validateNormalizedSourceBatch,
+} from './contracts';
 import { subscriptionPlanIdsForModel } from './subscription-model-map';
 
 const observedAt = '2026-08-05T00:00:00.000Z';
@@ -108,6 +111,34 @@ const validBatch = {
   comparisonSeeds: [],
 };
 
+const lmArenaSource = {
+  sourceId: 'lmarena',
+  artifactId: 'text-style-control-r1',
+  sourceUrl: 'https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset',
+  observedAt,
+  etag: null,
+  lastModified: null,
+  upstreamRevision: 'lmarena-r1',
+  schemaVersion: null,
+  snapshotKey: 'benchmarks/lmarena/text-style-control-r1.json',
+  contentHash: 'sha256:lmarena-text-style-control-r1',
+  licenseId: 'CC-BY-4.0',
+  attributionText: 'Arena ratings from LMArena',
+};
+
+function lmArenaMetric(methodology: 'bradley_terry' | 'ips') {
+  return {
+    ...validBatch.metrics[0],
+    metricKey: methodology === 'bradley_terry'
+      ? 'lmarena:text_style_control:overall'
+      : 'lmarena:agent:overall:ips',
+    unit: methodology === 'bradley_terry' ? 'arena_score' : 'score',
+    sourceId: 'lmarena',
+    sourceArtifactId: 'text-style-control-r1',
+    methodology,
+  };
+}
+
 function batchWithComparison() {
   const secondModel = {
     ...validBatch.models[0],
@@ -167,6 +198,25 @@ describe('benchmark contracts', () => {
     })).toThrow(/prohibited/i);
   });
 
+  it('accepts benign model identifiers whose spelling begins with aa', () => {
+    const modelKey = 'aardvark:model-v1';
+    const sourceModelId = 'provider/aardvark-model-v1';
+    const result = validateNormalizedSourceBatch({
+      ...validBatch,
+      models: [{ ...validBatch.models[0], modelKey, slug: 'aardvark-model-v1', sourceModelId }],
+      metrics: [{ ...validBatch.metrics[0], modelKey, sourceModelId }],
+      priceChecks: [{
+        ...validBatch.priceChecks[0],
+        modelKey,
+        sourceModelId,
+        canonicalSlug: 'aardvark-model-v1',
+        routeId: 'openrouter:provider/aardvark-model-v1',
+      }],
+    });
+
+    expect(result.models[0].sourceModelId).toBe(sourceModelId);
+  });
+
   it('rejects missing, non-finite, or negative numeric evidence instead of coercing it', () => {
     expect(() => validateNormalizedSourceBatch({
       ...validBatch,
@@ -183,11 +233,88 @@ describe('benchmark contracts', () => {
     expect(() => validateNormalizedSourceBatch({
       ...validBatch,
       models: [{ ...validBatch.models[0], contextWindowTokens: -1 }],
-    })).toThrow('models[0].contextWindowTokens must be a non-negative integer or null');
+    })).toThrow('models[0].contextWindowTokens must be a positive integer or null');
     expect(() => validateNormalizedSourceBatch({
       ...validBatch,
       metrics: [{ ...validBatch.metrics[0], voteCount: -1 }],
     })).toThrow('metrics[0].voteCount must be a non-negative integer or null');
+  });
+
+  it('rejects zero context and token limits while preserving unavailable nulls', () => {
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      models: [{ ...validBatch.models[0], contextWindowTokens: 0 }],
+    })).toThrow('models[0].contextWindowTokens must be a positive integer or null');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      priceChecks: [{ ...validBatch.priceChecks[0], contextWindowTokens: 0 }],
+    })).toThrow('priceChecks[0].contextWindowTokens must be a positive integer or null');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      priceChecks: [{ ...validBatch.priceChecks[0], maxInputTokens: 0 }],
+    })).toThrow('priceChecks[0].maxInputTokens must be a positive integer or null');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      priceChecks: [{ ...validBatch.priceChecks[0], maxOutputTokens: 0 }],
+    })).toThrow('priceChecks[0].maxOutputTokens must be a positive integer or null');
+    expect(validateNormalizedSourceBatch({
+      ...validBatch,
+      priceChecks: [{
+        ...validBatch.priceChecks[0],
+        contextWindowTokens: null,
+        maxInputTokens: null,
+        maxOutputTokens: null,
+      }],
+    }).priceChecks[0].contextWindowTokens).toBeNull();
+  });
+
+  it('rejects negative metric values and confidence bounds', () => {
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      metrics: [{ ...validBatch.metrics[0], value: -0.01 }],
+    })).toThrow('metrics[0].value must be a non-negative finite number');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      metrics: [{ ...validBatch.metrics[0], lower: -1, upper: 1 }],
+    })).toThrow('metrics[0].lower must be a non-negative finite number');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      models: [{ ...validBatch.models[0], confidenceLower: -1, confidenceUpper: 1 }],
+    })).toThrow('models[0].confidenceLower must be a non-negative finite number');
+  });
+
+  it('accepts evidence counts only for their matching arena methodology', () => {
+    const standardMetric = {
+      ...lmArenaMetric('bradley_terry'),
+      voteCount: 200,
+      observationCount: null,
+      sessionCount: null,
+    };
+    const agentMetric = {
+      ...lmArenaMetric('ips'),
+      voteCount: null,
+      observationCount: 100,
+      sessionCount: 20,
+    };
+    expect(validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [...validBatch.sources, lmArenaSource],
+      metrics: [standardMetric, agentMetric],
+    }).metrics).toHaveLength(2);
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [...validBatch.sources, lmArenaSource],
+      metrics: [{ ...standardMetric, observationCount: 1 }],
+    })).toThrow('metrics[0].observationCount and metrics[0].sessionCount are only valid for ips');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      sources: [...validBatch.sources, lmArenaSource],
+      metrics: [{ ...agentMetric, voteCount: 1 }],
+    })).toThrow('metrics[0].voteCount is only valid for bradley_terry');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      metrics: [{ ...validBatch.metrics[0], methodology: 'bradley_terry' }],
+    })).toThrow('metrics[0].methodology bradley_terry requires sourceId lmarena');
   });
 
   it('rejects incomplete or inverted confidence intervals', () => {
@@ -238,6 +365,23 @@ describe('benchmark contracts', () => {
       }],
     })).toThrow('comparisonSeeds[0].modelAKey must sort before comparisonSeeds[0].modelBKey');
   });
+
+  it('requires at least two shared safe metrics before a comparison is indexable', () => {
+    const pair = {
+      pairSlug: 'claude-3-7-sonnet-vs-gpt-4o',
+      modelAKey: 'anthropic:claude-3-7-sonnet',
+      modelBKey: 'openai:gpt-4o',
+      indexable: true,
+      eligibilityReason: 'eligible',
+      featuredRank: null,
+      sharedMetricCount: 0,
+    };
+
+    expect(() => validateBenchmarkComparisonPair(pair))
+      .toThrow('sharedMetricCount must be at least 2 when indexable');
+    expect(validateBenchmarkComparisonPair({ ...pair, sharedMetricCount: 2 }).indexable).toBe(true);
+    expect(validateBenchmarkComparisonPair({ ...pair, indexable: false }).sharedMetricCount).toBe(0);
+  });
 });
 
 describe('exact-review model policy', () => {
@@ -250,5 +394,23 @@ describe('exact-review model policy', () => {
   it('treats absent checked-in comparison and subscription entries as unverified', () => {
     expect(isEditorialComparisonPair('claude-3-7-sonnet-vs-gpt-4o')).toBe(false);
     expect(subscriptionPlanIdsForModel('openai:gpt-4o')).toEqual([]);
+  });
+
+  it.each([
+    ['toString', 'source:openrouter:toString'],
+    ['constructor', 'source:openrouter:constructor'],
+    ['__proto__', 'source:openrouter:__proto__'],
+  ])('keeps prototype-like key %s source-specific and unsubscribed', (sourceModelId, expectedKey) => {
+    expect(resolveCanonicalModelKey('openrouter', sourceModelId)).toBeNull();
+    expect(resolvedModelKey('openrouter', sourceModelId)).toBe(expectedKey);
+    expect(subscriptionPlanIdsForModel(sourceModelId)).toEqual([]);
+  });
+
+  it.each([
+    ['toString', 'name'],
+    ['constructor', 'prototype'],
+    ['__proto__', 'hasOwnProperty'],
+  ])('does not read inherited source map key %s', (sourceId, sourceModelId) => {
+    expect(resolveCanonicalModelKey(sourceId as never, sourceModelId)).toBeNull();
   });
 });

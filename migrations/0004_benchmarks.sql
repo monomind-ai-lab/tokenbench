@@ -49,12 +49,12 @@ CREATE TABLE IF NOT EXISTS benchmark_models (
   source_type TEXT NOT NULL CHECK (source_type IN ('Proprietary', 'Open Weight', 'Unknown')),
   reasoning_type TEXT,
   release_date TEXT,
-  context_window_tokens INTEGER CHECK (context_window_tokens IS NULL OR context_window_tokens >= 0),
+  context_window_tokens INTEGER CHECK (context_window_tokens IS NULL OR (typeof(context_window_tokens) = 'integer' AND context_window_tokens > 0)),
   evidence_status TEXT NOT NULL CHECK (evidence_status IN ('supported', 'estimated', 'source_only')),
   ranking_eligible INTEGER NOT NULL CHECK (ranking_eligible IN (0, 1)),
   confidence_lower REAL,
   confidence_upper REAL,
-  benchmark_count INTEGER NOT NULL CHECK (benchmark_count >= 0),
+  benchmark_count INTEGER NOT NULL CHECK (typeof(benchmark_count) = 'integer' AND benchmark_count >= 0),
   source_id TEXT NOT NULL CHECK (source_id IN ('benchlm', 'lmarena', 'litellm', 'openrouter')),
   source_model_id TEXT NOT NULL CHECK (length(trim(source_model_id)) > 0),
   source_artifact_id TEXT NOT NULL CHECK (length(trim(source_artifact_id)) > 0),
@@ -64,7 +64,17 @@ CREATE TABLE IF NOT EXISTS benchmark_models (
     REFERENCES benchmark_source_records(revision, source_id, artifact_id),
   CHECK (
     (confidence_lower IS NULL AND confidence_upper IS NULL)
-    OR (confidence_lower IS NOT NULL AND confidence_upper IS NOT NULL AND confidence_lower <= confidence_upper)
+    OR (
+      typeof(confidence_lower) IN ('integer', 'real')
+      AND confidence_lower = confidence_lower
+      AND confidence_lower >= 0
+      AND confidence_lower <= 1.7976931348623157e308
+      AND typeof(confidence_upper) IN ('integer', 'real')
+      AND confidence_upper = confidence_upper
+      AND confidence_upper >= 0
+      AND confidence_upper <= 1.7976931348623157e308
+      AND confidence_lower <= confidence_upper
+    )
   )
 );
 CREATE INDEX IF NOT EXISTS idx_benchmark_models_revision_slug
@@ -75,7 +85,12 @@ CREATE TABLE IF NOT EXISTS benchmark_metrics (
   model_key TEXT NOT NULL CHECK (length(trim(model_key)) > 0),
   metric_key TEXT NOT NULL CHECK (length(trim(metric_key)) > 0),
   category TEXT NOT NULL CHECK (length(trim(category)) > 0),
-  value REAL NOT NULL CHECK (typeof(value) IN ('integer', 'real') AND value = value),
+  value REAL NOT NULL CHECK (
+    typeof(value) IN ('integer', 'real')
+    AND value = value
+    AND value >= 0
+    AND value <= 1.7976931348623157e308
+  ),
   rank INTEGER CHECK (rank IS NULL OR (typeof(rank) = 'integer' AND rank > 0)),
   lower_bound REAL,
   upper_bound REAL,
@@ -95,8 +110,25 @@ CREATE TABLE IF NOT EXISTS benchmark_metrics (
     REFERENCES benchmark_source_records(revision, source_id, artifact_id),
   CHECK (
     (lower_bound IS NULL AND upper_bound IS NULL)
-    OR (lower_bound IS NOT NULL AND upper_bound IS NOT NULL AND lower_bound <= upper_bound)
-  )
+    OR (
+      typeof(lower_bound) IN ('integer', 'real')
+      AND lower_bound = lower_bound
+      AND lower_bound >= 0
+      AND lower_bound <= 1.7976931348623157e308
+      AND typeof(upper_bound) IN ('integer', 'real')
+      AND upper_bound = upper_bound
+      AND upper_bound >= 0
+      AND upper_bound <= 1.7976931348623157e308
+      AND lower_bound <= upper_bound
+    )
+  ),
+  CHECK (
+    (methodology = 'benchlm_raw_composite' AND source_id = 'benchlm')
+    OR (methodology IN ('bradley_terry', 'ips') AND source_id = 'lmarena')
+  ),
+  CHECK (vote_count IS NULL OR methodology = 'bradley_terry'),
+  CHECK (observation_count IS NULL OR methodology = 'ips'),
+  CHECK (session_count IS NULL OR methodology = 'ips')
 );
 CREATE INDEX IF NOT EXISTS idx_benchmark_metrics_revision_category_rank
   ON benchmark_metrics (revision, category, rank);
@@ -111,12 +143,12 @@ CREATE TABLE IF NOT EXISTS benchmark_price_checks (
   route_id TEXT NOT NULL CHECK (length(trim(route_id)) > 0),
   source_model_id TEXT NOT NULL CHECK (length(trim(source_model_id)) > 0),
   canonical_slug TEXT,
-  input_usd_per_million REAL CHECK (input_usd_per_million IS NULL OR (typeof(input_usd_per_million) IN ('integer', 'real') AND input_usd_per_million = input_usd_per_million AND input_usd_per_million >= 0)),
-  cached_input_usd_per_million REAL CHECK (cached_input_usd_per_million IS NULL OR (typeof(cached_input_usd_per_million) IN ('integer', 'real') AND cached_input_usd_per_million = cached_input_usd_per_million AND cached_input_usd_per_million >= 0)),
-  output_usd_per_million REAL CHECK (output_usd_per_million IS NULL OR (typeof(output_usd_per_million) IN ('integer', 'real') AND output_usd_per_million = output_usd_per_million AND output_usd_per_million >= 0)),
-  context_window_tokens INTEGER CHECK (context_window_tokens IS NULL OR (typeof(context_window_tokens) = 'integer' AND context_window_tokens >= 0)),
-  max_input_tokens INTEGER CHECK (max_input_tokens IS NULL OR (typeof(max_input_tokens) = 'integer' AND max_input_tokens >= 0)),
-  max_output_tokens INTEGER CHECK (max_output_tokens IS NULL OR (typeof(max_output_tokens) = 'integer' AND max_output_tokens >= 0)),
+  input_usd_per_million REAL CHECK (input_usd_per_million IS NULL OR (typeof(input_usd_per_million) IN ('integer', 'real') AND input_usd_per_million = input_usd_per_million AND input_usd_per_million >= 0 AND input_usd_per_million <= 1.7976931348623157e308)),
+  cached_input_usd_per_million REAL CHECK (cached_input_usd_per_million IS NULL OR (typeof(cached_input_usd_per_million) IN ('integer', 'real') AND cached_input_usd_per_million = cached_input_usd_per_million AND cached_input_usd_per_million >= 0 AND cached_input_usd_per_million <= 1.7976931348623157e308)),
+  output_usd_per_million REAL CHECK (output_usd_per_million IS NULL OR (typeof(output_usd_per_million) IN ('integer', 'real') AND output_usd_per_million = output_usd_per_million AND output_usd_per_million >= 0 AND output_usd_per_million <= 1.7976931348623157e308)),
+  context_window_tokens INTEGER CHECK (context_window_tokens IS NULL OR (typeof(context_window_tokens) = 'integer' AND context_window_tokens > 0)),
+  max_input_tokens INTEGER CHECK (max_input_tokens IS NULL OR (typeof(max_input_tokens) = 'integer' AND max_input_tokens > 0)),
+  max_output_tokens INTEGER CHECK (max_output_tokens IS NULL OR (typeof(max_output_tokens) = 'integer' AND max_output_tokens > 0)),
   input_modalities_json TEXT CHECK (input_modalities_json IS NULL OR (json_valid(input_modalities_json) AND json_type(input_modalities_json) = 'array')),
   output_modalities_json TEXT CHECK (output_modalities_json IS NULL OR (json_valid(output_modalities_json) AND json_type(output_modalities_json) = 'array')),
   supported_parameters_json TEXT CHECK (supported_parameters_json IS NULL OR (json_valid(supported_parameters_json) AND json_type(supported_parameters_json) = 'array')),
@@ -143,7 +175,8 @@ CREATE TABLE IF NOT EXISTS benchmark_comparison_pairs (
   UNIQUE (revision, model_a_key, model_b_key),
   FOREIGN KEY (revision, model_a_key) REFERENCES benchmark_models(revision, model_key),
   FOREIGN KEY (revision, model_b_key) REFERENCES benchmark_models(revision, model_key),
-  CHECK (model_a_key COLLATE BINARY < model_b_key COLLATE BINARY)
+  CHECK (model_a_key COLLATE BINARY < model_b_key COLLATE BINARY),
+  CHECK (indexable = 0 OR shared_metric_count >= 2)
 );
 CREATE INDEX IF NOT EXISTS idx_benchmark_comparison_pairs_revision_indexable_featured_rank
   ON benchmark_comparison_pairs (revision, indexable, featured_rank);
