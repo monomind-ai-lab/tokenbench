@@ -9,7 +9,7 @@ import {
   visibleLeaderboardEntries,
   type LeaderboardFilterState,
 } from '../frontend/leaderboard-filters';
-import { LeaderboardTable } from '../frontend/leaderboard-table';
+import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
 import { useBenchmarkLeaderboard } from '../frontend/use-benchmarks';
 
 function methodologySummary(keyName: LeaderboardKey): string {
@@ -108,7 +108,17 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
           ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} />
           : <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
       ) : null}
-      {state.phase === 'stale' || state.phase === 'unavailable' || state.phase === 'error'
+      {state.phase === 'stale' && state.envelope ? <>
+        <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
+        <LeaderboardEvidence
+          publishedAt={state.envelope.publishedAt}
+          freshness={state.envelope.freshness}
+          attribution={state.envelope.attribution}
+          label="Stale leaderboard evidence"
+          compact
+        />
+      </> : null}
+      {state.phase === 'unavailable' || state.phase === 'error'
         ? <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
         : null}
     </section>

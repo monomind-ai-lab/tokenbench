@@ -75,6 +75,61 @@ function leaderboardEnvelope(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function codingEnvelope(entryOverrides: Record<string, unknown> = {}) {
+  const value = leaderboardEnvelope();
+  const currentEntry = value.data.entries[0];
+  return {
+    ...value,
+    data: {
+      key: 'llm-coding',
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: ['benchlm:category:coding'],
+        defaultSort: 'score-desc',
+      },
+      entries: [{
+        ...currentEntry,
+        metric: { ...currentEntry.metric, metricKey: 'benchlm:category:coding', category: 'coding' },
+        ...entryOverrides,
+      }],
+    },
+  };
+}
+
+function multimodalEnvelope(overrides: Record<string, unknown> = {}) {
+  const value = codingEnvelope();
+  const currentEntry = value.data.entries[0];
+  return {
+    ...value,
+    attribution: [{
+      sourceId: 'benchlm',
+      label: 'Data from BenchLM.ai',
+      url: 'https://benchlm.ai/data',
+      updatedAt: ISO_TIME,
+    }],
+    data: {
+      key: 'multimodal-vision-documents',
+      profile: 'balanced',
+      definition: {
+        kind: 'multimodal',
+        metricKeys: [
+          'benchlm:category:multimodal',
+          'lmarena:vision_style_control:overall',
+          'lmarena:document_style_control:overall',
+        ],
+        defaultSort: 'score-desc',
+      },
+      entries: [{
+        ...currentEntry,
+        metric: { ...currentEntry.metric, metricKey: 'benchlm:category:multimodal', category: 'multimodal' },
+      }],
+    },
+    ...overrides,
+  };
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -163,19 +218,7 @@ describe('useBenchmarkLeaderboard', () => {
     const firstResponse = new Promise<Response>((resolve) => { resolveFirst = resolve; });
     const fetchMock = vi.fn()
       .mockReturnValueOnce(firstResponse)
-      .mockResolvedValueOnce(jsonResponse(leaderboardEnvelope({
-        data: {
-          ...leaderboardEnvelope().data,
-          key: 'llm-coding',
-          profile: 'balanced',
-          definition: {
-            kind: 'benchlm',
-            sourceId: 'benchlm',
-            metricKeys: ['benchlm:category:coding'],
-            defaultSort: 'score-desc',
-          },
-        },
-      })));
+      .mockResolvedValueOnce(jsonResponse(codingEnvelope()));
     vi.stubGlobal('fetch', fetchMock);
 
     const { result, rerender } = renderHook(({ key }) => useBenchmarkLeaderboard(key), {
@@ -193,6 +236,138 @@ describe('useBenchmarkLeaderboard', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ revision: 'bad', data: { entries: [] } })));
 
     const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
+  it.each([
+    ['an invalid publication timestamp', leaderboardEnvelope({ publishedAt: 'not-a-date' })],
+    ['an invalid freshness timestamp', leaderboardEnvelope({ freshness: { status: 'fresh', checkedAt: '2026-08-05' } })],
+    ['an invalid attribution timestamp', leaderboardEnvelope({ attribution: [{ ...leaderboardEnvelope().attribution[0], updatedAt: 'not-a-date' }] })],
+    ['an invalid metric timestamp', leaderboardEnvelope({
+      data: {
+        ...leaderboardEnvelope().data,
+        entries: [{
+          ...leaderboardEnvelope().data.entries[0],
+          metric: { ...leaderboardEnvelope().data.entries[0].metric, sourceUpdatedAt: 'not-a-date' },
+        }],
+      },
+    })],
+    ['an empty attribution list', leaderboardEnvelope({ attribution: [] })],
+    ['an attribution from an unrelated source', leaderboardEnvelope({ attribution: [{
+      sourceId: 'lmarena',
+      label: 'Arena ratings from LMArena',
+      url: 'https://lmarena.ai/leaderboard',
+      updatedAt: ISO_TIME,
+    }] })],
+  ])('treats %s as unavailable evidence', async (_label, payload) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
+  it.each([
+    ['a LMArena human-preference row', (() => {
+      const payload = codingEnvelope();
+      const currentEntry = payload.data.entries[0];
+      const arenaMetric = {
+        ...currentEntry.metric,
+        modelKey: 'source:lmarena:arena-model',
+        metricKey: 'lmarena:text_style_control:overall',
+        category: 'overall',
+        sourceId: 'lmarena',
+        sourceModelId: 'arena-model',
+        sourceArtifactId: 'lmarena-text-style',
+        methodology: 'bradley_terry',
+        unit: 'arena_score',
+        rank: 1,
+      };
+      return {
+        ...payload,
+        data: {
+          ...payload.data,
+          entries: [{
+            ...currentEntry,
+            model: {
+              ...currentEntry.model,
+              modelKey: 'source:lmarena:arena-model',
+              slug: 'arena-model',
+              sourceId: 'lmarena',
+              sourceModelId: 'arena-model',
+              sourceArtifactId: 'lmarena-text-style',
+              evidenceStatus: 'source_only',
+            },
+            metric: arenaMetric,
+            metrics: [arenaMetric],
+            sourceRank: 1,
+          }],
+        },
+      };
+    })()],
+    ['a matched key with LMArena source and methodology', (() => {
+      const payload = codingEnvelope();
+      const currentEntry = payload.data.entries[0];
+      return codingEnvelope({
+        metric: {
+          ...currentEntry.metric,
+          sourceId: 'lmarena',
+          methodology: 'bradley_terry',
+          unit: 'arena_score',
+          rank: 1,
+        },
+      });
+    })()],
+    ['a BenchLM metric carried by an LMArena-only model', (() => {
+      const payload = codingEnvelope();
+      const currentEntry = payload.data.entries[0];
+      return codingEnvelope({
+        model: {
+          ...currentEntry.model,
+          sourceId: 'lmarena',
+          sourceArtifactId: 'lmarena-text-style',
+          evidenceStatus: 'source_only',
+        },
+      });
+    })()],
+    ['a secondary metric from a different source lens', (() => {
+      const payload = codingEnvelope();
+      const currentEntry = payload.data.entries[0];
+      return codingEnvelope({
+        metrics: [{
+          ...currentEntry.metric,
+          metricKey: 'lmarena:text_style_control:overall',
+          category: 'overall',
+          sourceId: 'lmarena',
+          sourceModelId: 'arena-model',
+          sourceArtifactId: 'lmarena-text-style',
+          methodology: 'bradley_terry',
+          unit: 'arena_score',
+          rank: 1,
+        }],
+      });
+    })()],
+  ])('rejects %s even when the requested coding definition matches', async (_label, payload) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-coding'));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
+  it('requires multimodal attribution to cover the lens carried by the response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(multimodalEnvelope({ attribution: [{
+      sourceId: 'openrouter',
+      label: 'Catalog and pricing data from OpenRouter',
+      url: 'https://openrouter.ai/models',
+      updatedAt: ISO_TIME,
+    }] }))));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('multimodal-vision-documents'));
 
     await waitFor(() => expect(result.current.phase).toBe('unavailable'));
     expect(result.current.envelope).toBeNull();

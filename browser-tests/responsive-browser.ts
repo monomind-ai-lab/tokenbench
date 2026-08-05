@@ -21,6 +21,87 @@ async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, statu
   if (expectCalculator) await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 }
 
+function codingLeaderboardEnvelope() {
+  const checkedAt = '2026-08-05T12:00:00.000Z';
+  return {
+    revision: 'published-revision-1',
+    publishedAt: checkedAt,
+    freshness: { status: 'fresh', checkedAt },
+    attribution: [{
+      sourceId: 'benchlm',
+      label: 'Data from BenchLM.ai',
+      url: 'https://benchlm.ai/data',
+      updatedAt: checkedAt,
+    }],
+    data: {
+      key: 'llm-coding',
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: ['benchlm:category:coding'],
+        defaultSort: 'score-desc',
+      },
+      entries: [{
+        model: {
+          modelKey: 'model-a',
+          slug: 'model-a',
+          name: 'Model A',
+          creator: 'Provider A',
+          sourceType: 'Proprietary',
+          reasoningType: null,
+          releaseDate: null,
+          contextWindowTokens: null,
+          evidenceStatus: 'supported',
+          rankingEligible: true,
+          confidenceLower: null,
+          confidenceUpper: null,
+          benchmarkCount: 1,
+          sourceId: 'benchlm',
+          sourceModelId: 'model-a',
+          sourceArtifactId: 'benchlm-models',
+        },
+        metric: {
+          modelKey: 'model-a',
+          metricKey: 'benchlm:category:coding',
+          category: 'coding',
+          value: 83.2,
+          rank: null,
+          lower: null,
+          upper: null,
+          voteCount: null,
+          unit: 'score',
+          sourceId: 'benchlm',
+          sourceUpdatedAt: checkedAt,
+          sourceModelId: 'model-a',
+          sourceArtifactId: 'benchlm-models',
+          rankingEligible: true,
+          methodology: 'benchlm_raw_composite',
+          observationCount: null,
+          sessionCount: null,
+        },
+        metrics: [],
+        primaryPrice: null,
+        blendedCostPerMillion: null,
+        contextWindowTokens: null,
+        sourceRank: null,
+        onValueFrontier: false,
+      }],
+    },
+  };
+}
+
+async function openCodingLeaderboard(page: Page) {
+  await page.route('https://*/*', (route) => route.abort());
+  await page.route(/http:\/\/127\.0\.0\.1:4173\/api\/benchmarks\/leaderboards\/llm-coding\?.*/, (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(codingLeaderboardEnvelope()),
+  }));
+  await page.goto('/leaderboards/llm/coding/');
+  await expect(page.getByRole('table', { name: 'AI coding model benchmarks' })).toBeVisible({ timeout: 15_000 });
+}
+
 async function tabTo(page: Page, selector: string) {
   for (let index = 0; index < 180; index += 1) {
     await page.keyboard.press('Tab');
@@ -290,6 +371,24 @@ test.describe('responsive calculator browser harness', () => {
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, freshness: { status: 'stale', checkedAt: '2026-08-02T00:00:00.000Z' } });
     await expect(page.getByText('The published catalog is stale; verify pricing before making a decision.')).toBeVisible();
+  });
+});
+
+test.describe('leaderboard browser harness', () => {
+  test('keeps every desktop sort control at a 44px minimum hit target', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCodingLeaderboard(page);
+
+    const targets = await page.locator('.leaderboard-desktop-table thead button').evaluateAll((elements) => elements.map((element) => {
+      const bounds = element.getBoundingClientRect();
+      return { label: element.getAttribute('aria-label'), width: bounds.width, height: bounds.height };
+    }));
+
+    expect(targets).toHaveLength(4);
+    for (const target of targets) {
+      expect(target.width, `${target.label} width`).toBeGreaterThanOrEqual(44);
+      expect(target.height, `${target.label} height`).toBeGreaterThanOrEqual(44);
+    }
   });
 });
 

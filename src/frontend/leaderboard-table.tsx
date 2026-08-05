@@ -94,8 +94,17 @@ function LensList({ entry }: { readonly entry: LeaderboardEntry }) {
   </ul>;
 }
 
-function EvidenceFooter({ publishedAt, freshness, attribution }: Pick<LeaderboardTableProps, 'publishedAt' | 'freshness' | 'attribution'>) {
-  return <footer className="leaderboard-evidence" aria-label="Leaderboard evidence">
+export function LeaderboardEvidence({
+  publishedAt,
+  freshness,
+  attribution,
+  label = 'Leaderboard evidence',
+  compact = false,
+}: Pick<LeaderboardTableProps, 'publishedAt' | 'freshness' | 'attribution'> & {
+  readonly label?: string;
+  readonly compact?: boolean;
+}) {
+  return <footer className={`leaderboard-evidence${compact ? ' leaderboard-evidence-compact' : ''}`} aria-label={label}>
     <p><strong>Published</strong> {formatDateTime(publishedAt)} <span aria-hidden="true">·</span> <strong>Checked</strong> {formatDateTime(freshness.checkedAt)} <span className={`leaderboard-freshness freshness-${freshness.status}`}>{freshness.status === 'fresh' ? 'Fresh' : 'Stale'}</span></p>
     {freshness.message ? <p className="muted">{freshness.message}</p> : null}
     <ul aria-label="Source attribution">
@@ -125,18 +134,23 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
 
 export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
+  const orderDescriptionId = `leaderboard-order-${keyName}`;
+  const orderDescription = sort === 'pareto-score-desc'
+    ? 'Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'
+    : null;
   let rankedPosition = 0;
   const rows = entries.map((entry) => ({ entry, position: isEstimated(entry) ? null : ++rankedPosition }));
   return <section className="leaderboard-results" aria-label={label}>
     <div className="leaderboard-desktop-table">
-      <table aria-label={label}>
+      <table aria-label={label} aria-describedby={orderDescription ? orderDescriptionId : undefined}>
+        {orderDescription ? <caption id={orderDescriptionId} className="sr-only">{orderDescription}</caption> : null}
         <thead>
           <tr>
-            <th scope="col" aria-sort={sortDirection(sort, 'rank-asc')}><button type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button></th>
+            <th scope="col" aria-sort={sortDirection(sort, 'rank-asc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button></th>
             <th scope="col">Model</th>
-            <th scope="col" aria-sort={sortDirection(sort, 'score-desc')}><button type="button" onClick={() => onSortChange('score-desc')} aria-label="Sort by metric">Metric</button></th>
-            <th scope="col" aria-sort={sortDirection(sort, 'price-asc')}><button type="button" onClick={() => onSortChange('price-asc')} aria-label="Sort by blended cost">Blended cost</button></th>
-            <th scope="col" aria-sort={sortDirection(sort, 'context-desc')}><button type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button></th>
+            <th scope="col" aria-sort={sortDirection(sort, 'score-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label="Sort by metric">Metric</button></th>
+            <th scope="col" aria-sort={sortDirection(sort, 'price-asc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('price-asc')} aria-label="Sort by blended cost">Blended cost</button></th>
+            <th scope="col" aria-sort={sortDirection(sort, 'context-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button></th>
           </tr>
         </thead>
         <tbody>
@@ -153,6 +167,6 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, publish
     <ol className="leaderboard-card-list" aria-label={cardLabel(keyName)}>
       {rows.map(({ entry, position }) => <Card key={entry.model.modelKey} keyName={keyName} entry={entry} position={position} />)}
     </ol>
-    <EvidenceFooter publishedAt={publishedAt} freshness={freshness} attribution={attribution} />
+    <LeaderboardEvidence publishedAt={publishedAt} freshness={freshness} attribution={attribution} />
   </section>;
 }

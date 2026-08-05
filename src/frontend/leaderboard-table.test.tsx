@@ -83,11 +83,14 @@ function apiEnvelope(
     'llm-human-preference': { kind: 'lmarena', sourceId: 'lmarena', metricKeys: ['lmarena:text_style_control:overall'], defaultSort: 'rank-asc' },
     'media-text-to-image': { kind: 'lmarena', sourceId: 'lmarena', metricKeys: ['lmarena:text_to_image:overall'], defaultSort: 'rank-asc' },
   };
+  const attribution = key === 'llm-human-preference' || key.startsWith('media-')
+    ? { sourceId: 'lmarena', label: 'Arena ratings from LMArena', url: 'https://lmarena.ai/leaderboard', updatedAt: ISO_TIME }
+    : { sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data', updatedAt: ISO_TIME };
   return {
     revision: 'published-revision-1',
     publishedAt: ISO_TIME,
     freshness,
-    attribution: [{ sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data', updatedAt: ISO_TIME }],
+    attribution: [attribution],
     data: { key, profile, definition: definitions[key] ?? definitions['llm-coding'], entries },
   };
 }
@@ -205,6 +208,15 @@ describe('LeaderboardTable', () => {
     expect(screen.queryByText('Value Frontier')).not.toBeInTheDocument();
     expect(screen.queryByText('BenchLM coding')).not.toBeInTheDocument();
   });
+
+  it('describes the default Pareto order when it cannot truthfully be assigned to one column', () => {
+    renderTable('llm-value', 'pareto-score-desc', [entry({ onValueFrontier: true })]);
+
+    const table = screen.getByRole('table', { name: 'AI model value frontier' });
+    expect(table).toHaveAttribute('aria-describedby', 'leaderboard-order-llm-value');
+    expect(screen.getByText('Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'))
+      .toHaveAttribute('id', 'leaderboard-order-llm-value');
+  });
 });
 
 describe('LeaderboardFilters', () => {
@@ -293,6 +305,27 @@ describe('leaderboard routes and honest home teasers', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('Stale benchmark data');
     expect(screen.queryByRole('table', { name: 'AI coding model benchmarks' })).not.toBeInTheDocument();
+  });
+
+  it('keeps stale envelope metadata and source links visible without rendering stale rows as rankings', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope(
+      'llm-coding',
+      'balanced',
+      [entry()],
+      { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue.' },
+    ))));
+    window.history.replaceState({}, '', '/leaderboards/llm/coding/');
+
+    render(<App />);
+
+    const evidence = await screen.findByLabelText('Stale leaderboard evidence');
+    expect(evidence).toHaveTextContent('Published');
+    expect(evidence).toHaveTextContent('Checked');
+    expect(evidence).toHaveTextContent('Stale');
+    expect(evidence).toHaveTextContent('2026');
+    expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(screen.queryByRole('table', { name: 'AI coding model benchmarks' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Model A')).not.toBeInTheDocument();
   });
 
   it('renders the directory with registered category links without fixture rankings', () => {

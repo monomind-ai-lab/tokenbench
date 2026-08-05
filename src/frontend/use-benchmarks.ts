@@ -46,6 +46,12 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function isFiniteIsoTimestamp(value: unknown): value is string {
+  return isNonEmptyString(value)
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
+    && Number.isFinite(Date.parse(value));
+}
+
 function isNullableFiniteNumber(value: unknown): value is number | null {
   return value === null || (typeof value === 'number' && Number.isFinite(value));
 }
@@ -104,8 +110,9 @@ function isModel(value: unknown): boolean {
 
 function isMetric(value: unknown): boolean {
   if (!isRecord(value)) return false;
-  return ['modelKey', 'metricKey', 'category', 'sourceUpdatedAt', 'sourceModelId', 'sourceArtifactId']
+  return ['modelKey', 'metricKey', 'category', 'sourceModelId', 'sourceArtifactId']
     .every((key) => isNonEmptyString(value[key]))
+    && isFiniteIsoTimestamp(value.sourceUpdatedAt)
     && typeof value.value === 'number'
     && Number.isFinite(value.value)
     && isNullablePositiveInteger(value.rank)
@@ -139,21 +146,96 @@ function isLeaderboardEntry(value: unknown): value is LeaderboardEntry {
     && typeof value.onValueFrontier === 'boolean';
 }
 
+function isBenchLmRouteMetric(metric: NonNullable<LeaderboardEntry['metric']>): boolean {
+  return metric.metricKey.startsWith('benchlm:')
+    && metric.sourceId === 'benchlm'
+    && metric.methodology === 'benchlm_raw_composite'
+    && metric.unit === 'score';
+}
+
+function isLmArenaRouteMetric(metric: NonNullable<LeaderboardEntry['metric']>): boolean {
+  return metric.metricKey.startsWith('lmarena:')
+    && metric.sourceId === 'lmarena'
+    && metric.methodology === 'bradley_terry'
+    && metric.unit === 'arena_score';
+}
+
+function isMetricForDefinition(
+  metric: NonNullable<LeaderboardEntry['metric']>,
+  definition: LeaderboardDefinition,
+): boolean {
+  if (!definition.metricKeys.includes(metric.metricKey)) return false;
+  switch (definition.kind) {
+    case 'benchlm':
+    case 'value':
+      return isBenchLmRouteMetric(metric);
+    case 'lmarena':
+      return isLmArenaRouteMetric(metric);
+    case 'multimodal':
+      return isBenchLmRouteMetric(metric) || isLmArenaRouteMetric(metric);
+    case 'pricing-context':
+      return false;
+  }
+}
+
+function isMetricForEntryDefinition(
+  entry: LeaderboardEntry,
+  metric: NonNullable<LeaderboardEntry['metric']>,
+  definition: LeaderboardDefinition,
+): boolean {
+  if (!isMetricForDefinition(metric, definition)) return false;
+  if (metric.sourceId === 'benchlm') {
+    return entry.model.sourceId === 'benchlm'
+      && (entry.model.evidenceStatus === 'supported' || entry.model.evidenceStatus === 'estimated');
+  }
+  return metric.sourceId === 'lmarena'
+    && entry.model.evidenceStatus !== 'estimated'
+    && (entry.model.evidenceStatus !== 'source_only' || entry.model.sourceId === 'lmarena');
+}
+
+function isEntryForDefinition(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
+  if (definition.kind === 'pricing-context') return entry.metric === null && entry.metrics.length === 0;
+  if (entry.metric === null || entry.metric.modelKey !== entry.model.modelKey || !isMetricForEntryDefinition(entry, entry.metric, definition)) return false;
+  return entry.metrics.every((metric) => metric.modelKey === entry.model.modelKey && isMetricForEntryDefinition(entry, metric, definition));
+}
+
 function isFreshness(value: unknown): value is BenchmarkFreshness {
   return isRecord(value)
     && (value.status === 'fresh' || value.status === 'stale')
-    && isNonEmptyString(value.checkedAt)
+    && isFiniteIsoTimestamp(value.checkedAt)
     && (value.message === undefined || isNonEmptyString(value.message));
 }
 
 function isAttribution(value: unknown): value is BenchmarkAttribution {
   if (!isRecord(value) || !isBenchmarkSourceId(value.sourceId)) return false;
-  if (!['label', 'url', 'updatedAt'].every((key) => isNonEmptyString(value[key]))) return false;
+  if (!isNonEmptyString(value.label) || !isNonEmptyString(value.url) || !isFiniteIsoTimestamp(value.updatedAt)) return false;
   try {
     return new URL(value.url as string).protocol === 'https:';
   } catch {
     return false;
   }
+}
+
+function hasApplicableAttribution(
+  attribution: readonly BenchmarkAttribution[],
+  definition: LeaderboardDefinition,
+  entries: readonly LeaderboardEntry[],
+): boolean {
+  if (definition.sourceId !== undefined) {
+    return attribution.some((source) => source.sourceId === definition.sourceId);
+  }
+
+  const activeMetricSources = new Set<string>();
+  for (const entry of entries) {
+    if (entry.metric !== null) activeMetricSources.add(entry.metric.sourceId);
+    for (const metric of entry.metrics) activeMetricSources.add(metric.sourceId);
+  }
+  if (activeMetricSources.size > 0) {
+    return [...activeMetricSources].every((sourceId) => attribution.some((source) => source.sourceId === sourceId));
+  }
+
+  return definition.kind === 'multimodal'
+    && attribution.some((source) => source.sourceId === 'benchlm' || source.sourceId === 'lmarena');
 }
 
 /** Estimated rows are a reviewed Task 9 extension only for BenchLM-backed routes. */
@@ -196,15 +278,17 @@ function isLeaderboardEnvelope(
   profile: WorkloadProfile,
   includeEstimated: boolean,
 ): value is BenchmarkApiEnvelope<LeaderboardResult> {
-  if (!isRecord(value) || !isNonEmptyString(value.revision) || !isNonEmptyString(value.publishedAt)) return false;
-  if (!isFreshness(value.freshness) || !Array.isArray(value.attribution) || !value.attribution.every(isAttribution)) return false;
+  if (!isRecord(value) || !isNonEmptyString(value.revision) || !isFiniteIsoTimestamp(value.publishedAt)) return false;
+  if (!isFreshness(value.freshness) || !Array.isArray(value.attribution) || value.attribution.length === 0 || !value.attribution.every(isAttribution)) return false;
   if (!isRecord(value.data)) return false;
-  return value.data.key === key
-    && value.data.profile === profile
-    && isExpectedLeaderboardDefinition(value.data.definition, key)
-    && Array.isArray(value.data.entries)
-    && value.data.entries.every(isLeaderboardEntry)
-    && hasSafeEstimatedSection(value.data.entries as readonly LeaderboardEntry[], includeEstimated);
+  if (value.data.key !== key || value.data.profile !== profile || !isExpectedLeaderboardDefinition(value.data.definition, key)) return false;
+  if (!Array.isArray(value.data.entries) || !value.data.entries.every(isLeaderboardEntry)) return false;
+  const entries = value.data.entries as readonly LeaderboardEntry[];
+  const attribution = value.attribution as readonly BenchmarkAttribution[];
+  const definition = LEADERBOARD_DEFINITIONS[key];
+  return entries.every((entry) => isEntryForDefinition(entry, definition))
+    && hasApplicableAttribution(attribution, definition, entries)
+    && hasSafeEstimatedSection(entries, includeEstimated);
 }
 
 function normalizeLimit(limit: number): number {

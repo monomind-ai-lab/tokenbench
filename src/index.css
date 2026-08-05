@@ -372,7 +372,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .leaderboard-desktop-table thead { background: var(--surface-container); }
 .leaderboard-desktop-table th, .leaderboard-desktop-table td { padding: 16px 18px; border-bottom: 1px solid color-mix(in srgb, var(--outline) 72%, transparent); text-align: left; vertical-align: top; }
 .leaderboard-desktop-table thead th { color: var(--muted); font-family: var(--font-label); font-size: 0.61rem; letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
-.leaderboard-desktop-table thead button { min-height: auto; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 800; letter-spacing: inherit; text-transform: inherit; }
+.leaderboard-sort-button { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; padding: 0 8px; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 800; letter-spacing: inherit; text-transform: inherit; }
 .leaderboard-desktop-table tbody tr:last-child > * { border-bottom: 0; }
 .leaderboard-desktop-table tbody tr:hover > * { background: color-mix(in srgb, var(--primary-soft) 22%, var(--surface)); }
 .leaderboard-desktop-table tbody th { min-width: 190px; font-weight: 700; }
@@ -404,6 +404,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .leaderboard-card dd { min-width: 0; margin: 5px 0 0; font-size: 0.72rem; font-weight: 700; overflow-wrap: anywhere; }
 .leaderboard-card dd .leaderboard-lenses { gap: 5px; }
 .leaderboard-evidence { display: grid; gap: 10px; padding: 16px 18px; border-top: 1px solid var(--outline); background: var(--surface-low); }
+.leaderboard-evidence-compact { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--outline); border-radius: 8px; }
 .leaderboard-evidence p { margin: 0; color: var(--muted); font-size: 0.68rem; line-height: 1.55; }
 .leaderboard-evidence p strong { color: var(--text); }
 .leaderboard-freshness { display: inline-flex; margin-left: 6px; padding: 2px 6px; border-radius: 999px; font-family: var(--font-label); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
