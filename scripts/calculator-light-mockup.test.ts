@@ -1,9 +1,12 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import { validateMockupHtml } from './mockup-contract';
 
-const html = readFileSync('.stitch/designs/calculator-light.html', 'utf8');
+const htmlPath = resolve('.stitch/designs/calculator-light.html');
+const html = readFileSync(htmlPath, 'utf8');
 const calculatorCss = readFileSync('.stitch/designs/calculator-mockup.css', 'utf8');
 const document = new JSDOM(html).window.document;
 
@@ -32,7 +35,10 @@ describe('light calculator mockup', () => {
 
   it('matches the production brand lockup and evidence footer', () => {
     const logo = document.querySelector<HTMLImageElement>('.brand-home img');
-    expect(logo?.getAttribute('src')).toBe('/brand/monomind-tokenbench.png');
+    const logoSrc = logo?.getAttribute('src') ?? '';
+    const resolvedLogoPath = fileURLToPath(new URL(logoSrc, pathToFileURL(htmlPath)));
+    expect(resolvedLogoPath).toBe(resolve('public/brand/monomind-tokenbench.png'));
+    expect(existsSync(resolvedLogoPath)).toBe(true);
     expect(logo?.getAttribute('alt')).toBe('MonoMind monogram');
     expect(document.querySelector('.brand-name')?.textContent?.trim()).toBe('TokenBench');
     expect(document.querySelector('.brand-tagline')?.textContent?.trim()).toBe('The Decision Engine for AI Costs & Model Benchmarks');
