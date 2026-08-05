@@ -5,6 +5,10 @@ import { MOCKUP_PAGES, MOCKUP_THEMES, MOCKUP_VIEWPORTS } from '../scripts/mockup
 
 const CHECK_VIEWPORTS = [...MOCKUP_VIEWPORTS, { width: 320, height: 844 }] as const;
 
+function mockupUrl(file: string, theme: string): string {
+  return `${pathToFileURL(resolve(file)).href}?theme=${theme}`;
+}
+
 for (const mockup of MOCKUP_PAGES) {
   for (const theme of MOCKUP_THEMES) {
     for (const viewport of CHECK_VIEWPORTS) {
@@ -16,7 +20,7 @@ for (const mockup of MOCKUP_PAGES) {
 
         await page.setViewportSize(viewport);
         await page.emulateMedia({ reducedMotion: 'reduce' });
-        await page.goto(`${pathToFileURL(resolve(mockup.file)).href}?theme=${theme}`);
+        await page.goto(mockupUrl(mockup.file, theme));
 
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         await expect(page.locator('h1')).toHaveCount(1);
@@ -81,7 +85,7 @@ test('keyboard focus is visible in both themes', async ({ page }) => {
 
   for (const theme of MOCKUP_THEMES) {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.goto(`${pathToFileURL(resolve(MOCKUP_PAGES[0].file)).href}?theme=${theme}`);
+    await page.goto(mockupUrl(MOCKUP_PAGES[0].file, theme));
     await page.keyboard.press('Tab');
     const focus = await page.evaluate(() => {
       const active = document.activeElement as HTMLElement;
@@ -91,5 +95,85 @@ test('keyboard focus is visible in both themes', async ({ page }) => {
     expect(focus.style).toBe('solid');
     expect(Number.parseFloat(focus.width)).toBeGreaterThan(0);
     expect(focus.color).not.toBe('transparent');
+  }
+});
+
+test('shared navigation, language, and theme controls are keyboard-operable across mockup pages and themes', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  for (const mockup of MOCKUP_PAGES) {
+    for (const theme of MOCKUP_THEMES) {
+      await test.step(`${mockup.id} ${theme}`, async () => {
+        await page.goto(mockupUrl(mockup.file, theme));
+
+        const menu = page.locator('[data-menu-toggle]');
+        const nav = page.locator('[data-primary-nav]');
+        await menu.focus();
+        await expect(menu).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(menu).toHaveAttribute('aria-expanded', 'true');
+        await expect(nav).toHaveAttribute('data-open', '');
+        await page.keyboard.press('Enter');
+        await expect(menu).toHaveAttribute('aria-expanded', 'false');
+        await expect(nav).not.toHaveAttribute('data-open');
+
+        const language = page.getByLabel('Language');
+        await language.selectOption('ja');
+        await expect(language).toHaveValue('ja');
+
+        const themeToggle = page.locator('[data-theme-toggle]');
+        const nextTheme = theme === 'dark' ? 'light' : 'dark';
+        await themeToggle.focus();
+        await expect(themeToggle).toBeFocused();
+        await page.keyboard.press('Enter');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', nextTheme);
+        await expect(themeToggle).toHaveAttribute('aria-pressed', String(nextTheme === 'dark'));
+      });
+    }
+  }
+});
+
+test('decision controls retain their representative selected states in both themes', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  for (const theme of MOCKUP_THEMES) {
+    await test.step(`calculator ${theme}`, async () => {
+      await page.goto(mockupUrl(MOCKUP_PAGES[0].file, theme));
+      const openAiProvider = page.locator('input[name="provider"][value="openai"]');
+      await openAiProvider.check();
+      await expect(openAiProvider).toBeChecked();
+      await expect(openAiProvider.locator('xpath=..')).toHaveAttribute('aria-checked', 'true');
+      await expect(page.locator('input[name="provider"][value="alibaba"]').locator('xpath=..')).toHaveAttribute('aria-checked', 'false');
+    });
+
+    await test.step(`compare hub ${theme}`, async () => {
+      await page.goto(mockupUrl(MOCKUP_PAGES[1].file, theme));
+      const firstModel = page.getByRole('combobox', { name: 'First model' });
+      await firstModel.fill('GPT-4o');
+      await expect(firstModel).toHaveValue('GPT-4o');
+      const provider = page.locator('#provider-filter');
+      await provider.selectOption({ label: 'OpenAI' });
+      await expect(provider).toHaveValue('OpenAI');
+      await expect(page.locator('[data-compare-action]')).toBeDisabled();
+    });
+
+    await test.step(`compare detail ${theme}`, async () => {
+      await page.goto(mockupUrl(MOCKUP_PAGES[2].file, theme));
+      const outputHeavy = page.locator('input[name="workload"][value="output-heavy"]');
+      await outputHeavy.check();
+      await expect(outputHeavy).toBeChecked();
+    });
+
+    await test.step(`value leaderboard ${theme}`, async () => {
+      await page.goto(mockupUrl(MOCKUP_PAGES[4].file, theme));
+      const includeEstimated = page.locator('#include-estimated');
+      await expect(includeEstimated).toBeChecked();
+      await includeEstimated.uncheck();
+      await expect(includeEstimated).not.toBeChecked();
+      await includeEstimated.check();
+      await expect(includeEstimated).toBeChecked();
+    });
   }
 });

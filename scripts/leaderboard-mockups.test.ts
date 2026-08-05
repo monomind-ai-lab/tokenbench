@@ -190,6 +190,18 @@ describe('leaderboard mockups', () => {
     ]).toEqual(['Unranked', 'Unranked']);
   });
 
+  it('marks the estimate opt-in as selected when its desktop and mobile previews are rendered', () => {
+    const document = new JSDOM(valueHtml).window.document;
+    const includeEstimated = document.querySelector<HTMLInputElement>('#include-estimated');
+    const desktopEstimated = document.querySelectorAll('tbody tr[data-estimated]');
+    const mobileEstimated = document.querySelectorAll('[data-mobile-rank-card][data-estimated]');
+
+    expect(desktopEstimated).toHaveLength(1);
+    expect(mobileEstimated).toHaveLength(1);
+    expect(includeEstimated?.checked).toBe(true);
+    expect(includeEstimated?.indeterminate).toBe(false);
+  });
+
   it('shares a visible illustrative-data disclosure with the table and mobile cards', () => {
     const document = new JSDOM(valueHtml).window.document;
     const disclosure = document.querySelector<HTMLElement>('[data-evidence-disclosure]');
