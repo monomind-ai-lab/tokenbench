@@ -70,7 +70,7 @@ export function validateMockupCss(css: string): string[] {
   if (!/@media\s*\([^)]*max-width:\s*767px/i.test(css)) errors.push('missing mobile shell rule');
   const uncommentedCss = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const importRanges: Array<readonly [number, number]> = [];
-  const importPattern = /@import\s+(?:url\(\s*)?(?:(["'])(.*?)\1|([^\s;()]+))\s*\)?\s*;/gi;
+  const importPattern = /@import\s+(?:url\(\s*)?(?:(["'])(.*?)\1|([^\s;()]+))\s*\)?[^;]*;/gi;
   for (const match of uncommentedCss.matchAll(importPattern)) {
     if (isExternalRuntimeUrl(match[2] ?? match[3] ?? '')) {
       errors.push(`external runtime asset: ${match[0].trim()}`);

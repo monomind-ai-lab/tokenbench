@@ -65,4 +65,13 @@ describe('mockup contract', () => {
         expect.stringContaining('external runtime asset: url(//cdn.example/background.svg)'),
       ]));
   });
+
+  it('rejects qualified direct-string remote CSS imports', () => {
+    const css = readFileSync('.stitch/designs/tokenbench-mockup.css', 'utf8');
+    expect(validateMockupCss(`${css}\n@import "HTTPS://cdn.example/mockup.css" screen;\n@import "//cdn.example/print.css" layer(theme) supports(display: grid) print and (min-width: 48rem);`))
+      .toEqual(expect.arrayContaining([
+        expect.stringContaining('external runtime asset: @import "HTTPS://cdn.example/mockup.css" screen;'),
+        expect.stringContaining('external runtime asset: @import "//cdn.example/print.css" layer(theme) supports(display: grid) print and (min-width: 48rem);'),
+      ]));
+  });
 });
