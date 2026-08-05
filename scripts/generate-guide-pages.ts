@@ -1,77 +1,13 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { SITE_CONFIG } from '../src/brand/site-config';
 import { GUIDES, guidePath, relatedGuides, type GuideArticle, type GuideSection } from '../src/guides/content';
-
-const SITE_URL = 'https://ai-plans.monomind.one';
-const SOCIAL_IMAGE = `${SITE_URL}/og-guides.png`;
-const outputRoot = resolve(process.cwd(), 'guides');
-
-function escapeHtml(value: string): string {
-  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
-}
-
-function jsonLd(value: unknown): string {
-  return JSON.stringify(value).replaceAll('<', '\\u003c');
-}
+import { metadataForRoute } from '../src/seo/metadata';
+import { documentHtml, escapeHtml, headMarkup, staticChrome } from '../src/seo/static-page';
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
-}
-
-function headMarkup({ title, description, canonical, type, structuredData }: { title: string; description: string; canonical: string; type: 'website' | 'article'; structuredData: unknown[] }): string {
-  return `<meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${escapeHtml(title)}</title>
-    <meta name="description" content="${escapeHtml(description)}">
-    <meta name="robots" content="index,follow,max-image-preview:large">
-    <link rel="canonical" href="${canonical}">
-    <meta property="og:type" content="${type}">
-    <meta property="og:site_name" content="TokenBench">
-    <meta property="og:title" content="${escapeHtml(title)}">
-    <meta property="og:description" content="${escapeHtml(description)}">
-    <meta property="og:url" content="${canonical}">
-    <meta property="og:image" content="${SOCIAL_IMAGE}">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="TokenBench guides for spending smarter on AI">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="${escapeHtml(title)}">
-    <meta name="twitter:description" content="${escapeHtml(description)}">
-    <meta name="twitter:image" content="${SOCIAL_IMAGE}">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('tokenbench:theme')==='dark'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/src/index.css">
-    <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,ko,zh-TW,zh-CN,ja,es,fr,de,fi,pl,ru',autoDisplay:false},'google_translate_element')}</script>
-    <script async defer src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-    ${structuredData.map((data) => `<script type="application/ld+json">${jsonLd(data)}</script>`).join('\n    ')}`;
-}
-
-function chrome(content: string): string {
-  return `<div class="app-shell guides-shell">
-      <a class="skip-link" href="#guide-content">Skip to guide content</a>
-      <header class="top-header"><div class="header-inner">
-        <div class="brand-lockup"><a class="brand-name" href="/">TokenBench</a></div>
-        <nav class="primary-nav" aria-label="Primary navigation"><a href="/">Calculator</a><a href="/#comparison">Pricing</a><a href="/guides/" aria-current="page">Guides</a></nav>
-      </div></header>
-      ${content}
-      <footer class="app-footer"><span>MonoMind AI Lab · 2026</span><span>Independent, source-backed guidance.</span><span>Verify provider terms before purchasing.</span></footer>
-    </div>`;
-}
-
-function documentHtml(head: string, content: string): string {
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    ${head}
-  </head>
-  <body>
-    <div id="google_translate_element"></div>
-    <div id="root">${chrome(content)}</div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>\n`;
 }
 
 function guideCard(guide: GuideArticle): string {
@@ -88,30 +24,92 @@ function renderSection(section: GuideSection): string {
   return `<section id="${section.id}" class="article-section"><h2>${escapeHtml(section.title)}</h2>${paragraphs}${steps}${bullets}${table}${callout}${sources}</section>`;
 }
 
-async function createHub(): Promise<void> {
-  const canonical = `${SITE_URL}/guides/`;
-  const description = 'Practical, source-backed guides to track AI usage, compare access paths, find legitimate free APIs, and reduce token costs.';
-  const content = `<main id="guide-content" class="guides-main"><section class="guides-hero"><span class="eyebrow">AI bill playbook</span><h1>Spend smarter on AI</h1><p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p><div class="guides-hero-actions"><a class="button guide-primary-action" href="/#calculator">Open the calculator</a><span>5 field guides · Reviewed ${formatDate(GUIDES[0].updatedAt)}</span></div></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Guides</span><h2>Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div><div class="guide-grid">${GUIDES.map(guideCard).join('')}</div></section></main>`;
-  const structuredData = [{ '@context': 'https://schema.org', '@type': 'CollectionPage', name: 'AI Cost Optimization Guides', description, url: canonical, mainEntity: { '@type': 'ItemList', itemListElement: GUIDES.map((guide, index) => ({ '@type': 'ListItem', position: index + 1, name: guide.title, url: `${SITE_URL}${guidePath(guide.slug)}` })) } }];
-  await mkdir(outputRoot, { recursive: true });
-  await writeFile(resolve(outputRoot, 'index.html'), documentHtml(headMarkup({ title: 'AI Cost Optimization Guides | TokenBench', description, canonical, type: 'website', structuredData }), content));
+function guideHubContent(): string {
+  const metadata = metadataForRoute({ kind: 'guides' });
+  return `<main id="page-content" class="guides-main"><section class="guides-hero"><span class="eyebrow">AI bill playbook</span><h1>${escapeHtml(metadata.h1)}</h1><p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p><div class="guides-hero-actions"><a class="button guide-primary-action" href="/#calculator">Open the calculator</a><span>5 field guides · Reviewed ${formatDate(GUIDES[0].updatedAt)}</span></div></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Guides</span><h2>Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div><div class="guide-grid">${GUIDES.map(guideCard).join('')}</div></section></main>`;
 }
 
-async function createArticle(guide: GuideArticle): Promise<void> {
-  const canonical = `${SITE_URL}${guidePath(guide.slug)}`;
+function guideHubStructuredData(): unknown[] {
+  const metadata = metadataForRoute({ kind: 'guides' });
+  return [{
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: metadata.h1,
+    description: metadata.description,
+    url: metadata.canonical,
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: GUIDES.map((guide, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        name: guide.title,
+        url: `${SITE_CONFIG.origin}${guidePath(guide.slug)}`,
+      })),
+    },
+  }];
+}
+
+function articleContent(guide: GuideArticle): string {
   const toc = `<aside class="article-toc" aria-label="On this page"><strong>On this page</strong><ol>${guide.sections.map((section) => `<li><a href="#${section.id}">${escapeHtml(section.title.replace(/^\d+\.\s*/, ''))}</a></li>`).join('')}</ol></aside>`;
   const related = relatedGuides(guide);
-  const content = `<main id="guide-content" class="guides-main article-main"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/guides/">Guides</a><span>›</span><span aria-current="page">${escapeHtml(guide.category)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">${escapeHtml(guide.category)}</span><h1>${escapeHtml(guide.title)}</h1><p class="article-dek">${escapeHtml(guide.dek)}</p><div class="article-byline"><span>By MonoMind AI Lab</span><span>Updated ${formatDate(guide.updatedAt)}</span><span>${guide.readMinutes} min read</span></div></header><div class="article-layout"><div class="article-body"><aside class="takeaways"><span class="eyebrow">At a glance</span><h2>What you’ll learn</h2><ul>${guide.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join('')}</ul></aside>${guide.sections.map(renderSection).join('')}<aside class="calculator-cta"><div><span class="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a class="button" href="/#calculator">Open calculator →</a></aside></div>${toc}</div></article><section class="related-guides"><div class="guide-index-heading"><div><span class="eyebrow">Keep optimizing</span><h2>Related guides</h2></div><a href="/guides/">View all guides</a></div><div class="related-grid">${related.map(guideCard).join('')}</div></section></main>`;
-  const structuredData = [
-    { '@context': 'https://schema.org', '@type': 'Article', headline: guide.title, description: guide.description, datePublished: guide.publishedAt, dateModified: guide.updatedAt, image: SOCIAL_IMAGE, mainEntityOfPage: canonical, author: { '@type': 'Organization', name: 'MonoMind AI Lab' }, publisher: { '@type': 'Organization', name: 'MonoMind AI Lab', url: SITE_URL }, keywords: guide.keywords.join(', ') },
-    { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Calculator', item: SITE_URL }, { '@type': 'ListItem', position: 2, name: 'Guides', item: `${SITE_URL}/guides/` }, { '@type': 'ListItem', position: 3, name: guide.title, item: canonical }] },
-  ];
-  const articleDir = resolve(outputRoot, guide.slug);
-  await mkdir(articleDir, { recursive: true });
-  await writeFile(resolve(articleDir, 'index.html'), documentHtml(headMarkup({ title: `${guide.seoTitle} | TokenBench`, description: guide.description, canonical, type: 'article', structuredData }), content));
+  return `<main id="page-content" class="guides-main article-main"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/guides/">Guides</a><span>›</span><span aria-current="page">${escapeHtml(guide.category)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">${escapeHtml(guide.category)}</span><h1>${escapeHtml(guide.title)}</h1><p class="article-dek">${escapeHtml(guide.dek)}</p><div class="article-byline"><span>By ${SITE_CONFIG.parentName}</span><span>Updated ${formatDate(guide.updatedAt)}</span><span>${guide.readMinutes} min read</span></div></header><div class="article-layout"><div class="article-body"><aside class="takeaways"><span class="eyebrow">At a glance</span><h2>What you’ll learn</h2><ul>${guide.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join('')}</ul></aside>${guide.sections.map(renderSection).join('')}<aside class="calculator-cta"><div><span class="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a class="button" href="/#calculator">Open calculator →</a></aside></div>${toc}</div></article><section class="related-guides"><div class="guide-index-heading"><div><span class="eyebrow">Keep optimizing</span><h2>Related guides</h2></div><a href="/guides/">View all guides</a></div><div class="related-grid">${related.map(guideCard).join('')}</div></section></main>`;
 }
 
-await rm(outputRoot, { recursive: true, force: true });
-await createHub();
-await Promise.all(GUIDES.map(createArticle));
-console.log(`Generated ${GUIDES.length + 1} guide pages.`);
+function articleStructuredData(guide: GuideArticle): unknown[] {
+  const metadata = metadataForRoute({ kind: 'guides', slug: guide.slug });
+  return [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: guide.title,
+      description: guide.description,
+      datePublished: guide.publishedAt,
+      dateModified: guide.updatedAt,
+      image: metadata.openGraph.image,
+      mainEntityOfPage: metadata.canonical,
+      author: { '@type': 'Organization', name: SITE_CONFIG.parentName, url: SITE_CONFIG.parentUrl },
+      publisher: { '@type': 'Organization', name: SITE_CONFIG.parentName, url: SITE_CONFIG.parentUrl },
+      keywords: guide.keywords.join(', '),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: SITE_CONFIG.name, item: SITE_CONFIG.origin },
+        { '@type': 'ListItem', position: 2, name: 'Guides', item: `${SITE_CONFIG.origin}/guides/` },
+        { '@type': 'ListItem', position: 3, name: guide.title, item: metadata.canonical },
+      ],
+    },
+  ];
+}
+
+export async function generateGuidePages(outputRoot: string): Promise<void> {
+  await mkdir(outputRoot, { recursive: true });
+
+  const hubMetadata = metadataForRoute({ kind: 'guides' });
+  await writeFile(resolve(outputRoot, 'index.html'), documentHtml(
+    headMarkup(hubMetadata, guideHubStructuredData()),
+    staticChrome(guideHubContent(), 'guides'),
+  ));
+
+  await Promise.all(GUIDES.map(async (guide) => {
+    const metadata = metadataForRoute({ kind: 'guides', slug: guide.slug });
+    const articleDir = resolve(outputRoot, guide.slug);
+    await mkdir(articleDir, { recursive: true });
+    await writeFile(resolve(articleDir, 'index.html'), documentHtml(
+      headMarkup(metadata, articleStructuredData(guide)),
+      staticChrome(articleContent(guide), 'guides'),
+    ));
+  }));
+}
+
+async function runGuideGenerator(): Promise<void> {
+  const outputRoot = resolve(process.cwd(), 'guides');
+  await rm(outputRoot, { recursive: true, force: true });
+  await generateGuidePages(outputRoot);
+  console.log(`Generated ${GUIDES.length + 1} guide pages.`);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await runGuideGenerator();
+}

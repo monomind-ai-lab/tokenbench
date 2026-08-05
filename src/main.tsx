@@ -2,9 +2,11 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import GuidesApp from './GuidesApp.tsx';
+import { matchRoute } from './routing/routes';
 import './index.css';
 
-const RootApp = window.location.pathname.startsWith('/guides') ? GuidesApp : App;
+const route = matchRoute(window.location.pathname);
+const RootApp = route.kind === 'guides' ? GuidesApp : App;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

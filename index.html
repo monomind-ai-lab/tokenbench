@@ -1,93 +1,44 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script>
-      (function() {
-        try {
-          var _fetch = window.fetch;
-          Object.defineProperty(window, 'fetch', {
-            get: function() {
-              return _fetch;
-            },
-            set: function(v) {
-              _fetch = v;
-            },
-            configurable: true,
-            enumerable: true
-          });
-        } catch (e) {}
-      })();
-    </script>
-    <title>TokenBench · The Decision Engine for AI Costs &amp; Model Benchmarks</title>
-    <meta name="description" content="The Decision Engine for AI Costs &amp; Model Benchmarks. Compare paid individual AI plans with direct API pricing, model mix, expected monthly token usage, and estimated savings.">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>(function(){try{var currentFetch=window.fetch;Object.defineProperty(window,'fetch',{get:function(){return currentFetch},set:function(nextFetch){currentFetch=nextFetch},configurable:true,enumerable:true})}catch(e){}})()</script>
+    <title>AI Cost and Model Benchmark Decisions | TokenBench</title>
+    <meta name="description" content="TokenBench helps teams compare AI costs, model benchmarks, pricing context, and decision paths with source-aware methodology and transparent caveats.">
     <meta name="robots" content="index,follow,max-image-preview:large">
     <link rel="canonical" href="https://tokenbench.monomind.one">
     <link rel="icon" href="/favicon.png" type="image/png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="TokenBench">
-    <meta property="og:title" content="TokenBench · The Decision Engine for AI Costs &amp; Model Benchmarks">
-    <meta property="og:description" content="Compare paid individual AI plans with API-equivalent value and estimated monthly savings.">
+    <meta property="og:title" content="AI Cost and Model Benchmark Decisions | TokenBench">
+    <meta property="og:description" content="TokenBench helps teams compare AI costs, model benchmarks, pricing context, and decision paths with source-aware methodology and transparent caveats.">
     <meta property="og:url" content="https://tokenbench.monomind.one">
     <meta property="og:image" content="https://tokenbench.monomind.one/og-guides.png">
+    <meta property="og:image:alt" content="TokenBench — AI cost and model benchmark decisions">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="TokenBench · The Decision Engine for AI Costs &amp; Model Benchmarks">
-    <meta name="twitter:description" content="Compare AI subscriptions, API prices, and estimated monthly savings.">
+    <meta name="twitter:title" content="AI Cost and Model Benchmark Decisions | TokenBench">
+    <meta name="twitter:description" content="TokenBench helps teams compare AI costs, model benchmarks, pricing context, and decision paths with source-aware methodology and transparent caveats.">
     <meta name="twitter:image" content="https://tokenbench.monomind.one/og-guides.png">
-    <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"TokenBench","url":"https://tokenbench.monomind.one","applicationCategory":"FinanceApplication","description":"The Decision Engine for AI Costs & Model Benchmarks."}</script>
-    <script>
-      try {
-        document.documentElement.dataset.theme = localStorage.getItem('tokenbench:theme') === 'light' ? 'light' : 'dark';
-      } catch (e) {
-        document.documentElement.dataset.theme = 'dark';
-      }
-    </script>
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem('tokenbench:theme')==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <style>
-      /* Hide Google Translate top banner and widget frame */
-      .goog-te-banner-frame,
-      .goog-te-banner-frame.skiptranslate,
-      iframe.goog-te-banner-frame,
-      .skiptranslate iframe,
-      body > .skiptranslate,
-      .VIpgJd-ZVi9od-ORHb-OEVmcd,
-      .VIpgJd-ZVi9od-aZ2wEe-wOHMyf,
-      .goog-te-balloon-frame,
-      #goog-gt-tt,
-      .goog-te-spinner-pos {
-        display: none !important;
-      }
-      body,
-      body.translated-ltr,
-      body.translated-rtl {
-        top: 0px !important;
-        position: static !important;
-      }
-      .goog-text-highlight {
-        background-color: transparent !important;
-        box-shadow: none !important;
-      }
-      #google_translate_element {
-        display: none !important;
-      }
-    </style>
-    <script type="text/javascript">
-      function googleTranslateElementInit() {
-        new google.translate.TranslateElement({
-          pageLanguage: 'en',
-          includedLanguages: 'en,ko,zh-TW,zh-CN,ja,es,fr,de,fi,pl,ru',
-          autoDisplay: false
-        }, 'google_translate_element');
-      }
-    </script>
-    <script async defer type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,ko,zh-TW,zh-CN,ja,es,fr,de,fi,pl,ru',autoDisplay:false},'google_translate_element')}</script>
+    <script async defer src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"AI cost and model benchmark decisions","description":"TokenBench helps teams compare AI costs, model benchmarks, pricing context, and decision paths with source-aware methodology and transparent caveats.","url":"https://tokenbench.monomind.one","publisher":{"@type":"Organization","name":"MonoMind AI Lab","url":"https://monomind.one/"}}</script>
   </head>
   <body>
     <div id="google_translate_element"></div>
-    <div id="root"></div>
+    <div id="root"><div class="app-shell static-page-shell">
+      <a class="skip-link" href="#page-content">Skip to page content</a>
+      <header class="top-header"><div class="header-inner">
+        <div class="brand-lockup"><a class="brand-home" href="/" aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram"><span class="brand-copy"><span class="brand-name">TokenBench</span><span class="brand-tagline">The Decision Engine for AI Costs & Model Benchmarks</span></span></a></div>
+        <nav class="primary-nav" aria-label="Primary navigation"><a href="/tools/">Tools</a><a href="/compare/">Compare</a><a href="/leaderboards/">Leaderboards</a><a href="/guides/">Guides</a></nav>
+      </div></header>
+      <main id="page-content" class="page-main"><section class="content-stack static-page-content"><span class="eyebrow">TokenBench</span><h1>AI cost and model benchmark decisions</h1><p>TokenBench is a source-aware decision engine for AI costs and model benchmarks. Start with the question you need to answer, then inspect the evidence, methodology, and unavailable states behind it.</p><div class="static-page-links"><a class="button" href="/tools/">Explore AI cost tools</a><a class="button" href="/leaderboards/">Browse model leaderboards</a></div><section><h2>Make an evidence-aware decision</h2><p>Compare direct API pricing, paid subscriptions, workload context, and benchmark categories without treating missing measurements as zero or presenting estimates as facts.</p></section></section></main>
+      <footer class="app-footer"><div class="footer-brand"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a><span>Source-aware decision support.</span></div><div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div></footer>
+    </div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

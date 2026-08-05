@@ -2,14 +2,9 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { staticHtmlEntries } from './src/routing/routes';
 
-const guideSlugs = [
-  'track-claude-code-usage',
-  'monitor-openai-codex-usage',
-  'openrouter-guide-model-routing-cost-controls',
-  'legitimate-free-ai-api-access-credits',
-  'reduce-llm-api-costs-caching-batch-output-limits',
-];
+const generatedHtmlInputs = staticHtmlEntries(__dirname);
 
 export default defineConfig(() => {
   return {
@@ -27,11 +22,18 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
+      cssCodeSplit: false,
       rollupOptions: {
-        input: {
-          main: path.resolve(__dirname, 'index.html'),
-          guides: path.resolve(__dirname, 'guides/index.html'),
-          ...Object.fromEntries(guideSlugs.map((slug) => [`guide-${slug}`, path.resolve(__dirname, `guides/${slug}/index.html`)])),
+        input: generatedHtmlInputs,
+        output: {
+          entryFileNames: 'assets/[name].js',
+          // Every generated HTML page imports this shared browser entry. Keep the Pages Function target stable.
+          chunkFileNames: (chunk) => chunk.moduleIds.some((moduleId) => moduleId.replaceAll('\\', '/').endsWith('/src/main.tsx'))
+            ? 'assets/main.js'
+            : 'assets/[name]-[hash].js',
+          assetFileNames: (asset) => asset.names?.some((name) => name.endsWith('.css'))
+            ? 'assets/tokenbench.css'
+            : 'assets/[name]-[hash][extname]',
         },
       },
     },
