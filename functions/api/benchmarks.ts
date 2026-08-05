@@ -5,6 +5,7 @@ import {
   attributionForAllSources,
   benchmarkEnvelope,
   etagForBenchmarkResponse,
+  freshnessFor,
   jsonBenchmarkResponse,
   matchesExactEtag,
   notModifiedBenchmarkResponse,
@@ -31,6 +32,28 @@ interface RouteAvailability {
   readonly metricKeys: readonly string[];
   readonly available: boolean;
   readonly supportsEstimated: boolean;
+}
+
+interface CompareDirectoryModel {
+  readonly slug: string;
+  readonly name: string;
+  readonly creator: string;
+  readonly sourceType: ActiveBenchmarkSnapshot['models'][number]['sourceType'];
+  readonly evidenceStatus: ActiveBenchmarkSnapshot['models'][number]['evidenceStatus'];
+  readonly metricCategories: readonly string[];
+}
+
+interface CompareDirectoryPair {
+  readonly pairSlug: string;
+  readonly modelASlug: string;
+  readonly modelBSlug: string;
+  readonly featuredRank: number | null;
+  readonly sharedMetricCount: number;
+}
+
+interface CompareDirectory {
+  readonly models: readonly CompareDirectoryModel[];
+  readonly indexablePairs: readonly CompareDirectoryPair[];
 }
 
 function compareText(left: string, right: string): number {
@@ -74,6 +97,51 @@ function routeAvailability(snapshot: ActiveBenchmarkSnapshot): readonly RouteAva
     });
 }
 
+function compareDirectory(snapshot: ActiveBenchmarkSnapshot): CompareDirectory {
+  const modelsByKey = new Map(snapshot.models.map((model) => [model.modelKey, model]));
+  const metricCategories = new Map(snapshot.models.map((model) => [
+    model.modelKey,
+    [...new Set(snapshot.metrics
+      .filter((metric) => metric.modelKey === model.modelKey)
+      .map((metric) => metric.category))].sort(compareText),
+  ]));
+  const models = snapshot.models
+    .slice()
+    .sort((left, right) => compareText(left.slug, right.slug) || compareText(left.modelKey, right.modelKey))
+    .map((model) => ({
+      slug: model.slug,
+      name: model.name,
+      creator: model.creator,
+      sourceType: model.sourceType,
+      evidenceStatus: model.evidenceStatus,
+      metricCategories: metricCategories.get(model.modelKey) ?? [],
+    }));
+  const indexablePairs = snapshot.comparisonPairs
+    .filter((pair) => pair.indexable === true)
+    .slice()
+    .sort((left, right) => {
+      if (left.featuredRank === null && right.featuredRank !== null) return 1;
+      if (left.featuredRank !== null && right.featuredRank === null) return -1;
+      if (left.featuredRank !== null && right.featuredRank !== null && left.featuredRank !== right.featuredRank) {
+        return left.featuredRank - right.featuredRank;
+      }
+      return compareText(left.pairSlug, right.pairSlug);
+    })
+    .map((pair) => {
+      const modelA = modelsByKey.get(pair.modelAKey);
+      const modelB = modelsByKey.get(pair.modelBKey);
+      if (!modelA || !modelB) throw new Error('Indexable comparison pair refers to an unavailable model');
+      return {
+        pairSlug: pair.pairSlug,
+        modelASlug: modelA.slug,
+        modelBSlug: modelB.slug,
+        featuredRank: pair.featuredRank,
+        sharedMetricCount: pair.sharedMetricCount,
+      };
+    });
+  return { models, indexablePairs };
+}
+
 export async function onRequestGet({ request, env }: { request: Request; env: BenchmarkApiEnv }): Promise<Response> {
   if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
 
@@ -81,13 +149,15 @@ export async function onRequestGet({ request, env }: { request: Request; env: Be
     const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
     if (!snapshot) return unavailableBenchmarkResponse();
 
-    const etag = etagForBenchmarkResponse(snapshot.revision.revision, { endpoint: 'benchmarks' });
+    const freshness = freshnessFor(snapshot.revision, Date.now());
+    const etag = etagForBenchmarkResponse(snapshot.revision, freshness, { endpoint: 'benchmarks' });
     if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
 
     return jsonBenchmarkResponse(
-      benchmarkEnvelope(snapshot, attributionForAllSources(snapshot), {
+      benchmarkEnvelope(snapshot, freshness, attributionForAllSources(snapshot), {
         sources: sourceAvailability(snapshot),
         routes: routeAvailability(snapshot),
+        compareDirectory: compareDirectory(snapshot),
       }),
       200,
       etag,

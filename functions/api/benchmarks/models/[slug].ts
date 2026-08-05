@@ -2,6 +2,7 @@ import {
   attributionForEvidence,
   benchmarkEnvelope,
   etagForBenchmarkResponse,
+  freshnessFor,
   jsonBenchmarkResponse,
   matchesExactEtag,
   modelNotFoundBenchmarkResponse,
@@ -30,6 +31,7 @@ export async function onRequestGet({
   try {
     const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
     if (!snapshot) return unavailableBenchmarkResponse();
+    const freshness = freshnessFor(snapshot.revision, Date.now());
     const slug = params?.slug;
     const model = typeof slug === 'string'
       ? snapshot.models.find((candidate) => candidate.slug === slug)
@@ -55,14 +57,14 @@ export async function onRequestGet({
       ...metrics.map((metric) => ({ sourceId: metric.sourceId, sourceArtifactId: metric.sourceArtifactId })),
       ...priceChecks.map((price) => ({ sourceId: price.sourceId, sourceArtifactId: price.sourceArtifactId })),
     ];
-    const etag = etagForBenchmarkResponse(snapshot.revision.revision, {
+    const etag = etagForBenchmarkResponse(snapshot.revision, freshness, {
       endpoint: 'model',
       slug: model.slug,
     });
     if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
 
     return jsonBenchmarkResponse(
-      benchmarkEnvelope(snapshot, attributionForEvidence(snapshot, references), {
+      benchmarkEnvelope(snapshot, freshness, attributionForEvidence(snapshot, references), {
         model,
         metrics,
         priceChecks,

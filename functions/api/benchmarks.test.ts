@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onRequestGet as getBenchmarks } from './benchmarks';
 import { onRequestGet as getLeaderboard } from './benchmarks/leaderboards/[key]';
@@ -6,8 +7,20 @@ import { onRequestGet as getModel } from './benchmarks/models/[slug]';
 const REVISION = 'benchmark-revision-1';
 const PUBLISHED_AT = '2026-08-05T00:00:00.000Z';
 const CHECKED_AT = '2026-08-05T12:00:00.000Z';
+const CATALOG_REVISION = 'catalog-revision-1';
 
 const hash = (character: string) => `sha256:${character.repeat(64)}`;
+const OPENROUTER_CONTENT_HASH = hash('0');
+const OPENROUTER_ARTIFACT_ID = `catalog:${CATALOG_REVISION}`;
+const REVISION_CONTENT_HASH = `sha256:${createHash('sha256').update(JSON.stringify({
+  catalogRevision: CATALOG_REVISION,
+  openrouterContentHash: OPENROUTER_CONTENT_HASH,
+  artifacts: [
+    { sourceId: 'benchlm', artifactId: 'models', contentHash: hash('c') },
+    { sourceId: 'lmarena', artifactId: 'text-style-control', contentHash: hash('e') },
+    { sourceId: 'openrouter', artifactId: OPENROUTER_ARTIFACT_ID, contentHash: OPENROUTER_CONTENT_HASH },
+  ],
+})).digest('hex')}`;
 
 const revision = {
   revision: REVISION,
@@ -15,9 +28,9 @@ const revision = {
   published_at: PUBLISHED_AT,
   checked_at: CHECKED_AT,
   publication_state: 'published',
-  content_hash: hash('a'),
-  catalog_revision: 'catalog-revision-1',
-  openrouter_content_hash: hash('b'),
+  content_hash: REVISION_CONTENT_HASH,
+  catalog_revision: CATALOG_REVISION,
+  openrouter_content_hash: OPENROUTER_CONTENT_HASH,
 };
 
 const sources = [
@@ -56,15 +69,15 @@ const sources = [
   {
     revision: REVISION,
     source_id: 'openrouter',
-    artifact_id: 'catalog-models',
+    artifact_id: OPENROUTER_ARTIFACT_ID,
     source_url: 'https://openrouter.ai/api/v1/models',
     observed_at: '2026-08-05T11:10:00.000Z',
     etag: '"openrouter-r1"',
     last_modified: null,
-    upstream_revision: 'catalog-r1',
+    upstream_revision: CATALOG_REVISION,
     schema_version: null,
     snapshot_key: 'catalog/openrouter/models-r1.json',
-    content_hash: hash('0'),
+    content_hash: OPENROUTER_CONTENT_HASH,
     original_content_hash: hash('1'),
     license_id: 'OpenRouter-ToS',
     attribution_text: 'OpenRouter',
@@ -290,7 +303,7 @@ const prices = [
     input_modalities_json: JSON.stringify(['text']),
     output_modalities_json: JSON.stringify(['text']),
     supported_parameters_json: null,
-    source_artifact_id: 'catalog-models',
+    source_artifact_id: OPENROUTER_ARTIFACT_ID,
     verification_status: 'primary',
   },
   {
@@ -310,7 +323,7 @@ const prices = [
     input_modalities_json: JSON.stringify(['text']),
     output_modalities_json: JSON.stringify(['text']),
     supported_parameters_json: JSON.stringify(['tools']),
-    source_artifact_id: 'catalog-models',
+    source_artifact_id: OPENROUTER_ARTIFACT_ID,
     verification_status: 'primary',
   },
 ];
@@ -329,7 +342,8 @@ const pairs = [
 ];
 
 type D1Rows = {
-  revision: unknown[];
+  activeRevision: string | null;
+  revisions: unknown[];
   sources: unknown[];
   models: unknown[];
   metrics: unknown[];
@@ -339,7 +353,8 @@ type D1Rows = {
 
 function publishedRows(overrides: Partial<D1Rows> = {}): D1Rows {
   return {
-    revision: [revision],
+    activeRevision: REVISION,
+    revisions: [revision],
     sources,
     models,
     metrics,
@@ -349,31 +364,50 @@ function publishedRows(overrides: Partial<D1Rows> = {}): D1Rows {
   };
 }
 
-function d1(rows: D1Rows) {
+interface FakeD1Options {
+  readonly bypassFactRevisionFilter?: boolean;
+}
+
+function d1(rows: D1Rows, options: FakeD1Options = {}) {
   const bindings: Array<{ sql: string; values: unknown[] }> = [];
   return {
     bindings,
     prepare(sql: string) {
-      const key = sql.includes('benchmark_publication_state') ? 'revision'
-        : sql.includes('benchmark_source_records') ? 'sources'
-          : sql.includes('benchmark_models') ? 'models'
-            : sql.includes('benchmark_metrics') ? 'metrics'
-              : sql.includes('benchmark_price_checks') ? 'prices'
-                : 'pairs';
       return {
         bind(...values: unknown[]) {
           bindings.push({ sql, values });
-          return { all: async () => ({ results: rows[key] }) };
+          return { all: async () => {
+            if (sql.includes('benchmark_publication_state')) {
+              const joined = rows.revisions.find((candidate) => {
+                if (!candidate || typeof candidate !== 'object') return false;
+                const record = candidate as Record<string, unknown>;
+                return record.revision === rows.activeRevision && record.publication_state === 'published';
+              });
+              return { results: joined ? [joined] : [] };
+            }
+            const key = sql.includes('benchmark_source_records') ? 'sources'
+              : sql.includes('benchmark_models') ? 'models'
+                : sql.includes('benchmark_metrics') ? 'metrics'
+                  : sql.includes('benchmark_price_checks') ? 'prices'
+                    : 'pairs';
+            const results = options.bypassFactRevisionFilter
+              ? rows[key]
+              : rows[key].filter((candidate) => {
+                if (!candidate || typeof candidate !== 'object') return false;
+                return (candidate as Record<string, unknown>).revision === values[0];
+              });
+            return { results };
+          } };
         },
       };
     },
   };
 }
 
-async function summary(rows = publishedRows(), headers?: HeadersInit): Promise<Response> {
+async function summary(rows = publishedRows(), headers?: HeadersInit, options?: FakeD1Options): Promise<Response> {
   return getBenchmarks({
     request: new Request('https://example.com/api/benchmarks', { headers }),
-    env: { CATALOG_DB: d1(rows) },
+    env: { CATALOG_DB: d1(rows, options) },
   });
 }
 
@@ -382,18 +416,19 @@ async function leaderboard(
   query = '',
   rows = publishedRows(),
   headers?: HeadersInit,
+  options?: FakeD1Options,
 ): Promise<Response> {
   return getLeaderboard({
     request: new Request(`https://example.com/api/benchmarks/leaderboards/${key}${query}`, { headers }),
-    env: { CATALOG_DB: d1(rows) },
+    env: { CATALOG_DB: d1(rows, options) },
     params: { key },
   });
 }
 
-async function model(slug: string, rows = publishedRows(), headers?: HeadersInit): Promise<Response> {
+async function model(slug: string, rows = publishedRows(), headers?: HeadersInit, options?: FakeD1Options): Promise<Response> {
   return getModel({
     request: new Request(`https://example.com/api/benchmarks/models/${slug}`, { headers }),
-    env: { CATALOG_DB: d1(rows) },
+    env: { CATALOG_DB: d1(rows, options) },
     params: { slug },
   });
 }
@@ -402,7 +437,7 @@ afterEach(() => vi.useRealTimers());
 
 describe('cached benchmark APIs', () => {
   it('returns the exact JSON envelope and deterministic active-revision availability metadata', async () => {
-    const response = await summary();
+    const response = await summary(publishedRows({ sources: [...sources].reverse() }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
@@ -426,6 +461,68 @@ describe('cached benchmark APIs', () => {
     });
   });
 
+  it('returns a deterministic minimal compare directory without synthetic scores or winners', async () => {
+    const directoryPairs = [
+      ...pairs,
+      {
+        ...pairs[0],
+        pair_slug: 'arena-vs-alpha',
+        model_a_key: 'lmarena:arena',
+        model_b_key: 'provider:alpha',
+        featured_rank: null,
+      },
+      {
+        ...pairs[0],
+        pair_slug: 'alpha-vs-estimated',
+        model_b_key: 'provider:estimated',
+        indexable: 0,
+        featured_rank: 2,
+      },
+    ];
+    const response = await summary(publishedRows({
+      models: [...models].reverse(),
+      metrics: [...metrics].reverse(),
+      pairs: directoryPairs.reverse(),
+    }));
+    const body = await response.json() as { data: { compareDirectory: {
+      models: Array<Record<string, unknown>>;
+      indexablePairs: Array<Record<string, unknown>>;
+    } } };
+
+    expect(response.status).toBe(200);
+    expect(body.data.compareDirectory).toEqual({
+      models: [
+        { slug: 'alpha', name: 'Alpha', creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['overall'] },
+        { slug: 'arena', name: 'Arena', creator: 'LMArena', sourceType: 'Unknown', evidenceStatus: 'source_only', metricCategories: ['overall'] },
+        { slug: 'beta', name: 'Beta', creator: 'Provider', sourceType: 'Proprietary', evidenceStatus: 'supported', metricCategories: ['overall'] },
+        { slug: 'estimated', name: 'Estimated', creator: 'Provider', sourceType: 'Unknown', evidenceStatus: 'estimated', metricCategories: ['overall'] },
+        { slug: 'wrong-lens', name: 'Wrong lens', creator: 'Provider', sourceType: 'Unknown', evidenceStatus: 'estimated', metricCategories: ['reasoning'] },
+      ],
+      indexablePairs: [
+        {
+          pairSlug: 'alpha-vs-beta',
+          modelASlug: 'alpha',
+          modelBSlug: 'beta',
+          featuredRank: 1,
+          sharedMetricCount: 2,
+        },
+        {
+          pairSlug: 'arena-vs-alpha',
+          modelASlug: 'arena',
+          modelBSlug: 'alpha',
+          featuredRank: null,
+          sharedMetricCount: 2,
+        },
+      ],
+    });
+    body.data.compareDirectory.models.forEach((entry) => {
+      expect(Object.keys(entry).sort()).toEqual(['creator', 'evidenceStatus', 'metricCategories', 'name', 'slug', 'sourceType']);
+    });
+    body.data.compareDirectory.indexablePairs.forEach((entry) => {
+      expect(Object.keys(entry).sort()).toEqual(['featuredRank', 'modelASlug', 'modelBSlug', 'pairSlug', 'sharedMetricCount']);
+    });
+  });
+
   it('uses an exact ETag and returns 304 for a matching benchmark response', async () => {
     const first = await summary();
     const etag = first.headers.get('etag');
@@ -434,6 +531,67 @@ describe('cached benchmark APIs', () => {
     expect(etag).toMatch(/^".+"$/);
     expect(response.status).toBe(304);
     await expect(response.text()).resolves.toBe('');
+  });
+
+  it.each([
+    ['summary', (headers?: HeadersInit) => summary(publishedRows(), headers)],
+    ['leaderboard', (headers?: HeadersInit) => leaderboard('llm-overall', '', publishedRows(), headers)],
+    ['model', (headers?: HeadersInit) => model('alpha', publishedRows(), headers)],
+  ])('evaluates freshness once per %s request and returns 304 for an unchanged evaluation', async (_label, requestEndpoint) => {
+    const now = Date.parse(CHECKED_AT) + 1_000;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      const first = await requestEndpoint();
+      expect(nowSpy).toHaveBeenCalledTimes(1);
+      const conditional = await requestEndpoint({ 'If-None-Match': first.headers.get('etag')! });
+
+      expect(nowSpy).toHaveBeenCalledTimes(2);
+      expect(conditional.status).toBe(304);
+      await expect(conditional.text()).resolves.toBe('');
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it.each([
+    ['summary', (rows: D1Rows, headers?: HeadersInit) => summary(rows, headers)],
+    ['leaderboard', (rows: D1Rows, headers?: HeadersInit) => leaderboard('llm-overall', '', rows, headers)],
+    ['model', (rows: D1Rows, headers?: HeadersInit) => model('alpha', rows, headers)],
+  ])('invalidates the %s ETag when checked_at changes within the same revision', async (_label, requestEndpoint) => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T12:00:00.000Z');
+    const first = await requestEndpoint(publishedRows());
+    const etag = first.headers.get('etag')!;
+    const refreshedCheckedAt = '2026-08-06T06:00:00.000Z';
+    const refreshed = await requestEndpoint(publishedRows({
+      revisions: [{ ...revision, checked_at: refreshedCheckedAt }],
+    }), { 'If-None-Match': etag });
+
+    expect(first.status).toBe(200);
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.headers.get('etag')).not.toBe(etag);
+    await expect(refreshed.json()).resolves.toMatchObject({
+      revision: REVISION,
+      freshness: { status: 'fresh', checkedAt: refreshedCheckedAt },
+    });
+  });
+
+  it.each([
+    ['summary', (rows: D1Rows, headers?: HeadersInit) => summary(rows, headers)],
+    ['leaderboard', (rows: D1Rows, headers?: HeadersInit) => leaderboard('llm-overall', '', rows, headers)],
+    ['model', (rows: D1Rows, headers?: HeadersInit) => model('alpha', rows, headers)],
+  ])('invalidates the %s ETag when evaluated freshness crosses from fresh to stale', async (_label, requestEndpoint) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse(CHECKED_AT) + 36 * 60 * 60 * 1000);
+    const fresh = await requestEndpoint(publishedRows());
+    const etag = fresh.headers.get('etag')!;
+    vi.setSystemTime(Date.parse(CHECKED_AT) + 36 * 60 * 60 * 1000 + 1);
+    const stale = await requestEndpoint(publishedRows(), { 'If-None-Match': etag });
+
+    expect(fresh.status).toBe(200);
+    expect(stale.status).toBe(200);
+    expect(stale.headers.get('etag')).not.toBe(etag);
+    await expect(stale.json()).resolves.toMatchObject({ freshness: { status: 'stale' } });
   });
 
   it('normalizes query defaults and ordering before calculating leaderboard ETags', async () => {
@@ -460,7 +618,57 @@ describe('cached benchmark APIs', () => {
   });
 
   it('returns a generic unavailable response when no active published revision exists', async () => {
-    const response = await summary(publishedRows({ revision: [] }));
+    const response = await summary(publishedRows({ activeRevision: null }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+  });
+
+  it('does not fall back to an older published revision when the active pointer targets an unpublished revision', async () => {
+    const pendingRevision = {
+      ...revision,
+      revision: 'benchmark-revision-pending',
+      published_at: null,
+      checked_at: '2026-08-06T00:00:00.000Z',
+      publication_state: 'pending',
+    };
+    const response = await summary(publishedRows({
+      activeRevision: pendingRevision.revision,
+      revisions: [revision, pendingRevision],
+    }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+  });
+
+  it.each([
+    ['a malformed revision aggregate hash', publishedRows({
+      revisions: [{ ...revision, content_hash: 'sha256:not-a-digest' }],
+    })],
+    ['a malformed pinned OpenRouter hash', publishedRows({
+      revisions: [{ ...revision, openrouter_content_hash: 'not-a-digest' }],
+    })],
+    ['a valid digest that does not match the canonical aggregate', publishedRows({
+      revisions: [{ ...revision, content_hash: hash('a') }],
+    })],
+    ['an OpenRouter source hash that differs from the revision pin', publishedRows({
+      sources: sources.map((source) => source.source_id === 'openrouter'
+        ? { ...source, content_hash: hash('2') }
+        : source),
+    })],
+    ['an OpenRouter source with the wrong catalog upstream revision', publishedRows({
+      sources: sources.map((source) => source.source_id === 'openrouter'
+        ? { ...source, upstream_revision: 'catalog-revision-other' }
+        : source),
+    })],
+    ['an OpenRouter source with the wrong catalog artifact identity', publishedRows({
+      sources: sources.map((source) => source.source_id === 'openrouter'
+        ? { ...source, artifact_id: 'catalog:catalog-revision-other' }
+        : source),
+      prices: prices.map((price) => ({ ...price, source_artifact_id: 'catalog:catalog-revision-other' })),
+    })],
+  ])('rejects %s with only the generic unavailable response', async (_caseName, rows) => {
+    const response = await summary(rows);
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
@@ -533,7 +741,16 @@ describe('cached benchmark APIs', () => {
     ['a row from another revision', publishedRows({ models: [{ ...models[0], revision: 'other-revision' }] })],
     ['a model referring to an unrecorded source artifact', publishedRows({ models: [{ ...models[0], source_artifact_id: 'missing-artifact' }] })],
   ])('rejects %s before deriving output', async (_caseName, rows) => {
-    const response = await leaderboard('llm-overall', '', rows);
+    const response = await leaderboard('llm-overall', '', rows, undefined, { bypassFactRevisionFilter: true });
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+  });
+
+  it('rejects a persisted comparison pair whose slug is not canonical for its ordered active models', async () => {
+    const response = await summary(publishedRows({
+      pairs: [{ ...pairs[0], pair_slug: 'beta-vs-alpha' }],
+    }));
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
@@ -564,12 +781,55 @@ describe('cached benchmark APIs', () => {
     });
   });
 
+  it.each([
+    ['the model is ranking eligible', publishedRows({
+      models: models.map((candidate) => candidate.model_key === 'provider:estimated'
+        ? { ...candidate, ranking_eligible: 1 }
+        : candidate),
+    })],
+    ['the metric is ranking eligible', publishedRows({
+      metrics: metrics.map((candidate) => candidate.model_key === 'provider:estimated'
+        ? { ...candidate, ranking_eligible: 1 }
+        : candidate),
+    })],
+    ['the metric carries a source rank', publishedRows({
+      metrics: metrics.map((candidate) => candidate.model_key === 'provider:estimated'
+        ? { ...candidate, rank: 1 }
+        : candidate),
+    })],
+  ])('does not append an estimated extension when %s', async (_caseName, rows) => {
+    const response = await leaderboard('llm-overall', '?includeEstimated=1', rows);
+    const body = await response.json() as { data: { entries: Array<{ model: { slug: string } }> } };
+
+    expect(response.status).toBe(200);
+    expect(body.data.entries.map((entry) => entry.model.slug)).toEqual(['alpha', 'beta']);
+  });
+
   it('attributes every displayed metric and hosted price source, including OpenRouter value evidence', async () => {
     const response = await leaderboard('llm-value');
     const body = await response.json() as { attribution: Array<{ sourceId: string }>; data: { entries: unknown[] } };
 
     expect(body.data.entries).toHaveLength(2);
     expect(body.attribution.map((item) => item.sourceId).sort()).toEqual(['benchlm', 'openrouter']);
+  });
+
+  it.each([
+    ['llm-coding', publishedRows(), ['benchlm']],
+    ['media-text-to-image', publishedRows(), ['lmarena']],
+    ['llm-pricing-context', publishedRows({ prices: [] }), ['openrouter']],
+    ['llm-value', publishedRows({ prices: [] }), ['benchlm', 'openrouter']],
+    ['multimodal-vision-documents', publishedRows(), ['benchlm', 'lmarena']],
+  ])('attributes the registered route sources when %s has zero eligible entries', async (key, rows, expectedSources) => {
+    const response = await leaderboard(key, '', rows);
+    const body = await response.json() as {
+      attribution: Array<{ sourceId: string }>;
+      data: { entries: unknown[]; pagination: { total: number; nextCursor: string | null } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data.entries).toEqual([]);
+    expect(body.data.pagination).toMatchObject({ total: 0, nextCursor: null });
+    expect(body.attribution.map((item) => item.sourceId).sort()).toEqual(expectedSources);
   });
 
   it('never fetches an upstream source while serving a benchmark request', async () => {

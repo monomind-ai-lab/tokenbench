@@ -44,6 +44,8 @@ export interface BenchmarkApiEnvelope<T> {
   readonly data: T;
 }
 
+export type BenchmarkFreshness = BenchmarkApiEnvelope<never>['freshness'];
+
 export interface ActiveBenchmarkSnapshot {
   readonly revision: BenchmarkRevision;
   readonly sources: readonly BenchmarkSourceRecord[];
@@ -113,6 +115,13 @@ function requireNonBlankString(value: unknown, label: string): string {
   return value;
 }
 
+function requireSha256(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+    fail(`${label} must be a sha256: digest`);
+  }
+  return value;
+}
+
 function mapRevision(value: unknown): BenchmarkRevision {
   const row = asRecord(value, 'benchmark revision');
   const publicationState = row.publication_state as BenchmarkPublicationState;
@@ -123,9 +132,9 @@ function mapRevision(value: unknown): BenchmarkRevision {
     publishedAt,
     checkedAt: requireTimestamp(row.checked_at, 'benchmark revision.checked_at'),
     publicationState,
-    contentHash: requireNonBlankString(row.content_hash, 'benchmark revision.content_hash'),
+    contentHash: requireSha256(row.content_hash, 'benchmark revision.content_hash'),
     catalogRevision: requireNonBlankString(row.catalog_revision, 'benchmark revision.catalog_revision'),
-    openrouterContentHash: requireNonBlankString(row.openrouter_content_hash, 'benchmark revision.openrouter_content_hash'),
+    openrouterContentHash: requireSha256(row.openrouter_content_hash, 'benchmark revision.openrouter_content_hash'),
   };
   if (revision.publicationState !== 'published') fail('active benchmark revision must be published');
   if (!isIsoTimestamp(publishedAt)) fail('published benchmark revision must have a published_at timestamp');
@@ -251,6 +260,50 @@ function artifactIdentity(sourceId: BenchmarkSourceId, artifactId: string): stri
   return `${sourceId}\u0000${artifactId}`;
 }
 
+async function sha256Digest(bytes: Uint8Array): Promise<string> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) fail('Web Crypto SHA-256 is unavailable');
+  const digest = await subtle.digest('SHA-256', bytes);
+  const hex = [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  return `sha256:${hex}`;
+}
+
+async function validateRevisionIntegrity(
+  revision: BenchmarkRevision,
+  sources: readonly BenchmarkSourceRecord[],
+): Promise<void> {
+  const openrouterSources = sources.filter((source) => source.sourceId === 'openrouter');
+  if (openrouterSources.length !== 1) fail('benchmark revision must contain exactly one OpenRouter catalog source');
+
+  const openrouter = openrouterSources[0];
+  if (openrouter.artifactId !== `catalog:${revision.catalogRevision}`
+    || openrouter.contentHash !== revision.openrouterContentHash
+    || openrouter.upstreamRevision !== revision.catalogRevision) {
+    fail('benchmark revision OpenRouter catalog source does not match its pinned catalog revision');
+  }
+
+  const artifacts = sources
+    .map((source) => ({
+      sourceId: source.sourceId,
+      artifactId: source.artifactId,
+      contentHash: source.contentHash,
+    }))
+    .sort((left, right) => compareText(
+      artifactIdentity(left.sourceId, left.artifactId),
+      artifactIdentity(right.sourceId, right.artifactId),
+    ));
+  const canonicalBytes = new TextEncoder().encode(JSON.stringify({
+    catalogRevision: revision.catalogRevision,
+    openrouterContentHash: revision.openrouterContentHash,
+    artifacts,
+  }));
+  if (await sha256Digest(canonicalBytes) !== revision.contentHash) {
+    fail('benchmark revision aggregate content hash does not match its source artifacts');
+  }
+}
+
 /**
  * Reads exactly the revision selected by benchmark_publication_state. There is
  * deliberately no newest-revision fallback: an incomplete or unpublished
@@ -285,13 +338,19 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
   // The existing domain validator verifies every source artifact, model,
   // metric, and price relation while preserving explicit nulls and zeroes.
   validateNormalizedSourceBatch({ sources, models, metrics, priceChecks, comparisonSeeds: [] });
+  await validateRevisionIntegrity(activeRevision, sources);
 
   const modelsByKey = new Map(models.map((model) => [model.modelKey, model]));
   const comparisonPairs = pairRows.map(mapComparisonPair);
   comparisonPairs.forEach((pair) => {
     validateBenchmarkComparisonPair(pair);
-    if (!modelsByKey.has(pair.modelAKey) || !modelsByKey.has(pair.modelBKey)) {
+    const modelA = modelsByKey.get(pair.modelAKey);
+    const modelB = modelsByKey.get(pair.modelBKey);
+    if (!modelA || !modelB) {
       fail(`comparison pair ${pair.pairSlug} refers to a model outside the active revision`);
+    }
+    if (pair.pairSlug !== `${modelA.slug}-vs-${modelB.slug}`) {
+      fail(`comparison pair ${pair.pairSlug} does not use its active models' canonical slugs`);
     }
   });
 
@@ -311,7 +370,7 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
   };
 }
 
-export function freshnessFor(revision: BenchmarkRevision, now = Date.now()): BenchmarkApiEnvelope<never>['freshness'] {
+export function freshnessFor(revision: BenchmarkRevision, now: number): BenchmarkFreshness {
   const isStale = now - Date.parse(revision.checkedAt) > FRESHNESS_WINDOW_MS;
   return isStale
     ? {
@@ -324,6 +383,7 @@ export function freshnessFor(revision: BenchmarkRevision, now = Date.now()): Ben
 
 export function benchmarkEnvelope<T>(
   snapshot: ActiveBenchmarkSnapshot,
+  freshness: BenchmarkFreshness,
   attribution: readonly BenchmarkApiAttribution[],
   data: T,
 ): BenchmarkApiEnvelope<T> {
@@ -331,7 +391,7 @@ export function benchmarkEnvelope<T>(
   return {
     revision: snapshot.revision.revision,
     publishedAt: snapshot.revision.publishedAt,
-    freshness: freshnessFor(snapshot.revision),
+    freshness,
     attribution,
     data,
   };
@@ -396,9 +456,17 @@ export function decodeOpaqueValue(value: string): unknown {
   }
 }
 
-/** The canonical ETag payload includes every endpoint parameter that affects a response. */
-export function etagForBenchmarkResponse(revision: string, parameters: unknown): string {
-  return `"benchmark-${encodeOpaqueValue([revision, parameters])}"`;
+/** The canonical ETag payload includes every body field and endpoint parameter that can change. */
+export function etagForBenchmarkResponse(
+  revision: BenchmarkRevision,
+  freshness: BenchmarkFreshness,
+  parameters: unknown,
+): string {
+  return `"benchmark-${encodeOpaqueValue([
+    revision.revision,
+    { checkedAt: revision.checkedAt, freshnessStatus: freshness.status },
+    parameters,
+  ])}"`;
 }
 
 export function matchesExactEtag(request: Request, etag: string): boolean {

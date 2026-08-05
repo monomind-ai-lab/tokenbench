@@ -1,4 +1,4 @@
-import type { BenchmarkMetric, BenchmarkModel } from '../../../../src/benchmarks/contracts';
+import type { BenchmarkMetric, BenchmarkModel, BenchmarkSourceId } from '../../../../src/benchmarks/contracts';
 import {
   buildLeaderboard,
   LEADERBOARD_DEFINITIONS,
@@ -13,6 +13,7 @@ import {
   decodeOpaqueValue,
   encodeOpaqueValue,
   etagForBenchmarkResponse,
+  freshnessFor,
   invalidBenchmarkRequestResponse,
   jsonBenchmarkResponse,
   matchesExactEtag,
@@ -137,8 +138,11 @@ function hasExactEstimatedBenchLmMetric(
 ): boolean {
   return model.sourceId === 'benchlm'
     && model.evidenceStatus === 'estimated'
+    && model.rankingEligible === false
     && metric.modelKey === model.modelKey
     && metric.sourceId === 'benchlm'
+    && metric.rankingEligible === false
+    && metric.rank === null
     && definition.metricKeys.includes(metric.metricKey)
     && metric.methodology === 'benchlm_raw_composite'
     && metric.unit === 'score'
@@ -182,6 +186,25 @@ function displayedEvidence(entries: readonly LeaderboardEntry[]): readonly Evide
   ]);
 }
 
+function routeEvidence(
+  snapshot: ActiveBenchmarkSnapshot,
+  definition: LeaderboardDefinition,
+): readonly EvidenceReference[] {
+  const sourceIds: readonly BenchmarkSourceId[] = definition.kind === 'value'
+    ? ['benchlm', 'openrouter']
+    : definition.kind === 'multimodal'
+      ? ['benchlm', 'lmarena']
+      : definition.kind === 'pricing-context'
+        ? ['openrouter']
+        : definition.kind === 'lmarena'
+          ? ['lmarena']
+          : ['benchlm'];
+  const wanted = new Set<BenchmarkSourceId>(sourceIds);
+  return snapshot.sources
+    .filter((source) => wanted.has(source.sourceId))
+    .map((source) => ({ sourceId: source.sourceId, sourceArtifactId: source.artifactId }));
+}
+
 export async function onRequestGet({
   request,
   env,
@@ -202,6 +225,7 @@ export async function onRequestGet({
   try {
     const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
     if (!snapshot) return unavailableBenchmarkResponse();
+    const freshness = freshnessFor(snapshot.revision, Date.now());
 
     const cursorParameters = {
       key: normalized.key,
@@ -234,7 +258,7 @@ export async function onRequestGet({
     const nextCursor = nextOffset < entries.length
       ? cursorFor(snapshot.revision.revision, cursorParameters, nextOffset)
       : null;
-    const etag = etagForBenchmarkResponse(snapshot.revision.revision, {
+    const etag = etagForBenchmarkResponse(snapshot.revision, freshness, {
       endpoint: 'leaderboard',
       key: normalized.key,
       profile: normalized.profile,
@@ -247,7 +271,11 @@ export async function onRequestGet({
     return jsonBenchmarkResponse(
       benchmarkEnvelope(
         snapshot,
-        attributionForEvidence(snapshot, displayedEvidence(pagedEntries)),
+        freshness,
+        attributionForEvidence(snapshot, [
+          ...routeEvidence(snapshot, leaderboard.definition),
+          ...displayedEvidence(pagedEntries),
+        ]),
         {
           ...leaderboard,
           entries: pagedEntries,
