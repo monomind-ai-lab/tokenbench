@@ -184,6 +184,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button:hover { filter: brightness(1.08); }
 .button-secondary { color: var(--primary-strong); background: transparent; }
 .button-small { min-height: 44px; padding: 7px 10px; font-size: 0.7rem; }
+.share-action { display: grid; justify-items: start; gap: 6px; }
+.share-action-feedback { margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
+.share-action-feedback-error { color: var(--danger); }
 .preset-button { border-color: var(--outline); background: var(--surface-low); color: var(--muted); filter: none; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
 .preset-button:hover { border-color: var(--primary); background: var(--surface-highest); color: var(--primary-strong); filter: none; }
 .preset-button.preset-selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 58%, var(--surface-low)); color: var(--primary-strong); }
