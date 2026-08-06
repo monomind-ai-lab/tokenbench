@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { modelBrand, providerBrand } from '../brand/provider-brands';
 import type { ProviderBrand } from '../brand/provider-brands';
 
@@ -38,7 +38,12 @@ function logoUrl(brand: ProviderBrand, theme: MarkTheme, size: MarkSize): string
 
 function BrandMark({ brand, label, size = 20, theme = 'light', decorative = false, loading = 'lazy' }: MarkProps & { readonly brand: ProviderBrand; readonly label: string }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const source = imageFailed ? null : logoUrl(brand, theme, size);
+  const imageSource = logoUrl(brand, theme, size);
+  const brandIdentity = `${brand.domain ?? ''}:${brand.label}:${brand.fallback}`;
+
+  useEffect(() => setImageFailed(false), [brandIdentity, imageSource]);
+
+  const source = imageFailed ? null : imageSource;
 
   if (source) {
     return (
@@ -60,6 +65,7 @@ function BrandMark({ brand, label, size = 20, theme = 'light', decorative = fals
     <span
       className="provider-mark provider-mark-fallback"
       style={{ width: `${size}px`, height: `${size}px` }}
+      role={decorative ? undefined : 'img'}
       aria-label={decorative ? undefined : label}
       aria-hidden={decorative || undefined}
     >

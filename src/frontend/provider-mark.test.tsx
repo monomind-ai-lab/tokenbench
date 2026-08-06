@@ -25,8 +25,8 @@ describe('ProviderMark', () => {
     render(<ProviderMark providerId="anthropic" providerName="Anthropic" size={24} theme="dark" />);
     fireEvent.error(screen.getByRole('img', { name: 'Anthropic' }));
 
+    expect(screen.getByRole('img', { name: 'Anthropic' })).toHaveTextContent('A');
     expect(screen.getByText('A')).toHaveAttribute('aria-label', 'Anthropic');
-    expect(screen.queryByRole('img', { name: 'Anthropic' })).not.toBeInTheDocument();
   });
 
   it('preserves decorative semantics for a fallback mark', () => {
@@ -43,13 +43,28 @@ describe('ProviderMark', () => {
 
     expect(markup).toContain('/theme/light/icon');
   });
+
+  it('retries Brandfetch when a failed mark receives a new source', () => {
+    vi.stubEnv('VITE_BRANDFETCH_CLIENT_ID', 'public-client');
+    const { rerender } = render(<ProviderMark providerId="anthropic" providerName="Anthropic" size={20} theme="dark" />);
+
+    fireEvent.error(screen.getByRole('img', { name: 'Anthropic' }));
+    rerender(<ProviderMark providerId="anthropic" providerName="Anthropic" size={32} theme="light" />);
+
+    expect(screen.getByRole('img', { name: 'Anthropic' })).toHaveAttribute('src', expect.stringContaining('/w/32/h/32/theme/light/icon'));
+
+    fireEvent.error(screen.getByRole('img', { name: 'Anthropic' }));
+    rerender(<ProviderMark providerId="openai" providerName="OpenAI" size={32} theme="light" />);
+
+    expect(screen.getByRole('img', { name: 'OpenAI' })).toHaveAttribute('src', expect.stringContaining('cdn.brandfetch.io/openai.com'));
+  });
 });
 
 describe('ModelMark', () => {
   it('reserves dimensions and never guesses an unreviewed model brand', () => {
     render(<ModelMark modelId="unknown/model" providerId="unknown-lab" providerName="Unknown lab" size={32} />);
 
-    expect(screen.queryByRole('img')).not.toBeInTheDocument();
+    expect(document.querySelector('img')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Unknown lab')).toHaveStyle({ width: '32px', height: '32px' });
   });
 
