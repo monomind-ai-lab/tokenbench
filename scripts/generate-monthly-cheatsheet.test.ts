@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -19,6 +19,12 @@ const temporaryRoots: string[] = [];
 const SHA = `sha256:${'a'.repeat(64)}`;
 const PREVIOUS_SHA = `sha256:${'b'.repeat(64)}`;
 const PREVIOUS_FACTS_HASH = 'sha256:cbfbd155ef344f5a8368c99945c671a648e9f9d678ce9e58e25fb8dc39cf13f8';
+const MUTATED_FACTS_HASH = 'sha256:d7e3b334a1a76072373b8c1139ad3970e1470bb8057e91b4b22d221510bc7dbe';
+const REPLAYED_FACTS_HASH = 'sha256:9be28de221a9d3e08a2930d812bf6fac29e8ea55c8f3f9662054875b01e3df42';
+const TRUSTED_KEYS = generateKeyPairSync('ed25519');
+const WRONG_KEYS = generateKeyPairSync('ed25519');
+const TRUSTED_PUBLIC_KEY = TRUSTED_KEYS.publicKey.export({ format: 'pem', type: 'spki' }).toString();
+const WRONG_PUBLIC_KEY = WRONG_KEYS.publicKey.export({ format: 'pem', type: 'spki' }).toString();
 const execFileAsync = promisify(execFile);
 
 afterEach(async () => {
@@ -145,12 +151,36 @@ function previousBenchmarkFixture() {
   };
 }
 
+function canonicalSignatureJson(value: unknown): string {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalSignatureJson).sort().join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalSignatureJson(record[key])}`);
+    return `{${entries.join(',')}}`;
+  }
+  throw new TypeError('Unsupported publication receipt signature value');
+}
+
 function previousReceiptFixture() {
-  return {
-    schemaVersion: 'tokenbench-published-revision-receipt/v1' as const,
+  const unsigned = {
+    schemaVersion: 'tokenbench-published-revision-receipt/v2' as const,
     benchmarks: previousBenchmarkFixture(),
     catalog: previousCatalogFixture(),
     factsHash: PREVIOUS_FACTS_HASH,
+  };
+  return {
+    ...unsigned,
+    signature: {
+      algorithm: 'Ed25519' as const,
+      value: sign(null, Buffer.from(canonicalSignatureJson(unsigned)), TRUSTED_KEYS.privateKey).toString('base64'),
+    },
   };
 }
 
@@ -270,8 +300,8 @@ async function fixtureArgs(name: string, overrides: Partial<GenerateMonthlyCheat
   };
 }
 
-function fakeDependencies(browser: FakeBrowser) {
-  return { launchBrowser: async () => browser };
+function fakeDependencies(browser: FakeBrowser, publicationVerifyKey = TRUSTED_PUBLIC_KEY) {
+  return { launchBrowser: async () => browser, publicationVerifyKey };
 }
 
 async function runCli(args: GenerateMonthlyCheatsheetArgs): Promise<void> {
@@ -283,7 +313,10 @@ async function runCli(args: GenerateMonthlyCheatsheetArgs): Promise<void> {
     '--out-dir', args.outDir,
     ...(args.artifactRoot ? ['--artifact-root', args.artifactRoot] : []),
     ...(args.shareImage ? ['--share-image'] : []),
-  ], { cwd: process.cwd() });
+  ], {
+    cwd: process.cwd(),
+    env: { ...process.env, TOKENBENCH_PUBLICATION_VERIFY_KEY: TRUSTED_PUBLIC_KEY },
+  });
 }
 
 describe('generateMonthlyCheatsheet', () => {
@@ -297,7 +330,7 @@ describe('generateMonthlyCheatsheet', () => {
     ])).toThrow(/unknown argument/i);
   });
 
-  it('accepts a hash-bound frozen prior publication receipt for deterministic changes', async () => {
+  it('accepts an independently signed frozen prior publication receipt for deterministic changes', async () => {
     const args = await fixtureArgs('prior-receipt');
     const envelope = changesFixture();
     await writeFile(args.changes, `${JSON.stringify(envelope)}\n`);
@@ -309,6 +342,151 @@ describe('generateMonthlyCheatsheet', () => {
       toRevision: 'benchmark_fixture',
       dedupeKey: envelope.changes?.dedupeKey,
     });
+  });
+
+  it('rejects coordinated prior price mutation and facts rehash without a new trusted signature', async () => {
+    const args = await fixtureArgs('mutation-rehash');
+    const envelope = changesFixture();
+    const previous = {
+      ...envelope.previous,
+      factsHash: MUTATED_FACTS_HASH,
+      benchmarks: {
+        ...envelope.previous.benchmarks,
+        priceChecks: envelope.previous.benchmarks.priceChecks.map((price) => ({
+          ...price,
+          inputUsdPerMillion: 99,
+          outputUsdPerMillion: 99,
+        })),
+      },
+      catalog: {
+        ...envelope.previous.catalog,
+        modelOffers: envelope.previous.catalog.modelOffers.map((offer) => ({
+          ...offer,
+          inputMicroDollarsPerMillion: 99_000_000,
+          outputMicroDollarsPerMillion: 99_000_000,
+        })),
+      },
+    };
+    await writeFile(args.changes, `${JSON.stringify({ ...envelope, previous })}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser)))
+      .rejects.toThrow(/publication receipt signature is invalid/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects mutation of a frozen receipt field outside the published-facts hash', async () => {
+    const args = await fixtureArgs('full-receipt-mutation');
+    const envelope = changesFixture();
+    const previous = {
+      ...envelope.previous,
+      benchmarks: {
+        ...envelope.previous.benchmarks,
+        comparisonPairs: [{ pairSlug: 'forged-pair' }],
+      },
+    };
+    await writeFile(args.changes, `${JSON.stringify({ ...envelope, previous })}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser)))
+      .rejects.toThrow(/publication receipt signature is invalid/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects a valid receipt signature under the wrong runtime verification key', async () => {
+    const args = await fixtureArgs('wrong-key');
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser, WRONG_PUBLIC_KEY)))
+      .rejects.toThrow(/publication receipt signature is invalid/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects signed change claims when runtime configuration has no trusted verification key', async () => {
+    const args = await fixtureArgs('missing-key');
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, { launchBrowser: async () => browser }))
+      .rejects.toThrow(/trusted.*verification key/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects private key material supplied in the runtime public-key slot', async () => {
+    const args = await fixtureArgs('private-key-config');
+    const browser = new FakeBrowser();
+    const privateKeyMaterial = TRUSTED_KEYS.privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser, privateKeyMaterial)))
+      .rejects.toThrow(/public verification key/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects replaying a signature after changing and rehashing the prior revision identity', async () => {
+    const args = await fixtureArgs('revision-replay');
+    const envelope = changesFixture();
+    const previous = {
+      ...envelope.previous,
+      factsHash: REPLAYED_FACTS_HASH,
+      benchmarks: {
+        ...envelope.previous.benchmarks,
+        revision: { ...envelope.previous.benchmarks.revision, revision: 'benchmark_replayed' },
+      },
+    };
+    await writeFile(args.changes, `${JSON.stringify({ ...envelope, previous })}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser)))
+      .rejects.toThrow(/publication receipt signature is invalid/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('verifies a signed receipt after object keys and unordered fact arrays are reordered', async () => {
+    const args = await fixtureArgs('canonical-signature');
+    const envelope = changesFixture();
+    const receipt = envelope.previous;
+    const reordered = {
+      signature: receipt.signature,
+      factsHash: receipt.factsHash,
+      catalog: {
+        ...receipt.catalog,
+        provenance: [...receipt.catalog.provenance].reverse(),
+        modelOffers: [...receipt.catalog.modelOffers].reverse(),
+      },
+      benchmarks: {
+        ...receipt.benchmarks,
+        sources: [...receipt.benchmarks.sources].reverse(),
+        models: [...receipt.benchmarks.models].reverse(),
+        metrics: [...receipt.benchmarks.metrics].reverse(),
+        priceChecks: [...receipt.benchmarks.priceChecks].reverse(),
+      },
+      schemaVersion: receipt.schemaVersion,
+    };
+    await writeFile(args.changes, `${JSON.stringify({ ...envelope, previous: reordered })}\n`);
+
+    const output = await generateMonthlyCheatsheet(args, fakeDependencies(new FakeBrowser()));
+
+    expect(output.manifest.changes.fromRevision).toBe('benchmark_previous');
+  });
+
+  it('never accepts a verification key embedded beside a signed receipt', async () => {
+    const args = await fixtureArgs('embedded-key');
+    const envelope = changesFixture();
+    await writeFile(args.changes, `${JSON.stringify({
+      ...envelope,
+      previous: { ...envelope.previous, verificationKey: TRUSTED_PUBLIC_KEY },
+    })}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, { launchBrowser: async () => browser }))
+      .rejects.toThrow(/verificationKey.*not allowed/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
   });
 
   it('rejects a caller-supplied thin previous snapshot without a frozen receipt', async () => {

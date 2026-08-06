@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -83,12 +83,17 @@ export interface CheatsheetBrowser {
 
 export interface GenerateMonthlyCheatsheetDependencies {
   readonly launchBrowser: () => Promise<CheatsheetBrowser>;
+  /** Trusted runtime configuration; never read from the publication receipt. */
+  readonly publicationVerifyKey?: string;
 }
 
 const DEFAULT_DEPENDENCIES: GenerateMonthlyCheatsheetDependencies = {
   launchBrowser: async () => {
     const { chromium } = await import('@playwright/test');
     return chromium.launch();
+  },
+  get publicationVerifyKey() {
+    return process.env.TOKENBENCH_PUBLICATION_VERIFY_KEY;
   },
 };
 const ARTIFACT_NAMES = {
@@ -297,6 +302,23 @@ function canonicalPublishedSnapshot(snapshot: PublishedRevisionSnapshot): string
   return JSON.stringify({ revision: snapshot.revision, models, prices });
 }
 
+function canonicalSignatureJson(value: unknown): string {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalSignatureJson).sort(compareText).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort(compareText)
+      .map((key) => `${JSON.stringify(key)}:${canonicalSignatureJson(record[key])}`);
+    return `{${entries.join(',')}}`;
+  }
+  fail('publication receipt contains a value that cannot be signed canonically');
+}
+
 function expectedCurrentRevision(snapshot: FrozenBenchmarkSnapshot): PublishedRevisionSnapshot {
   return {
     revision: snapshot.revision.revision,
@@ -314,12 +336,21 @@ function expectedCurrentRevision(snapshot: FrozenBenchmarkSnapshot): PublishedRe
   };
 }
 
-function parsePreviousRevisionReceipt(value: unknown): PublishedRevisionSnapshot {
+function parsePreviousRevisionReceipt(
+  value: unknown,
+  publicationVerifyKey: string | undefined,
+): PublishedRevisionSnapshot {
   const receipt = asRecord(value, 'changes envelope.previous receipt');
-  assertOnlyKeys(receipt, ['schemaVersion', 'benchmarks', 'catalog', 'factsHash'], 'changes envelope.previous receipt');
-  if (receipt.schemaVersion !== 'tokenbench-published-revision-receipt/v1') {
+  assertOnlyKeys(receipt, ['schemaVersion', 'benchmarks', 'catalog', 'factsHash', 'signature'], 'changes envelope.previous receipt');
+  if (receipt.schemaVersion !== 'tokenbench-published-revision-receipt/v2') {
     fail('changes envelope.previous receipt schemaVersion is invalid');
   }
+  const signatureRecord = asRecord(receipt.signature, 'changes envelope.previous receipt.signature');
+  assertOnlyKeys(signatureRecord, ['algorithm', 'value'], 'changes envelope.previous receipt.signature');
+  if (signatureRecord.algorithm !== 'Ed25519') {
+    fail('changes envelope.previous receipt signature algorithm must be Ed25519');
+  }
+  const signatureValue = requireString(signatureRecord.value, 'changes envelope.previous receipt.signature.value');
   const factsHash = requireString(receipt.factsHash, 'changes envelope.previous receipt.factsHash');
   if (!/^sha256:[a-f0-9]{64}$/u.test(factsHash)) {
     fail('changes envelope.previous receipt.factsHash must be a SHA-256 digest');
@@ -336,16 +367,50 @@ function parsePreviousRevisionReceipt(value: unknown): PublishedRevisionSnapshot
   if (actualFactsHash !== factsHash) {
     fail('changes envelope.previous receipt facts hash does not match its published facts');
   }
+  if (typeof publicationVerifyKey !== 'string' || publicationVerifyKey.trim().length === 0) {
+    fail('change claims require a trusted publication verification key from runtime configuration');
+  }
+  const publicKeyPem = publicationVerifyKey.trim();
+  if (!publicKeyPem.startsWith('-----BEGIN PUBLIC KEY-----')
+    || !publicKeyPem.endsWith('-----END PUBLIC KEY-----')) {
+    fail('trusted public verification key must be an Ed25519 SPKI PEM public key');
+  }
+  let verificationKey: ReturnType<typeof createPublicKey>;
+  try {
+    verificationKey = createPublicKey(publicKeyPem);
+  } catch {
+    fail('trusted public verification key must be an Ed25519 SPKI PEM public key');
+  }
+  if (verificationKey.asymmetricKeyType !== 'ed25519') {
+    fail('trusted public verification key must be an Ed25519 SPKI PEM public key');
+  }
+  const signature = Buffer.from(signatureValue, 'base64');
+  if (signature.byteLength !== 64 || signature.toString('base64') !== signatureValue) {
+    fail('publication receipt signature is invalid');
+  }
+  const signedPayload = canonicalSignatureJson({
+    schemaVersion: receipt.schemaVersion,
+    benchmarks: receipt.benchmarks,
+    catalog: receipt.catalog,
+    factsHash,
+  });
+  if (!verify(null, Buffer.from(signedPayload), verificationKey, signature)) {
+    fail('publication receipt signature is invalid');
+  }
   return facts;
 }
 
-function parseVerifiedChanges(value: unknown, snapshot: FrozenBenchmarkSnapshot): RevisionChanges {
+function parseVerifiedChanges(
+  value: unknown,
+  snapshot: FrozenBenchmarkSnapshot,
+  publicationVerifyKey: string | undefined,
+): RevisionChanges {
   const envelope = asRecord(value, 'changes envelope');
   if (!Object.hasOwn(envelope, 'previous') || !Object.hasOwn(envelope, 'current')) {
     fail('changes must contain verified previous and current published revision snapshots');
   }
   assertOnlyKeys(envelope, ['previous', 'current', 'changes'], 'changes envelope');
-  const previous = parsePreviousRevisionReceipt(envelope.previous);
+  const previous = parsePreviousRevisionReceipt(envelope.previous, publicationVerifyKey);
   const current = parsePublishedRevisionSnapshot(envelope.current, 'changes envelope.current');
   if (previous.revision === current.revision) fail('changes envelope revisions must be different');
   if (current.revision !== snapshot.revision.revision) {
@@ -568,7 +633,7 @@ export async function generateMonthlyCheatsheet(
   ]);
   const snapshot = parseBenchmarkSnapshot(rawSnapshot);
   const catalog = validateCatalogResponse(rawCatalog);
-  const changes = parseVerifiedChanges(rawChanges, snapshot);
+  const changes = parseVerifiedChanges(rawChanges, snapshot, dependencies.publicationVerifyKey);
   assertRevisionRelationship(snapshot, catalog);
   const document = buildCheatsheet(snapshot, catalog);
   const { output, parent, stagingPrefix, lockPath } = await outputLocation(args.outDir, args.artifactRoot);
