@@ -1,5 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
+import {
+  HANDLER_COMPARISON_PATH,
+  comparisonDirectoryEnvelope,
+  emptyCodingLeaderboard,
+  fulfillJson,
+  readyCodingLeaderboard,
+  readyMediaLeaderboard,
+  staleCodingLeaderboard,
+  stubBenchmarkDirectory,
+  stubHandlerBackedComparison,
+  stubLeaderboard,
+} from './tokenbench-fixtures';
 
 const viewports = [
   { width: 320, layout: 'compact', cards: true },
@@ -9,16 +21,114 @@ const viewports = [
   { width: 1440, layout: 'wide', cards: false },
 ] as const;
 
+type Theme = 'dark' | 'light';
+
+function previewOrigin(): string {
+  const baseURL = test.info().project.use.baseURL;
+  if (typeof baseURL !== 'string') throw new Error('Playwright baseURL is required for origin-scoped browser coverage.');
+  return new URL(baseURL).origin;
+}
+
+function handlerBackedAssetMode(): 'vite-source' | 'as-served' {
+  return process.env.TOKENBENCH_BROWSER_ASSET_MODE === 'production' ? 'as-served' : 'vite-source';
+}
+
+async function blockExternalRequests(page: Page, origin = previewOrigin()): Promise<void> {
+  await page.route((url) => url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:'), (route) => route.abort());
+}
+
+async function setStoredTheme(page: Page, theme: Theme): Promise<void> {
+  if (page.url() === 'about:blank') {
+    await page.goto(previewOrigin() + '/', { waitUntil: 'domcontentloaded' });
+  }
+  await page.evaluate((storedTheme) => window.localStorage.setItem('tokenbench:theme', storedTheme), theme);
+}
+
+async function assertNoHorizontalOverflow(page: Page): Promise<void> {
+  const dimensions = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+}
+
+async function installInteractiveRouteStubs(page: Page): Promise<void> {
+  const origin = previewOrigin();
+  await blockExternalRequests(page, origin);
+  await page.route(origin + '/api/catalog', (route) => fulfillJson(route, FRONTEND_TEST_CATALOG));
+  await stubBenchmarkDirectory(page, origin);
+  await page.route((url) => url.origin === origin && url.pathname.startsWith('/api/benchmarks/leaderboards/'), (route) => fulfillJson(route, {
+    error: 'Published benchmark data is unavailable for this fixture route.',
+  }, 503));
+  await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
+  await stubLeaderboard(page, origin, 'media-text-to-image', readyMediaLeaderboard());
+  await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+}
+
+async function assertHydratedRouteFrame(
+  page: Page,
+  route: HydrationMatrixRoute,
+): Promise<void> {
+  const h1 = page.getByRole('heading', { name: route.heading, level: 1 });
+  await expect(h1).toHaveCount(1);
+  await expect(page.locator('h1')).toHaveCount(1);
+  if (route.visuallyVisibleHeading !== false) await expect(h1).toBeVisible();
+  await expect(page.locator('main')).toHaveCount(1);
+  await expect(page.getByRole('banner')).toHaveCount(1);
+  await expect(page.getByRole('contentinfo')).toHaveCount(1);
+  await expect(page.locator('nav[aria-label="Primary navigation"]')).toHaveCount(1);
+  await expect(page.locator('.static-page-shell')).toHaveCount(0);
+  await expect(page.locator(route.hydratedClientMarker)).toBeVisible();
+  await assertNoHorizontalOverflow(page);
+}
+
+async function assertCompactMenuPresence(page: Page): Promise<void> {
+  const menu = page.locator('.menu-button');
+  await expect(menu).toBeVisible();
+  await expect(menu).toHaveAccessibleName('Open navigation');
+  await expect(menu).toHaveAttribute('aria-controls', 'primary-navigation');
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+}
+
+interface HydrationMatrixRoute {
+  readonly path: string;
+  readonly heading: string;
+  readonly hydratedClientMarker: string;
+  readonly visuallyVisibleHeading?: boolean;
+}
+
+const hydrationMatrix: readonly HydrationMatrixRoute[] = [
+  { path: '/', heading: 'Stop Guessing Your AI Costs. Start Optimizing.', hydratedClientMarker: '.home-page' },
+  { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
+  { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', hydratedClientMarker: '.calculator-page', visuallyVisibleHeading: false },
+  { path: '/leaderboards/', heading: 'AI model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
+  { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks', hydratedClientMarker: '.leaderboard-results[aria-label="AI coding model benchmarks"]' },
+  { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings', hydratedClientMarker: '.leaderboard-results[aria-label="Text-to-image model rankings"]' },
+  { path: '/compare/', heading: 'Compare AI models', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
+  { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
+  { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
+  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
+];
+
 async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, status = 200, expectCalculator = true) {
-  await page.route('https://*/*', (route) => route.abort());
-  await page.route('http://127.0.0.1:4173/api/catalog', (route) => route.fulfill({
+  const origin = previewOrigin();
+  await blockExternalRequests(page, origin);
+  await page.route(origin + '/api/catalog', (route) => route.fulfill({
     status,
     contentType: 'application/json',
     headers: { etag: `"${catalog.revision}"` },
     body: JSON.stringify(catalog),
   }));
-  await page.goto('/');
+  await page.goto('/tools/subscriptions-vs-apis/');
   if (expectCalculator) await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
+}
+
+async function openCodingLeaderboard(page: Page) {
+  const origin = previewOrigin();
+  await blockExternalRequests(page, origin);
+  await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
+  await page.goto('/leaderboards/llm/coding/');
+  await expect(page.getByRole('table', { name: 'AI coding model benchmarks' })).toBeVisible({ timeout: 15_000 });
 }
 
 async function tabTo(page: Page, selector: string) {
@@ -42,6 +152,19 @@ function expectVisibleFocus(style: { outlineWidth: string; outlineStyle: string;
   expect(color).not.toBe('');
   expect(color).not.toBe('transparent');
   expect(color).not.toBe('rgba(0,0,0,0)');
+}
+
+async function activateSkipLinkAndAssertTarget(page: Page, targetId: string): Promise<void> {
+  const skipLink = page.locator('.skip-link');
+  await page.keyboard.press('Tab');
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toHaveAttribute('href', `#${targetId}`);
+  await page.keyboard.press('Enter');
+
+  await expect.poll(() => page.evaluate(() => ({
+    hash: window.location.hash,
+    focusedId: (document.activeElement as HTMLElement | null)?.id ?? null,
+  }))).toEqual({ hash: `#${targetId}`, focusedId: targetId });
 }
 
 test.describe('responsive calculator browser harness', () => {
@@ -101,8 +224,72 @@ test.describe('responsive calculator browser harness', () => {
     await expect(first).toHaveAttribute('target', '_blank');
     await expect(first).toHaveAttribute('rel', 'noreferrer');
     await page.locator('body').click({ position: { x: 2, y: 2 } });
-    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle dark theme"]', 'a.evidence-link']) {
+    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle light theme"]', 'a.evidence-link']) {
       expectVisibleFocus(await tabTo(page, selector));
+    }
+  });
+
+  test('keeps dark foreground accents readable while retaining the exact primary background', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCalculator(page);
+    await page.locator('a.evidence-link').first().hover();
+
+    const styles = await page.evaluate(() => {
+      const parseColor = (color: string) => {
+        const channels = color.match(/[\d.]+/g)?.map(Number) ?? [];
+        return { red: channels[0] ?? 0, green: channels[1] ?? 0, blue: channels[2] ?? 0, alpha: channels[3] ?? 1 };
+      };
+      const backgroundFor = (element: Element) => {
+        let current: Element | null = element;
+        while (current) {
+          const background = getComputedStyle(current).backgroundColor;
+          if (parseColor(background).alpha > 0.99) return background;
+          current = current.parentElement;
+        }
+        return getComputedStyle(document.body).backgroundColor;
+      };
+      const luminance = (color: string) => {
+        const { red, green, blue } = parseColor(color);
+        const convert = (channel: number) => {
+          const normalized = channel / 255;
+          return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+        };
+        return 0.2126 * convert(red) + 0.7152 * convert(green) + 0.0722 * convert(blue);
+      };
+      const sample = (selector: string) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error(`Missing contrast sample: ${selector}`);
+        const foreground = getComputedStyle(element).color;
+        const background = backgroundFor(element);
+        const lighter = Math.max(luminance(foreground), luminance(background));
+        const darker = Math.min(luminance(foreground), luminance(background));
+        return { foreground, background, ratio: (lighter + 0.05) / (darker + 0.05) };
+      };
+
+      return {
+        primaryBackground: getComputedStyle(document.querySelector('.value-summary-card') as Element).backgroundColor,
+        samples: [sample('a.evidence-link'), sample('.control-block legend'), sample('.choice-check'), sample('.field-label output')],
+      };
+    });
+
+    expect(styles.primaryBackground).toBe('rgb(0, 7, 205)');
+    for (const sample of styles.samples) expect(sample.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  test('gives the shared skip and brand links 44px targets', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await openCalculator(page);
+
+    const targets = await page.evaluate(() => ['.skip-link', '.brand-home'].map((selector) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error(`Missing target: ${selector}`);
+      const bounds = element.getBoundingClientRect();
+      return { selector, width: bounds.width, height: bounds.height };
+    }));
+
+    for (const target of targets) {
+      expect(target.width, `${target.selector} width`).toBeGreaterThanOrEqual(44);
+      expect(target.height, `${target.selector} height`).toBeGreaterThanOrEqual(44);
     }
   });
 
@@ -124,29 +311,64 @@ test.describe('responsive calculator browser harness', () => {
     expect(comparisonOwnsVisibleContent).toBe(true);
   });
 
-  test('persists dark theme and applies the selected language without changing the catalog controls', async ({ page }) => {
+  test('defaults dark, persists both theme choices, and changes language without resetting catalog controls', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page);
     const initialProvider = await page.locator('input[name="provider"]:checked').inputValue();
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.getByRole('button', { name: 'Toggle light theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
+    await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-TW');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW');
     await expect(page.locator('input[name="provider"]:checked')).toHaveValue(initialProvider);
 
     await page.evaluate(() => {
-      const banner = document.createElement('div');
-      banner.className = 'VIpgJd-ZVi9od-ORHb-OEVmcd';
+      const banner = document.createElement('iframe');
+      banner.className = 'goog-te-banner-frame';
+      banner.dataset.translateChrome = 'banner-frame';
+      const injectedBanner = document.createElement('div');
+      injectedBanner.className = 'VIpgJd-ZVi9od-ORHb-OEVmcd';
+      injectedBanner.dataset.translateChrome = 'injected-banner';
+      const secondaryBanner = document.createElement('div');
+      secondaryBanner.className = 'VIpgJd-ZVi9od-aZ2wEe-wOHMyf';
+      secondaryBanner.dataset.translateChrome = 'secondary-banner';
+      const translateWrapper = document.createElement('div');
+      translateWrapper.className = 'skiptranslate';
+      translateWrapper.dataset.translateChrome = 'wrapper';
+      const nestedFrame = document.createElement('iframe');
+      nestedFrame.dataset.translateChrome = 'nested-frame';
+      translateWrapper.append(nestedFrame);
       document.body.style.top = '40px';
-      document.body.prepend(banner);
+      document.documentElement.style.marginTop = '40px';
+      document.body.prepend(banner, injectedBanner, secondaryBanner, translateWrapper);
     });
-    await expect.poll(() => page.locator('.VIpgJd-ZVi9od-ORHb-OEVmcd').evaluateAll((elements) => (
-      elements.length > 0 && elements.every((element) => getComputedStyle(element).display === 'none')
+    await expect.poll(() => page.locator('[data-translate-chrome]').evaluateAll((elements) => (
+      elements.length === 5 && elements.every((element) => {
+        const style = getComputedStyle(element);
+        return element.getAttribute('aria-hidden') === 'true'
+          && style.display === 'none'
+          && style.height === '0px'
+          && style.visibility === 'hidden';
+      })
     ))).toBe(true);
     await expect.poll(() => page.evaluate(() => ({
       top: document.body.style.getPropertyValue('top'),
       priority: document.body.style.getPropertyPriority('top'),
     }))).toEqual({ top: '0px', priority: 'important' });
+    await expect.poll(() => page.evaluate(() => ({
+      marginTop: document.documentElement.style.getPropertyValue('margin-top'),
+      priority: document.documentElement.style.getPropertyPriority('margin-top'),
+    }))).toEqual({ marginTop: '0px', priority: 'important' });
   });
 
   test('uses reference-matched outlined choices and selected preset states', async ({ page }) => {
@@ -192,12 +414,13 @@ test.describe('responsive calculator browser harness', () => {
 
   test('renders loading, empty, error, bootstrap, and stale catalog states', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
-    await page.route('https://*/*', (route) => route.abort());
-    await page.route('http://127.0.0.1:4173/api/catalog', async (route) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await page.route(origin + '/api/catalog', async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FRONTEND_TEST_CATALOG) });
     });
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
     await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 
@@ -218,16 +441,175 @@ test.describe('responsive calculator browser harness', () => {
   });
 });
 
+test.describe('leaderboard browser harness', () => {
+  test('keeps every desktop sort control at a 44px minimum hit target', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCodingLeaderboard(page);
+
+    const targets = await page.locator('.leaderboard-desktop-table thead button').evaluateAll((elements) => elements.map((element) => {
+      const bounds = element.getBoundingClientRect();
+      return { label: element.getAttribute('aria-label'), width: bounds.width, height: bounds.height };
+    }));
+
+    expect(targets).toHaveLength(4);
+    for (const target of targets) {
+      expect(target.width, `${target.label} width`).toBeGreaterThanOrEqual(44);
+      expect(target.height, `${target.label} height`).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  test('keeps table semantics, named filters, and equivalent model cards across leaderboard breakpoints', async ({ page }) => {
+    const origin = previewOrigin();
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCodingLeaderboard(page);
+    await stubLeaderboard(page, origin, 'media-text-to-image', readyMediaLeaderboard());
+
+    const codingTable = page.getByRole('table', { name: 'AI coding model benchmarks' });
+    await expect(codingTable).toBeVisible();
+    await expect(page.getByRole('form', { name: 'Leaderboard filters' })).toBeVisible();
+    await expect(page.getByRole('searchbox', { name: 'Search model or provider' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Workload profile' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Input-heavy' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Balanced' })).toBeChecked();
+    await expect(page.getByRole('radio', { name: 'Output-heavy' })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Sort leaderboard' })).toBeVisible();
+    expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['none', 'descending', 'none', 'none']);
+    await page.getByRole('button', { name: 'Sort by position' }).click();
+    await expect(page.locator('th[aria-sort]', { has: page.getByRole('button', { name: 'Sort by position' }) })).toHaveAttribute('aria-sort', 'ascending');
+    const codingNames = await codingTable.locator('tbody th[scope="row"] .leaderboard-model > span:first-child').allTextContents();
+    expect(codingNames).toEqual(['Alpha', 'Beta']);
+
+    for (const width of [320, 375, 768]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto('/leaderboards/llm/coding/');
+      await expect(page.locator('.leaderboard-desktop-table')).toBeHidden();
+      const codingCards = page.getByRole('list', { name: 'AI coding model benchmark cards' });
+      await expect(codingCards).toBeVisible();
+      expect(await codingCards.getByRole('heading', { level: 3 }).allTextContents()).toEqual(codingNames);
+      await assertNoHorizontalOverflow(page);
+    }
+
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.goto('/leaderboards/media/text-to-image/');
+    const mediaTable = page.getByRole('table', { name: 'Text-to-image model rankings' });
+    await expect(mediaTable).toBeVisible();
+    expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['ascending', 'none', 'none', 'none']);
+    const mediaNames = await mediaTable.locator('tbody th[scope="row"] .leaderboard-model > span:first-child').allTextContents();
+    expect(mediaNames).toEqual(['Canvas', 'Prism']);
+
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await page.goto('/leaderboards/media/text-to-image/');
+    const mediaCards = page.getByRole('list', { name: 'Text-to-image model ranking cards' });
+    await expect(mediaCards).toBeVisible();
+    expect(await mediaCards.getByRole('heading', { level: 3 }).allTextContents()).toEqual(mediaNames);
+  });
+
+  test('keeps stale, empty, and unavailable leaderboard states explicit', async ({ page }) => {
+    const origin = previewOrigin();
+    const openCodingState = async (value: unknown, status = 200) => {
+      await page.unrouteAll();
+      await blockExternalRequests(page, origin);
+      await stubLeaderboard(page, origin, 'llm-coding', value, status);
+      await page.goto('/leaderboards/llm/coding/');
+    };
+
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await openCodingState(staleCodingLeaderboard());
+    await expect(page.getByRole('status')).toContainText('Stale benchmark data', { timeout: 15_000 });
+    await expect(page.getByRole('button', { name: 'Retry benchmark refresh' })).toBeVisible();
+    await expect(page.locator('footer[aria-label="Stale leaderboard evidence"]')).toContainText('Stale');
+
+    await openCodingState(emptyCodingLeaderboard());
+    await expect(page.getByText('No published entries match these filters')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('footer[aria-label="Filtered leaderboard evidence"]')).toBeVisible();
+
+    await openCodingState({ error: 'Published benchmark data is unavailable.' }, 503);
+    const unavailable = page.getByRole('region', { name: 'AI coding model benchmarks results' }).getByRole('status');
+    await expect(unavailable).toContainText('Unavailable', { timeout: 15_000 });
+    await expect(unavailable.getByRole('button', { name: 'Retry benchmark request' })).toBeVisible();
+  });
+});
+
+test.describe('motion and named call-to-action coverage', () => {
+  test('respects reduced-motion preferences for animated and transitional UI', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await blockExternalRequests(page);
+    await page.goto('/guides/');
+    await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
+    const motion = await page.locator('.guide-card').first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        prefersReducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+        animationDuration: style.animationDuration,
+        transitionDuration: style.transitionDuration,
+      };
+    });
+    expect(motion.prefersReducedMotion).toBe(true);
+    expect(Number.parseFloat(motion.animationDuration)).toBeLessThanOrEqual(0.001);
+    expect(Number.parseFloat(motion.transitionDuration)).toBeLessThanOrEqual(0.001);
+  });
+
+  test('keeps named home and leaderboard primary calls-to-action visible in both themes', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
+    await page.setViewportSize({ width: 1024, height: 1000 });
+
+    for (const theme of ['dark', 'light'] as const) {
+      await setStoredTheme(page, theme);
+      await page.goto('/');
+      for (const [path, name] of [
+        ['/', 'Calculate your costs'],
+        ['/leaderboards/llm/coding/', 'Talk to MonoMind'],
+      ] as const) {
+        await page.goto(path);
+        const cta = page.getByRole('link', { name });
+        await expect(cta).toBeVisible();
+        const presentation = await cta.evaluate((element) => {
+          const style = getComputedStyle(element);
+          const bounds = element.getBoundingClientRect();
+          return {
+            background: style.backgroundColor,
+            color: style.color,
+            display: style.display,
+            height: bounds.height,
+            opacity: style.opacity,
+            text: element.textContent?.trim(),
+            visibility: style.visibility,
+          };
+        });
+        expect(presentation.text).toBeTruthy();
+        expect(presentation.display).not.toBe('none');
+        expect(presentation.visibility).toBe('visible');
+        expect(Number.parseFloat(presentation.opacity)).toBeGreaterThan(0);
+        expect(presentation.height).toBeGreaterThanOrEqual(44);
+        expect(presentation.background).not.toBe('transparent');
+        expect(presentation.color).not.toBe('transparent');
+      }
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    }
+  });
+});
+
 test.describe('guides browser harness', () => {
   for (const width of [320, 768, 1440]) {
     test(`${width}px guide hub stays readable without horizontal overflow`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1000 });
-      await page.route('https://*/*', (route) => route.abort());
+      await blockExternalRequests(page);
       await page.goto('/guides/');
 
       await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
       await expect(page.locator('.guide-card')).toHaveCount(5);
+      if (width < 768) {
+        const menu = page.getByRole('button', { name: 'Open navigation' });
+        await menu.focus();
+        await page.keyboard.press('Enter');
+        await expect(page.getByRole('button', { name: 'Close navigation' })).toHaveAttribute('aria-expanded', 'true');
+      }
       await expect(page.getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
+      await expect(page.getByRole('link', { name: 'Sources' })).toHaveAttribute('href', '/sources/');
+      await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/');
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
     });
@@ -242,24 +624,417 @@ test.describe('guides browser harness', () => {
     expect(rawHtml).toContain('application/ld+json');
 
     await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.route('https://*/*', (route) => route.abort());
+    await blockExternalRequests(page);
     await page.goto(path);
     await expect(page.getByRole('heading', { name: 'How to Track Claude Code Usage, Tokens, and Spend', level: 1 })).toBeVisible();
     await expect(page.locator('h1')).toHaveCount(1);
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://ai-plans.monomind.one${path}`);
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://tokenbench.monomind.one${path}`);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /subscription limits differ from API billing/i);
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(2);
     await expect(page.getByRole('link', { name: /Models, usage, and limits/i })).toHaveAttribute('href', /^https:\/\/support\.claude\.com/);
     await expect(page.getByRole('heading', { name: 'Related guides' })).toBeVisible();
   });
 
-  test('guide theme control persists the selected dark mode', async ({ page }) => {
+  test('guide theme control defaults dark and persists both theme choices', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
-    await page.route('https://*/*', (route) => route.abort());
+    await blockExternalRequests(page);
     await page.goto('/guides/openrouter-guide-model-routing-cost-controls/');
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await page.getByRole('button', { name: 'Toggle light theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
     await page.getByRole('button', { name: 'Toggle dark theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+});
+
+test.describe('generated static route runtime', () => {
+  const hydratingLeaderboardRoutes = [
+    ['/leaderboards/', 'AI model leaderboards'],
+    ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
+    ['/leaderboards/llm/coding/', 'AI coding model benchmarks'],
+    ['/leaderboards/llm/agentic/', 'AI agentic model benchmarks'],
+    ['/leaderboards/llm/human-preference/', 'Human preference AI model rankings'],
+    ['/leaderboards/llm/value/', 'AI model value frontier'],
+    ['/leaderboards/llm/pricing-context/', 'AI model pricing and context'],
+    ['/leaderboards/multimodal/vision-documents/', 'Vision and document AI benchmarks'],
+    ['/leaderboards/media/text-to-image/', 'Text-to-image model rankings'],
+    ['/leaderboards/media/image-editing/', 'AI image-editing model rankings'],
+    ['/leaderboards/media/text-to-video/', 'Text-to-video model rankings'],
+    ['/leaderboards/media/image-to-video/', 'Image-to-video model rankings'],
+    ['/leaderboards/media/video-editing/', 'AI video-editing model rankings'],
+  ] as const;
+
+  test('ships a raw crawlable compare hub, then mounts its active-revision directory without external requests', async ({ page, request, baseURL }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    if (!baseURL) throw new Error('Playwright baseURL is required for origin-scoped route stubs.');
+    const rawResponse = await request.get('/compare/');
+    const rawHtml = await rawResponse.text();
+    expect(rawResponse.ok()).toBe(true);
+    expect(rawHtml).toContain('class="app-shell static-page-shell"');
+    expect(rawHtml).toContain('<h1>Compare AI models</h1>');
+
+    const previewOrigin = new URL(baseURL).origin;
+    const browserContext = page.context();
+    const approvedStaticExternalOrigins = new Set([
+      'https://fonts.googleapis.com',
+      'https://fonts.gstatic.com',
+      'https://translate.google.com',
+    ]);
+    const benchmarkProviderHostSuffixes = [
+      'benchlm.ai',
+      'lmarena.ai',
+      'openrouter.ai',
+      'huggingface.co',
+      'github.com',
+      'raw.githubusercontent.com',
+    ];
+    const benchmarkRequests: string[] = [];
+    const benchmarkProviderRequests: string[] = [];
+    const unexpectedRequests: string[] = [];
+    await browserContext.route(/^https?:\/\//, (route) => {
+      const requestUrl = new URL(route.request().url());
+      if (requestUrl.origin !== previewOrigin) {
+        if (benchmarkProviderHostSuffixes.some((host) => requestUrl.hostname === host || requestUrl.hostname.endsWith(`.${host}`))) {
+          benchmarkProviderRequests.push(route.request().url());
+        }
+        if (approvedStaticExternalOrigins.has(requestUrl.origin)) return route.abort();
+        unexpectedRequests.push(route.request().url());
+        return route.abort();
+      }
+      if (requestUrl.pathname.startsWith('/api/')) {
+        benchmarkRequests.push(`${requestUrl.pathname}${requestUrl.search}`);
+        if (requestUrl.pathname === '/api/benchmarks' && requestUrl.search === '' && requestUrl.hash === '') {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(comparisonDirectoryEnvelope()),
+          });
+        }
+        unexpectedRequests.push(route.request().url());
+        return route.abort();
+      }
+      return route.fallback();
+    });
+
+    await page.goto('/compare/');
+    await expect(page.locator('.static-page-shell')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Compare AI models', level: 1 })).toBeVisible();
+    await expect(page.getByText('Published revision: browser-benchmark-r1')).toBeVisible();
+    await page.getByRole('combobox', { name: 'First model' }).fill('alpha');
+    await page.getByRole('combobox', { name: 'Second model' }).fill('beta');
+    await expect(page.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/alpha-vs-beta');
+    await expect(page.locator('#calculator')).toHaveCount(0);
+    // StrictMode may remount the effect in the development preview, but every
+    // same-origin API request must remain this one exact no-query endpoint.
+    expect(benchmarkRequests).not.toHaveLength(0);
+    expect(new Set(benchmarkRequests)).toEqual(new Set(['/api/benchmarks']));
+    expect(benchmarkProviderRequests).toEqual([]);
+    expect(unexpectedRequests).toEqual([]);
+  });
+
+  test('ships crawlable leaderboard HTML and replaces it with the interactive app when JavaScript executes', async ({ page, request, baseURL }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    if (!baseURL) throw new Error('Playwright baseURL is required for origin-scoped route stubs.');
+    const previewOrigin = new URL(baseURL).origin;
+    const browserContext = page.context();
+    await browserContext.route(/^https?:\/\//, (route) => (
+      new URL(route.request().url()).origin === previewOrigin ? route.fallback() : route.abort()
+    ));
+    await browserContext.route(`${previewOrigin}/api/benchmarks/leaderboards/**`, (route) => route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Published benchmark data is unavailable.' }),
+    }));
+
+    const externalNavigationResults = [];
+    for (const protocol of ['http', 'https']) {
+      const externalUrl = `${protocol}://external.example/api/benchmarks/leaderboards/llm-overall?profile=balanced`;
+      const externalPage = await browserContext.newPage();
+      externalNavigationResults.push(await externalPage.goto(externalUrl).then(() => 'fulfilled', () => 'aborted'));
+      await externalPage.close();
+    }
+    expect(externalNavigationResults).toEqual(['aborted', 'aborted']);
+
+    for (const [pathname, h1] of hydratingLeaderboardRoutes) {
+      const response = await request.get(pathname);
+      const rawHtml = await response.text();
+      expect(response.ok(), pathname).toBe(true);
+      expect(rawHtml, pathname).toContain('class="app-shell static-page-shell"');
+      expect(rawHtml, pathname).toContain(`<h1>${h1}</h1>`);
+
+      await page.goto(pathname);
+      await expect(page.locator('.static-page-shell'), pathname).toHaveCount(0);
+      await expect(page.locator('.app-shell'), pathname).toBeVisible();
+      await expect(page.getByRole('heading', { name: h1, level: 1 }), pathname).toBeVisible();
+      await expect(page.locator('h1'), pathname).toHaveCount(1);
+      await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+      if (pathname !== '/leaderboards/') {
+        await expect(page.getByRole('form', { name: 'Leaderboard filters' }), pathname).toBeVisible();
+        const unavailableState = page.getByRole('region', { name: `${h1} results` }).getByRole('status');
+        await expect(unavailableState.getByText('Unavailable', { exact: true }), pathname).toBeVisible();
+        await expect(unavailableState.getByRole('button', { name: 'Retry benchmark request' }), pathname).toBeVisible();
+      }
+    }
+  });
+
+  test('does not mount the legacy calculator over server-rendered dynamic or unknown shells', async ({ page, request }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    const shellResponse = await request.get('/compare/');
+    const shellHtml = await shellResponse.text();
+
+    for (const pathname of ['/compare/model-a-vs-model-b', '/not-a-tokenbench-route']) {
+      const url = origin + pathname;
+      await page.route(url, (route) => route.fulfill({ status: 200, contentType: 'text/html', body: shellHtml }));
+      await page.goto(pathname);
+      await expect(page.locator('.static-page-shell'), pathname).toBeVisible();
+      await expect(page.locator('#calculator'), pathname).toHaveCount(0);
+      await page.unroute(url);
+    }
+  });
+});
+
+test.describe('home and tools route runtime', () => {
+  test('adapts the home decision showcase grids from desktop to mobile', async ({ page }) => {
+    await blockExternalRequests(page);
+
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeVisible();
+
+    const desktop = await page.evaluate(() => {
+      const columnsFor = (label: string) => {
+        const element = document.querySelector(`[aria-label="${label}"]`);
+        if (!element) throw new Error(`Missing ${label}`);
+        const styles = getComputedStyle(element);
+        return { display: styles.display, columns: styles.gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length };
+      };
+      return {
+        terminal: columnsFor('TokenBench decision workflow'),
+        features: columnsFor('TokenBench decision features'),
+        teasers: columnsFor('TokenBench benchmark teasers'),
+      };
+    });
+    expect(desktop.terminal).toEqual({ display: 'grid', columns: 2 });
+    expect(desktop.features).toEqual({ display: 'grid', columns: 4 });
+    expect(desktop.teasers).toEqual({ display: 'grid', columns: 3 });
+
+    await page.setViewportSize({ width: 768, height: 1000 });
+    const tablet = await page.evaluate(() => {
+      const columnsFor = (label: string) => {
+        const element = document.querySelector(`[aria-label="${label}"]`);
+        if (!element) throw new Error(`Missing ${label}`);
+        return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+      };
+      return {
+        terminal: columnsFor('TokenBench decision workflow'),
+        features: columnsFor('TokenBench decision features'),
+        teasers: columnsFor('TokenBench benchmark teasers'),
+      };
+    });
+    expect(tablet).toEqual({ terminal: 2, features: 2, teasers: 2 });
+
+    await page.setViewportSize({ width: 375, height: 1000 });
+    const mobile = await page.evaluate(() => {
+      const columnsFor = (label: string) => {
+        const element = document.querySelector(`[aria-label="${label}"]`);
+        if (!element) throw new Error(`Missing ${label}`);
+        return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+      };
+      return {
+        terminal: columnsFor('TokenBench decision workflow'),
+        features: columnsFor('TokenBench decision features'),
+        teasers: columnsFor('TokenBench benchmark teasers'),
+      };
+    });
+    expect(mobile).toEqual({ terminal: 1, features: 1, teasers: 1 });
+  });
+
+  test('mounts the interactive tools directory without replacing static-only routes', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto('/tools/');
+
+    await expect(page.locator('.static-page-shell')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'Available TokenBench tools' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+  });
+});
+
+test.describe('handler-backed comparison browser coverage', () => {
+  test('renders a server comparison document from the real Pages handler before hydration', async ({ browser }) => {
+    const origin = previewOrigin();
+    const context = await browser.newContext({ baseURL: origin, javaScriptEnabled: false });
+    const page = await context.newPage();
+    try {
+      await blockExternalRequests(page, origin);
+      await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+
+      await page.goto(HANDLER_COMPARISON_PATH);
+      await expect(page.getByRole('heading', { name: 'Alpha vs Beta', level: 1 })).toBeVisible();
+      await expect(page.locator('h1')).toHaveCount(1);
+      await expect(page.locator('#comparison-initial-data')).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: 'Source metrics', level: 2 })).toBeVisible();
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://tokenbench.monomind.one/compare/alpha-vs-beta');
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('hydrates the handler-backed comparison so workload selection recalculates its displayed cost', async ({ page }) => {
+    test.setTimeout(45_000);
+    const origin = previewOrigin();
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+    const devEntryResponse = handlerBackedAssetMode() === 'vite-source'
+      ? page.waitForResponse((response) => response.url() === `${origin}/src/main.tsx`)
+      : null;
+
+    await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
+    if (devEntryResponse) await devEntryResponse;
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', 'desktop', { timeout: 15_000 });
+    await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+    const alphaWorkloadCost = page.getByTestId('workload-cost-provider:alpha');
+    await expect(alphaWorkloadCost).toHaveText('$3.50 / 1M');
+    await expect(page.getByRole('radio', { name: 'Balanced' })).toBeChecked();
+
+    await page.getByRole('radio', { name: 'Output-heavy' }).click();
+    await expect(alphaWorkloadCost).toHaveText('$5.00 / 1M');
+  });
+});
+
+test.describe('viewport and theme hydration matrix', () => {
+  test('keeps every primary route semantic and overflow-safe across supported viewports and themes', async ({ page }) => {
+    test.setTimeout(180_000);
+    await installInteractiveRouteStubs(page);
+
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: 1000 });
+      for (const theme of ['dark', 'light'] as const) {
+        for (const route of hydrationMatrix) {
+          await setStoredTheme(page, theme);
+          await page.goto(route.path, { waitUntil: 'domcontentloaded' });
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+          await assertHydratedRouteFrame(page, route);
+          if (viewport.width < 768) await assertCompactMenuPresence(page);
+        }
+      }
+    }
+  });
+});
+
+test.describe('keyboard and chart accessibility regressions', () => {
+  test('moves focus to the home main landmark when the skip link is activated', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeVisible();
+
+    await page.keyboard.press('Tab');
+    await expect(page.locator('.skip-link')).toBeFocused();
+    await page.keyboard.press('Enter');
+
+    await expect.poll(() => page.evaluate(() => ({
+      hash: window.location.hash,
+      focusedId: (document.activeElement as HTMLElement | null)?.id ?? null,
+      focusedRole: document.activeElement?.getAttribute('role') ?? null,
+    }))).toEqual({ hash: '#page-content', focusedId: 'page-content', focusedRole: null });
+  });
+
+  test('moves focus to the calculator when the calculator skip link is activated', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await openCalculator(page);
+
+    await activateSkipLinkAndAssertTarget(page, 'calculator');
+  });
+
+  test('moves focus to the persistent calculator target while the catalog is still loading', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 1000 });
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    let releaseCatalogRequest: (() => void) | undefined;
+    const catalogRequestReleased = new Promise<void>((resolve) => {
+      releaseCatalogRequest = resolve;
+    });
+    await page.route(origin + '/api/catalog', async (route) => {
+      await catalogRequestReleased;
+      await fulfillJson(route, FRONTEND_TEST_CATALOG);
+    });
+
+    try {
+      await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
+      await activateSkipLinkAndAssertTarget(page, 'calculator');
+    } finally {
+      releaseCatalogRequest?.();
+    }
+  });
+
+  for (const guide of [
+    { path: '/guides/', heading: 'Spend smarter on AI', name: 'guide hub' },
+    { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', name: 'guide article' },
+  ]) {
+    test(`moves focus to guide content when the ${guide.name} skip link is activated`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 1000 });
+      await blockExternalRequests(page);
+      await page.goto(guide.path);
+      await expect(page.getByRole('heading', { name: guide.heading, level: 1 })).toBeVisible();
+
+      await activateSkipLinkAndAssertTarget(page, 'guide-content');
+    });
+  }
+
+  test('closes the compact navigation when Escape is pressed from the focused toggle', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto('/');
+    const menu = page.locator('.menu-button');
+    await expect(menu).toHaveAccessibleName('Open navigation');
+    await menu.focus();
+    await page.keyboard.press('Enter');
+    await expect(menu).toHaveAccessibleName('Close navigation');
+    await expect(menu).toHaveAttribute('aria-expanded', 'true');
+
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveAccessibleName('Open navigation');
+    await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  test('describes the plotted current tokens and API-equivalent value in chart accessibility text', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await openCalculator(page);
+    const chart = page.getByRole('img', { name: /API-equivalent value trend/i });
+    await expect(chart).toBeVisible();
+
+    const expected = await page.evaluate(() => {
+      const currentTokens = document.querySelector('.chart-column-current > span:last-child')?.textContent?.trim();
+      const apiEquivalentValue = document.querySelector('.value-summary-card .value-metric strong')?.textContent?.trim();
+      const chartElement = document.querySelector('.trend-chart');
+      const describedBy = chartElement?.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean) ?? [];
+      const describedText = describedBy.map((id) => document.getElementById(id)?.textContent?.trim() ?? '').join(' ');
+      return {
+        currentTokens,
+        apiEquivalentValue,
+        accessibilityText: [
+          chartElement?.getAttribute('aria-label'),
+          chartElement?.getAttribute('aria-description'),
+          describedText,
+        ].filter(Boolean).join(' '),
+      };
+    });
+    expect(expected.currentTokens).toBeTruthy();
+    expect(expected.apiEquivalentValue).toBeTruthy();
+    expect(expected.accessibilityText).toContain(expected.currentTokens!);
+    expect(expected.accessibilityText).toContain(expected.apiEquivalentValue!);
   });
 });

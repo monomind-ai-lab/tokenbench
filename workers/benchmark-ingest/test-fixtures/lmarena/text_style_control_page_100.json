@@ -1,0 +1,56 @@
+{
+  "provenance": {
+    "artifactId": "text_style_control:latest:overall:rows-100-200",
+    "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=100&length=100",
+    "datasetUrl": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+    "licenseId": "CC-BY-4.0",
+    "etag": null,
+    "lastModified": null,
+    "subset": "text_style_control",
+    "split": "latest",
+    "category": "overall",
+    "offset": 100,
+    "length": 100,
+    "upstreamRevision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0",
+    "responseHeaders": {
+      "x-revision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0"
+    },
+    "schemaVersion": null,
+    "snapshotKey": "benchmarks/lmarena/text_style_control/latest/overall/offset-100-length-100/0413bbf1f6f9437d678bacbc51e3ef0d2c3c2dfab942b56958708561eb4a2ae2.json",
+    "contentHash": "sha256:0413bbf1f6f9437d678bacbc51e3ef0d2c3c2dfab942b56958708561eb4a2ae2",
+    "originalContentHash": "sha256:f6ea856bfa9e089eefbd26a5e6d8dfd417c819e9334f8f32c9a2c0cf0682a0d3",
+    "retrievedAt": "2026-08-05T10:57:47.000Z",
+    "projectionFields": [
+      "model_name",
+      "organization",
+      "license",
+      "rating",
+      "rating_lower",
+      "rating_upper",
+      "variance",
+      "vote_count",
+      "rank",
+      "category",
+      "leaderboard_publish_date"
+    ]
+  },
+  "rows": [
+    {
+      "row_idx": 160,
+      "row": {
+        "model_name": "trinity-large-preview",
+        "organization": "",
+        "license": "Apache 2.0",
+        "rating": 1378.5313490922492,
+        "rating_lower": 1374.1599906231409,
+        "rating_upper": 1382.9027075613576,
+        "variance": 4.974353691494949,
+        "vote_count": 29678,
+        "rank": 161,
+        "category": "overall",
+        "leaderboard_publish_date": "2026-08-03"
+      },
+      "truncated_cells": []
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://tokenbench.monomind.one</loc></url>
+  <url><loc>https://tokenbench.monomind.one/guides/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/guides/track-claude-code-usage/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/guides/monitor-openai-codex-usage/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/guides/openrouter-guide-model-routing-cost-controls/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/guides/legitimate-free-ai-api-access-credits/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/guides/reduce-llm-api-costs-caching-batch-output-limits/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/tools/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/compare/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/overall/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/coding/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/agentic/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/human-preference/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/value/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/pricing-context/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/multimodal/vision-documents/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/media/text-to-image/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/media/image-editing/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/media/text-to-video/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/media/image-to-video/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc></url>
+</urlset>

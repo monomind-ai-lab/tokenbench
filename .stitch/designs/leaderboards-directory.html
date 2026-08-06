@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Choose a source-aware TokenBench evidence lens for an AI model decision.">
+    <title>AI model leaderboards | TokenBench</title>
+    <link rel="stylesheet" href="tokenbench-mockup.css">
+    <link rel="stylesheet" href="leaderboard-mockup.css">
+  </head>
+  <body>
+    <!--
+    THESIS: A decision starts by choosing the evidence lens, not by accepting a synthetic ordering.
+    OWN-WORLD: TokenBench's compact dark decision shell uses neutral panels, electric-blue links, and explicit source language.
+    STORY: Find the route that matches the question, then inspect its evidence in context.
+    FIRST VIEWPORT: A concise title and directory grid make the available lenses immediately scannable.
+    FORM: Evidence directory; approved 2026-08-06.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->
+    <a class="skip-link" href="#page-content">Skip to page content</a>
+    <header class="mockup-header">
+      <div class="mockup-header-inner">
+        <div class="brand-lockup">
+          <a class="brand-home" href="/" aria-label="TokenBench home">
+            <img src="../../public/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+            <span class="brand-copy">
+              <span class="brand-name">TokenBench</span>
+              <span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span>
+            </span>
+          </a>
+        </div>
+        <button class="header-tool menu-button" type="button" data-menu-toggle aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation">
+          <a href="/tools/">Tools</a>
+          <a href="/compare/">Compare</a>
+          <a href="/leaderboards/" aria-current="page">Leaderboards</a>
+          <a href="/guides/">Guides</a>
+        </nav>
+        <div class="header-actions">
+          <label class="language-control">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.4 3.2 2.5 5.9 5.5 7.2M11 5c-.4 3.2-2.5 5.9-5.5 7.2M13 21l4-10 4 10M14.5 17h5"/></svg>
+            <span class="sr-only">Language</span>
+            <select aria-label="Language">
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
+              <option value="zh-TW">繁體中文</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="ja">日本語</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="fi">Suomi</option>
+              <option value="pl">Polski</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <button class="header-tool icon-button" type="button" data-theme-toggle aria-label="Toggle light theme">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
+            <span class="sr-only">Theme</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="page-content" class="mockup-main">
+      <section class="leaderboard-hero" aria-labelledby="directory-title">
+        <h1 id="directory-title">AI model leaderboards</h1>
+        <p class="leaderboard-summary">Choose the evidence lens that matches the decision. Each route keeps its source, update time, and methodology context visible instead of compressing unlike evidence into one result.</p>
+      </section>
+
+      <section class="leaderboard-section" data-mockup-section="directory" aria-labelledby="directory-lenses-title">
+        <h2 id="directory-lenses-title" class="leaderboard-section-heading">Evidence lenses</h2>
+        <div class="leaderboard-directory-grid">
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/llm/overall/">
+            <h2>Overall AI model benchmarks</h2>
+            <p>Review the supported overall-capability signal alongside its source, update time, and methodology before making a model decision.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/llm/overall/" aria-label="Open Overall AI model benchmarks">/leaderboards/llm/overall/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/llm/coding/">
+            <h2>AI coding model benchmarks</h2>
+            <p>Use coding benchmark evidence as one input to a workload-specific evaluation, not as a substitute for your repository and toolchain tests.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/llm/coding/" aria-label="Open AI coding model benchmarks">/leaderboards/llm/coding/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/llm/agentic/">
+            <h2>AI agentic model benchmarks</h2>
+            <p>Agentic performance depends on the tools, policies, and task environment; inspect the evidence before generalizing a benchmark result.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/llm/agentic/" aria-label="Open AI agentic model benchmarks">/leaderboards/llm/agentic/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/llm/human-preference/">
+            <h2>Human preference AI model rankings</h2>
+            <p>Human-preference signals are useful for comparing perceived response quality, while task fit and safety requirements still need local evaluation.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/llm/human-preference/" aria-label="Open Human preference AI model rankings">/leaderboards/llm/human-preference/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/llm/value/">
+            <h2>AI model value frontier</h2>
+            <p>Value views compare supported capability evidence with stated workload costs and never present an unsupported universal value score.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/llm/value/" aria-label="Open AI model value frontier">/leaderboards/llm/value/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/llm/pricing-context/">
+            <h2>AI model pricing and context</h2>
+            <p>Price and context information are route-specific; compare the exact provider route and declared limits relevant to your workload.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/llm/pricing-context/" aria-label="Open AI model pricing and context">/leaderboards/llm/pricing-context/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/multimodal/vision-documents/">
+            <h2>Vision and document AI benchmarks</h2>
+            <p>Vision and document results should be checked against the image, document, language, and extraction conditions that match your use case.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/multimodal/vision-documents/" aria-label="Open Vision and document AI benchmarks">/leaderboards/multimodal/vision-documents/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/media/text-to-image/">
+            <h2>Text-to-image model rankings</h2>
+            <p>Image-generation rankings describe a measured evaluation context and should be paired with prompt, licensing, and workflow review.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/media/text-to-image/" aria-label="Open Text-to-image model rankings">/leaderboards/media/text-to-image/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/media/image-editing/">
+            <h2>AI image editing model rankings</h2>
+            <p>Evaluate editing models against the transformations, source assets, rights, and fidelity requirements of the real production workflow.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/media/image-editing/" aria-label="Open AI image editing model rankings">/leaderboards/media/image-editing/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/media/text-to-video/">
+            <h2>Text-to-video model rankings</h2>
+            <p>Video-generation evidence should be considered alongside duration, controls, rights, and production workflow requirements.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/media/text-to-video/" aria-label="Open Text-to-video model rankings">/leaderboards/media/text-to-video/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/media/image-to-video/">
+            <h2>Image-to-video model rankings</h2>
+            <p>Image-to-video rankings are only one signal; assess input fidelity, motion controls, rights, and output reliability for your workflow.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/media/image-to-video/" aria-label="Open Image-to-video model rankings">/leaderboards/media/image-to-video/</a>
+          </article>
+          <article class="leaderboard-route-card" data-leaderboard-route="/leaderboards/media/video-editing/">
+            <h2>AI video editing model rankings</h2>
+            <p>Use video-editing evidence to frame a hands-on workflow test that includes source media, edit controls, rights, and delivery constraints.</p>
+            <a class="leaderboard-route-link" href="/leaderboards/media/video-editing/" aria-label="Open AI video editing model rankings">/leaderboards/media/video-editing/</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="leaderboard-note" aria-labelledby="directory-note-title">
+        <h2 id="directory-note-title" class="leaderboard-section-heading">Read the route before the result</h2>
+        <p>This directory intentionally contains no models, positions, badges, or embedded rank values. It is a map to route-specific evidence, not a claim that one lens settles every decision.</p>
+      </section>
+
+      <section class="leaderboard-related" data-mockup-section="related" aria-labelledby="directory-related-title">
+        <h2 id="directory-related-title" class="leaderboard-section-heading">Related decision surfaces</h2>
+        <ul>
+          <li><a href="/compare/">Compare two known models</a></li>
+          <li><a href="/tools/subscriptions-vs-apis/">Subscription versus API calculator</a></li>
+          <li><a href="/guides/">Evidence-aware guides</a></li>
+        </ul>
+      </section>
+
+      <section class="leaderboard-monomind" data-mockup-section="monomind" aria-labelledby="directory-monomind-title">
+        <h2 id="directory-monomind-title" class="leaderboard-section-heading">MonoMind AI Lab</h2>
+        <p>TokenBench keeps source metrics, provider pricing, workload calculations, and unavailable states visibly distinct so teams can make a defensible next decision.</p>
+      </section>
+    </main>
+
+    <footer class="mockup-footer">
+      <div class="footer-brand"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a><span>Source-aware decision support.</span></div>
+      <div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div>
+    </footer>
+    <script src="tokenbench-mockup.js"></script>
+  </body>
+</html>

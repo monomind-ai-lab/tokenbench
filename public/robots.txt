@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://ai-plans.monomind.one/sitemap.xml
+Sitemap: https://tokenbench.monomind.one/sitemap.xml

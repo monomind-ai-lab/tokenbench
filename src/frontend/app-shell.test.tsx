@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, createElement, StrictMode } from 'react';
+import { hydrateRoot, type Root } from 'react-dom/client';
+import { renderToString } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { AppShell, SiteHeader } from './app-shell';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import '../index.css';
 
@@ -11,11 +15,58 @@ function respondWithCatalog(catalog = FRONTEND_TEST_CATALOG) {
   })));
 }
 
+function renderAt(pathname: string) {
+  window.history.replaceState({}, '', pathname);
+  return render(<App />);
+}
+
 describe('responsive calculator app shell', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.dataset.theme = 'light';
+    window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
     respondWithCatalog();
+  });
+
+  it('keeps the TokenBench home showcase separate from calculator controls', () => {
+    renderAt('/');
+
+    expect(screen.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Calculate your costs' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
+    expect(screen.getByRole('heading', { name: 'Overall Model Value', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Human Preference', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Image Generation', level: 3 })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
+  });
+
+  it('makes the tools directory link to the subscription versus API calculator', () => {
+    renderAt('/tools/');
+
+    expect(screen.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the calculator controls and results on their dedicated route', async () => {
+    renderAt('/tools/subscriptions-vs-apis/');
+
+    expect(screen.getByRole('heading', { name: 'Subscription vs. API cost calculator', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('group', { name: /Provider selection/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Plan selection/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Model selection/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Expected monthly usage/i)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Calculated plan value/i })).toBeInTheDocument();
+  });
+
+  it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
+    renderAt('/tools/subscriptions-vs-apis/');
+
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '20000001' } });
+
+    const guidance = await screen.findByRole('status', { name: 'High-volume optimization guidance' });
+    expect(guidance).toHaveTextContent('At this volume, custom model routing, prompt caching, and agent pipelines may materially reduce spend.');
+    expect(within(guidance).getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
   });
 
   it('renders derived metrics, evidence links, and separated pricing basis comparisons', async () => {
@@ -27,6 +78,48 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /evidence/i }).length).toBeGreaterThan(0);
     expect(screen.getByText('Availability: available')).toBeInTheDocument();
+  });
+
+  it('renders the TokenBench shared chrome with its canonical navigation', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
+    expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
+    expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('ToolsCompareLeaderboardsGuides');
+  });
+
+  it('defaults to dark and persists both TokenBench theme choices', async () => {
+    render(<App />);
+
+    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle dark theme' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+  });
+
+  it('opens and closes primary navigation with its accessible mobile menu control', () => {
+    render(<SiteHeader theme="dark" language="en" activePage="tools" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
+
+    const menu = document.querySelector<HTMLButtonElement>('.menu-button');
+    if (!menu) throw new Error('Expected an accessible mobile navigation control');
+    expect(menu).toHaveAttribute('aria-label', 'Open navigation');
+    expect(menu).toHaveAttribute('aria-controls', 'primary-navigation');
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.keyDown(screen.getByRole('navigation', { name: 'Primary navigation' }), { key: 'Escape' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('does not present API-only model owners as subscription plan providers', async () => {
@@ -94,11 +187,12 @@ describe('responsive calculator app shell', () => {
     expect(usageRange).toHaveAttribute('aria-valuetext', '50,000,000 tokens');
   });
 
-  it('keeps calculator state while switching language and persists the dark theme', async () => {
+  it('keeps calculator state while switching language and returns to the dark theme', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     const usage = screen.getByLabelText(/Expected monthly usage/i);
     fireEvent.change(usage, { target: { value: '4200000' } });
+    fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 
@@ -120,12 +214,65 @@ describe('responsive calculator app shell', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeInTheDocument());
   });
 
+  it('announces one recovery banner when the fallback notice duplicates the catalog error', () => {
+    const unavailable = 'Catalog unavailable (network down). Showing only the checked-in verified bootstrap; retry to load the latest revision.';
+    render(<AppShell
+      activePage="tools"
+      catalogPhase="ready"
+      error={unavailable}
+      language="en"
+      lastSuccessfulRefreshAt={null}
+      notice={unavailable}
+      onLanguageChange={vi.fn()}
+      onRetry={vi.fn()}
+      onThemeToggle={vi.fn()}
+      theme="dark"
+    ><p>Calculator fallback</p></AppShell>);
+
+    expect(screen.getByRole('alert')).toHaveTextContent(unavailable);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry loading catalog' })).toBeInTheDocument();
+  });
+
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);
     await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     expect(document.querySelector('[data-layout="compact"]')).toBeInTheDocument();
     expect(screen.getAllByTestId('offer-card').length).toBeGreaterThan(0);
+  });
+
+  it('hydrates compact clients from a wide SSR shell without leaving a layout mismatch behind', async () => {
+    const shell = (children = createElement('p', null, 'Server comparison content')) => createElement(AppShell, {
+      activePage: 'compare',
+      children,
+      language: 'en',
+      lastSuccessfulRefreshAt: null,
+      onLanguageChange: vi.fn(),
+      onThemeToggle: vi.fn(),
+      theme: 'dark',
+    });
+    vi.stubGlobal('window', undefined);
+    vi.stubGlobal('document', undefined);
+    const serverMarkup = renderToString(createElement(StrictMode, null, shell()));
+    vi.unstubAllGlobals();
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+    const container = document.createElement('div');
+    container.innerHTML = serverMarkup;
+    document.body.append(container);
+    const recoverable = vi.fn();
+    let root: Root | undefined;
+
+    await act(async () => {
+      root = hydrateRoot(container, createElement(StrictMode, null, shell()), { onRecoverableError: recoverable });
+    });
+
+    expect(serverMarkup).toContain('data-layout="wide"');
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(container.querySelector('.app-shell')).toHaveAttribute('data-layout', 'compact');
+
+    await act(async () => root?.unmount());
+    container.remove();
   });
 
   it('gives every range control a minimum 44px touch target', async () => {

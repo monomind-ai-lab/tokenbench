@@ -1,344 +1,307 @@
-<!DOCTYPE html><html class="light" lang="en" style=""><head>
-<meta charset="utf-8">
-<meta content="width=device-width, initial-scale=1.0" name="viewport">
-<title>TokenBench | Calculator</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
-<script id="tailwind-config">
-      tailwind.config = {
-        darkMode: "class",
-        theme: {
-          extend: {
-            "colors": {
-                    "on-primary": "#ffffff",
-                    "inverse-surface": "#2d3037",
-                    "on-tertiary-container": "#fffbff",
-                    "outline": "#717785",
-                    "on-primary-fixed": "#001b3e",
-                    "on-error": "#ffffff",
-                    "surface-container-lowest": "#ffffff",
-                    "on-secondary-fixed": "#001b3d",
-                    "secondary-fixed-dim": "#aec7f7",
-                    "primary-container": "#0a73e0",
-                    "on-background": "#181c22",
-                    "tertiary": "#964400",
-                    "outline-variant": "#c1c6d5",
-                    "secondary": "#465f88",
-                    "tertiary-container": "#bd5700",
-                    "on-tertiary-fixed": "#321200",
-                    "on-secondary": "#ffffff",
-                    "on-error-container": "#93000a",
-                    "surface-dim": "#d7dae3",
-                    "surface-variant": "#e0e2eb",
-                    "on-secondary-container": "#3f5881",
-                    "surface-bright": "#f9f9ff",
-                    "background": "#f9f9ff",
-                    "surface-tint": "#005db8",
-                    "on-tertiary": "#ffffff",
-                    "surface-container": "#ebedf7",
-                    "on-primary-fixed-variant": "#00458d",
-                    "surface-container-low": "#f1f3fc",
-                    "surface-container-highest": "#e0e2eb",
-                    "secondary-fixed": "#d6e3ff",
-                    "on-secondary-fixed-variant": "#2d476f",
-                    "secondary-container": "#b6d0ff",
-                    "error-container": "#ffdad6",
-                    "surface": "#f9f9ff",
-                    "on-tertiary-fixed-variant": "#763400",
-                    "primary": "#005ab4",
-                    "error": "#ba1a1a",
-                    "on-surface-variant": "#414753",
-                    "inverse-on-surface": "#eef0fa",
-                    "on-primary-container": "#fefcff",
-                    "inverse-primary": "#aac7ff",
-                    "primary-fixed": "#d6e3ff",
-                    "tertiary-fixed-dim": "#ffb68c",
-                    "tertiary-fixed": "#ffdbc9",
-                    "surface-container-high": "#e6e8f1",
-                    "on-surface": "#181c22",
-                    "primary-fixed-dim": "#aac7ff"
-            },
-            "borderRadius": {
-                    "DEFAULT": "0.25rem",
-                    "lg": "0.8px",
-                    "xl": "1rem",
-                    "full": "9999px"
-            },
-            "fontFamily": {
-                    "headline": ["Inter"],
-                    "display": ["Inter"],
-                    "body": ["Inter"],
-                    "label": ["Inter"]
-            }
-          },
-        },
-      }
-    </script>
-<style>
-        body { font-family: 'Inter', sans-serif; }
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-        .hide-scrollbar::-webkit-scrollbar { display: none; }
-        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-    </style>
-</head>
-<body class="bg-background text-on-background min-h-screen">
-<!-- Global Top Navigation Bar -->
-<header class="sticky top-0 z-50 bg-surface/80 dark:bg-zinc-900/80 backdrop-blur-md border-b border-zinc-100 dark:border-zinc-800 grid grid-cols-3 items-center h-14 px-8">
-<div class="flex items-center gap-8"><h1 class="font-headline-sm text-headline-sm font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">TokenBench</h1></div>
-<nav class="flex items-center justify-center gap-6 h-14">
-<a class="text-zinc-900 dark:text-zinc-50 font-semibold border-b-2 border-primary h-full flex items-center px-1" href="#">Calculator</a>
-<a class="text-zinc-500 dark:text-zinc-400 font-body-sm hover:text-zinc-900 transition-all h-full flex items-center px-1" href="#">Leaderboard</a>
-</nav><div class="flex items-center gap-4 justify-end">
-<span class="material-symbols-outlined text-zinc-500 cursor-pointer hover:text-primary transition-colors">language</span>
-<span class="material-symbols-outlined text-zinc-500 cursor-pointer hover:text-primary transition-colors">dark_mode</span>
-
-</div>
-</header>
-<!-- Horizontal Controls Section -->
-<section class="bg-surface border-b border-zinc-100 px-8 py-6 shadow-sm sticky top-14 z-40">
-<div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 gap-8"><!-- Row 1, Col 1: Provider Setup -->
-  <div class="space-y-4 p-6 bg-surface-container-low rounded-xl border border-outline-variant/30"><div class="flex items-center gap-2 text-primary font-semibold mb-4"><span class="material-symbols-outlined text-xl">account_tree</span><span class="text-sm uppercase tracking-wider">Provider Selection</span></div><div class="space-y-2"><div class="flex items-center justify-between p-3 rounded-lg border border-primary bg-primary/5 cursor-pointer"><span class="text-sm font-medium text-on-surface">Alibaba Cloud (Qwen)</span><span class="material-symbols-outlined text-primary text-sm">check_circle</span></div><div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant hover:bg-surface-container-highest cursor-pointer"><span class="text-sm font-medium text-on-surface-variant">OpenAI (GPT-4o)</span></div><div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant hover:bg-surface-container-highest cursor-pointer"><span class="text-sm font-medium text-on-surface-variant">Anthropic (Claude)</span></div><div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant hover:bg-surface-container-highest cursor-pointer"><span class="text-sm font-medium text-on-surface-variant">Google Cloud (Gemini)</span></div></div></div>
-
-  <!-- Row 1, Col 2: Plan Selection -->
-  <div class="space-y-4 p-6 bg-surface-container-low rounded-xl border border-outline-variant/30"><div class="flex items-center gap-2 text-primary font-semibold mb-4"><span class="material-symbols-outlined text-xl">payments</span><span class="text-sm uppercase tracking-wider">Plan Selection</span></div><div class="space-y-2"><div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant hover:bg-surface-container-highest cursor-pointer"><span class="text-sm font-medium text-on-surface-variant">Starter ($100/mo)</span></div><div class="flex items-center justify-between p-3 rounded-lg border border-primary bg-primary/5 cursor-pointer"><span class="text-sm font-medium text-on-surface">Enterprise ($2,000/mo)</span><span class="material-symbols-outlined text-primary text-sm">check_circle</span></div><div class="flex items-center justify-between p-3 rounded-lg border border-outline-variant hover:bg-surface-container-highest cursor-pointer"><span class="text-sm font-medium text-on-surface-variant">Unlimited ($8,500/mo)</span></div></div></div>
-
-  <!-- Row 2, Col 1: Model Selection -->
-  <div class="space-y-4 p-6 bg-surface-container-low rounded-xl border border-outline-variant/30">
-    <div class="flex items-center gap-2 text-primary font-semibold">
-      <span class="material-symbols-outlined text-xl">psychology</span>
-      <span class="text-sm uppercase tracking-wider">Model Selection</span>
-    </div>
-    <div class="space-y-3">
-      <div class="relative group border border-outline-variant rounded-lg bg-surface-container-lowest overflow-hidden flex flex-col" style="min-height: 400px;"><label class="text-[10px] uppercase font-bold text-outline px-3 pt-3 pb-2 bg-surface-container-low border-b border-outline-variant/30">Select Models</label><div class="flex-grow overflow-y-auto p-2 space-y-1 hide-scrollbar"><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" checked="" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">Qwen-Max (High-performance)</span></label><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" checked="" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">Qwen-Plus (Balanced)</span></label><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">Qwen-Turbo (Fast)</span></label><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">Qwen-Long (Context)</span></label><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">GPT-4o (Standard)</span></label><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">Claude 3.5 Sonnet</span></label><label class="flex items-center gap-3 p-2 rounded hover:bg-primary/5 cursor-pointer transition-colors"><input type="checkbox" class="w-4 h-4 rounded border-outline-variant text-primary focus:ring-primary"><span class="text-sm text-on-surface">Llama 3.1 70B</span></label></div></div>
-
-    </div>
-  </div>
-
-  <!-- Row 2, Col 2: Usage Mix -->
-  <div class="space-y-4 p-6 bg-surface-container-low rounded-xl border border-outline-variant/30">
-    <div class="flex items-center justify-between">
-      <div class="flex items-center gap-2 text-primary font-semibold">
-        <span class="material-symbols-outlined text-xl">analytics</span>
-        <span class="text-sm uppercase tracking-wider">Usage Mix (%)</span>
-      </div>
-      <span class="text-[11px] font-mono bg-primary-container text-on-primary-container px-2 py-0.5 rounded-full">Total: 100%</span>
-    </div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-      <div class="space-y-2">
-        <div class="flex justify-between text-xs font-medium">
-          <span class="text-on-surface-variant">Qwen-Max</span>
-          <span class="text-primary">45%</span>
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Subscription vs API value calculator · TokenBench</title>
+    <link rel="stylesheet" href="tokenbench-mockup.css">
+    <link rel="stylesheet" href="calculator-mockup.css">
+  </head>
+  <body>
+    <!--
+    THESIS: A compact decision workstation translates the dark calculator's technical detail into a precise light workspace.
+    OWN-WORLD: White evidence panels, restrained gray structure, and electric blue reserved for active decisions and the value summary.
+    STORY: Review the illustrated inputs, inspect their resulting value, then verify the pricing context before changing strategy.
+    FIRST VIEWPORT: The shared TokenBench shell frames two-by-two selections above a blue summary and detailed value trend.
+    FORM: Established decision-system extension; approved calculator detail language, 2026-08-06.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->
+    <a class="skip-link" href="#page-content">Skip to page content</a>
+    <header class="mockup-header">
+      <div class="mockup-header-inner">
+        <div class="brand-lockup">
+          <a class="brand-home" href="/" aria-label="TokenBench home">
+            <img src="../../public/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+            <span class="brand-copy">
+              <span class="brand-name">TokenBench</span>
+              <span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span>
+            </span>
+          </a>
         </div>
-        <input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="65">
-      </div>
-      <div class="space-y-2">
-        <div class="flex justify-between text-xs font-medium">
-          <span class="text-on-surface-variant">Qwen-Plus</span>
-          <span class="text-primary">35%</span>
-        </div>
-        <input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="35">
-      </div>
-      <div class="space-y-2">
-        <div class="flex justify-between text-xs font-medium">
-          <span class="text-on-surface-variant">Model #3</span>
-          <span class="text-primary">10%</span>
-        </div>
-        <input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="40">
-      </div>
-      <div class="space-y-2">
-        <div class="flex justify-between text-xs font-medium">
-          <span class="text-on-surface-variant">Model #4</span>
-          <span class="text-primary">10%</span>
-        </div>
-        <input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="20">
-      </div>
-      <div class="md:col-span-2 pt-2 border-t border-outline-variant/30 space-y-2">
-        <div class="flex justify-between text-xs font-medium">
-          <span class="text-on-surface-variant">Token Blend (Input / Output)</span>
-          <span class="text-primary">70 / 30</span>
-        </div>
-        <input class="w-full h-1.5 bg-surface-container-highest rounded-lg appearance-none cursor-pointer accent-primary" max="100" min="0" step="5" type="range" value="70">
-        <div class="flex justify-between text-[10px] text-outline uppercase font-bold tracking-tighter">
-          <span class="">More Input</span>
-          <span class="">More Output</span>
+        <button class="header-tool menu-button" type="button" data-menu-toggle aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation">
+          <a href="/tools/" aria-current="page">Tools</a>
+          <a href="/compare/">Compare</a>
+          <a href="/leaderboards/">Leaderboards</a>
+          <a href="/guides/">Guides</a>
+        </nav>
+        <div class="header-actions">
+          <label class="language-control">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.4 3.2 2.5 5.9 5.5 7.2M11 5c-.4 3.2-2.5 5.9-5.5 7.2M13 21l4-10 4 10M14.5 17h5"/></svg>
+            <span class="sr-only">Language</span>
+            <select aria-label="Language">
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
+              <option value="zh-TW">繁體中文</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="ja">日本語</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="fi">Suomi</option>
+              <option value="pl">Polski</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <button class="header-tool icon-button" type="button" data-theme-toggle aria-label="Toggle dark theme">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
+            <span class="sr-only">Theme</span>
+          </button>
         </div>
       </div>
-    </div>
-  </div></div>
-</section>
-<!-- Main Content Area -->
-<main class="max-w-7xl mx-auto p-8 space-y-8">
-<!-- Results Dashboard (Bento Style) -->
-<div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-<!-- Target Usage Retail Cost Card -->
-<div class="lg:col-span-4 bg-primary text-on-primary p-8 rounded-xl shadow-lg flex flex-col justify-between overflow-hidden relative group"><div class="absolute -right-12 -top-12 w-48 h-48 bg-white/10 rounded-full blur-3xl group-hover:scale-110 transition-transform duration-700"></div><div class="relative z-10 space-y-8"><div class="space-y-2"><h3 class="text-primary-fixed font-medium flex items-center gap-2"><span class="material-symbols-outlined text-lg">monetization_on</span><span style="font-size: inherit;" class="">API Equivalent Value</span><br></h3><div class="mt-2"><span class="text-5xl font-extrabold tracking-tight">$1,420</span><span class="text-primary-fixed/80 block mt-1 text-sm">Total Market Value</span></div></div><div class="space-y-2 pt-4 border-t border-white/10"><h3 class="text-primary-fixed font-medium flex items-center gap-2"><span class="material-symbols-outlined text-lg">account_balance_wallet</span></h3><h3 class="text-primary-fixed font-medium flex items-center gap-2" style="--tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgb(59 130 246 / 0.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; --tw-text-opacity: 1; color: rgb(214, 227, 255); outline: none !important; box-shadow: none !important;">Est. Monthly Savings</h3><div class="mt-2"><span class="text-3xl font-bold tracking-tight">$3,420</span><span class="text-primary-fixed/80 block mt-1 text-sm">vs Standard Pay-As-You-Go</span></div></div></div><div class="mt-8 relative z-10 pt-6 border-t border-white/20"><div class="flex justify-between items-end"><div><p class="text-[10px] uppercase font-bold text-primary-fixed/60 tracking-widest">Breakeven Point</p><p class="text-lg font-semibold">1.4M Tokens</p></div><div class="text-right"><p class="text-[10px] uppercase font-bold text-primary-fixed/60 tracking-widest">Efficiency</p><p class="text-lg font-semibold">+42%</p></div></div></div></div>
-<!-- Value Trend Analysis Chart Area -->
-<div class="lg:col-span-8 bg-surface-container-lowest p-6 rounded-xl border border-outline-variant shadow-sm flex flex-col">
-<div class="flex items-center justify-between mb-6">
-<div>
-<h3 class="text-on-surface font-bold text-lg">Value Trend Analysis</h3>
-<p class="text-on-surface-variant text-sm">API Equivalent Value ($) vs Est. Monthly Tokens</p>
-</div>
-<div class="flex items-center gap-2">
-</div>
-</div>
-<div class="flex-grow h-64 w-full bg-surface-container-low rounded-lg relative overflow-hidden flex items-end px-4 pb-4 gap-4"><div class="absolute inset-0 opacity-10 pointer-events-none"><div class="absolute top-1/4 left-0 w-full h-px border-t border-dashed border-primary"></div><div class="absolute top-2/4 left-0 w-full h-px border-t border-dashed border-primary"></div><div class="absolute top-3/4 left-0 w-full h-px border-t border-dashed border-primary"></div></div><div class="absolute left-0 top-0 h-full w-12 flex flex-col justify-between py-4 text-[10px] text-outline font-mono px-2"><span class="">$4k</span><span class="">$3k</span><span class="">$2k</span><span class="">$1k</span><span class="">$0</span></div><div class="flex-grow h-full flex items-end gap-4 ml-12 relative"><div class="absolute left-[45%] top-0 bottom-0 w-px border-l-2 border-dashed border-tertiary z-20"><div class="absolute -top-6 left-1/2 -translate-x-1/2 bg-tertiary text-white text-[9px] px-2 py-0.5 rounded whitespace-nowrap font-bold">BREAKEVEN: 1.4M</div></div><div class="flex-1 flex flex-col items-center gap-2 h-full justify-end"><div class="w-full bg-primary/20 rounded-t h-[30%] hover:bg-primary/40 transition-all cursor-help"></div><span class="text-[10px] text-outline font-medium">500k</span></div><div class="flex-1 flex flex-col items-center gap-2 h-full justify-end"><div class="w-full bg-primary/20 rounded-t h-[45%] hover:bg-primary/40 transition-all cursor-help"></div><span class="text-[10px] text-outline font-medium">1M</span></div><div class="flex-1 flex flex-col items-center gap-2 h-full justify-end relative"><div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-primary text-white text-[10px] px-2 py-1 rounded font-bold whitespace-nowrap z-10">Current Mix</div><div class="w-full bg-primary/60 rounded-t h-[65%] transition-all"></div><span class="text-[10px] text-on-surface font-bold">1.5M</span></div><div class="flex-1 flex flex-col items-center gap-2 h-full justify-end"><div class="w-full bg-primary/20 rounded-t h-[80%] hover:bg-primary/40 transition-all cursor-help"></div><span class="text-[10px] text-outline font-medium">2M</span></div><div class="flex-1 flex flex-col items-center gap-2 h-full justify-end"><div class="w-full bg-primary/20 rounded-t h-[95%] hover:bg-primary/40 transition-all cursor-help"></div><span class="text-[10px] text-outline font-medium">2.5M</span></div></div></div>
-</div>
-</div>
-<!-- Pricing Comparison Tables Area -->
-<div class="grid grid-cols-1 gap-8">
-<!-- Alibaba Cloud Plans Table -->
-<div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm">
-<div class="p-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
-<h4 class="font-bold text-on-surface flex items-center gap-2">
-<span class="material-symbols-outlined text-primary">cloud_done</span>
-                        Alibaba Cloud Plans
-                    </h4>
-<span class="text-[10px] bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-bold uppercase">View Plan</span>
-</div>
-<div class="overflow-x-auto">
-<table class="w-full text-left border-collapse">
-<thead>
-<tr class="bg-surface-container-low text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">
-<th class="px-6 py-3">Tier</th>
-<th class="px-6 py-3">Monthly Fee</th>
-<th class="px-6 py-3">Token Credits</th>
-<th class="px-6 py-3">Overage</th>
-</tr>
-</thead>
-<tbody class="text-sm divide-y divide-outline-variant/30">
-<tr class="hover:bg-surface-container-low/50 transition-colors">
-<td class="px-6 py-4 font-medium text-on-surface">Starter</td>
-<td class="px-6 py-4">$100</td>
-<td class="px-6 py-4 text-on-surface-variant">10M</td>
-<td class="px-6 py-4 text-primary font-medium">$0.012/k</td>
-</tr>
-<tr class="bg-primary/5 hover:bg-primary/10 transition-colors">
-<td class="px-6 py-4 font-bold text-primary">Enterprise</td>
-<td class="px-6 py-4 font-bold text-primary">$2,000</td>
-<td class="px-6 py-4 text-on-surface-variant font-medium">350M</td>
-<td class="px-6 py-4 text-primary font-bold">$0.004/k</td>
-</tr>
-<tr class="hover:bg-surface-container-low/50 transition-colors">
-<td class="px-6 py-4 font-medium text-on-surface">Unlimited</td>
-<td class="px-6 py-4">$8,500</td>
-<td class="px-6 py-4 text-on-surface-variant">1.5B</td>
-<td class="px-6 py-4 text-primary font-medium">$0.002/k</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-<!-- OpenRouter API Comparison Table -->
-<div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden shadow-sm">
-<div class="p-5 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
-<h4 class="font-bold text-on-surface flex items-center gap-2">
-<span class="material-symbols-outlined text-primary">hub</span>
-                        OpenRouter API Prices
-                    </h4>
-<span class="text-[10px] bg-tertiary-container text-on-tertiary-container px-2 py-0.5 rounded font-bold uppercase">Real-time Market</span>
-</div>
-<div class="overflow-x-auto">
-<table class="w-full text-left border-collapse">
-<thead>
-<tr class="bg-surface-container-low text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">
-<th class="px-6 py-3">Model Name</th>
-<th class="px-6 py-3">Input / 1M</th>
-<th class="px-6 py-3">Output / 1M</th>
-<th class="px-6 py-3">Latency</th>
-</tr>
-</thead>
-<tbody class="text-sm divide-y divide-outline-variant/30">
-<tr class="hover:bg-surface-container-low/50 transition-colors">
-<td class="px-6 py-4 font-medium text-on-surface">GPT-4o (Standard)</td>
-<td class="px-6 py-4 text-on-surface-variant">$5.00</td>
-<td class="px-6 py-4 text-on-surface-variant">$15.00</td>
-<td class="px-6 py-4 text-secondary font-medium">~1.2s</td>
-</tr>
-<tr class="hover:bg-surface-container-low/50 transition-colors">
-<td class="px-6 py-4 font-medium text-on-surface">Claude 3.5 Sonnet</td>
-<td class="px-6 py-4 text-on-surface-variant">$3.00</td>
-<td class="px-6 py-4 text-on-surface-variant">$9.00</td>
-<td class="px-6 py-4 text-secondary font-medium">~0.8s</td>
-</tr>
-<tr class="hover:bg-surface-container-low/50 transition-colors">
-<td class="px-6 py-4 font-medium text-on-surface">Llama 3.1 70B</td>
-<td class="px-6 py-4 text-on-surface-variant">$0.60</td>
-<td class="px-6 py-4 text-on-surface-variant">$0.80</td>
-<td class="px-6 py-4 text-secondary font-medium">~0.4s</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-<!-- Featured Analysis Context -->
-<div class="bg-surface-container-low rounded-xl p-8 border border-outline-variant/50 relative overflow-hidden group">
-<div class="absolute right-0 top-0 h-full w-1/3 opacity-5 pointer-events-none">
-</div>
-<div class="max-w-3xl relative z-10">
-<div class="flex items-center gap-3 mb-4">
-<span class="material-symbols-outlined text-primary text-3xl">lightbulb_circle</span>
-<h3 class="text-2xl font-extrabold text-on-surface">Cost-Optimization Recommendation</h3>
-</div>
-<p class="text-on-surface-variant text-lg leading-relaxed mb-6">
-                    Based on your current <span class="font-bold text-primary">65/35 Model Mix</span> and an average of 1.2k input tokens, switching to the <span class="font-bold text-primary">Alibaba Enterprise Plan</span> will reduce your effective cost by <span class="font-bold">42%</span>. This configuration breaks even at 1.4M tokens per month, which you are currently surpassing by 2.1M.
-                </p>
-<div class="flex gap-4">
-<button class="bg-primary text-on-primary px-6 py-3 rounded-lg font-bold shadow-md hover:shadow-lg transition-all active:scale-95">Update Strategy</button>
-<button class="bg-surface-container-highest text-on-surface px-6 py-3 rounded-lg font-bold hover:bg-outline-variant transition-all">Download Report</button>
-</div>
-</div>
-</div>
-</main>
-<!-- Footer -->
-<footer class="bg-surface dark:bg-zinc-950 border-t border-zinc-100 dark:border-zinc-900 py-8 px-8">
-<div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-6 justify-center">
-<div class="flex flex-col items-center gap-1">
-<p class="text-[11px] text-zinc-500 text-center">© 2026 MonoMind AI Lab</p>
-</div>
-<nav class="flex items-center gap-8">
+    </header>
 
-</nav>
+    <main id="page-content" class="mockup-main calculator-page">
+      <h1 class="sr-only">Subscription vs API value calculator</h1>
+      <p class="calculator-disclosure">All numeric values show an illustrative calculator state, not published benchmark evidence.</p>
 
-</div>
-</footer>
-<!-- Custom Micro-interactions -->
-<script>
-        // Simple slider visual feedback
-        document.querySelectorAll('input[type="range"]').forEach(slider => {
-            slider.addEventListener('input', (e) => {
-                const val = e.target.value;
-                const label = e.target.previousElementSibling.querySelector('.text-primary');
-                if(label) {
-                    if(label.innerText.includes('k')) label.innerText = (val / 10).toFixed(1) + 'k';
-                    else if(label.innerText.includes('$')) label.innerText = '$' + val;
-                    else label.innerText = val + '%';
-                }
-            });
+      <section id="selections" class="calculator-grid" data-mockup-section="selections" aria-label="Calculator selections">
+        <fieldset class="mockup-panel selection-panel">
+          <legend>Provider selection</legend>
+          <div class="choice-list">
+            <label class="mockup-choice choice-row" aria-checked="true">
+              <input type="radio" name="provider" value="alibaba" checked>
+              <span class="choice-label">Alibaba Cloud (Qwen)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="radio" name="provider" value="openai">
+              <span class="choice-label">OpenAI (GPT-4o)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="radio" name="provider" value="anthropic">
+              <span class="choice-label">Anthropic (Claude)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="radio" name="provider" value="google">
+              <span class="choice-label">Google Cloud (Gemini)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="mockup-panel selection-panel">
+          <legend>Plan selection</legend>
+          <div class="choice-list">
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="radio" name="plan" value="starter">
+              <span class="choice-label">Starter ($100/mo)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="true">
+              <input type="radio" name="plan" value="enterprise" checked>
+              <span class="choice-label">Enterprise ($2,000/mo)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="radio" name="plan" value="unlimited">
+              <span class="choice-label">Unlimited ($8,500/mo)</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="mockup-panel selection-panel model-panel">
+          <legend>Model selection</legend>
+          <p class="selection-help">Select models for this illustrative calculator state.</p>
+          <div class="choice-list model-choice-list">
+            <label class="mockup-choice choice-row" aria-checked="true">
+              <input type="checkbox" name="model" value="qwen-max" checked>
+              <span class="choice-label">Qwen-Max</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="true">
+              <input type="checkbox" name="model" value="qwen-plus" checked>
+              <span class="choice-label">Qwen-Plus</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="checkbox" name="model" value="qwen-turbo">
+              <span class="choice-label">Qwen-Turbo</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="checkbox" name="model" value="qwen-long">
+              <span class="choice-label">Qwen-Long</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="checkbox" name="model" value="gpt-4o">
+              <span class="choice-label">GPT-4o</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="checkbox" name="model" value="claude-3-5-sonnet">
+              <span class="choice-label">Claude 3.5 Sonnet</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+            <label class="mockup-choice choice-row" aria-checked="false">
+              <input type="checkbox" name="model" value="llama-3-1-70b">
+              <span class="choice-label">Llama 3.1 70B</span>
+              <svg class="choice-check" viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m5 10 3.2 3.2L15.5 6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="mockup-panel selection-panel usage-panel">
+          <legend>Usage mix</legend>
+          <p class="selection-help">Illustrative calculator state · Total allocation: 100%</p>
+          <div class="usage-grid">
+            <label class="usage-control">
+              <span><span>Qwen-Max</span><output>45%</output></span>
+              <input type="range" min="0" max="100" value="45" aria-label="Qwen-Max share">
+            </label>
+            <label class="usage-control">
+              <span><span>Qwen-Plus</span><output>35%</output></span>
+              <input type="range" min="0" max="100" value="35" aria-label="Qwen-Plus share">
+            </label>
+            <label class="usage-control">
+              <span><span>Model #3</span><output>10%</output></span>
+              <input type="range" min="0" max="100" value="10" aria-label="Model number 3 share">
+            </label>
+            <label class="usage-control">
+              <span><span>Model #4</span><output>10%</output></span>
+              <input type="range" min="0" max="100" value="10" aria-label="Model number 4 share">
+            </label>
+          </div>
+          <label class="usage-control token-blend-control">
+            <span><span>Token blend (input / output)</span><output>70 / 30</output></span>
+            <input type="range" min="0" max="100" step="5" value="70" aria-label="Input token proportion">
+            <small><span>More input</span><span>More output</span></small>
+          </label>
+        </fieldset>
+      </section>
+
+      <section class="result-layout" data-mockup-section="results" aria-label="Calculated value results">
+        <article class="value-summary-card">
+          <div>
+            <h2>API-equivalent value</h2>
+            <strong>$1,420</strong>
+            <p>Illustrative calculator state from the incumbent mockup.</p>
+          </div>
+          <dl class="value-details">
+            <div><dt>Estimated monthly savings</dt><dd>$3,420</dd></div>
+            <div><dt>Break-even point</dt><dd>1.4M tokens</dd></div>
+            <div><dt>Efficiency</dt><dd>+42%</dd></div>
+          </dl>
+        </article>
+
+        <article class="mockup-panel trend-panel">
+          <div class="trend-heading">
+            <div>
+              <h2>Value trend analysis</h2>
+              <p>API-equivalent value versus estimated monthly tokens.</p>
+            </div>
+            <p class="trend-note">Illustrative state</p>
+          </div>
+          <div class="trend-chart" role="img" aria-label="Five usage levels with the current 1.5 million token level emphasized and a break-even marker at 1.4 million tokens">
+            <div class="chart-y-axis" aria-hidden="true"><span>$4k</span><span>$3k</span><span>$2k</span><span>$1k</span><span>$0</span></div>
+            <div class="chart-plot" aria-hidden="true">
+              <span class="chart-gridline gridline-one"></span>
+              <span class="chart-gridline gridline-two"></span>
+              <span class="chart-gridline gridline-three"></span>
+              <span class="break-even-marker"><span>Break-even · 1.4M</span></span>
+              <div class="chart-series">
+                <div class="chart-bar" style="--bar-height: 32%"><span class="chart-bar-value">$1.5k</span><span class="chart-bar-label">500k</span></div>
+                <div class="chart-bar" style="--bar-height: 47%"><span class="chart-bar-value">$2.2k</span><span class="chart-bar-label">1M</span></div>
+                <div class="chart-bar current" style="--bar-height: 65%"><span class="chart-current-label">Current mix</span><span class="chart-bar-value">$3.0k</span><span class="chart-bar-label">1.5M</span></div>
+                <div class="chart-bar" style="--bar-height: 82%"><span class="chart-bar-value">$3.7k</span><span class="chart-bar-label">2M</span></div>
+                <div class="chart-bar" style="--bar-height: 96%"><span class="chart-bar-value">$4.3k</span><span class="chart-bar-label">2.5M</span></div>
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="mockup-panel pricing-panel" data-mockup-section="subscription-pricing">
+        <div class="section-heading">
+          <div>
+            <h2>Individual subscription plans</h2>
+            <p>Illustrative calculator state — not published benchmark evidence.</p>
+          </div>
+          <span class="section-tag">Selected plan</span>
+        </div>
+        <div class="table-wrap">
+          <table class="pricing-table">
+            <caption>Illustrative calculator state — not published benchmark evidence.</caption>
+            <thead>
+              <tr><th scope="col">Plan</th><th scope="col">Monthly fee</th><th scope="col">Token credits</th><th scope="col">Overage</th></tr>
+            </thead>
+            <tbody>
+              <tr><td data-label="Plan">Starter</td><td data-label="Monthly fee">$100</td><td data-label="Token credits">10M</td><td data-label="Overage">$0.012/k</td></tr>
+              <tr class="selected-table-row"><td data-label="Plan">Enterprise</td><td data-label="Monthly fee">$2,000</td><td data-label="Token credits">350M</td><td data-label="Overage">$0.004/k</td></tr>
+              <tr><td data-label="Plan">Unlimited</td><td data-label="Monthly fee">$8,500</td><td data-label="Token credits">1.5B</td><td data-label="Overage">$0.002/k</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="mockup-panel pricing-panel" data-mockup-section="api-pricing">
+        <div class="section-heading">
+          <div>
+            <h2>API route pricing</h2>
+            <p>Illustrative calculator state — not published benchmark evidence.</p>
+          </div>
+          <span class="section-tag">Illustrative routes</span>
+        </div>
+        <div class="table-wrap">
+          <table class="pricing-table">
+            <caption>Illustrative calculator state — not published benchmark evidence.</caption>
+            <thead>
+              <tr><th scope="col">Model</th><th scope="col">Input / 1M</th><th scope="col">Output / 1M</th><th scope="col">Typical latency</th></tr>
+            </thead>
+            <tbody>
+              <tr><td data-label="Model">GPT-4o</td><td data-label="Input / 1M">$5.00</td><td data-label="Output / 1M">$15.00</td><td data-label="Typical latency">~1.2s</td></tr>
+              <tr><td data-label="Model">Claude 3.5 Sonnet</td><td data-label="Input / 1M">$3.00</td><td data-label="Output / 1M">$9.00</td><td data-label="Typical latency">~0.8s</td></tr>
+              <tr><td data-label="Model">Llama 3.1 70B</td><td data-label="Input / 1M">$0.60</td><td data-label="Output / 1M">$0.80</td><td data-label="Typical latency">~0.4s</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="mockup-panel recommendation-panel" data-mockup-section="recommendation">
+        <h2>Cost-optimization recommendation</h2>
+        <p>Review the selected plan, model mix, and evidence before changing purchasing strategy.</p>
+        <div class="recommendation-actions" role="group" aria-label="Recommendation actions">
+          <a class="recommendation-action" data-action-priority="primary" href="#selections">Review selections</a>
+          <a class="recommendation-action" data-action-priority="secondary" href="/methodology/">Review methodology</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mockup-footer app-footer">
+      <div class="footer-brand"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a><span>Source-aware decision support.</span></div>
+      <div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div>
+    </footer>
+    <script src="tokenbench-mockup.js"></script>
+    <script>
+      (() => {
+        const choiceInputSelector = '.mockup-choice input[type="radio"], .mockup-choice input[type="checkbox"]';
+        const syncChoices = () => {
+          document.querySelectorAll('.mockup-choice').forEach((row) => {
+            const input = row.querySelector('input[type="radio"], input[type="checkbox"]');
+            row.setAttribute('aria-checked', String(Boolean(input?.checked)));
+          });
+        };
+        document.querySelector('#selections')?.addEventListener('change', (event) => {
+          if (event.target instanceof HTMLInputElement && event.target.matches(choiceInputSelector)) syncChoices();
         });
+        syncChoices();
+      })();
     </script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-</body></html>
+  </body>
+</html>

@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A source-aware TokenBench value-frontier mockup with explicit unavailable states.">
+    <title>AI model value frontier | TokenBench</title>
+    <link rel="stylesheet" href="tokenbench-mockup.css">
+    <link rel="stylesheet" href="leaderboard-mockup.css">
+  </head>
+  <body>
+    <!--
+    THESIS: Value is a disclosed trade-off between evidence and workload cost, never a universal score.
+    OWN-WORLD: TokenBench's compact dark decision shell uses a filter rail, tabular evidence, and explicit unavailable states.
+    STORY: Set a workload lens, inspect the available evidence, and see uncertainty before acting.
+    FIRST VIEWPORT: The route summary leads directly into compact, adjustable filters and the evidence table.
+    FORM: Value workbench; approved 2026-08-06.
+    FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+    -->
+    <a class="skip-link" href="#page-content">Skip to page content</a>
+    <header class="mockup-header">
+      <div class="mockup-header-inner">
+        <div class="brand-lockup">
+          <a class="brand-home" href="/" aria-label="TokenBench home">
+            <img src="../../public/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+            <span class="brand-copy">
+              <span class="brand-name">TokenBench</span>
+              <span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span>
+            </span>
+          </a>
+        </div>
+        <button class="header-tool menu-button" type="button" data-menu-toggle aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded="false">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation">
+          <a href="/tools/">Tools</a>
+          <a href="/compare/">Compare</a>
+          <a href="/leaderboards/" aria-current="page">Leaderboards</a>
+          <a href="/guides/">Guides</a>
+        </nav>
+        <div class="header-actions">
+          <label class="language-control">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.4 3.2 2.5 5.9 5.5 7.2M11 5c-.4 3.2-2.5 5.9-5.5 7.2M13 21l4-10 4 10M14.5 17h5"/></svg>
+            <span class="sr-only">Language</span>
+            <select aria-label="Language">
+              <option value="en">English</option>
+              <option value="ko">한국어</option>
+              <option value="zh-TW">繁體中文</option>
+              <option value="zh-CN">简体中文</option>
+              <option value="ja">日本語</option>
+              <option value="es">Español</option>
+              <option value="fr">Français</option>
+              <option value="de">Deutsch</option>
+              <option value="fi">Suomi</option>
+              <option value="pl">Polski</option>
+              <option value="ru">Русский</option>
+            </select>
+          </label>
+          <button class="header-tool icon-button" type="button" data-theme-toggle aria-label="Toggle light theme">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
+            <span class="sr-only">Theme</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="page-content" class="mockup-main">
+      <section class="leaderboard-hero" data-mockup-section="route-summary" aria-labelledby="value-title">
+        <h1 id="value-title">AI model value frontier</h1>
+        <p class="leaderboard-summary">Value views compare supported capability evidence with stated workload costs and never present an unsupported universal value score.</p>
+        <aside class="leaderboard-value-methodology" data-value-methodology aria-label="Value methodology">
+          <p><strong>Methodology.</strong> This view does not calculate an opaque universal value score. It keeps capability evidence and the declared workload price separate, with unavailable evidence left visible.</p>
+        </aside>
+      </section>
+
+      <section class="leaderboard-filter-rail" data-mockup-section="filters" aria-labelledby="filter-title">
+        <h2 id="filter-title" class="leaderboard-section-heading">Set the decision context</h2>
+        <form class="leaderboard-filter-grid" aria-label="Value leaderboard filters">
+          <div class="leaderboard-field">
+            <label for="model-search">Search model labels</label>
+            <input id="model-search" class="mockup-control leaderboard-search" type="search" name="model-search" placeholder="Search the represented model label">
+          </div>
+          <fieldset class="leaderboard-fieldset">
+            <legend>Workload lens</legend>
+            <div class="leaderboard-workload-options">
+              <label class="leaderboard-workload-option"><input type="radio" name="workload" value="general" checked> General use</label>
+              <label class="leaderboard-workload-option"><input type="radio" name="workload" value="coding"> Coding task</label>
+              <label class="leaderboard-workload-option"><input type="radio" name="workload" value="long-context"> Long context</label>
+            </div>
+          </fieldset>
+          <div class="leaderboard-field">
+            <label for="sort-by">Sort rows</label>
+            <select id="sort-by" class="mockup-control leaderboard-sort" name="sort-by">
+              <option selected>Evidence completeness</option>
+              <option>Capability evidence</option>
+              <option>Workload cost</option>
+            </select>
+          </div>
+          <div class="leaderboard-field leaderboard-estimated-field">
+            <label class="leaderboard-estimated-control" for="include-estimated"><input id="include-estimated" type="checkbox" name="include-estimated" checked> Include estimated BenchLM models</label>
+            <small>Estimated entries are opt-in, unranked, and never winner claims.</small>
+          </div>
+        </form>
+      </section>
+
+      <section class="leaderboard-section" data-mockup-section="rankings" aria-labelledby="rankings-title">
+        <h2 id="rankings-title" class="leaderboard-section-heading">Evidence rows</h2>
+        <p id="value-evidence-disclosure" class="leaderboard-evidence-disclosure" data-evidence-disclosure>Illustrative rows only. No active revision exists: ordinary entries use Unavailable for rank, capability, workload price, declared context, source, publication, and freshness. The estimated preview is Unranked, has the evidence state Estimated preview, and identifies BenchLM only as a source; its publication and freshness remain Unavailable. It is neither a published result nor a winner claim.</p>
+        <div class="leaderboard-table-wrap">
+          <table class="leaderboard-table" aria-labelledby="rankings-title" aria-describedby="value-evidence-disclosure">
+            <thead>
+              <tr>
+                <th scope="col">Rank / status</th>
+                <th scope="col">Model / provider</th>
+                <th scope="col">Capability evidence</th>
+                <th scope="col">Workload price</th>
+                <th scope="col">Declared context</th>
+                <th scope="col">Evidence state</th>
+                <th scope="col">Source / publication / freshness</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-rank>Unavailable</td>
+                <th scope="row"><span class="leaderboard-model-name">OpenAI GPT-4o</span> <span class="leaderboard-provider">Provider: OpenAI</span></th>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
+              </tr>
+              <tr>
+                <td data-rank>Unavailable</td>
+                <th scope="row"><span class="leaderboard-model-name">Anthropic Claude 3.5 Sonnet</span> <span class="leaderboard-provider">Provider: Anthropic</span></th>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
+              </tr>
+              <tr>
+                <td data-rank>Unavailable</td>
+                <th scope="row"><span class="leaderboard-model-name">Google Gemini 1.5 Pro</span> <span class="leaderboard-provider">Provider: Google</span></th>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
+              </tr>
+              <tr data-estimated>
+                <td data-rank>Unranked</td>
+                <th scope="row"><span class="leaderboard-model-name">BenchLM estimated preview</span> <span class="leaderboard-provider">Provider: Unavailable</span> <span class="leaderboard-estimate-label">Shown only to make the opt-in state visible</span></th>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Unavailable</td>
+                <td>Estimated preview</td>
+                <td><span class="leaderboard-source-metadata"><span>Source: BenchLM</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="leaderboard-mobile-cards" aria-label="Value evidence rows for narrow screens" aria-describedby="value-evidence-disclosure">
+          <article class="leaderboard-mobile-card" data-mobile-rank-card>
+            <header class="leaderboard-mobile-card-header">
+              <h3><span class="leaderboard-model-name">OpenAI GPT-4o</span> <span class="leaderboard-provider">Provider: OpenAI</span></h3>
+              <span class="leaderboard-mobile-rank" data-rank>Unavailable</span>
+            </header>
+            <dl>
+              <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Evidence state</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
+            </dl>
+          </article>
+          <article class="leaderboard-mobile-card" data-mobile-rank-card>
+            <header class="leaderboard-mobile-card-header">
+              <h3><span class="leaderboard-model-name">Anthropic Claude 3.5 Sonnet</span> <span class="leaderboard-provider">Provider: Anthropic</span></h3>
+              <span class="leaderboard-mobile-rank" data-rank>Unavailable</span>
+            </header>
+            <dl>
+              <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Evidence state</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
+            </dl>
+          </article>
+          <article class="leaderboard-mobile-card" data-mobile-rank-card>
+            <header class="leaderboard-mobile-card-header">
+              <h3><span class="leaderboard-model-name">Google Gemini 1.5 Pro</span> <span class="leaderboard-provider">Provider: Google</span></h3>
+              <span class="leaderboard-mobile-rank" data-rank>Unavailable</span>
+            </header>
+            <dl>
+              <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Evidence state</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: Unavailable</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
+            </dl>
+          </article>
+          <article class="leaderboard-mobile-card" data-mobile-rank-card data-estimated>
+            <header class="leaderboard-mobile-card-header">
+              <h3><span class="leaderboard-model-name">BenchLM estimated preview</span> <span class="leaderboard-provider">Provider: Unavailable</span> <span class="leaderboard-estimate-label">Shown only to make the opt-in state visible</span></h3>
+              <span class="leaderboard-mobile-rank" data-rank>Unranked</span>
+            </header>
+            <dl>
+              <div><dt>Capability evidence</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Workload price</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Declared context</dt><dd class="leaderboard-unavailable">Unavailable</dd></div>
+              <div><dt>Evidence state</dt><dd>Estimated preview</dd></div>
+              <div><dt>Source / publication / freshness</dt><dd class="leaderboard-unavailable"><span class="leaderboard-source-metadata"><span>Source: BenchLM</span> <span>Publication: Unavailable</span> <span>Freshness: Unavailable</span></span></dd></div>
+            </dl>
+          </article>
+        </div>
+      </section>
+
+      <section class="leaderboard-related" data-mockup-section="related" aria-labelledby="value-related-title">
+        <h2 id="value-related-title" class="leaderboard-section-heading">Related decision surfaces</h2>
+        <ul>
+          <li><a href="/leaderboards/llm/pricing-context/">Pricing and context evidence</a></li>
+          <li><a href="/leaderboards/llm/coding/">Coding benchmark evidence</a></li>
+          <li><a href="/tools/subscriptions-vs-apis/">Subscription versus API calculator</a></li>
+        </ul>
+      </section>
+
+      <section class="leaderboard-monomind" data-mockup-section="monomind" aria-labelledby="value-monomind-title">
+        <h2 id="value-monomind-title" class="leaderboard-section-heading">MonoMind AI Lab</h2>
+        <p>TokenBench pairs clear source attribution with workload context so unavailable data remains visible instead of becoming an invented comparison result.</p>
+      </section>
+    </main>
+
+    <footer class="mockup-footer">
+      <div class="footer-brand"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a><span>Source-aware decision support.</span></div>
+      <div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div>
+    </footer>
+    <script src="tokenbench-mockup.js"></script>
+  </body>
+</html>

@@ -28,7 +28,11 @@ function TrendChart({ snapshot }: TrendChartProps) {
         <span>{formatCurrencyMicroDollars(Math.round(maxValue * 0.25))}</span>
         <span>$0</span>
       </div>
-      <div className="trend-chart" role="img" aria-label="API-equivalent value trend by expected monthly tokens">
+      <div
+        className="trend-chart"
+        role="img"
+        aria-label={`API-equivalent value trend by expected monthly tokens. Current mix: ${formatTokens(snapshot.monthlyTokens)} tokens and ${formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)} API-equivalent value.`}
+      >
         {snapshot.chartPoints.map((point, index) => (
           <div className={`chart-column ${index === 3 ? 'chart-column-current' : ''}`} key={`${point.tokens}-${index}`} data-testid="chart-point">
             {index === 3 ? <span className="current-mix-label">Current mix</span> : null}
@@ -102,6 +106,13 @@ export function ResultsDashboard({ selectedPlan, snapshot }: ResultsDashboardPro
           </article>
         </div>
       )}
+      {snapshot.monthlyTokens > 20_000_000 ? (
+        <aside className="panel agency-routing-notice" role="status" aria-label="High-volume optimization guidance">
+          <strong>High-volume optimization guidance</strong>
+          <p>At this volume, custom model routing, prompt caching, and agent pipelines may materially reduce spend.</p>
+          <a className="button" href="https://monomind.one/">Talk to MonoMind</a>
+        </aside>
+      ) : null}
     </section>
   );
 }

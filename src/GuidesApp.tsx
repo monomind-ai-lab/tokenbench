@@ -1,11 +1,12 @@
 import { GuideArticlePage, GuidesHub } from './frontend/guides-page';
-import { SiteHeader } from './frontend/app-shell';
+import { SiteFooter, SiteHeader } from './frontend/app-shell';
 import { useSitePreferences } from './frontend/site-preferences';
 import { GUIDE_BY_SLUG } from './guides/content';
+import { matchRoute } from './routing/routes';
 
 function currentGuideSlug(): string | undefined {
-  const match = window.location.pathname.match(/^\/guides\/([^/]+)\/?$/);
-  return match?.[1];
+  const route = matchRoute(window.location.pathname);
+  return route.kind === 'guides' ? route.slug : undefined;
 }
 
 export default function GuidesApp() {
@@ -17,6 +18,6 @@ export default function GuidesApp() {
     <a className="skip-link" href="#guide-content">Skip to guide content</a>
     <SiteHeader theme={theme} language={language} activePage="guides" onThemeToggle={toggleTheme} onLanguageChange={changeLanguage} />
     {guide ? <GuideArticlePage guide={guide} /> : <GuidesHub />}
-    <footer className="app-footer"><span>MonoMind AI Lab · 2026</span><span>Independent, source-backed guidance.</span><span>Verify provider terms before purchasing.</span></footer>
+    <SiteFooter status="Source-aware decision support." notice="Verify provider evidence before purchasing." />
   </div>;
 }

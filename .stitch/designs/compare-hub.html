@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TokenBench — Compare AI models</title>
+  <link rel="stylesheet" href="tokenbench-mockup.css">
+  <link rel="stylesheet" href="compare-mockup.css">
+</head>
+<body>
+<!--
+THESIS: A neutral comparison desk keeps evidence limits inside the model-selection flow.
+OWN-WORLD: Compact dark-derived panels, restrained dividers, and scarce cobalt decision states in semantic themes.
+STORY: Choose two models, understand the evidence conditions, and open only defensible comparisons.
+FIRST VIEWPORT: The selection workspace follows the H1 and holds paired comboboxes, filters, and a disabled action.
+FORM: Compact technical decision workstation; approved 2026-08-06.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+-->
+  <a class="skip-link" href="#page-content">Skip to page content</a>
+  <header class="mockup-header">
+    <div class="mockup-header-inner">
+      <div class="brand-lockup">
+        <a class="brand-home" href="/" aria-label="TokenBench home">
+          <img src="../../public/brand/monomind-tokenbench.png" alt="MonoMind monogram">
+          <span class="brand-copy">
+            <span class="brand-name">TokenBench</span>
+            <span class="brand-tagline">The Decision Engine for AI Costs &amp; Model Benchmarks</span>
+          </span>
+        </a>
+      </div>
+      <button class="header-tool menu-button" type="button" data-menu-toggle aria-label="Open navigation" aria-controls="primary-navigation" aria-expanded="false">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <nav id="primary-navigation" class="primary-nav" data-primary-nav aria-label="Primary navigation">
+        <a href="/tools/">Tools</a>
+        <a href="/compare/" aria-current="page">Compare</a>
+        <a href="/leaderboards/">Leaderboards</a>
+        <a href="/guides/">Guides</a>
+      </nav>
+      <div class="header-actions">
+        <label class="language-control">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h9M8.5 3v2M6 5c.4 3.2 2.5 5.9 5.5 7.2M11 5c-.4 3.2-2.5 5.9-5.5 7.2M13 21l4-10 4 10M14.5 17h5"/></svg>
+          <span class="sr-only">Language</span>
+          <select aria-label="Language">
+            <option value="en">English</option>
+            <option value="ko">한국어</option>
+            <option value="zh-TW">繁體中文</option>
+            <option value="zh-CN">简体中文</option>
+            <option value="ja">日本語</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="fi">Suomi</option>
+            <option value="pl">Polski</option>
+            <option value="ru">Русский</option>
+          </select>
+        </label>
+        <button class="header-tool icon-button" type="button" data-theme-toggle aria-label="Toggle light theme">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"/></svg>
+          <span class="sr-only">Theme</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="page-content" class="mockup-main compare-page compare-hub">
+    <section class="compare-intro" aria-labelledby="compare-heading">
+      <h1 id="compare-heading">Compare AI models</h1>
+      <p class="compare-lede">Set up a model pair, then inspect the source context, workload lens, and unavailable fields that shape a decision.</p>
+    </section>
+
+    <section class="mockup-panel workspace-panel" data-mockup-section="workspace" aria-labelledby="workspace-heading">
+      <div class="workspace-heading">
+        <h2 id="workspace-heading">Set up a comparison</h2>
+        <p class="section-copy">Model identities stay distinct until two different selections are made. This review state deliberately leaves both selectors empty.</p>
+      </div>
+
+      <div class="model-picker-grid">
+        <section class="model-picker" aria-labelledby="first-model-label">
+          <label id="first-model-label" for="first-model">First model</label>
+          <input id="first-model" class="combobox-control" type="text" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-controls="first-model-options" autocomplete="off" placeholder="Search the active model catalog">
+          <p class="field-copy">Choose a model with source context before opening a pair view.</p>
+          <div id="first-model-options" role="listbox" hidden></div>
+        </section>
+
+        <button class="swap-control" type="button" disabled aria-label="Swap selected models">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3M18 7l3 3-3 3M6 17l-3-3 3-3"/></svg>
+          <span class="sr-only">Swap selected models</span>
+        </button>
+
+        <section class="model-picker" aria-labelledby="second-model-label">
+          <label id="second-model-label" for="second-model">Second model</label>
+          <input id="second-model" class="combobox-control" type="text" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-controls="second-model-options" autocomplete="off" placeholder="Search the active model catalog">
+          <p class="field-copy">A second, distinct model is required before comparison is available.</p>
+          <div id="second-model-options" role="listbox" hidden></div>
+        </section>
+      </div>
+
+      <div class="compare-filter-grid">
+        <div class="filter-field">
+          <label for="provider-filter">Provider</label>
+          <select id="provider-filter" class="mockup-control">
+            <option>All providers</option>
+            <option>Anthropic</option>
+            <option>OpenAI</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label for="category-filter">Category</label>
+          <select id="category-filter" class="mockup-control">
+            <option>All categories</option>
+            <option>Language models</option>
+            <option>Multimodal models</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="compare-action-row">
+        <button class="compare-action" type="button" data-compare-action disabled aria-describedby="comparison-action-status">Compare selected models</button>
+        <p id="comparison-action-status" class="action-status">Select two distinct models to continue.</p>
+      </div>
+
+      <aside class="methodology-strip" aria-label="Comparison methodology">
+        <h3>What makes a pair comparable</h3>
+        <p>Canonical ordering keeps the pair stable. TokenBench only presents source fields that meet the active-revision evidence rules; missing measurements remain unavailable.</p>
+      </aside>
+    </section>
+
+    <section class="mockup-panel empty-reviewed" data-mockup-section="reviewed-matchups" data-reviewed-pairs>
+      <h2>Reviewed matchups</h2>
+      <strong>No reviewed matchups published yet</strong>
+      <p>TokenBench lists a pair here only after both models pass the active-revision evidence and editorial quality gates.</p>
+    </section>
+
+    <section class="mockup-panel guide-panel" data-mockup-section="guides" aria-labelledby="guides-heading">
+      <h2 id="guides-heading">Related guides</h2>
+      <ul class="guide-list">
+        <li>
+          <a href="/guides/track-claude-code-usage/">Track Claude Code usage, tokens, and spend</a>
+          <p>Keep workload observations and plan capacity distinct before comparing routes.</p>
+        </li>
+        <li>
+          <a href="/guides/openrouter-guide-model-routing-cost-controls/">OpenRouter model routing and cost controls</a>
+          <p>Read provider-route context before treating a listed model name as a single price.</p>
+        </li>
+        <li>
+          <a href="/guides/reduce-llm-api-costs-caching-batch-output-limits/">Reduce LLM API costs with caching, batch, and output limits</a>
+          <p>Use a real workload shape instead of a generic cost assumption.</p>
+        </li>
+      </ul>
+    </section>
+
+    <section class="mockup-panel evidence-legend" data-mockup-section="evidence-legend" aria-labelledby="evidence-heading">
+      <h2 id="evidence-heading">Evidence states</h2>
+      <dl class="evidence-definition-list">
+        <div>
+          <dt>Supported</dt>
+          <dd>The source field meets the current evidence and eligibility rules.</dd>
+        </div>
+        <div>
+          <dt>Estimated</dt>
+          <dd>The field is labelled as an estimate and is not treated as a verified result.</dd>
+        </div>
+        <div>
+          <dt>Stale</dt>
+          <dd>The last complete source record is retained while a newer state needs review.</dd>
+        </div>
+        <div>
+          <dt>Unavailable</dt>
+          <dd>No eligible value is represented, so TokenBench does not substitute a number.</dd>
+        </div>
+      </dl>
+    </section>
+  </main>
+
+  <footer class="mockup-footer">
+    <div class="footer-brand">
+      <a href="https://monomind.one/">Powered by MonoMind AI Lab</a>
+      <span>Source-aware decision support.</span>
+    </div>
+    <div class="footer-links">
+      <a href="/sources/">Sources</a>
+      <a href="/methodology/">Methodology</a>
+      <span>Verify provider evidence before purchasing.</span>
+    </div>
+  </footer>
+  <script src="tokenbench-mockup.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "origin": "local-approved-mockup",
+  "approvedSpec": "docs/superpowers/specs/2026-08-05-tokenbench-mockups-design.md",
+  "sources": [
+    ".stitch/designs/calculator-light.html",
+    ".stitch/designs/compare-hub.html",
+    ".stitch/designs/compare-detail.html",
+    ".stitch/designs/leaderboards-directory.html",
+    ".stitch/designs/leaderboard-value.html"
+  ],
+  "renders": [
+    ".stitch/designs/renders/calculator-light-1440-dark.png",
+    ".stitch/designs/renders/calculator-light-390-dark.png",
+    ".stitch/designs/renders/calculator-light-1440-light.png",
+    ".stitch/designs/renders/calculator-light-390-light.png",
+    ".stitch/designs/renders/compare-hub-1440-dark.png",
+    ".stitch/designs/renders/compare-hub-390-dark.png",
+    ".stitch/designs/renders/compare-hub-1440-light.png",
+    ".stitch/designs/renders/compare-hub-390-light.png",
+    ".stitch/designs/renders/compare-detail-1440-dark.png",
+    ".stitch/designs/renders/compare-detail-390-dark.png",
+    ".stitch/designs/renders/compare-detail-1440-light.png",
+    ".stitch/designs/renders/compare-detail-390-light.png",
+    ".stitch/designs/renders/leaderboards-directory-1440-dark.png",
+    ".stitch/designs/renders/leaderboards-directory-390-dark.png",
+    ".stitch/designs/renders/leaderboards-directory-1440-light.png",
+    ".stitch/designs/renders/leaderboards-directory-390-light.png",
+    ".stitch/designs/renders/leaderboard-value-1440-dark.png",
+    ".stitch/designs/renders/leaderboard-value-390-dark.png",
+    ".stitch/designs/renders/leaderboard-value-1440-light.png",
+    ".stitch/designs/renders/leaderboard-value-390-light.png"
+  ]
+}

@@ -5,14 +5,19 @@
   "type": "module",
   "scripts": {
     "generate:guides": "tsx scripts/generate-guide-pages.ts",
-    "predev": "npm run generate:guides",
+    "generate:pages": "tsx scripts/generate-static-pages.ts",
+    "predev": "npm run generate:pages",
     "dev": "vite --port=3000 --host=0.0.0.0",
-    "prebuild": "npm run generate:guides",
+    "prebuild": "npm run generate:pages",
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "test:browser": "env -u FORCE_COLOR -u NO_COLOR playwright test browser-tests/responsive-browser.ts",
+    "pretest:browser:production": "npm run build",
+    "test:browser:production": "env -u FORCE_COLOR -u NO_COLOR TOKENBENCH_BROWSER_ASSET_MODE=production playwright test --config=playwright.production.config.ts browser-tests/responsive-browser.ts",
+    "test:mockups": "npm test -- scripts/*mockup*.test.ts && env -u FORCE_COLOR -u NO_COLOR playwright test --config=playwright.mockups.config.ts",
+    "render:mockups": "tsx scripts/render-tokenbench-mockups.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

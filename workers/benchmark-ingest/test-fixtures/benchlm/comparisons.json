@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-05T06:25:54.198Z",
+  "sourceLastUpdated": "2026-08-05T06:25:54.198Z",
+  "canonicalUrl": "https://benchlm.ai/data/comparisons.json",
+  "name": "BenchLM Comparisons",
+  "description": "Reduced allowlist projection for parser tests.",
+  "sourceFiles": ["comparisons.json"],
+  "counts": { "items": 1 },
+  "items": [
+    {
+      "slug": "model-b-vs-model-a",
+      "modelA": { "canonicalModelKey": "model-b", "slug": "model-b" },
+      "modelB": { "canonicalModelKey": "model-a", "slug": "model-a" }
+    }
+  ]
+}

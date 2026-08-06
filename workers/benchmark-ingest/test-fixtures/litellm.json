@@ -1,0 +1,60 @@
+{
+  "provenance": {
+    "sourceUrl": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+    "repositoryUrl": "https://github.com/BerriAI/litellm",
+    "licenseId": "MIT",
+    "etag": "\"a19e0b7dcee6aad7dbc7683a95e34671347085bb50a6041f0ca0bf4c16b3f3cd\"",
+    "lastModified": null,
+    "upstreamRevision": null,
+    "schemaVersion": null,
+    "snapshotKey": "benchmarks/litellm/model-prices/377120e920e9a4417ecdc8e9ce6642cea391a35b8e138e927a6dd3e46231c8e1.json",
+    "contentHash": "sha256:377120e920e9a4417ecdc8e9ce6642cea391a35b8e138e927a6dd3e46231c8e1",
+    "originalContentHash": "sha256:64c1cd8e97ecf9801c8cf66c66f16552168b08535230b8e0a5304fdee31a08b5",
+    "retrievedAt": "2026-08-05T10:20:10.000Z",
+    "projectionFields": [
+      "litellm_provider",
+      "mode",
+      "input_cost_per_token",
+      "output_cost_per_token",
+      "cache_read_input_token_cost",
+      "max_input_tokens",
+      "max_output_tokens",
+      "max_tokens",
+      "supported_modalities"
+    ]
+  },
+  "payload": {
+    "sample_spec": {
+      "input_cost_per_token": 0,
+      "litellm_provider": "one of https://docs.litellm.ai/docs/providers",
+      "max_input_tokens": "max input tokens, if the provider specifies it. if not default to max_tokens",
+      "max_output_tokens": "max output tokens, if the provider specifies it. if not default to max_tokens",
+      "max_tokens": "LEGACY parameter",
+      "mode": "one of: chat, embedding, completion"
+    },
+    "azure/codex-mini": {
+      "litellm_provider": "azure",
+      "mode": "responses",
+      "input_cost_per_token": 0.0000015,
+      "output_cost_per_token": 0.000006,
+      "cache_read_input_token_cost": 0.000000375,
+      "max_input_tokens": 200000,
+      "max_output_tokens": 100000,
+      "max_tokens": 100000,
+      "supported_modalities": [
+        "text",
+        "image"
+      ],
+      "supported_endpoints": [
+        "/v1/responses"
+      ]
+    },
+    "1024-x-1024/dall-e-2": {
+      "litellm_provider": "openai",
+      "mode": "image_generation"
+    },
+    "fallback_generalizations": {
+      "rules": []
+    }
+  }
+}

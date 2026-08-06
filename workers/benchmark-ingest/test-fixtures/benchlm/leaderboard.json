@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-05T06:25:54.198Z",
+  "sourceLastUpdated": "2026-08-05T06:25:54.198Z",
+  "canonicalUrl": "https://benchlm.ai/data/leaderboard.json",
+  "name": "BenchLM Leaderboard",
+  "description": "Reduced allowlist projection for parser tests.",
+  "rankingMode": "public",
+  "sourceFiles": ["leaderboard.json"],
+  "counts": { "items": 2 },
+  "items": [
+    {
+      "canonicalModelKey": "model-a",
+      "slug": "model-a",
+      "model": "Model A",
+      "creator": "Acme",
+      "sourceType": "Proprietary",
+      "reasoningType": null,
+      "contextWindowTokens": 128000,
+      "evidenceStatus": "supported",
+      "rankingEligible": true
+    },
+    {
+      "canonicalModelKey": "model-b",
+      "slug": "model-b",
+      "model": "Model B",
+      "creator": "Acme",
+      "sourceType": "Open Weight",
+      "reasoningType": null,
+      "contextWindowTokens": 0,
+      "evidenceStatus": "estimated",
+      "rankingEligible": true
+    }
+  ]
+}

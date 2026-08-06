@@ -1,0 +1,56 @@
+{
+  "provenance": {
+    "artifactId": "text_style_control:latest:overall:rows-0-100",
+    "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=text_style_control&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100",
+    "datasetUrl": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+    "licenseId": "CC-BY-4.0",
+    "etag": null,
+    "lastModified": null,
+    "split": "latest",
+    "category": "overall",
+    "subset": "text_style_control",
+    "offset": 0,
+    "length": 100,
+    "upstreamRevision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0",
+    "responseHeaders": {
+      "x-revision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0"
+    },
+    "schemaVersion": null,
+    "snapshotKey": "benchmarks/lmarena/text_style_control/latest/overall/offset-0-length-100/5d873e68d4c28a8ae16c0ffae78ace63cdeb6f3110c6fcc364f31cbd018e292d.json",
+    "contentHash": "sha256:5d873e68d4c28a8ae16c0ffae78ace63cdeb6f3110c6fcc364f31cbd018e292d",
+    "originalContentHash": "sha256:9e78bca94653a81405fab13ab5b7fa9ae0238936e96031f7d19e31897d22d53f",
+    "retrievedAt": "2026-08-05T10:57:47.000Z",
+    "projectionFields": [
+      "model_name",
+      "organization",
+      "license",
+      "rating",
+      "rating_lower",
+      "rating_upper",
+      "variance",
+      "vote_count",
+      "rank",
+      "category",
+      "leaderboard_publish_date"
+    ]
+  },
+  "rows": [
+    {
+      "row_idx": 0,
+      "row": {
+        "model_name": "claude-fable-5",
+        "organization": "anthropic",
+        "license": "Proprietary",
+        "rating": 1508.576862666775,
+        "rating_lower": 1502.750545162002,
+        "rating_upper": 1514.403180171548,
+        "variance": 8.836740741188125,
+        "vote_count": 17799,
+        "rank": 1,
+        "category": "overall",
+        "leaderboard_publish_date": "2026-08-03"
+      },
+      "truncated_cells": []
+    }
+  ]
+}

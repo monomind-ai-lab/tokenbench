@@ -2,6 +2,25 @@
 
 A responsive calculator for comparing verified paid individual AI subscriptions with current API token prices.
 
+## Platform
+
+TokenBench is the decision engine for AI costs and model benchmarks. Its release
+surface combines:
+
+- subscription-versus-API cost analysis at
+  [Tools](/tools/subscriptions-vs-apis/);
+- a revisioned catalog of verified subscription and API offers;
+- source-attributed benchmark directories and workload-aware leaderboards;
+- a compare hub and canonical, server-rendered model-pair pages;
+- crawlable guides that connect cost, model-selection, and source-methodology
+  decisions.
+
+Catalog and benchmark data are published by separate scheduled Cloudflare
+Workers. The browser consumes the published Pages APIs; it does not fetch
+benchmark providers directly. Published data retains source attribution,
+timestamps, and explicit unavailable or stale states rather than silently
+substituting values.
+
 ## What it calculates
 
 - A blended API cost per million tokens from the selected models and input/output mix.
@@ -57,3 +76,18 @@ npm run test:browser
 ```
 
 The app uses React, TypeScript, Vite, Cloudflare Workers/D1/R2 for catalog ingestion, and Playwright for responsive browser coverage.
+
+## Deployment and operations
+
+The release procedure, evidence template, authorization boundaries, rollback
+guidance, and production smoke checklist are in
+[docs/tokenbench-deployment.md](docs/tokenbench-deployment.md). For the shared
+catalog/benchmark data plane, bindings, schedules, integrity invariants, and
+public API contract, see
+[docs/catalog-deployment.md](docs/catalog-deployment.md). Source rights and
+visible-attribution rules are documented in
+[docs/data-sources.md](docs/data-sources.md).
+
+Do not treat a successful local build as authorization to mutate Cloudflare,
+attach a domain, create a redirect, or push a release commit. Those operations
+are intentionally separated in the deployment runbook.

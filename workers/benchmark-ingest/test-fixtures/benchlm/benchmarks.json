@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0",
+  "generatedAt": "2026-08-05T06:25:54.198Z",
+  "sourceLastUpdated": "2026-08-05T06:25:54.198Z",
+  "canonicalUrl": "https://benchlm.ai/data/benchmarks.json",
+  "name": "BenchLM Benchmarks",
+  "description": "Reduced allowlist projection for parser tests.",
+  "sourceFiles": ["benchmarks.json"],
+  "counts": { "items": 2 },
+  "items": [
+    {
+      "category": "coding",
+      "categoryLabel": "Coding",
+      "benchmarkKey": "safe-coding",
+      "name": "Safe Coding Benchmark",
+      "paperUrl": "https://example.org/safe-coding",
+      "weight": 1
+    },
+    {
+      "category": "reasoning",
+      "categoryLabel": "Reasoning",
+      "benchmarkKey": "safe-reasoning",
+      "name": "Safe Reasoning Benchmark",
+      "paperUrl": "https://example.org/safe-reasoning",
+      "weight": 1
+    }
+  ]
+}

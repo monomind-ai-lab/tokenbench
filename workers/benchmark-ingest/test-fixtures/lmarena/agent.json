@@ -1,0 +1,56 @@
+{
+  "provenance": {
+    "artifactId": "agent:latest:overall:rows-0-100",
+    "sourceUrl": "https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset&config=agent&split=latest&where=%22category%22%3D%27overall%27&offset=0&length=100",
+    "datasetUrl": "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset",
+    "licenseId": "CC-BY-4.0",
+    "etag": null,
+    "lastModified": null,
+    "split": "latest",
+    "category": "overall",
+    "subset": "agent",
+    "offset": 0,
+    "length": 100,
+    "upstreamRevision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0",
+    "responseHeaders": {
+      "x-revision": "4e52c8e709c90a4cad8498d9db5aad11709b04e0"
+    },
+    "schemaVersion": null,
+    "snapshotKey": "benchmarks/lmarena/agent/latest/overall/offset-0-length-100/3f2c6e0b85579b74c6b8704cd800615c2b0a67169d10ee72d36e81d7e8267f14.json",
+    "contentHash": "sha256:3f2c6e0b85579b74c6b8704cd800615c2b0a67169d10ee72d36e81d7e8267f14",
+    "originalContentHash": "sha256:92bc654a76df181bda2212184722dbb5825d7c7d3d1bb80e76571da17144bc66",
+    "retrievedAt": "2026-08-05T10:57:48.000Z",
+    "projectionFields": [
+      "model_name",
+      "organization",
+      "license",
+      "score",
+      "score_ci_lower",
+      "score_ci_upper",
+      "observation_count",
+      "session_count",
+      "rank",
+      "category",
+      "leaderboard_publish_date"
+    ]
+  },
+  "rows": [
+    {
+      "row_idx": 0,
+      "row": {
+        "model_name": "Claude Opus 5 (High)",
+        "organization": "anthropic",
+        "license": "Proprietary",
+        "score": 0.12099932361820687,
+        "score_ci_lower": 0.10701570657993759,
+        "score_ci_upper": 0.13498294065647615,
+        "observation_count": 1845220,
+        "session_count": 19135,
+        "rank": 1,
+        "category": "overall",
+        "leaderboard_publish_date": "2026-08-03"
+      },
+      "truncated_cells": []
+    }
+  ]
+}
