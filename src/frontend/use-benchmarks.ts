@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { activeBenchAlignSourceMetadata, type BenchAlignSourceMetadata } from '../benchmarks/benchalign-metadata';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardDefinition, type LeaderboardEntry, type LeaderboardResult, type LeaderboardSort } from '../benchmarks/leaderboards';
+import {
+  LEADERBOARD_EVIDENCE_STATUSES,
+  LEADERBOARD_SORT_ORDER,
+  LEADERBOARD_SOURCE_TYPES,
+  leaderboardQueryToSearchParams,
+  type LeaderboardQueryCapabilities,
+  type LeaderboardQueryState,
+} from '../benchmarks/leaderboard-query';
 import { BENCHMARK_SOURCE_IDS, type BenchmarkSourceId } from '../benchmarks/contracts';
 import {
   DECISION_PICK_CATEGORIES,
@@ -55,9 +63,21 @@ export type BenchmarkPhase = 'loading' | 'ready' | 'stale' | 'unavailable' | 'er
 
 export interface BenchmarkLeaderboardState {
   readonly phase: BenchmarkPhase;
-  readonly envelope: BenchmarkApiEnvelope<LeaderboardResult> | null;
+  readonly envelope: BenchmarkApiEnvelope<LeaderboardPageResult> | null;
   readonly error: string | null;
   readonly retry: () => void;
+}
+
+export interface LeaderboardPagination {
+  readonly limit: number;
+  readonly total: number;
+  readonly nextCursor: string | null;
+}
+
+/** A bounded server page plus capabilities derived from its complete projection. */
+export interface LeaderboardPageResult extends LeaderboardResult {
+  readonly pagination?: LeaderboardPagination;
+  readonly capabilities?: LeaderboardQueryCapabilities;
 }
 
 const DEFAULT_LIMIT = 50;
@@ -102,11 +122,64 @@ function isEvidenceStatus(value: unknown): boolean {
 }
 
 function isLeaderboardSort(value: unknown): value is LeaderboardSort {
-  return value === 'score-desc'
-    || value === 'rank-asc'
-    || value === 'pareto-score-desc'
-    || value === 'price-asc'
-    || value === 'context-desc';
+  return typeof value === 'string' && LEADERBOARD_SORT_ORDER.includes(value as LeaderboardSort);
+}
+
+function isSortedUniqueStrings(value: unknown, predicate: (item: string) => boolean): value is readonly string[] {
+  return Array.isArray(value)
+    && value.every((item) => typeof item === 'string' && predicate(item))
+    && value.every((item, index) => index === 0 || value[index - 1]! < item);
+}
+
+/** Capability lists are ordered subsets of the server's published vocabulary, not alphabetized. */
+function isCanonicalOrderedSubset<T extends string>(value: unknown, vocabulary: readonly T[]): value is readonly T[] {
+  let previousIndex = -1;
+  return Array.isArray(value) && value.every((item) => {
+    if (typeof item !== 'string') return false;
+    const currentIndex = vocabulary.indexOf(item as T);
+    if (currentIndex < 0 || currentIndex <= previousIndex) return false;
+    previousIndex = currentIndex;
+    return true;
+  });
+}
+
+function isLeaderboardPagination(value: unknown, expectedLimit?: number): value is LeaderboardPagination {
+  if (!isRecord(value)) return false;
+  return Number.isSafeInteger(value.limit)
+    && (value.limit as number) >= 1
+    && (value.limit as number) <= MAX_LIMIT
+    && (expectedLimit === undefined || value.limit === expectedLimit)
+    && Number.isSafeInteger(value.total)
+    && (value.total as number) >= 0
+    && (value.total as number) <= 4_096
+    && (value.nextCursor === null || (typeof value.nextCursor === 'string'
+      && /^[A-Za-z0-9_-]{1,2048}$/u.test(value.nextCursor)));
+}
+
+function isLeaderboardCapabilities(value: unknown, key: LeaderboardKey): value is LeaderboardQueryCapabilities {
+  if (!isRecord(value)) return false;
+  const definition = LEADERBOARD_DEFINITIONS[key];
+  const supportsProfile = definition.kind === 'value' || definition.kind === 'pricing-context';
+  const supportsEstimated = ('sourceId' in definition && definition.sourceId === 'benchlm') || definition.kind === 'multimodal';
+  const priceMode = supportsProfile ? 'profile' : 'representative';
+  const sourceTypes = value.sourceTypes;
+  const evidenceStatuses = value.evidenceStatuses;
+  return value.dataReady === true
+    && value.defaultProfile === 'balanced'
+    && value.defaultSort === definition.defaultSort
+    && value.supportsProfile === supportsProfile
+    && value.supportsEstimated === supportsEstimated
+    && value.supportsLifecycle === false
+    && value.priceMode === priceMode
+    && typeof value.supportsPrice === 'boolean'
+    && Array.isArray(value.metricKeys)
+    && value.metricKeys.length === definition.metricKeys.length
+    && value.metricKeys.every((metric, index) => metric === definition.metricKeys[index])
+    && isCanonicalOrderedSubset(value.sorts, LEADERBOARD_SORT_ORDER)
+    && value.sorts.includes(definition.defaultSort)
+    && (value.providers === null || isSortedUniqueStrings(value.providers, (provider) => provider.trim().length > 0 && provider.length <= 120))
+    && (sourceTypes === null || isCanonicalOrderedSubset(sourceTypes, LEADERBOARD_SOURCE_TYPES))
+    && (evidenceStatuses === null || isCanonicalOrderedSubset(evidenceStatuses, LEADERBOARD_EVIDENCE_STATUSES));
 }
 
 function isLeaderboardDefinition(value: unknown): value is LeaderboardDefinition {
@@ -463,16 +536,23 @@ function isLeaderboardEnvelope(
   key: LeaderboardKey,
   profile: WorkloadProfile,
   includeEstimated: boolean,
-): value is BenchmarkApiEnvelope<LeaderboardResult> {
+  expectedLimit: number,
+  requireCompletePage: boolean,
+): value is BenchmarkApiEnvelope<LeaderboardPageResult> {
   if (!isRecord(value) || !isNonEmptyString(value.revision) || !isFiniteIsoTimestamp(value.publishedAt)) return false;
   if (!isFreshness(value.freshness) || !Array.isArray(value.attribution) || value.attribution.length === 0 || !value.attribution.every(isAttribution)) return false;
   if (!isRecord(value.data)) return false;
   if (value.data.key !== key || value.data.profile !== profile || !isExpectedLeaderboardDefinition(value.data.definition, key)) return false;
   if (!Array.isArray(value.data.entries) || !value.data.entries.every(isLeaderboardEntry)) return false;
+  if (value.data.pagination !== undefined && !isLeaderboardPagination(value.data.pagination, expectedLimit)) return false;
+  if (value.data.capabilities !== undefined && !isLeaderboardCapabilities(value.data.capabilities, key)) return false;
   const entries = value.data.entries as readonly LeaderboardEntry[];
+  const pagination = value.data.pagination as LeaderboardPagination | undefined;
   const attribution = value.attribution as readonly BenchmarkAttribution[];
   const definition = LEADERBOARD_DEFINITIONS[key];
-  return entries.every((entry) => isEntryForDefinition(entry, definition, profile))
+  return (!requireCompletePage || (pagination !== undefined && value.data.capabilities !== undefined))
+    && (!pagination || (entries.length <= pagination.limit && entries.length <= pagination.total))
+    && entries.every((entry) => isEntryForDefinition(entry, definition, profile))
     && hasApplicableAttribution(attribution, definition, entries)
     && hasSafeEstimatedSection(entries, includeEstimated);
 }
@@ -489,10 +569,18 @@ export function leaderboardEndpoint(
   limit = DEFAULT_LIMIT,
   cursor?: string,
   includeEstimated = false,
+  filters?: LeaderboardQueryState,
 ): string {
-  const query = new URLSearchParams({ profile, limit: String(normalizeLimit(limit)) });
+  const query = filters
+    ? leaderboardQueryToSearchParams({
+      ...filters,
+      profile,
+      includeEstimated: includeEstimated && supportsEstimatedModels(key),
+    })
+    : new URLSearchParams({ profile });
+  query.set('limit', String(normalizeLimit(limit)));
   if (cursor && cursor.trim().length > 0) query.set('cursor', cursor);
-  if (includeEstimated && supportsEstimatedModels(key)) query.set('includeEstimated', '1');
+  if (!filters && includeEstimated && supportsEstimatedModels(key)) query.set('includeEstimated', '1');
   return `/api/benchmarks/leaderboards/${encodeURIComponent(key)}?${query.toString()}`;
 }
 
@@ -510,6 +598,7 @@ export function useBenchmarkLeaderboard(
   limit = DEFAULT_LIMIT,
   cursor?: string,
   includeEstimated = false,
+  filters?: LeaderboardQueryState,
 ): BenchmarkLeaderboardState {
   const [state, setState] = useState<Omit<BenchmarkLeaderboardState, 'retry'>>({
     phase: 'loading',
@@ -521,6 +610,15 @@ export function useBenchmarkLeaderboard(
   const retry = useCallback(() => setRetryVersion((version) => version + 1), []);
   const normalizedLimit = normalizeLimit(limit);
   const requestIncludesEstimated = includeEstimated && supportsEstimatedModels(key);
+  const endpoint = leaderboardEndpoint(
+    key,
+    profile,
+    normalizedLimit,
+    cursor,
+    requestIncludesEstimated,
+    filters,
+  );
+  const requireCompletePage = filters !== undefined;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -530,7 +628,7 @@ export function useBenchmarkLeaderboard(
 
     const load = async () => {
       try {
-        const response = await fetch(leaderboardEndpoint(key, profile, normalizedLimit, cursor, requestIncludesEstimated), {
+        const response = await fetch(endpoint, {
           headers: { accept: 'application/json' },
           signal: controller.signal,
         });
@@ -552,7 +650,14 @@ export function useBenchmarkLeaderboard(
           return;
         }
         if (!active || controller.signal.aborted || requestVersion.current !== version) return;
-        if (!isLeaderboardEnvelope(payload, key, profile, requestIncludesEstimated)) {
+        if (!isLeaderboardEnvelope(
+          payload,
+          key,
+          profile,
+          requestIncludesEstimated,
+          normalizedLimit,
+          requireCompletePage,
+        )) {
           setState(unavailableState('Published benchmark data is unavailable.'));
           return;
         }
@@ -579,7 +684,7 @@ export function useBenchmarkLeaderboard(
       active = false;
       controller.abort();
     };
-  }, [cursor, key, normalizedLimit, profile, requestIncludesEstimated, retryVersion]);
+  }, [endpoint, key, normalizedLimit, profile, requestIncludesEstimated, requireCompletePage, retryVersion]);
 
   return { ...state, retry };
 }

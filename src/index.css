@@ -478,6 +478,10 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .leaderboard-estimated-control { min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 3px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--outline)); border-radius: 8px; background: color-mix(in srgb, var(--primary-soft) 32%, var(--surface)); }
 .leaderboard-estimated-control small { grid-column: 2; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
 .leaderboard-results { min-width: 0; overflow: hidden; border: 1px solid var(--outline); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.leaderboard-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 18px; padding: 14px 18px; border-top: 1px solid var(--outline); background: var(--surface-low); }
+.leaderboard-pagination p { margin: 0; color: var(--muted); font-family: var(--font-label); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.045em; text-transform: uppercase; }
+.leaderboard-pagination > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.leaderboard-pagination .button { min-width: 112px; }
 .leaderboard-desktop-table { min-width: 0; overflow-x: auto; }
 .leaderboard-desktop-table table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 0.78rem; }
 .leaderboard-desktop-table thead { background: var(--surface-container); }
@@ -650,6 +654,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .leaderboard-estimated-control { align-items: start; }
   .leaderboard-card { padding: 16px; }
   .leaderboard-card dl { grid-template-columns: minmax(0, 1fr); }
+  .leaderboard-pagination { display: grid; padding: 14px 16px; }
+  .leaderboard-pagination > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .leaderboard-pagination .button { width: 100%; min-width: 0; }
   .leaderboard-evidence { padding: 14px 16px; }
   .leaderboard-related nav { display: grid; grid-template-columns: minmax(0, 1fr); }
   .leaderboard-related nav a { justify-content: space-between; }

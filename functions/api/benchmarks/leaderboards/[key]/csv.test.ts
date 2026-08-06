@@ -191,6 +191,53 @@ async function jsonResponse(path: string, fixture: ReturnType<typeof cacheDataba
 afterEach(() => vi.useRealTimers());
 
 describe('leaderboard CSV endpoint', () => {
+  it('uses the complete projection for discoverability, sort-leading pagination, capabilities, and CSV export parity', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T01:00:00.000Z');
+    const firstFifty = Array.from({ length: 50 }, (_, index) => entry({
+      modelKey: `model-${String(index).padStart(2, '0')}`,
+      name: `Model ${index}`,
+      provider: index % 2 === 0 ? 'Provider A' : 'Provider B',
+      score: 900 - index,
+    }));
+    const needleAfterFifty = entry({
+      modelKey: 'needle-after-fifty',
+      name: 'Needle after fifty',
+      provider: 'Tail Provider',
+      score: 1_000,
+    });
+    const fixture = cacheDatabase({ fresh: JSON.stringify(projection([...firstFifty, needleAfterFifty])) });
+
+    const first = await jsonResponse('/api/benchmarks/leaderboards/llm-coding?sort=score-desc&limit=50', fixture);
+    const firstBody = await first.json() as { data: {
+      entries: Array<{ model: { modelKey: string } }>;
+      pagination: { limit: number; total: number; nextCursor: string | null };
+      capabilities?: { providers: readonly string[] | null };
+    } };
+    const second = await jsonResponse(
+      `/api/benchmarks/leaderboards/llm-coding?sort=score-desc&limit=50&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor!)}`,
+      fixture,
+    );
+    const secondBody = await second.json() as { data: { entries: Array<{ model: { modelKey: string } }>; pagination: { nextCursor: string | null } } };
+    const filtered = await jsonResponse('/api/benchmarks/leaderboards/llm-coding?q=Needle&sort=score-desc', fixture);
+    const filteredBody = await filtered.json() as { data: { entries: Array<{ model: { modelKey: string } }>; pagination: { total: number } } };
+    const csv = await csvResponse('/api/benchmarks/leaderboards/llm-coding/csv?q=Needle&sort=score-desc', fixture);
+
+    expect(first.status).toBe(200);
+    expect(firstBody.data.entries).toHaveLength(50);
+    expect(firstBody.data.entries[0]?.model.modelKey).toBe('needle-after-fifty');
+    expect(firstBody.data.pagination).toMatchObject({ limit: 50, total: 51 });
+    expect(firstBody.data.pagination.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(firstBody.data.capabilities?.providers).toEqual(['Provider A', 'Provider B', 'Tail Provider']);
+    expect(second.status).toBe(200);
+    expect(secondBody.data.entries.map((row) => row.model.modelKey)).toEqual(['model-49']);
+    expect(secondBody.data.pagination.nextCursor).toBeNull();
+    expect(filtered.status).toBe(200);
+    expect(filteredBody.data.entries.map((row) => row.model.modelKey)).toEqual(['needle-after-fifty']);
+    expect(filteredBody.data.pagination.total).toBe(1);
+    expect((await csv.text()).split('\r\n')[1]).toContain('Needle after fifty');
+  });
+
   it('exports the complete filtered ordering with revision and publication headers', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-08-06T01:00:00.000Z');

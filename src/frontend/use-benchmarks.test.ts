@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LeaderboardKey } from '../routing/routes';
+import type { LeaderboardQueryState } from '../benchmarks/leaderboard-query';
 import {
   benchmarkSummaryEndpoint,
   leaderboardEndpoint,
@@ -520,6 +521,86 @@ describe('useBenchmarkLeaderboard', () => {
       .toBe('/api/benchmarks/leaderboards/llm-human-preference?profile=balanced&limit=50');
     expect(leaderboardEndpoint('llm-pricing-context', 'balanced', 50, undefined, true))
       .toBe('/api/benchmarks/leaderboards/llm-pricing-context?profile=balanced&limit=50');
+  });
+
+  it('fails closed when a filter-aware page response omits complete-projection capabilities or pagination', async () => {
+    const filters: LeaderboardQueryState = {
+      query: '',
+      profile: 'balanced',
+      priceMode: 'representative',
+      metricKey: null,
+      sort: 'score-desc',
+      providers: [],
+      sourceTypes: [],
+      evidence: null,
+      priceMinimum: null,
+      priceMaximum: null,
+      includeEstimated: false,
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(codingEnvelope())));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(
+      'llm-coding',
+      'balanced',
+      50,
+      undefined,
+      false,
+      filters,
+    ));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
+  it('accepts the published capability order for a complete multi-sort value projection', async () => {
+    const filters: LeaderboardQueryState = {
+      query: '',
+      profile: 'balanced',
+      priceMode: 'profile',
+      metricKey: null,
+      sort: 'pareto-score-desc',
+      providers: [],
+      sourceTypes: [],
+      evidence: null,
+      priceMinimum: null,
+      priceMaximum: null,
+      includeEstimated: false,
+    };
+    const payload = leaderboardEnvelope();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: {
+        ...payload.data,
+        pagination: { limit: 50, total: 1, nextCursor: null },
+        capabilities: {
+          dataReady: true,
+          defaultProfile: 'balanced',
+          defaultSort: 'pareto-score-desc',
+          supportsProfile: true,
+          supportsEstimated: true,
+          supportsLifecycle: false,
+          priceMode: 'profile',
+          supportsPrice: true,
+          metricKeys: ['benchlm:overall:raw'],
+          sorts: ['score-desc', 'pareto-score-desc', 'price-asc', 'context-desc'],
+          providers: ['Provider A'],
+          sourceTypes: ['Proprietary'],
+          evidenceStatuses: ['supported'],
+        },
+      },
+    })));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(
+      'llm-value',
+      'balanced',
+      50,
+      undefined,
+      false,
+      filters,
+    ));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.capabilities?.sorts).toEqual(['score-desc', 'pareto-score-desc', 'price-asc', 'context-desc']);
   });
 
   it.each([

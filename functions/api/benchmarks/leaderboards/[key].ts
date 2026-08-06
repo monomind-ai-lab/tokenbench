@@ -318,6 +318,7 @@ export async function onRequestGet({
       data: {
         ...leaderboard,
         entries: pagedEntries,
+        capabilities,
         pagination: {
           limit: normalized.limit,
           total: entries.length,

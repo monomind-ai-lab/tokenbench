@@ -10,8 +10,7 @@ import type {
   BenchmarkPriceCheck,
 } from '../src/benchmarks/contracts';
 import { DECISION_PICK_CATEGORIES, type DecisionPickEntry } from '../src/benchmarks/decision-picks';
-import type { LeaderboardResult } from '../src/benchmarks/leaderboards';
-import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../src/frontend/use-benchmarks';
+import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult } from '../src/frontend/use-benchmarks';
 import { LEADERBOARD_ROUTES } from '../src/routing/routes';
 
 export const HANDLER_COMPARISON_PATH = '/compare/alpha-vs-beta';
@@ -220,8 +219,24 @@ export const CODING_LEADERBOARD_ENVELOPE = {
         onValueFrontier: false,
       },
     ],
+    pagination: { limit: 50, total: 2, nextCursor: null },
+    capabilities: {
+      dataReady: true,
+      defaultProfile: 'balanced',
+      defaultSort: 'score-desc',
+      supportsProfile: false,
+      supportsEstimated: true,
+      supportsLifecycle: false,
+      priceMode: 'representative',
+      supportsPrice: false,
+      metricKeys: ['benchlm:category:coding'],
+      sorts: ['score-desc'],
+      providers: ['Anthropic', 'OpenAI'],
+      sourceTypes: ['Proprietary'],
+      evidenceStatuses: ['supported'],
+    },
   },
-} satisfies BenchmarkApiEnvelope<LeaderboardResult>;
+} satisfies BenchmarkApiEnvelope<LeaderboardPageResult>;
 
 export const MEDIA_LEADERBOARD_ENVELOPE = {
   revision: REVISION,
@@ -259,8 +274,24 @@ export const MEDIA_LEADERBOARD_ENVELOPE = {
         onValueFrontier: false,
       },
     ],
+    pagination: { limit: 50, total: 2, nextCursor: null },
+    capabilities: {
+      dataReady: true,
+      defaultProfile: 'balanced',
+      defaultSort: 'rank-asc',
+      supportsProfile: false,
+      supportsEstimated: false,
+      supportsLifecycle: false,
+      priceMode: 'representative',
+      supportsPrice: false,
+      metricKeys: ['lmarena:text_to_image:overall'],
+      sorts: ['rank-asc'],
+      providers: ['Canvas Labs', 'Prism Labs'],
+      sourceTypes: ['Proprietary'],
+      evidenceStatuses: ['source_only'],
+    },
   },
-} satisfies BenchmarkApiEnvelope<LeaderboardResult>;
+} satisfies BenchmarkApiEnvelope<LeaderboardPageResult>;
 
 export function comparisonDirectoryEnvelope(options: {
   readonly stale?: boolean;
@@ -720,15 +751,15 @@ export async function stubHandlerBackedComparison(
   });
 }
 
-export function readyCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardResult> {
-  return clone(CODING_LEADERBOARD_ENVELOPE) as BenchmarkApiEnvelope<LeaderboardResult>;
+export function readyCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
+  return clone(CODING_LEADERBOARD_ENVELOPE) as BenchmarkApiEnvelope<LeaderboardPageResult>;
 }
 
-export function readyMediaLeaderboard(): BenchmarkApiEnvelope<LeaderboardResult> {
-  return clone(MEDIA_LEADERBOARD_ENVELOPE) as BenchmarkApiEnvelope<LeaderboardResult>;
+export function readyMediaLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
+  return clone(MEDIA_LEADERBOARD_ENVELOPE) as BenchmarkApiEnvelope<LeaderboardPageResult>;
 }
 
-export function staleCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardResult> {
+export function staleCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
   const value = readyCodingLeaderboard();
   return {
     ...value,
@@ -740,7 +771,14 @@ export function staleCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardResult
   };
 }
 
-export function emptyCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardResult> {
+export function emptyCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
   const value = readyCodingLeaderboard();
-  return { ...value, data: { ...value.data, entries: [] } };
+  return {
+    ...value,
+    data: {
+      ...value.data,
+      entries: [],
+      pagination: { limit: value.data.pagination?.limit ?? 50, total: 0, nextCursor: null },
+    },
+  };
 }

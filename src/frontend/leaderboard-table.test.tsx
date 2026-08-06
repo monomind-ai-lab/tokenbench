@@ -111,6 +111,8 @@ function apiEnvelope(
   profile: 'inputHeavy' | 'balanced' | 'outputHeavy' = 'balanced',
   entries: readonly LeaderboardEntry[] = [entry()],
   freshness: { status: 'fresh' | 'stale'; checkedAt: string; message?: string } = { status: 'fresh', checkedAt: ISO_TIME },
+  completeEntries: readonly LeaderboardEntry[] = entries,
+  total = entries.length,
 ) {
   const definitions: Partial<Record<LeaderboardKey, Record<string, unknown>>> = {
     'llm-coding': { kind: 'benchlm', sourceId: 'benchlm', metricKeys: ['benchlm:category:coding'], defaultSort: 'score-desc' },
@@ -132,12 +134,42 @@ function apiEnvelope(
     publishedAt: ISO_TIME,
     freshness,
     attribution,
-    data: { key, profile, definition: definitions[key] ?? definitions['llm-coding'], entries },
+    data: {
+      key,
+      profile,
+      definition: definitions[key] ?? definitions['llm-coding'],
+      entries,
+      capabilities: leaderboardFilterCapabilities(key, completeEntries),
+      pagination: { limit: 50, total, nextCursor: null },
+    },
   };
 }
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+/** Mirrors the bounded API contract so route tests never reintroduce page-local filtering. */
+function leaderboardApiResponse(
+  input: string,
+  key: LeaderboardKey,
+  completeEntries: readonly LeaderboardEntry[],
+  freshness: { status: 'fresh' | 'stale'; checkedAt: string; message?: string } = { status: 'fresh', checkedAt: ISO_TIME },
+) {
+  const url = new URL(input, 'https://tokenbench.test');
+  const capabilities = leaderboardFilterCapabilities(key, completeEntries);
+  const filters = parseLeaderboardFilters(url.search, key, completeEntries, capabilities);
+  const filtered = visibleLeaderboardEntries(completeEntries, filters, key);
+  const requestedLimit = Number(url.searchParams.get('limit') ?? '50');
+  const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : 50;
+  return jsonResponse(apiEnvelope(
+    key,
+    filters.profile,
+    filtered.slice(0, limit),
+    freshness,
+    completeEntries,
+    filtered.length,
+  ));
 }
 
 function renderTable(
@@ -614,7 +646,8 @@ describe('LeaderboardFilters', () => {
 
 describe('leaderboard routes and the Home decision snapshot', () => {
   it('mounts a category page from its registered route with normalized controls, attribution, related routes, and the MonoMind CTA', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced')));
+    const entries = [entry()];
+    const fetchMock = vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', entries)));
     vi.stubGlobal('fetch', fetchMock);
     window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=outputHeavy&sort=price-asc&q=provider&estimated=1');
 
@@ -623,7 +656,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     expect(await screen.findByRole('heading', { name: 'Coding benchmark', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('checkbox', { name: 'Include estimated BenchLM models' })).toBeChecked();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=50&includeEstimated=1');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&q=provider&estimated=1&limit=50');
     expect(within(screen.getByLabelText('Published leaderboard evidence')).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('heading', { name: 'Related leaderboards', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
@@ -642,7 +675,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       primaryPrice: null,
       blendedCostPerMillion: null,
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta]))));
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [alpha, beta]))));
     window.history.replaceState({}, '', '/leaderboards/llm/coding/?utm_source=newsletter&profile=outputHeavy&provider=Provider+B');
     const replaceState = vi.spyOn(window.history, 'replaceState');
 
@@ -672,23 +705,32 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       contextWindowTokens: 128_000,
     });
     let resolveResponse: ((response: Response) => void) | undefined;
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { resolveResponse = resolve; })));
+    let pendingRequest = '';
+    let firstRequest = true;
+    vi.stubGlobal('fetch', vi.fn((input: string) => {
+      if (!firstRequest) return Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [alpha, beta]));
+      firstRequest = false;
+      return new Promise<Response>((resolve) => {
+        pendingRequest = input;
+        resolveResponse = resolve;
+      });
+    }));
     window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=balanced&sort=context-desc');
 
     const firstRender = render(<App />);
 
     expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
-    resolveResponse?.(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta])));
+    resolveResponse?.(leaderboardApiResponse(pendingRequest, 'llm-coding', [alpha, beta]));
     const firstTable = await screen.findByRole('table', { name: 'Coding benchmark' });
-    expect(within(firstTable).getAllByRole('row')[1]).toHaveTextContent('Beta');
+    await waitFor(() => expect(within(firstTable).getAllByRole('row')[1]).toHaveTextContent('Beta'));
     expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
 
     firstRender.unmount();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta]))));
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [alpha, beta]))));
     render(<App />);
 
     const reopened = await screen.findByRole('table', { name: 'Coding benchmark' });
-    expect(within(reopened).getAllByRole('row')[1]).toHaveTextContent('Beta');
+    await waitFor(() => expect(within(reopened).getAllByRole('row')[1]).toHaveTextContent('Beta'));
     expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
   });
 
@@ -722,10 +764,11 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     };
     const fetchMock = vi.fn((input: string) => {
       const profile = String(input).includes('profile=outputHeavy') ? 'outputHeavy' : 'balanced';
-      return Promise.resolve(jsonResponse(apiEnvelope('llm-value', profile, [
+      const completeEntries = [
         valueEntry('alpha', 'Alpha', 'Provider A', profile),
         valueEntry('beta', 'Beta', 'Provider B', profile),
-      ])));
+      ];
+      return Promise.resolve(leaderboardApiResponse(input, 'llm-value', completeEntries));
     });
     vi.stubGlobal('fetch', fetchMock);
     window.history.replaceState({}, '', '/leaderboards/llm/value/?profile=balanced&sort=pareto-score-desc');
@@ -749,7 +792,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
   });
 
   it('removes its popstate listener when the leaderboard page unmounts', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding'))));
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [entry()]))));
     window.history.replaceState({}, '', '/leaderboards/llm/coding/');
     const addEventListener = vi.spyOn(window, 'addEventListener');
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
@@ -774,21 +817,21 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       model: { ...entry().model, modelKey: 'other', slug: 'other', name: 'Other Model', creator: 'Provider A' },
       metric: { ...entry().metric!, modelKey: 'other', sourceModelId: 'other' },
     });
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [incorporated, other]))));
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [incorporated, other]))));
     window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
 
     render(<App />);
 
     expect(await screen.findByRole('checkbox', { name: 'Provider, Inc.' })).toBeChecked();
-    expect(screen.getAllByText('Incorporated Model')).toHaveLength(2);
-    expect(screen.queryByText('Other Model')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Incorporated Model')).toHaveLength(2));
+    await waitFor(() => expect(screen.queryAllByText('Other Model')).toHaveLength(0));
     expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
   });
 
   it('shows cached stale rows with an explicit freshness warning', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope(
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(
+      input,
       'llm-coding',
-      'balanced',
       [entry()],
       { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue.' },
     ))));
@@ -802,9 +845,9 @@ describe('leaderboard routes and the Home decision snapshot', () => {
   });
 
   it('keeps stale envelope metadata, source links, and cached rows visible together', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope(
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(
+      input,
       'llm-coding',
-      'balanced',
       [entry()],
       { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue.' },
     ))));
@@ -823,7 +866,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
   });
 
   it('keeps ready revision evidence visible when filters match zero rows', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding'))));
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [entry()]))));
     window.history.replaceState({}, '', '/leaderboards/llm/coding/?q=no-such-model');
 
     render(<App />);

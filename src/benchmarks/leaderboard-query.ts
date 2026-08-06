@@ -78,9 +78,12 @@ export const LEADERBOARD_SINGLE_VALUE_QUERY_KEYS = [
   'estimated',
 ] as const;
 const QUERY_KEYS = new Set<string>(LEADERBOARD_QUERY_KEYS);
-const SOURCE_TYPES: readonly LeaderboardSourceType[] = ['Open Weight', 'Proprietary', 'Unknown'];
-const EVIDENCE_STATUSES: readonly EvidenceStatus[] = ['supported', 'source_only', 'estimated'];
-const SORT_ORDER: readonly LeaderboardSort[] = [
+/** Canonical serialization order for source-type capability values. */
+export const LEADERBOARD_SOURCE_TYPES: readonly LeaderboardSourceType[] = ['Open Weight', 'Proprietary', 'Unknown'];
+/** Canonical serialization order for evidence capability values. */
+export const LEADERBOARD_EVIDENCE_STATUSES: readonly EvidenceStatus[] = ['supported', 'source_only', 'estimated'];
+/** Canonical serialization order for sort capability values. */
+export const LEADERBOARD_SORT_ORDER: readonly LeaderboardSort[] = [
   'score-desc',
   'rank-asc',
   'pareto-score-desc',
@@ -107,7 +110,7 @@ function isNonNegativeFinite(value: unknown): value is number {
 }
 
 function isEvidenceStatus(value: unknown): value is EvidenceStatus {
-  return typeof value === 'string' && EVIDENCE_STATUSES.includes(value as EvidenceStatus);
+  return typeof value === 'string' && LEADERBOARD_EVIDENCE_STATUSES.includes(value as EvidenceStatus);
 }
 
 function supportsEstimatedModels(definition: LeaderboardDefinition): boolean {
@@ -152,7 +155,7 @@ function allowedSorts(
   if (definition.kind === 'value') allowed.add('pareto-score-desc');
   if (entries.some((entry) => priceForEntry(entry, priceMode) !== null)) allowed.add('price-asc');
   if (entries.some((entry) => entry.contextWindowTokens !== null)) allowed.add('context-desc');
-  return SORT_ORDER.filter((sort) => allowed.has(sort));
+  return LEADERBOARD_SORT_ORDER.filter((sort) => allowed.has(sort));
 }
 
 function potentialSorts(definition: LeaderboardDefinition): readonly LeaderboardSort[] {
@@ -164,7 +167,7 @@ function potentialSorts(definition: LeaderboardDefinition): readonly Leaderboard
   if (definition.kind === 'lmarena' || definition.kind === 'multimodal') possible.add('rank-asc');
   possible.add('price-asc');
   possible.add('context-desc');
-  return SORT_ORDER.filter((sort) => possible.has(sort));
+  return LEADERBOARD_SORT_ORDER.filter((sort) => possible.has(sort));
 }
 
 /** Derives UI/API controls only from the route definition and published route data. */
@@ -194,10 +197,10 @@ export function createLeaderboardQueryCapabilities(
       ? sortedUnique(routeEntries.map((entry) => entry.model.creator).filter((provider) => provider.trim().length > 0))
       : null,
     sourceTypes: routeEntriesKnown
-      ? SOURCE_TYPES.filter((sourceType) => routeEntries.some((entry) => entry.model.sourceType === sourceType))
+      ? LEADERBOARD_SOURCE_TYPES.filter((sourceType) => routeEntries.some((entry) => entry.model.sourceType === sourceType))
       : null,
     evidenceStatuses: routeEntriesKnown
-      ? EVIDENCE_STATUSES.filter((status) => routeEntries.some((entry) => entry.model.evidenceStatus === status))
+      ? LEADERBOARD_EVIDENCE_STATUSES.filter((status) => routeEntries.some((entry) => entry.model.evidenceStatus === status))
       : null,
   };
 }
@@ -327,7 +330,7 @@ export function parseLeaderboardQuery(
 
   const rawSort = readSingle('sort');
   if (rawSort !== null) {
-    const knownSort = rawSort !== INVALID && SORT_ORDER.includes(rawSort as LeaderboardSort);
+    const knownSort = rawSort !== INVALID && LEADERBOARD_SORT_ORDER.includes(rawSort as LeaderboardSort);
     if (!knownSort
       || ((capabilities.dataReady || mode === 'api-preflight')
         && !capabilities.sorts.includes(rawSort as LeaderboardSort))) malformed = true;
@@ -344,7 +347,7 @@ export function parseLeaderboardQuery(
   const rawSourceTypes = params.getAll('sourceType');
   if (rawSourceTypes.length > 0) {
     const parsed = parseList(rawSourceTypes);
-    if (parsed === null || !parsed.every((sourceType) => SOURCE_TYPES.includes(sourceType as LeaderboardSourceType)
+    if (parsed === null || !parsed.every((sourceType) => LEADERBOARD_SOURCE_TYPES.includes(sourceType as LeaderboardSourceType)
       && isAllowedDynamicValue(capabilities.sourceTypes, sourceType, mode))) malformed = true;
     else sourceTypes = parsed as readonly LeaderboardSourceType[];
   }
@@ -440,13 +443,13 @@ function canonicalPrice(value: number | null): string | null {
 export function leaderboardQueryToSearchParams(state: LeaderboardQueryState): URLSearchParams {
   const params = new URLSearchParams();
   params.set('profile', isWorkloadProfile(state.profile) ? state.profile : 'balanced');
-  params.set('sort', SORT_ORDER.includes(state.sort) ? state.sort : 'score-desc');
+  params.set('sort', LEADERBOARD_SORT_ORDER.includes(state.sort) ? state.sort : 'score-desc');
   const query = parseQueryText(state.query);
   if (query) params.set('q', query);
   if (state.metricKey && state.metricKey.length <= MAX_QUERY_LENGTH) params.set('metric', state.metricKey);
   const providers = canonicalList(state.providers);
   for (const provider of providers) params.append('provider', provider);
-  const sourceTypes = canonicalList(state.sourceTypes).filter((value): value is LeaderboardSourceType => SOURCE_TYPES.includes(value as LeaderboardSourceType));
+  const sourceTypes = canonicalList(state.sourceTypes).filter((value): value is LeaderboardSourceType => LEADERBOARD_SOURCE_TYPES.includes(value as LeaderboardSourceType));
   for (const sourceType of sourceTypes) params.append('sourceType', sourceType);
   if (isEvidenceStatus(state.evidence)) params.set('evidence', state.evidence);
   const minimum = canonicalPrice(state.priceMinimum);

@@ -7,13 +7,14 @@ import {
   LeaderboardFilters,
 } from '../frontend/leaderboard-filters';
 import {
+  bootstrapLeaderboardFilters,
   leaderboardFilterCapabilities,
   normalizeLeaderboardFilters,
   parseLeaderboardFilters,
   sameLeaderboardFilters,
   serializeLeaderboardFilters,
-  visibleLeaderboardEntries,
   type LeaderboardFilterState,
+  type LeaderboardQueryCapabilities,
 } from '../frontend/leaderboard-filter-state';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
 import { ProviderMark } from '../frontend/provider-mark';
@@ -42,6 +43,70 @@ function useLeaderboardFilters(keyName: LeaderboardKey): [LeaderboardFilterState
     keyName,
   ));
   return [filters, setFilters];
+}
+
+interface LeaderboardPageCursorState {
+  readonly identity: string;
+  readonly cursor: string | null;
+  readonly previousCursors: readonly (string | null)[];
+}
+
+function firstLeaderboardPage(identity: string): LeaderboardPageCursorState {
+  return { identity, cursor: null, previousCursors: [] };
+}
+
+function sameValues<T>(left: readonly T[] | null, right: readonly T[] | null): boolean {
+  return left === right || (left !== null && right !== null
+    && left.length === right.length
+    && left.every((value, index) => value === right[index]));
+}
+
+/** Responses decode into fresh objects; only real complete-projection changes should refetch. */
+function sameLeaderboardCapabilities(
+  left: LeaderboardQueryCapabilities,
+  right: LeaderboardQueryCapabilities,
+): boolean {
+  return left.dataReady === right.dataReady
+    && left.defaultProfile === right.defaultProfile
+    && left.defaultSort === right.defaultSort
+    && left.supportsProfile === right.supportsProfile
+    && left.supportsEstimated === right.supportsEstimated
+    && left.supportsLifecycle === right.supportsLifecycle
+    && left.priceMode === right.priceMode
+    && left.supportsPrice === right.supportsPrice
+    && sameValues(left.metricKeys, right.metricKeys)
+    && sameValues(left.sorts, right.sorts)
+    && sameValues(left.providers, right.providers)
+    && sameValues(left.sourceTypes, right.sourceTypes)
+    && sameValues(left.evidenceStatuses, right.evidenceStatuses);
+}
+
+function LeaderboardPagination({
+  entriesCount,
+  limit,
+  total,
+  pageIndex,
+  hasNextPage,
+  onPrevious,
+  onNext,
+}: {
+  readonly entriesCount: number;
+  readonly limit: number;
+  readonly total: number;
+  readonly pageIndex: number;
+  readonly hasNextPage: boolean;
+  readonly onPrevious: () => void;
+  readonly onNext: () => void;
+}) {
+  const start = entriesCount === 0 ? 0 : pageIndex * limit + 1;
+  const end = entriesCount === 0 ? 0 : Math.min(total, start + entriesCount - 1);
+  return <nav className="leaderboard-pagination" aria-label="Leaderboard result pages">
+    <p aria-live="polite">{entriesCount === 0 ? `Showing 0 of ${total} published entries` : `Showing ${start}–${end} of ${total} published entries`}</p>
+    <div>
+      <button type="button" className="button button-secondary button-small" onClick={onPrevious} disabled={pageIndex === 0}>Previous page</button>
+      <button type="button" className="button button-secondary button-small" onClick={onNext} disabled={!hasNextPage}>Next page</button>
+    </div>
+  </nav>;
 }
 
 function RelatedLeaderboards({ keyName }: { readonly keyName?: LeaderboardKey }) {
@@ -95,45 +160,105 @@ function CurrentDecisionPicks({ keyName }: { readonly keyName: LeaderboardKey })
 export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey }) {
   const route = LEADERBOARD_ROUTES[keyName];
   const [filters, setFilters] = useLeaderboardFilters(keyName);
-  const state = useBenchmarkLeaderboard(keyName, filters.profile, 50, undefined, filters.includeEstimated);
+  const [knownCapabilities, setKnownCapabilities] = useState<{
+    readonly keyName: LeaderboardKey;
+    readonly value: LeaderboardQueryCapabilities;
+  } | null>(null);
+  const completeCapabilities = knownCapabilities?.keyName === keyName ? knownCapabilities.value : undefined;
+  const requestFilters = useMemo(
+    () => completeCapabilities ? filters : bootstrapLeaderboardFilters(keyName, filters),
+    [completeCapabilities, filters, keyName],
+  );
+  const filterQuery = serializeLeaderboardFilters(filters);
+  const requestFilterQuery = serializeLeaderboardFilters(requestFilters);
+  const pageIdentity = `${keyName}\u0000${requestFilterQuery}`;
+  const [pageState, setPageState] = useState<LeaderboardPageCursorState>(() => firstLeaderboardPage(pageIdentity));
+  const activePage = pageState.identity === pageIdentity ? pageState : firstLeaderboardPage(pageIdentity);
+  const state = useBenchmarkLeaderboard(
+    keyName,
+    requestFilters.profile,
+    50,
+    activePage.cursor ?? undefined,
+    requestFilters.includeEstimated,
+    requestFilters,
+  );
   const publishedEntries = state.envelope?.data.entries;
+  const responseCapabilities = state.envelope?.data.capabilities;
+
+  useEffect(() => {
+    if (!responseCapabilities) return;
+    setKnownCapabilities((current) => current?.keyName === keyName
+      && sameLeaderboardCapabilities(current.value, responseCapabilities)
+      ? current
+      : { keyName, value: responseCapabilities });
+  }, [keyName, responseCapabilities]);
+
   const capabilities = useMemo(
-    () => leaderboardFilterCapabilities(keyName, publishedEntries),
-    [keyName, publishedEntries],
+    () => responseCapabilities ?? completeCapabilities ?? leaderboardFilterCapabilities(keyName, publishedEntries),
+    [completeCapabilities, keyName, publishedEntries, responseCapabilities],
   );
 
   useEffect(() => {
+    setPageState((current) => current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity));
+  }, [pageIdentity]);
+
+  useEffect(() => {
     if (!publishedEntries) return;
-    const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries);
+    const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries, capabilities);
     if (!sameLeaderboardFilters(filters, normalized)) setFilters(normalized);
-  }, [filters, keyName, publishedEntries, setFilters]);
+  }, [capabilities, filters, keyName, publishedEntries, setFilters]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPopState = () => {
-      const restored = parseLeaderboardFilters(window.location.search, keyName, publishedEntries);
+      const restored = parseLeaderboardFilters(window.location.search, keyName, publishedEntries, capabilities);
       if (!sameLeaderboardFilters(filters, restored)) setFilters(restored);
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [filters, keyName, publishedEntries, setFilters]);
+  }, [capabilities, filters, keyName, publishedEntries, setFilters]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !publishedEntries) return;
-    const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries);
+    const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries, capabilities);
     if (!sameLeaderboardFilters(filters, normalized)) return;
-    const query = serializeLeaderboardFilters(filters);
+    const query = filterQuery;
     const current = window.location.search.replace(/^\?/, '');
     if (current === query) return;
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${query}${window.location.hash}`);
-  }, [filters, keyName, publishedEntries]);
+  }, [capabilities, filterQuery, filters, keyName, publishedEntries]);
 
-  const entries = publishedEntries ? visibleLeaderboardEntries(publishedEntries, filters, keyName) : [];
-  const csvQuery = serializeLeaderboardFilters(filters);
+  const entries = publishedEntries ?? [];
+  const pagination = state.envelope?.data.pagination;
+  const csvQuery = filterQuery;
   const csvHref = `/api/benchmarks/leaderboards/${encodeURIComponent(keyName)}/csv?${csvQuery}`;
   const shareUrl = typeof window === 'undefined'
     ? `${route.pathname}?${csvQuery}`
     : `${window.location.origin}${route.pathname}?${csvQuery}`;
+  const goToNextPage = () => {
+    const nextCursor = pagination?.nextCursor;
+    if (!nextCursor) return;
+    setPageState((current) => {
+      const active = current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity);
+      return {
+        identity: pageIdentity,
+        cursor: nextCursor,
+        previousCursors: [...active.previousCursors, active.cursor],
+      };
+    });
+  };
+  const goToPreviousPage = () => {
+    setPageState((current) => {
+      const active = current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity);
+      if (active.previousCursors.length === 0) return active;
+      const previousIndex = active.previousCursors.length - 1;
+      return {
+        identity: pageIdentity,
+        cursor: active.previousCursors[previousIndex]!,
+        previousCursors: active.previousCursors.slice(0, previousIndex),
+      };
+    });
+  };
 
   return <div className="content-stack leaderboard-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
@@ -157,17 +282,21 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       {state.phase === 'loading' ? <Skeleton label="Loading published benchmark data" /> : null}
       {state.phase === 'ready' && state.envelope ? (
         entries.length > 0
-          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
+          ? <><LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
+            {pagination ? <LeaderboardPagination entriesCount={entries.length} limit={pagination.limit} total={pagination.total} pageIndex={activePage.previousCursors.length} hasNextPage={pagination.nextCursor !== null} onPrevious={goToPreviousPage} onNext={goToNextPage} /> : null}</>
           : <>
             <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
+            {pagination ? <LeaderboardPagination entriesCount={0} limit={pagination.limit} total={pagination.total} pageIndex={activePage.previousCursors.length} hasNextPage={pagination.nextCursor !== null} onPrevious={goToPreviousPage} onNext={goToNextPage} /> : null}
           </>
       ) : null}
       {state.phase === 'stale' && state.envelope ? <>
         <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
         {entries.length > 0
-          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
+          ? <><LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
+            {pagination ? <LeaderboardPagination entriesCount={entries.length} limit={pagination.limit} total={pagination.total} pageIndex={activePage.previousCursors.length} hasNextPage={pagination.nextCursor !== null} onPrevious={goToPreviousPage} onNext={goToNextPage} /> : null}</>
           : <>
             <EmptyState title="No cached entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
+            {pagination ? <LeaderboardPagination entriesCount={0} limit={pagination.limit} total={pagination.total} pageIndex={activePage.previousCursors.length} hasNextPage={pagination.nextCursor !== null} onPrevious={goToPreviousPage} onNext={goToNextPage} /> : null}
           </>}
       </> : null}
       {state.phase === 'unavailable' || state.phase === 'error'

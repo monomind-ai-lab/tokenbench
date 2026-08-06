@@ -28,17 +28,39 @@ export function defaultLeaderboardFilters(keyName: LeaderboardKey): LeaderboardF
   return defaultLeaderboardQueryState(definition, capabilities);
 }
 
+/**
+ * Keeps a shared UI link usable before the page receives dynamic capabilities.
+ * The API remains strict for dynamic values; the first bounded request omits
+ * those values, then the complete projection either confirms or removes them.
+ */
+export function bootstrapLeaderboardFilters(
+  keyName: LeaderboardKey,
+  filters: LeaderboardFilterState,
+): LeaderboardFilterState {
+  const definition = LEADERBOARD_DEFINITIONS[keyName];
+  return {
+    ...filters,
+    sort: definition.defaultSort,
+    providers: [],
+    sourceTypes: [],
+    evidence: null,
+    priceMinimum: null,
+    priceMaximum: null,
+  };
+}
+
 /** Reads only URL state and uses the forgiving UI branch of the shared parser. */
 export function parseLeaderboardFilters(
   search: string,
   keyName: LeaderboardKey,
   entries?: readonly LeaderboardEntry[],
+  capabilities?: LeaderboardQueryCapabilities,
 ): LeaderboardFilterState {
   const definition = LEADERBOARD_DEFINITIONS[keyName];
-  const capabilities = leaderboardFilterCapabilities(keyName, entries);
+  const routeCapabilities = capabilities ?? leaderboardFilterCapabilities(keyName, entries);
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-  const parsed = parseLeaderboardQuery(params, definition, capabilities, 'ui');
-  return parsed.ok ? parsed.state : defaultLeaderboardQueryState(definition, capabilities);
+  const parsed = parseLeaderboardQuery(params, definition, routeCapabilities, 'ui');
+  return parsed.ok ? parsed.state : defaultLeaderboardQueryState(definition, routeCapabilities);
 }
 
 /** Stable ordering and URL encoding are owned by the shared benchmark contract. */
@@ -50,9 +72,10 @@ export function normalizeLeaderboardFilters(
   keyName: LeaderboardKey,
   filters: LeaderboardFilterState,
   entries?: readonly LeaderboardEntry[],
+  capabilities?: LeaderboardQueryCapabilities,
 ): LeaderboardFilterState {
   const definition = LEADERBOARD_DEFINITIONS[keyName];
-  return normalizeLeaderboardQueryState(filters, definition, leaderboardFilterCapabilities(keyName, entries));
+  return normalizeLeaderboardQueryState(filters, definition, capabilities ?? leaderboardFilterCapabilities(keyName, entries));
 }
 
 /** Preserves the published multimodal lens grouping only for its default view. */

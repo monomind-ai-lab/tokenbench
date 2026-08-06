@@ -1,8 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DecisionPickEntry } from '../benchmarks/decision-picks';
-import type { LeaderboardResult } from '../benchmarks/leaderboards';
-import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
+import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult } from '../frontend/use-benchmarks';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './leaderboards-page';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
@@ -89,7 +88,7 @@ function respondWithSummary(payload = decisionSummaryEnvelope()) {
   return fetchMock;
 }
 
-function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardResult> {
+function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardPageResult> {
   const model = {
     modelKey: 'openai:alpha',
     slug: 'alpha',
@@ -151,6 +150,22 @@ function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardResult> {
         sourceRank: null,
         onValueFrontier: false,
       }],
+      pagination: { limit: 50, total: 1, nextCursor: null },
+      capabilities: {
+        dataReady: true,
+        defaultProfile: 'balanced',
+        defaultSort: 'score-desc',
+        supportsProfile: false,
+        supportsEstimated: true,
+        supportsLifecycle: false,
+        priceMode: 'representative',
+        supportsPrice: false,
+        metricKeys: ['benchlm:category:coding'],
+        sorts: ['score-desc'],
+        providers: ['OpenAI'],
+        sourceTypes: ['Proprietary'],
+        evidenceStatuses: ['supported'],
+      },
     },
   };
 }
@@ -259,6 +274,238 @@ describe('LeaderboardDirectoryPage', () => {
 });
 
 describe('LeaderboardPage', () => {
+  it('requests canonical filters from the complete projection so a model beyond the first page remains discoverable', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Needle&sort=score-desc');
+    const base = codingLeaderboardEnvelope();
+    const baseEntry = base.data.entries[0]!;
+    const needleMetric = {
+      ...baseEntry.metric!,
+      modelKey: 'openai:needle-after-fifty',
+      sourceModelId: 'openai:needle-after-fifty',
+    };
+    const needle = {
+      ...baseEntry,
+      model: {
+        ...baseEntry.model,
+        modelKey: 'openai:needle-after-fifty',
+        slug: 'needle-after-fifty',
+        name: 'Needle after fifty',
+        sourceModelId: 'openai:needle-after-fifty',
+      },
+      metric: needleMetric,
+      metrics: [needleMetric],
+    };
+    const filteredPage = {
+      ...base,
+      data: {
+        ...base.data,
+        entries: [needle],
+        pagination: { limit: 50, total: 1, nextCursor: null },
+        capabilities: {
+          dataReady: true,
+          defaultProfile: 'balanced',
+          defaultSort: 'score-desc',
+          supportsProfile: false,
+          supportsEstimated: true,
+          supportsLifecycle: false,
+          priceMode: 'representative',
+          supportsPrice: false,
+          metricKeys: ['benchlm:category:coding'],
+          sorts: ['score-desc'],
+          providers: ['OpenAI'],
+          sourceTypes: ['Proprietary'],
+          evidenceStatuses: ['supported'],
+        },
+      },
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      if (input === '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&q=Needle&limit=50') {
+        return Promise.resolve(new Response(JSON.stringify(filteredPage), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: 'Unexpected leaderboard request' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    const table = await screen.findByRole('table', { name: 'Coding benchmark' });
+    expect(within(table).getByText('Needle after fifty')).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&q=Needle&limit=50',
+      expect.objectContaining({ headers: { accept: 'application/json' } }),
+    );
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, 25); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
+      'href',
+      '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Needle',
+    );
+  });
+
+  it('moves through bounded server pages while keeping pagination cursors out of the shared URL', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?sort=score-desc');
+    const base = codingLeaderboardEnvelope();
+    const baseEntry = base.data.entries[0]!;
+    const pageEntry = (index: number) => {
+      const modelKey = index === 50 ? 'openai:needle-after-fifty' : `openai:model-${String(index).padStart(2, '0')}`;
+      const metric = {
+        ...baseEntry.metric!,
+        modelKey,
+        value: 1_000 - index,
+        sourceModelId: modelKey,
+      };
+      return {
+        ...baseEntry,
+        model: {
+          ...baseEntry.model,
+          modelKey,
+          slug: modelKey.slice('openai:'.length),
+          name: index === 50 ? 'Needle after fifty' : `Model ${index}`,
+          sourceModelId: modelKey,
+        },
+        metric,
+        metrics: [metric],
+      };
+    };
+    const capabilities = {
+      dataReady: true,
+      defaultProfile: 'balanced',
+      defaultSort: 'score-desc',
+      supportsProfile: false,
+      supportsEstimated: true,
+      supportsLifecycle: false,
+      priceMode: 'representative',
+      supportsPrice: false,
+      metricKeys: ['benchlm:category:coding'],
+      sorts: ['score-desc'],
+      providers: ['OpenAI'],
+      sourceTypes: ['Proprietary'],
+      evidenceStatuses: ['supported'],
+    } as const;
+    const firstPage = {
+      ...base,
+      data: {
+        ...base.data,
+        entries: Array.from({ length: 50 }, (_, index) => pageEntry(index)),
+        capabilities,
+        pagination: { limit: 50, total: 51, nextCursor: 'cursor-page-two' },
+      },
+    };
+    const secondPage = {
+      ...base,
+      data: {
+        ...base.data,
+        entries: [pageEntry(50)],
+        capabilities,
+        pagination: { limit: 50, total: 51, nextCursor: null },
+      },
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      if (input === '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50') {
+        return Promise.resolve(new Response(JSON.stringify(firstPage), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      if (input === '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50&cursor=cursor-page-two') {
+        return Promise.resolve(new Response(JSON.stringify(secondPage), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: 'Unexpected leaderboard request' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    await screen.findAllByText('Model 0');
+    const pagination = await screen.findByRole('navigation', { name: 'Leaderboard result pages' });
+    expect(within(pagination).getByText('Showing 1–50 of 51 published entries')).toBeInTheDocument();
+    expect(within(pagination).getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    fireEvent.click(within(pagination).getByRole('button', { name: 'Next page' }));
+
+    await screen.findAllByText('Needle after fifty');
+    expect(screen.getByText('Showing 51–51 of 51 published entries')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc'));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
+    await screen.findAllByText('Model 0');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50&cursor=cursor-page-two',
+      expect.objectContaining({ headers: { accept: 'application/json' } }),
+    );
+  });
+
+  it('omits a no-longer-published dynamic filter until complete capabilities can normalize the shared URL', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?provider=Missing&sort=score-desc');
+    const base = codingLeaderboardEnvelope();
+    const bootstrapPage = {
+      ...base,
+      data: {
+        ...base.data,
+        pagination: { limit: 50, total: 1, nextCursor: null },
+        capabilities: {
+          dataReady: true,
+          defaultProfile: 'balanced',
+          defaultSort: 'score-desc',
+          supportsProfile: false,
+          supportsEstimated: true,
+          supportsLifecycle: false,
+          priceMode: 'representative',
+          supportsPrice: false,
+          metricKeys: ['benchlm:category:coding'],
+          sorts: ['score-desc'],
+          providers: ['OpenAI'],
+          sourceTypes: ['Proprietary'],
+          evidenceStatuses: ['supported'],
+        },
+      },
+    };
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      if (input === '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50') {
+        return Promise.resolve(new Response(JSON.stringify(bootstrapPage), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ error: 'Unexpected leaderboard request' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    await screen.findByRole('table', { name: 'Coding benchmark' });
+    await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc'));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50',
+      expect.objectContaining({ headers: { accept: 'application/json' } }),
+    );
+  });
+
   it('places current actions and available picks before filters and consolidates provenance', async () => {
     window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Alpha&sort=score-desc');
     const fetchMock = vi.fn((input: string) => {
