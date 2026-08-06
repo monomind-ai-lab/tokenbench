@@ -224,6 +224,13 @@ describe('comparison SSR hydration contract', () => {
     expect(parseComparisonViewModel({ ...viewModel, freshness: { status: 'unknown', checkedAt: viewModel.freshness.checkedAt } })).toBeNull();
   });
 
+  it('rejects a published timestamp that rolls into a different calendar date', () => {
+    expect(parseComparisonViewModel({
+      ...viewModel,
+      publishedAt: '2026-02-30T00:00:00.000Z',
+    })).toBeNull();
+  });
+
   it('rejects a selected price route that is not present in its model route group', () => {
     const malformed = JSON.parse(JSON.stringify(viewModel)) as Record<string, any>;
     malformed.priceChecks[0] = {
@@ -425,6 +432,34 @@ describe('comparison SSR hydration contract', () => {
     duplicate.priceChecks[0].checks.push(duplicate.priceChecks[0].checks[1]);
 
     expect(parseComparisonViewModel(duplicate)).toBeNull();
+  });
+
+  it('rejects a selected route ID that identifies more than one published fact', () => {
+    const payload = JSON.parse(JSON.stringify(viewModel)) as Record<string, any>;
+    const routeId = 'direct:shared';
+    payload.priceChecks[0] = {
+      modelKey: viewModel.models[0].modelKey,
+      selectedRouteId: routeId,
+      checks: [
+        {
+          ...priceCheckRecord(viewModel.models[0], 'a-provider', routeId),
+          sourceId: 'benchlm',
+          sourceArtifactId: 'direct-a',
+        },
+        {
+          ...priceCheckRecord(viewModel.models[0], 'z-provider', routeId),
+          sourceId: 'benchlm',
+          sourceArtifactId: 'direct-z',
+        },
+      ],
+    };
+    payload.attribution = [
+      benchLmSource,
+      { ...benchLmSource, artifactId: 'direct-a' },
+      { ...benchLmSource, artifactId: 'direct-z' },
+    ];
+
+    expect(parseComparisonViewModel(payload)).toBeNull();
   });
 
   it('rejects related comparisons reordered away from featured-rank server ordering', () => {

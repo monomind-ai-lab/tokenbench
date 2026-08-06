@@ -165,14 +165,14 @@ async function request(pairValue: string, pathname = `/compare/${pairValue}`, pa
 function initialViewModel(html: string): {
   relatedPairs: Array<{ pairSlug: string; modelA: BenchmarkModel; modelB: BenchmarkModel }>;
   attribution: Array<{ sourceId: string; artifactId: string }>;
-  priceChecks: Array<{ modelKey: string; selectedRouteId?: string | null; checks: BenchmarkPriceCheck[] }>;
+  priceChecks: Array<{ modelKey: string; selectedRouteId: string | null; checks: BenchmarkPriceCheck[] }>;
 } {
   const payload = html.match(/<script id="comparison-initial-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
   if (!payload) throw new Error('Expected the comparison hydration payload');
   return JSON.parse(payload) as {
     relatedPairs: Array<{ pairSlug: string; modelA: BenchmarkModel; modelB: BenchmarkModel }>;
     attribution: Array<{ sourceId: string; artifactId: string }>;
-    priceChecks: Array<{ modelKey: string; selectedRouteId?: string | null; checks: BenchmarkPriceCheck[] }>;
+    priceChecks: Array<{ modelKey: string; selectedRouteId: string | null; checks: BenchmarkPriceCheck[] }>;
   };
 }
 
@@ -431,6 +431,44 @@ describe('dynamic comparison Pages Function', () => {
       { sourceId: 'benchlm', artifactId: 'benchlm-models' },
       { sourceId: 'benchlm', artifactId: 'direct-pricing' },
       { sourceId: 'openrouter', artifactId: 'openrouter-catalog' },
+    ]);
+  });
+
+  it('publishes duplicate route-ID facts deterministically without an ambiguous selection', async () => {
+    const base = snapshot();
+    const duplicateRoute = (providerId: string, sourceArtifactId: string): BenchmarkPriceCheck => ({
+      ...price('provider:alpha', 2, 8),
+      sourceId: 'benchlm',
+      providerId,
+      routeId: 'direct:shared',
+      sourceArtifactId,
+    });
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({
+      sources: [
+        ...base.sources,
+        source('benchlm', 'direct-a', 'https://alpha.example/a', 'Alpha A pricing'),
+        source('benchlm', 'direct-z', 'https://alpha.example/z', 'Alpha Z pricing'),
+      ],
+      priceChecks: [
+        duplicateRoute('z-provider', 'direct-z'),
+        duplicateRoute('a-provider', 'direct-a'),
+        price('provider:alpha', 2, 8),
+        price('provider:beta', 1, 4),
+      ],
+    }));
+
+    const response = await request('zeta-vs-alpha');
+    const data = initialViewModel(await response.text());
+
+    expect(response.status).toBe(200);
+    expect(data.priceChecks[0]).toMatchObject({
+      modelKey: 'provider:alpha',
+      selectedRouteId: null,
+    });
+    expect(data.priceChecks[0].checks.map((check) => [check.routeId, check.providerId])).toEqual([
+      ['direct:shared', 'a-provider'],
+      ['direct:shared', 'z-provider'],
+      ['openrouter:provider:alpha', 'openrouter'],
     ]);
   });
 

@@ -141,4 +141,51 @@ describe('comparison price-route selection', () => {
 
     expect(result.map((entry) => entry.routeId)).toEqual(['direct:alpha', 'openrouter:alpha']);
   });
+
+  it('rejects a source timestamp that Date.parse would normalize across the calendar', () => {
+    const result = comparisonPriceRoutes('provider:alpha', [
+      price({ sourceArtifactId: 'rollover', routeId: 'direct:rollover' }),
+    ], sourcesByArtifactId(source('rollover', '2026-02-30T00:00:00.000Z')));
+
+    expect(result).toEqual([]);
+  });
+
+  it('orders duplicate route IDs totally and refuses an ambiguous default after reversal', () => {
+    const sameRouteA = price({
+      sourceId: 'benchlm',
+      providerId: 'a-provider',
+      routeId: 'direct:shared',
+      sourceArtifactId: 'z-artifact',
+    });
+    const sameRouteB = price({
+      sourceId: 'benchlm',
+      providerId: 'a-provider',
+      routeId: 'direct:shared',
+      sourceArtifactId: 'a-artifact',
+    });
+    const sameRouteC = price({
+      sourceId: 'benchlm',
+      providerId: 'z-provider',
+      routeId: 'direct:shared',
+      sourceArtifactId: 'm-artifact',
+    });
+    const input = [sameRouteC, sameRouteA, sameRouteB];
+    const sources = sourcesByArtifactId(
+      source('z-artifact', '2026-08-05T00:00:00.000Z', 'benchlm'),
+      source('a-artifact', '2026-08-05T00:00:00.000Z', 'benchlm'),
+      source('m-artifact', '2026-08-05T00:00:00.000Z', 'benchlm'),
+    );
+
+    const forward = comparisonPriceRoutes('provider:alpha', input, sources);
+    const reversed = comparisonPriceRoutes('provider:alpha', [...input].reverse(), sources);
+
+    expect(forward.map((entry) => [entry.providerId, entry.sourceArtifactId])).toEqual([
+      ['a-provider', 'a-artifact'],
+      ['a-provider', 'z-artifact'],
+      ['z-provider', 'm-artifact'],
+    ]);
+    expect(reversed).toEqual(forward);
+    expect(defaultComparisonPriceRoute('provider:alpha', input, sources)).toBeNull();
+    expect(defaultComparisonPriceRoute('provider:alpha', [...input].reverse(), sources)).toBeNull();
+  });
 });

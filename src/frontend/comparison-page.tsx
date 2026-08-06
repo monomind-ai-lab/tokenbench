@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { BenchmarkMetric, BenchmarkModel, BenchmarkSourceRecord } from '../benchmarks/contracts';
-import { primaryHostedPriceForModel, type PrimaryHostedPrice, type WorkloadProfile } from '../benchmarks/value';
+import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck, BenchmarkSourceRecord } from '../benchmarks/contracts';
+import { blendedCostPerMillion, type WorkloadProfile } from '../benchmarks/value';
 import { ROUTE_PATHS } from '../routing/routes';
-import { comparisonMetricRowIdentity, type ComparisonMetricRow, type ComparisonPriceChecks, type ComparisonViewModel, type RelatedComparison } from './comparison-contracts';
+import { comparisonMetricRowIdentity, selectedComparisonPriceCheck, type ComparisonMetricRow, type ComparisonPriceChecks, type ComparisonViewModel, type RelatedComparison } from './comparison-contracts';
 
 const WORKLOAD_OPTIONS: readonly { readonly id: WorkloadProfile; readonly label: string; readonly description: string }[] = [
   { id: 'inputHeavy', label: 'Input-heavy', description: 'For work dominated by incoming context.' },
@@ -91,18 +91,21 @@ function relatedComparisonLabel(pair: RelatedComparison, duplicateNames: Readonl
 
 function selectedRoute(
   group: ComparisonPriceChecks,
-  model: BenchmarkModel,
-  profile: WorkloadProfile,
-): PrimaryHostedPrice | null {
-  return primaryHostedPriceForModel(model.modelKey, group.checks, profile);
+): BenchmarkPriceCheck | null {
+  return selectedComparisonPriceCheck(group);
+}
+
+function routeWorkloadCost(route: BenchmarkPriceCheck | null, profile: WorkloadProfile): number | null {
+  if (route?.inputUsdPerMillion === null || route?.outputUsdPerMillion === null || route === null) return null;
+  return blendedCostPerMillion(route.inputUsdPerMillion, route.outputUsdPerMillion, profile);
 }
 
 function priceAmount(value: number | null): ReactNode {
   return value === null ? unavailable('Unavailable') : `$${formatNumber(value)}`;
 }
 
-function routeContext(route: PrimaryHostedPrice | null): ReactNode {
-  const contextWindowTokens = route?.price.contextWindowTokens ?? null;
+function routeContext(route: BenchmarkPriceCheck | null): ReactNode {
+  const contextWindowTokens = route?.contextWindowTokens ?? null;
   return unavailable(contextWindowTokens === null ? 'Unavailable' : new Intl.NumberFormat('en-US').format(contextWindowTokens));
 }
 
@@ -113,7 +116,7 @@ function PriceRouteContext({
 }: {
   readonly models: readonly [BenchmarkModel, BenchmarkModel];
   readonly index: 0 | 1;
-  readonly route: PrimaryHostedPrice | null;
+  readonly route: BenchmarkPriceCheck | null;
 }) {
   return <div className="comparison-route-context">
     <strong>{modelDisplayLabel(models, index)}</strong>
@@ -174,9 +177,9 @@ function PricingContext({
   readonly models: readonly [BenchmarkModel, BenchmarkModel];
   readonly profile: WorkloadProfile;
 }) {
-  const routes = groups.map((group, index) => selectedRoute(group, models[index], profile)) as [PrimaryHostedPrice | null, PrimaryHostedPrice | null];
-  const leftWorkloadCost = formatCost(routes[0]?.blendedCostPerMillion ?? null);
-  const rightWorkloadCost = formatCost(routes[1]?.blendedCostPerMillion ?? null);
+  const routes = groups.map((group) => selectedRoute(group)) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
+  const leftWorkloadCost = formatCost(routeWorkloadCost(routes[0], profile));
+  const rightWorkloadCost = formatCost(routeWorkloadCost(routes[1], profile));
   const leftRouteContext = routeContext(routes[0]);
   const rightRouteContext = routeContext(routes[1]);
   const rows: readonly {
@@ -187,8 +190,8 @@ function PricingContext({
     readonly mobileLeft: ReactNode;
     readonly mobileRight: ReactNode;
   }[] = [
-    { label: 'Input API price', unit: 'USD / 1M tokens', left: priceAmount(routes[0]?.price.inputUsdPerMillion ?? null), right: priceAmount(routes[1]?.price.inputUsdPerMillion ?? null), mobileLeft: priceAmount(routes[0]?.price.inputUsdPerMillion ?? null), mobileRight: priceAmount(routes[1]?.price.inputUsdPerMillion ?? null) },
-    { label: 'Output API price', unit: 'USD / 1M tokens', left: priceAmount(routes[0]?.price.outputUsdPerMillion ?? null), right: priceAmount(routes[1]?.price.outputUsdPerMillion ?? null), mobileLeft: priceAmount(routes[0]?.price.outputUsdPerMillion ?? null), mobileRight: priceAmount(routes[1]?.price.outputUsdPerMillion ?? null) },
+    { label: 'Input API price', unit: 'USD / 1M tokens', left: priceAmount(routes[0]?.inputUsdPerMillion ?? null), right: priceAmount(routes[1]?.inputUsdPerMillion ?? null), mobileLeft: priceAmount(routes[0]?.inputUsdPerMillion ?? null), mobileRight: priceAmount(routes[1]?.inputUsdPerMillion ?? null) },
+    { label: 'Output API price', unit: 'USD / 1M tokens', left: priceAmount(routes[0]?.outputUsdPerMillion ?? null), right: priceAmount(routes[1]?.outputUsdPerMillion ?? null), mobileLeft: priceAmount(routes[0]?.outputUsdPerMillion ?? null), mobileRight: priceAmount(routes[1]?.outputUsdPerMillion ?? null) },
     {
       label: 'Route context',
       unit: 'tokens',

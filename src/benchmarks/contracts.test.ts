@@ -10,6 +10,7 @@ import {
 import {
   compareUtf8Binary,
   createComparisonPairSlugResolver,
+  isCanonicalIsoTimestamp,
   resolveComparisonPairSlug,
   type BenchmarkComparisonPair,
   type BenchmarkModel,
@@ -176,6 +177,21 @@ function batchWithComparison() {
 }
 
 describe('benchmark contracts', () => {
+  it.each([
+    null,
+    'not-a-timestamp',
+    '2026-02-30T00:00:00.000Z',
+  ])('rejects non-canonical timestamp value %s', (value) => {
+    expect(isCanonicalIsoTimestamp(value)).toBe(false);
+  });
+
+  it.each([
+    '2026-02-28T00:00:00Z',
+    '2024-02-29T23:59:59.123Z',
+  ])('accepts canonical timestamp %s', (value) => {
+    expect(isCanonicalIsoTimestamp(value)).toBe(true);
+  });
+
   it('accepts a source-linked batch and preserves explicit nulls and zero-price evidence', () => {
     const result = validateNormalizedSourceBatch(validBatch);
 

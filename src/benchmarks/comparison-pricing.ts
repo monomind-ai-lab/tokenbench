@@ -1,5 +1,6 @@
 import {
   compareUtf8Binary,
+  isCanonicalIsoTimestamp,
   type BenchmarkPriceCheck,
   type BenchmarkSourceId,
   type BenchmarkSourceRecord,
@@ -19,7 +20,7 @@ function resolvedSource(
 ): BenchmarkSourceRecord | null {
   const source = sourcesByArtifactId.get(comparisonPriceSourceArtifactIdentity(price.sourceId, price.sourceArtifactId))
     ?? sourcesByArtifactId.get(price.sourceArtifactId);
-  return source?.sourceId === price.sourceId && Number.isFinite(Date.parse(source.observedAt)) ? source : null;
+  return source?.sourceId === price.sourceId && isCanonicalIsoTimestamp(source.observedAt) ? source : null;
 }
 
 function isKnownRouter(price: BenchmarkPriceCheck): boolean {
@@ -41,7 +42,10 @@ function comparePriceRoutes(
   const observedAtOrder = Date.parse(resolvedSource(right, sourcesByArtifactId)!.observedAt)
     - Date.parse(resolvedSource(left, sourcesByArtifactId)!.observedAt);
   if (observedAtOrder !== 0) return observedAtOrder;
-  return compareUtf8Binary(left.routeId, right.routeId);
+  return compareUtf8Binary(left.routeId, right.routeId)
+    || compareUtf8Binary(left.providerId, right.providerId)
+    || compareUtf8Binary(left.sourceId, right.sourceId)
+    || compareUtf8Binary(left.sourceArtifactId, right.sourceArtifactId);
 }
 
 /**
@@ -66,5 +70,8 @@ export function defaultComparisonPriceRoute(
   prices: readonly BenchmarkPriceCheck[],
   sourcesByArtifactId: ReadonlyMap<string, BenchmarkSourceRecord>,
 ): BenchmarkPriceCheck | null {
-  return comparisonPriceRoutes(modelKey, prices, sourcesByArtifactId)[0] ?? null;
+  const routes = comparisonPriceRoutes(modelKey, prices, sourcesByArtifactId);
+  const selected = routes[0] ?? null;
+  if (selected === null) return null;
+  return routes.filter((route) => route.routeId === selected.routeId).length === 1 ? selected : null;
 }

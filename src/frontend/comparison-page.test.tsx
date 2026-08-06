@@ -40,8 +40,8 @@ function viewModel(): ComparisonViewModel {
       modelA: metric(modelA.modelKey, 88.5), modelB: metric(modelB.modelKey, 76.2),
     }],
     priceChecks: [
-      { modelKey: modelA.modelKey, checks: [price(modelA.modelKey, 2, 8)] },
-      { modelKey: modelB.modelKey, checks: [price(modelB.modelKey, 1, 4)] },
+      { modelKey: modelA.modelKey, selectedRouteId: `openrouter:${modelA.modelKey}`, checks: [price(modelA.modelKey, 2, 8)] },
+      { modelKey: modelB.modelKey, selectedRouteId: `openrouter:${modelB.modelKey}`, checks: [price(modelB.modelKey, 1, 4)] },
     ],
     attribution: [
       {
@@ -109,6 +109,36 @@ describe('comparison detail page', () => {
 
     expect(screen.getByTestId('workload-cost-provider:model-a')).toHaveTextContent('$5.00 / 1M');
     expect(screen.getByRole('link', { name: 'Data from BenchLM' })).toHaveAttribute('href', 'https://benchlm.example/models');
+  });
+
+  it('renders the published direct route and preserves its unavailable output rate', () => {
+    const model = viewModel();
+    const directRoute = {
+      ...model.priceChecks[0].checks[0],
+      sourceId: 'benchlm' as const,
+      providerId: 'provider-a-direct',
+      routeId: 'direct:model-a',
+      sourceArtifactId: 'benchlm-models',
+      inputUsdPerMillion: 0.5,
+      outputUsdPerMillion: null,
+    };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      priceChecks: [
+        {
+          modelKey: model.models[0].modelKey,
+          selectedRouteId: directRoute.routeId,
+          checks: [model.priceChecks[0].checks[0], directRoute],
+        },
+        model.priceChecks[1],
+      ],
+    }} />);
+
+    const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
+    expect(screen.getByText('direct:model-a')).toBeVisible();
+    expect(within(within(pricingTable).getByRole('row', { name: /Input API price/ })).getByText('$0.5')).toBeVisible();
+    expect(within(within(pricingTable).getByRole('row', { name: /Output API price/ })).getByText('Unavailable')).toBeVisible();
+    expect(screen.getByTestId('workload-cost-provider:model-a')).toHaveTextContent('Unavailable');
   });
 
   it('encodes related comparison paths and refuses non-HTTPS attribution targets', () => {
@@ -199,7 +229,7 @@ describe('comparison detail page', () => {
     render(<ComparisonPage viewModel={{
       ...model,
       models: [model.models[0], duplicateNameModel],
-      priceChecks: [model.priceChecks[0], { ...model.priceChecks[1], modelKey: duplicateNameModel.modelKey, checks: [] }],
+      priceChecks: [model.priceChecks[0], { ...model.priceChecks[1], modelKey: duplicateNameModel.modelKey, selectedRouteId: null, checks: [] }],
       metricRows: [{
         ...model.metricRows[0],
         modelB: { ...model.metricRows[0].modelB!, modelKey: duplicateNameModel.modelKey, sourceModelId: duplicateNameModel.sourceModelId },

@@ -1,5 +1,6 @@
 import {
   compareUtf8Binary,
+  isCanonicalIsoTimestamp,
   isComparisonPairRouteSafe,
   type BenchmarkMetric,
   type BenchmarkMethodology,
@@ -9,7 +10,7 @@ import {
   type BenchmarkSourceRecord,
   type MetricUnit,
 } from '../benchmarks/contracts';
-import { comparisonPriceRoutes, comparisonPriceSourceArtifactIdentity } from '../benchmarks/comparison-pricing';
+import { comparisonPriceRoutes, comparisonPriceSourceArtifactIdentity, defaultComparisonPriceRoute } from '../benchmarks/comparison-pricing';
 export interface ComparisonMetricRow {
   readonly metricKey: string;
   readonly category: string;
@@ -24,10 +25,17 @@ export interface ComparisonMetricRow {
 
 export interface ComparisonPriceChecks {
   readonly modelKey: string;
-  /** Always present in the published SSR payload; null means no verified route is available. */
-  readonly selectedRouteId?: string | null;
+  /** Always present; null means no verified route can be selected unambiguously. */
+  readonly selectedRouteId: string | null;
   /** Route records retain all pricing and context fields from the active revision. */
   readonly checks: readonly BenchmarkPriceCheck[];
+}
+
+/** Resolves a published selection only when its route ID identifies one fact. */
+export function selectedComparisonPriceCheck(group: ComparisonPriceChecks): BenchmarkPriceCheck | null {
+  if (group.selectedRouteId === null) return null;
+  const matches = group.checks.filter((check) => check.routeId === group.selectedRouteId);
+  return matches.length === 1 ? matches[0] : null;
 }
 
 export interface ComparisonMethodology {
@@ -183,12 +191,6 @@ function isText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function isTimestamp(value: unknown): value is string {
-  return isText(value)
-    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)
-    && Number.isFinite(Date.parse(value));
-}
-
 function isNullableText(value: unknown): boolean {
   return value === null || isText(value);
 }
@@ -241,7 +243,7 @@ function isMetric(value: unknown): value is BenchmarkMetric {
     && typeof value.unit === 'string'
     && UNITS.has(value.unit as MetricUnit)
     && isSourceId(value.sourceId)
-    && isTimestamp(value.sourceUpdatedAt)
+    && isCanonicalIsoTimestamp(value.sourceUpdatedAt)
     && typeof value.rankingEligible === 'boolean'
     && typeof value.methodology === 'string'
     && METHODOLOGIES.has(value.methodology as BenchmarkMethodology)
@@ -285,7 +287,7 @@ function isSourceRecord(value: unknown): value is BenchmarkSourceRecord {
   return isSourceId(value.sourceId)
     && ['artifactId', 'snapshotKey', 'contentHash', 'originalContentHash', 'attributionText'].every((key) => isText(value[key]))
     && isHttps(value.sourceUrl)
-    && isTimestamp(value.observedAt)
+    && isCanonicalIsoTimestamp(value.observedAt)
     && isNullableText(value.etag)
     && isNullableText(value.lastModified)
     && isNullableText(value.upstreamRevision)
@@ -425,10 +427,10 @@ function isRelatedComparison(
 export function parseComparisonViewModel(value: unknown): ComparisonViewModel | null {
   if (!isRecord(value)
     || !isText(value.revision)
-    || !isTimestamp(value.publishedAt)
+    || !isCanonicalIsoTimestamp(value.publishedAt)
     || !isRecord(value.freshness)
     || (value.freshness.status !== 'fresh' && value.freshness.status !== 'stale')
-    || !isTimestamp(value.freshness.checkedAt)
+    || !isCanonicalIsoTimestamp(value.freshness.checkedAt)
     || (value.freshness.message !== undefined && !isText(value.freshness.message))
     || !isText(value.canonicalPath)
     || !/^\/compare\/[^/]+$/.test(value.canonicalPath)
@@ -473,10 +475,15 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
   ]));
   if (!priceChecks.every((group) => {
     const expectedRoutes = comparisonPriceRoutes(group.modelKey, group.checks, sourcesByArtifactId);
+    const expectedSelectedRouteId = defaultComparisonPriceRoute(
+      group.modelKey,
+      group.checks,
+      sourcesByArtifactId,
+    )?.routeId ?? null;
     return hasUniqueIdentities(group.checks, comparisonPriceCheckIdentity)
       && expectedRoutes.length === group.checks.length
       && expectedRoutes.every((check, index) => check === group.checks[index])
-      && group.selectedRouteId === (group.checks[0]?.routeId ?? null);
+      && group.selectedRouteId === expectedSelectedRouteId;
   })) return null;
   if (!value.methodology.every((item) => isRecord(item)
     && isSourceId(item.sourceId)

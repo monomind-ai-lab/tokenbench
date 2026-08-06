@@ -1,8 +1,8 @@
 import { compareUtf8Binary, type BenchmarkModel, type BenchmarkPriceCheck } from '../benchmarks/contracts';
-import { primaryHostedPriceForModel } from '../benchmarks/value';
 import {
   compareComparisonMetricRows,
   isSupportedBenchLmComparisonMetric,
+  selectedComparisonPriceCheck,
   type ComparisonMetricRow,
   type ComparisonSummary,
   type ComparisonViewModel,
@@ -56,10 +56,6 @@ function compatibleScoreRows(viewModel: ComparisonViewModel): readonly Compariso
     .filter((row) => isSupportedBenchLmComparisonMetric(row, viewModel.models))
     .slice()
     .sort(compareMetricRowsForSummary);
-}
-
-function selectedVerifiedRoute(modelKey: string, checks: readonly BenchmarkPriceCheck[]): BenchmarkPriceCheck | null {
-  return primaryHostedPriceForModel(modelKey, checks, 'balanced')?.price ?? null;
 }
 
 function publishedRate(route: BenchmarkPriceCheck | null, dimension: 'inputUsdPerMillion' | 'outputUsdPerMillion'): number | null {
@@ -139,7 +135,7 @@ function scoreRowsAreExactlyTied(rows: readonly ComparisonMetricRow[]): boolean 
 export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSummary {
   const compatibleRows = compatibleScoreRows(viewModel);
   const coverage = coverageFor(compatibleRows.length);
-  const routes = viewModel.priceChecks.map((group, index) => selectedVerifiedRoute(viewModel.models[index].modelKey, group.checks)) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
+  const routes = viewModel.priceChecks.map(selectedComparisonPriceCheck) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
   const scoreClaims = scoreSentences(compatibleRows, viewModel.models);
   const pricingClaims = [
     rateSentence('inputUsdPerMillion', routes, viewModel.models),

@@ -25,6 +25,22 @@ export function compareUtf8Binary(left: string, right: string): number {
 }
 
 /**
+ * Accepts only UTC timestamps whose parsed instant round-trips to the exact
+ * published calendar fields. This rejects values such as February 30 that
+ * JavaScript would otherwise normalize into March.
+ */
+export function isCanonicalIsoTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return false;
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return false;
+  const canonical = new Date(timestamp).toISOString();
+  return value.endsWith('.000Z')
+    ? value === canonical
+    : value === canonical.replace(/\.000Z$/, 'Z');
+}
+
+/**
  * Immutable revision metadata. `catalogRevision` and `openrouterContentHash`
  * bind price-route evidence to the exact sanitized catalog revision used when
  * this benchmark revision was published.
@@ -303,7 +319,7 @@ function requireSha256(value: unknown, name: string): asserts value is string {
 
 function requireIsoTimestamp(value: unknown, name: string): void {
   requireString(value, name);
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value) || !Number.isFinite(Date.parse(value))) {
+  if (!isCanonicalIsoTimestamp(value)) {
     fail(`${name} must be a finite ISO timestamp`);
   }
 }

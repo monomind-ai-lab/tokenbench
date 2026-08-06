@@ -120,8 +120,8 @@ function comparisonWith(
     models,
     metricRows,
     priceChecks: [
-      { modelKey: models[0].modelKey, checks: priceChecks[0] },
-      { modelKey: models[1].modelKey, checks: priceChecks[1] },
+      { modelKey: models[0].modelKey, selectedRouteId: priceChecks[0][0]?.routeId ?? null, checks: priceChecks[0] },
+      { modelKey: models[1].modelKey, selectedRouteId: priceChecks[1][0]?.routeId ?? null, checks: priceChecks[1] },
     ],
     attribution: [],
     indexable: true,
@@ -356,7 +356,7 @@ describe('comparisonSummary', () => {
     ]);
   });
 
-  it('uses the same deterministic primary route selection as comparison pricing', () => {
+  it('honors the published route instead of recalculating a lower-priced route', () => {
     const models = pair();
     const summary = comparisonSummary(comparisonWith(models, [], [
       [
@@ -367,8 +367,33 @@ describe('comparisonSummary', () => {
     ]));
 
     expect(summary.sentences).toEqual([
-      'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
-      'Output API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
+      'Input API price: Beta has the lower verified rate ($2 / 1M tokens vs $10 / 1M tokens).',
+      'Output API price: Beta has the lower verified rate ($2 / 1M tokens vs $10 / 1M tokens).',
+      'There is not enough shared evidence to make a supported BenchLM score comparison.',
+    ]);
+  });
+
+  it('uses the published selected direct route while preserving a missing rate', () => {
+    const models = pair();
+    const direct = price(models[0], 0.5, null, {
+      sourceId: 'benchlm',
+      providerId: 'alpha-direct',
+      routeId: 'direct:alpha',
+      sourceArtifactId: 'benchlm-pricing',
+    });
+    const router = price(models[0], 10, 10);
+    const beta = price(models[1], 2, 3);
+    const base = comparisonWith(models, [], [[router, direct], [beta]]);
+    const summary = comparisonSummary({
+      ...base,
+      priceChecks: [
+        { ...base.priceChecks[0], selectedRouteId: direct.routeId },
+        base.priceChecks[1],
+      ],
+    });
+
+    expect(summary.sentences).toEqual([
+      'Input API price: Alpha has the lower verified rate ($0.5 / 1M tokens vs $2 / 1M tokens).',
       'There is not enough shared evidence to make a supported BenchLM score comparison.',
     ]);
   });
