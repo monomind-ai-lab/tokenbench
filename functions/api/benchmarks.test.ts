@@ -606,7 +606,7 @@ describe('cached benchmark APIs', () => {
     await expect(response.text()).resolves.toBe(cachedBody);
   });
 
-  it('accepts the existing unfiltered cursor emitted by a materialized first page', async () => {
+  it('rejects an impossible unaligned cursor embedded in a materialized first-page fixture', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-08-05T12:00:01.000Z');
     const cursor = encodeOpaqueValue({
@@ -652,66 +652,33 @@ describe('cached benchmark APIs', () => {
     const secondBody = await second.json() as { data?: { entries: Array<{ model: { slug: string } }> }; error?: string };
 
     expect(first.status).toBe(200);
-    expect(second.status).toBe(200);
-    expect(secondBody.data?.entries.map((entry) => entry.model.slug)).toEqual(['beta']);
+    expect(second.status).toBe(400);
+    expect(secondBody.error).toBe('Invalid benchmark request');
   });
 
   it.each([
     {
       alias: 'includeEstimated',
-      firstQuery: '?includeEstimated=1',
-      secondQuery: '?estimated=1',
-      cursorLimit: 50,
-      expectedSlugs: ['beta', 'estimated'],
+      firstQuery: '?includeEstimated=1&limit=1',
+      secondQuery: '?estimated=1&limit=1',
+      expectedSlugs: ['beta'],
     },
     {
       alias: 'estimated',
       firstQuery: '?estimated=1&limit=1',
       secondQuery: '?includeEstimated=1&limit=1',
-      cursorLimit: 1,
       expectedSlugs: ['beta'],
     },
   ] as const)(
     'continues an estimated page started with the $alias alias',
-    async ({ firstQuery, secondQuery, cursorLimit, expectedSlugs }) => {
-      vi.useFakeTimers();
-      vi.setSystemTime('2026-08-05T12:00:01.000Z');
-      const materializedCursor = encodeOpaqueValue({
-        v: 1,
-        r: REVISION,
-        k: 'llm-overall',
-        p: 'balanced',
-        l: 50,
-        e: true,
-        o: 1,
-      });
-      const cacheEntry = (variant: 'fresh' | 'stale'): ApiCacheEntry => ({
-        scope: 'benchmarks',
-        revision: REVISION,
-        cacheKey: 'leaderboard:llm-overall:balanced:50::1',
-        variant,
-        chunkIndex: 0,
-        etag: `"materialized-estimated-leaderboard-${variant}"`,
-        body: JSON.stringify({
-          revision: REVISION,
-          publishedAt: PUBLISHED_AT,
-          freshness: { status: variant, checkedAt: CHECKED_AT },
-          attribution: [],
-          data: {
-            key: 'llm-overall',
-            profile: 'balanced',
-            entries: [],
-            pagination: { limit: 50, total: 3, nextCursor: materializedCursor },
-          },
-        }),
-      });
-      const rows = publishedRows({ apiCacheEntries: [cacheEntry('fresh'), cacheEntry('stale')] });
+    async ({ firstQuery, secondQuery, expectedSlugs }) => {
+      const rows = publishedRows();
       const expectedCursor = encodeOpaqueValue({
         v: 1,
         r: REVISION,
         k: 'llm-overall',
         p: 'balanced',
-        l: cursorLimit,
+        l: 1,
         e: true,
         o: 1,
       });
@@ -734,7 +701,7 @@ describe('cached benchmark APIs', () => {
     },
   );
 
-  it('keeps the dedicated estimated cursor flag and other filter fingerprints tamper-resistant', async () => {
+  it('binds encoded pagination state to estimated inclusion and the canonical query identity', async () => {
     const estimated = await leaderboard('llm-overall', '?estimated=1&limit=1');
     const estimatedBody = await estimated.json() as { data: { pagination: { nextCursor: string } } };
     const defaultPage = await leaderboard('llm-overall', '?limit=1');
@@ -752,10 +719,10 @@ describe('cached benchmark APIs', () => {
       `?estimated=1&limit=1&cursor=${encodeURIComponent(defaultBody.data.pagination.nextCursor)}`,
     );
     const cursorSuffix = estimatedBody.data.pagination.nextCursor.at(-1);
-    const tamperedCursor = `${estimatedBody.data.pagination.nextCursor.slice(0, -1)}${cursorSuffix === 'A' ? 'B' : 'A'}`;
-    const tampered = await leaderboard(
+    const malformedCursor = `${estimatedBody.data.pagination.nextCursor.slice(0, -1)}${cursorSuffix === 'A' ? 'B' : 'A'}`;
+    const malformed = await leaderboard(
       'llm-overall',
-      `?estimated=1&limit=1&cursor=${encodeURIComponent(tamperedCursor)}`,
+      `?estimated=1&limit=1&cursor=${encodeURIComponent(malformedCursor)}`,
     );
 
     expect(estimated.status).toBe(200);
@@ -763,7 +730,7 @@ describe('cached benchmark APIs', () => {
     expect(withoutEstimated.status).toBe(400);
     expect(changedFilter.status).toBe(400);
     expect(falseCursorOnEstimated.status).toBe(400);
-    expect(tampered.status).toBe(400);
+    expect(malformed.status).toBe(400);
   });
 
   it('builds exact route availability while reading each complete fact collection only once', async () => {
@@ -1152,17 +1119,72 @@ describe('cached benchmark APIs', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Invalid benchmark request' });
   });
 
-  it('binds pagination cursors to the canonical shared filter state', async () => {
+  it('binds pagination cursors to the canonical shared query and order', async () => {
     const first = await leaderboard('llm-overall', '?q=Provider&sort=score-desc&limit=1');
     const firstBody = await first.json() as { data: { pagination: { nextCursor: string } } };
     const reused = await leaderboard(
       'llm-overall',
       `?q=Alpha&sort=score-desc&limit=1&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor)}`,
     );
+    const reordered = await leaderboard(
+      'llm-overall',
+      `?q=Provider&sort=context-desc&limit=1&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor)}`,
+    );
 
     expect(first.status).toBe(200);
     expect(firstBody.data.pagination.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(reused.status).toBe(400);
+    expect(reordered.status).toBe(400);
+  });
+
+  it('allows public encoded cursor state to select only an aligned bounded page', async () => {
+    const alignedCursor = encodeOpaqueValue({
+      v: 1,
+      r: REVISION,
+      k: 'llm-overall',
+      p: 'balanced',
+      l: 1,
+      e: true,
+      o: 2,
+    });
+    const unalignedCursor = encodeOpaqueValue({
+      v: 1,
+      r: REVISION,
+      k: 'llm-overall',
+      p: 'balanced',
+      l: 2,
+      e: true,
+      o: 1,
+    });
+    const aligned = await leaderboard(
+      'llm-overall',
+      `?estimated=1&limit=1&cursor=${encodeURIComponent(alignedCursor)}`,
+    );
+    const alignedBody = await aligned.json() as {
+      data?: { entries: Array<{ model: { slug: string } }>; pagination: { limit: number; total: number; nextCursor: string | null } };
+    };
+    const unaligned = await leaderboard(
+      'llm-overall',
+      `?estimated=1&limit=2&cursor=${encodeURIComponent(unalignedCursor)}`,
+    );
+
+    expect(aligned.status).toBe(200);
+    expect(alignedBody.data?.entries.map((entry) => entry.model.slug)).toEqual(['estimated']);
+    expect(alignedBody.data?.pagination).toEqual({ limit: 1, total: 3, nextCursor: null });
+    expect(unaligned.status).toBe(400);
+  });
+
+  it.each([
+    ['stale revision', encodeOpaqueValue({ v: 1, r: 'benchmark-revision-stale', k: 'llm-overall', p: 'balanced', l: 1, e: true, o: 1 })],
+    ['out-of-range offset', encodeOpaqueValue({ v: 1, r: REVISION, k: 'llm-overall', p: 'balanced', l: 1, e: true, o: 3 })],
+    ['malformed state', 'not-a-cursor'],
+  ])('rejects %s in public encoded cursor state', async (_label, cursor) => {
+    const response = await leaderboard(
+      'llm-overall',
+      `?estimated=1&limit=1&cursor=${encodeURIComponent(cursor)}`,
+    );
+
+    expect(response.status).toBe(400);
   });
 
   it('defaults page size to 50 and enforces the safe limit ceiling of 200', async () => {
@@ -1175,7 +1197,7 @@ describe('cached benchmark APIs', () => {
     expect(tooLarge.status).toBe(400);
   });
 
-  it('paginates in stable order with a deterministic opaque cursor and rejects invalid cursors', async () => {
+  it('paginates in stable order with deterministic encoded state and rejects invalid cursors', async () => {
     const first = await leaderboard('llm-overall', '?limit=1');
     const firstBody = await first.json() as { data: { entries: Array<{ model: { slug: string } }>; pagination: { nextCursor: string | null } } };
     const repeated = await leaderboard('llm-overall', '?limit=1');

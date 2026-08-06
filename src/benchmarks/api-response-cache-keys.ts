@@ -13,8 +13,8 @@ export interface BenchmarkLeaderboardCacheParameters {
 }
 
 /**
- * The cache key is derived only after request validation/defaulting. A cursor
- * is opaque but restricted to the base64url form before it reaches this key.
+ * The cache key is derived only after request validation/defaulting. Public
+ * encoded cursor state is restricted to bounded base64url before this key.
  */
 export function benchmarkLeaderboardCacheKey(parameters: BenchmarkLeaderboardCacheParameters): string {
   return `leaderboard:${parameters.key}:${parameters.profile}:${parameters.limit}:${parameters.cursor ?? ''}:${parameters.includeEstimated ? '1' : '0'}`;

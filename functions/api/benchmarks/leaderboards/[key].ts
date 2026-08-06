@@ -16,7 +16,7 @@ import {
 import { benchmarkLeaderboardCacheKey } from '../../../../src/benchmarks/api-response-cache-keys';
 import {
   isValidLeaderboardCursor,
-  leaderboardFilterFingerprint,
+  leaderboardFilterIdentity,
 } from '../../../../src/benchmarks/leaderboard-cursor';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../src/benchmarks/value';
@@ -65,7 +65,7 @@ interface CursorRequestParameters {
   readonly profile: WorkloadProfile;
   readonly limit: number;
   readonly includeEstimated: boolean;
-  readonly filterFingerprint: string;
+  readonly filterIdentity: string;
 }
 
 const SHARED_FILTER_KEYS = new Set<string>(LEADERBOARD_QUERY_KEYS);
@@ -161,7 +161,7 @@ function cursorFor(revision: string, request: CursorRequestParameters, offset: n
     p: request.profile,
     l: request.limit,
     e: request.includeEstimated,
-    ...(request.filterFingerprint ? { f: request.filterFingerprint } : {}),
+    ...(request.filterIdentity ? { f: request.filterIdentity } : {}),
     o: offset,
   };
   const cursor = encodeOpaqueValue(payload);
@@ -184,10 +184,11 @@ function offsetFromCursor(
     || value.p !== request.profile
     || value.l !== request.limit
     || value.e !== request.includeEstimated
-    || !((value.f === undefined && request.filterFingerprint === '') || value.f === request.filterFingerprint)
+    || !((value.f === undefined && request.filterIdentity === '') || value.f === request.filterIdentity)
     || !Number.isSafeInteger(value.o)
     || value.o === undefined
-    || value.o < 1) {
+    || value.o < 1
+    || value.o % request.limit !== 0) {
     throw new Error('invalid cursor');
   }
   if (cursorFor(revision, request, value.o) !== cursor) throw new Error('non-canonical cursor');
@@ -270,24 +271,25 @@ export async function onRequestGet({
     const canonicalFilterParameters = leaderboardQueryToSearchParams(filterState);
     // Profile and estimated inclusion are dedicated cursor fields, and the
     // route definition fixes the default sort. Omitting them retains
-    // compatibility with materialized first-page cursors while every other
-    // shared filter remains fingerprinted.
+    // compatibility with materialized first-page cursors. Every other shared
+    // filter contributes to a bounded public query identity; this is not a
+    // signature or an access-control boundary.
     canonicalFilterParameters.delete('profile');
     canonicalFilterParameters.delete('estimated');
     if (filterState.sort === projection.definition.defaultSort) {
       canonicalFilterParameters.delete('sort');
     }
     const canonicalFilter = canonicalFilterParameters.toString();
-    const filterFingerprint = canonicalFilter === ''
+    const filterIdentity = canonicalFilter === ''
       ? ''
-      : await leaderboardFilterFingerprint(canonicalFilter);
+      : await leaderboardFilterIdentity(canonicalFilter);
 
     const cursorParameters = {
       key: normalized.key,
       profile: normalized.profile,
       limit: normalized.limit,
       includeEstimated: normalized.includeEstimated,
-      filterFingerprint,
+      filterIdentity,
     } as const;
     let offset = 0;
     if (normalized.cursor) {

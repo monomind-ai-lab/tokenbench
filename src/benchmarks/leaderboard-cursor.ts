@@ -1,4 +1,4 @@
-/** Shared API/client boundary for opaque leaderboard pagination cursors. */
+/** Shared API/client boundary for public, base64url-encoded pagination state. */
 export const LEADERBOARD_CURSOR_MAX_LENGTH = 512;
 
 export function isValidLeaderboardCursor(value: unknown): value is string {
@@ -8,8 +8,11 @@ export function isValidLeaderboardCursor(value: unknown): value is string {
     && /^[A-Za-z0-9_-]+$/u.test(value);
 }
 
-/** Fixed-width identity for canonical filter state embedded in opaque cursors. */
-export async function leaderboardFilterFingerprint(filter: string): Promise<string> {
+/**
+ * Fixed-width identity for canonical query equality. This public hash bounds
+ * cursor size; it is not a signature and does not provide tamper resistance.
+ */
+export async function leaderboardFilterIdentity(filter: string): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) throw new Error('Web Crypto SHA-256 is unavailable');
   const digest = await subtle.digest('SHA-256', new TextEncoder().encode(filter));

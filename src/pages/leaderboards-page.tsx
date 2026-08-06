@@ -173,7 +173,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const requestFilterQuery = serializeLeaderboardFilters(requestFilters);
   const pageIdentity = `${keyName}\u0000${requestFilterQuery}`;
   const [pageState, setPageState] = useState<LeaderboardPageCursorState>(() => firstLeaderboardPage(pageIdentity));
-  const [recoveryNoticeIdentity, setRecoveryNoticeIdentity] = useState<string | null>(null);
+  const [recoveryNoticeVisible, setRecoveryNoticeVisible] = useState(false);
   const activePage = pageState.identity === pageIdentity ? pageState : firstLeaderboardPage(pageIdentity);
   const state = useBenchmarkLeaderboard(
     keyName,
@@ -205,8 +205,9 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
 
   useEffect(() => {
     if (state.phase !== 'error' || state.statusCode !== 400 || activePage.cursor === null) return;
+    setKnownCapabilities(null);
     setPageState(firstLeaderboardPage(pageIdentity));
-    setRecoveryNoticeIdentity(pageIdentity);
+    setRecoveryNoticeVisible(true);
   }, [activePage.cursor, pageIdentity, state.phase, state.statusCode]);
 
   useEffect(() => {
@@ -246,7 +247,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const goToNextPage = () => {
     const nextCursor = pagination?.nextCursor;
     if (!nextCursor) return;
-    setRecoveryNoticeIdentity(null);
+    setRecoveryNoticeVisible(false);
     setPageState((current) => {
       const active = current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity);
       return {
@@ -257,7 +258,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     });
   };
   const goToPreviousPage = () => {
-    setRecoveryNoticeIdentity(null);
+    setRecoveryNoticeVisible(false);
     setPageState((current) => {
       const active = current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity);
       if (active.previousCursors.length === 0) return active;
@@ -289,7 +290,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     </section>
 
     <section aria-label={`${route.seo.h1} results`}>
-      {recoveryNoticeIdentity === pageIdentity
+      {recoveryNoticeVisible
         ? <p className="leaderboard-recovery-notice" role="status">Leaderboard revision changed. Showing the first page of the latest results.</p>
         : null}
       {state.phase === 'loading' ? <Skeleton label="Loading published benchmark data" /> : null}

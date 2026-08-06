@@ -529,6 +529,99 @@ describe('LeaderboardPage', () => {
     expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/benchmarks/leaderboards/')).length).toBe(3);
   });
 
+  it('drops an active provider removed by the revision before stale-cursor recovery rebuilds page one', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?provider=Removed%20Provider&sort=score-desc');
+    const base = codingLeaderboardEnvelope();
+    const currentEntry = base.data.entries[0]!;
+    const removedEntry = {
+      ...currentEntry,
+      model: {
+        ...currentEntry.model,
+        creator: 'Removed Provider',
+        name: 'Removed provider model',
+      },
+    };
+    const previousCapabilities = {
+      ...base.data.capabilities!,
+      providers: ['OpenAI', 'Removed Provider'],
+    };
+    const bootstrapPage = {
+      ...base,
+      data: {
+        ...base.data,
+        entries: [removedEntry],
+        capabilities: previousCapabilities,
+        pagination: { limit: 50, total: 2, nextCursor: null },
+      },
+    };
+    const filteredPage = {
+      ...bootstrapPage,
+      data: {
+        ...bootstrapPage.data,
+        pagination: { limit: 50, total: 2, nextCursor: 'cursor-removed-provider' },
+      },
+    };
+    const revisedPage = {
+      ...base,
+      revision: 'published-r2',
+      data: {
+        ...base.data,
+        entries: [{
+          ...currentEntry,
+          model: { ...currentEntry.model, name: 'Current revision leader' },
+        }],
+        capabilities: { ...base.data.capabilities!, providers: ['OpenAI'] },
+        pagination: { limit: 50, total: 1, nextCursor: null },
+      },
+    };
+    const bootstrapEndpoint = '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50';
+    const filteredEndpoint = '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&provider=Removed+Provider&limit=50';
+    let bootstrapRequests = 0;
+    let filteredPageRequests = 0;
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      if (input === bootstrapEndpoint) {
+        bootstrapRequests += 1;
+        return Promise.resolve(new Response(JSON.stringify(bootstrapRequests === 1 ? bootstrapPage : revisedPage), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      if (input === filteredEndpoint) {
+        filteredPageRequests += 1;
+        return Promise.resolve(new Response(JSON.stringify(
+          filteredPageRequests === 1 ? filteredPage : { error: 'Invalid benchmark request' },
+        ), {
+          status: filteredPageRequests === 1 ? 200 : 400,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      if (input === `${filteredEndpoint}&cursor=cursor-removed-provider`) {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Invalid benchmark request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    await screen.findAllByText('Removed provider model');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next page' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findAllByText('Current revision leader');
+    expect(screen.getByText('Leaderboard revision changed. Showing the first page of the latest results.')).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc'));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, 25); });
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/benchmarks/leaderboards/')).length).toBe(4);
+  });
+
   it('keeps a first-page 400 visible as a generic benchmark API error', async () => {
     const fetchMock = vi.fn((input: string) => Promise.resolve(new Response(JSON.stringify(
       input === '/api/benchmarks' ? decisionSummaryEnvelope() : { error: 'Invalid benchmark request' },
