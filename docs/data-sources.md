@@ -70,7 +70,7 @@ Placeholders and raw hashes presented as sanitized snapshot hashes are rejected
 at the contract and D1 boundaries.
 
 OpenRouter is treated as catalog evidence, not benchmark evidence. Ingestion
-projects only `id`, `canonical_slug`, `name`, `created`, `description`,
+projects only `id`, `canonical_slug`, `name`, `created`,
 `context_length`, `architecture.modality`, `architecture.input_modalities`,
 `architecture.output_modalities`, `architecture.tokenizer`,
 `architecture.instruct_type`, `pricing.prompt`, `pricing.completion`,
@@ -86,9 +86,15 @@ unknown fields. TokenBench does not expose a bulk OpenRouter mirror.
 - BenchLM public artifacts currently expose `schemaVersion` and a common
   `generatedAt`; conditional requests use ETag/304. No Last-Modified signal is
   assumed.
-- LMArena uses the accepted Dataset Viewer subsets, `latest` split, and
-  `overall` category. Its `x-revision` response header is the upstream revision;
-  no ETag or Last-Modified signal is assumed.
+- LMArena uses the accepted subsets, `latest` split, and `overall` category.
+  Dataset Viewer is the primary transport and its `x-revision` response header
+  is the upstream revision. After exhausted retryable transport or server
+  failures only, ingestion may read the same public dataset from official Hub
+  Parquet files pinned to one verified 40-character repository commit. Every
+  resolver must return that exact commit before its bounded file is accepted;
+  authorization, schema, size, and validation failures never activate the
+  fallback. Parquet rows are reduced to the same field allowlist and 100-row
+  JSON evidence pages, while each record retains the original Parquet SHA-256.
 - LiteLLM uses raw GitHub ETag/304 where available and is recorded as
   corroborating evidence.
 - OpenRouter route facts are tied to the active sanitized catalog revision and

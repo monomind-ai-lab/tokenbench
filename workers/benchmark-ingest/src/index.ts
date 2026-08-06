@@ -24,6 +24,8 @@ import {
 } from './benchlm';
 import {
   LMARENA_SUBSETS,
+  lmArenaHubParquetPageArtifactId,
+  lmArenaHubParquetSourceUrl,
   lmArenaPageArtifactId,
   lmArenaPageSourceUrl,
   parseLmArenaSubset,
@@ -31,6 +33,7 @@ import {
 } from './lmarena';
 import { parseLiteLlmPrices } from './litellm';
 import { parseOpenRouterModels, projectOpenRouterModelsPayload } from '../../catalog-ingest/src/index';
+import { parquetReadObjects } from 'hyparquet';
 
 type BoundStatement = {
   bind(...values: unknown[]): BoundStatement;
@@ -64,6 +67,7 @@ export interface BenchmarkIngestEnv {
 
 export interface RefreshDependencies {
   fetchImpl: typeof fetch;
+  readParquetRows: (bytes: ArrayBuffer) => Promise<Record<string, unknown>[]>;
   now: () => string;
   createAbortController: () => AbortController;
   setTimeoutImpl: (handler: () => void, timeout: number) => ReturnType<typeof setTimeout>;
@@ -135,12 +139,15 @@ const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/mode
 const OPENROUTER_SOURCE_ID = 'openrouter-models';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/models';
 const USER_AGENT = 'TokenBench/1.0 (+https://tokenbench.monomind.one)';
+const LMARENA_HUB_INFO_URL = 'https://huggingface.co/api/datasets/lmarena-ai/leaderboard-dataset';
 const REQUEST_TIMEOUT_MS = 20_000;
 const MAX_RETRIES = 2;
 const MAX_RETRY_DELAY_MS = 10_000;
 const MAX_ERROR_LENGTH = 1_000;
 const MAX_BENCHLM_BYTES = 8 * 1024 * 1024;
 const MAX_LMARENA_PAGE_BYTES = 2 * 1024 * 1024;
+const MAX_LMARENA_HUB_PARQUET_BYTES = 2 * 1024 * 1024;
+const MAX_LMARENA_HUB_INFO_BYTES = 64 * 1024;
 const MAX_LITELLM_BYTES = 32 * 1024 * 1024;
 const MAX_LMARENA_PAGES_PER_SUBSET = 200;
 // D1's Worker Paid limit is 1,000 queries per invocation, including the three
@@ -156,15 +163,24 @@ class RefreshFailure extends Error {
     readonly sourceId: BenchmarkSourceRecord['sourceId'],
     readonly artifactId: string,
     message: string,
+    readonly transient = false,
   ) {
     super(message);
     this.name = 'RefreshFailure';
   }
 }
 
+class ResponseValidationFailure extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ResponseValidationFailure';
+  }
+}
+
 function defaultDependencies(): RefreshDependencies {
   return {
     fetchImpl: (input, init) => globalThis.fetch(input, init),
+    readParquetRows: async (bytes) => parquetReadObjects({ file: bytes }) as Promise<Record<string, unknown>[]>,
     now: () => new Date().toISOString(),
     createAbortController: () => new AbortController(),
     setTimeoutImpl: (handler, timeout) => globalThis.setTimeout(handler, timeout),
@@ -271,6 +287,10 @@ function requestHeaders(conditional?: StoredSourceRecord): Headers {
   return headers;
 }
 
+function hubRequestHeaders(accept: string): Headers {
+  return new Headers({ 'user-agent': USER_AGENT, accept });
+}
+
 function abortError(signal: AbortSignal): Error {
   const reason = signal.reason;
   return reason instanceof Error
@@ -320,12 +340,24 @@ async function fetchWithRetry<T>(
     const abort = dependencies.createAbortController();
     const timeout = dependencies.setTimeoutImpl(() => abort.abort('upstream timeout'), REQUEST_TIMEOUT_MS);
     let retryResponse: Response | null = null;
+    let consumingResponse = false;
     try {
       const response = await dependencies.fetchImpl(url, { headers: requestHeaders(conditional), signal: abort.signal });
-      if (response.ok || response.status === 304) return await consume(response, abort.signal);
+      if (response.ok || response.status === 304) {
+        consumingResponse = true;
+        try {
+          return await consume(response, abort.signal);
+        } catch (error) {
+          if (abort.signal.aborted) throw error;
+          if (error instanceof ResponseValidationFailure) {
+            throw new RefreshFailure(sourceId, artifactId, `${sourceId}/${artifactId} response body is invalid: ${error.message}`);
+          }
+          throw error;
+        }
+      }
       const transient = response.status === 429 || response.status === 408 || response.status >= 500;
       if (!transient || attempt === MAX_RETRIES) {
-        throw new RefreshFailure(sourceId, artifactId, `${sourceId}/${artifactId} returned ${response.status}`);
+        throw new RefreshFailure(sourceId, artifactId, `${sourceId}/${artifactId} returned ${response.status}`, transient);
       }
       retryResponse = response;
     } catch (error) {
@@ -334,15 +366,17 @@ async function fetchWithRetry<T>(
       if (attempt === MAX_RETRIES) {
         const message = abort.signal.aborted
           ? `${sourceId}/${artifactId} timed out after ${REQUEST_TIMEOUT_MS}ms`
-          : `${sourceId}/${artifactId} request failed: ${error instanceof Error ? error.message : String(error)}`;
-        throw new RefreshFailure(sourceId, artifactId, message);
+          : consumingResponse
+            ? `${sourceId}/${artifactId} response body request failed: ${error instanceof Error ? error.message : String(error)}`
+            : `${sourceId}/${artifactId} request failed: ${error instanceof Error ? error.message : String(error)}`;
+        throw new RefreshFailure(sourceId, artifactId, message, true);
       }
     } finally {
       dependencies.clearTimeoutImpl(timeout);
     }
     await dependencies.sleep(retryDelay(retryResponse, attempt, dependencies));
   }
-  throw new RefreshFailure(sourceId, artifactId, `Unexpected exhausted retry state: ${String(lastError)}`);
+  throw new RefreshFailure(sourceId, artifactId, `Unexpected exhausted retry state: ${String(lastError)}`, true);
 }
 
 async function readBoundedResponse(
@@ -353,11 +387,11 @@ async function readBoundedResponse(
 ): Promise<Uint8Array> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > limit) {
-    throw new Error(`${label} response exceeds ${limit} byte limit`);
+    throw new ResponseValidationFailure(`${label} response exceeds ${limit} byte limit`);
   }
   if (!response.body) {
     const bytes = new Uint8Array(await awaitWithAbort(response.arrayBuffer(), signal));
-    if (bytes.byteLength > limit) throw new Error(`${label} response exceeds ${limit} byte limit`);
+    if (bytes.byteLength > limit) throw new ResponseValidationFailure(`${label} response exceeds ${limit} byte limit`);
     return bytes;
   }
   const reader = response.body.getReader();
@@ -374,7 +408,7 @@ async function readBoundedResponse(
       length += value.byteLength;
       if (length > limit) {
         await reader.cancel('payload too large');
-        throw new Error(`${label} response exceeds ${limit} byte limit`);
+        throw new ResponseValidationFailure(`${label} response exceeds ${limit} byte limit`);
       }
       chunks.push(value);
     }
@@ -831,6 +865,266 @@ function projectLmArenaPage(payload: unknown, subset: LmArenaSubset, offset: num
   return { rows, num_rows_total: totalRows };
 }
 
+function isHubRevision(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
+}
+
+function hasOwn(record: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(record, key);
+}
+
+function safeParquetInteger(value: unknown, label: string): number {
+  if (typeof value === 'bigint') {
+    if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
+      throw new Error(`${label} exceeds JavaScript's safe integer range`);
+    }
+    return Number(value);
+  }
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) throw new Error(`${label} must be an integer`);
+  return value;
+}
+
+function requireParquetNumber(value: unknown, label: string, nullable = false): number | null {
+  if (nullable && value === null) return null;
+  if (typeof value !== 'number') throw new Error(`${label} must be a number${nullable ? ' or null' : ''}`);
+  return value;
+}
+
+function projectLmArenaHubParquetRow(value: unknown, subset: LmArenaSubset, index: number): Record<string, unknown> {
+  const row = requireRecord(value, `LMArena Hub Parquet ${subset} row ${index}`);
+  const fields = lmArenaAllowedFields(subset);
+  if (Object.keys(row).length !== fields.length || fields.some((field) => !hasOwn(row, field))) {
+    throw new Error(`LMArena Hub Parquet ${subset} row ${index} does not have the expected column schema`);
+  }
+  const projected = Object.fromEntries(fields.map((field) => [field, row[field]])) as Record<string, unknown>;
+  for (const field of ['model_name', 'organization', 'license', 'category', 'leaderboard_publish_date']) {
+    if (typeof projected[field] !== 'string') throw new Error(`LMArena Hub Parquet ${subset} row ${index}.${field} must be a string`);
+  }
+  projected.rank = safeParquetInteger(projected.rank, `LMArena Hub Parquet ${subset} row ${index}.rank`);
+  if (subset === 'agent') {
+    projected.score = requireParquetNumber(projected.score, `LMArena Hub Parquet ${subset} row ${index}.score`);
+    for (const field of ['observation_count', 'session_count']) {
+      projected[field] = safeParquetInteger(projected[field], `LMArena Hub Parquet ${subset} row ${index}.${field}`);
+    }
+    for (const field of ['score_ci_lower', 'score_ci_upper']) {
+      projected[field] = requireParquetNumber(projected[field], `LMArena Hub Parquet ${subset} row ${index}.${field}`, true);
+    }
+  } else {
+    for (const field of ['rating', 'variance']) {
+      projected[field] = requireParquetNumber(projected[field], `LMArena Hub Parquet ${subset} row ${index}.${field}`);
+    }
+    for (const field of ['rating_lower', 'rating_upper']) {
+      projected[field] = requireParquetNumber(projected[field], `LMArena Hub Parquet ${subset} row ${index}.${field}`, true);
+    }
+    projected.vote_count = safeParquetInteger(projected.vote_count, `LMArena Hub Parquet ${subset} row ${index}.vote_count`);
+  }
+  assertNoProhibitedData(projected, `LMArena Hub Parquet ${subset} row ${index}`);
+  return projected;
+}
+
+function projectLmArenaHubParquetPages(rows: unknown[], subset: LmArenaSubset): ProjectedLmArenaPage[] {
+  const overallRows = rows
+    .map((row, index) => projectLmArenaHubParquetRow(row, subset, index))
+    .filter((row) => row.category === 'overall')
+    .sort((left, right) => {
+      const rankDifference = (left.rank as number) - (right.rank as number);
+      if (rankDifference !== 0) return rankDifference;
+      const modelDifference = binaryCompare(String(left.model_name), String(right.model_name));
+      return modelDifference !== 0 ? modelDifference : binaryCompare(JSON.stringify(left), JSON.stringify(right));
+    });
+  if (overallRows.length === 0) throw new Error(`LMArena Hub Parquet ${subset} has no overall rows`);
+  const totalRows = overallRows.length;
+  const pages: ProjectedLmArenaPage[] = [];
+  for (let offset = 0; offset < totalRows; offset += 100) {
+    pages.push({
+      rows: overallRows.slice(offset, offset + 100)
+        .map((row, index) => ({ row_idx: offset + index, row, truncated_cells: [] })),
+      num_rows_total: totalRows,
+    });
+  }
+  return pages;
+}
+
+function lmArenaHubSnapshotKey(
+  subset: LmArenaSubset,
+  offset: number,
+  contentHash: string,
+  originalContentHash: string,
+): string {
+  return `benchmarks/lmarena/${subset}/latest/overall/hub-parquet/offset-${offset}-length-100/${contentHash.slice('sha256:'.length)}/original/${originalContentHash.slice('sha256:'.length)}.json`;
+}
+
+async function fetchLmArenaHubRevision(dependencies: RefreshDependencies): Promise<string> {
+  const fetched = await fetchWithRetry(
+    LMARENA_HUB_INFO_URL,
+    'lmarena',
+    'hub-parquet:dataset-revision',
+    undefined,
+    dependencies,
+    async (response, signal) => readBoundedResponse(response, MAX_LMARENA_HUB_INFO_BYTES, 'LMArena Hub dataset info', signal),
+  );
+  const document = requireRecord(decodeJson(fetched, 'LMArena Hub dataset info'), 'LMArena Hub dataset info');
+  if (!isHubRevision(document.sha)) throw new RefreshFailure('lmarena', 'hub-parquet:dataset-revision', 'LMArena Hub dataset info requires a 40-character lowercase sha');
+  return document.sha;
+}
+
+interface HubParquetResponse {
+  bytes: Uint8Array;
+  etag: string | null;
+  lastModified: string | null;
+  originalContentHash: string;
+}
+
+function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+function isHubRedirect(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+function trustedHubDownloadHost(hostname: string): boolean {
+  return hostname.endsWith('.hf.co') || hostname === 'cdn-lfs.huggingface.co';
+}
+
+function linkedSha256(value: string | null): string | null {
+  const match = value?.match(/^"([a-f0-9]{64})"$/);
+  return match ? `sha256:${match[1]}` : null;
+}
+
+async function fetchLmArenaHubParquet(
+  subset: LmArenaSubset,
+  revision: string,
+  dependencies: RefreshDependencies,
+): Promise<HubParquetResponse> {
+  const sourceUrl = lmArenaHubParquetSourceUrl(subset, revision);
+  const artifactId = `${subset}:latest:overall:hub-parquet`;
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const abort = dependencies.createAbortController();
+    const timeout = dependencies.setTimeoutImpl(() => abort.abort('upstream timeout'), REQUEST_TIMEOUT_MS);
+    let retryResponse: Response | null = null;
+    try {
+      const resolver = await dependencies.fetchImpl(sourceUrl, {
+        headers: hubRequestHeaders('application/octet-stream'), signal: abort.signal, redirect: 'manual',
+      });
+      if (!isHubRedirect(resolver.status)) {
+        const transient = isTransientStatus(resolver.status);
+        if (!transient || attempt === MAX_RETRIES) {
+          throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver returned ${resolver.status}`, transient);
+        }
+        retryResponse = resolver;
+      } else {
+        if (resolver.headers.get('x-repo-commit') !== revision) {
+          throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver x-repo-commit does not match the selected dataset revision`);
+        }
+        const expectedContentHash = linkedSha256(resolver.headers.get('x-linked-etag'));
+        if (!expectedContentHash) {
+          throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver requires a quoted SHA-256 x-linked-etag`);
+        }
+        const location = resolver.headers.get('location');
+        if (!location) throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver did not provide a download location`);
+        let downloadUrl: URL;
+        try {
+          downloadUrl = new URL(location, sourceUrl);
+        } catch {
+          throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver returned an invalid download location`);
+        }
+        if (downloadUrl.protocol !== 'https:' || !trustedHubDownloadHost(downloadUrl.hostname)) {
+          throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver returned an untrusted download location`);
+        }
+        const response = await dependencies.fetchImpl(downloadUrl, {
+          headers: hubRequestHeaders('application/octet-stream'), signal: abort.signal, redirect: 'error',
+        });
+        if (!response.ok) {
+          const transient = isTransientStatus(response.status);
+          if (!transient || attempt === MAX_RETRIES) {
+            throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} download returned ${response.status}`, transient);
+          }
+          retryResponse = response;
+        } else {
+          let bytes: Uint8Array;
+          try {
+            bytes = await readBoundedResponse(response, MAX_LMARENA_HUB_PARQUET_BYTES, `LMArena Hub Parquet ${subset}`, abort.signal);
+          } catch (error) {
+            if (abort.signal.aborted) throw error;
+            if (error instanceof ResponseValidationFailure) {
+              throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} download body is invalid: ${error.message}`);
+            }
+            throw error;
+          }
+          const originalContentHash = await sha256Digest(bytes);
+          if (originalContentHash !== expectedContentHash) {
+            throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} download SHA-256 does not match the pinned resolver digest`);
+          }
+          return {
+            bytes,
+            etag: resolver.headers.get('x-linked-etag') ?? response.headers.get('etag'),
+            lastModified: response.headers.get('last-modified'),
+            originalContentHash,
+          };
+        }
+      }
+    } catch (error) {
+      lastError = error;
+      if (error instanceof RefreshFailure) {
+        if (!error.transient || attempt === MAX_RETRIES) throw error;
+      } else if (attempt === MAX_RETRIES) {
+        const message = abort.signal.aborted
+          ? `lmarena/${artifactId} timed out after ${REQUEST_TIMEOUT_MS}ms`
+          : `lmarena/${artifactId} request failed: ${error instanceof Error ? error.message : String(error)}`;
+        throw new RefreshFailure('lmarena', artifactId, message, true);
+      }
+    } finally {
+      dependencies.clearTimeoutImpl(timeout);
+    }
+    await dependencies.sleep(retryDelay(retryResponse, attempt, dependencies));
+  }
+  throw new RefreshFailure('lmarena', artifactId, `Unexpected exhausted Hub Parquet retry state: ${String(lastError)}`, true);
+}
+
+async function fetchLmArenaHubParquetPages(
+  observedAt: string,
+  dependencies: RefreshDependencies,
+): Promise<LmArenaPage[]> {
+  const revision = await fetchLmArenaHubRevision(dependencies);
+  const pagesBySubset = await mapWithConcurrency(LMARENA_SUBSETS, 6, async (subset) => {
+    const sourceUrl = lmArenaHubParquetSourceUrl(subset, revision);
+    const fetched = await fetchLmArenaHubParquet(subset, revision, dependencies);
+    const originalContentHash = fetched.originalContentHash;
+    let projections: ProjectedLmArenaPage[];
+    try {
+      const decoded = await dependencies.readParquetRows(fetched.bytes.slice().buffer as ArrayBuffer);
+      projections = projectLmArenaHubParquetPages(decoded, subset);
+    } catch (error) {
+      throw new RefreshFailure('lmarena', `${subset}:latest:overall:hub-parquet`, error instanceof Error ? error.message : String(error));
+    }
+    return Promise.all(projections.map(async (projection, pageNumber) => {
+      const offset = pageNumber * 100;
+      const artifactId = lmArenaHubParquetPageArtifactId(subset, 'latest', 'overall', offset, 100);
+      const bytes = jsonBytes(projection);
+      const contentHash = await sha256Digest(bytes);
+      const provenance = {
+        artifactId, sourceUrl, transport: 'hub-parquet' as const, subset, split: 'latest', category: 'overall', offset, length: 100,
+        etag: fetched.etag, lastModified: fetched.lastModified, upstreamRevision: revision, schemaVersion: 'hub-parquet-v1',
+        snapshotKey: lmArenaHubSnapshotKey(subset, offset, contentHash, originalContentHash), contentHash, originalContentHash,
+      };
+      try {
+        return {
+          batch: parseLmArenaSubset(subset, projection.rows, observedAt, provenance),
+          evidence: [{ sourceId: 'lmarena' as const, artifactId, snapshotKey: provenance.snapshotKey, bytes, contentHash, originalContentHash }],
+          rowCount: projection.rows.length,
+          revision,
+          totalRows: projection.num_rows_total,
+        } satisfies LmArenaPage;
+      } catch (error) {
+        throw new RefreshFailure('lmarena', artifactId, error instanceof Error ? error.message : String(error));
+      }
+    }));
+  });
+  return pagesBySubset.flat();
+}
+
 function lmArenaSnapshotKey(
   subset: LmArenaSubset,
   offset: number,
@@ -1276,8 +1570,18 @@ export async function refreshBenchmarkRevision(
     const openRouter = await loadOpenRouterCatalog(env.SOURCE_SNAPSHOTS, catalog);
     const benchLm = await prepareBenchLmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
     const liteLlm = await prepareLiteLlmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
-    const lmarenaBySubset = await mapWithConcurrency(LMARENA_SUBSETS, 6, (subset) => fetchLmArenaSubset(subset, env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies));
-    const pages = lmarenaBySubset.flat();
+    let pages: LmArenaPage[];
+    try {
+      const lmarenaBySubset = await mapWithConcurrency(
+        LMARENA_SUBSETS,
+        6,
+        (subset) => fetchLmArenaSubset(subset, env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies),
+      );
+      pages = lmarenaBySubset.flat();
+    } catch (error) {
+      if (!(error instanceof RefreshFailure && error.sourceId === 'lmarena' && error.transient)) throw error;
+      pages = await fetchLmArenaHubParquetPages(checkedAt, dependencies);
+    }
     const revisions = new Set(pages.map((page) => page.revision));
     if (revisions.size !== 1 || ![...revisions][0]) {
       throw new RefreshFailure('lmarena', 'bundle', 'LMArena pages must share one non-null x-revision');
