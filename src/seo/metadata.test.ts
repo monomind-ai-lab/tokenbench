@@ -48,7 +48,7 @@ describe('route metadata registry', () => {
       expect(page.canonical).toBe(fixedRouteCases[index].canonical);
       expect(page.canonical.startsWith(origin)).toBe(true);
       expect(page.canonical).not.toContain('ai-plans.monomind.one');
-      expect(page.h1.length).toBeGreaterThan(12);
+      expect(page.h1.trim().length).toBeGreaterThanOrEqual(3);
       expect(page.openGraph.title).toBe(page.title);
       expect(page.openGraph.description).toBe(page.description);
       expect(page.openGraph.url).toBe(page.canonical);
@@ -72,6 +72,16 @@ describe('route metadata registry', () => {
 
     expect(page.h1).toBe('Model leaderboards');
     expect(page.canonical).toBe(`${origin}/leaderboards/`);
+  });
+
+  it.each([
+    ['llm-overall', 'Overall benchmarks'],
+    ['llm-coding', 'Coding benchmark'],
+    ['llm-agentic', 'Agentic performance'],
+    ['llm-human-preference', 'Human preference'],
+    ['media-image-editing', 'Image editing'],
+  ] as const)('uses the approved succinct H1 for %s', (key, h1) => {
+    expect(metadataForRoute({ kind: 'leaderboard', key }).h1).toBe(h1);
   });
 
   it('keeps dynamic comparison canonical and Open Graph URLs slashless', () => {

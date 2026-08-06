@@ -87,7 +87,7 @@ describe('leaderboard mockups', () => {
       summary: normalizeText(card.querySelector('p')?.textContent),
     }));
 
-    expect(validateMockupHtml(directoryHtml, { h1: 'AI model leaderboards', requiredSections: ['directory', 'related', 'monomind'] })).toEqual([]);
+    expect(validateMockupHtml(directoryHtml, { h1: 'Model leaderboards', requiredSections: ['directory', 'related', 'monomind'] })).toEqual([]);
     expect(registeredRoutes.map((route) => route.pathname)).toEqual(expectedRoutePaths);
     expect(renderedRoutes).toHaveLength(14);
     expect(renderedRoutes).toEqual(registeredRoutes.map((route) => ({
@@ -100,13 +100,13 @@ describe('leaderboard mockups', () => {
       {
         pathname: '/leaderboards/llm/reasoning/',
         href: '/leaderboards/llm/reasoning/',
-        title: 'AI reasoning category evidence',
+        title: 'Reasoning',
         summary: 'Reasoning is a BenchLM-published category evidence lens, not a validated BenchAlign ranking; inspect the exact source measurement before applying it to your workload.',
       },
       {
         pathname: '/leaderboards/llm/knowledge/',
         href: '/leaderboards/llm/knowledge/',
-        title: 'AI knowledge category evidence',
+        title: 'Knowledge',
         summary: 'Knowledge is a BenchLM-published category evidence lens, not a validated BenchAlign ranking. If BenchLM has not published the reviewed category metric, this view remains unavailable rather than inferring a result.',
       },
     ]));

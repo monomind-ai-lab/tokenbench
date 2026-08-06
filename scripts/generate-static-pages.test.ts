@@ -53,14 +53,14 @@ describe('crawlable static-page generator', () => {
     expect(leaderboardDirectory).toContain('<h1>Model leaderboards</h1>');
     expect(leaderboardDirectory).toContain('Explore current model leaders by capability, workload, cost, and human preference.');
 
-    expect(leaderboard).toContain('<h1>Overall AI model benchmarks</h1>');
+    expect(leaderboard).toContain('<h1>Overall benchmarks</h1>');
     expect(leaderboard).toContain('Live ranking data is not embedded in this static shell.');
     expect(leaderboard).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/overall/">');
 
-    expect(reasoning).toContain('<h1>AI reasoning category evidence</h1>');
+    expect(reasoning).toContain('<h1>Reasoning</h1>');
     expect(reasoning).toContain('not a validated BenchAlign ranking');
     expect(reasoning).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/reasoning/">');
-    expect(knowledge).toContain('<h1>AI knowledge category evidence</h1>');
+    expect(knowledge).toContain('<h1>Knowledge</h1>');
     expect(knowledge).toContain('If BenchLM has not published the reviewed category metric');
     expect(knowledge).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/knowledge/">');
 

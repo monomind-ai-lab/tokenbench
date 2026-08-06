@@ -17,6 +17,7 @@ import {
 } from '../frontend/leaderboard-filter-state';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
 import { ProviderMark } from '../frontend/provider-mark';
+import { ShareAction } from '../frontend/share-action';
 import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
 
 function methodologySummary(keyName: LeaderboardKey): string {
@@ -80,6 +81,17 @@ function LeaderboardState({
   return <div className="empty-state leaderboard-state" role="alert"><strong>Unable to load benchmark data</strong><p>{error ?? 'The cached benchmark request failed.'}</p><button type="button" className="button button-secondary" onClick={onRetry}>Retry benchmark request</button></div>;
 }
 
+function CurrentDecisionPicks({ keyName }: { readonly keyName: LeaderboardKey }) {
+  const state = useDecisionPicks();
+  const group = state.decisionPicks?.find((candidate) => candidate.key === keyName);
+  if (!group || group.entries.length === 0) return null;
+
+  return <section className="panel leaderboard-decision-picks" aria-labelledby="leaderboard-decision-picks-heading">
+    <div className="panel-heading"><div><span className="eyebrow">Available from the published summary</span><h2 id="leaderboard-decision-picks-heading">Decision-ready picks</h2><p>Supported entries only. Use this short list to orient your review, then inspect the filtered results below.</p></div></div>
+    <ol className="decision-pick-list">{group.entries.map((entry) => <DecisionEntry key={entry.modelKey} entry={entry} />)}</ol>
+  </section>;
+}
+
 export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey }) {
   const route = LEADERBOARD_ROUTES[keyName];
   const [filters, setFilters] = useLeaderboardFilters(keyName);
@@ -119,17 +131,22 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const entries = publishedEntries ? visibleLeaderboardEntries(publishedEntries, filters, keyName) : [];
   const csvQuery = serializeLeaderboardFilters(filters);
   const csvHref = `/api/benchmarks/leaderboards/${encodeURIComponent(keyName)}/csv?${csvQuery}`;
+  const shareUrl = typeof window === 'undefined'
+    ? `${route.pathname}?${csvQuery}`
+    : `${window.location.origin}${route.pathname}?${csvQuery}`;
 
   return <div className="content-stack leaderboard-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
       <span className="eyebrow">TokenBench leaderboard</span>
       <h1 id="leaderboard-heading">{route.seo.h1}</h1>
       <p>{route.seo.summary}</p>
-      <p className="leaderboard-methodology"><strong>Methodology:</strong> {methodologySummary(keyName)}</p>
       <div className="leaderboard-actions" role="group" aria-label="Leaderboard actions">
+        <ShareAction label="Share leaderboard" text={`Review ${route.seo.h1} on TokenBench.`} title={`${route.seo.h1} | TokenBench`} url={shareUrl} />
         <a className="button button-secondary" href={csvHref}>Download CSV</a>
       </div>
     </section>
+
+    {state.phase === 'ready' || state.phase === 'stale' ? <CurrentDecisionPicks keyName={keyName} /> : null}
 
     <section className="panel leaderboard-filter-panel" aria-labelledby="leaderboard-filters-heading">
       <div className="panel-heading"><div><span className="eyebrow">Review the published revision</span><h2 id="leaderboard-filters-heading">Filter and sort</h2><p>Use the filters supported by this route’s published evidence. Estimated records remain visibly separate from ranked evidence.</p></div></div>
@@ -140,36 +157,29 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       {state.phase === 'loading' ? <Skeleton label="Loading published benchmark data" /> : null}
       {state.phase === 'ready' && state.envelope ? (
         entries.length > 0
-          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} capabilities={capabilities} />
+          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
           : <>
             <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
-            <LeaderboardEvidence
-              publishedAt={state.envelope.publishedAt}
-              freshness={state.envelope.freshness}
-              attribution={state.envelope.attribution}
-              label="Filtered leaderboard evidence"
-              compact
-            />
           </>
       ) : null}
       {state.phase === 'stale' && state.envelope ? <>
         <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
         {entries.length > 0
-          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} evidenceLabel="Stale leaderboard evidence" capabilities={capabilities} />
+          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
           : <>
             <EmptyState title="No cached entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
-            <LeaderboardEvidence
-              publishedAt={state.envelope.publishedAt}
-              freshness={state.envelope.freshness}
-              attribution={state.envelope.attribution}
-              label="Stale leaderboard evidence"
-              compact
-            />
           </>}
       </> : null}
       {state.phase === 'unavailable' || state.phase === 'error'
         ? <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
         : null}
+    </section>
+
+    <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
+      <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p></div></div>
+      {state.envelope
+        ? <LeaderboardEvidence publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} label="Published leaderboard evidence" compact />
+        : <p className="leaderboard-evidence-unavailable">No published source record is available for this view yet. TokenBench will show source links, publication time, and freshness here when a valid revision is available.</p>}
     </section>
 
     <RelatedLeaderboards keyName={keyName} />

@@ -3,17 +3,22 @@ import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 import { formatDateTime } from './ui';
 import type { BenchmarkAttribution, BenchmarkFreshness } from './use-benchmarks';
 import type { LeaderboardQueryCapabilities } from './leaderboard-filter-state';
+import { ProviderMark } from './provider-mark';
 
 interface LeaderboardTableProps {
   readonly keyName: LeaderboardKey;
   readonly entries: readonly LeaderboardEntry[];
   readonly sort: LeaderboardSort;
   readonly onSortChange: (sort: LeaderboardSort) => void;
+  readonly capabilities?: LeaderboardQueryCapabilities;
+}
+
+interface LeaderboardEvidenceProps {
   readonly publishedAt: string;
   readonly freshness: BenchmarkFreshness;
   readonly attribution: readonly BenchmarkAttribution[];
-  readonly evidenceLabel?: string;
-  readonly capabilities?: LeaderboardQueryCapabilities;
+  readonly label?: string;
+  readonly compact?: boolean;
 }
 
 function tableLabel(keyName: LeaderboardKey): string {
@@ -107,10 +112,7 @@ export function LeaderboardEvidence({
   attribution,
   label = 'Leaderboard evidence',
   compact = false,
-}: Pick<LeaderboardTableProps, 'publishedAt' | 'freshness' | 'attribution'> & {
-  readonly label?: string;
-  readonly compact?: boolean;
-}) {
+}: LeaderboardEvidenceProps) {
   return <footer className={`leaderboard-evidence${compact ? ' leaderboard-evidence-compact' : ''}`} aria-label={label}>
     <p><strong>Published</strong> {formatDateTime(publishedAt)} <span aria-hidden="true">·</span> <strong>Checked</strong> {formatDateTime(freshness.checkedAt)} <span className={`leaderboard-freshness freshness-${freshness.status}`}>{freshness.status === 'fresh' ? 'Fresh' : 'Stale'}</span></p>
     {freshness.message ? <p className="muted">{freshness.message}</p> : null}
@@ -124,12 +126,16 @@ function Badge({ value }: { readonly value: string | null }) {
   return value ? <span className="leaderboard-badge">{value}</span> : null;
 }
 
+function ProviderIdentity({ entry }: { readonly entry: LeaderboardEntry }) {
+  return <span className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span></span>;
+}
+
 function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; readonly entry: LeaderboardEntry; readonly position: number | null; readonly key?: string }) {
   const estimated = isEstimated(entry);
   return <li className={`leaderboard-card${estimated ? ' leaderboard-card-estimated' : ''}`}>
     <div className="leaderboard-card-heading"><span className="leaderboard-position">{position === null ? 'Unranked' : `#${position}`}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div>
     <h3>{entry.model.name}</h3>
-    <p className="leaderboard-provider">{entry.model.creator} <span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span></p>
+    <p className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span></p>
     <dl>
       <div><dt>Metric</dt><dd><LensList entry={entry} /></dd></div>
       <div><dt>Blended cost</dt><dd>{estimated ? 'Unavailable' : formatPrice(entry.blendedCostPerMillion)}</dd></div>
@@ -139,7 +145,7 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
   </li>;
 }
 
-export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution, evidenceLabel: evidenceLabelText, capabilities }: LeaderboardTableProps) {
+export function LeaderboardTable({ keyName, entries, sort, onSortChange, capabilities }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
   const orderDescriptionId = `leaderboard-order-${keyName}`;
   const usesSourceLensOrder = keyName === 'multimodal-vision-documents' && sort === 'score-desc';
@@ -167,7 +173,7 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, publish
         <tbody>
           {rows.map(({ entry, position }) => <tr key={entry.model.modelKey} className={isEstimated(entry) ? 'leaderboard-row-estimated' : undefined}>
             <td>{position === null ? 'Unranked' : `#${position}`}</td>
-            <th scope="row"><div className="leaderboard-model"><span>{entry.model.name}</span><small>{entry.model.creator}</small><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
+            <th scope="row"><div className="leaderboard-model"><span>{entry.model.name}</span><ProviderIdentity entry={entry} /><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
             <td><LensList entry={entry} /></td>
             <td>{isEstimated(entry) ? 'Unavailable' : formatPrice(entry.blendedCostPerMillion)}</td>
             <td>{isEstimated(entry) ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</td>
@@ -178,6 +184,5 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, publish
     <ol className="leaderboard-card-list" aria-label={cardLabel(keyName)}>
       {rows.map(({ entry, position }) => <Card key={entry.model.modelKey} keyName={keyName} entry={entry} position={position} />)}
     </ol>
-    <LeaderboardEvidence publishedAt={publishedAt} freshness={freshness} attribution={attribution} label={evidenceLabelText} />
   </section>;
 }

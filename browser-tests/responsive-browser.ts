@@ -125,8 +125,8 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
   { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', hydratedClientMarker: '.calculator-page', visuallyVisibleHeading: false },
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
-  { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks', hydratedClientMarker: '.leaderboard-results[aria-label="AI coding model benchmarks"]' },
-  { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings', hydratedClientMarker: '.leaderboard-results[aria-label="Text-to-image model rankings"]' },
+  { path: '/leaderboards/llm/coding/', heading: 'Coding benchmark', hydratedClientMarker: '.leaderboard-results[aria-label="Coding benchmark"]' },
+  { path: '/leaderboards/media/text-to-image/', heading: 'Text to image', hydratedClientMarker: '.leaderboard-results[aria-label="Text to image"]' },
   { path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
   { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
@@ -149,9 +149,10 @@ async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, statu
 async function openCodingLeaderboard(page: Page) {
   const origin = previewOrigin();
   await blockExternalRequests(page, origin);
+  await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
   await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
   await page.goto('/leaderboards/llm/coding/');
-  await expect(page.getByRole('table', { name: 'AI coding model benchmarks' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('table', { name: 'Coding benchmark' })).toBeVisible({ timeout: 15_000 });
 }
 
 async function tabTo(page: Page, selector: string) {
@@ -623,7 +624,7 @@ test.describe('leaderboard browser harness', () => {
     }
   });
 
-  test('keeps every desktop sort control at a 44px minimum hit target', async ({ page }) => {
+  test('keeps every available desktop sort control at a 44px minimum hit target', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
     await openCodingLeaderboard(page);
 
@@ -632,7 +633,7 @@ test.describe('leaderboard browser harness', () => {
       return { label: element.getAttribute('aria-label'), width: bounds.width, height: bounds.height };
     }));
 
-    expect(targets).toHaveLength(4);
+    expect(targets).toEqual([{ label: 'Sort by metric', width: expect.any(Number), height: expect.any(Number) }]);
     for (const target of targets) {
       expect(target.width, `${target.label} width`).toBeGreaterThanOrEqual(44);
       expect(target.height, `${target.label} height`).toBeGreaterThanOrEqual(44);
@@ -645,18 +646,15 @@ test.describe('leaderboard browser harness', () => {
     await openCodingLeaderboard(page);
     await stubLeaderboard(page, origin, 'media-text-to-image', readyMediaLeaderboard());
 
-    const codingTable = page.getByRole('table', { name: 'AI coding model benchmarks' });
+    const codingTable = page.getByRole('table', { name: 'Coding benchmark' });
     await expect(codingTable).toBeVisible();
     await expect(page.getByRole('form', { name: 'Leaderboard filters' })).toBeVisible();
     await expect(page.getByRole('searchbox', { name: 'Search model or provider' })).toBeVisible();
-    await expect(page.getByRole('group', { name: 'Workload profile' })).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'Input-heavy' })).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'Balanced' })).toBeChecked();
-    await expect(page.getByRole('radio', { name: 'Output-heavy' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Sort leaderboard' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Providers' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Workload profile' })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Sort leaderboard' })).toHaveCount(0);
     expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['none', 'descending', 'none', 'none']);
-    await page.getByRole('button', { name: 'Sort by position' }).click();
-    await expect(page.locator('th[aria-sort]', { has: page.getByRole('button', { name: 'Sort by position' }) })).toHaveAttribute('aria-sort', 'ascending');
+    await expect(page.getByRole('button', { name: 'Sort by metric' })).toBeVisible();
     const codingNames = await codingTable.locator('tbody th[scope="row"] .leaderboard-model > span:first-child').allTextContents();
     expect(codingNames).toEqual(['Alpha', 'Beta']);
 
@@ -664,7 +662,7 @@ test.describe('leaderboard browser harness', () => {
       await page.setViewportSize({ width, height: 1000 });
       await page.goto('/leaderboards/llm/coding/');
       await expect(page.locator('.leaderboard-desktop-table')).toBeHidden();
-      const codingCards = page.getByRole('list', { name: 'AI coding model benchmark cards' });
+      const codingCards = page.getByRole('list', { name: 'Coding benchmark cards' });
       await expect(codingCards).toBeVisible();
       expect(await codingCards.getByRole('heading', { level: 3 }).allTextContents()).toEqual(codingNames);
       await assertNoHorizontalOverflow(page);
@@ -672,7 +670,7 @@ test.describe('leaderboard browser harness', () => {
 
     await page.setViewportSize({ width: 1024, height: 1000 });
     await page.goto('/leaderboards/media/text-to-image/');
-    const mediaTable = page.getByRole('table', { name: 'Text-to-image model rankings' });
+    const mediaTable = page.getByRole('table', { name: 'Text to image' });
     await expect(mediaTable).toBeVisible();
     expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['ascending', 'none', 'none', 'none']);
     const mediaNames = await mediaTable.locator('tbody th[scope="row"] .leaderboard-model > span:first-child').allTextContents();
@@ -680,9 +678,64 @@ test.describe('leaderboard browser harness', () => {
 
     await page.setViewportSize({ width: 375, height: 1000 });
     await page.goto('/leaderboards/media/text-to-image/');
-    const mediaCards = page.getByRole('list', { name: 'Text-to-image model ranking cards' });
+    const mediaCards = page.getByRole('list', { name: 'Text to image cards' });
     await expect(mediaCards).toBeVisible();
     expect(await mediaCards.getByRole('heading', { level: 3 }).allTextContents()).toEqual(mediaNames);
+  });
+
+  test('keeps current leaderboard actions, decision picks, and provider identity readable across themes and breakpoints', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
+
+    for (const [width, expectedPickColumns] of [[320, 1], [1440, 3]] as const) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ['dark', 'light'] as const) {
+        await setStoredTheme(page, theme);
+        await page.goto('/leaderboards/llm/coding/?q=Alpha&sort=score-desc');
+
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(page.getByRole('heading', { name: 'Coding benchmark', level: 1 })).toBeVisible();
+
+        const actions = page.getByRole('group', { name: 'Leaderboard actions' });
+        await expect(actions.getByRole('button', { name: 'Share leaderboard' })).toBeVisible();
+        await expect(actions.getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
+          'href',
+          '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha',
+        );
+
+        const picks = page.getByRole('region', { name: 'Decision-ready picks' });
+        await expect(picks).toBeVisible({ timeout: 15_000 });
+        await expect(page.getByRole('heading', { name: 'Evidence and methodology', level: 2 })).toHaveCount(1);
+        await expect(page.locator('.leaderboard-results .leaderboard-evidence')).toHaveCount(0);
+        await expect(page.locator('.leaderboard-evidence-panel .leaderboard-evidence')).toHaveCount(1);
+        await expect(page.locator('.leaderboard-cover-image')).toHaveCount(0);
+
+        const sectionPositions = await page.locator('.leaderboard-page').evaluate((leaderboardPage) => [
+          '.leaderboard-hero',
+          '.leaderboard-decision-picks',
+          '.leaderboard-filter-panel',
+          'section[aria-label="Coding benchmark results"]',
+          '.leaderboard-evidence-panel',
+        ].map((selector) => Array.from(leaderboardPage.children).findIndex((child) => child.matches(selector))));
+        expect(sectionPositions.every((position) => position >= 0)).toBe(true);
+        expect(sectionPositions).toEqual([...sectionPositions].sort((left, right) => left - right));
+
+        const pickColumnCount = await picks.locator('.decision-pick-list').evaluate((list) => (
+          getComputedStyle(list).gridTemplateColumns.split(/\s+/).filter(Boolean).length
+        ));
+        expect(pickColumnCount).toBe(expectedPickColumns);
+
+        const provider = width < 1024
+          ? page.locator('.leaderboard-card-list .leaderboard-provider').first()
+          : page.locator('.leaderboard-desktop-table .leaderboard-provider').first();
+        await expect(provider).toContainText('OpenAI');
+        await expect(provider.locator('.provider-mark')).toHaveCount(1);
+        await assertNoHorizontalOverflow(page);
+      }
+    }
   });
 
   test('keeps stale, empty, and unavailable leaderboard states explicit', async ({ page }) => {
@@ -690,6 +743,7 @@ test.describe('leaderboard browser harness', () => {
     const openCodingState = async (value: unknown, status = 200) => {
       await page.unrouteAll();
       await blockExternalRequests(page, origin);
+      await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
       await stubLeaderboard(page, origin, 'llm-coding', value, status);
       await page.goto('/leaderboards/llm/coding/');
     };
@@ -698,15 +752,15 @@ test.describe('leaderboard browser harness', () => {
     await openCodingState(staleCodingLeaderboard());
     await expect(page.getByRole('status')).toContainText('Stale benchmark data', { timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Retry benchmark refresh' })).toBeVisible();
-    await expect(page.getByRole('list', { name: 'AI coding model benchmark cards' })).toBeVisible();
-    await expect(page.locator('footer[aria-label="Stale leaderboard evidence"]')).toContainText('Stale');
+    await expect(page.getByRole('list', { name: 'Coding benchmark cards' })).toBeVisible();
+    await expect(page.locator('footer[aria-label="Published leaderboard evidence"]')).toContainText('Stale');
 
     await openCodingState(emptyCodingLeaderboard());
     await expect(page.getByText('No published entries match these filters')).toBeVisible({ timeout: 15_000 });
-    await expect(page.locator('footer[aria-label="Filtered leaderboard evidence"]')).toBeVisible();
+    await expect(page.locator('footer[aria-label="Published leaderboard evidence"]')).toBeVisible();
 
     await openCodingState({ error: 'Published benchmark data is unavailable.' }, 503);
-    const unavailable = page.getByRole('region', { name: 'AI coding model benchmarks results' }).getByRole('status');
+    const unavailable = page.getByRole('region', { name: 'Coding benchmark results' }).getByRole('status');
     await expect(unavailable).toContainText('Unavailable', { timeout: 15_000 });
     await expect(unavailable.getByRole('button', { name: 'Retry benchmark request' })).toBeVisible();
   });
@@ -734,6 +788,7 @@ test.describe('motion and named call-to-action coverage', () => {
   test('keeps named home and leaderboard primary calls-to-action visible in both themes', async ({ page }) => {
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
     await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
     await page.setViewportSize({ width: 1024, height: 1000 });
 
@@ -840,18 +895,18 @@ test.describe('guides browser harness', () => {
 test.describe('generated static route runtime', () => {
   const hydratingLeaderboardRoutes = [
     ['/leaderboards/', 'Model leaderboards'],
-    ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
-    ['/leaderboards/llm/coding/', 'AI coding model benchmarks'],
-    ['/leaderboards/llm/agentic/', 'AI agentic model benchmarks'],
-    ['/leaderboards/llm/human-preference/', 'Human preference AI model rankings'],
-    ['/leaderboards/llm/value/', 'AI model value frontier'],
-    ['/leaderboards/llm/pricing-context/', 'AI model pricing and context'],
-    ['/leaderboards/multimodal/vision-documents/', 'Vision and document AI benchmarks'],
-    ['/leaderboards/media/text-to-image/', 'Text-to-image model rankings'],
-    ['/leaderboards/media/image-editing/', 'AI image-editing model rankings'],
-    ['/leaderboards/media/text-to-video/', 'Text-to-video model rankings'],
-    ['/leaderboards/media/image-to-video/', 'Image-to-video model rankings'],
-    ['/leaderboards/media/video-editing/', 'AI video-editing model rankings'],
+    ['/leaderboards/llm/overall/', 'Overall benchmarks'],
+    ['/leaderboards/llm/coding/', 'Coding benchmark'],
+    ['/leaderboards/llm/agentic/', 'Agentic performance'],
+    ['/leaderboards/llm/human-preference/', 'Human preference'],
+    ['/leaderboards/llm/value/', 'Value frontier'],
+    ['/leaderboards/llm/pricing-context/', 'Pricing and context'],
+    ['/leaderboards/multimodal/vision-documents/', 'Multimodal'],
+    ['/leaderboards/media/text-to-image/', 'Text to image'],
+    ['/leaderboards/media/image-editing/', 'Image editing'],
+    ['/leaderboards/media/text-to-video/', 'Text to video'],
+    ['/leaderboards/media/image-to-video/', 'Image to video'],
+    ['/leaderboards/media/video-editing/', 'Video editing'],
   ] as const;
 
   test('ships a raw crawlable compare hub, then mounts its active-revision directory without external requests', async ({ page, request, baseURL }) => {

@@ -1,6 +1,7 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DecisionPickEntry } from '../benchmarks/decision-picks';
+import type { LeaderboardResult } from '../benchmarks/leaderboards';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './leaderboards-page';
 
@@ -88,6 +89,72 @@ function respondWithSummary(payload = decisionSummaryEnvelope()) {
   return fetchMock;
 }
 
+function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardResult> {
+  const model = {
+    modelKey: 'openai:alpha',
+    slug: 'alpha',
+    name: 'Alpha',
+    creator: 'OpenAI',
+    sourceType: 'Proprietary' as const,
+    reasoningType: null,
+    releaseDate: null,
+    contextWindowTokens: 128_000,
+    evidenceStatus: 'supported' as const,
+    rankingEligible: true,
+    confidenceLower: null,
+    confidenceUpper: null,
+    benchmarkCount: 1,
+    sourceId: 'benchlm' as const,
+    sourceModelId: 'openai:alpha',
+    sourceArtifactId: 'models',
+  };
+  const metric = {
+    modelKey: model.modelKey,
+    metricKey: 'benchlm:category:coding',
+    category: 'coding',
+    value: 91,
+    rank: null,
+    lower: null,
+    upper: null,
+    voteCount: null,
+    unit: 'score' as const,
+    sourceId: 'benchlm' as const,
+    sourceUpdatedAt: UPDATED_AT,
+    sourceModelId: model.modelKey,
+    sourceArtifactId: 'models',
+    rankingEligible: true,
+    methodology: 'benchlm_raw_composite' as const,
+    observationCount: null,
+    sessionCount: null,
+  };
+  return {
+    revision: 'published-r1',
+    publishedAt: UPDATED_AT,
+    freshness: { status: 'fresh', checkedAt: UPDATED_AT },
+    attribution: [{ sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data', updatedAt: UPDATED_AT }],
+    data: {
+      key: 'llm-coding',
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: ['benchlm:category:coding'],
+        defaultSort: 'score-desc',
+      },
+      entries: [{
+        model,
+        metric,
+        metrics: [metric],
+        primaryPrice: null,
+        blendedCostPerMillion: null,
+        contextWindowTokens: null,
+        sourceRank: null,
+        onValueFrontier: false,
+      }],
+    },
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   window.history.replaceState(null, '', '/');
@@ -164,16 +231,61 @@ describe('LeaderboardDirectoryPage', () => {
     expect(within(codingCard).getByRole('link', { name: 'View full Coding benchmark' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
   });
 
-  it('shows a loading placeholder before the summary resolves', () => {
-    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+  it('shows a loading placeholder before the summary resolves', async () => {
+    let resolveResponse: ((response: Response) => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { resolveResponse = resolve; })));
 
     render(<LeaderboardDirectoryPage />);
 
     expect(screen.getByLabelText('Loading decision-ready picks')).toHaveAttribute('aria-busy', 'true');
+    resolveResponse?.(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    await screen.findByRole('region', { name: 'Decision-ready picks' });
   });
 });
 
 describe('LeaderboardPage', () => {
+  it('places current actions and available picks before filters and consolidates provenance', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Alpha&sort=score-desc');
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      if (input.startsWith('/api/benchmarks/leaderboards/llm-coding?')) return Promise.resolve(new Response(JSON.stringify(codingLeaderboardEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    const heading = await screen.findByRole('heading', { name: 'Coding benchmark', level: 1 });
+    const actions = screen.getByRole('group', { name: 'Leaderboard actions' });
+    expect(within(actions).getByRole('button', { name: 'Share leaderboard' })).toBeInTheDocument();
+    expect(within(actions).getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
+      'href',
+      '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha',
+    );
+
+    const picks = await screen.findByRole('region', { name: 'Decision-ready picks' });
+    const filters = screen.getByRole('region', { name: 'Filter and sort' });
+    const results = screen.getByRole('region', { name: 'Coding benchmark results' });
+    const evidence = screen.getByRole('region', { name: 'Evidence and methodology' });
+    expect(heading.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(actions.compareDocumentPosition(picks) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(picks.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(filters.compareDocumentPosition(results) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(results.compareDocumentPosition(evidence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole('heading', { name: 'Evidence and methodology', level: 2 })).toHaveLength(1);
+    expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(document.querySelector('.leaderboard-cover-image')).toBeNull();
+  });
+
   it('builds a normal Download CSV link from the current shared filter state', () => {
     window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Alpha&provider=Provider%20A&sort=score-desc');
     vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
@@ -185,5 +297,31 @@ describe('LeaderboardPage', () => {
       'href',
       '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha&provider=Provider+A',
     );
+  });
+
+  it('shares the canonical leaderboard path with the current serialized filters', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Alpha&sort=score-desc');
+    const share = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { share });
+    vi.stubGlobal('fetch', vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      return Promise.resolve(new Response(JSON.stringify(codingLeaderboardEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+    }));
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share leaderboard' }));
+    await screen.findByRole('status');
+    expect(share).toHaveBeenCalledWith({
+      url: `${window.location.origin}/leaderboards/llm/coding/?profile=balanced&sort=score-desc&q=Alpha`,
+      title: 'Coding benchmark | TokenBench',
+      text: 'Review Coding benchmark on TokenBench.',
+    });
   });
 });

@@ -151,32 +151,23 @@ function renderTable(
     entries={entries}
     sort={sort}
     onSortChange={onSortChange}
-    publishedAt={ISO_TIME}
-    freshness={{ status: 'fresh', checkedAt: ISO_TIME }}
-    attribution={[{
-      sourceId: 'benchlm',
-      label: 'Data from BenchLM.ai',
-      url: 'https://benchlm.ai/data',
-      updatedAt: ISO_TIME,
-    }]}
   />);
   return onSortChange;
 }
 
 describe('LeaderboardTable', () => {
-  it('renders an accessible semantic table with nulls explicitly unavailable and source attribution', () => {
+  it('renders an accessible semantic table with nulls explicitly unavailable without duplicating provenance', () => {
     const onSortChange = renderTable();
 
-    const table = screen.getByRole('table', { name: 'AI coding model benchmarks' });
+    const table = screen.getByRole('table', { name: 'Coding benchmark' });
     expect(within(table).getByRole('columnheader', { name: 'Position' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Model' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Metric' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Blended cost' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Metric' })).toHaveAttribute('aria-sort', 'descending');
     expect(within(table).getAllByText('Unavailable').length).toBeGreaterThan(1);
-    expect(screen.getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(screen.getByLabelText('Leaderboard evidence')).toHaveTextContent('Published');
-    expect(screen.getByLabelText('Leaderboard evidence')).toHaveTextContent('2026');
+    expect(screen.queryByRole('link', { name: 'Data from BenchLM.ai' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Leaderboard evidence')).not.toBeInTheDocument();
 
     fireEvent.click(within(table).getByRole('button', { name: 'Sort by metric' }));
     expect(onSortChange).toHaveBeenCalledWith('score-desc');
@@ -211,6 +202,20 @@ describe('LeaderboardTable', () => {
     expect(cardRows[0]).toHaveTextContent('Vision Model');
     expect(cardRows[0]).toHaveTextContent('BenchLM multimodal');
     expect(cardRows[0]).toHaveTextContent('LMArena vision');
+  });
+
+  it('keeps a provider mark and its textual label in equivalent desktop and mobile model rows', () => {
+    renderTable('llm-coding', 'score-desc', [entry({
+      model: { ...entry().model, creator: 'OpenAI' },
+    })]);
+
+    const table = screen.getByRole('table', { name: 'Coding benchmark' });
+    const cards = document.querySelector<HTMLOListElement>('.leaderboard-card-list');
+    expect(cards).not.toBeNull();
+    expect(within(table).getByText('OpenAI')).toBeInTheDocument();
+    expect(within(cards!).getByText('OpenAI')).toBeInTheDocument();
+    expect(table.querySelectorAll('.provider-mark')).toHaveLength(1);
+    expect(cards!.querySelectorAll('.provider-mark')).toHaveLength(1);
   });
 
   it.each([
@@ -275,7 +280,7 @@ describe('LeaderboardTable', () => {
   it('describes the default Pareto order when it cannot truthfully be assigned to one column', () => {
     renderTable('llm-value', 'pareto-score-desc', [entry({ onValueFrontier: true })]);
 
-    const table = screen.getByRole('table', { name: 'AI model value frontier' });
+    const table = screen.getByRole('table', { name: 'Value frontier' });
     expect(table).toHaveAttribute('aria-describedby', 'leaderboard-order-llm-value');
     expect(screen.getByText('Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'))
       .toHaveAttribute('id', 'leaderboard-order-llm-value');
@@ -288,9 +293,6 @@ describe('LeaderboardTable', () => {
       readonly entries: readonly LeaderboardEntry[];
       readonly sort: LeaderboardSort;
       readonly onSortChange: (sort: LeaderboardSort) => void;
-      readonly publishedAt: string;
-      readonly freshness: { readonly status: 'fresh'; readonly checkedAt: string };
-      readonly attribution: readonly [{ readonly sourceId: 'benchlm'; readonly label: string; readonly url: string; readonly updatedAt: string }];
       readonly capabilities: typeof capabilities;
     }) => ReturnType<typeof LeaderboardTable>;
 
@@ -299,9 +301,6 @@ describe('LeaderboardTable', () => {
       entries={[entry()]}
       sort="score-desc"
       onSortChange={vi.fn()}
-      publishedAt={ISO_TIME}
-      freshness={{ status: 'fresh', checkedAt: ISO_TIME }}
-      attribution={[{ sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data', updatedAt: ISO_TIME }]}
       capabilities={capabilities}
     />);
 
@@ -621,11 +620,11 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'AI coding model benchmarks', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Coding benchmark', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('checkbox', { name: 'Include estimated BenchLM models' })).toBeChecked();
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=50&includeEstimated=1');
-    expect(screen.getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(within(screen.getByLabelText('Published leaderboard evidence')).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('heading', { name: 'Related leaderboards', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
   });
@@ -680,7 +679,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
     resolveResponse?.(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta])));
-    const firstTable = await screen.findByRole('table', { name: 'AI coding model benchmarks' });
+    const firstTable = await screen.findByRole('table', { name: 'Coding benchmark' });
     expect(within(firstTable).getAllByRole('row')[1]).toHaveTextContent('Beta');
     expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
 
@@ -688,7 +687,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta]))));
     render(<App />);
 
-    const reopened = await screen.findByRole('table', { name: 'AI coding model benchmarks' });
+    const reopened = await screen.findByRole('table', { name: 'Coding benchmark' });
     expect(within(reopened).getAllByRole('row')[1]).toHaveTextContent('Beta');
     expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
   });
@@ -756,7 +755,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
 
     const mounted = render(<App />);
-    await screen.findByRole('table', { name: 'AI coding model benchmarks' });
+    await screen.findByRole('table', { name: 'Coding benchmark' });
     const popstateListener = addEventListener.mock.calls.find(([type]) => type === 'popstate')?.[1];
 
     expect(popstateListener).toBeTypeOf('function');
@@ -798,7 +797,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     render(<App />);
 
     expect(await screen.findByRole('status')).toHaveTextContent('Stale benchmark data');
-    expect(screen.getByRole('table', { name: 'AI coding model benchmarks' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
     expect(screen.getAllByText('Model A')).toHaveLength(2);
   });
 
@@ -813,13 +812,13 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     render(<App />);
 
-    const evidence = await screen.findByLabelText('Stale leaderboard evidence');
+    const evidence = await screen.findByLabelText('Published leaderboard evidence');
     expect(evidence).toHaveTextContent('Published');
     expect(evidence).toHaveTextContent('Checked');
     expect(evidence).toHaveTextContent('Stale');
     expect(evidence).toHaveTextContent('2026');
     expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(screen.getByRole('table', { name: 'AI coding model benchmarks' })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
     expect(screen.getAllByText('Model A')).toHaveLength(2);
   });
 
@@ -830,14 +829,14 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     render(<App />);
 
     expect(await screen.findByRole('status')).toHaveTextContent('No published entries match these filters');
-    const evidence = screen.getByLabelText('Filtered leaderboard evidence');
+    const evidence = screen.getByLabelText('Published leaderboard evidence');
     expect(evidence).toHaveTextContent('Published');
     expect(evidence).toHaveTextContent('Checked');
     expect(evidence).toHaveTextContent('Fresh');
     expect(evidence).toHaveTextContent('2026');
     expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' }))
       .toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(screen.queryByRole('table', { name: 'AI coding model benchmarks' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Coding benchmark' })).not.toBeInTheDocument();
     expect(screen.queryByText('Model A')).not.toBeInTheDocument();
   });
 
