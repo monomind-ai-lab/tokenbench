@@ -517,6 +517,7 @@ test.describe('leaderboard browser harness', () => {
     await openCodingState(staleCodingLeaderboard());
     await expect(page.getByRole('status')).toContainText('Stale benchmark data', { timeout: 15_000 });
     await expect(page.getByRole('button', { name: 'Retry benchmark refresh' })).toBeVisible();
+    await expect(page.getByRole('list', { name: 'AI coding model benchmark cards' })).toBeVisible();
     await expect(page.locator('footer[aria-label="Stale leaderboard evidence"]')).toContainText('Stale');
 
     await openCodingState(emptyCodingLeaderboard());

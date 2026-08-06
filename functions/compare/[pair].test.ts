@@ -402,13 +402,15 @@ describe('dynamic comparison Pages Function', () => {
     expect(html).not.toContain('\u2029');
   });
 
-  it('returns a safe noindex 404 when there is no publication-pointer-selected revision', async () => {
+  it('returns a safe noindex 503 when there is no publication-pointer-selected revision', async () => {
     readActiveBenchmarkSnapshot.mockResolvedValueOnce(null);
 
     const response = await request('zeta-vs-alpha');
     const html = await response.text();
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(503);
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+    expect(html).toContain('Comparison temporarily unavailable');
     expect(html).toContain('<meta name="robots" content="noindex,follow">');
     expect(html).not.toContain('rel="canonical"');
     expect(html).not.toContain('application/ld+json');

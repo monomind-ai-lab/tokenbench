@@ -428,7 +428,7 @@ function unavailableState(message: string): Omit<BenchmarkLeaderboardState, 'ret
 
 /**
  * Reads one active published revision from Task 9. A stale revision remains
- * visible to status UI but deliberately never becomes a ready leaderboard.
+ * available to the UI as an explicitly stale last-known-good snapshot.
  */
 export function useBenchmarkLeaderboard(
   key: LeaderboardKey,
