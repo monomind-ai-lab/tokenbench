@@ -69,8 +69,6 @@ interface NormalizedRate {
   readonly invalid: boolean;
 }
 
-const ID_SEPARATOR = '\u0000';
-
 function compareText(left: string, right: string): number {
   return compareUtf8Binary(left, right);
 }
@@ -87,7 +85,7 @@ function normalizeRate(value: unknown): NormalizedRate {
 }
 
 function routeIdentity(modelKey: string, providerId: string, routeId: string): string {
-  return [modelKey, providerId, routeId].join(ID_SEPARATOR);
+  return JSON.stringify([modelKey, providerId, routeId]);
 }
 
 function factId(
@@ -97,7 +95,7 @@ function factId(
   providerId: string,
   routeId: string,
 ): string {
-  return [toRevision, kind, modelKey, providerId, routeId].join(ID_SEPARATOR);
+  return JSON.stringify([toRevision, kind, modelKey, providerId, routeId]);
 }
 
 function routePrice(price: PublishedRevisionPriceCheck): RoutePrice | null {

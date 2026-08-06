@@ -58,11 +58,11 @@ describe('diffPublishedRevisions', () => {
     expect(changes.fromRevision).toBe('revision-1');
     expect(changes.toRevision).toBe('revision-2');
     expect(changes.newModels).toEqual([{
-      id: 'revision-2\u0000new-model\u0000provider:new-model\u0000\u0000',
+      id: '["revision-2","new-model","provider:new-model","",""]',
       modelKey: 'provider:new-model',
     }]);
     expect(changes.priceDrops).toEqual([{
-      id: 'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:alpha',
+      id: '["revision-2","price-drop","provider:alpha","provider","direct:alpha"]',
       modelKey: 'provider:alpha',
       providerId: 'provider',
       routeId: 'direct:alpha',
@@ -71,6 +71,28 @@ describe('diffPublishedRevisions', () => {
       previousOutputUsdPerMillion: 6,
       currentOutputUsdPerMillion: 5,
     }]);
+  });
+
+  it('emits both exact route drops when distinct tuples contain NUL characters', () => {
+    const previous = snapshot('revision-1', [model('a'), model('a\u0000b')], [
+      price({ modelKey: 'a', providerId: 'b\u0000c', routeId: 'd', inputUsdPerMillion: 4, outputUsdPerMillion: 8 }),
+      price({ modelKey: 'a\u0000b', providerId: 'c', routeId: 'd', inputUsdPerMillion: 6, outputUsdPerMillion: 10 }),
+    ]);
+    const current = snapshot('revision-2', [model('a'), model('a\u0000b')], [
+      price({ modelKey: 'a', providerId: 'b\u0000c', routeId: 'd', inputUsdPerMillion: 3, outputUsdPerMillion: 8 }),
+      price({ modelKey: 'a\u0000b', providerId: 'c', routeId: 'd', inputUsdPerMillion: 5, outputUsdPerMillion: 10 }),
+    ]);
+
+    const changes = diffPublishedRevisions(previous, current);
+
+    expect(changes.priceDrops.map((fact) => [fact.modelKey, fact.providerId, fact.routeId])).toEqual([
+      ['a', 'b\u0000c', 'd'],
+      ['a\u0000b', 'c', 'd'],
+    ]);
+    expect(changes.priceDrops.map((fact) => fact.id)).toEqual([
+      '["revision-2","price-drop","a","b\\u0000c","d"]',
+      '["revision-2","price-drop","a\\u0000b","c","d"]',
+    ]);
   });
 
   it('reports only primary finite non-negative rate decreases and preserves missing sides as unavailable', () => {
@@ -91,7 +113,7 @@ describe('diffPublishedRevisions', () => {
 
     expect(diffPublishedRevisions(previous, current).priceDrops).toEqual([
       {
-        id: 'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:drop-to-zero',
+        id: '["revision-2","price-drop","provider:alpha","provider","direct:drop-to-zero"]',
         modelKey: 'provider:alpha',
         providerId: 'provider',
         routeId: 'direct:drop-to-zero',
@@ -101,7 +123,7 @@ describe('diffPublishedRevisions', () => {
         currentOutputUsdPerMillion: 2,
       },
       {
-        id: 'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:partial',
+        id: '["revision-2","price-drop","provider:alpha","provider","direct:partial"]',
         modelKey: 'provider:alpha',
         providerId: 'provider',
         routeId: 'direct:partial',
@@ -203,20 +225,20 @@ describe('diffPublishedRevisions', () => {
       'provider:alpha/provider/direct:z',
     ]);
     expect(changes.newModels.map((fact) => fact.id)).toEqual([
-      'revision-2\u0000new-model\u0000provider:new-a\u0000\u0000',
-      'revision-2\u0000new-model\u0000provider:new-z\u0000\u0000',
+      '["revision-2","new-model","provider:new-a","",""]',
+      '["revision-2","new-model","provider:new-z","",""]',
     ]);
     expect(changes.priceDrops.map((fact) => fact.id)).toEqual([
-      'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:a',
-      'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:z',
+      '["revision-2","price-drop","provider:alpha","provider","direct:a"]',
+      '["revision-2","price-drop","provider:alpha","provider","direct:z"]',
     ]);
     expect(JSON.parse(changes.dedupeKey)).toEqual([
       'revision-1',
       'revision-2',
-      'revision-2\u0000new-model\u0000provider:new-a\u0000\u0000',
-      'revision-2\u0000new-model\u0000provider:new-z\u0000\u0000',
-      'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:a',
-      'revision-2\u0000price-drop\u0000provider:alpha\u0000provider\u0000direct:z',
+      '["revision-2","new-model","provider:new-a","",""]',
+      '["revision-2","new-model","provider:new-z","",""]',
+      '["revision-2","price-drop","provider:alpha","provider","direct:a"]',
+      '["revision-2","price-drop","provider:alpha","provider","direct:z"]',
     ]);
     expect(previous).toEqual(previousBefore);
     expect(current).toEqual(currentBefore);
