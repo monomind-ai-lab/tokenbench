@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import type { Page, Route } from '@playwright/test';
 import { readActiveBenchmarkSnapshot, type D1Database } from '../functions/_shared/benchmark-db';
@@ -456,6 +455,14 @@ interface HandlerDocument {
   readonly body: string;
 }
 
+const VITE_HANDLER_HYDRATION_ENTRY = [
+  'import { injectIntoGlobalHook } from "/@react-refresh";',
+  'injectIntoGlobalHook(window);',
+  'window.$RefreshReg$ = () => {};',
+  'window.$RefreshSig$ = () => (type) => type;',
+  'void import("/src/main.tsx");',
+].join('\n');
+
 const execFile = promisify(execFileCallback);
 
 /**
@@ -465,9 +472,9 @@ const execFile = promisify(execFileCallback);
  * the browser request with that real handler response.
  */
 async function renderHandlerBackedComparisonDocument(origin: string): Promise<HandlerDocument> {
-  const projectRoot = process.cwd();
-  const fixtureModule = pathToFileURL(resolve(projectRoot, 'browser-tests/tokenbench-fixtures.ts')).href;
-  const handlerModule = pathToFileURL(resolve(projectRoot, 'functions/compare/[pair].ts')).href;
+  const projectRoot = fileURLToPath(new URL('../', import.meta.url));
+  const fixtureModule = import.meta.url;
+  const handlerModule = new URL('../functions/compare/[pair].ts', import.meta.url).href;
   const program = [
     `const fixture = await import(${JSON.stringify(fixtureModule)});`,
     `const handler = await import(${JSON.stringify(handlerModule)});`,
@@ -494,10 +501,14 @@ async function renderHandlerBackedComparisonDocument(origin: string): Promise<Ha
 
 /**
  * The document itself is rendered by the real Pages Function against a fake
- * D1 reader. Assets are served by Vite solely so browser hydration can run;
- * this is handler-backed browser coverage, not a local Pages runtime.
+ * D1 reader. Vite source remapping remains the development default; production
+ * previews can serve their generated /assets files by selecting `as-served`.
  */
-export async function stubHandlerBackedComparison(page: Page, origin: string): Promise<void> {
+export async function stubHandlerBackedComparison(
+  page: Page,
+  origin: string,
+  options: { readonly assetMode?: 'vite-source' | 'as-served' } = {},
+): Promise<void> {
   const preflight = await readActiveBenchmarkSnapshot(handlerBackedComparisonDatabase());
   if (!preflight) throw new Error('Handler-backed comparison fixture has no active benchmark revision.');
   const response = await renderHandlerBackedComparisonDocument(origin);
@@ -512,11 +523,12 @@ export async function stubHandlerBackedComparison(page: Page, origin: string): P
       body: response.body,
     });
   });
+  if (options.assetMode === 'as-served') return;
   await page.route(origin + '/assets/main.js', async (route) => {
-    await route.fulfill({ response: await route.fetch({ url: origin + '/src/main.tsx' }) });
+    await route.fulfill({ contentType: 'application/javascript', body: VITE_HANDLER_HYDRATION_ENTRY });
   });
   await page.route(origin + '/assets/tokenbench.css', async (route) => {
-    await route.fulfill({ response: await route.fetch({ url: origin + '/src/index.css' }) });
+    await route.fulfill({ contentType: 'text/css', body: '@import url("/src/index.css");' });
   });
 }
 

@@ -29,6 +29,10 @@ function previewOrigin(): string {
   return new URL(baseURL).origin;
 }
 
+function handlerBackedAssetMode(): 'vite-source' | 'as-served' {
+  return process.env.TOKENBENCH_BROWSER_ASSET_MODE === 'production' ? 'as-served' : 'vite-source';
+}
+
 async function blockExternalRequests(page: Page, origin = previewOrigin()): Promise<void> {
   await page.route((url) => url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:'), (route) => route.abort());
 }
@@ -58,21 +62,23 @@ async function installInteractiveRouteStubs(page: Page): Promise<void> {
   }, 503));
   await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
   await stubLeaderboard(page, origin, 'media-text-to-image', readyMediaLeaderboard());
-  await stubHandlerBackedComparison(page, origin);
+  await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
 }
 
 async function assertHydratedRouteFrame(
   page: Page,
-  heading: string,
-  options: { readonly visuallyVisibleHeading?: boolean } = {},
+  route: HydrationMatrixRoute,
 ): Promise<void> {
-  const h1 = page.getByRole('heading', { name: heading, level: 1 });
+  const h1 = page.getByRole('heading', { name: route.heading, level: 1 });
   await expect(h1).toHaveCount(1);
-  if (options.visuallyVisibleHeading !== false) await expect(h1).toBeVisible();
+  await expect(page.locator('h1')).toHaveCount(1);
+  if (route.visuallyVisibleHeading !== false) await expect(h1).toBeVisible();
   await expect(page.locator('main')).toHaveCount(1);
   await expect(page.getByRole('banner')).toHaveCount(1);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('nav[aria-label="Primary navigation"]')).toHaveCount(1);
+  await expect(page.locator('.static-page-shell')).toHaveCount(0);
+  await expect(page.locator(route.hydratedClientMarker)).toBeVisible();
   await assertNoHorizontalOverflow(page);
 }
 
@@ -87,20 +93,21 @@ async function assertCompactMenuPresence(page: Page): Promise<void> {
 interface HydrationMatrixRoute {
   readonly path: string;
   readonly heading: string;
+  readonly hydratedClientMarker: string;
   readonly visuallyVisibleHeading?: boolean;
 }
 
 const hydrationMatrix: readonly HydrationMatrixRoute[] = [
-  { path: '/', heading: 'Stop Guessing Your AI Costs. Start Optimizing.' },
-  { path: '/tools/', heading: 'AI cost decision tools' },
-  { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', visuallyVisibleHeading: false },
-  { path: '/leaderboards/', heading: 'AI model leaderboards' },
-  { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks' },
-  { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings' },
-  { path: '/compare/', heading: 'Compare AI models' },
-  { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta' },
-  { path: '/guides/', heading: 'Spend smarter on AI' },
-  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend' },
+  { path: '/', heading: 'Stop Guessing Your AI Costs. Start Optimizing.', hydratedClientMarker: '.home-page' },
+  { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
+  { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', hydratedClientMarker: '.calculator-page', visuallyVisibleHeading: false },
+  { path: '/leaderboards/', heading: 'AI model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
+  { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks', hydratedClientMarker: '.leaderboard-results[aria-label="AI coding model benchmarks"]' },
+  { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings', hydratedClientMarker: '.leaderboard-results[aria-label="Text-to-image model rankings"]' },
+  { path: '/compare/', heading: 'Compare AI models', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
+  { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page' },
+  { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
+  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
 ];
 
 async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, status = 200, expectCalculator = true) {
@@ -145,6 +152,19 @@ function expectVisibleFocus(style: { outlineWidth: string; outlineStyle: string;
   expect(color).not.toBe('');
   expect(color).not.toBe('transparent');
   expect(color).not.toBe('rgba(0,0,0,0)');
+}
+
+async function activateSkipLinkAndAssertTarget(page: Page, targetId: string): Promise<void> {
+  const skipLink = page.locator('.skip-link');
+  await page.keyboard.press('Tab');
+  await expect(skipLink).toBeFocused();
+  await expect(skipLink).toHaveAttribute('href', `#${targetId}`);
+  await page.keyboard.press('Enter');
+
+  await expect.poll(() => page.evaluate(() => ({
+    hash: window.location.hash,
+    focusedId: (document.activeElement as HTMLElement | null)?.id ?? null,
+  }))).toEqual({ hash: `#${targetId}`, focusedId: targetId });
 }
 
 test.describe('responsive calculator browser harness', () => {
@@ -857,7 +877,7 @@ test.describe('handler-backed comparison browser coverage', () => {
     const page = await context.newPage();
     try {
       await blockExternalRequests(page, origin);
-      await stubHandlerBackedComparison(page, origin);
+      await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
 
       await page.goto(HANDLER_COMPARISON_PATH);
       await expect(page.getByRole('heading', { name: 'Alpha vs Beta', level: 1 })).toBeVisible();
@@ -868,6 +888,27 @@ test.describe('handler-backed comparison browser coverage', () => {
     } finally {
       await context.close();
     }
+  });
+
+  test('hydrates the handler-backed comparison so workload selection recalculates its displayed cost', async ({ page }) => {
+    test.setTimeout(45_000);
+    const origin = previewOrigin();
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+    const devEntryResponse = handlerBackedAssetMode() === 'vite-source'
+      ? page.waitForResponse((response) => response.url() === `${origin}/src/main.tsx`)
+      : null;
+
+    await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
+    if (devEntryResponse) await devEntryResponse;
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', 'desktop', { timeout: 15_000 });
+    const alphaWorkloadCost = page.getByTestId('workload-cost-provider:alpha');
+    await expect(alphaWorkloadCost).toHaveText('$3.50 / 1M');
+    await expect(page.getByRole('radio', { name: 'Balanced' })).toBeChecked();
+
+    await page.getByRole('radio', { name: 'Output-heavy' }).click();
+    await expect(alphaWorkloadCost).toHaveText('$5.00 / 1M');
   });
 });
 
@@ -883,7 +924,7 @@ test.describe('viewport and theme hydration matrix', () => {
           await setStoredTheme(page, theme);
           await page.goto(route.path, { waitUntil: 'domcontentloaded' });
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-          await assertHydratedRouteFrame(page, route.heading, route);
+          await assertHydratedRouteFrame(page, route);
           if (viewport.width < 768) await assertCompactMenuPresence(page);
         }
       }
@@ -908,6 +949,27 @@ test.describe('keyboard and chart accessibility regressions', () => {
       focusedRole: document.activeElement?.getAttribute('role') ?? null,
     }))).toEqual({ hash: '#page-content', focusedId: 'page-content', focusedRole: null });
   });
+
+  test('moves focus to the calculator when the calculator skip link is activated', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await openCalculator(page);
+
+    await activateSkipLinkAndAssertTarget(page, 'calculator');
+  });
+
+  for (const guide of [
+    { path: '/guides/', heading: 'Spend smarter on AI', name: 'guide hub' },
+    { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', name: 'guide article' },
+  ]) {
+    test(`moves focus to guide content when the ${guide.name} skip link is activated`, async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 1000 });
+      await blockExternalRequests(page);
+      await page.goto(guide.path);
+      await expect(page.getByRole('heading', { name: guide.heading, level: 1 })).toBeVisible();
+
+      await activateSkipLinkAndAssertTarget(page, 'guide-content');
+    });
+  }
 
   test('closes the compact navigation when Escape is pressed from the focused toggle', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
