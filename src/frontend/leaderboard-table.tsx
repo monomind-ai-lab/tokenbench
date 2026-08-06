@@ -44,6 +44,8 @@ function metricLabel(metricKey: string): string {
     'benchlm:overall:raw': 'BenchLM overall',
     'benchlm:category:coding': 'BenchLM coding',
     'benchlm:category:agentic': 'BenchLM agentic',
+    'benchlm:category:reasoning': 'BenchLM reasoning',
+    'benchlm:category:knowledge': 'BenchLM knowledge',
     'benchlm:category:multimodal': 'BenchLM multimodal',
     'lmarena:text_style_control:overall': 'LMArena human preference',
     'lmarena:vision_style_control:overall': 'LMArena vision',
@@ -78,6 +80,8 @@ function badgeFor(keyName: LeaderboardKey, entry: LeaderboardEntry, position: nu
   if (keyName === 'llm-value' && entry.onValueFrontier) return 'Value Frontier';
   if (position !== 1) return null;
   if (keyName === 'llm-coding') return 'Top Coding';
+  if (keyName === 'llm-reasoning') return 'Top Reasoning';
+  if (keyName === 'llm-knowledge') return 'Top Knowledge';
   if (keyName === 'llm-human-preference' || keyName.startsWith('media-')) return 'Arena Leader';
   return 'Top Capability';
 }

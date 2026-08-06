@@ -11,6 +11,8 @@ const expectedRoutePaths = [
   '/leaderboards/llm/overall/',
   '/leaderboards/llm/coding/',
   '/leaderboards/llm/agentic/',
+  '/leaderboards/llm/reasoning/',
+  '/leaderboards/llm/knowledge/',
   '/leaderboards/llm/human-preference/',
   '/leaderboards/llm/value/',
   '/leaderboards/llm/pricing-context/',
@@ -81,17 +83,33 @@ describe('leaderboard mockups', () => {
     const renderedRoutes = [...document.querySelectorAll('[data-leaderboard-route]')].map((card) => ({
       pathname: card.getAttribute('data-leaderboard-route'),
       href: card.querySelector('a')?.getAttribute('href'),
+      title: normalizeText(card.querySelector('h2')?.textContent),
       summary: normalizeText(card.querySelector('p')?.textContent),
     }));
 
     expect(validateMockupHtml(directoryHtml, { h1: 'AI model leaderboards', requiredSections: ['directory', 'related', 'monomind'] })).toEqual([]);
     expect(registeredRoutes.map((route) => route.pathname)).toEqual(expectedRoutePaths);
-    expect(renderedRoutes).toHaveLength(12);
+    expect(renderedRoutes).toHaveLength(14);
     expect(renderedRoutes).toEqual(registeredRoutes.map((route) => ({
       pathname: route.pathname,
       href: route.pathname,
+      title: route.seo.h1,
       summary: route.seo.summary,
     })));
+    expect(renderedRoutes).toEqual(expect.arrayContaining([
+      {
+        pathname: '/leaderboards/llm/reasoning/',
+        href: '/leaderboards/llm/reasoning/',
+        title: 'AI reasoning category evidence',
+        summary: 'Reasoning is a BenchLM-published category evidence lens, not a validated BenchAlign ranking; inspect the exact source measurement before applying it to your workload.',
+      },
+      {
+        pathname: '/leaderboards/llm/knowledge/',
+        href: '/leaderboards/llm/knowledge/',
+        title: 'AI knowledge category evidence',
+        summary: 'Knowledge is a BenchLM-published category evidence lens, not a validated BenchAlign ranking. If BenchLM has not published the reviewed category metric, this view remains unavailable rather than inferring a result.',
+      },
+    ]));
     expect(document.querySelector('[data-rank]')).toBeNull();
   });
 

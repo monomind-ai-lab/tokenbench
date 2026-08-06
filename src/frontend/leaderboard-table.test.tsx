@@ -227,6 +227,24 @@ describe('LeaderboardTable', () => {
     expect(screen.queryByText(/^Best$/i)).not.toBeInTheDocument();
   });
 
+  it.each([
+    ['llm-reasoning', 'benchlm:category:reasoning', 'reasoning', 'BenchLM reasoning', 'Top Reasoning'],
+    ['llm-knowledge', 'benchlm:category:knowledge', 'knowledge', 'BenchLM knowledge', 'Top Knowledge'],
+  ] as const)('uses semantic category-lens labels and a specific top badge for %s', (key, metricKey, category, label, badge) => {
+    const metric = {
+      ...entry().metric!,
+      metricKey,
+      category,
+    };
+
+    renderTable(key, 'score-desc', [entry({ metric, metrics: [metric] })]);
+
+    expect(screen.getAllByText(label).length).toBeGreaterThan(1);
+    expect(screen.getAllByText(badge).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Top Capability')).not.toBeInTheDocument();
+    expect(screen.queryByText(/BenchAlign/i)).not.toBeInTheDocument();
+  });
+
   it('keeps an estimated record visibly unranked and without metric or value badges', () => {
     const estimated = entry({
       model: { ...entry().model, evidenceStatus: 'estimated', name: 'Estimated Model' },
