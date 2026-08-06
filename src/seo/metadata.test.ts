@@ -16,6 +16,7 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'calculator' }, canonical: `${origin}/tools/subscriptions-vs-apis/` },
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
+  { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
   { route: { kind: 'leaderboard', key: 'llm-coding' }, canonical: `${origin}/leaderboards/llm/coding/` },
   { route: { kind: 'leaderboard', key: 'llm-agentic' }, canonical: `${origin}/leaderboards/llm/agentic/` },

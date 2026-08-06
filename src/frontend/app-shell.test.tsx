@@ -88,7 +88,15 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('ToolsCompareLeaderboardsGuides');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APICompareLeaderboardsGuides');
+  });
+
+  it('renders the five approved primary navigation destinations', () => {
+    render(<SiteHeader theme="dark" language="en" activePage="home" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
+
+    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' }))
+      .getAllByRole('link').map((link) => link.textContent))
+      .toEqual(['Home', 'Subscribe vs API', 'Compare', 'Leaderboards', 'Guides']);
   });
 
   it('defaults to dark and persists both TokenBench theme choices', async () => {
@@ -108,7 +116,7 @@ describe('responsive calculator app shell', () => {
   });
 
   it('opens and closes primary navigation with its accessible mobile menu control', () => {
-    render(<SiteHeader theme="dark" language="en" activePage="tools" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
+    render(<SiteHeader theme="dark" language="en" activePage="calculator" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
 
     const menu = document.querySelector<HTMLButtonElement>('.menu-button');
     if (!menu) throw new Error('Expected an accessible mobile navigation control');
@@ -217,7 +225,7 @@ describe('responsive calculator app shell', () => {
   it('announces one recovery banner when the fallback notice duplicates the catalog error', () => {
     const unavailable = 'Catalog unavailable (network down). Showing only the checked-in verified bootstrap; retry to load the latest revision.';
     render(<AppShell
-      activePage="tools"
+      activePage="calculator"
       catalogPhase="ready"
       error={unavailable}
       language="en"

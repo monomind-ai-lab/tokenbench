@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEADERBOARD_ROUTES, matchRoute, staticHtmlEntries } from './routes';
+import { LEADERBOARD_ROUTES, matchRoute, ROUTE_PATHS, staticHtmlEntries } from './routes';
 
 const fixedRouteCases = [
   ['/', { kind: 'home' }],
@@ -48,6 +48,16 @@ describe('TokenBench route registry', () => {
     expect(matchRoute('/compare/')).toEqual({ kind: 'compareHub' });
   });
 
+  it('publishes the approved decision hierarchy and canonical redirects', () => {
+    expect(ROUTE_PATHS.methodologyBenchAlign).toBe('/methodology/benchalign/');
+    expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'methodologyBenchAlign' });
+    expect(matchRoute('/leaderboard')).toEqual({ kind: 'redirect', to: '/leaderboards/' });
+    expect(matchRoute('/leaderboard/llm/coding')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/coding/' });
+    expect(matchRoute('/tools/')).toEqual({ kind: 'tools' });
+    expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('Overall benchmarks');
+    expect(LEADERBOARD_ROUTES['llm-agentic'].navigationLabel).toBe('Agentic performance');
+  });
+
   it('does not turn unknown fixed-path candidates into published pages', () => {
     expect(matchRoute('/guides/not-a-guide/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/leaderboards/llm/not-a-metric/')).toEqual({ kind: 'notFound' });
@@ -78,6 +88,7 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/leaderboards/media/text-to-video/index.html',
       '/generated-tokenbench/leaderboards/media/video-editing/index.html',
       '/generated-tokenbench/leaderboards/multimodal/vision-documents/index.html',
+      '/generated-tokenbench/methodology/benchalign/index.html',
       '/generated-tokenbench/tools/index.html',
       '/generated-tokenbench/tools/subscriptions-vs-apis/index.html',
     ]);
@@ -86,7 +97,7 @@ describe('TokenBench route registry', () => {
   });
 
   it('keeps human-readable navigation labels on the single leaderboard registry', () => {
-    expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('LLM overall');
+    expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('Overall benchmarks');
     expect(LEADERBOARD_ROUTES['media-text-to-video'].navigationLabel).toBe('Text to video');
   });
 });

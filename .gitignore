@@ -24,6 +24,7 @@ dist/
 /leaderboards/media/text-to-video/index.html
 /leaderboards/media/image-to-video/index.html
 /leaderboards/media/video-editing/index.html
+/methodology/benchalign/index.html
 coverage/
 .worktrees/
 .DS_Store

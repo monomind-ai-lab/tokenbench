@@ -68,4 +68,13 @@ describe('browser entrypoint', () => {
     expect(root).toBeEmptyDOMElement();
     expect(createRootMock).toHaveBeenCalledWith(root);
   });
+
+  it('mounts the interactive BenchAlign methodology page from its fixed route', async () => {
+    window.history.replaceState({}, '', '/methodology/benchalign/');
+
+    await import('./main.tsx');
+
+    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
+    expect(rootRenderer).toHaveBeenCalledTimes(1);
+  });
 });

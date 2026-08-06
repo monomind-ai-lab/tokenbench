@@ -16,10 +16,12 @@ import { generateGuidePages } from './generate-guide-pages';
 function activeNavigation(route: AppRoute): StaticNavigationPage {
   switch (route.kind) {
     case 'tools':
-    case 'calculator': return 'tools';
+    case 'calculator': return 'calculator';
+    case 'home': return 'home';
     case 'compareHub': return 'compare';
     case 'leaderboards':
-    case 'leaderboard': return 'leaderboards';
+    case 'leaderboard':
+    case 'methodologyBenchAlign': return 'leaderboards';
     case 'guides': return 'guides';
     default: return undefined;
   }
@@ -29,7 +31,7 @@ function pageIntro(metadata: PageMetadata, body: string): string {
   return `<main id="page-content" class="page-main" tabindex="-1"><section class="content-stack static-page-content"><span class="eyebrow">${SITE_CONFIG.name}</span><h1>${escapeHtml(metadata.h1)}</h1>${body}</section></main>`;
 }
 
-function fixedPageContent(route: Exclude<AppRoute, { kind: 'guides' } | { kind: 'comparison' } | { kind: 'notFound' }>, metadata: PageMetadata): string {
+function fixedPageContent(route: Exclude<AppRoute, { kind: 'guides' } | { kind: 'comparison' } | { kind: 'redirect' } | { kind: 'notFound' }>, metadata: PageMetadata): string {
   switch (route.kind) {
     case 'home':
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} is a source-aware decision engine for AI costs and model benchmarks. Start with the question you need to answer, then inspect the evidence, methodology, and unavailable states behind it.</p><div class="static-page-links"><a class="button" href="/tools/">Explore AI cost tools</a><a class="button" href="/leaderboards/">Browse model leaderboards</a></div><section><h2>Make an evidence-aware decision</h2><p>Compare direct API pricing, paid subscriptions, workload context, and benchmark categories without treating missing measurements as zero or presenting estimates as facts.</p></section>`);
@@ -37,6 +39,8 @@ function fixedPageContent(route: Exclude<AppRoute, { kind: 'guides' } | { kind: 
       return pageIntro(metadata, `<p>Use ${SITE_CONFIG.name} tools to frame AI cost decisions from your observed usage and the provider evidence that is available for the exact route you are considering.</p><section><h2>Available tool</h2><article><h3><a href="/tools/subscriptions-vs-apis/">Subscription vs API cost calculator</a></h3><p>Estimate an API-equivalent cost from monthly tokens and model mix, then compare it with a paid individual subscription while keeping variable limits explicit.</p></article></section>`);
     case 'calculator':
       return pageIntro(metadata, `<p>Estimate how a paid individual AI subscription compares with direct API pricing. The interactive calculator mounts here in the browser; this crawlable summary explains its inputs and evidence boundaries.</p><section><h2>Use observed workload inputs</h2><p>Choose a provider, plan, model mix, input/output share, and expected monthly token volume. Treat unpublished or guardrail-limited capacity as variable rather than inventing a token cap.</p></section><section><h2>Review the source before purchasing</h2><p>${SITE_CONFIG.name} calculations are decision aids. Follow the provider evidence for current terms, included models, billing conditions, and availability before acting on an estimate.</p></section>`);
+    case 'methodologyBenchAlign':
+      return pageIntro(metadata, `<p>${SITE_CONFIG.name} republishes BenchLM&#039;s BenchAlign results without recalculating them. <a href="https://benchlm.ai/methodology">Read BenchLM&#039;s methodology</a> for the source method.</p><section><h2>What each view represents</h2><p>Overall, Agentic, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge are BenchLM-published category evidence lenses, not additional TokenBench rankings.</p><p>Supported rows are source-published results eligible for their exact view. Reviewed estimated rows stay visibly estimated and appear after supported evidence where a route allows them; they are never silently promoted into a validated ranking. Missing measurements remain Unavailable, never zero.</p></section><section><h2>Metrics and runtime</h2><p>Weighted metrics affect the relevant BenchAlign method only. Display-only metrics add context without changing the published order. Runtime is a separate signal, not a substitute for capability evidence or a hidden ranking weight.</p></section><section><h2>Method and refresh status</h2><p>Published method version: <strong>Unavailable</strong>.</p><p>BenchLM refreshes its source output on its own schedule. TokenBench checks that source once daily within its broader Worker, which runs twice daily; a successful TokenBench check does not claim that BenchLM published a new method or result.</p></section>`);
     case 'compareHub':
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`);
     case 'leaderboards':

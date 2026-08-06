@@ -96,6 +96,11 @@ const pageDefinitions = {
     description: `Browse ${SITE_CONFIG.name}'s source-aware AI model leaderboards for capability, coding, agentic work, human preference, multimodal tasks, and media generation.`,
     h1: 'AI model leaderboards',
   },
+  methodologyBenchAlign: {
+    title: `How BenchAlign Rankings Work | ${SITE_CONFIG.name}`,
+    description: `Read how ${SITE_CONFIG.name} republishes BenchLM's BenchAlign output, separates supported and estimated rows, and preserves source methodology and refresh boundaries.`,
+    h1: 'How BenchAlign rankings work',
+  },
   comparison: {
     title: `AI Model Comparison | ${SITE_CONFIG.name}`,
     description: `Use ${SITE_CONFIG.name} to compare two AI models with evidence-aware benchmark, cost, and capability context.`,
@@ -115,6 +120,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'home': return makeMetadata('/', pageDefinitions.home);
     case 'tools': return makeMetadata('/tools/', pageDefinitions.tools);
     case 'calculator': return makeMetadata('/tools/subscriptions-vs-apis/', pageDefinitions.calculator);
+    case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
     case 'leaderboards': return makeMetadata('/leaderboards/', pageDefinitions.leaderboards);
     case 'leaderboard': {
@@ -137,6 +143,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
       title: `${route.pair.replaceAll('-', ' ')} comparison | ${SITE_CONFIG.name}`,
       h1: `${route.pair.replaceAll('-', ' ')} comparison`,
     }, false);
+    case 'redirect': return makeMetadata(route.to, pageDefinitions.notFound);
     case 'notFound': return makeMetadata('/', pageDefinitions.notFound);
   }
 }

@@ -8,12 +8,15 @@ export const ROUTE_PATHS = {
   calculator: '/tools/subscriptions-vs-apis/',
   compareHub: '/compare/',
   leaderboards: '/leaderboards/',
+  methodologyBenchAlign: '/methodology/benchalign/',
 } as const;
+
+export type SiteNavigationPage = 'home' | 'calculator' | 'compare' | 'leaderboards' | 'guides';
 
 export const LEADERBOARD_ROUTES = {
   'llm-overall': {
     pathname: '/leaderboards/llm/overall/',
-    navigationLabel: 'LLM overall',
+    navigationLabel: 'Overall benchmarks',
     seo: {
       title: `Overall AI Model Benchmarks | ${SITE_CONFIG.name}`,
       description: `Compare supported AI models by overall benchmark capability with clear source attribution, methodology context, and ${SITE_CONFIG.name}'s unavailable-data handling.`,
@@ -23,7 +26,7 @@ export const LEADERBOARD_ROUTES = {
   },
   'llm-coding': {
     pathname: '/leaderboards/llm/coding/',
-    navigationLabel: 'LLM coding',
+    navigationLabel: 'Coding performance',
     seo: {
       title: `AI Coding Model Benchmarks | ${SITE_CONFIG.name}`,
       description: `Compare supported AI coding models with source-aware benchmark context, transparent methodology, and ${SITE_CONFIG.name}'s explicit treatment of missing measurements.`,
@@ -33,7 +36,7 @@ export const LEADERBOARD_ROUTES = {
   },
   'llm-agentic': {
     pathname: '/leaderboards/llm/agentic/',
-    navigationLabel: 'LLM agentic',
+    navigationLabel: 'Agentic performance',
     seo: {
       title: `AI Agentic Model Benchmarks | ${SITE_CONFIG.name}`,
       description: `Explore supported agentic AI model benchmarks with source-level context, publication timestamps, and ${SITE_CONFIG.name}'s clear methodology for unavailable results.`,
@@ -53,7 +56,7 @@ export const LEADERBOARD_ROUTES = {
   },
   'llm-value': {
     pathname: '/leaderboards/llm/value/',
-    navigationLabel: 'LLM value',
+    navigationLabel: 'Value frontier',
     seo: {
       title: `AI Model Value Frontier | ${SITE_CONFIG.name}`,
       description: `Explore the AI model value frontier using disclosed workload costs, supported benchmark evidence, and ${SITE_CONFIG.name}'s transparent Pareto methodology instead of an opaque score.`,
@@ -63,7 +66,7 @@ export const LEADERBOARD_ROUTES = {
   },
   'llm-pricing-context': {
     pathname: '/leaderboards/llm/pricing-context/',
-    navigationLabel: 'Pricing context',
+    navigationLabel: 'Pricing and context',
     seo: {
       title: `AI Model Pricing and Context | ${SITE_CONFIG.name}`,
       description: `Compare AI model pricing context and declared context windows with source attribution, route-level caveats, and ${SITE_CONFIG.name}'s explicit unavailable-data states.`,
@@ -139,14 +142,16 @@ export type AppRoute =
   | { kind: 'home' }
   | { kind: 'tools' }
   | { kind: 'calculator' }
+  | { kind: 'methodologyBenchAlign' }
   | { kind: 'guides'; slug?: string }
   | { kind: 'compareHub' }
   | { kind: 'comparison'; pair: string }
   | { kind: 'leaderboards' }
   | { kind: 'leaderboard'; key: LeaderboardKey }
+  | { kind: 'redirect'; to: string }
   | { kind: 'notFound' };
 
-export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'notFound' }>;
+export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'redirect' } | { kind: 'notFound' }>;
 
 export interface FixedRouteDefinition {
   readonly id: string;
@@ -166,6 +171,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'leaderboards', pathname: ROUTE_PATHS.leaderboards, route: { kind: 'leaderboards' } },
+  { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
 ];
 
 const leaderboardFixedRoutes: readonly FixedRouteDefinition[] = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[]).map((key) => ({
@@ -199,11 +205,13 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'home': return ROUTE_PATHS.home;
     case 'tools': return ROUTE_PATHS.tools;
     case 'calculator': return ROUTE_PATHS.calculator;
+    case 'methodologyBenchAlign': return ROUTE_PATHS.methodologyBenchAlign;
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
     case 'leaderboards': return ROUTE_PATHS.leaderboards;
     case 'leaderboard': return LEADERBOARD_ROUTES[route.key].pathname;
+    case 'redirect': return route.to;
     case 'notFound': return null;
   }
 }
@@ -214,9 +222,14 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.home) return { kind: 'home' };
   if (normalizedPathname === ROUTE_PATHS.tools) return { kind: 'tools' };
   if (normalizedPathname === ROUTE_PATHS.calculator) return { kind: 'calculator' };
+  if (normalizedPathname === ROUTE_PATHS.methodologyBenchAlign) return { kind: 'methodologyBenchAlign' };
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
+
+  if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };
+  const legacyLeaderboardMatch = normalizedPathname.match(/^\/leaderboard\/(.+)\/$/);
+  if (legacyLeaderboardMatch) return { kind: 'redirect', to: `/leaderboards/${legacyLeaderboardMatch[1]}/` };
 
   const guideMatch = normalizedPathname.match(/^\/guides\/([^/]+)\/$/);
   if (guideMatch && GUIDE_BY_SLUG.has(guideMatch[1])) return { kind: 'guides', slug: guideMatch[1] };

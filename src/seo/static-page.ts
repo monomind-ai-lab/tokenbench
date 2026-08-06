@@ -1,7 +1,8 @@
 import { SITE_CONFIG } from '../brand/site-config';
+import type { SiteNavigationPage } from '../routing/routes';
 import type { PageMetadata } from './metadata';
 
-export type StaticNavigationPage = 'tools' | 'compare' | 'leaderboards' | 'guides' | undefined;
+export type StaticNavigationPage = SiteNavigationPage | undefined;
 
 export function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
@@ -49,7 +50,7 @@ export function staticChrome(content: string, activePage: StaticNavigationPage):
       <a class="skip-link" href="#page-content">Skip to page content</a>
       <header class="top-header"><div class="header-inner">
         <div class="brand-lockup"><a class="brand-home" href="/" aria-label="${SITE_CONFIG.name} home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram"><span class="brand-copy"><span class="brand-name">${SITE_CONFIG.name}</span><span class="brand-tagline">${SITE_CONFIG.tagline}</span></span></a></div>
-        <nav class="primary-nav" aria-label="Primary navigation">${navLink('/tools/', 'Tools', activePage, 'tools')}${navLink('/compare/', 'Compare', activePage, 'compare')}${navLink('/leaderboards/', 'Leaderboards', activePage, 'leaderboards')}${navLink('/guides/', 'Guides', activePage, 'guides')}</nav>
+        <nav class="primary-nav" aria-label="Primary navigation">${navLink('/', 'Home', activePage, 'home')}${navLink('/tools/subscriptions-vs-apis/', 'Subscribe vs API', activePage, 'calculator')}${navLink('/compare/', 'Compare', activePage, 'compare')}${navLink('/leaderboards/', 'Leaderboards', activePage, 'leaderboards')}${navLink('/guides/', 'Guides', activePage, 'guides')}</nav>
       </div></header>
       ${content}
       <footer class="app-footer"><div class="footer-brand"><a href="${SITE_CONFIG.parentUrl}">Powered by ${SITE_CONFIG.parentName}</a><span>Source-aware decision support.</span></div><div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div></footer>

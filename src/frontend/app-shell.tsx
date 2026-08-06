@@ -1,13 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Languages, Menu, Moon, Sun, X } from 'lucide-react';
 import { SITE_CONFIG } from '../brand/site-config';
-import { ROUTE_PATHS } from '../routing/routes';
+import { ROUTE_PATHS, type SiteNavigationPage } from '../routing/routes';
 import { LANGUAGES } from '../types';
 import { getResponsiveLayout } from './responsive';
 import { formatDateTime, StatusBanner } from './ui';
 import type { CatalogPhase } from './use-catalog';
-
-export type SiteNavigationPage = 'home' | 'tools' | 'compare' | 'leaderboards' | 'guides';
 
 interface AppShellProps {
   readonly children: ReactNode;
@@ -46,7 +44,8 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
       <div className="brand-lockup"><a className="brand-home" href="/" aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span><span className="brand-tagline">{SITE_CONFIG.tagline}</span></span></a></div>
       <button type="button" className="menu-button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
       <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
-        <a href={ROUTE_PATHS.tools} aria-current={activePage === 'tools' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Tools</a>
+        <a href={ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Home</a>
+        <a href={ROUTE_PATHS.calculator} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Subscribe vs API</a>
         <a href={ROUTE_PATHS.compareHub} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Compare</a>
         <a href={ROUTE_PATHS.leaderboards} aria-current={activePage === 'leaderboards' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Leaderboards</a>
         <a href={ROUTE_PATHS.guides} aria-current={activePage === 'guides' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Guides</a>

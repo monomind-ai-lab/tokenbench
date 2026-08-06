@@ -19,7 +19,7 @@ function initialComparisonViewModel() {
 const route = matchRoute(window.location.pathname);
 const RootApp = route.kind === 'guides'
   ? GuidesApp
-  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
+  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'methodologyBenchAlign' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
     ? App
     : null;
 
@@ -45,4 +45,6 @@ if (route.kind === 'comparison') {
       <RootApp />
     </StrictMode>,
   );
+} else if (route.kind === 'redirect') {
+  window.location.replace(route.to);
 }

@@ -21,14 +21,13 @@ import { HomePage } from './pages/home-page';
 import { CompareHubPage } from './pages/compare-hub-page';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
 import { ToolsPage } from './pages/tools-page';
-import { matchRoute, type LeaderboardKey } from './routing/routes';
+import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
+import { matchRoute, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 import type { WorkloadPreset } from './frontend/calculator-state';
-
-type ActivePage = 'home' | 'tools' | 'compare' | 'leaderboards' | 'guides';
 
 interface PageFrameProps {
   readonly children: ReactNode;
-  readonly activePage: ActivePage;
+  readonly activePage: SiteNavigationPage;
   readonly skipLinkTarget?: string;
   readonly skipLinkLabel?: string;
   readonly catalogState?: CatalogState;
@@ -132,7 +131,7 @@ function CalculatorPage() {
   };
 
   return (
-    <PageFrame activePage="tools" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
+    <PageFrame activePage="calculator" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
       <section id="calculator" className="content-stack calculator-page" aria-labelledby="calculator-heading" tabIndex={-1}>
         <h1 id="calculator-heading" className="sr-only">Subscription vs. API cost calculator</h1>
         {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
@@ -151,7 +150,11 @@ function HomeRoute() {
 }
 
 function ToolsRoute() {
-  return <PageFrame activePage="tools"><ToolsPage /></PageFrame>;
+  return <PageFrame activePage="calculator"><ToolsPage /></PageFrame>;
+}
+
+function BenchAlignMethodologyRoute() {
+  return <PageFrame activePage="leaderboards"><BenchAlignMethodologyPage /></PageFrame>;
 }
 
 function CompareHubRoute() {
@@ -177,8 +180,13 @@ export default function App() {
   if (route.kind === 'home') return <HomeRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
+  if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
+  if (route.kind === 'redirect') {
+    window.location.replace(route.to);
+    return null;
+  }
   return null;
 }
