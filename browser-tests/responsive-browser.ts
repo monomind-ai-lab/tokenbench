@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
 import {
   HANDLER_COMPARISON_PATH,
+  HANDLER_SPARSE_COMPARISON_PATH,
   comparisonDirectoryEnvelope,
   decisionSummaryEnvelope,
   emptyCodingLeaderboard,
@@ -859,7 +860,7 @@ test.describe('generated static route runtime', () => {
     const rawHtml = await rawResponse.text();
     expect(rawResponse.ok()).toBe(true);
     expect(rawHtml).toContain('class="app-shell static-page-shell"');
-    expect(rawHtml).toContain('<h1>Compare AI models</h1>');
+    expect(rawHtml).toContain('<h1>Compare models side by side</h1>');
 
     const previewOrigin = new URL(baseURL).origin;
     const browserContext = page.context();
@@ -906,8 +907,8 @@ test.describe('generated static route runtime', () => {
 
     await page.goto('/compare/');
     await expect(page.locator('.static-page-shell')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Compare AI models', level: 1 })).toBeVisible();
-    await expect(page.getByText('Published revision: browser-benchmark-r1')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Compare models side by side', level: 1 })).toBeVisible();
+    await expect(page.getByText(/Published revision:/)).toHaveCount(0);
     await page.getByRole('combobox', { name: 'First model' }).fill('alpha');
     await page.getByRole('combobox', { name: 'Second model' }).fill('beta');
     await expect(page.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/alpha-vs-beta');
@@ -1086,8 +1087,8 @@ test.describe('home and tools route runtime', () => {
   });
 });
 
-test.describe('handler-backed comparison browser coverage', () => {
-  test('renders a server comparison document from the real Pages handler before hydration', async ({ browser }) => {
+test.describe('handler-backed compare browser coverage', () => {
+  test('renders a dense server comparison document with only eligible radar axes before hydration', async ({ browser }) => {
     const origin = previewOrigin();
     const context = await browser.newContext({ baseURL: origin, javaScriptEnabled: false });
     const page = await context.newPage();
@@ -1101,30 +1102,74 @@ test.describe('handler-backed comparison browser coverage', () => {
       await expect(page.locator('#comparison-initial-data')).toHaveCount(1);
       await expect(page.getByRole('heading', { name: 'Source metrics', level: 2 })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Comparison summary', level: 2 })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Comparable metric detail', level: 3 })).toBeVisible();
+      await expect(page.getByRole('img', { name: 'Alpha and Beta shared metric radar' })).toBeVisible();
+      const radarTable = page.getByRole('table', { name: 'Radar chart data' });
+      await expect(radarTable).toBeVisible();
+      expect(await radarTable.getByRole('rowheader').allTextContents()).toEqual([
+        'Agentic',
+        'Coding',
+        'Overall',
+        'Reasoning',
+      ]);
       await expect(page.getByRole('table', { name: 'Source metric comparison' }).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
       await expect(page.getByRole('table', { name: 'Route pricing and context comparison' }).getByRole('row', { name: /Verification status/ })).toBeVisible();
       await expect(page.locator('.comparison-provenance')).toHaveCount(1);
+      await expect(page.getByRole('button', { name: 'Share result', exact: true })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Workload view' })).toHaveCount(0);
+      await expect(page.getByText(/Published revision:/)).toHaveCount(0);
       await expect(page.locator('.comparison-model-heading img.provider-mark')).toHaveCount(0);
       await expect(page.locator('.comparison-model-heading .provider-mark-fallback')).toHaveCount(2);
+      expect(await page.getByRole('table', { name: 'Source metric comparison' }).locator('thead th').allTextContents()).toEqual([
+        'Metric',
+        'Unit',
+        'Alpha',
+        'Beta',
+      ]);
       const rootText = await page.locator('#root').innerText();
       expect(rootText).not.toContain('benchlm:category:coding');
+      expect(rootText).not.toContain('browser-benchmark-r1');
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://tokenbench.monomind.one/compare/alpha-vs-beta');
     } finally {
       await context.close();
     }
   });
 
-  test('hydrates the handler-backed comparison with route-sensitive claims and no Task 5 regressions', async ({ page }) => {
-    test.setTimeout(90_000);
+  test('renders the sparse comparison with a ruled detail fallback before hydration', async ({ browser }) => {
     const origin = previewOrigin();
-    const hydrationErrors: string[] = [];
+    const context = await browser.newContext({ baseURL: origin, javaScriptEnabled: false });
+    const page = await context.newPage();
+    try {
+      await blockExternalRequests(page, origin);
+      await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+
+      await page.goto(HANDLER_SPARSE_COMPARISON_PATH);
+      await expect(page.getByRole('heading', { name: 'Canvas vs Alpha', level: 1 })).toBeVisible();
+      await expect(page.getByRole('img', { name: /shared metric radar/i })).toHaveCount(0);
+      const fallback = page.locator('.comparison-radar-fallback');
+      await expect(fallback).toBeVisible();
+      await expect(fallback.getByRole('heading', { name: 'Comparable metric detail', level: 3 })).toBeVisible();
+      expect(await fallback.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe('dashed');
+      await expect(fallback).toContainText('Text To Image');
+      await expect(page.getByRole('heading', { name: 'Workload view' })).toHaveCount(0);
+      await expect(page.getByText(/Published revision:/)).toHaveCount(0);
+      await assertNoHorizontalOverflow(page);
+    } finally {
+      await context.close();
+    }
+  });
+
+  test('hydrates dense and sparse SSR comparisons across themes, routes, and target viewports without runtime errors', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+    const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     page.on('console', (message) => {
-      if (message.type() === 'error' && /hydration|didn't match|server rendered html/i.test(message.text())) hydrationErrors.push(message.text());
+      if (message.type() === 'error') consoleErrors.push(message.text());
     });
     page.on('pageerror', (error) => pageErrors.push(error.message));
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { configurable: true, value: () => Promise.resolve() });
+    });
     await page.setViewportSize({ width: 1024, height: 1000 });
     await blockExternalRequests(page, origin);
     if (process.env.VITE_BRANDFETCH_CLIENT_ID) {
@@ -1144,7 +1189,9 @@ test.describe('handler-backed comparison browser coverage', () => {
     await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', 'desktop', { timeout: 15_000 });
     await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
     await expect(page.getByRole('heading', { name: 'Workload view' })).toHaveCount(0);
+    await expect(page.getByText(/Published revision:/)).toHaveCount(0);
     await expect(page.locator('.comparison-provenance')).toHaveCount(1);
+    await expect(page.getByRole('img', { name: 'Alpha and Beta shared metric radar' })).toBeVisible();
     const pricingTable = page.getByRole('table', { name: 'Route pricing and context comparison' });
     const inputPrice = pricingTable.getByRole('row', { name: /Input API price/ });
     const verification = pricingTable.getByRole('row', { name: /Verification status/ });
@@ -1163,18 +1210,48 @@ test.describe('handler-backed comparison browser coverage', () => {
       await expect(page.locator('.comparison-model-heading img.provider-mark')).toHaveCount(2);
     }
 
-    for (const viewport of [{ width: 1440, height: 1000 }, { width: 375, height: 1000 }]) {
+    await page.getByRole('combobox', { name: 'Second model' }).fill('canvas');
+    await page.getByRole('combobox', { name: 'Second model' }).press('ArrowDown');
+    await page.getByRole('combobox', { name: 'Second model' }).press('Enter');
+    const sparseLink = page.getByRole('link', { name: 'View selected comparison', exact: true });
+    await expect(sparseLink).toHaveAttribute('href', HANDLER_SPARSE_COMPARISON_PATH);
+    await Promise.all([
+      page.waitForURL(`**${HANDLER_SPARSE_COMPARISON_PATH}`),
+      sparseLink.click(),
+    ]);
+    await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+    await expect(page.getByRole('heading', { name: 'Canvas vs Alpha', level: 1 })).toBeVisible();
+    await expect(page.getByRole('img', { name: /shared metric radar/i })).toHaveCount(0);
+    await expect(page.locator('.comparison-radar-fallback')).toBeVisible();
+    await assertNoHorizontalOverflow(page);
+
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 320, height: 1000 }]) {
       await page.setViewportSize(viewport);
       for (const theme of ['dark', 'light'] as const) {
         await setStoredTheme(page, theme);
-        await page.reload({ waitUntil: 'networkidle' });
+        await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+        await expect(page.getByRole('img', { name: 'Alpha and Beta shared metric radar' })).toBeVisible();
+        const shareAction = page.getByRole('button', { name: 'Share result', exact: true });
+        await expect(shareAction).toBeVisible();
+        const shareBounds = await shareAction.evaluate((element) => element.getBoundingClientRect().toJSON());
+        expect(shareBounds.width).toBeGreaterThanOrEqual(44);
+        expect(shareBounds.height).toBeGreaterThanOrEqual(44);
+        await shareAction.click();
+        await expect(page.locator('.share-action').getByRole('status')).toContainText('Link shared.');
+        await assertNoHorizontalOverflow(page);
+
+        await page.goto(HANDLER_SPARSE_COMPARISON_PATH, { waitUntil: 'networkidle' });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+        await expect(page.getByRole('img', { name: /shared metric radar/i })).toHaveCount(0);
+        await expect(page.locator('.comparison-radar-fallback')).toBeVisible();
         await assertNoHorizontalOverflow(page);
       }
     }
 
-    expect(hydrationErrors).toEqual([]);
+    expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
   });
 });

@@ -15,6 +15,7 @@ import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../src/frontend
 import { LEADERBOARD_ROUTES } from '../src/routing/routes';
 
 export const HANDLER_COMPARISON_PATH = '/compare/alpha-vs-beta';
+export const HANDLER_SPARSE_COMPARISON_PATH = '/compare/canvas-vs-alpha';
 
 const REVISION = 'browser-benchmark-r1';
 const CATALOG_REVISION = 'browser-catalog-r1';
@@ -144,6 +145,14 @@ const alphaCoding = benchlmMetric(alpha.modelKey, 'benchlm:category:coding', 'co
 const betaCoding = benchlmMetric(beta.modelKey, 'benchlm:category:coding', 'coding', 84);
 const alphaOverall = benchlmMetric(alpha.modelKey, 'benchlm:overall:raw', 'overall', 90);
 const betaOverall = benchlmMetric(beta.modelKey, 'benchlm:overall:raw', 'overall', 82);
+const alphaAgentic = benchlmMetric(alpha.modelKey, 'benchlm:category:agentic', 'agentic', 87);
+const betaAgentic = benchlmMetric(beta.modelKey, 'benchlm:category:agentic', 'agentic', 79);
+const alphaReasoning = benchlmMetric(alpha.modelKey, 'benchlm:category:reasoning', 'reasoning', 88);
+const betaReasoning = benchlmMetric(beta.modelKey, 'benchlm:category:reasoning', 'reasoning', 86);
+// This shared Arena row must remain visible as published evidence without
+// qualifying for the score-only BenchLM radar.
+const alphaArena = lmarenaMetric(alpha.modelKey, 12);
+const betaArena = lmarenaMetric(beta.modelKey, 14);
 const canvasImage = lmarenaMetric(canvas.modelKey, 1);
 const prismImage = lmarenaMetric(prism.modelKey, 2);
 const alphaPrice = primaryPrice(alpha.modelKey, 2, 8);
@@ -256,12 +265,12 @@ export function comparisonDirectoryEnvelope(options: {
     data: {
       compareDirectory: {
         models: options.empty ? [] : [
-          { slug: alpha.slug, name: alpha.name, creator: alpha.creator, sourceType: alpha.sourceType, evidenceStatus: alpha.evidenceStatus, utilitySelectable: true, metricCategories: ['coding', 'overall'] },
-          { slug: beta.slug, name: beta.name, creator: beta.creator, sourceType: beta.sourceType, evidenceStatus: beta.evidenceStatus, utilitySelectable: true, metricCategories: ['coding', 'overall'] },
+          { slug: alpha.slug, name: alpha.name, creator: alpha.creator, sourceType: alpha.sourceType, evidenceStatus: alpha.evidenceStatus, utilitySelectable: true, metricCategories: ['agentic', 'coding', 'overall', 'reasoning'] },
+          { slug: beta.slug, name: beta.name, creator: beta.creator, sourceType: beta.sourceType, evidenceStatus: beta.evidenceStatus, utilitySelectable: true, metricCategories: ['agentic', 'coding', 'overall', 'reasoning'] },
           { slug: canvas.slug, name: canvas.name, creator: canvas.creator, sourceType: canvas.sourceType, evidenceStatus: canvas.evidenceStatus, utilitySelectable: true, metricCategories: ['text-to-image'] },
         ],
         indexablePairs: options.empty ? [] : [
-          { pairSlug: 'alpha-vs-beta', modelASlug: 'alpha', modelBSlug: 'beta', featuredRank: 1, sharedMetricCount: 2 },
+          { pairSlug: 'alpha-vs-beta', modelASlug: 'alpha', modelBSlug: 'beta', featuredRank: 1, sharedMetricCount: 4 },
         ],
       },
     },
@@ -507,20 +516,38 @@ export function handlerBackedComparisonDatabase(): D1Database {
       rawMetric(betaCoding),
       rawMetric(alphaOverall),
       rawMetric(betaOverall),
+      rawMetric(alphaAgentic),
+      rawMetric(betaAgentic),
+      rawMetric(alphaReasoning),
+      rawMetric(betaReasoning),
+      rawMetric(alphaArena),
+      rawMetric(betaArena),
       rawMetric(canvasImage),
       rawMetric(prismImage),
     ],
     prices: [rawPrice(alphaDirectPrice), rawPrice(alphaPrice), rawPrice(betaPrice)],
-    pairs: [{
-      revision: REVISION,
-      pair_slug: 'alpha-vs-beta',
-      model_a_key: alpha.modelKey,
-      model_b_key: beta.modelKey,
-      indexable: 1,
-      eligibility_reason: 'Reviewed browser comparison pair',
-      featured_rank: 1,
-      shared_metric_count: 2,
-    }],
+    pairs: [
+      {
+        revision: REVISION,
+        pair_slug: 'alpha-vs-beta',
+        model_a_key: alpha.modelKey,
+        model_b_key: beta.modelKey,
+        indexable: 1,
+        eligibility_reason: 'Reviewed browser comparison pair with four compatible score lenses',
+        featured_rank: 1,
+        shared_metric_count: 4,
+      },
+      {
+        revision: REVISION,
+        pair_slug: 'canvas-vs-alpha',
+        model_a_key: canvas.modelKey,
+        model_b_key: alpha.modelKey,
+        indexable: 1,
+        eligibility_reason: 'Reviewed browser comparison pair with only non-BenchLM shared metrics',
+        featured_rank: 2,
+        shared_metric_count: 2,
+      },
+    ],
   };
 
   return {
@@ -584,14 +611,18 @@ const execFile = promisify(execFileCallback);
  * actual Pages Function in a small `tsx` child process instead, then fulfill
  * the browser request with that real handler response.
  */
-async function renderHandlerBackedComparisonDocument(origin: string): Promise<HandlerDocument> {
+async function renderHandlerBackedComparisonDocument(
+  origin: string,
+  path: string,
+  pair: string,
+): Promise<HandlerDocument> {
   const projectRoot = fileURLToPath(new URL('../', import.meta.url));
   const fixtureModule = import.meta.url;
   const handlerModule = new URL('../functions/compare/[pair].ts', import.meta.url).href;
   const program = [
     `const fixture = await import(${JSON.stringify(fixtureModule)});`,
     `const handler = await import(${JSON.stringify(handlerModule)});`,
-    `const response = await handler.onRequestGet({ request: new Request(${JSON.stringify(origin + HANDLER_COMPARISON_PATH)}), env: { CATALOG_DB: fixture.handlerBackedComparisonDatabase() }, params: { pair: 'alpha-vs-beta' } });`,
+    `const response = await handler.onRequestGet({ request: new Request(${JSON.stringify(origin + path)}), env: { CATALOG_DB: fixture.handlerBackedComparisonDatabase() }, params: { pair: ${JSON.stringify(pair)} } });`,
     'process.stdout.write(JSON.stringify({ status: response.status, headers: Object.fromEntries(response.headers.entries()), body: await response.text() }));',
   ].join('\n');
   const { stdout, stderr } = await execFile(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', program], {
@@ -624,18 +655,22 @@ export async function stubHandlerBackedComparison(
 ): Promise<void> {
   const preflight = await readActiveBenchmarkSnapshot(handlerBackedComparisonDatabase());
   if (!preflight) throw new Error('Handler-backed comparison fixture has no active benchmark revision.');
-  const response = await renderHandlerBackedComparisonDocument(origin);
-  if (response.status !== 200) {
-    throw new Error(`Handler-backed comparison fixture returned ${response.status} after a valid D1 preflight: ${response.body}`);
-  }
-
-  await page.route(origin + HANDLER_COMPARISON_PATH, async (route) => {
-    await route.fulfill({
-      status: response.status,
-      headers: response.headers,
-      body: response.body,
+  const responses = await Promise.all([
+    [HANDLER_COMPARISON_PATH, 'alpha-vs-beta'] as const,
+    [HANDLER_SPARSE_COMPARISON_PATH, 'canvas-vs-alpha'] as const,
+  ].map(async ([path, pair]) => ({ path, response: await renderHandlerBackedComparisonDocument(origin, path, pair) })));
+  for (const { path, response } of responses) {
+    if (response.status !== 200) {
+      throw new Error(`Handler-backed comparison fixture for ${path} returned ${response.status} after a valid D1 preflight: ${response.body}`);
+    }
+    await page.route(origin + path, async (route) => {
+      await route.fulfill({
+        status: response.status,
+        headers: response.headers,
+        body: response.body,
+      });
     });
-  });
+  }
   if (options.assetMode === 'as-served') return;
   await page.route(origin + '/assets/main.js', async (route) => {
     await route.fulfill({ contentType: 'application/javascript', body: VITE_HANDLER_HYDRATION_ENTRY });

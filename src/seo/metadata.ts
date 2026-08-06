@@ -89,7 +89,7 @@ const pageDefinitions = {
   compareHub: {
     title: `Compare AI Models and Costs | ${SITE_CONFIG.name}`,
     description: `Compare AI models with ${SITE_CONFIG.name} by benchmark context, pricing information, and documented evidence while keeping unavailable measurements visibly unavailable.`,
-    h1: 'Compare AI models',
+    h1: 'Compare models side by side',
   },
   leaderboards: {
     title: `AI Model Leaderboards | ${SITE_CONFIG.name}`,
