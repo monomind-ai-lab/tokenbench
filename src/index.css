@@ -683,6 +683,28 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .comparison-detail-page .comparison-table { min-width: 640px; }
 .comparison-detail-page .comparison-table th, .comparison-detail-page .comparison-table td { padding: 11px 12px; }
 .comparison-detail-page .comparison-table th[scope='row'] { color: var(--text); font-family: var(--font-body); font-size: 0.72rem; letter-spacing: 0; text-transform: none; }
+.comparison-radar, .comparison-radar-figure { min-width: 0; display: grid; gap: 14px; margin: 0; }
+.comparison-radar-figure > figcaption { max-width: 720px; color: var(--muted); font-size: 0.74rem; line-height: 1.55; }
+.comparison-radar-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 0; color: var(--text); font-family: var(--font-label); font-size: 0.65rem; font-weight: 800; list-style: none; }
+.comparison-radar-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.comparison-radar-legend-swatch { width: 24px; border-top: 2px solid var(--primary-strong); }
+.comparison-radar-legend-swatch-b { border-top-color: var(--tertiary); border-top-style: dashed; }
+.comparison-radar-chart { width: min(100%, 520px); height: auto; justify-self: center; overflow: visible; border: 1px solid color-mix(in srgb, var(--primary) 34%, var(--outline)); border-radius: 10px; background: radial-gradient(circle at center, color-mix(in srgb, var(--primary-soft) 34%, var(--surface)), var(--surface) 66%); }
+.comparison-radar-boundary { fill: color-mix(in srgb, var(--primary-soft) 23%, transparent); stroke: color-mix(in srgb, var(--primary) 45%, var(--outline)); stroke-dasharray: 3 4; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.comparison-radar-series { fill-opacity: 0.13; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.comparison-radar-series-a { fill: var(--primary); stroke: var(--primary-strong); }
+.comparison-radar-series-b { fill: var(--tertiary); stroke: var(--tertiary); }
+.comparison-radar-marker { stroke: var(--surface); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.comparison-radar-marker-a { fill: var(--primary-strong); }
+.comparison-radar-marker-b { fill: var(--tertiary); }
+.comparison-radar-axis-label { fill: var(--text); font-family: var(--font-label); font-size: 8px; font-weight: 800; text-anchor: middle; dominant-baseline: middle; }
+.comparison-radar-table { width: 100%; border-collapse: collapse; font-size: 0.73rem; }
+.comparison-radar-table caption { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.comparison-radar-table th, .comparison-radar-table td { padding: 10px 11px; border-bottom: 1px solid color-mix(in srgb, var(--outline) 66%, transparent); text-align: left; vertical-align: top; line-height: 1.45; }
+.comparison-radar-table thead th { background: var(--surface-container); color: var(--muted); font-family: var(--font-label); font-size: 0.59rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.comparison-radar-table tbody tr:last-child th, .comparison-radar-table tbody tr:last-child td { border-bottom: 0; }
+.comparison-radar-table th[scope='row'] { color: var(--text); font-family: var(--font-body); font-weight: 750; }
+.comparison-radar-table small { display: block; margin-top: 3px; color: var(--muted); font-family: var(--font-label); font-size: 0.6rem; font-weight: 600; overflow-wrap: anywhere; }
 .comparison-mobile-cards { display: none; gap: 9px; }
 .comparison-mobile-card { min-width: 0; padding: 14px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-low); }
 .comparison-mobile-card h3 { margin: 0 0 12px; font-size: 0.77rem; }
