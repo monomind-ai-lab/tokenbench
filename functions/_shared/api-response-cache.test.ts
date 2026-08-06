@@ -41,6 +41,7 @@ describe('materialized API response cache', () => {
       'catalog',
       'catalog',
       '2026-08-04T12:00:00.000Z',
+      17,
     ]);
     expect(cached).toEqual({
       revision: 'rev-1',
@@ -89,7 +90,63 @@ describe('materialized API response cache', () => {
     expect(cached?.body).toBe('{"value":"hello"}');
   });
 
-  it('rejects missing or inconsistent response chunks', async () => {
+  it('accepts the exact chunk-count cap and rejects one additional row', async () => {
+    const rows = (count: number) => Array.from({ length: count }, (_, index) => ({
+      ...cachedRow,
+      chunk_index: index,
+      body: 'x',
+    }));
+
+    await expect(readApiResponseCache(
+      database(rows(16)).db,
+      'benchmarks',
+      'summary',
+      1,
+    )).resolves.toMatchObject({ body: 'x'.repeat(16) });
+    await expect(readApiResponseCache(
+      database(rows(17)).db,
+      'benchmarks',
+      'summary',
+      1,
+    )).rejects.toThrow(/chunk count exceeds/i);
+  });
+
+  it('accepts a cache chunk at its UTF-8 byte cap and rejects the next byte', async () => {
+    await expect(readApiResponseCache(
+      database({ ...cachedRow, body: 'x'.repeat(1_400_000) }).db,
+      'benchmarks',
+      'summary',
+      1,
+    )).resolves.toMatchObject({ body: 'x'.repeat(1_400_000) });
+    await expect(readApiResponseCache(
+      database({ ...cachedRow, body: 'x'.repeat(1_400_001) }).db,
+      'benchmarks',
+      'summary',
+      1,
+    )).rejects.toThrow(/chunk exceeds/i);
+  });
+
+  it('accepts cumulative cache bytes at the cap and rejects the next byte', async () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      ...cachedRow,
+      chunk_index: index,
+      body: 'x'.repeat(index === 11 ? 1_377_216 : 1_400_000),
+    }));
+    const exact = await readApiResponseCache(database(rows).db, 'benchmarks', 'summary', 1);
+    let rejectedOverflow = false;
+    try {
+      await readApiResponseCache(database(rows.map((row, index) => index === 11
+        ? { ...row, body: `${row.body}x` }
+        : row)).db, 'benchmarks', 'summary', 1);
+    } catch {
+      rejectedOverflow = true;
+    }
+
+    expect(new TextEncoder().encode(exact?.body ?? '').byteLength).toBe(16_777_216);
+    expect(rejectedOverflow).toBe(true);
+  });
+
+  it('rejects missing, duplicate, or revision-inconsistent response chunks', async () => {
     await expect(readApiResponseCache(
       database([
         cachedRow,
@@ -99,6 +156,24 @@ describe('materialized API response cache', () => {
       'summary',
       1,
     )).rejects.toThrow('not contiguous');
+    await expect(readApiResponseCache(
+      database([
+        cachedRow,
+        { ...cachedRow, chunk_index: 0, body: '{}' },
+      ]).db,
+      'benchmarks',
+      'summary',
+      1,
+    )).rejects.toThrow('not contiguous');
+    await expect(readApiResponseCache(
+      database([
+        cachedRow,
+        { ...cachedRow, revision: 'other-revision', chunk_index: 1, body: '{}' },
+      ]).db,
+      'benchmarks',
+      'summary',
+      1,
+    )).rejects.toThrow('inconsistent');
   });
 
   it('returns a 304 only for the exact selected freshness ETag', async () => {

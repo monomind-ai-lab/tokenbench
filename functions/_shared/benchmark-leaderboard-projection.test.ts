@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { CachedLeaderboardPaginationProjection } from '../../src/benchmarks/api-projections';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardEntry } from '../../src/benchmarks/leaderboards';
-import { readCompleteLeaderboardProjection } from './benchmark-leaderboard-projection';
+import {
+  parseCompleteLeaderboardProjection,
+  readCompleteLeaderboardProjection,
+} from './benchmark-leaderboard-projection';
 
 const REVISION = 'benchmark-revision-1';
 const CHECKED_AT = '2026-08-06T00:00:00.000Z';
@@ -120,9 +123,71 @@ function projection(): CachedLeaderboardPaginationProjection {
   };
 }
 
+function projectionWithEntries(entries: readonly LeaderboardEntry[]): CachedLeaderboardPaginationProjection {
+  const base = projection();
+  return {
+    ...base,
+    leaderboard: { ...base.leaderboard, entries },
+    entries,
+  };
+}
+
+function entryWithIdentity(index: number): LeaderboardEntry {
+  const fixture = entry();
+  const modelKey = `model-${String(index).padStart(4, '0')}`;
+  const metric = { ...fixture.metric!, modelKey, sourceModelId: modelKey };
+  return {
+    ...fixture,
+    model: {
+      ...fixture.model,
+      modelKey,
+      slug: modelKey,
+      name: `Model ${index}`,
+      sourceModelId: modelKey,
+    },
+    metric,
+    metrics: [metric],
+    primaryPrice: {
+      ...fixture.primaryPrice!,
+      modelKey,
+      routeId: `openrouter:${modelKey}`,
+      sourceModelId: modelKey,
+    },
+  };
+}
+
+function estimatedEntry(modelKey: string): LeaderboardEntry {
+  const fixture = entry();
+  const metric = {
+    ...fixture.metric!,
+    modelKey,
+    sourceModelId: modelKey,
+    rankingEligible: false,
+  };
+  return {
+    ...fixture,
+    model: {
+      ...fixture.model,
+      modelKey,
+      slug: modelKey,
+      name: modelKey,
+      sourceModelId: modelKey,
+      evidenceStatus: 'estimated',
+      rankingEligible: false,
+    },
+    metric,
+    metrics: [metric],
+    primaryPrice: null,
+    blendedCostPerMillion: null,
+    sourceRank: null,
+    onValueFrontier: false,
+  };
+}
+
 interface CacheFixture {
   readonly fresh?: string;
   readonly stale?: string;
+  readonly cacheRevision?: string;
 }
 
 function cacheDatabase(bodies: CacheFixture) {
@@ -142,7 +207,7 @@ function cacheDatabase(bodies: CacheFixture) {
                 const body = bodies[variant];
                 return {
                   results: body === undefined ? [] : [{
-                    revision: REVISION,
+                    revision: bodies.cacheRevision ?? REVISION,
                     variant,
                     chunk_index: 0,
                     etag: `"${variant}-projection"`,
@@ -208,6 +273,23 @@ describe('complete leaderboard projection cache reader', () => {
     expect(result?.publishedAt).toBe(PUBLISHED_AT);
   });
 
+  it('accepts the publisher storage-revision suffix while preserving the benchmark revision', async () => {
+    const fixture = cacheDatabase({
+      fresh: JSON.stringify(projection()),
+      cacheRevision: `${REVISION}+cache-20260806000000000-attempt-1`,
+    });
+
+    const result = await readCompleteLeaderboardProjection(
+      fixture.db,
+      'llm-coding',
+      'balanced',
+      false,
+      Date.parse('2026-08-06T01:00:00.000Z'),
+    );
+
+    expect(result?.revision).toBe(REVISION);
+  });
+
   it('fails closed for corrupted cache bytes or a mismatched cache revision', async () => {
     const malformed = cacheDatabase({ fresh: '{not-json' });
     const validProjection = projection();
@@ -243,5 +325,226 @@ describe('complete leaderboard projection cache reader', () => {
       false,
       Date.parse('2026-08-06T01:00:00.000Z'),
     )).resolves.toBeNull();
+  });
+
+  it('rejects a coding projection carrying an overall metric row', () => {
+    const coding = entry();
+    const overallMetric = {
+      ...coding.metric!,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+    };
+    const wrongRouteEntry = { ...coding, metric: overallMetric, metrics: [overallMetric] };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries([wrongRouteEntry])),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/route invariants/i);
+  });
+
+  it('rejects top-level rows that do not exactly match the selected base projection', () => {
+    const base = projection();
+    const changed = entry();
+    const changedMetric = { ...changed.metric!, value: 91 };
+    const mismatched = {
+      ...base,
+      entries: [{ ...changed, metric: changedMetric, metrics: [changedMetric] }],
+    };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(mismatched),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/entry variant/i);
+  });
+
+  it('rejects a non-estimated suffix in the estimated projection variant', () => {
+    const base = projection();
+    const extra = entry();
+    const extraMetric = { ...extra.metric!, modelKey: 'beta', sourceModelId: 'beta' };
+    const extraSupported = {
+      ...extra,
+      model: { ...extra.model, modelKey: 'beta', slug: 'beta', name: 'Beta', sourceModelId: 'beta' },
+      metric: extraMetric,
+      metrics: [extraMetric],
+      primaryPrice: { ...extra.primaryPrice!, modelKey: 'beta', routeId: 'openrouter:beta', sourceModelId: 'beta' },
+    };
+    const wrongVariant = { ...base, entries: [...base.entries, extraSupported] };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(wrongVariant),
+      'llm-coding',
+      'balanced',
+      true,
+    )).toThrow(/entry variant/i);
+  });
+
+  it('rejects a non-canonical estimated-entry suffix order', () => {
+    const base = projection();
+    const wrongOrder = {
+      ...base,
+      entries: [...base.entries, estimatedEntry('zeta'), estimatedEntry('beta')],
+    };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(wrongOrder),
+      'llm-coding',
+      'balanced',
+      true,
+    )).toThrow(/entry variant/i);
+  });
+
+  it('accepts a canonical estimated-entry suffix', () => {
+    const base = projection();
+    const selected = { ...base, entries: [...base.entries, estimatedEntry('beta'), estimatedEntry('zeta')] };
+
+    expect(parseCompleteLeaderboardProjection(
+      JSON.stringify(selected),
+      'llm-coding',
+      'balanced',
+      true,
+    ).entries.map((row) => row.model.modelKey)).toEqual(['alpha', 'beta', 'zeta']);
+  });
+
+  it('rejects duplicate model identities in complete projection rows', () => {
+    const duplicated = projectionWithEntries([entry(), entry()]);
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(duplicated),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/duplicate leaderboard entry/i);
+  });
+
+  it('rejects route rows with the wrong metric source or evidence status', () => {
+    const coding = entry();
+    const wrongSourceMetric = {
+      ...coding.metric!,
+      sourceId: 'lmarena' as const,
+      unit: 'arena_score' as const,
+      methodology: 'bradley_terry' as const,
+      rank: 1,
+    };
+    const wrongSource = projectionWithEntries([{
+      ...coding,
+      metric: wrongSourceMetric,
+      metrics: [wrongSourceMetric],
+      sourceRank: 1,
+    }]);
+    const wrongEvidenceEntry = { ...coding, model: { ...coding.model, evidenceStatus: 'source_only' as const } };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(wrongSource),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/route invariants/i);
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries([wrongEvidenceEntry])),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/route invariants/i);
+  });
+
+  it('rejects structurally corrupt price evidence inside an entry', () => {
+    const corrupt = { ...entry(), primaryPrice: {} } as unknown as LeaderboardEntry;
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries([corrupt])),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/route invariants/i);
+  });
+
+  it('accepts the exact entry cap and rejects one additional entry', () => {
+    const exactRows = Array.from({ length: 4_096 }, (_, index) => entryWithIdentity(index));
+    const exact = parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries(exactRows)),
+      'llm-coding',
+      'balanced',
+    );
+
+    expect(exact.entries).toHaveLength(4_096);
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries([...exactRows, entryWithIdentity(4_096)])),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/entry count exceeds/i);
+  });
+
+  it('rejects value rows without the required exact hosted-price evidence', () => {
+    const fixture = entry();
+    const overallMetric = {
+      ...fixture.metric!,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+    };
+    const invalidValueEntry = {
+      ...fixture,
+      metric: overallMetric,
+      metrics: [overallMetric],
+      primaryPrice: null,
+      blendedCostPerMillion: null,
+    };
+    const base = projection();
+    const invalidValueProjection: CachedLeaderboardPaginationProjection = {
+      ...base,
+      leaderboard: {
+        key: 'llm-value',
+        profile: 'balanced',
+        definition: LEADERBOARD_DEFINITIONS['llm-value'],
+        entries: [invalidValueEntry],
+      },
+      entries: [invalidValueEntry],
+    };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(invalidValueProjection),
+      'llm-value',
+      'balanced',
+    )).toThrow(/route invariants/i);
+  });
+
+  it('accepts valid materialized entry invariants for every route kind', () => {
+    const base = projection();
+    const fixture = entry();
+    const routeProjection = (
+      key: keyof typeof LEADERBOARD_DEFINITIONS,
+      routeEntry: LeaderboardEntry,
+    ): CachedLeaderboardPaginationProjection => ({
+      ...base,
+      leaderboard: {
+        key,
+        profile: 'balanced',
+        definition: LEADERBOARD_DEFINITIONS[key],
+        entries: [routeEntry],
+      },
+      entries: [routeEntry],
+    });
+    const lmarenaMetric = {
+      ...fixture.metric!,
+      metricKey: 'lmarena:text_style_control:overall',
+      category: 'text',
+      sourceId: 'lmarena' as const,
+      unit: 'arena_score' as const,
+      methodology: 'bradley_terry' as const,
+      rank: 1,
+    };
+    const overallMetric = { ...fixture.metric!, metricKey: 'benchlm:overall:raw', category: 'overall' };
+    const multimodalMetric = { ...fixture.metric!, metricKey: 'benchlm:category:multimodal', category: 'multimodal' };
+    const cases = [
+      ['llm-human-preference', { ...fixture, metric: lmarenaMetric, metrics: [lmarenaMetric], sourceRank: 1 }],
+      ['llm-value', { ...fixture, metric: overallMetric, metrics: [overallMetric], blendedCostPerMillion: 2, onValueFrontier: true }],
+      ['llm-pricing-context', { ...fixture, metric: null, metrics: [], blendedCostPerMillion: 2 }],
+      ['multimodal-vision-documents', { ...fixture, metric: multimodalMetric, metrics: [multimodalMetric] }],
+    ] as const;
+
+    for (const [key, routeEntry] of cases) {
+      expect(parseCompleteLeaderboardProjection(
+        JSON.stringify(routeProjection(key, routeEntry)),
+        key,
+        'balanced',
+      ).entries).toHaveLength(1);
+    }
   });
 });

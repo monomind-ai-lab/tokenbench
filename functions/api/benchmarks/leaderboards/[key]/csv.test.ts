@@ -252,6 +252,34 @@ describe('leaderboard CSV endpoint', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Invalid benchmark request' });
   });
 
+  it.each([
+    ['/api/benchmarks/leaderboards/llm-coding/csv?q=%00'],
+    ['/api/benchmarks/leaderboards/llm-coding/csv?q=%FF'],
+    ['/api/benchmarks/leaderboards/llm-coding/csv?provider=%00'],
+    ['/api/benchmarks/leaderboards/llm-coding/csv?minPrice=-1'],
+    ['/api/benchmarks/leaderboards/llm-coding/csv?metric=benchlm%3Aoverall%3Araw'],
+    ['/api/benchmarks/leaderboards/llm-coding/csv?sort=rank-asc'],
+    ['/api/benchmarks/leaderboards/llm-coding/csv?lifecycle=active'],
+  ])('rejects data-independent grammar before reading a projection %s', async (path) => {
+    const fixture = cacheDatabase({});
+
+    const response = await csvResponse(path, fixture);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid benchmark request' });
+    expect(fixture.calls).toHaveLength(0);
+  });
+
+  it('keeps the JSON fallback on the same pre-cache grammar contract', async () => {
+    const fixture = cacheDatabase({});
+
+    const response = await jsonResponse('/api/benchmarks/leaderboards/llm-coding?q=%00', fixture);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid benchmark request' });
+    expect(fixture.calls).toHaveLength(0);
+  });
+
   it('keeps stale publication metadata visible while serving the published snapshot', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-08-08T00:00:01.000Z');
@@ -274,6 +302,19 @@ describe('leaderboard CSV endpoint', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
   });
 
+  it('fails closed without a partial CSV response when output bounds are exceeded', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T01:00:00.000Z');
+    const oversized = entry({ modelKey: 'alpha', name: 'x'.repeat(65_537), provider: 'Provider A', score: 90 });
+    const fixture = cacheDatabase({ fresh: JSON.stringify(projection([oversized])) });
+
+    const response = await csvResponse('/api/benchmarks/leaderboards/llm-coding/csv', fixture);
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+  });
+
   it('makes the JSON leaderboard route reject a complete cache projection for another route', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-08-06T01:00:00.000Z');
@@ -288,5 +329,34 @@ describe('leaderboard CSV endpoint', () => {
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+  });
+
+  it('keeps JSON fallback attribution scoped to the paged entries', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T01:00:00.000Z');
+    const beta = entry({ modelKey: 'beta', name: 'Beta', provider: 'Provider B', score: 95 });
+    const alpha = entry({ modelKey: 'alpha', name: 'Alpha', provider: 'Provider A', score: 90 });
+    const betaEntry = { ...beta, primaryPrice: { ...beta.primaryPrice!, sourceArtifactId: 'openrouter-beta' } };
+    const alphaEntry = { ...alpha, primaryPrice: { ...alpha.primaryPrice!, sourceArtifactId: 'openrouter-alpha' } };
+    const complete = projection([betaEntry, alphaEntry]);
+    const pagedProjection = {
+      ...complete,
+      leaderboard: { ...complete.leaderboard, entries: [betaEntry, alphaEntry] },
+      entries: [betaEntry, alphaEntry],
+      sources: [
+        ...complete.sources.filter((record) => record.sourceId !== 'openrouter'),
+        { ...source('openrouter', 'openrouter-beta'), sourceUrl: 'https://openrouter.ai/beta' },
+        { ...source('openrouter', 'openrouter-alpha'), sourceUrl: 'https://openrouter.ai/alpha' },
+      ],
+    };
+    const fixture = cacheDatabase({ fresh: JSON.stringify(pagedProjection) });
+
+    const response = await jsonResponse('/api/benchmarks/leaderboards/llm-coding?limit=1', fixture);
+    const payload = await response.json() as { attribution: Array<{ url: string }>; data: { entries: LeaderboardEntry[] } };
+
+    expect(response.status).toBe(200);
+    expect(payload.data.entries.map((row) => row.model.modelKey)).toEqual(['beta']);
+    expect(payload.attribution.map((record) => record.url)).toContain('https://openrouter.ai/beta');
+    expect(payload.attribution.map((record) => record.url)).not.toContain('https://openrouter.ai/alpha');
   });
 });

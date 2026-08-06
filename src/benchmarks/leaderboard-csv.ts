@@ -3,7 +3,11 @@ import type { LeaderboardEntry, LeaderboardResult } from './leaderboards';
 import { filterLeaderboardEntries, type LeaderboardQueryState } from './leaderboard-query';
 
 /** Spreadsheet programs can skip leading whitespace and controls before parsing a formula. */
-const FORMULA_PREFIX = /^[\u0000-\u0020]*[=+\-@]/u;
+const FORMULA_PREFIX = /^[\u0000-\u0020\uFEFF]*[=+\-@]/u;
+export const LEADERBOARD_CSV_MAX_CELL_BYTES = 64 * 1024;
+export const LEADERBOARD_CSV_MAX_ROW_BYTES = 256 * 1024;
+export const LEADERBOARD_CSV_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+const UTF8_ENCODER = new TextEncoder();
 
 function csvLiteral(value: unknown): string {
   if (value === null || value === undefined) return '';
@@ -14,10 +18,22 @@ function csvLiteral(value: unknown): string {
 /** Escapes a UTF-8 CSV field with RFC 4180-compatible quoting. */
 export function csvCell(value: unknown): string {
   const literal = csvLiteral(value);
-  const formulaSafe = FORMULA_PREFIX.test(literal) ? `'${literal}` : literal;
-  return /[",\r\n]/u.test(formulaSafe)
+  const formulaSafe = typeof value === 'string' && FORMULA_PREFIX.test(literal) ? `'${literal}` : literal;
+  const escaped = /[",\r\n]/u.test(formulaSafe)
     ? `"${formulaSafe.replace(/"/gu, '""')}"`
     : formulaSafe;
+  if (UTF8_ENCODER.encode(escaped).byteLength > LEADERBOARD_CSV_MAX_CELL_BYTES) {
+    throw new RangeError('CSV cell exceeds the byte limit');
+  }
+  return escaped;
+}
+
+function serializedCsvRow(values: readonly unknown[]): string {
+  const row = values.map(csvCell).join(',');
+  if (UTF8_ENCODER.encode(row).byteLength > LEADERBOARD_CSV_MAX_ROW_BYTES) {
+    throw new RangeError('CSV row exceeds the byte limit');
+  }
+  return row;
 }
 
 function metricForKey(entry: LeaderboardEntry, metricKey: string): BenchmarkMetric | null {
@@ -175,9 +191,19 @@ function csvRow(
 export function leaderboardCsv(result: LeaderboardResult, filters: LeaderboardQueryState): string {
   const entries = filterLeaderboardEntries(result.entries, filters);
   let rankedPosition = 0;
-  const rows = entries.map((entry) => {
+  let outputBytes = 0;
+  const rows: string[] = [];
+  const appendRow = (row: string): void => {
+    outputBytes += UTF8_ENCODER.encode(row).byteLength + 2;
+    if (outputBytes > LEADERBOARD_CSV_MAX_OUTPUT_BYTES) {
+      throw new RangeError('CSV output exceeds the byte limit');
+    }
+    rows.push(row);
+  };
+  appendRow(serializedCsvRow(csvHeaders(result)));
+  for (const entry of entries) {
     const rank = isEstimated(entry) ? null : ++rankedPosition;
-    return csvRow(result, entry, rank).map(csvCell).join(',');
-  });
-  return [csvHeaders(result).map(csvCell).join(','), ...rows].join('\r\n').concat('\r\n');
+    appendRow(serializedCsvRow(csvRow(result, entry, rank)));
+  }
+  return rows.join('\r\n').concat('\r\n');
 }

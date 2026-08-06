@@ -6,6 +6,7 @@ import {
 import {
   createLeaderboardQueryCapabilities,
   filterLeaderboardEntries,
+  hasValidLeaderboardQueryGrammar,
   hasValidLeaderboardQueryEncoding,
   LEADERBOARD_QUERY_KEYS,
   leaderboardQueryToSearchParams,
@@ -16,7 +17,10 @@ import { benchmarkLeaderboardCacheKey } from '../../../../src/benchmarks/api-res
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../src/benchmarks/value';
 import { cachedApiResponse, readApiResponseCache } from '../../../_shared/api-response-cache';
-import { readCompleteLeaderboardProjection } from '../../../_shared/benchmark-leaderboard-projection';
+import {
+  completeLeaderboardAttributionForEntries,
+  readCompleteLeaderboardProjection,
+} from '../../../_shared/benchmark-leaderboard-projection';
 import {
   decodeOpaqueValue,
   encodeOpaqueValue,
@@ -209,6 +213,10 @@ export async function onRequestGet({
     const requestUrl = new URL(request.url);
     if (!hasValidLeaderboardQueryEncoding(requestUrl.search)) throw new Error('malformed query encoding');
     normalized = parseRequest(params?.key, requestUrl);
+    if (!hasValidLeaderboardQueryGrammar(
+      normalized.filterParameters,
+      LEADERBOARD_DEFINITIONS[normalized.key],
+    )) throw new Error('invalid query grammar');
   } catch {
     return invalidBenchmarkRequestResponse();
   }
@@ -306,6 +314,7 @@ export async function onRequestGet({
 
     return jsonBenchmarkResponse({
       ...complete,
+      attribution: completeLeaderboardAttributionForEntries(complete, pagedEntries),
       data: {
         ...leaderboard,
         entries: pagedEntries,

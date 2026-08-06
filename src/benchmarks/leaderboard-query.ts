@@ -222,7 +222,11 @@ export function defaultLeaderboardQueryState(
 }
 
 function parseList(values: readonly string[]): readonly string[] | null {
-  if (values.length === 0 || values.length > MAX_LIST_VALUES || values.some((item) => item.length === 0 || item.length > MAX_QUERY_LENGTH)) return null;
+  if (values.length === 0
+    || values.length > MAX_LIST_VALUES
+    || values.some((item) => item.length === 0
+      || item.length > MAX_QUERY_LENGTH
+      || /[\u0000-\u001f\u007f]/u.test(item))) return null;
   const normalized = sortedUnique(values.map((item) => item.trim()));
   if (normalized.some((item) => item.length === 0 || item.length > MAX_QUERY_LENGTH)) return null;
   return normalized.length === values.length ? normalized : null;
@@ -240,8 +244,14 @@ function parseQueryText(value: string): string | null {
   return normalized;
 }
 
-function isAllowedDynamicValue(values: readonly string[] | null, value: string, mode: 'ui' | 'api'): boolean {
-  return values === null ? mode === 'ui' : values.includes(value);
+type LeaderboardQueryParseMode = 'ui' | 'api' | 'api-preflight';
+
+function isStrictMode(mode: LeaderboardQueryParseMode): boolean {
+  return mode !== 'ui';
+}
+
+function isAllowedDynamicValue(values: readonly string[] | null, value: string, mode: LeaderboardQueryParseMode): boolean {
+  return values === null ? mode !== 'api' : values.includes(value);
 }
 
 function invalidResult(): LeaderboardQueryParseResult {
@@ -268,13 +278,13 @@ export function parseLeaderboardQuery(
   input: LeaderboardQueryInput,
   definition: LeaderboardDefinition,
   capabilities: LeaderboardQueryCapabilities,
-  mode: 'ui' | 'api',
+  mode: LeaderboardQueryParseMode,
 ): LeaderboardQueryParseResult {
-  if (mode === 'api' && typeof input === 'string' && !hasValidLeaderboardQueryEncoding(input)) return invalidResult();
+  if (isStrictMode(mode) && typeof input === 'string' && !hasValidLeaderboardQueryEncoding(input)) return invalidResult();
   const params = typeof input === 'string'
     ? new URLSearchParams(input.startsWith('?') ? input.slice(1) : input)
     : input;
-  if (mode === 'api' && [...params.keys()].some((name) => !QUERY_KEYS.has(name))) return invalidResult();
+  if (isStrictMode(mode) && [...params.keys()].some((name) => !QUERY_KEYS.has(name))) return invalidResult();
 
   let malformed = false;
   const readSingle = (name: string): QueryValue => {
@@ -318,7 +328,9 @@ export function parseLeaderboardQuery(
   const rawSort = readSingle('sort');
   if (rawSort !== null) {
     const knownSort = rawSort !== INVALID && SORT_ORDER.includes(rawSort as LeaderboardSort);
-    if (!knownSort || (capabilities.dataReady && !capabilities.sorts.includes(rawSort as LeaderboardSort))) malformed = true;
+    if (!knownSort
+      || ((capabilities.dataReady || mode === 'api-preflight')
+        && !capabilities.sorts.includes(rawSort as LeaderboardSort))) malformed = true;
     else sort = rawSort as LeaderboardSort;
   }
 
@@ -368,7 +380,7 @@ export function parseLeaderboardQuery(
   // becoming an unknown field. No published entry currently carries that fact.
   if (params.has('lifecycle')) {
     if (params.getAll('lifecycle').length > 1) malformed = true;
-    if (mode === 'api' || capabilities.supportsLifecycle) malformed = true;
+    if (isStrictMode(mode) || capabilities.supportsLifecycle) malformed = true;
   }
 
   if (priceMinimum !== null && priceMaximum !== null && priceMinimum > priceMaximum) {
@@ -381,7 +393,7 @@ export function parseLeaderboardQuery(
     evidence = null;
   }
 
-  if (mode === 'api' && malformed) return invalidResult();
+  if (isStrictMode(mode) && malformed) return invalidResult();
 
   return {
     ok: true,
@@ -399,6 +411,19 @@ export function parseLeaderboardQuery(
       includeEstimated,
     },
   };
+}
+
+/** Validates every raw and data-independent API rule before reading route data. */
+export function hasValidLeaderboardQueryGrammar(
+  input: LeaderboardQueryInput,
+  definition: LeaderboardDefinition,
+): boolean {
+  return parseLeaderboardQuery(
+    input,
+    definition,
+    createLeaderboardQueryCapabilities(definition),
+    'api-preflight',
+  ).ok;
 }
 
 function canonicalList(values: readonly string[]): readonly string[] {

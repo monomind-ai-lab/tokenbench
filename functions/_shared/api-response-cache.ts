@@ -1,3 +1,5 @@
+import { API_RESPONSE_CHUNK_MAX_BYTES } from '../../src/cache/api-response-chunks';
+
 export type ApiResponseCacheScope = 'catalog' | 'benchmarks';
 
 export interface ApiResponseCacheStatement {
@@ -15,6 +17,11 @@ export interface MaterializedApiResponse {
   /** Exact JSON bytes produced by the publisher. Pages must not parse these. */
   readonly body: string;
 }
+
+export const API_RESPONSE_CACHE_MAX_CHUNKS = 16;
+export const API_RESPONSE_CACHE_MAX_CHUNK_BYTES = API_RESPONSE_CHUNK_MAX_BYTES;
+export const API_RESPONSE_CACHE_MAX_BODY_BYTES = 16 * 1024 * 1024;
+const UTF8_ENCODER = new TextEncoder();
 
 interface ApiResponseCacheRow {
   readonly revision: unknown;
@@ -41,6 +48,7 @@ const ACTIVE_CACHE_QUERY = `
       ELSE 'stale'
     END
   ORDER BY entries.chunk_index ASC
+  LIMIT ?
 `;
 
 function requiredString(value: unknown, label: string): string {
@@ -56,21 +64,37 @@ export async function readApiResponseCache(
   now: number = Date.now(),
 ): Promise<MaterializedApiResponse | null> {
   const cutoff = new Date(now - freshnessWindowMs).toISOString();
-  const result = await db.prepare(ACTIVE_CACHE_QUERY).bind(scope, cacheKey, cutoff).all();
+  const result = await db.prepare(ACTIVE_CACHE_QUERY)
+    .bind(scope, cacheKey, cutoff, API_RESPONSE_CACHE_MAX_CHUNKS + 1)
+    .all();
   if (result.results.length === 0) return null;
+  if (result.results.length > API_RESPONSE_CACHE_MAX_CHUNKS) {
+    throw new Error('cached API response chunk count exceeds the limit');
+  }
   const rows = result.results as ApiResponseCacheRow[];
   const first = rows[0];
   const revision = requiredString(first.revision, 'cached API revision');
   const variant = requiredString(first.variant, 'cached API variant');
   if (variant !== 'fresh' && variant !== 'stale') throw new Error('cached API variant is invalid');
   const etag = requiredString(first.etag, 'cached API ETag');
-  const chunks = rows.map((row, index) => {
+  let bodyBytes = 0;
+  const chunks: string[] = [];
+  for (const [index, row] of rows.entries()) {
     if (row.revision !== revision || row.variant !== variant || row.etag !== etag) {
       throw new Error('cached API response chunks are inconsistent');
     }
     if (row.chunk_index !== index) throw new Error('cached API response chunks are not contiguous');
-    return requiredString(row.body, 'cached API body chunk');
-  });
+    const body = requiredString(row.body, 'cached API body chunk');
+    const chunkBytes = UTF8_ENCODER.encode(body).byteLength;
+    if (chunkBytes > API_RESPONSE_CACHE_MAX_CHUNK_BYTES) {
+      throw new Error('cached API response chunk exceeds the byte limit');
+    }
+    bodyBytes += chunkBytes;
+    if (bodyBytes > API_RESPONSE_CACHE_MAX_BODY_BYTES) {
+      throw new Error('cached API response body exceeds the byte limit');
+    }
+    chunks.push(body);
+  }
   return {
     revision,
     freshness: variant,

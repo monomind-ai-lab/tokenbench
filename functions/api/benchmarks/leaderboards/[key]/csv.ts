@@ -1,6 +1,7 @@
 import { leaderboardCsv } from '../../../../../src/benchmarks/leaderboard-csv';
 import {
   createLeaderboardQueryCapabilities,
+  hasValidLeaderboardQueryGrammar,
   hasValidLeaderboardQueryEncoding,
   LEADERBOARD_QUERY_KEYS,
   LEADERBOARD_SINGLE_VALUE_QUERY_KEYS,
@@ -138,6 +139,9 @@ export async function onRequestGet({
     requestUrl = new URL(request.url);
     if (!hasValidLeaderboardQueryEncoding(requestUrl.search)) throw new Error('malformed query encoding');
     normalized = parseCsvRequest(params?.key, requestUrl);
+    if (!hasValidLeaderboardQueryGrammar(requestUrl.search, LEADERBOARD_DEFINITIONS[normalized.key])) {
+      throw new Error('invalid query grammar');
+    }
   } catch {
     return invalidBenchmarkRequestResponse();
   }

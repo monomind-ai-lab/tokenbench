@@ -149,6 +149,74 @@ describe('leaderboard CSV', () => {
     expect(csvCell('\u001f-42')).toBe("'\u001f-42");
   });
 
+  it('blocks a formula prefix hidden after a UTF-8 BOM and ASCII controls', () => {
+    expect(csvCell('\uFEFF\t=1+1')).toBe("'\uFEFF\t=1+1");
+  });
+
+  it('keeps finite numbers numeric while protecting formula-looking strings', () => {
+    expect(csvCell(-42)).toBe('-42');
+    expect(csvCell('-42')).toBe("'-42");
+  });
+
+  it('accepts a cell at the byte cap and rejects the next byte', () => {
+    expect(new TextEncoder().encode(csvCell('x'.repeat(65_536))).byteLength).toBe(65_536);
+    expect(() => csvCell('x'.repeat(65_537))).toThrow(/CSV cell exceeds/i);
+  });
+
+  it('accepts a serialized row at the byte cap and rejects the next byte', () => {
+    const rowAtLimit = entry({ modelKey: 'alpha', name: 'Alpha', provider: 'Provider A', score: 90 });
+    const wideModel = {
+      ...rowAtLimit.model,
+      name: 'n'.repeat(65_536),
+      creator: 'p'.repeat(65_536),
+      modelKey: 'k'.repeat(65_536),
+      slug: 's'.repeat(65_446),
+    };
+    const exact = leaderboardCsv(leaderboardResult('llm-coding', [{ ...rowAtLimit, model: wideModel }]), FILTERS);
+
+    expect(new TextEncoder().encode(exact.split('\r\n')[1] ?? '').byteLength).toBe(262_144);
+    expect(() => leaderboardCsv(leaderboardResult('llm-coding', [{
+      ...rowAtLimit,
+      model: { ...wideModel, slug: `${wideModel.slug}s` },
+    }]), FILTERS)).toThrow(/CSV row exceeds/i);
+  });
+
+  it('accepts total output at the byte cap and rejects the next byte', () => {
+    const header = 'rank,model,provider,evidence_status,score,unit,metric_key,methodology,price_usd_per_million,context_window_tokens,model_key,slug,source_type';
+    const targetBytes = 8 * 1024 * 1024;
+    const rowAtBytes = (rank: number, bytes: number): LeaderboardEntry => {
+      const fixture = entry({ modelKey: `model-${rank}`, name: 'Model', provider: 'Provider', score: 90 });
+      let remaining = bytes - 89 - String(rank).length;
+      const lengths = [0, 0, 0, 0].map(() => {
+        const length = Math.min(65_536, remaining);
+        remaining -= length;
+        return length;
+      });
+      const padded = (prefix: string, character: string, length: number) => `${prefix}${character.repeat(length - prefix.length)}`;
+      return {
+        ...fixture,
+        model: {
+          ...fixture.model,
+          name: 'n'.repeat(lengths[0] ?? 0),
+          creator: 'p'.repeat(lengths[1] ?? 0),
+          modelKey: padded(`k${String(rank).padStart(2, '0')}`, 'k', lengths[2] ?? 0),
+          slug: padded(`m${String(rank).padStart(2, '0')}`, 's', lengths[3] ?? 0),
+        },
+      };
+    };
+    const firstRows = Array.from({ length: 31 }, (_, index) => rowAtBytes(index + 1, 262_144));
+    const headerBytes = new TextEncoder().encode(header).byteLength;
+    const finalRowBytes = targetBytes - headerBytes - 2 - 31 * (262_144 + 2) - 2;
+    const lastRow = rowAtBytes(32, finalRowBytes);
+    const exact = leaderboardCsv(leaderboardResult('llm-coding', [...firstRows, lastRow]), FILTERS);
+
+    expect(new TextEncoder().encode(exact).byteLength).toBe(targetBytes);
+    expect(() => leaderboardCsv(leaderboardResult('llm-coding', [
+      ...firstRows,
+      { ...lastRow, model: { ...lastRow.model, slug: `${lastRow.model.slug}s` } },
+    ]), FILTERS)).toThrow(/CSV output exceeds/i);
+  });
+
   it('uses RFC 4180 quoting without damaging Unicode or embedded newlines', () => {
     expect(csvCell('模型, "quoted"\r\nnext')).toBe('"模型, ""quoted""\r\nnext"');
     expect(csvCell('=HYPERLINK("https://bad")')).toBe('"\'=HYPERLINK(""https://bad"")"');
