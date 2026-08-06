@@ -91,7 +91,7 @@ function price(overrides: Partial<BenchmarkPriceCheck> = {}): BenchmarkPriceChec
   return {
     modelKey: 'fixture:alpha',
     sourceId: 'openrouter',
-    providerId: 'openrouter',
+    providerId: 'openai',
     inputUsdPerMillion: 1.25,
     cachedInputUsdPerMillion: null,
     outputUsdPerMillion: 5.5,
@@ -107,6 +107,27 @@ function price(overrides: Partial<BenchmarkPriceCheck> = {}): BenchmarkPriceChec
     supportedParameters: [],
     sourceArtifactId: 'catalog:catalog_fixture',
     ...overrides,
+  };
+}
+
+function catalogOffer(
+  providerId: 'openai' | 'anthropic',
+  modelId: string,
+  routeId: string,
+): CatalogResponse['modelOffers'][number] {
+  return {
+    id: routeId,
+    providerId,
+    displayName: modelId,
+    modelId,
+    pricingBasis: 'openrouter',
+    route: 'openrouter',
+    currency: 'USD',
+    unit: 'micro_dollars_per_million_tokens',
+    inputMicroDollarsPerMillion: 1_250_000,
+    outputMicroDollarsPerMillion: 5_500_000,
+    contextWindowTokens: 128_000,
+    sourceId: 'openrouter-models',
   };
 }
 
@@ -173,7 +194,7 @@ function catalogFixture(overrides: Partial<CatalogResponse> = {}): CatalogRespon
     publishedAt: '2026-08-01T00:00:00.000Z',
     freshness: { status: 'fresh', checkedAt: '2026-08-01T00:00:00.000Z' },
     plans: [],
-    modelOffers: [],
+    modelOffers: [catalogOffer('openai', 'alpha', 'openrouter:alpha')],
     provenance: [{
       id: 'openrouter-models',
       providerId: 'openrouter',
@@ -199,7 +220,7 @@ function changesFixture(overrides: Partial<RevisionChanges> = {}): RevisionChang
     priceDrops: [{
       id: 'price-alpha',
       modelKey: 'fixture:alpha',
-      providerId: 'openrouter',
+      providerId: 'openai',
       routeId: 'openrouter:alpha',
       previousInputUsdPerMillion: 2,
       currentInputUsdPerMillion: 1.25,
@@ -211,6 +232,37 @@ function changesFixture(overrides: Partial<RevisionChanges> = {}): RevisionChang
 }
 
 describe('monthly cheatsheet facts', () => {
+  it.each([
+    ['openai', 'openai/gpt-alpha', 'openrouter:openai/gpt-alpha'],
+    ['anthropic', 'anthropic/claude-alpha', 'openrouter:anthropic/claude-alpha'],
+  ] as const)('accepts %s as the model-owner provider on a bound OpenRouter route', (providerId, sourceModelId, routeId) => {
+    const snapshot = benchmarkFixture({
+      priceChecks: [price({ providerId, sourceModelId, routeId, canonicalSlug: sourceModelId })],
+    });
+    const catalog = catalogFixture({
+      modelOffers: [catalogOffer(providerId, sourceModelId, routeId)],
+    });
+
+    expect(buildCheatsheet(snapshot, catalog).categories[0].entries[0]).toMatchObject({
+      modelKey: 'fixture:alpha',
+      routeId,
+      inputUsdPerMillion: 1.25,
+      outputUsdPerMillion: 5.5,
+    });
+  });
+
+  it.each([
+    ['missing route', []],
+    ['wrong owner provider', [{ ...catalogOffer('openai', 'alpha', 'openrouter:alpha'), providerId: 'anthropic' }]],
+    ['wrong source model', [{ ...catalogOffer('openai', 'alpha', 'openrouter:alpha'), modelId: 'openai/other' }]],
+    ['wrong exact input rate', [{ ...catalogOffer('openai', 'alpha', 'openrouter:alpha'), inputMicroDollarsPerMillion: 9_000_000 }]],
+    ['wrong cached-input availability', [{ ...catalogOffer('openai', 'alpha', 'openrouter:alpha'), cachedInputMicroDollarsPerMillion: 0 }]],
+    ['wrong route context', [{ ...catalogOffer('openai', 'alpha', 'openrouter:alpha'), contextWindowTokens: 64_000 }]],
+  ] as const)('fails closed when the bound OpenRouter price has a %s in the catalog artifact', (_label, modelOffers) => {
+    expect(() => buildCheatsheet(benchmarkFixture(), catalogFixture({ modelOffers: [...modelOffers] })))
+      .toThrow(/OpenRouter price.*catalog offer/i);
+  });
+
   it('builds supported, deduplicated top-ten rows in the approved category order', () => {
     const document = buildCheatsheet(benchmarkFixture(), catalogFixture());
 
@@ -293,6 +345,26 @@ describe('monthly cheatsheet facts', () => {
     });
 
     expect(() => buildCheatsheet(snapshot, catalogFixture())).toThrow(/OpenRouter price.*artifact/i);
+  });
+
+  it('keeps hosted-route context unavailable when the selected catalog route omits it', () => {
+    const snapshot = benchmarkFixture({
+      priceChecks: [price({ contextWindowTokens: null })],
+    });
+    const offer = catalogOffer('openai', 'alpha', 'openrouter:alpha');
+    const { contextWindowTokens: _omitted, ...offerWithoutContext } = offer;
+
+    const document = buildCheatsheet(snapshot, catalogFixture({ modelOffers: [offerWithoutContext] }));
+    const alpha = document.categories[0].entries.find((entry) => entry.modelKey === 'fixture:alpha');
+
+    expect(alpha).toMatchObject({
+      routeId: 'openrouter:alpha',
+      inputUsdPerMillion: 1.25,
+      outputUsdPerMillion: 5.5,
+      contextWindowTokens: null,
+    });
+    expect(renderCheatsheetCsv(document)).toContain(',openrouter:alpha,1.25,5.5,Unavailable,supported');
+    expect(renderCheatsheetHtml(document)).toMatch(/openrouter:alpha[\s\S]{0,300}Unavailable/u);
   });
 
   it('renders factual CSV and accessible HTML without spreadsheet or markup injection', () => {

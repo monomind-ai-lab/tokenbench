@@ -130,9 +130,36 @@ function assertFrozenInputs(snapshot: FrozenBenchmarkSnapshot, catalog: CatalogR
   }
 
   const openRouterPrices = snapshot.priceChecks.filter((price) => price.sourceId === 'openrouter');
-  if (openRouterPrices.some((price) => price.providerId !== 'openrouter'
-    || price.sourceArtifactId !== expectedArtifactId)) {
+  if (openRouterPrices.some((price) => price.sourceArtifactId !== expectedArtifactId)) {
     throw new RangeError('OpenRouter price source artifact must match the catalog revision');
+  }
+  const modelKeys = new Set(snapshot.models.map((model) => model.modelKey));
+  const routeIdentities = new Set<string>();
+  for (const price of openRouterPrices) {
+    if (!modelKeys.has(price.modelKey)) {
+      throw new RangeError('OpenRouter price modelKey must refer to a benchmark model');
+    }
+    const routeIdentity = JSON.stringify([price.modelKey, price.providerId, price.routeId]);
+    if (routeIdentities.has(routeIdentity)) {
+      throw new RangeError('OpenRouter price route identity must be unique');
+    }
+    routeIdentities.add(routeIdentity);
+    const catalogOffer = catalog.modelOffers.find((offer) => offer.id === price.routeId);
+    const catalogCachedInput = catalogOffer?.cachedInputMicroDollarsPerMillion === undefined
+      ? null
+      : catalogOffer.cachedInputMicroDollarsPerMillion / 1_000_000;
+    if (!catalogOffer
+      || catalogOffer.sourceId !== catalogSource.id
+      || catalogOffer.pricingBasis !== 'openrouter'
+      || catalogOffer.route !== 'openrouter'
+      || catalogOffer.providerId !== price.providerId
+      || catalogOffer.modelId !== price.sourceModelId
+      || catalogOffer.inputMicroDollarsPerMillion / 1_000_000 !== price.inputUsdPerMillion
+      || catalogOffer.outputMicroDollarsPerMillion / 1_000_000 !== price.outputUsdPerMillion
+      || catalogCachedInput !== price.cachedInputUsdPerMillion
+      || (catalogOffer.contextWindowTokens ?? null) !== price.contextWindowTokens) {
+      throw new RangeError('OpenRouter price must match its exact catalog offer identity and facts');
+    }
   }
   return openRouterPrices;
 }
@@ -211,7 +238,7 @@ function priceFacts(
     routeId: price.routeId,
     inputUsdPerMillion,
     outputUsdPerMillion,
-    contextWindowTokens: isPositiveSafeInteger(price.contextWindowTokens) ? price.contextWindowTokens : modelContext,
+    contextWindowTokens: isPositiveSafeInteger(price.contextWindowTokens) ? price.contextWindowTokens : null,
   };
 }
 

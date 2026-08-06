@@ -17,6 +17,8 @@ import {
 
 const temporaryRoots: string[] = [];
 const SHA = `sha256:${'a'.repeat(64)}`;
+const PREVIOUS_SHA = `sha256:${'b'.repeat(64)}`;
+const PREVIOUS_FACTS_HASH = 'sha256:cbfbd155ef344f5a8368c99945c671a648e9f9d678ce9e58e25fb8dc39cf13f8';
 const execFileAsync = promisify(execFile);
 
 afterEach(async () => {
@@ -66,7 +68,7 @@ function benchmarkFixture() {
       rankingEligible: true, methodology: 'benchlm_raw_composite', observationCount: null, sessionCount: null,
     }],
     priceChecks: [{
-      modelKey: 'fixture:alpha', sourceId: 'openrouter', providerId: 'openrouter', inputUsdPerMillion: 1,
+      modelKey: 'fixture:alpha', sourceId: 'openrouter', providerId: 'openai', inputUsdPerMillion: 1,
       cachedInputUsdPerMillion: null, outputUsdPerMillion: 2, contextWindowTokens: 128_000, verificationStatus: 'primary',
       routeId: 'openrouter:alpha', sourceModelId: 'alpha', canonicalSlug: 'alpha', maxInputTokens: null,
       maxOutputTokens: null, inputModalities: ['text'], outputModalities: ['text'], supportedParameters: [],
@@ -82,7 +84,12 @@ function catalogFixture(): CatalogResponse {
     publishedAt: '2026-08-01T00:00:00.000Z',
     freshness: { status: 'fresh', checkedAt: '2026-08-01T00:00:00.000Z' },
     plans: [],
-    modelOffers: [],
+    modelOffers: [{
+      id: 'openrouter:alpha', providerId: 'openai', displayName: 'Alpha', modelId: 'alpha',
+      pricingBasis: 'openrouter', route: 'openrouter', currency: 'USD', unit: 'micro_dollars_per_million_tokens',
+      inputMicroDollarsPerMillion: 1_000_000, outputMicroDollarsPerMillion: 2_000_000,
+      contextWindowTokens: 128_000, sourceId: 'openrouter-models',
+    }],
     provenance: [{
       id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://example.test/catalog',
       observedAt: '2026-08-01T00:00:00.000Z', sourceKind: 'official_json', confidence: 'official',
@@ -91,37 +98,88 @@ function catalogFixture(): CatalogResponse {
   };
 }
 
+function previousCatalogFixture(): CatalogResponse {
+  const current = catalogFixture();
+  return {
+    ...current,
+    revision: 'catalog_previous',
+    modelOffers: current.modelOffers.map((offer) => ({
+      ...offer,
+      inputMicroDollarsPerMillion: 2_000_000,
+      outputMicroDollarsPerMillion: 3_000_000,
+    })),
+    provenance: current.provenance.map((source) => ({
+      ...source,
+      snapshotKey: 'fixtures/catalog-previous.json',
+      contentHash: PREVIOUS_SHA,
+    })),
+  };
+}
+
+function previousBenchmarkFixture() {
+  const current = benchmarkFixture();
+  return {
+    ...current,
+    revision: {
+      ...current.revision,
+      revision: 'benchmark_previous',
+      catalogRevision: 'catalog_previous',
+      openrouterContentHash: PREVIOUS_SHA,
+    },
+    sources: current.sources.map((source) => source.sourceId === 'openrouter'
+      ? {
+          ...source,
+          artifactId: 'catalog:catalog_previous',
+          upstreamRevision: 'catalog_previous',
+          snapshotKey: 'fixtures/catalog-previous.json',
+          contentHash: PREVIOUS_SHA,
+          originalContentHash: PREVIOUS_SHA,
+        }
+      : source),
+    priceChecks: current.priceChecks.map((priceCheck) => ({
+      ...priceCheck,
+      inputUsdPerMillion: 2,
+      outputUsdPerMillion: 3,
+      sourceArtifactId: 'catalog:catalog_previous',
+    })),
+  };
+}
+
+function previousReceiptFixture() {
+  return {
+    schemaVersion: 'tokenbench-published-revision-receipt/v1' as const,
+    benchmarks: previousBenchmarkFixture(),
+    catalog: previousCatalogFixture(),
+    factsHash: PREVIOUS_FACTS_HASH,
+  };
+}
+
+type PreviousRevisionReceiptFixture = ReturnType<typeof previousReceiptFixture>;
+
 interface VerifiedChangesFixture {
-  readonly previous: PublishedRevisionSnapshot;
+  readonly previous: PreviousRevisionReceiptFixture;
   readonly current: PublishedRevisionSnapshot;
   readonly changes?: RevisionChanges;
 }
 
 function changesFixture(overrides: Partial<VerifiedChangesFixture> = {}): VerifiedChangesFixture {
-  const previous: PublishedRevisionSnapshot = {
-    revision: 'benchmark_previous',
-    models: [{ modelKey: 'fixture:alpha' }],
-    priceChecks: [{
-      modelKey: 'fixture:alpha', providerId: 'openrouter', routeId: 'openrouter:alpha', verificationStatus: 'primary',
-      inputUsdPerMillion: 2, outputUsdPerMillion: 3,
-    }],
-  };
+  const previous = previousReceiptFixture();
   const current: PublishedRevisionSnapshot = {
     revision: 'benchmark_fixture',
     models: [{ modelKey: 'fixture:alpha' }],
     priceChecks: [{
-      modelKey: 'fixture:alpha', providerId: 'openrouter', routeId: 'openrouter:alpha', verificationStatus: 'primary',
+      modelKey: 'fixture:alpha', providerId: 'openai', routeId: 'openrouter:alpha', verificationStatus: 'primary',
       inputUsdPerMillion: 1, outputUsdPerMillion: 2,
     }],
   };
-  const priceDropId = JSON.stringify(['benchmark_fixture', 'price-drop', 'fixture:alpha', 'openrouter', 'openrouter:alpha']);
+  const priceDropId = JSON.stringify(['benchmark_fixture', 'price-drop', 'fixture:alpha', 'openai', 'openrouter:alpha']);
   const changes: RevisionChanges = {
     fromRevision: 'benchmark_previous',
     toRevision: 'benchmark_fixture',
     dedupeKey: JSON.stringify(['benchmark_previous', 'benchmark_fixture', priceDropId]),
     newModels: [],
     priceDrops: [{
-      id: priceDropId, modelKey: 'fixture:alpha', providerId: 'openrouter', routeId: 'openrouter:alpha',
+      id: priceDropId, modelKey: 'fixture:alpha', providerId: 'openai', routeId: 'openrouter:alpha',
       previousInputUsdPerMillion: 2, currentInputUsdPerMillion: 1,
       previousOutputUsdPerMillion: 3, currentOutputUsdPerMillion: 2,
     }],
@@ -237,6 +295,118 @@ describe('generateMonthlyCheatsheet', () => {
       '--out-dir', 'artifacts',
       'unexpected',
     ])).toThrow(/unknown argument/i);
+  });
+
+  it('accepts a hash-bound frozen prior publication receipt for deterministic changes', async () => {
+    const args = await fixtureArgs('prior-receipt');
+    const envelope = changesFixture();
+    await writeFile(args.changes, `${JSON.stringify(envelope)}\n`);
+
+    const output = await generateMonthlyCheatsheet(args, fakeDependencies(new FakeBrowser()));
+
+    expect(output.manifest.changes).toEqual({
+      fromRevision: 'benchmark_previous',
+      toRevision: 'benchmark_fixture',
+      dedupeKey: envelope.changes?.dedupeKey,
+    });
+  });
+
+  it('rejects a caller-supplied thin previous snapshot without a frozen receipt', async () => {
+    const args = await fixtureArgs('thin-prior');
+    const envelope = changesFixture();
+    const previous: PublishedRevisionSnapshot = {
+      revision: 'benchmark_previous',
+      models: [{ modelKey: 'fixture:alpha' }],
+      priceChecks: [{
+        modelKey: 'fixture:alpha', providerId: 'openai', routeId: 'openrouter:alpha', verificationStatus: 'primary',
+        inputUsdPerMillion: 2, outputUsdPerMillion: 3,
+      }],
+    };
+    await writeFile(args.changes, `${JSON.stringify({ ...envelope, previous })}\n`);
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(new FakeBrowser())))
+      .rejects.toThrow(/previous.*receipt/i);
+  });
+
+  it.each([
+    ['an unpublished revision', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: {
+        ...receipt.benchmarks,
+        revision: { ...receipt.benchmarks.revision, publicationState: 'superseded' },
+      },
+    }), /published/i],
+    ['a mismatched source artifact ID', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: {
+        ...receipt.benchmarks,
+        sources: receipt.benchmarks.sources.map((source) => source.sourceId === 'openrouter'
+          ? { ...source, artifactId: 'catalog:stale' }
+          : source),
+        priceChecks: receipt.benchmarks.priceChecks.map((price) => ({
+          ...price,
+          sourceArtifactId: 'catalog:stale',
+        })),
+      },
+    }), /source artifact|catalog revision/i],
+    ['a mismatched upstream revision', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: {
+        ...receipt.benchmarks,
+        sources: receipt.benchmarks.sources.map((source) => source.sourceId === 'openrouter'
+          ? { ...source, upstreamRevision: 'catalog_stale' }
+          : source),
+      },
+    }), /upstream revision/i],
+    ['a mismatched source content hash', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: {
+        ...receipt.benchmarks,
+        sources: receipt.benchmarks.sources.map((source) => source.sourceId === 'openrouter'
+          ? { ...source, contentHash: SHA, originalContentHash: SHA }
+          : source),
+      },
+    }), /content hash/i],
+    ['a forged receipt facts hash', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      factsHash: SHA,
+    }), /facts hash/i],
+    ['an omitted prior price fact', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: { ...receipt.benchmarks, priceChecks: [] },
+    }), /facts hash/i],
+    ['inflated prior prices', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: {
+        ...receipt.benchmarks,
+        priceChecks: receipt.benchmarks.priceChecks.map((price) => ({
+          ...price,
+          inputUsdPerMillion: 99,
+          outputUsdPerMillion: 99,
+        })),
+      },
+      catalog: {
+        ...receipt.catalog,
+        modelOffers: receipt.catalog.modelOffers.map((offer) => ({
+          ...offer,
+          inputMicroDollarsPerMillion: 99_000_000,
+          outputMicroDollarsPerMillion: 99_000_000,
+        })),
+      },
+    }), /facts hash/i],
+    ['no prior published facts', (receipt: PreviousRevisionReceiptFixture) => ({
+      ...receipt,
+      benchmarks: { ...receipt.benchmarks, models: [], metrics: [], priceChecks: [] },
+    }), /published model facts/i],
+  ] as const)('rejects a prior receipt containing %s before rendering', async (_label, mutate, expected) => {
+    const args = await fixtureArgs(`prior-${_label.replaceAll(' ', '-')}`);
+    const envelope = changesFixture();
+    await writeFile(args.changes, `${JSON.stringify({ ...envelope, previous: mutate(envelope.previous) })}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(expected);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
   });
 
   it('writes the full factual artifact set with hashes, frozen PDF metadata, and fixed browser settings', async () => {
@@ -435,13 +605,6 @@ describe('generateMonthlyCheatsheet', () => {
     ['fabricated route', (envelope: VerifiedChangesFixture) => ({
       ...envelope,
       changes: { ...envelope.changes!, priceDrops: [{ ...envelope.changes!.priceDrops[0], routeId: 'openrouter:invented' }] },
-    })],
-    ['non-decreasing prior price', (envelope: VerifiedChangesFixture) => ({
-      ...envelope,
-      previous: {
-        ...envelope.previous,
-        priceChecks: [{ ...envelope.previous.priceChecks[0], inputUsdPerMillion: 1, outputUsdPerMillion: 2 }],
-      },
     })],
     ['current route values that differ from the benchmark', (envelope: VerifiedChangesFixture) => ({
       ...envelope,

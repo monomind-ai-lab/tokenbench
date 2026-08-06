@@ -314,13 +314,38 @@ function expectedCurrentRevision(snapshot: FrozenBenchmarkSnapshot): PublishedRe
   };
 }
 
+function parsePreviousRevisionReceipt(value: unknown): PublishedRevisionSnapshot {
+  const receipt = asRecord(value, 'changes envelope.previous receipt');
+  assertOnlyKeys(receipt, ['schemaVersion', 'benchmarks', 'catalog', 'factsHash'], 'changes envelope.previous receipt');
+  if (receipt.schemaVersion !== 'tokenbench-published-revision-receipt/v1') {
+    fail('changes envelope.previous receipt schemaVersion is invalid');
+  }
+  const factsHash = requireString(receipt.factsHash, 'changes envelope.previous receipt.factsHash');
+  if (!/^sha256:[a-f0-9]{64}$/u.test(factsHash)) {
+    fail('changes envelope.previous receipt.factsHash must be a SHA-256 digest');
+  }
+  const snapshot = parseBenchmarkSnapshot(receipt.benchmarks);
+  const catalog = validateCatalogResponse(receipt.catalog);
+  assertRevisionRelationship(snapshot, catalog);
+  buildCheatsheet(snapshot, catalog);
+  const facts = expectedCurrentRevision(snapshot);
+  if (facts.models.length === 0) {
+    fail('changes envelope.previous receipt must contain published model facts');
+  }
+  const actualFactsHash = sha256(new TextEncoder().encode(canonicalPublishedSnapshot(facts)));
+  if (actualFactsHash !== factsHash) {
+    fail('changes envelope.previous receipt facts hash does not match its published facts');
+  }
+  return facts;
+}
+
 function parseVerifiedChanges(value: unknown, snapshot: FrozenBenchmarkSnapshot): RevisionChanges {
   const envelope = asRecord(value, 'changes envelope');
   if (!Object.hasOwn(envelope, 'previous') || !Object.hasOwn(envelope, 'current')) {
     fail('changes must contain verified previous and current published revision snapshots');
   }
   assertOnlyKeys(envelope, ['previous', 'current', 'changes'], 'changes envelope');
-  const previous = parsePublishedRevisionSnapshot(envelope.previous, 'changes envelope.previous');
+  const previous = parsePreviousRevisionReceipt(envelope.previous);
   const current = parsePublishedRevisionSnapshot(envelope.current, 'changes envelope.current');
   if (previous.revision === current.revision) fail('changes envelope revisions must be different');
   if (current.revision !== snapshot.revision.revision) {
