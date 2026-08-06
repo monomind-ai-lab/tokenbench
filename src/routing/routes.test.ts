@@ -53,6 +53,7 @@ describe('TokenBench route registry', () => {
     expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'methodologyBenchAlign' });
     expect(matchRoute('/leaderboard')).toEqual({ kind: 'redirect', to: '/leaderboards/' });
     expect(matchRoute('/leaderboard/llm/coding')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/coding/' });
+    expect(matchRoute('/leaderboard/not-a-real-route/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/tools/')).toEqual({ kind: 'tools' });
     expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('Overall benchmarks');
     expect(LEADERBOARD_ROUTES['llm-agentic'].navigationLabel).toBe('Agentic performance');

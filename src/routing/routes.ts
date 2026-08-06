@@ -229,7 +229,12 @@ export function matchRoute(pathname: string): AppRoute {
 
   if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };
   const legacyLeaderboardMatch = normalizedPathname.match(/^\/leaderboard\/(.+)\/$/);
-  if (legacyLeaderboardMatch) return { kind: 'redirect', to: `/leaderboards/${legacyLeaderboardMatch[1]}/` };
+  if (legacyLeaderboardMatch) {
+    const canonicalPathname = `/leaderboards/${legacyLeaderboardMatch[1]}/`;
+    const isPublishedLeaderboard = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
+      .some((key) => LEADERBOARD_ROUTES[key].pathname === canonicalPathname);
+    if (isPublishedLeaderboard) return { kind: 'redirect', to: canonicalPathname };
+  }
 
   const guideMatch = normalizedPathname.match(/^\/guides\/([^/]+)\/$/);
   if (guideMatch && GUIDE_BY_SLUG.has(guideMatch[1])) return { kind: 'guides', slug: guideMatch[1] };
