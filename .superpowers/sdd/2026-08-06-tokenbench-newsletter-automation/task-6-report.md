@@ -133,3 +133,75 @@ All Brevo behavior, including crash, ambiguous-response, retry,
 reconciliation, redirect, pagination, concurrency, and fsync ordering paths,
 was tested with injected mocks. No live network request was made. The managed
 `progress.md` file was not edited.
+
+## Review fix round 2
+
+Reviewed head: `4c98ef0`.
+
+The low-level Brevo mutation helpers are now private module implementation
+details. The only exported mutation workflow requires the trusted signed
+deployment receipt, verifies the complete local artifact bundle, and owns the
+durable reconciliation/lock/state lifecycle. Runtime arguments are exact and no
+longer accept a caller-selected receipt or lock filename. Instead, the workflow
+derives one canonical `campaigns/<sha256(dedupeKey)>` directory beneath the
+trusted state root with fixed `pending.json`, `receipt.json`, and `draft.lock`
+children.
+
+Locks now contain a strict schema, process ID, canonical start time, dedupe
+fingerprint, and random ownership token. A lock is reclaimed only after both a
+15-minute bound and a dead-owner check succeed. Reclamation and release use
+atomic rename/identity checks, restore a concurrently replaced lock without
+overwriting it, never steal a live owner, and recheck ownership before the POST
+and every durable state transition. Tests cover a real terminated child owner,
+a live old owner, a recent dead owner, stale-lock replacement, and live-lock
+replacement after POST.
+
+Artifact and state operations retain opened canonical root handles and capture
+ancestor device/inode identities. Roots and ancestors are revalidated by
+device, inode, type, symlink status, and realpath before and after leaf opens,
+state renames, and directory syncs; leaves use `O_NOFOLLOW`. An adversarial test
+replaces the canonical campaign state directory with a symlink after POST and
+proves that no receipt is written through the replacement.
+
+Brevo verification now consumes realistic documented list/detail shapes rather
+than a POST-echo fixture. It requires `type: classic`, `status: draft`, exact
+name and deterministic payload fields, expanded sender identity, exact recipient
+lists/exclusions, no schedule, and the expected campaign ID before recording a
+receipt. Immediately before POST, the adapter reapplies its exact-key payload
+grammar, C0/CRLF, header length, HTML byte-size, attachment URL, sender, and
+monthly-list-only constraints.
+
+Round-two RED/GREEN evidence included failures for the exported mutation bypass,
+documented Brevo response normalization, overlong destination fields, dead-owner
+lock recovery, stale-lock replacement, live-lock replacement, and state ancestor
+replacement before their respective fixes. All Brevo requests remained injected
+mocks; the only documentation lookup used the official Brevo create/list/detail
+API references. No live Brevo request or other external mutation was performed.
+
+Round-two verification evidence:
+
+```text
+npm test -- src/newsletter/revision-diff.test.ts src/newsletter/cheatsheet.test.ts \
+  scripts/generate-monthly-cheatsheet.test.ts src/newsletter/campaign.test.ts \
+  scripts/create-brevo-campaign-draft.test.ts
+  5 files passed; 114 tests passed.
+
+npm test
+  65 files passed; 866 tests passed.
+
+npm run lint
+  tsc --noEmit passed.
+
+git diff --check
+  passed.
+```
+
+Evidence SHA-256 values before commit:
+
+```text
+b0df17e5faa85c1ceceab7476255a23cf922338528a2e2c017d7546047e5bd6d  scripts/create-brevo-campaign-draft.ts
+d6e7c65ad843a78344e1f781a318d17df27c6fcb5da231ab362d69d071508ba5  scripts/create-brevo-campaign-draft.test.ts
+```
+
+The checked-in plan, operator documentation, `.env.example`, and managed
+`progress.md` were not modified in this round.

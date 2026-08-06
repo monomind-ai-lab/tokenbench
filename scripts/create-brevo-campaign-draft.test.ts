@@ -1,15 +1,15 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { renameSync, writeFileSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CampaignDraft } from '../src/newsletter/campaign';
 import { renderNewsletterHtml, subjectPreviewSet, type CheatsheetDocument } from '../src/newsletter/cheatsheet';
 import type { RevisionChanges } from '../src/newsletter/revision-diff';
+import * as campaignDraftModule from './create-brevo-campaign-draft';
 import {
   BrevoCampaignError,
-  createCampaignDraft,
-  createCampaignDraftFromReceipt,
   createNewsletterCampaignDraft,
   parseBrevoCampaignConfig,
   parseCreateNewsletterCampaignDraftArgs,
@@ -33,19 +33,6 @@ function config(): BrevoCampaignConfig {
     apiKey: 'test-server-only-api-key',
     sender: { id: 17 },
     monthlyCheatsheetListId: 23,
-  };
-}
-
-function draft(): CampaignDraft {
-  return {
-    dedupeKey: '["benchmark_previous","benchmark_fixture"]',
-    audience: 'monthly-cheatsheet',
-    name: 'TokenBench monthly cheatsheet benchmark_fixture abcdef0123456789',
-    subject: 'TokenBench August 2026: 2 new models and 1 verified price drop',
-    previewText: 'Frozen benchmark revision benchmark_fixture with validated ranks.',
-    htmlContent: '<!doctype html><p>Frozen benchmark revision benchmark_fixture.</p>',
-    recipients: { listIds: [999] },
-    attachmentUrl: 'https://artifacts.example.test/newsletters/tokenbench-cheatsheet.pdf',
   };
 }
 
@@ -90,18 +77,18 @@ function signDeploymentReceipt(
   };
 }
 
-function artifactChanges(): RevisionChanges {
+function artifactChanges(toRevision = 'benchmark_fixture'): RevisionChanges {
   const newModelIds = [
-    JSON.stringify(['benchmark_fixture', 'new-model', 'fixture:alpha', '', '']),
-    JSON.stringify(['benchmark_fixture', 'new-model', 'fixture:bravo', '', '']),
+    JSON.stringify([toRevision, 'new-model', 'fixture:alpha', '', '']),
+    JSON.stringify([toRevision, 'new-model', 'fixture:bravo', '', '']),
   ];
   const priceDropId = JSON.stringify([
-    'benchmark_fixture', 'price-drop', 'fixture:alpha', 'fixture', 'direct:alpha',
+    toRevision, 'price-drop', 'fixture:alpha', 'fixture', 'direct:alpha',
   ]);
   return {
     fromRevision: 'benchmark_previous',
-    toRevision: 'benchmark_fixture',
-    dedupeKey: JSON.stringify(['benchmark_previous', 'benchmark_fixture', ...newModelIds, priceDropId]),
+    toRevision,
+    dedupeKey: JSON.stringify(['benchmark_previous', toRevision, ...newModelIds, priceDropId]),
     newModels: [
       { id: newModelIds[0], modelKey: 'fixture:alpha' },
       { id: newModelIds[1], modelKey: 'fixture:bravo' },
@@ -119,9 +106,9 @@ function artifactChanges(): RevisionChanges {
   };
 }
 
-function artifactDocument(): CheatsheetDocument {
+function artifactDocument(revision = 'benchmark_fixture'): CheatsheetDocument {
   return {
-    revision: 'benchmark_fixture',
+    revision,
     catalogRevision: 'catalog_fixture',
     generatedAt: '2026-08-01T00:00:00.000Z',
     publishedAt: '2026-08-01T00:00:00.000Z',
@@ -129,7 +116,7 @@ function artifactDocument(): CheatsheetDocument {
   };
 }
 
-async function artifactInputs() {
+async function artifactInputs(options: { revision?: string } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'tokenbench-campaign-'));
   temporaryRoots.push(root);
   const artifactRoot = join(root, 'artifacts');
@@ -139,8 +126,8 @@ async function artifactInputs() {
     mkdir(bundleRoot, { recursive: true }),
     mkdir(stateRoot, { recursive: true }),
   ]);
-  const changes = artifactChanges();
-  const document = artifactDocument();
+  const changes = artifactChanges(options.revision);
+  const document = artifactDocument(options.revision);
   const files = [
     ['tokenbench-cheatsheet.csv', encoder.encode('modelKey\nfixture:alpha\n')],
     ['tokenbench-cheatsheet.html', encoder.encode('<!doctype html><title>cheatsheet</title>')],
@@ -182,6 +169,8 @@ async function artifactInputs() {
   const manifestPath = join(bundleRoot, 'tokenbench-cheatsheet.manifest.json');
   const changesPath = join(bundleRoot, 'changes.json');
   const deploymentReceiptPath = join(bundleRoot, 'deployment-receipt.json');
+  const stateKey = sha256(encoder.encode(changes.dedupeKey)).slice('sha256:'.length);
+  const stateDirectory = join(stateRoot, 'campaigns', stateKey);
   await Promise.all([
     writeFile(manifestPath, `${JSON.stringify(manifest)}\n`),
     writeFile(changesPath, `${JSON.stringify(changesEnvelope)}\n`),
@@ -199,13 +188,16 @@ async function artifactInputs() {
     manifestPath,
     changesPath,
     deploymentReceiptPath,
-    receiptPath: join(stateRoot, 'campaign-receipt.json'),
+    stateKey,
+    stateDirectory,
+    pendingPath: join(stateDirectory, 'pending.json'),
+    receiptPath: join(stateDirectory, 'receipt.json'),
+    lockPath: join(stateDirectory, 'draft.lock'),
     args: {
       manifest: 'bundle/tokenbench-cheatsheet.manifest.json',
       changes: 'bundle/changes.json',
       deploymentReceipt: 'bundle/deployment-receipt.json',
       artifactBaseUrl,
-      receiptFile: 'campaign-receipt.json',
     },
   };
 }
@@ -217,6 +209,19 @@ function runtimeEnvironment(files: Awaited<ReturnType<typeof artifactInputs>>, o
     TOKENBENCH_NEWSLETTER_STATE_ROOT: files.stateRoot,
     ...overrides,
   });
+}
+
+function lockRecord(
+  files: Awaited<ReturnType<typeof artifactInputs>>,
+  options: { pid: number; startedAt: string; token?: string },
+) {
+  return {
+    schemaVersion: 'tokenbench-brevo-campaign-lock/v1',
+    pid: options.pid,
+    startedAt: options.startedAt,
+    fingerprint: `sha256:${files.stateKey}`,
+    token: options.token ?? '11111111-1111-4111-8111-111111111111',
+  };
 }
 
 describe('verifySignedDeploymentReceipt', () => {
@@ -350,13 +355,11 @@ describe('parseCreateNewsletterCampaignDraftArgs', () => {
       '--changes', 'inputs/changes.json',
       '--deployment-receipt', 'receipts/deployment.json',
       '--artifact-base-url', 'https://artifacts.example.test/newsletters/',
-      '--receipt-file', 'state/campaign-receipts.json',
     ])).toEqual({
       manifest: 'artifacts/tokenbench-cheatsheet.manifest.json',
       changes: 'inputs/changes.json',
       deploymentReceipt: 'receipts/deployment.json',
       artifactBaseUrl: 'https://artifacts.example.test/newsletters/',
-      receiptFile: 'state/campaign-receipts.json',
     });
     expect(() => parseCreateNewsletterCampaignDraftArgs([
       '--manifest', 'manifest.json', '--changes', 'changes.json',
@@ -366,100 +369,65 @@ describe('parseCreateNewsletterCampaignDraftArgs', () => {
       '--manifest', 'one.json', '--manifest', 'two.json',
       '--changes', 'changes.json', '--deployment-receipt', 'deployment.json',
       '--artifact-base-url', 'https://artifacts.example.test/',
-      '--receipt-file', 'receipt.json',
     ])).toThrow(/once/i);
+    expect(() => parseCreateNewsletterCampaignDraftArgs([
+      '--manifest', 'manifest.json', '--changes', 'changes.json',
+      '--deployment-receipt', 'deployment.json',
+      '--artifact-base-url', 'https://artifacts.example.test/',
+      '--receipt-file', 'alternate-lock.json',
+    ])).toThrow(/unknown argument/i);
   });
 });
 
-describe('createCampaignDraft', () => {
-  it('creates and verifies a draft with the monthly list only', async () => {
-    let posted: Record<string, unknown> = {};
-    const fetchImpl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === 'POST') {
-        posted = JSON.parse(String(init.body)) as Record<string, unknown>;
-        return new Response('{"id":42}', { status: 201 });
-      }
-      return new Response(JSON.stringify({ id: 42, status: 'draft', ...posted }), { status: 200 });
-    });
-
-    const receipt = await createCampaignDraft(config(), draft(), fetchImpl);
-
-    expect(receipt).toEqual({
-      schemaVersion: 'tokenbench-brevo-campaign-receipt/v1',
-      dedupeKey: '["benchmark_previous","benchmark_fixture"]',
-      campaignId: 42,
-      campaignName: expect.stringMatching(/^TokenBench monthly cheatsheet benchmark_fixture abcdef0123456789 fp-[a-f0-9]{24}$/u),
-      fingerprint: expect.stringMatching(/^sha256:[a-f0-9]{64}$/u),
-    });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe('https://api.brevo.com/v3/emailCampaigns');
-    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
-      name: expect.stringMatching(/^TokenBench monthly cheatsheet benchmark_fixture abcdef0123456789 fp-[a-f0-9]{24}$/u),
-      sender: { id: 17 },
-      subject: 'TokenBench August 2026: 2 new models and 1 verified price drop',
-      previewText: 'Frozen benchmark revision benchmark_fixture with validated ranks.',
-      htmlContent: '<!doctype html><p>Frozen benchmark revision benchmark_fixture.</p>',
-      recipients: { listIds: [23] },
-      attachmentUrl: 'https://artifacts.example.test/newsletters/tokenbench-cheatsheet.pdf',
-    });
-    expect(String(fetchImpl.mock.calls[1]?.[0])).toBe('https://api.brevo.com/v3/emailCampaigns/42');
-    expect(fetchImpl.mock.calls.every(([, init]) => init?.redirect === 'error')).toBe(true);
-    expect(fetchImpl.mock.calls.map(([url]) => String(url)).join(' ')).not.toMatch(/sendNow|sendTest|schedule|lists|templates|accounts/i);
-  });
-
-  it('does not create the same revision draft twice', async () => {
-    const fetchImpl = vi.fn();
-    const existingReceipt = {
-      schemaVersion: 'tokenbench-brevo-campaign-receipt/v1' as const,
-      dedupeKey: draft().dedupeKey,
-      campaignId: 42,
-      campaignName: draft().name,
-      fingerprint: `sha256:${'a'.repeat(64)}`,
-    };
-
-    await expect(createCampaignDraftFromReceipt(existingReceipt, config(), draft(), fetchImpl))
-      .rejects.toThrow(/already drafted/i);
-
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it('returns a typed secret-free error for an upstream response', async () => {
-    const responseBody = 'builder@example.com cannot be drafted with test-server-only-api-key';
-    const failure = await createCampaignDraft(
-      config(),
-      draft(),
-      vi.fn().mockResolvedValue(new Response(responseBody, { status: 503 })),
-    ).catch((error: unknown) => error);
-
-    expect(failure).toBeInstanceOf(BrevoCampaignError);
-    expect(failure).toMatchObject({ status: 503 });
-    expect(String(failure)).not.toContain('builder@example.com');
-    expect(String(failure)).not.toContain('test-server-only-api-key');
-    expect(String(failure)).not.toContain(responseBody);
-  });
-
-  it('fails closed on malformed campaign configuration before network access', async () => {
-    const fetchImpl = vi.fn();
-
-    await expect(createCampaignDraft({
-      ...config(),
-      monthlyCheatsheetListId: 0,
-    }, draft(), fetchImpl)).rejects.toThrow(/configuration/i);
-
-    expect(fetchImpl).not.toHaveBeenCalled();
-  });
-
-  it('rejects a differently identified campaign even when its status is draft', async () => {
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response('{"id":42}', { status: 201 }))
-      .mockResolvedValueOnce(new Response('{"id":43,"status":"draft"}', { status: 200 }));
-
-    await expect(createCampaignDraft(config(), draft(), fetchImpl))
-      .rejects.toBeInstanceOf(BrevoCampaignError);
+describe('campaign mutation export boundary', () => {
+  it('does not expose low-level Brevo mutation helpers that bypass signed artifact verification', () => {
+    expect(campaignDraftModule).not.toHaveProperty('createCampaignDraft');
+    expect(campaignDraftModule).not.toHaveProperty('createCampaignDraftFromReceipt');
+    expect(campaignDraftModule).toHaveProperty('createNewsletterCampaignDraft');
   });
 });
 
-function brevoDraftHarness(options: { ambiguousPost?: boolean; scheduled?: boolean } = {}) {
+function documentedBrevoCampaign(
+  payload: Record<string, unknown>,
+  status: string,
+): { id: number; status: string } & Record<string, unknown> {
+  return {
+    id: 42,
+    name: payload.name,
+    status,
+    type: 'classic',
+    createdAt: '2026-08-07T00:00:00.000Z',
+    footer: '[DEFAULT_FOOTER]',
+    header: '[DEFAULT_HEADER]',
+    htmlContent: payload.htmlContent,
+    modifiedAt: '2026-08-07T00:00:01.000Z',
+    replyTo: 'news@tokenbench.example',
+    sender: { email: 'news@tokenbench.example', id: 17, name: 'TokenBench' },
+    testSent: false,
+    recipients: { exclusionLists: [], lists: [23] },
+    statistics: { campaignStats: [], globalStats: {} },
+    attachmentFile: 'https://img.brevo.example.test/42/tokenbench-cheatsheet.pdf',
+    attachmentUrl: payload.attachmentUrl,
+    previewText: payload.previewText,
+    scheduledAt: '',
+    subject: payload.subject,
+    inlineImageActivation: false,
+    mirrorActive: false,
+    recurring: false,
+    shareLink: 'Draft campaign has no public share URL',
+    tags: [],
+    toField: '',
+  };
+}
+
+function brevoDraftHarness(options: {
+  ambiguousPost?: boolean;
+  scheduled?: boolean;
+  wrongName?: boolean;
+  wrongRecipients?: boolean;
+  wrongSender?: boolean;
+  wrongType?: boolean;
+} = {}) {
   let remote: ({ id: number; status: string } & Record<string, unknown>) | null = null;
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -469,7 +437,11 @@ function brevoDraftHarness(options: { ambiguousPost?: boolean; scheduled?: boole
     }
     if (init?.method === 'POST') {
       const payload = JSON.parse(String(init.body)) as Record<string, unknown>;
-      remote = { id: 42, status: options.scheduled ? 'scheduled' : 'draft', ...payload };
+      remote = documentedBrevoCampaign(payload, options.scheduled ? 'scheduled' : 'draft');
+      if (options.wrongName) remote = { ...remote, name: `${String(remote.name)} altered` };
+      if (options.wrongRecipients) remote = { ...remote, recipients: { exclusionLists: [], lists: [99] } };
+      if (options.wrongSender) remote = { ...remote, sender: { email: 'other@example.test', id: 99, name: 'Other' } };
+      if (options.wrongType) remote = { ...remote, type: 'trigger' };
       if (options.ambiguousPost) throw new TypeError('connection reset after request body');
       return new Response('{"id":42}', { status: 201 });
     }
@@ -482,13 +454,29 @@ function brevoDraftHarness(options: { ambiguousPost?: boolean; scheduled?: boole
 }
 
 describe('createNewsletterCampaignDraft', () => {
+  it('rejects caller-selected state filenames before local or remote mutation', async () => {
+    const files = await artifactInputs();
+    const fetchImpl = vi.fn();
+
+    const alternateStateArgs = {
+      ...files.args,
+      receiptFile: 'alternate-lock.json',
+    } as unknown as Parameters<typeof createNewsletterCampaignDraft>[0];
+    await expect(createNewsletterCampaignDraft(alternateStateArgs, {
+      environment: runtimeEnvironment(files), fetchImpl,
+    })).rejects.toThrow(/arguments|receipt|unknown/i);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('reconciles first, fsyncs pending before POST, then records a verified draft atomically', async () => {
     const files = await artifactInputs();
     const harness = brevoDraftHarness();
     const events: string[] = [];
+    let observedLock: Record<string, unknown> | undefined;
     const receipt = await createNewsletterCampaignDraft(files.args, {
       environment: runtimeEnvironment(files),
       fetchImpl: async (input, init) => {
+        observedLock ??= JSON.parse(await readFile(files.lockPath, 'utf8')) as Record<string, unknown>;
         events.push(init?.method === 'POST' ? 'post' : 'get');
         return harness.fetchImpl(input, init);
       },
@@ -498,10 +486,14 @@ describe('createNewsletterCampaignDraft', () => {
       },
     });
 
-    expect(JSON.parse(await readFile(files.receiptPath, 'utf8'))).toEqual({
-      schemaVersion: 'tokenbench-brevo-campaign-state/v2',
-      pending: [],
-      drafts: [receipt],
+    expect(JSON.parse(await readFile(files.receiptPath, 'utf8'))).toEqual(receipt);
+    await expect(readFile(files.pendingPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(observedLock).toEqual({
+      schemaVersion: 'tokenbench-brevo-campaign-lock/v1',
+      pid: process.pid,
+      startedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u),
+      fingerprint: `sha256:${files.stateKey}`,
+      token: expect.stringMatching(/^[0-9a-f-]{36}$/u),
     });
     expect(events.indexOf('sync:pending-file')).toBeLessThan(events.indexOf('post'));
     expect(events.indexOf('sync:state-directory')).toBeLessThan(events.indexOf('post'));
@@ -526,7 +518,11 @@ describe('createNewsletterCampaignDraft', () => {
 
   it('fails before network access when the receipt lock is held', async () => {
     const files = await artifactInputs();
-    await writeFile(`${files.receiptPath}.lock`, 'another process');
+    await mkdir(files.stateDirectory, { recursive: true });
+    await writeFile(files.lockPath, JSON.stringify(lockRecord(files, {
+      pid: process.pid,
+      startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })));
     const fetchImpl = vi.fn();
 
     await expect(createNewsletterCampaignDraft(files.args, {
@@ -534,6 +530,111 @@ describe('createNewsletterCampaignDraft', () => {
     })).rejects.toThrow(/locked/i);
 
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('recovers an old lock only after its process owner has terminated', async () => {
+    const files = await artifactInputs();
+    await mkdir(files.stateDirectory, { recursive: true });
+    const terminated = spawnSync(process.execPath, [
+      '-e',
+      `require('node:fs').writeFileSync(process.argv[1], JSON.stringify({
+        schemaVersion: 'tokenbench-brevo-campaign-lock/v1',
+        pid: process.pid,
+        startedAt: process.argv[2],
+        fingerprint: process.argv[3],
+        token: '11111111-1111-4111-8111-111111111111',
+      }))`,
+      files.lockPath,
+      new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      `sha256:${files.stateKey}`,
+    ], { encoding: 'utf8' });
+    expect(terminated.status, terminated.stderr).toBe(0);
+    const harness = brevoDraftHarness();
+
+    const receipt = await createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
+    });
+
+    expect(receipt.campaignId).toBe(42);
+    await expect(readFile(files.lockPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(harness.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('does not steal a recently created lock from a dead owner', async () => {
+    const files = await artifactInputs();
+    await mkdir(files.stateDirectory, { recursive: true });
+    await writeFile(files.lockPath, JSON.stringify(lockRecord(files, {
+      pid: 2_147_483_647,
+      startedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+    })));
+    const fetchImpl = vi.fn();
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl,
+    })).rejects.toThrow(/locked/i);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when a stale lock is replaced during dead-owner verification', async () => {
+    const files = await artifactInputs();
+    await mkdir(files.stateDirectory, { recursive: true });
+    await writeFile(files.lockPath, JSON.stringify(lockRecord(files, {
+      pid: 2_147_483_647,
+      startedAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    })));
+    const replacement = lockRecord(files, {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      token: '22222222-2222-4222-8222-222222222222',
+    });
+    const oldPath = `${files.lockPath}.old`;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
+      renameSync(files.lockPath, oldPath);
+      writeFileSync(files.lockPath, JSON.stringify(replacement));
+      throw Object.assign(new Error('dead owner'), { code: 'ESRCH' });
+    });
+    const fetchImpl = vi.fn();
+    try {
+      await expect(createNewsletterCampaignDraft(files.args, {
+        environment: runtimeEnvironment(files), fetchImpl,
+      })).rejects.toThrow(/locked|ownership/i);
+    } finally {
+      killSpy.mockRestore();
+    }
+
+    expect(JSON.parse(await readFile(files.lockPath, 'utf8'))).toEqual(replacement);
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('does not record a receipt after live lock ownership is replaced', async () => {
+    const files = await artifactInputs();
+    const harness = brevoDraftHarness();
+    const displacedLock = `${files.lockPath}.displaced`;
+    const replacement = lockRecord(files, {
+      pid: process.pid,
+      startedAt: new Date().toISOString(),
+      token: '22222222-2222-4222-8222-222222222222',
+    });
+    let replaced = false;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await harness.fetchImpl(input, init);
+      if (!replaced && init?.method === 'POST') {
+        replaced = true;
+        renameSync(files.lockPath, displacedLock);
+        writeFileSync(files.lockPath, JSON.stringify(replacement));
+      }
+      return response;
+    });
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl,
+    })).rejects.toThrow(/lock|ownership/i);
+
+    await expect(readFile(files.receiptPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(JSON.parse(await readFile(files.pendingPath, 'utf8'))).toMatchObject({
+      dedupeKey: files.changes.dedupeKey,
+    });
+    expect(JSON.parse(await readFile(files.lockPath, 'utf8'))).toEqual(replacement);
   });
 
   it('does not record a campaign unless Brevo returns draft status', async () => {
@@ -544,10 +645,38 @@ describe('createNewsletterCampaignDraft', () => {
       environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
     })).rejects.toBeInstanceOf(BrevoCampaignError);
 
-    expect(JSON.parse(await readFile(files.receiptPath, 'utf8'))).toMatchObject({
-      schemaVersion: 'tokenbench-brevo-campaign-state/v2',
-      pending: [{ dedupeKey: files.changes.dedupeKey }],
-      drafts: [],
+    expect(JSON.parse(await readFile(files.pendingPath, 'utf8'))).toMatchObject({
+      dedupeKey: files.changes.dedupeKey,
+    });
+    await expect(readFile(files.receiptPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects a non-classic campaign even when Brevo reports draft status', async () => {
+    const files = await artifactInputs();
+    const harness = brevoDraftHarness({ wrongType: true });
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
+    })).rejects.toBeInstanceOf(BrevoCampaignError);
+    expect(JSON.parse(await readFile(files.pendingPath, 'utf8'))).toMatchObject({
+      dedupeKey: files.changes.dedupeKey,
+    });
+  });
+
+  it.each([
+    ['name', { wrongName: true }],
+    ['expanded sender', { wrongSender: true }],
+    ['recipient lists', { wrongRecipients: true }],
+  ] as const)('rejects a documented Brevo detail with mismatched %s', async (_field, options) => {
+    const files = await artifactInputs();
+    const harness = brevoDraftHarness(options);
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
+    })).rejects.toBeInstanceOf(BrevoCampaignError);
+    await expect(readFile(files.receiptPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(JSON.parse(await readFile(files.pendingPath, 'utf8'))).toMatchObject({
+      dedupeKey: files.changes.dedupeKey,
     });
   });
 
@@ -565,16 +694,13 @@ describe('createNewsletterCampaignDraft', () => {
 
   it('fails closed on a malformed receipt before network access', async () => {
     const files = await artifactInputs();
+    await mkdir(files.stateDirectory, { recursive: true });
     await writeFile(files.receiptPath, JSON.stringify({
-      schemaVersion: 'tokenbench-brevo-campaign-state/v2',
-      pending: [],
-      drafts: [{
-        schemaVersion: 'tokenbench-brevo-campaign-receipt/v1',
-        dedupeKey: 'different-revision',
-        campaignId: '42',
-        campaignName: 'TokenBench monthly cheatsheet',
-        fingerprint: `sha256:${'a'.repeat(64)}`,
-      }],
+      schemaVersion: 'tokenbench-brevo-campaign-receipt/v1',
+      dedupeKey: 'different-revision',
+      campaignId: '42',
+      campaignName: 'TokenBench monthly cheatsheet',
+      fingerprint: `sha256:${'a'.repeat(64)}`,
     }));
     const fetchImpl = vi.fn();
 
@@ -592,9 +718,8 @@ describe('createNewsletterCampaignDraft', () => {
     await expect(createNewsletterCampaignDraft(files.args, {
       environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
     })).rejects.toBeInstanceOf(BrevoCampaignError);
-    expect(JSON.parse(await readFile(files.receiptPath, 'utf8'))).toMatchObject({
-      pending: [{ dedupeKey: files.changes.dedupeKey }],
-      drafts: [],
+    expect(JSON.parse(await readFile(files.pendingPath, 'utf8'))).toMatchObject({
+      dedupeKey: files.changes.dedupeKey,
     });
 
     const receipt = await createNewsletterCampaignDraft(files.args, {
@@ -602,7 +727,8 @@ describe('createNewsletterCampaignDraft', () => {
     });
     expect(receipt.campaignId).toBe(42);
     expect(harness.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
-    expect(JSON.parse(await readFile(files.receiptPath, 'utf8'))).toMatchObject({ pending: [], drafts: [receipt] });
+    expect(JSON.parse(await readFile(files.receiptPath, 'utf8'))).toEqual(receipt);
+    await expect(readFile(files.pendingPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('does not POST when the pending outbox cannot be fsynced', async () => {
@@ -667,26 +793,53 @@ describe('createNewsletterCampaignDraft', () => {
     expect(harness.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 
+  it('rejects an ancestor replacement race without writing state through a symlink', async () => {
+    const files = await artifactInputs();
+    const harness = brevoDraftHarness();
+    const displacedDirectory = `${files.stateDirectory}.displaced`;
+    const attackerDirectory = join(files.stateRoot, 'attacker-controlled');
+    let replaced = false;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const response = await harness.fetchImpl(input, init);
+      if (!replaced && init?.method === 'POST') {
+        replaced = true;
+        await mkdir(attackerDirectory);
+        await rename(files.stateDirectory, displacedDirectory);
+        await symlink(attackerDirectory, files.stateDirectory);
+      }
+      return response;
+    });
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl,
+    })).rejects.toThrow(/state|ancestor|path|ownership/i);
+
+    await expect(readFile(join(attackerDirectory, 'receipt.json'), 'utf8'))
+      .rejects.toMatchObject({ code: 'ENOENT' });
+    expect(JSON.parse(await readFile(join(displacedDirectory, 'pending.json'), 'utf8')))
+      .toMatchObject({ dedupeKey: files.changes.dedupeKey });
+  });
+
   it('rejects absolute, escaping, and symlinked paths before network access', async () => {
     const files = await artifactInputs();
     const fetchImpl = vi.fn();
     await expect(createNewsletterCampaignDraft({ ...files.args, manifest: files.manifestPath }, {
       environment: runtimeEnvironment(files), fetchImpl,
     })).rejects.toThrow(/path|relative/i);
-    await expect(createNewsletterCampaignDraft({ ...files.args, receiptFile: '../outside.json' }, {
+    await expect(createNewsletterCampaignDraft({ ...files.args, changes: '../outside.json' }, {
       environment: runtimeEnvironment(files), fetchImpl,
     })).rejects.toThrow(/path|relative/i);
-    await expect(createNewsletterCampaignDraft({ ...files.args, receiptFile: 'bad\r\nstate.json' }, {
+    await expect(createNewsletterCampaignDraft({ ...files.args, deploymentReceipt: 'bad\r\nreceipt.json' }, {
       environment: runtimeEnvironment(files), fetchImpl,
     })).rejects.toThrow(/path|relative/i);
     await symlink(files.bundleRoot, join(files.artifactRoot, 'linked'));
     await expect(createNewsletterCampaignDraft({ ...files.args, manifest: 'linked/tokenbench-cheatsheet.manifest.json' }, {
       environment: runtimeEnvironment(files), fetchImpl,
-    })).rejects.toThrow(/symlink|path/i);
-    await symlink(files.bundleRoot, join(files.stateRoot, 'linked'));
-    await expect(createNewsletterCampaignDraft({ ...files.args, receiptFile: 'linked/state.json' }, {
+    })).rejects.toThrow(/symlink|path|state/i);
+    await symlink(files.bundleRoot, join(files.stateRoot, 'campaigns'));
+    await expect(createNewsletterCampaignDraft(files.args, {
       environment: runtimeEnvironment(files), fetchImpl,
-    })).rejects.toThrow(/symlink|path/i);
+    })).rejects.toThrow(/symlink|path|state/i);
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -699,6 +852,29 @@ describe('createNewsletterCampaignDraft', () => {
       environment: runtimeEnvironment(files), fetchImpl,
     })).rejects.toThrow(/size|large|bytes/i);
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('applies Brevo destination field limits before any POST', async () => {
+    const files = await artifactInputs({ revision: `benchmark_${'r'.repeat(240)}` });
+    const { fetchImpl } = brevoDraftHarness();
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl,
+    })).rejects.toThrow(/preview|Brevo|length|limit/i);
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it.each([
+    ['unsupported campaign-name grammar', 'benchmark@fixture', /grammar/i],
+    ['campaign control characters', 'benchmark\r\nfixture', /invalid|control|limit/i],
+  ] as const)('rejects %s before any POST', async (_case, revision, message) => {
+    const files = await artifactInputs({ revision });
+    const { fetchImpl } = brevoDraftHarness();
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl,
+    })).rejects.toThrow(message);
+    expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
   });
 });
 
@@ -714,7 +890,6 @@ describe('runCreateNewsletterCampaignDraftCli', () => {
       '--changes', files.args.changes,
       '--deployment-receipt', files.args.deploymentReceipt,
       '--artifact-base-url', files.args.artifactBaseUrl,
-      '--receipt-file', files.args.receiptFile,
     ], { environment: runtimeEnvironment(files), fetchImpl }, { stdout, stderr });
 
     expect(exitCode).toBe(0);

@@ -1,7 +1,7 @@
 import { createHash, createPublicKey, randomUUID, verify } from 'node:crypto';
 import { constants as fsConstants } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
-import { lstat, open, realpath, rename, unlink } from 'node:fs/promises';
+import { link, lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
@@ -24,6 +24,8 @@ const MAX_BREVO_RESPONSE_BYTES = 1024 * 1024;
 const BREVO_TIMEOUT_MS = 10_000;
 const BREVO_PAGE_SIZE = 50;
 const MAX_BREVO_PAGES = 3;
+const MAX_LOCK_BYTES = 4_096;
+const LOCK_STALE_AFTER_MS = 15 * 60 * 1_000;
 
 export interface BrevoCampaignConfig {
   readonly apiKey: string;
@@ -47,18 +49,11 @@ export interface CampaignPendingDraft {
   readonly fingerprint: string;
 }
 
-export interface CampaignReceiptBook {
-  readonly schemaVersion: 'tokenbench-brevo-campaign-state/v2';
-  readonly pending: readonly CampaignPendingDraft[];
-  readonly drafts: readonly CampaignDraftReceipt[];
-}
-
 export interface CreateNewsletterCampaignDraftArgs {
   readonly manifest: string;
   readonly changes: string;
   readonly deploymentReceipt: string;
   readonly artifactBaseUrl: string;
-  readonly receiptFile: string;
 }
 
 export interface CreateNewsletterCampaignDraftDependencies {
@@ -433,9 +428,29 @@ function sha256(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 }
 
+interface OpenedRoot {
+  readonly path: string;
+  readonly handle: FileHandle;
+  readonly identity: FileIdentity;
+}
+
+interface GuardedDirectory {
+  readonly root: OpenedRoot;
+  readonly path: string;
+  readonly ancestors: readonly { readonly path: string; readonly identity: FileIdentity }[];
+  readonly label: string;
+}
+
+interface GuardedPath {
+  readonly directory: GuardedDirectory;
+  readonly path: string;
+  readonly label: string;
+  readonly leafIdentity?: FileIdentity;
+}
+
 interface RuntimeRoots {
-  readonly artifactRoot: string;
-  readonly stateRoot: string;
+  readonly artifactRoot: OpenedRoot;
+  readonly stateRoot: OpenedRoot;
   readonly publicationVerifyKey: string;
 }
 
@@ -451,14 +466,22 @@ function relativePath(value: unknown, label: string): string {
   return segments.join(sep);
 }
 
-async function canonicalDirectory(value: unknown, label: string): Promise<string> {
+async function canonicalDirectory(value: unknown, label: string): Promise<OpenedRoot> {
   if (typeof value !== 'string' || !isAbsolute(value) || value.length > 4_096
     || /[\u0000-\u001f\u007f]/u.test(value)) fail(`${label} is invalid`);
+  let handle: FileHandle | undefined;
   try {
     const metadata = await lstat(value);
     if (!metadata.isDirectory() || metadata.isSymbolicLink()) fail(`${label} is invalid`);
-    return await realpath(value);
+    const path = await realpath(value);
+    handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+    const identity = await handle.stat();
+    const current = await lstat(path);
+    if (!identity.isDirectory() || current.isSymbolicLink() || !sameIdentity(identity, current)
+      || await realpath(path) !== path) fail(`${label} is invalid`);
+    return { path, handle, identity };
   } catch (error) {
+    await handle?.close();
     if (error instanceof Error && error.message === `${label} is invalid`) throw error;
     fail(`${label} is invalid`);
   }
@@ -467,49 +490,112 @@ async function canonicalDirectory(value: unknown, label: string): Promise<string
 async function runtimeRoots(environment: Record<string, unknown>): Promise<RuntimeRoots> {
   const publicationVerifyKey = nonEmptyString(environment.TOKENBENCH_PUBLICATION_VERIFY_KEY);
   if (!publicationVerifyKey) fail('trusted publication verification key is unavailable');
-  return {
-    artifactRoot: await canonicalDirectory(environment.TOKENBENCH_NEWSLETTER_ARTIFACT_ROOT, 'campaign artifact root'),
-    stateRoot: await canonicalDirectory(environment.TOKENBENCH_NEWSLETTER_STATE_ROOT, 'campaign state root'),
-    publicationVerifyKey,
-  };
+  const artifactRoot = await canonicalDirectory(
+    environment.TOKENBENCH_NEWSLETTER_ARTIFACT_ROOT,
+    'campaign artifact root',
+  );
+  try {
+    const stateRoot = await canonicalDirectory(
+      environment.TOKENBENCH_NEWSLETTER_STATE_ROOT,
+      'campaign state root',
+    );
+    return { artifactRoot, stateRoot, publicationVerifyKey };
+  } catch (error) {
+    await artifactRoot.handle.close();
+    throw error;
+  }
+}
+
+async function assertOpenedRoot(root: OpenedRoot, label: string): Promise<void> {
+  try {
+    const [opened, current, canonical] = await Promise.all([
+      root.handle.stat(),
+      lstat(root.path),
+      realpath(root.path),
+    ]);
+    if (!opened.isDirectory() || !current.isDirectory() || current.isSymbolicLink()
+      || !sameIdentity(opened, root.identity) || !sameIdentity(current, root.identity)
+      || canonical !== root.path) fail(`${label} root ownership changed`);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes(label)) throw error;
+    fail(`${label} root ownership changed`);
+  }
+}
+
+async function assertGuardedDirectory(directory: GuardedDirectory): Promise<void> {
+  await assertOpenedRoot(directory.root, directory.label);
+  for (const ancestor of directory.ancestors) {
+    try {
+      const [metadata, canonical] = await Promise.all([lstat(ancestor.path), realpath(ancestor.path)]);
+      if (!metadata.isDirectory() || metadata.isSymbolicLink()
+        || !sameIdentity(metadata, ancestor.identity) || canonical !== ancestor.path) {
+        fail(`${directory.label} ancestor ownership changed`);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes(directory.label)) throw error;
+      fail(`${directory.label} ancestor ownership changed`);
+    }
+  }
 }
 
 async function rootedPath(
-  root: string,
+  root: OpenedRoot,
   input: unknown,
   label: string,
   allowMissingFinal = false,
-): Promise<string> {
+): Promise<GuardedPath> {
+  await assertOpenedRoot(root, label);
   const normalized = relativePath(input, label);
-  const target = resolve(root, normalized);
-  const relation = relative(root, target);
+  const target = resolve(root.path, normalized);
+  const relation = relative(root.path, target);
   if (relation.startsWith(`..${sep}`) || relation === '..' || isAbsolute(relation)) {
     fail(`${label} must be within its configured root`);
   }
   const segments = relation.split(sep);
-  let current = root;
+  let current = root.path;
+  const ancestors: Array<{ path: string; identity: FileIdentity }> = [];
+  let leafIdentity: FileIdentity | undefined;
   for (let index = 0; index < segments.length; index += 1) {
     current = resolve(current, segments[index]!);
     try {
       const metadata = await lstat(current);
       if (metadata.isSymbolicLink()) fail(`${label} cannot traverse a symlink`);
-      if (index < segments.length - 1 && !metadata.isDirectory()) fail(`${label} path is invalid`);
+      if (index < segments.length - 1) {
+        if (!metadata.isDirectory() || await realpath(current) !== current) fail(`${label} path is invalid`);
+        ancestors.push({ path: current, identity: metadata });
+      } else {
+        leafIdentity = metadata;
+      }
     } catch (error) {
       if (allowMissingFinal && index === segments.length - 1
-        && (error as NodeJS.ErrnoException).code === 'ENOENT') return target;
+        && (error as NodeJS.ErrnoException).code === 'ENOENT') break;
       if (error instanceof Error && (error.message.includes(label) || error.message.includes('symlink'))) throw error;
       fail(`${label} path is invalid`);
     }
   }
-  return target;
+  const directory: GuardedDirectory = {
+    root,
+    path: dirname(target),
+    ancestors,
+    label,
+  };
+  await assertGuardedDirectory(directory);
+  return { directory, path: target, label, leafIdentity };
 }
 
-async function readBoundedFile(path: string, maximum: number, label: string): Promise<Uint8Array> {
+async function readBoundedFile(path: GuardedPath, maximum: number, label: string): Promise<Uint8Array> {
   let handle: FileHandle | undefined;
   try {
-    handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    await assertGuardedDirectory(path.directory);
+    handle = await open(path.path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
     const metadata = await handle.stat();
-    if (!metadata.isFile() || metadata.size > maximum) fail(`${label} size exceeds its limit`);
+    const current = await lstat(path.path);
+    if (!metadata.isFile() || metadata.size > maximum || current.isSymbolicLink()
+      || !sameIdentity(metadata, current)
+      || (path.leafIdentity && !sameIdentity(metadata, path.leafIdentity))) {
+      fail(`${label} size or ownership exceeds its limit`);
+    }
+    await assertGuardedDirectory(path.directory);
     const chunks: Uint8Array[] = [];
     let total = 0;
     while (true) {
@@ -526,6 +612,9 @@ async function readBoundedFile(path: string, maximum: number, label: string): Pr
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
+    const after = await lstat(path.path);
+    if (after.isSymbolicLink() || !sameIdentity(metadata, after)) fail(`${label} ownership changed`);
+    await assertGuardedDirectory(path.directory);
     return bytes;
   } catch (error) {
     if (error instanceof Error && error.message.includes(label)) throw error;
@@ -535,7 +624,7 @@ async function readBoundedFile(path: string, maximum: number, label: string): Pr
   }
 }
 
-async function readLocalJson(path: string, label: string): Promise<unknown> {
+async function readLocalJson(path: GuardedPath, label: string): Promise<unknown> {
   const bytes = await readBoundedFile(path, MAX_JSON_BYTES, label);
   try {
     return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as unknown;
@@ -545,7 +634,7 @@ async function readLocalJson(path: string, label: string): Promise<unknown> {
 }
 
 async function loadArtifactBundle(
-  artifactRoot: string,
+  artifactRoot: OpenedRoot,
   manifestRelativePath: string,
   manifest: CampaignManifest,
 ): Promise<CampaignArtifactBundle> {
@@ -590,116 +679,426 @@ function parsePending(value: unknown): CampaignPendingDraft {
   };
 }
 
-async function readReceiptBook(receiptFile: string): Promise<CampaignReceiptBook> {
-  let value: unknown;
+async function readOptionalState(path: GuardedPath, label: string): Promise<unknown | null> {
+  await assertGuardedDirectory(path.directory);
+  let metadata: Awaited<ReturnType<typeof lstat>>;
   try {
-    value = await readLocalJson(receiptFile, 'campaign state');
+    metadata = await lstat(path.path);
+    if (!metadata.isFile() || metadata.isSymbolicLink()) fail(`${label} is invalid`);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { schemaVersion: 'tokenbench-brevo-campaign-state/v2', pending: [], drafts: [] };
-    }
-    // readBoundedFile intentionally normalizes ENOENT; inspect here for the first run.
-    try {
-      await lstat(receiptFile);
-    } catch (statError) {
-      if ((statError as NodeJS.ErrnoException).code === 'ENOENT') {
-        return { schemaVersion: 'tokenbench-brevo-campaign-state/v2', pending: [], drafts: [] };
-      }
+      await assertGuardedDirectory(path.directory);
+      return null;
     }
     throw error;
   }
-  const book = asRecord(value, 'campaign state');
-  assertOnlyKeys(book, ['schemaVersion', 'pending', 'drafts'], 'campaign state');
-  if (book.schemaVersion !== 'tokenbench-brevo-campaign-state/v2'
-    || !Array.isArray(book.pending) || !Array.isArray(book.drafts)) {
-    fail('campaign state is invalid');
-  }
-  const pending = book.pending.map(parsePending);
-  const drafts = book.drafts.map(parseReceipt);
-  const keys = [...pending, ...drafts].map((entry) => entry.dedupeKey);
-  if (new Set(keys).size !== keys.length) fail('campaign state is invalid');
-  return { schemaVersion: 'tokenbench-brevo-campaign-state/v2', pending, drafts };
+  return readLocalJson({ ...path, leafIdentity: metadata }, label);
 }
 
-async function writeReceiptBook(
-  receiptFile: string,
-  book: CampaignReceiptBook,
+async function readReceipt(path: GuardedPath): Promise<CampaignDraftReceipt | null> {
+  const value = await readOptionalState(path, 'campaign receipt');
+  return value === null ? null : parseReceipt(value);
+}
+
+async function readPending(path: GuardedPath): Promise<CampaignPendingDraft | null> {
+  const value = await readOptionalState(path, 'campaign pending record');
+  return value === null ? null : parsePending(value);
+}
+
+async function writeStateFile(
+  path: GuardedPath,
+  value: CampaignPendingDraft | CampaignDraftReceipt,
   stage: 'pending-file' | 'verified-file',
   syncImpl: NonNullable<CreateNewsletterCampaignDraftDependencies['syncImpl']>,
 ): Promise<void> {
-  const temporary = resolve(dirname(receiptFile), `.${basename(receiptFile)}.${randomUUID()}.tmp`);
+  const temporary = resolve(path.directory.path, `.${basename(path.path)}.${randomUUID()}.tmp`);
   let handle: FileHandle | undefined;
+  let temporaryIdentity: FileIdentity | undefined;
   try {
+    await assertGuardedDirectory(path.directory);
     handle = await open(
       temporary,
       fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
       0o600,
     );
-    await handle.writeFile(`${JSON.stringify(book, null, 2)}\n`, 'utf8');
+    temporaryIdentity = await handle.stat();
+    const openedTemporary = await lstat(temporary);
+    if (openedTemporary.isSymbolicLink() || !sameIdentity(temporaryIdentity, openedTemporary)) {
+      fail('campaign state temporary ownership changed');
+    }
+    await assertGuardedDirectory(path.directory);
+    await handle.writeFile(`${JSON.stringify(value, null, 2)}\n`, 'utf8');
     await syncImpl(handle, stage);
+    const syncedIdentity = await handle.stat();
+    const currentTemporary = await lstat(temporary);
+    if (!sameIdentity(temporaryIdentity, syncedIdentity) || !sameIdentity(temporaryIdentity, currentTemporary)) {
+      fail('campaign state temporary ownership changed');
+    }
     await handle.close();
     handle = undefined;
-    await rename(temporary, receiptFile);
-    const directory = await open(dirname(receiptFile), fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    await assertGuardedDirectory(path.directory);
     try {
+      const existing = await lstat(path.path);
+      if (existing) fail('campaign state destination already exists');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+    await rename(temporary, path.path);
+    const installed = await lstat(path.path);
+    if (installed.isSymbolicLink() || !temporaryIdentity || !sameIdentity(temporaryIdentity, installed)) {
+      fail('campaign state destination ownership changed');
+    }
+    await assertGuardedDirectory(path.directory);
+    const directory = await open(
+      path.directory.path,
+      fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW,
+    );
+    try {
+      const openedDirectory = await directory.stat();
+      const expectedDirectory = path.directory.ancestors.at(-1)?.identity ?? path.directory.root.identity;
+      if (!sameIdentity(openedDirectory, expectedDirectory)) fail('campaign state ancestor ownership changed');
       await syncImpl(directory, 'state-directory');
     } finally {
       await directory.close();
     }
+    await assertGuardedDirectory(path.directory);
   } finally {
     await handle?.close();
     try {
+      await assertGuardedDirectory(path.directory);
       await unlink(temporary);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT'
+        && !(error instanceof Error && error.message.includes('ownership changed'))) throw error;
     }
   }
 }
 
-async function acquireReceiptLock(receiptFile: string, dedupeKey: string): Promise<() => Promise<void>> {
-  const directory = dirname(receiptFile);
+async function removeStateFile(
+  path: GuardedPath,
+  syncImpl: NonNullable<CreateNewsletterCampaignDraftDependencies['syncImpl']>,
+): Promise<void> {
+  await assertGuardedDirectory(path.directory);
+  let identity: FileIdentity;
   try {
+    const existing = await lstat(path.path);
+    if (!existing.isFile() || existing.isSymbolicLink()) fail('campaign state file is invalid');
+    identity = existing;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+  const removed = `${path.path}.remove.${randomUUID()}`;
+  await assertGuardedDirectory(path.directory);
+  await rename(path.path, removed);
+  const claimed = await lstat(removed);
+  if (!sameIdentity(identity, claimed)) {
+    await restoreClaimedLock(removed, path.path);
+    fail('campaign state file ownership changed');
+  }
+  await assertGuardedDirectory(path.directory);
+  await unlink(removed);
+  const directory = await open(
+    path.directory.path,
+    fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW,
+  );
+  try {
+    const openedDirectory = await directory.stat();
+    const expectedDirectory = path.directory.ancestors.at(-1)?.identity ?? path.directory.root.identity;
+    if (!sameIdentity(openedDirectory, expectedDirectory)) fail('campaign state ancestor ownership changed');
+    await syncImpl(directory, 'state-directory');
+  } finally {
+    await directory.close();
+  }
+  await assertGuardedDirectory(path.directory);
+}
+
+interface CampaignStatePaths {
+  readonly directory: GuardedDirectory;
+  readonly pending: GuardedPath;
+  readonly receipt: GuardedPath;
+  readonly lock: GuardedPath;
+}
+
+async function ensureStateDirectory(
+  root: OpenedRoot,
+  segments: readonly string[],
+): Promise<GuardedDirectory> {
+  const ancestors: Array<{ path: string; identity: FileIdentity }> = [];
+  let path = root.path;
+  for (const segment of segments) {
+    const parent: GuardedDirectory = {
+      root,
+      path,
+      ancestors: [...ancestors],
+      label: 'campaign state',
+    };
+    await assertGuardedDirectory(parent);
+    path = resolve(path, segment);
+    try {
+      await mkdir(path, { mode: 0o700 });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        fail('campaign state directory could not be created');
+      }
+    }
+    const metadata = await lstat(path);
+    if (!metadata.isDirectory() || metadata.isSymbolicLink() || await realpath(path) !== path) {
+      fail('campaign state directory is invalid');
+    }
+    ancestors.push({ path, identity: metadata });
+    await assertGuardedDirectory({ root, path, ancestors: [...ancestors], label: 'campaign state' });
+  }
+  return { root, path, ancestors, label: 'campaign state' };
+}
+
+async function campaignStatePaths(stateRoot: OpenedRoot, dedupeKey: string): Promise<CampaignStatePaths> {
+  const key = sha256(new TextEncoder().encode(dedupeKey)).slice('sha256:'.length);
+  const directory = await ensureStateDirectory(stateRoot, ['campaigns', key]);
+  const child = (name: string): GuardedPath => ({
+    directory,
+    path: resolve(directory.path, name),
+    label: 'campaign state',
+  });
+  return {
+    directory,
+    pending: child('pending.json'),
+    receipt: child('receipt.json'),
+    lock: child('draft.lock'),
+  };
+}
+
+interface CampaignLockRecord {
+  readonly schemaVersion: 'tokenbench-brevo-campaign-lock/v1';
+  readonly pid: number;
+  readonly startedAt: string;
+  readonly fingerprint: string;
+  readonly token: string;
+}
+
+interface CampaignLockLease {
+  readonly assertOwned: () => Promise<void>;
+  readonly release: () => Promise<void>;
+}
+
+interface FileIdentity {
+  readonly dev: number | bigint;
+  readonly ino: number | bigint;
+}
+
+function sameIdentity(left: FileIdentity, right: FileIdentity): boolean {
+  return left.dev === right.dev && left.ino === right.ino;
+}
+
+function parseCampaignLock(value: unknown, expectedFingerprint: string): CampaignLockRecord {
+  const record = asRecord(value, 'campaign receipt lock');
+  assertOnlyKeys(
+    record,
+    ['schemaVersion', 'pid', 'startedAt', 'fingerprint', 'token'],
+    'campaign receipt lock',
+  );
+  if (record.schemaVersion !== 'tokenbench-brevo-campaign-lock/v1'
+    || !Number.isSafeInteger(record.pid) || (record.pid as number) <= 0
+    || record.fingerprint !== expectedFingerprint
+    || typeof record.startedAt !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(record.startedAt)
+    || Number.isNaN(Date.parse(record.startedAt))
+    || typeof record.token !== 'string'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(record.token)) {
+    fail('campaign receipt is locked');
+  }
+  return record as unknown as CampaignLockRecord;
+}
+
+async function inspectCampaignLock(
+  lockPath: GuardedPath,
+  expectedFingerprint: string,
+): Promise<{ readonly identity: FileIdentity; readonly record: CampaignLockRecord }> {
+  let handle: FileHandle | undefined;
+  try {
+    await assertGuardedDirectory(lockPath.directory);
+    handle = await open(lockPath.path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    const metadata = await handle.stat();
+    if (!metadata.isFile() || metadata.size <= 0 || metadata.size > MAX_LOCK_BYTES) {
+      fail('campaign receipt is locked');
+    }
+    const bytes = await handle.readFile('utf8');
+    let value: unknown;
+    try {
+      value = JSON.parse(bytes);
+    } catch {
+      fail('campaign receipt is locked');
+    }
+    const current = await lstat(lockPath.path);
+    if (!current.isFile() || current.isSymbolicLink() || !sameIdentity(metadata, current)) {
+      fail('campaign receipt is locked');
+    }
+    await assertGuardedDirectory(lockPath.directory);
+    return { identity: metadata, record: parseCampaignLock(value, expectedFingerprint) };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'campaign receipt is locked') throw error;
+    fail('campaign receipt is locked');
+  } finally {
+    await handle?.close();
+  }
+}
+
+function processOwnerIsAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'ESRCH') return false;
+    return true;
+  }
+}
+
+async function restoreClaimedLock(claimPath: string, lockPath: string): Promise<void> {
+  try {
+    await link(claimPath, lockPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+      fail('campaign receipt lock ownership could not be restored');
+    }
+  }
+  await unlink(claimPath);
+}
+
+async function claimLockPath(
+  lockPath: GuardedPath,
+  expectedIdentity: FileIdentity,
+  purpose: 'recover' | 'release',
+): Promise<string> {
+  await assertGuardedDirectory(lockPath.directory);
+  const claimPath = `${lockPath.path}.${purpose}.${randomUUID()}`;
+  try {
+    await rename(lockPath.path, claimPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') fail('campaign receipt is locked');
+    fail('campaign receipt lock ownership could not be verified');
+  }
+  const claimed = await lstat(claimPath);
+  if (!sameIdentity(claimed, expectedIdentity)) {
+    await restoreClaimedLock(claimPath, lockPath.path);
+    fail('campaign receipt is locked because lock ownership changed');
+  }
+  await assertGuardedDirectory(lockPath.directory);
+  return claimPath;
+}
+
+async function assertCampaignLockOwnership(
+  lockPath: GuardedPath,
+  identity: FileIdentity,
+  expected: CampaignLockRecord,
+): Promise<void> {
+  let handle: FileHandle | undefined;
+  try {
+    await assertGuardedDirectory(lockPath.directory);
+    handle = await open(lockPath.path, fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW);
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.size <= 0 || opened.size > MAX_LOCK_BYTES
+      || !sameIdentity(opened, identity)) fail('campaign receipt lock ownership changed');
+    const parsed = parseCampaignLock(JSON.parse(await handle.readFile('utf8')), expected.fingerprint);
+    const current = await lstat(lockPath.path);
+    if (current.isSymbolicLink() || !sameIdentity(current, identity)
+      || canonicalSignatureJson(parsed) !== canonicalSignatureJson(expected)) {
+      fail('campaign receipt lock ownership changed');
+    }
+    await assertGuardedDirectory(lockPath.directory);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('lock ownership')) throw error;
+    fail('campaign receipt lock ownership changed');
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function acquireReceiptLock(lockPath: GuardedPath, dedupeKey: string): Promise<CampaignLockLease> {
+  const directory = lockPath.directory.path;
+  try {
+    await assertGuardedDirectory(lockPath.directory);
     const parent = await lstat(directory);
     if (!parent.isDirectory() || parent.isSymbolicLink()) fail('campaign receipt path is invalid');
   } catch (error) {
     if (error instanceof Error && error.message === 'campaign receipt path is invalid') throw error;
     fail('campaign receipt path is invalid');
   }
-  const lockPath = `${receiptFile}.lock`;
-  let lock: Awaited<ReturnType<typeof open>>;
-  try {
-    lock = await open(
-      lockPath,
-      fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
-      0o600,
-    );
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST') fail('campaign receipt is locked');
-    fail('campaign receipt lock could not be acquired');
+  const fingerprint = sha256(new TextEncoder().encode(dedupeKey));
+  let lock: FileHandle | undefined;
+  let recovered = false;
+  while (!lock) {
+    try {
+      lock = await open(
+        lockPath.path,
+        fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | fsConstants.O_NOFOLLOW,
+        0o600,
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        fail('campaign receipt lock could not be acquired');
+      }
+      if (recovered) fail('campaign receipt is locked');
+      const existing = await inspectCampaignLock(lockPath, fingerprint);
+      const startedAt = Date.parse(existing.record.startedAt);
+      const age = Date.now() - startedAt;
+      if (age < LOCK_STALE_AFTER_MS || processOwnerIsAlive(existing.record.pid)) {
+        fail('campaign receipt is locked');
+      }
+      const claimPath = await claimLockPath(lockPath, existing.identity, 'recover');
+      await unlink(claimPath);
+      recovered = true;
+    }
   }
+  const record: CampaignLockRecord = {
+    schemaVersion: 'tokenbench-brevo-campaign-lock/v1',
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+    fingerprint,
+    token: randomUUID(),
+  };
   const identity = await lock.stat();
   try {
-    await lock.writeFile(sha256(new TextEncoder().encode(dedupeKey)), 'utf8');
+    await lock.writeFile(`${JSON.stringify(record)}\n`, 'utf8');
+    await lock.sync();
+    const current = await lstat(lockPath.path);
+    if (!sameIdentity(identity, current)) fail('campaign receipt lock ownership changed');
+    await assertGuardedDirectory(lockPath.directory);
+    const parent = await open(
+      directory,
+      fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW,
+    );
+    try {
+      await parent.sync();
+    } finally {
+      await parent.close();
+    }
+    await assertGuardedDirectory(lockPath.directory);
   } catch {
     await lock.close();
     try {
-      await unlink(lockPath);
+      const claimPath = await claimLockPath(lockPath, identity, 'release');
+      await unlink(claimPath);
     } catch {
       // The failed lock is intentionally left for human review when unlinking is unsafe.
     }
     fail('campaign receipt lock could not be acquired');
   }
-  return async () => {
-    try {
-      await lock.close();
-    } finally {
+  return {
+    assertOwned: () => assertCampaignLockOwnership(lockPath, identity, record),
+    release: async () => {
       try {
-        const current = await lstat(lockPath);
-        if (current.dev === identity.dev && current.ino === identity.ino) await unlink(lockPath);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        await lock.close();
+      } finally {
+        try {
+          const claimPath = await claimLockPath(lockPath, identity, 'release');
+          await unlink(claimPath);
+        } catch (error) {
+          if (error instanceof Error && error.message === 'campaign receipt is locked') return;
+          throw error;
+        }
       }
-    }
+    },
   };
 }
 
@@ -743,6 +1142,48 @@ interface PreparedCampaign {
   readonly draft: CampaignDraft;
   readonly fingerprint: string;
   readonly payload: Record<string, unknown>;
+}
+
+function brevoHeaderText(value: unknown, label: string, maximum: number): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > maximum
+    || /[\u0000-\u001f\u007f]/u.test(value)) fail(`${label} exceeds the Brevo destination limit`);
+  return value;
+}
+
+function validatePreparedCampaign(config: BrevoCampaignConfig, prepared: PreparedCampaign): void {
+  if (!isValidCampaignConfig(config)) fail('campaign configuration is invalid');
+  const payload = prepared.payload;
+  assertOnlyKeys(payload, [
+    'name', 'sender', 'subject', 'previewText', 'htmlContent', 'recipients', 'attachmentUrl',
+  ], 'Brevo campaign payload');
+  const name = brevoHeaderText(payload.name, 'campaign name', 255);
+  if (!/^[\p{L}\p{N} .:_-]+$/u.test(name)) fail('campaign name grammar is invalid');
+  brevoHeaderText(payload.subject, 'campaign subject', 255);
+  brevoHeaderText(payload.previewText, 'campaign preview text', 255);
+  if (typeof payload.htmlContent !== 'string'
+    || new TextEncoder().encode(payload.htmlContent).byteLength <= 10
+    || new TextEncoder().encode(payload.htmlContent).byteLength >= 1024 * 1024
+    || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\r]/u.test(payload.htmlContent)) {
+    fail('campaign HTML exceeds the Brevo destination limit');
+  }
+  const attachmentUrl = brevoHeaderText(payload.attachmentUrl, 'campaign attachment URL', 2_048);
+  let parsedAttachment: URL;
+  try {
+    parsedAttachment = new URL(attachmentUrl);
+  } catch {
+    fail('campaign attachment URL is invalid');
+  }
+  if (parsedAttachment.protocol !== 'https:' || parsedAttachment.username || parsedAttachment.password
+    || parsedAttachment.search || parsedAttachment.hash
+    || !parsedAttachment.pathname.endsWith('/tokenbench-cheatsheet.pdf')) {
+    fail('campaign attachment URL is invalid');
+  }
+  const recipients = asRecord(payload.recipients, 'Brevo campaign recipients');
+  assertOnlyKeys(recipients, ['listIds'], 'Brevo campaign recipients');
+  if (!Array.isArray(recipients.listIds) || recipients.listIds.length !== 1
+    || recipients.listIds[0] !== config.monthlyCheatsheetListId) {
+    fail('Brevo campaign recipients are invalid');
+  }
 }
 
 function prepareCampaign(config: BrevoCampaignConfig, draft: CampaignDraft): PreparedCampaign {
@@ -813,11 +1254,28 @@ function verifiedRemoteCampaign(
   status: number,
 ): void {
   const campaign = asRecord(value, 'Brevo campaign');
-  if (campaign.id !== id || campaign.status !== 'draft') throw new BrevoCampaignError(status);
-  for (const [key, expected] of Object.entries(prepared.payload)) {
-    if (canonicalSignatureJson(campaign[key]) !== canonicalSignatureJson(expected)) {
-      throw new BrevoCampaignError(status);
-    }
+  const expectedSender = asRecord(prepared.payload.sender, 'campaign sender');
+  const actualSender = asRecord(campaign.sender, 'Brevo campaign sender');
+  const recipients = asRecord(campaign.recipients, 'Brevo campaign recipients');
+  const expectedRecipients = asRecord(prepared.payload.recipients, 'campaign recipients');
+  const expectedListIds = expectedRecipients.listIds;
+  const senderMatches = Object.hasOwn(expectedSender, 'id')
+    ? actualSender.id === expectedSender.id
+    : actualSender.name === expectedSender.name && actualSender.email === expectedSender.email;
+  if (campaign.id !== id
+    || campaign.name !== prepared.draft.name
+    || campaign.status !== 'draft'
+    || campaign.type !== 'classic'
+    || campaign.testSent !== false
+    || (campaign.scheduledAt !== undefined && campaign.scheduledAt !== '')
+    || campaign.subject !== prepared.draft.subject
+    || campaign.previewText !== prepared.draft.previewText
+    || campaign.htmlContent !== prepared.draft.htmlContent
+    || campaign.attachmentUrl !== prepared.draft.attachmentUrl
+    || !senderMatches
+    || canonicalSignatureJson(recipients.lists) !== canonicalSignatureJson(expectedListIds)
+    || canonicalSignatureJson(recipients.exclusionLists) !== canonicalSignatureJson([])) {
+    throw new BrevoCampaignError(status);
   }
 }
 
@@ -875,14 +1333,17 @@ function isValidCampaignConfig(value: unknown): value is BrevoCampaignConfig {
 }
 
 /** Creates one email campaign, then proves the returned lifecycle is draft. */
-export async function createCampaignDraft(
+async function createCampaignDraft(
   config: BrevoCampaignConfig,
   draft: CampaignDraft,
-  fetchImpl: BrevoFetch = (input, init) => globalThis.fetch(input, init),
+  fetchImpl: BrevoFetch,
+  assertMutationAllowed: () => Promise<void>,
 ): Promise<CampaignDraftReceipt> {
   if (!isValidCampaignConfig(config)) fail('campaign configuration is invalid');
   if (draft.audience !== 'monthly-cheatsheet') fail('campaign audience is invalid');
   const prepared = prepareCampaign(config, draft);
+  await assertMutationAllowed();
+  validatePreparedCampaign(config, prepared);
   try {
     const created = await fetchImpl(BREVO_CAMPAIGNS_URL, {
       ...requestInit(config, { method: 'POST' }),
@@ -917,7 +1378,7 @@ async function reconcileCampaignDraft(
       }
       for (const candidate of body.campaigns) {
         const item = asRecord(candidate, 'Brevo draft list item');
-        if (item.name === prepared.draft.name && item.status === 'draft'
+        if (item.name === prepared.draft.name && item.status === 'draft' && item.type === 'classic'
           && Number.isSafeInteger(item.id) && (item.id as number) > 0) {
           exactIds.push(item.id as number);
         }
@@ -936,19 +1397,6 @@ async function reconcileCampaignDraft(
   }
 }
 
-/** Refuses a matching durable receipt before any remote campaign mutation. */
-export async function createCampaignDraftFromReceipt(
-  existingReceipt: CampaignDraftReceipt | null | undefined,
-  config: BrevoCampaignConfig,
-  draft: CampaignDraft,
-  fetchImpl: BrevoFetch = (input, init) => globalThis.fetch(input, init),
-): Promise<CampaignDraftReceipt> {
-  if (existingReceipt?.dedupeKey === draft.dedupeKey) {
-    fail('campaign revision is already drafted');
-  }
-  return createCampaignDraft(config, draft, fetchImpl);
-}
-
 /**
  * Verifies signed deployment artifacts and performs a crash-safe, reconciled
  * Brevo draft creation. It never calls send, schedule, or template endpoints.
@@ -962,12 +1410,15 @@ export async function createNewsletterCampaignDraft(
   if (!config) fail('campaign configuration is unavailable');
   if (!args || typeof args !== 'object' || !environment || typeof environment !== 'object'
     || Array.isArray(environment)) fail('campaign arguments are invalid');
+  assertOnlyKeys(args as unknown as Record<string, unknown>, [
+    'manifest', 'changes', 'deploymentReceipt', 'artifactBaseUrl',
+  ], 'campaign arguments');
   const roots = await runtimeRoots(environment as Record<string, unknown>);
-  const [manifestPath, changesPath, deploymentReceiptPath, receiptFile] = await Promise.all([
+  try {
+  const [manifestPath, changesPath, deploymentReceiptPath] = await Promise.all([
     rootedPath(roots.artifactRoot, args.manifest, 'campaign manifest'),
     rootedPath(roots.artifactRoot, args.changes, 'campaign changes'),
     rootedPath(roots.artifactRoot, args.deploymentReceipt, 'deployment receipt'),
-    rootedPath(roots.stateRoot, args.receiptFile, 'campaign state', true),
   ]);
   const [rawManifest, rawChangesEnvelope, rawDeploymentReceipt] = await Promise.all([
     readLocalJson(manifestPath, 'campaign manifest'),
@@ -990,48 +1441,47 @@ export async function createNewsletterCampaignDraft(
   if (!pdf || !csv) fail('signed deployment receipt is missing campaign artifact URLs');
   const draft = campaignFromArtifacts(bundle, changes, { pdf, csv });
   const prepared = prepareCampaign(config, draft);
-  const releaseLock = await acquireReceiptLock(receiptFile, draft.dedupeKey);
+  validatePreparedCampaign(config, prepared);
+  const state = await campaignStatePaths(roots.stateRoot, draft.dedupeKey);
+  const lock = await acquireReceiptLock(state.lock, draft.dedupeKey);
   const fetchImpl = dependencies.fetchImpl ?? ((input, init) => globalThis.fetch(input, init));
   const syncImpl = dependencies.syncImpl ?? ((handle: FileHandle) => handle.sync());
   try {
-    const receiptBook = await readReceiptBook(receiptFile);
-    if (receiptBook.drafts.some((receipt) => receipt.dedupeKey === draft.dedupeKey)) {
-      fail('campaign revision is already drafted');
-    }
+    await lock.assertOwned();
+    const existingReceipt = await readReceipt(state.receipt);
+    if (existingReceipt) fail('campaign revision is already drafted');
     const reconciled = await reconcileCampaignDraft(config, prepared, fetchImpl);
     if (reconciled) {
-      await writeReceiptBook(receiptFile, {
-        schemaVersion: 'tokenbench-brevo-campaign-state/v2',
-        pending: receiptBook.pending.filter((entry) => entry.dedupeKey !== draft.dedupeKey),
-        drafts: [...receiptBook.drafts, reconciled],
-      }, 'verified-file', syncImpl);
+      await lock.assertOwned();
+      await writeStateFile(state.receipt, reconciled, 'verified-file', syncImpl);
+      await lock.assertOwned();
+      await removeStateFile(state.pending, syncImpl);
       return reconciled;
     }
-    const pending = receiptBook.pending.find((entry) => entry.dedupeKey === draft.dedupeKey);
+    const pending = await readPending(state.pending);
     if (pending) {
       if (pending.campaignName !== prepared.draft.name || pending.fingerprint !== prepared.fingerprint) {
         fail('campaign pending record does not match the requested draft');
       }
       fail('campaign draft remains pending reconciliation');
     }
-    await writeReceiptBook(receiptFile, {
-      schemaVersion: 'tokenbench-brevo-campaign-state/v2',
-      pending: [...receiptBook.pending, {
-        dedupeKey: draft.dedupeKey,
-        campaignName: prepared.draft.name,
-        fingerprint: prepared.fingerprint,
-      }],
-      drafts: receiptBook.drafts,
+    await lock.assertOwned();
+    await writeStateFile(state.pending, {
+      dedupeKey: draft.dedupeKey,
+      campaignName: prepared.draft.name,
+      fingerprint: prepared.fingerprint,
     }, 'pending-file', syncImpl);
-    const receipt = await createCampaignDraft(config, draft, fetchImpl);
-    await writeReceiptBook(receiptFile, {
-      schemaVersion: 'tokenbench-brevo-campaign-state/v2',
-      pending: receiptBook.pending,
-      drafts: [...receiptBook.drafts, receipt],
-    }, 'verified-file', syncImpl);
+    const receipt = await createCampaignDraft(config, draft, fetchImpl, lock.assertOwned);
+    await lock.assertOwned();
+    await writeStateFile(state.receipt, receipt, 'verified-file', syncImpl);
+    await lock.assertOwned();
+    await removeStateFile(state.pending, syncImpl);
     return receipt;
   } finally {
-    await releaseLock();
+    await lock.release();
+  }
+  } finally {
+    await Promise.all([roots.artifactRoot.handle.close(), roots.stateRoot.handle.close()]);
   }
 }
 
@@ -1039,7 +1489,7 @@ export async function createNewsletterCampaignDraft(
 export function parseCreateNewsletterCampaignDraftArgs(
   argv: readonly string[],
 ): CreateNewsletterCampaignDraftArgs {
-  const values: Partial<Record<'manifest' | 'changes' | 'deploymentReceipt' | 'artifactBaseUrl' | 'receiptFile', string>> = {};
+  const values: Partial<Record<'manifest' | 'changes' | 'deploymentReceipt' | 'artifactBaseUrl', string>> = {};
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     const key = argument === '--manifest'
@@ -1050,9 +1500,7 @@ export function parseCreateNewsletterCampaignDraftArgs(
           ? 'deploymentReceipt'
         : argument === '--artifact-base-url'
           ? 'artifactBaseUrl'
-          : argument === '--receipt-file'
-            ? 'receiptFile'
-            : null;
+          : null;
     if (!key) fail(`unknown argument: ${argument}`);
     const value = argv[index + 1];
     if (!value || value.startsWith('--') || values[key] !== undefined) {
@@ -1061,16 +1509,14 @@ export function parseCreateNewsletterCampaignDraftArgs(
     values[key] = value;
     index += 1;
   }
-  if (!values.manifest || !values.changes || !values.deploymentReceipt
-    || !values.artifactBaseUrl || !values.receiptFile) {
-    fail('required options are --manifest, --changes, --deployment-receipt, --artifact-base-url, and --receipt-file');
+  if (!values.manifest || !values.changes || !values.deploymentReceipt || !values.artifactBaseUrl) {
+    fail('required options are --manifest, --changes, --deployment-receipt, and --artifact-base-url');
   }
   return {
     manifest: values.manifest,
     changes: values.changes,
     deploymentReceipt: values.deploymentReceipt,
     artifactBaseUrl: values.artifactBaseUrl,
-    receiptFile: values.receiptFile,
   };
 }
 
