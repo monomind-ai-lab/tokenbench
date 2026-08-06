@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DecisionPickEntry } from '../benchmarks/decision-picks';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
-import { LeaderboardDirectoryPage } from './leaderboards-page';
+import { LeaderboardDirectoryPage, LeaderboardPage } from './leaderboards-page';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
 
@@ -88,7 +88,10 @@ function respondWithSummary(payload = decisionSummaryEnvelope()) {
   return fetchMock;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, '', '/');
+});
 
 describe('LeaderboardDirectoryPage', () => {
   it('shows decision-ready top-three groups before the full directory', async () => {
@@ -167,5 +170,20 @@ describe('LeaderboardDirectoryPage', () => {
     render(<LeaderboardDirectoryPage />);
 
     expect(screen.getByLabelText('Loading decision-ready picks')).toHaveAttribute('aria-busy', 'true');
+  });
+});
+
+describe('LeaderboardPage', () => {
+  it('builds a normal Download CSV link from the current shared filter state', () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Alpha&provider=Provider%20A&sort=score-desc');
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    const actions = screen.getByRole('group', { name: 'Leaderboard actions' });
+    expect(within(actions).getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
+      'href',
+      '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha&provider=Provider+A',
+    );
   });
 });

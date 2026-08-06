@@ -1,4 +1,5 @@
 import type { BenchmarkProjectionSnapshot } from '../benchmarks/api-projections';
+import { csvCell as escapeCsvCell } from '../benchmarks/leaderboard-csv';
 import {
   isCanonicalIsoTimestamp,
   type BenchmarkMetric,
@@ -65,7 +66,6 @@ export interface SubjectPreview {
 }
 
 const MAX_ENTRIES_PER_CATEGORY = 10;
-const FORMULA_PREFIX = /^[\u0000-\u0020]*[=+\-@]/u;
 const PDF_DATE_PREFIXES = [
   new TextEncoder().encode('/CreationDate'),
   new TextEncoder().encode('/ModDate'),
@@ -307,9 +307,7 @@ function unavailable(value: string | number | null): string | number {
  * can share the same injection boundary without copying it.
  */
 export function csvCell(value: string | number | null): string {
-  const literal = String(unavailable(value));
-  const formulaSafe = FORMULA_PREFIX.test(literal) ? `'${literal}` : literal;
-  return /[",\r\n]/u.test(formulaSafe) ? `"${formulaSafe.replace(/"/gu, '""')}"` : formulaSafe;
+  return escapeCsvCell(unavailable(value));
 }
 
 /** Renders one deterministic RFC-4180-compatible fact table. */

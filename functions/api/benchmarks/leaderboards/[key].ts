@@ -1,44 +1,31 @@
-import type { BenchmarkSourceId } from '../../../../src/benchmarks/contracts';
 import {
   LEADERBOARD_DEFINITIONS,
   type LeaderboardDefinition,
-  type LeaderboardEntry,
   type LeaderboardResult,
 } from '../../../../src/benchmarks/leaderboards';
 import {
   createLeaderboardQueryCapabilities,
   filterLeaderboardEntries,
   hasValidLeaderboardQueryEncoding,
+  LEADERBOARD_QUERY_KEYS,
   leaderboardQueryToSearchParams,
   parseLeaderboardQuery,
   type LeaderboardQueryState,
 } from '../../../../src/benchmarks/leaderboard-query';
-import {
-  benchmarkLeaderboardCacheKey,
-  benchmarkLeaderboardProjectionCacheKey,
-} from '../../../../src/benchmarks/api-response-cache-keys';
-import {
-  effectiveLeaderboardProfile,
-  type CachedLeaderboardPaginationProjection,
-} from '../../../../src/benchmarks/api-projections';
+import { benchmarkLeaderboardCacheKey } from '../../../../src/benchmarks/api-response-cache-keys';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../src/benchmarks/value';
 import { cachedApiResponse, readApiResponseCache } from '../../../_shared/api-response-cache';
+import { readCompleteLeaderboardProjection } from '../../../_shared/benchmark-leaderboard-projection';
 import {
-  attributionForEvidence,
-  benchmarkEnvelope,
   decodeOpaqueValue,
   encodeOpaqueValue,
-  etagForBenchmarkResponse,
-  freshnessFor,
   invalidBenchmarkRequestResponse,
   jsonBenchmarkResponse,
   matchesExactEtag,
   notModifiedBenchmarkResponse,
   unavailableBenchmarkResponse,
-  type ActiveBenchmarkSnapshot,
   type BenchmarkApiEnv,
-  type EvidenceReference,
 } from '../../../_shared/benchmark-db';
 
 const DEFAULT_LIMIT = 50;
@@ -73,19 +60,7 @@ interface CursorRequestParameters {
   readonly filter: string;
 }
 
-const SHARED_FILTER_KEYS = new Set([
-  'q',
-  'profile',
-  'metric',
-  'sort',
-  'provider',
-  'evidence',
-  'sourceType',
-  'lifecycle',
-  'minPrice',
-  'maxPrice',
-  'estimated',
-]);
+const SHARED_FILTER_KEYS = new Set<string>(LEADERBOARD_QUERY_KEYS);
 const PAGINATION_KEYS = new Set(['limit', 'cursor', 'includeEstimated']);
 const DATA_DEPENDENT_FILTER_KEYS = new Set([
   'q',
@@ -207,52 +182,17 @@ function offsetFromCursor(
   return value.o;
 }
 
-function displayedEvidence(entries: readonly LeaderboardEntry[]): readonly EvidenceReference[] {
-  return entries.flatMap((entry) => [
-    { sourceId: entry.model.sourceId, sourceArtifactId: entry.model.sourceArtifactId },
-    ...(entry.metric ? [{ sourceId: entry.metric.sourceId, sourceArtifactId: entry.metric.sourceArtifactId }] : []),
-    ...entry.metrics.map((metric) => ({ sourceId: metric.sourceId, sourceArtifactId: metric.sourceArtifactId })),
-    ...(entry.primaryPrice ? [{ sourceId: entry.primaryPrice.sourceId, sourceArtifactId: entry.primaryPrice.sourceArtifactId }] : []),
-  ]);
-}
-
-function routeEvidence(
-  snapshot: ActiveBenchmarkSnapshot,
-  definition: LeaderboardDefinition,
-): readonly EvidenceReference[] {
-  const sourceIds: readonly BenchmarkSourceId[] = definition.kind === 'value'
-    ? ['benchlm', 'openrouter']
-    : definition.kind === 'multimodal'
-      ? ['benchlm', 'lmarena']
-      : definition.kind === 'pricing-context'
-        ? ['openrouter']
-        : definition.kind === 'lmarena'
-          ? ['lmarena']
-          : ['benchlm'];
-  const wanted = new Set<BenchmarkSourceId>(sourceIds);
-  return snapshot.sources
-    .filter((source) => wanted.has(source.sourceId))
-    .map((source) => ({ sourceId: source.sourceId, sourceArtifactId: source.artifactId }));
-}
-
-function parsePaginationProjection(
-  body: string,
-  key: LeaderboardKey,
-  profile: WorkloadProfile,
-): CachedLeaderboardPaginationProjection {
-  const value = JSON.parse(body) as Partial<CachedLeaderboardPaginationProjection>;
-  if (!value || typeof value !== 'object'
-    || !value.revision || typeof value.revision !== 'object'
-    || typeof value.revision.revision !== 'string'
-    || value.revision.publishedAt === null
-    || !Array.isArray(value.sources)
-    || !value.leaderboard || typeof value.leaderboard !== 'object'
-    || value.leaderboard.definition?.kind !== LEADERBOARD_DEFINITIONS[key].kind
-    || value.leaderboard.profile !== profile
-    || !Array.isArray(value.entries)) {
-    throw new Error('cached leaderboard pagination projection is invalid');
-  }
-  return value as CachedLeaderboardPaginationProjection;
+/** Matches the established benchmark ETag payload without rereading fact tables. */
+function etagForCompleteProjection(
+  revision: string,
+  freshness: { readonly checkedAt: string; readonly status: 'fresh' | 'stale' },
+  parameters: unknown,
+): string {
+  return `"benchmark-${encodeOpaqueValue([
+    revision,
+    { checkedAt: freshness.checkedAt, freshnessStatus: freshness.status },
+    parameters,
+  ])}"`;
 }
 
 export async function onRequestGet({
@@ -289,24 +229,19 @@ export async function onRequestGet({
       if (cached) return cachedApiResponse(request, cached);
     }
 
-    const derivationProfile = effectiveLeaderboardProfile(normalized.key, normalized.profile);
-    const cachedProjection = await readApiResponseCache(
+    const complete = await readCompleteLeaderboardProjection(
       env.CATALOG_DB,
-      'benchmarks',
-      benchmarkLeaderboardProjectionCacheKey({
-        key: normalized.key,
-        profile: derivationProfile,
-        includeEstimated: normalized.includeEstimated,
-      }),
-      36 * 60 * 60 * 1000,
+      normalized.key,
+      normalized.profile,
+      normalized.includeEstimated,
       now,
     );
-    if (!cachedProjection) return unavailableBenchmarkResponse();
-    const projection = parsePaginationProjection(cachedProjection.body, normalized.key, derivationProfile);
-    const capabilities = createLeaderboardQueryCapabilities(projection.leaderboard.definition, projection.entries);
+    if (!complete) return unavailableBenchmarkResponse();
+    const projection = complete.data;
+    const capabilities = createLeaderboardQueryCapabilities(projection.definition, projection.entries);
     const parsedFilters = parseLeaderboardQuery(
       normalized.filterParameters.toString(),
-      projection.leaderboard.definition,
+      projection.definition,
       capabilities,
       'api',
     );
@@ -314,7 +249,7 @@ export async function onRequestGet({
     const filterState: LeaderboardQueryState = {
       ...parsedFilters.state,
       preserveSourceLensOrder: normalized.key === 'multimodal-vision-documents'
-        && parsedFilters.state.sort === projection.leaderboard.definition.defaultSort,
+        && parsedFilters.state.sort === projection.definition.defaultSort,
     };
     const canonicalFilterParameters = leaderboardQueryToSearchParams(filterState);
     // Profile and estimated inclusion are dedicated cursor fields, and the
@@ -323,22 +258,10 @@ export async function onRequestGet({
     // shared filter remains fingerprinted.
     canonicalFilterParameters.delete('profile');
     canonicalFilterParameters.delete('estimated');
-    if (filterState.sort === projection.leaderboard.definition.defaultSort) {
+    if (filterState.sort === projection.definition.defaultSort) {
       canonicalFilterParameters.delete('sort');
     }
     const canonicalFilter = canonicalFilterParameters.toString();
-    const snapshot: ActiveBenchmarkSnapshot = {
-      revision: projection.revision,
-      sources: projection.sources,
-      models: [],
-      metrics: [],
-      priceChecks: [],
-      comparisonPairs: [],
-    };
-    const freshness = freshnessFor(snapshot.revision, now);
-    if (freshness.status !== cachedProjection.freshness) {
-      throw new Error('cached leaderboard freshness does not match its projection');
-    }
 
     const cursorParameters = {
       key: normalized.key,
@@ -350,14 +273,14 @@ export async function onRequestGet({
     let offset = 0;
     if (normalized.cursor) {
       try {
-        offset = offsetFromCursor(normalized.cursor, snapshot.revision.revision, cursorParameters);
+        offset = offsetFromCursor(normalized.cursor, complete.revision, cursorParameters);
       } catch {
         return invalidBenchmarkRequestResponse();
       }
     }
 
     const leaderboard: LeaderboardResult = {
-      ...projection.leaderboard,
+      ...projection,
       profile: normalized.profile,
       entries: projection.entries,
     };
@@ -368,9 +291,9 @@ export async function onRequestGet({
     const pagedEntries = entries.slice(offset, offset + normalized.limit);
     const nextOffset = offset + pagedEntries.length;
     const nextCursor = nextOffset < entries.length
-      ? cursorFor(snapshot.revision.revision, cursorParameters, nextOffset)
+      ? cursorFor(complete.revision, cursorParameters, nextOffset)
       : null;
-    const etag = etagForBenchmarkResponse(snapshot.revision, freshness, {
+    const etag = etagForCompleteProjection(complete.revision, complete.freshness, {
       endpoint: 'leaderboard',
       key: normalized.key,
       profile: normalized.profile,
@@ -381,27 +304,18 @@ export async function onRequestGet({
     });
     if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
 
-    return jsonBenchmarkResponse(
-      benchmarkEnvelope(
-        snapshot,
-        freshness,
-        attributionForEvidence(snapshot, [
-          ...routeEvidence(snapshot, leaderboard.definition),
-          ...displayedEvidence(pagedEntries),
-        ]),
-        {
-          ...leaderboard,
-          entries: pagedEntries,
-          pagination: {
-            limit: normalized.limit,
-            total: entries.length,
-            nextCursor,
-          },
+    return jsonBenchmarkResponse({
+      ...complete,
+      data: {
+        ...leaderboard,
+        entries: pagedEntries,
+        pagination: {
+          limit: normalized.limit,
+          total: entries.length,
+          nextCursor,
         },
-      ),
-      200,
-      etag,
-    );
+      },
+    }, 200, etag);
   } catch {
     return unavailableBenchmarkResponse();
   }

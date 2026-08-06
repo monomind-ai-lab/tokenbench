@@ -52,7 +52,8 @@ export type LeaderboardQueryParseResult =
 
 export type LeaderboardQueryInput = URLSearchParams | string;
 
-const QUERY_KEYS = new Set([
+/** Public query keys shared by the UI, JSON API, and complete CSV export. */
+export const LEADERBOARD_QUERY_KEYS = [
   'q',
   'profile',
   'metric',
@@ -64,7 +65,19 @@ const QUERY_KEYS = new Set([
   'minPrice',
   'maxPrice',
   'estimated',
-]);
+] as const;
+export const LEADERBOARD_SINGLE_VALUE_QUERY_KEYS = [
+  'q',
+  'profile',
+  'metric',
+  'sort',
+  'evidence',
+  'lifecycle',
+  'minPrice',
+  'maxPrice',
+  'estimated',
+] as const;
+const QUERY_KEYS = new Set<string>(LEADERBOARD_QUERY_KEYS);
 const SOURCE_TYPES: readonly LeaderboardSourceType[] = ['Open Weight', 'Proprietary', 'Unknown'];
 const EVIDENCE_STATUSES: readonly EvidenceStatus[] = ['supported', 'source_only', 'estimated'];
 const SORT_ORDER: readonly LeaderboardSort[] = [

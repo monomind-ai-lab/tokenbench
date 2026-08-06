@@ -117,6 +117,8 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   }, [filters, keyName, publishedEntries]);
 
   const entries = publishedEntries ? visibleLeaderboardEntries(publishedEntries, filters, keyName) : [];
+  const csvQuery = serializeLeaderboardFilters(filters);
+  const csvHref = `/api/benchmarks/leaderboards/${encodeURIComponent(keyName)}/csv?${csvQuery}`;
 
   return <div className="content-stack leaderboard-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
@@ -124,6 +126,9 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       <h1 id="leaderboard-heading">{route.seo.h1}</h1>
       <p>{route.seo.summary}</p>
       <p className="leaderboard-methodology"><strong>Methodology:</strong> {methodologySummary(keyName)}</p>
+      <div className="leaderboard-actions" role="group" aria-label="Leaderboard actions">
+        <a className="button button-secondary" href={csvHref}>Download CSV</a>
+      </div>
     </section>
 
     <section className="panel leaderboard-filter-panel" aria-labelledby="leaderboard-filters-heading">
