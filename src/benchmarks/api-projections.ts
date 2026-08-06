@@ -44,6 +44,8 @@ interface SourceAvailability {
     readonly artifactId: string;
     readonly url: string;
     readonly updatedAt: string;
+    readonly upstreamRevision: string | null;
+    readonly schemaVersion: string | null;
   }[];
 }
 
@@ -152,6 +154,8 @@ function sourceAvailability(snapshot: BenchmarkProjectionSnapshot): readonly Sou
         artifactId: record.artifactId,
         url: record.sourceUrl,
         updatedAt: record.observedAt,
+        upstreamRevision: record.upstreamRevision,
+        schemaVersion: record.schemaVersion,
       })),
     };
   });

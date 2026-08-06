@@ -6,3 +6,8 @@ export const SITE_CONFIG = {
   parentUrl: 'https://monomind.one/',
   themeStorageKey: 'tokenbench:theme',
 } as const;
+
+export const HOME_PAGE_COPY = {
+  h1: 'Transparent AI Costs. Verified Benchmarks.',
+  subcopy: 'The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.',
+} as const;

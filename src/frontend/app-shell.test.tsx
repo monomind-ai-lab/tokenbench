@@ -155,6 +155,8 @@ describe('responsive calculator app shell', () => {
     const footer = screen.getByRole('contentinfo');
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
     expect(within(footer).getByRole('checkbox', { name: /Notify me when new models or price drops/i })).toBeInTheDocument();
+    expect(within(footer).getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
+    expect(within(footer).queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
   });
 
   it('makes the tools directory link to the subscription versus API calculator', () => {

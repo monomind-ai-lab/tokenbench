@@ -60,7 +60,7 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
 }
 
 export function SiteFooter({ status, notice }: SiteFooterProps) {
-  return <footer className="app-footer"><div className="footer-brand"><a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a><span>{status}</span></div><div className="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>{notice}</span></div><NewsletterSignup context="footer" /></footer>;
+  return <footer className="app-footer"><div className="footer-brand"><a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a><span>{status}</span></div><div className="footer-links"><a href={ROUTE_PATHS.methodologyBenchAlign}>Methodology</a><span>{notice}</span></div><NewsletterSignup context="footer" /></footer>;
 }
 
 export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, lastSuccessfulRefreshAt, onRetry }: AppShellProps) {

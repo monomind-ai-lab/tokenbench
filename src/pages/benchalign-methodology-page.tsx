@@ -1,17 +1,14 @@
-interface BenchAlignSourceMetadata {
-  readonly upstreamRevision?: string | null;
-  readonly schemaVersion?: string | null;
-}
+import { publishedBenchAlignMethodVersion, type BenchAlignSourceMetadata } from '../benchmarks/benchalign-metadata';
+import { useBenchAlignSourceMetadata } from '../frontend/use-benchmarks';
 
 interface BenchAlignMethodologyPageProps {
   readonly activeSourceMetadata?: BenchAlignSourceMetadata | null;
 }
 
-function publishedMethodVersion(source: BenchAlignSourceMetadata | null | undefined): string {
-  return source?.upstreamRevision ?? source?.schemaVersion ?? 'Unavailable';
-}
-
 export function BenchAlignMethodologyPage({ activeSourceMetadata }: BenchAlignMethodologyPageProps) {
+  const currentSourceMetadata = useBenchAlignSourceMetadata();
+  const sourceMetadata = activeSourceMetadata === undefined ? currentSourceMetadata : activeSourceMetadata;
+
   return <div className="content-stack methodology-page">
     <section className="panel" aria-labelledby="benchalign-methodology-heading">
       <span className="eyebrow">TokenBench methodology</span>
@@ -32,7 +29,7 @@ export function BenchAlignMethodologyPage({ activeSourceMetadata }: BenchAlignMe
 
     <section className="panel" aria-labelledby="benchalign-refresh-heading">
       <h2 id="benchalign-refresh-heading">Method and refresh status</h2>
-      <p>Published method version: <strong>{publishedMethodVersion(activeSourceMetadata)}</strong>.</p>
+      <p>Published method version: <strong>{publishedBenchAlignMethodVersion(sourceMetadata)}</strong>.</p>
       <p>BenchLM refreshes its source output on its own schedule. TokenBench checks that source once daily within its broader Worker, which runs twice daily; a successful TokenBench check does not claim that BenchLM published a new method or result.</p>
     </section>
   </div>;

@@ -847,7 +847,13 @@ describe('cached benchmark APIs', () => {
       freshness: { status: 'fresh', checkedAt: CHECKED_AT },
       data: {
         sources: expect.arrayContaining([
-          expect.objectContaining({ sourceId: 'benchlm', available: true }),
+          expect.objectContaining({
+            sourceId: 'benchlm',
+            available: true,
+            artifacts: expect.arrayContaining([
+              expect.objectContaining({ artifactId: 'models', upstreamRevision: 'benchlm-r1', schemaVersion: '1.0' }),
+            ]),
+          }),
           expect.objectContaining({ sourceId: 'litellm', available: false }),
         ]),
         routes: expect.arrayContaining([

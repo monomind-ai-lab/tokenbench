@@ -1,5 +1,5 @@
 import { SITE_CONFIG } from '../brand/site-config';
-import type { SiteNavigationPage } from '../routing/routes';
+import { ROUTE_PATHS, type SiteNavigationPage } from '../routing/routes';
 import type { PageMetadata } from './metadata';
 
 export type StaticNavigationPage = SiteNavigationPage | undefined;
@@ -53,7 +53,7 @@ export function staticChrome(content: string, activePage: StaticNavigationPage):
         <nav class="primary-nav" aria-label="Primary navigation">${navLink('/', 'Home', activePage, 'home')}${navLink('/tools/subscriptions-vs-apis/', 'Subscribe vs API', activePage, 'calculator')}${navLink('/compare/', 'Compare', activePage, 'compare')}${navLink('/leaderboards/', 'Leaderboards', activePage, 'leaderboards')}${navLink('/guides/', 'Guides', activePage, 'guides')}</nav>
       </div></header>
       ${content}
-      <footer class="app-footer"><div class="footer-brand"><a href="${SITE_CONFIG.parentUrl}">Powered by ${SITE_CONFIG.parentName}</a><span>Source-aware decision support.</span></div><div class="footer-links"><a href="/sources/">Sources</a><a href="/methodology/">Methodology</a><span>Verify provider evidence before purchasing.</span></div></footer>
+      <footer class="app-footer"><div class="footer-brand"><a href="${SITE_CONFIG.parentUrl}">Powered by ${SITE_CONFIG.parentName}</a><span>Source-aware decision support.</span></div><div class="footer-links"><a href="${ROUTE_PATHS.methodologyBenchAlign}">Methodology</a><span>Verify provider evidence before purchasing.</span></div></footer>
     </div>`;
 }
 

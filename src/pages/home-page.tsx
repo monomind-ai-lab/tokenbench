@@ -4,6 +4,7 @@ import type { DecisionPickEntry, HomeDecisionSlot, HomeRepresentativeRate, Price
 import { LeaderboardEvidence } from '../frontend/leaderboard-table';
 import { ProviderMark } from '../frontend/provider-mark';
 import { useHomeDecisionSnapshot } from '../frontend/use-benchmarks';
+import { HOME_PAGE_COPY } from '../brand/site-config';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
 
 const DECISION_CARDS = [
@@ -172,8 +173,8 @@ export function HomePage() {
     <div className="content-stack home-page">
       <section className="panel home-hero" aria-labelledby="home-hero-heading">
         <span className="eyebrow">TokenBench</span>
-        <h1 id="home-hero-heading">Transparent AI Costs. Verified Benchmarks.</h1>
-        <p>The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.</p>
+        <h1 id="home-hero-heading">{HOME_PAGE_COPY.h1}</h1>
+        <p>{HOME_PAGE_COPY.subcopy}</p>
         <div className="home-hero-actions" aria-label="Primary TokenBench decisions">
           <a className="button" href={ROUTE_PATHS.compareHub}>Compare models <ArrowRight aria-hidden="true" size={16} /></a>
           <a className="button button-secondary" href={ROUTE_PATHS.calculator}>Calculate subscription vs API</a>

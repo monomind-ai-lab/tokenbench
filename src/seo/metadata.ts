@@ -1,4 +1,4 @@
-import { SITE_CONFIG } from '../brand/site-config';
+import { HOME_PAGE_COPY, SITE_CONFIG } from '../brand/site-config';
 import { GUIDE_BY_SLUG } from '../guides/content';
 import { LEADERBOARD_ROUTES, pathnameForRoute, type AppRoute } from '../routing/routes';
 
@@ -67,9 +67,9 @@ function makeMetadata(pathname: string, definition: MetadataDefinition, trailing
 
 const pageDefinitions = {
   home: {
-    title: `AI Cost and Model Benchmark Decisions | ${SITE_CONFIG.name}`,
-    description: `${SITE_CONFIG.name} helps teams compare AI costs, model benchmarks, pricing context, and decision paths with source-aware methodology and transparent caveats.`,
-    h1: 'AI cost and model benchmark decisions',
+    title: `${HOME_PAGE_COPY.h1} | ${SITE_CONFIG.name}`,
+    description: HOME_PAGE_COPY.subcopy,
+    h1: HOME_PAGE_COPY.h1,
   },
   guides: {
     title: `AI Cost Optimization Guides | ${SITE_CONFIG.name}`,

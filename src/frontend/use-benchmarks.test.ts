@@ -1199,6 +1199,36 @@ describe('decision summary hooks', () => {
     });
   });
 
+  it('keeps a materialized source record readable when it predates method-version fields', async () => {
+    const payload = decisionSummaryEnvelope();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: {
+        ...payload.data,
+        sources: [
+          {
+            sourceId: 'benchlm',
+            available: true,
+            updatedAt: ISO_TIME,
+            artifacts: [{
+              artifactId: 'leaderboard',
+              url: 'https://benchlm.ai/data/leaderboard.json',
+              updatedAt: ISO_TIME,
+            }],
+          },
+          { sourceId: 'lmarena', available: false, updatedAt: null, artifacts: [] },
+          { sourceId: 'litellm', available: false, updatedAt: null, artifacts: [] },
+          { sourceId: 'openrouter', available: false, updatedAt: null, artifacts: [] },
+        ],
+      },
+    })));
+
+    const { result } = renderHook(() => useDecisionPicks());
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.decisionPicks?.[0]?.key).toBe('llm-overall');
+  });
+
   it('keeps a stale Home decision snapshot available without inventing a fallback', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(decisionSummaryEnvelope({
       freshness: { status: 'stale', checkedAt: ISO_TIME, message: 'Refresh overdue.' },

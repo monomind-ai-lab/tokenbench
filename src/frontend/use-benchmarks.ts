@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { activeBenchAlignSourceMetadata, type BenchAlignSourceMetadata } from '../benchmarks/benchalign-metadata';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardDefinition, type LeaderboardEntry, type LeaderboardResult, type LeaderboardSort } from '../benchmarks/leaderboards';
-import { BENCHMARK_SOURCE_IDS } from '../benchmarks/contracts';
+import { BENCHMARK_SOURCE_IDS, type BenchmarkSourceId } from '../benchmarks/contracts';
 import {
   DECISION_PICK_CATEGORIES,
   type DecisionPickEntry,
@@ -24,6 +25,21 @@ export interface BenchmarkAttribution {
   readonly label: string;
   readonly url: string;
   readonly updatedAt: string;
+}
+
+export interface BenchmarkSourceArtifactAvailability {
+  readonly artifactId: string;
+  readonly url: string;
+  readonly updatedAt: string;
+  readonly upstreamRevision?: string | null;
+  readonly schemaVersion?: string | null;
+}
+
+export interface BenchmarkSourceAvailability {
+  readonly sourceId: BenchmarkSourceId;
+  readonly available: boolean;
+  readonly updatedAt: string | null;
+  readonly artifacts: readonly BenchmarkSourceArtifactAvailability[];
 }
 
 /** The frozen Task 9 public envelope. Frontend code never substitutes its own data. */
@@ -71,6 +87,10 @@ function isNullableNonNegativeFiniteNumber(value: unknown): value is number | nu
 
 function isNullablePositiveInteger(value: unknown): value is number | null {
   return value === null || (Number.isSafeInteger(value) && (value as number) > 0);
+}
+
+function isNullableNonEmptyString(value: unknown): value is string | null {
+  return value === null || isNonEmptyString(value);
 }
 
 function isBenchmarkSourceId(value: unknown): boolean {
@@ -349,6 +369,36 @@ function isAttribution(value: unknown): value is BenchmarkAttribution {
   }
 }
 
+function isSourceArtifactAvailability(value: unknown): value is BenchmarkSourceArtifactAvailability {
+  if (!isRecord(value)
+    || !isNonEmptyString(value.artifactId)
+    || !isNonEmptyString(value.url)
+    || !isFiniteIsoTimestamp(value.updatedAt)
+    || (value.upstreamRevision !== undefined && !isNullableNonEmptyString(value.upstreamRevision))
+    || (value.schemaVersion !== undefined && !isNullableNonEmptyString(value.schemaVersion))) return false;
+  try {
+    return new URL(value.url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isSourceAvailability(value: unknown, sourceId: BenchmarkSourceId): value is BenchmarkSourceAvailability {
+  if (!isRecord(value)
+    || value.sourceId !== sourceId
+    || typeof value.available !== 'boolean'
+    || !Array.isArray(value.artifacts)
+    || !value.artifacts.every(isSourceArtifactAvailability)
+    || (value.updatedAt !== null && !isFiniteIsoTimestamp(value.updatedAt))) return false;
+  return value.available === (value.artifacts.length > 0);
+}
+
+function isSourceAvailabilityCollection(value: unknown): value is readonly BenchmarkSourceAvailability[] {
+  return Array.isArray(value)
+    && value.length === BENCHMARK_SOURCE_IDS.length
+    && value.every((source, index) => isSourceAvailability(source, BENCHMARK_SOURCE_IDS[index]));
+}
+
 function hasApplicableAttribution(
   attribution: readonly BenchmarkAttribution[],
   definition: LeaderboardDefinition,
@@ -535,6 +585,7 @@ export function useBenchmarkLeaderboard(
 }
 
 export interface BenchmarkSummaryData {
+  readonly sources?: readonly BenchmarkSourceAvailability[];
   readonly decisionPicks: readonly DecisionPickGroup[];
   readonly homeDecisionSnapshot: HomeDecisionSnapshot;
 }
@@ -641,7 +692,8 @@ function isBenchmarkSummaryEnvelope(value: unknown): value is BenchmarkApiEnvelo
     || !isRecord(value.data)) return false;
 
   const data = value.data;
-  return Array.isArray(data.decisionPicks)
+  return (data.sources === undefined || isSourceAvailabilityCollection(data.sources))
+    && Array.isArray(data.decisionPicks)
     && data.decisionPicks.length === DECISION_PICK_CATEGORIES.length
     && data.decisionPicks.every((group, index) => isDecisionPickGroup(group, DECISION_PICK_CATEGORIES[index]))
     && isHomeDecisionSnapshot(data.homeDecisionSnapshot);
@@ -760,4 +812,10 @@ export function useHomeDecisionSnapshot(): HomeDecisionSnapshotState {
     ...state,
     homeDecisionSnapshot: state.envelope?.data.homeDecisionSnapshot ?? null,
   };
+}
+
+/** Reuses the bounded published-summary request; it never fetches BenchLM directly. */
+export function useBenchAlignSourceMetadata(): BenchAlignSourceMetadata | null {
+  const state = useBenchmarkSummary();
+  return activeBenchAlignSourceMetadata(state.envelope?.data.sources);
 }

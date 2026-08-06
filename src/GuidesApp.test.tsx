@@ -12,7 +12,7 @@ describe('guides shared chrome', () => {
     render(<GuidesApp />);
 
     expect(screen.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
-    expect(screen.getByRole('link', { name: 'Sources' })).toHaveAttribute('href', '/sources/');
-    expect(screen.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/');
+    expect(screen.queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
   });
 });

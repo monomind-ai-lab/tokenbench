@@ -3,6 +3,8 @@ import type { AppRoute, LeaderboardKey } from '../routing/routes';
 import { metadataForRoute } from './metadata';
 
 const origin = 'https://tokenbench.monomind.one';
+const HOME_H1 = 'Transparent AI Costs. Verified Benchmarks.';
+const HOME_SUBCOPY = 'The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.';
 
 const APPROVED_LEADERBOARD_TITLES = {
   'llm-overall': 'Overall benchmarks',
@@ -51,6 +53,15 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
 ];
 
 describe('route metadata registry', () => {
+  it('keeps canonical Home metadata aligned with the approved decision copy', () => {
+    const page = metadataForRoute({ kind: 'home' });
+
+    expect(page.h1).toBe(HOME_H1);
+    expect(page.description).toBe(HOME_SUBCOPY);
+    expect(page.openGraph.description).toBe(HOME_SUBCOPY);
+    expect(page.twitter.description).toBe(HOME_SUBCOPY);
+  });
+
   it('gives every fixed page unique, canonical TokenBench search and social metadata', () => {
     const metadata = fixedRouteCases.map(({ route }) => metadataForRoute(route));
 

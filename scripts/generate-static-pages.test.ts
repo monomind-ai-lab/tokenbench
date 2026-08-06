@@ -43,7 +43,9 @@ describe('crawlable static-page generator', () => {
     const guide = await readFile(join(root, 'guides/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
-    expect(home).toContain('<h1>AI cost and model benchmark decisions</h1>');
+    expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
+    expect(home).toContain('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.');
+    expect(home).toContain('<meta name="description" content="The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.">');
     expect(home).toContain('<main id="page-content" class="page-main" tabindex="-1">');
     expect(home).toContain('<link rel="canonical" href="https://tokenbench.monomind.one">');
     expect(home).toContain('<script type="application/ld+json">');
@@ -76,6 +78,9 @@ describe('crawlable static-page generator', () => {
     expect(methodology).toContain('TokenBench republishes BenchLM&#039;s BenchAlign results');
     expect(methodology).toContain('https://benchlm.ai/methodology');
 
+    expect(home).toContain('<a href="/methodology/benchalign/">Methodology</a>');
+    expect(home).not.toContain('href="/sources/"');
+
     expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
@@ -88,6 +93,27 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
     expect(new Set(sitemap.match(/<loc>[^<]+<\/loc>/g)).size).toBe(sitemap.match(/<loc>[^<]+<\/loc>/g)?.length);
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
+  });
+
+  it('uses supplied BenchAlign source metadata in the static methodology fallback without an upstream request', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
+    outputRoots.push(root);
+    const previousRevision = process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION;
+    const previousSchema = process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION;
+    process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = 'benchlm-method-2026-08';
+    process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION = '1.0';
+
+    try {
+      await generateStaticPages(root);
+      const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
+      expect(methodology).toContain('Published method version: <strong>benchlm-method-2026-08</strong>.');
+      expect(methodology).not.toContain('Published method version: <strong>Unavailable</strong>.');
+    } finally {
+      if (previousRevision === undefined) delete process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION;
+      else process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = previousRevision;
+      if (previousSchema === undefined) delete process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION;
+      else process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION = previousSchema;
+    }
   });
 
   it('preserves unowned files inside generated route trees', async () => {
