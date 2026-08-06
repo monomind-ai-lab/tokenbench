@@ -94,22 +94,51 @@ describe('createDoubleOptInContact', () => {
     expect(String(failure)).not.toContain(responseBody);
   });
 
-  it('returns a typed secret-free error when the DOI request times out', async () => {
-    vi.useFakeTimers();
-    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
-      init?.signal?.addEventListener('abort', () => reject(new Error('request timeout')), { once: true });
-    }));
-    try {
-      const request = createDoubleOptInContact(config(), signup(), fetchImpl);
-      const failure = request.catch((error: unknown) => error);
-      await vi.advanceTimersByTimeAsync(60_000);
-      const resolvedFailure = await failure;
+  it.each([200, 202])('rejects successful-looking HTTP %i because DOI requires 201', async (status) => {
+    const failure = await createDoubleOptInContact(
+      config(),
+      signup(),
+      vi.fn().mockResolvedValue(new Response('{}', { status })),
+    ).catch((error: unknown) => error);
 
-      expect(resolvedFailure).toBeInstanceOf(BrevoUpstreamError);
-      expect(resolvedFailure).toMatchObject({ status: null });
-      expect(String(resolvedFailure)).not.toContain('builder@example.com');
-      expect(String(resolvedFailure)).not.toContain('test-api-key');
+    expect(failure).toBeInstanceOf(BrevoUpstreamError);
+    expect(failure).toMatchObject({ status });
+  });
+
+  it('times out at exactly 10,000ms when fetch ignores abort', async () => {
+    vi.useFakeTimers();
+    let requestSignal: AbortSignal | undefined;
+    const fetchImpl = vi.fn((_url: string | URL | Request, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>(() => undefined);
+    });
+    const pending = Symbol('pending');
+    let outcome: unknown = pending;
+    try {
+      const observed = createDoubleOptInContact(config(), signup(), fetchImpl).then(
+        () => { outcome = new Error('DOI request unexpectedly resolved'); },
+        (error: unknown) => { outcome = error; },
+      );
+
+      expect(requestSignal).toBeDefined();
+      expect(requestSignal?.aborted).toBe(false);
+      expect(vi.getTimerCount()).toBe(1);
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(requestSignal?.aborted).toBe(false);
+      expect(outcome).toBe(pending);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(requestSignal?.aborted).toBe(true);
+      expect(outcome).not.toBe(pending);
+      expect(outcome).toBeInstanceOf(BrevoUpstreamError);
+      expect(outcome).toMatchObject({ status: null });
+      expect(String(outcome)).not.toContain('builder@example.com');
+      expect(String(outcome)).not.toContain('test-api-key');
+      expect(vi.getTimerCount()).toBe(0);
+
+      await observed;
     } finally {
+      vi.clearAllTimers();
       vi.useRealTimers();
     }
   });
