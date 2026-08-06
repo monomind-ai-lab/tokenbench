@@ -23,15 +23,17 @@ export const LMARENA_SUBSETS = [
 ] as const;
 
 export type LmArenaSubset = typeof LMARENA_SUBSETS[number];
+export type LmArenaTransport = 'dataset-viewer' | 'hub-parquet';
 
 /**
- * Immutable identity and transport evidence for one Dataset Viewer page.
- * Page scope is explicit so independently fetched pages cannot collapse onto
- * the same durable source artifact.
+ * Immutable identity and transport evidence for one normalized source page.
+ * Page scope is explicit so independently fetched or derived pages cannot
+ * collapse onto the same durable source artifact.
  */
 export interface LmArenaPageArtifact extends ArtifactProvenance {
   artifactId: string;
   sourceUrl: string;
+  transport?: LmArenaTransport;
   subset: string;
   split: string;
   category: string;
@@ -40,6 +42,7 @@ export interface LmArenaPageArtifact extends ArtifactProvenance {
 }
 
 const LMARENA_FILTER_ORIGIN = 'https://datasets-server.huggingface.co/filter?dataset=lmarena-ai%2Fleaderboard-dataset';
+const LMARENA_HUB_ORIGIN = 'https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/resolve';
 
 type ArenaRow = Record<string, unknown>;
 
@@ -276,11 +279,29 @@ export function lmArenaPageSourceUrl(
   return `${LMARENA_FILTER_ORIGIN}&config=${encodeURIComponent(subset)}&split=${encodeURIComponent(split)}&where=${where}&offset=${offset}&length=${length}`;
 }
 
+export function lmArenaHubParquetPageArtifactId(
+  subset: LmArenaSubset,
+  split: string,
+  category: string,
+  offset: number,
+  length: number,
+): string {
+  return `${subset}:${split}:${encodeURIComponent(category)}:hub-parquet:rows-${offset}-${offset + length}`;
+}
+
+export function lmArenaHubParquetSourceUrl(subset: LmArenaSubset, revision: string): string {
+  return `${LMARENA_HUB_ORIGIN}/${revision}/${encodeURIComponent(subset)}/latest-00000-of-00001.parquet?download=true`;
+}
+
 function requireLmArenaPageArtifact(
   value: LmArenaPageArtifact | undefined,
   requestedSubset: LmArenaSubset,
 ): LmArenaPageArtifact {
   const artifact = requireArtifactProvenance(value, 'LMArena') as LmArenaPageArtifact;
+  const transport = artifact.transport ?? 'dataset-viewer';
+  if (transport !== 'dataset-viewer' && transport !== 'hub-parquet') {
+    fail('LMArena descriptor transport is invalid');
+  }
   const descriptorSubset = requireString(artifact.subset, 'LMArena descriptor subset');
   if (!isLmArenaSubset(descriptorSubset) || descriptorSubset !== requestedSubset) {
     fail(`LMArena descriptor subset ${descriptorSubset} does not match requested subset ${requestedSubset}`);
@@ -305,28 +326,25 @@ function requireLmArenaPageArtifact(
     fail('LMArena descriptor page bounds must be safe integers');
   }
 
-  const expectedArtifactId = lmArenaPageArtifactId(
-    requestedSubset,
-    split,
-    category,
-    artifact.offset,
-    artifact.length,
-  );
+  const expectedArtifactId = transport === 'hub-parquet'
+    ? lmArenaHubParquetPageArtifactId(requestedSubset, split, category, artifact.offset, artifact.length)
+    : lmArenaPageArtifactId(requestedSubset, split, category, artifact.offset, artifact.length);
   if (artifact.artifactId !== expectedArtifactId) {
-    fail(`LMArena descriptor artifactId must include its exact subset, split, category, and page bounds: ${expectedArtifactId}`);
-  }
-  const expectedSourceUrl = lmArenaPageSourceUrl(
-    requestedSubset,
-    split,
-    category,
-    artifact.offset,
-    artifact.length,
-  );
-  if (artifact.sourceUrl !== expectedSourceUrl) {
-    fail(`LMArena descriptor sourceUrl must equal the exact official Dataset Viewer URL: ${expectedSourceUrl}`);
+    fail(`LMArena descriptor artifactId must include its exact transport, subset, split, category, and page bounds: ${expectedArtifactId}`);
   }
   if (typeof artifact.upstreamRevision !== 'string' || artifact.upstreamRevision.trim().length === 0) {
     fail('LMArena provenance requires the non-null Hugging Face x-revision header');
+  }
+  const expectedSourceUrl = transport === 'hub-parquet'
+    ? lmArenaHubParquetSourceUrl(requestedSubset, artifact.upstreamRevision)
+    : lmArenaPageSourceUrl(requestedSubset, split, category, artifact.offset, artifact.length);
+  if (artifact.sourceUrl !== expectedSourceUrl) {
+    fail(transport === 'hub-parquet'
+      ? `LMArena descriptor sourceUrl must equal the exact official pinned Hub Parquet URL: ${expectedSourceUrl}`
+      : `LMArena descriptor sourceUrl must equal the exact official Dataset Viewer URL: ${expectedSourceUrl}`);
+  }
+  if (transport === 'hub-parquet' && !/^[a-f0-9]{40}$/.test(artifact.upstreamRevision)) {
+    fail('LMArena Hub Parquet provenance requires a 40-character lowercase Hugging Face commit');
   }
   return artifact;
 }

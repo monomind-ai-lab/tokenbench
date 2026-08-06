@@ -88,6 +88,13 @@ Benchmark ingestion follows the same publication boundary:
 4. It records a failure in benchmark_refresh_state without replacing a previous
    published revision.
 
+LMArena Dataset Viewer remains the primary transport. If it exhausts retries
+for a timeout, 408, 429, or 5xx response, the Worker may use the official Hub
+Parquet fallback pinned to one verified dataset commit. The fallback preserves
+the same subset, split, category, schema, attribution, immutable R2 evidence,
+and atomic D1 publication rules. It does not run for authorization, schema,
+size, or validation failures.
+
 Post-refresh verification must confirm an active published benchmark revision,
 expected source records, reachable R2 snapshot keys, and empty last_error values
 for the refreshed artifacts. A failed or incomplete refresh is not eligible for

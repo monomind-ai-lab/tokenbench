@@ -134,6 +134,74 @@ function healthyFetch(options: {
   }) as typeof fetch;
 }
 
+const hubRevision = '0123456789abcdef0123456789abcdef01234567';
+
+function hubParquetRows(subset: string): Record<string, unknown>[] {
+  const count = subset === 'text_style_control' ? 101 : 1;
+  const common = (index: number) => ({
+    model_name: `${subset}-overall-${index + 1}`,
+    organization: 'Example Org',
+    license: 'Proprietary',
+    rank: BigInt(index + 1),
+    category: 'overall',
+    leaderboard_publish_date: '2026-08-05',
+  });
+  const extraCategory = { ...common(count), model_name: `${subset}-excluded`, category: 'creative_writing' };
+  if (subset === 'agent') {
+    return [
+      ...Array.from({ length: count }, (_, index) => ({
+        ...common(index), score: 0.25, score_ci_lower: 0.1, score_ci_upper: 0.4, observation_count: 11n, session_count: 3n,
+      })),
+      { ...extraCategory, score: 0.2, score_ci_lower: 0.1, score_ci_upper: 0.3, observation_count: 10n, session_count: 2n },
+    ];
+  }
+  return [
+    ...Array.from({ length: count }, (_, index) => ({
+      ...common(index), rating: 1_200, rating_lower: 1_190, rating_upper: 1_210, variance: 1, vote_count: 10n,
+    })),
+    { ...extraCategory, rating: 1_100, rating_lower: 1_090, rating_upper: 1_110, variance: 1, vote_count: 9n },
+  ];
+}
+
+function hubFallbackFetch(options: {
+  wrongCommitFor?: string;
+  wrongDigestFor?: string;
+  downloadHost?: string;
+} = {}): typeof fetch {
+  const downloadHost = options.downloadHost ?? 'cdn.hf.co';
+  const primary = healthyFetch({
+    onRequest(url) {
+      if (url.hostname === 'datasets-server.huggingface.co') return new Response('unavailable', { status: 503 });
+      return undefined;
+    },
+  });
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    if (url.hostname === 'huggingface.co' && url.pathname === '/api/datasets/lmarena-ai/leaderboard-dataset') {
+      return new Response(JSON.stringify({ sha: hubRevision }), { headers: { 'content-type': 'application/json' } });
+    }
+    const resolve = url.pathname.match(/^\/datasets\/lmarena-ai\/leaderboard-dataset\/resolve\/([a-f0-9]{40})\/([^/]+)\/latest-00000-of-00001\.parquet$/);
+    if (url.hostname === 'huggingface.co' && resolve) {
+      const parquetBytes = new TextEncoder().encode(resolve[2]);
+      const linkedDigest = resolve[2] === options.wrongDigestFor
+        ? 'f'.repeat(64)
+        : sha256(parquetBytes).slice('sha256:'.length);
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: `https://${downloadHost}/${resolve[2]}.parquet`,
+          'x-linked-etag': `"${linkedDigest}"`,
+          'x-repo-commit': resolve[2] === options.wrongCommitFor ? 'f'.repeat(40) : resolve[1],
+        },
+      });
+    }
+    if (url.hostname === downloadHost) {
+      return new Response(new TextEncoder().encode(url.pathname.slice(1, -'.parquet'.length)));
+    }
+    return primary(input, init);
+  }) as typeof fetch;
+}
+
 function createR2(events: string[]) {
   const objects = new Map<string, { bytes: Uint8Array; customMetadata: Record<string, string> }>();
   const bucket = {
@@ -302,6 +370,7 @@ function dependencies(fetchImpl: typeof fetch, now = () => observedAt) {
   return {
     dependencies: {
       fetchImpl,
+      readParquetRows: async () => { throw new Error('unexpected Hub Parquet decode'); },
       now,
       createAbortController: () => new AbortController(),
       setTimeoutImpl: (_handler: () => void, timeout: number) => {
@@ -424,6 +493,206 @@ function jsonRowsFor(statements: readonly { sql: string; values: unknown[] }[], 
 }
 
 describe('atomic benchmark ingestion', () => {
+  it('publishes complete Hub-Parquet overall snapshots after exhausted transient Dataset Viewer failures', async () => {
+    const { env, db, r2 } = seededEnvironment();
+    const transport = dependencies(hubFallbackFetch());
+    const result = await refreshBenchmarkRevision(env, {
+      ...transport.dependencies,
+      readParquetRows: async (bytes: ArrayBuffer) => hubParquetRows(new TextDecoder().decode(bytes)),
+    });
+
+    expect(result).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    const sources = db.state.sourceRows.get(result.revision as string) ?? [];
+    const arenaSources = sources.filter((source) => source.sourceId === 'lmarena');
+    expect(arenaSources).toHaveLength(12);
+    expect(arenaSources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        artifactId: 'text_style_control:latest:overall:hub-parquet:rows-0-100',
+        sourceUrl: `https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset/resolve/${hubRevision}/text_style_control/latest-00000-of-00001.parquet?download=true`,
+        upstreamRevision: hubRevision,
+        originalContentHash: sha256(new TextEncoder().encode('text_style_control')),
+      }),
+      expect.objectContaining({ artifactId: 'text_style_control:latest:overall:hub-parquet:rows-100-200' }),
+    ]));
+    const textMetric = jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')
+      .find((metric) => metric.metricKey === 'lmarena:text_style_control:overall');
+    expect(textMetric).toMatchObject({ value: 1_200, voteCount: 10, rank: 1 });
+    expect(jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')
+      .some((metric) => metric.metricKey === 'lmarena:text_style_control:creative_writing')).toBe(false);
+    const finalTextPage = arenaSources.find((source) => source.artifactId === 'text_style_control:latest:overall:hub-parquet:rows-100-200');
+    const finalTextSnapshot = finalTextPage ? r2.objects.get(finalTextPage.snapshotKey) : undefined;
+    const finalTextProjection = JSON.parse(new TextDecoder().decode(finalTextSnapshot?.bytes)) as { rows: unknown[]; num_rows_total: number };
+    expect(finalTextProjection).toMatchObject({ num_rows_total: 101 });
+    expect(finalTextProjection.rows).toHaveLength(1);
+    expect(finalTextProjection.rows[0]).toMatchObject({ row_idx: 100 });
+    for (const source of arenaSources) {
+      const snapshot = r2.objects.get(source.snapshotKey);
+      expect(snapshot).toBeDefined();
+      expect(snapshot?.customMetadata.original_content_hash).toBe(source.originalContentHash);
+    }
+  });
+
+  it('rejects a Hub-Parquet file whose resolver revision differs from the selected dataset commit', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const { env, db } = seededEnvironment({ activeBenchmark: previous });
+    const transport = dependencies(hubFallbackFetch({ wrongCommitFor: 'agent' }));
+    const result = await refreshBenchmarkRevision(env, {
+      ...transport.dependencies,
+      readParquetRows: async (bytes: ArrayBuffer) => hubParquetRows(new TextDecoder().decode(bytes)),
+    });
+
+    expect(result).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/x-repo-commit/i) });
+    expect(db.state.activeRevision).toBe(previous.revision);
+    expect(db.state.publicationBatchCalls).toBe(0);
+  });
+
+  it('rejects Hub-Parquet bytes whose SHA-256 differs from the pinned resolver digest', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const { env, db } = seededEnvironment({ activeBenchmark: previous });
+    const transport = dependencies(hubFallbackFetch({ wrongDigestFor: 'agent' }));
+    const result = await refreshBenchmarkRevision(env, {
+      ...transport.dependencies,
+      readParquetRows: async (bytes: ArrayBuffer) => hubParquetRows(new TextDecoder().decode(bytes)),
+    });
+
+    expect(result).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/sha-256|digest/i) });
+    expect(db.state.activeRevision).toBe(previous.revision);
+    expect(db.state.publicationBatchCalls).toBe(0);
+  });
+
+  it('accepts the official cdn-lfs.huggingface.co Hub download host', async () => {
+    const { env } = seededEnvironment();
+    const transport = dependencies(hubFallbackFetch({ downloadHost: 'cdn-lfs.huggingface.co' }));
+    const result = await refreshBenchmarkRevision(env, {
+      ...transport.dependencies,
+      readParquetRows: async (bytes: ArrayBuffer) => hubParquetRows(new TextDecoder().decode(bytes)),
+    });
+
+    expect(result).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+  });
+
+  it('rejects a Hub resolver download outside the explicit Hugging Face CDN policy', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const { env, db } = seededEnvironment({ activeBenchmark: previous });
+    const transport = dependencies(hubFallbackFetch({ downloadHost: 'downloads.example.com' }));
+    const result = await refreshBenchmarkRevision(env, {
+      ...transport.dependencies,
+      readParquetRows: async (bytes: ArrayBuffer) => hubParquetRows(new TextDecoder().decode(bytes)),
+    });
+
+    expect(result).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/untrusted download location/i) });
+    expect(db.state.activeRevision).toBe(previous.revision);
+    expect(db.state.publicationBatchCalls).toBe(0);
+  });
+
+  it('retries an interrupted Dataset Viewer body before activating Hub-Parquet fallback', async () => {
+    let viewerRequests = 0;
+    const fallback = hubFallbackFetch();
+    const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.hostname === 'datasets-server.huggingface.co') {
+        viewerRequests += 1;
+        const body = new ReadableStream({
+          start(controller) {
+            controller.error(new TypeError('connection reset'));
+          },
+        });
+        return new Response(body, { status: 200, headers: { 'x-revision': 'interrupted' } });
+      }
+      return fallback(input, init);
+    }) as typeof fetch;
+    const { env } = seededEnvironment();
+    const transport = dependencies(fetchImpl);
+    const result = await refreshBenchmarkRevision(env, {
+      ...transport.dependencies,
+      readParquetRows: async (bytes: ArrayBuffer) => hubParquetRows(new TextDecoder().decode(bytes)),
+    });
+
+    expect(result).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    expect(viewerRequests).toBeGreaterThanOrEqual(3);
+  });
+
+  it.each([401, 403])('does not attempt Hub-Parquet fallback after a non-retryable Dataset Viewer %i', async (status) => {
+    let hubRequests = 0;
+    const fetchImpl = healthyFetch({
+      onRequest(url) {
+        if (url.hostname === 'huggingface.co') {
+          hubRequests += 1;
+          return new Response('unexpected Hub fallback', { status: 500 });
+        }
+        if (url.hostname === 'datasets-server.huggingface.co') return new Response('denied', { status });
+        return undefined;
+      },
+    });
+    const { env, db } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(fetchImpl).dependencies);
+
+    expect(result).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(new RegExp(`returned ${status}`)) });
+    expect(hubRequests).toBe(0);
+    expect(db.state.publicationBatchCalls).toBe(0);
+  });
+
+  it('does not attempt Hub-Parquet fallback for a schema-invalid Dataset Viewer 200 response', async () => {
+    let hubRequests = 0;
+    const fetchImpl = healthyFetch({
+      onRequest(url) {
+        if (url.hostname === 'huggingface.co') {
+          hubRequests += 1;
+          return new Response('unexpected Hub fallback', { status: 500 });
+        }
+        if (url.hostname === 'datasets-server.huggingface.co') {
+          return new Response(JSON.stringify({ rows: [], num_rows_total: 1 }), { headers: { 'x-revision': 'schema-invalid' } });
+        }
+        return undefined;
+      },
+    });
+    const { env, db } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(fetchImpl).dependencies);
+
+    expect(result).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/missing rows|required/i) });
+    expect(hubRequests).toBe(0);
+    expect(db.state.publicationBatchCalls).toBe(0);
+  });
+
+  it('does not attempt Hub-Parquet fallback after an oversized Dataset Viewer response body', async () => {
+    let hubRequests = 0;
+    const fetchImpl = healthyFetch({
+      onRequest(url) {
+        if (url.hostname === 'huggingface.co') {
+          hubRequests += 1;
+          return new Response('unexpected Hub fallback', { status: 500 });
+        }
+        if (url.hostname === 'datasets-server.huggingface.co') {
+          return new Response('{}', {
+            headers: {
+              'content-length': String(2 * 1024 * 1024 + 1),
+              'x-revision': 'oversized-response',
+            },
+          });
+        }
+        return undefined;
+      },
+    });
+    const { env, db } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(fetchImpl).dependencies);
+
+    expect(result).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/response body is invalid.*exceeds/i) });
+    expect(hubRequests).toBe(0);
+    expect(db.state.publicationBatchCalls).toBe(0);
+  });
+
   it('derives canonical pairs in SQLite UTF-8 BINARY order when JavaScript UTF-16 order disagrees', () => {
     // U+10000 begins with a UTF-16 surrogate (so JS sorts it first), while
     // U+E000 has the lower UTF-8 byte sequence used by D1 SQLite BINARY.
@@ -603,7 +872,7 @@ describe('atomic benchmark ingestion', () => {
     expect([...db.state.refreshRows.values()].some((row) => row.lastError?.includes('D1 batch rolled back'))).toBe(true);
   });
 
-  it('preserves the prior pointer when a required LMArena page fails', async () => {
+  it('preserves the prior pointer when a required LMArena page has a non-retryable failure', async () => {
     const previous: RevisionRow = {
       revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
       publicationState: 'published', contentHash: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -613,7 +882,7 @@ describe('atomic benchmark ingestion', () => {
     const transport = dependencies(healthyFetch({
       onRequest(url) {
         return url.hostname === 'datasets-server.huggingface.co' && url.searchParams.get('config') === 'agent'
-          ? new Response('unavailable', { status: 503 })
+          ? new Response('unavailable', { status: 401 })
           : undefined;
       },
     }));
@@ -624,7 +893,7 @@ describe('atomic benchmark ingestion', () => {
     expect(db.state.activeRevision).toBe('benchmark-known-good');
     expect(db.state.revisions).toHaveLength(1);
     expect(db.state.publicationStatements).toHaveLength(0);
-    expect([...db.state.refreshRows.values()].some((row) => row.lastError?.includes('503'))).toBe(true);
+    expect([...db.state.refreshRows.values()].some((row) => row.lastError?.includes('401'))).toBe(true);
   });
 
   it('reuses 304 snapshots and only updates checked_at for unchanged combined content', async () => {
@@ -867,6 +1136,7 @@ describe('atomic benchmark ingestion', () => {
 
     const result = await refreshBenchmarkRevision(env, {
       fetchImpl: fetchImpl as typeof fetch,
+      readParquetRows: async () => { throw new Error('unexpected Hub Parquet decode'); },
       now: () => observedAt,
       createAbortController: () => new AbortController(),
       setTimeoutImpl: (handler) => {
@@ -944,6 +1214,7 @@ describe('atomic benchmark ingestion', () => {
     try {
       const result = await refreshBenchmarkRevision(env, {
         fetchImpl: fetchImpl as typeof fetch,
+        readParquetRows: async () => { throw new Error('unexpected Hub Parquet decode'); },
         now: () => observedAt,
         createAbortController: () => {
           const controller = new AbortController();
