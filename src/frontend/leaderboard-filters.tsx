@@ -1,92 +1,88 @@
-import { LEADERBOARD_DEFINITIONS, sortLeaderboardEntries, type LeaderboardEntry, type LeaderboardSort } from '../benchmarks/leaderboards';
-import { isWorkloadProfile, type WorkloadProfile } from '../benchmarks/value';
+import type { LeaderboardSort } from '../benchmarks/leaderboards';
+import { LEADERBOARD_DEFINITIONS } from '../benchmarks/leaderboards';
+import { normalizeLeaderboardQueryState } from '../benchmarks/leaderboard-query';
 import type { LeaderboardKey } from '../routing/routes';
-import { supportsEstimatedModels } from './use-benchmarks';
+import {
+  leaderboardFilterCapabilities,
+  type LeaderboardFilterState,
+  type LeaderboardQueryCapabilities,
+} from './leaderboard-filter-state';
 
-export interface LeaderboardFilterState {
-  readonly query: string;
-  readonly profile: WorkloadProfile;
-  readonly sort: LeaderboardSort;
-  readonly includeEstimated: boolean;
-}
+export {
+  defaultLeaderboardFilters,
+  parseLeaderboardFilters,
+  serializeLeaderboardFilters,
+  visibleLeaderboardEntries,
+} from './leaderboard-filter-state';
+export type { LeaderboardFilterState } from './leaderboard-filter-state';
 
 interface LeaderboardFiltersProps {
   readonly keyName: LeaderboardKey;
   readonly filters: LeaderboardFilterState;
   readonly onChange: (filters: LeaderboardFilterState) => void;
+  readonly capabilities?: LeaderboardQueryCapabilities;
 }
 
 const SORT_OPTIONS: readonly { readonly value: LeaderboardSort; readonly label: string }[] = [
   { value: 'score-desc', label: 'Capability score' },
   { value: 'rank-asc', label: 'Source rank' },
   { value: 'pareto-score-desc', label: 'Value frontier' },
-  { value: 'price-asc', label: 'Blended cost' },
+  { value: 'price-asc', label: 'Price per 1M' },
   { value: 'context-desc', label: 'Context window' },
 ];
 
-function isLeaderboardSort(value: unknown): value is LeaderboardSort {
-  return typeof value === 'string' && SORT_OPTIONS.some((option) => option.value === value);
+function toggle(values: readonly string[], value: string): readonly string[] {
+  const next = values.includes(value)
+    ? values.filter((candidate) => candidate !== value)
+    : [...values, value];
+  return next.slice().sort((left, right) => left < right ? -1 : left > right ? 1 : 0);
 }
 
-export function defaultLeaderboardFilters(keyName: LeaderboardKey): LeaderboardFilterState {
-  return {
-    query: '',
-    profile: 'balanced',
-    sort: LEADERBOARD_DEFINITIONS[keyName].defaultSort,
-    includeEstimated: false,
-  };
+function parseOptionalPrice(value: string): number | null {
+  if (value.trim().length === 0) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-/** Reads only URL state; it does not infer a benchmark result or model identity. */
-export function parseLeaderboardFilters(search: string, keyName: LeaderboardKey): LeaderboardFilterState {
-  const defaults = defaultLeaderboardFilters(keyName);
-  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
-  const profile = params.get('profile');
-  const sort = params.get('sort');
-  return {
-    query: params.get('q')?.trim() ?? '',
-    profile: isWorkloadProfile(profile) ? profile : defaults.profile,
-    sort: isLeaderboardSort(sort) ? sort : defaults.sort,
-    includeEstimated: supportsEstimatedModels(keyName) && params.get('estimated') === '1',
-  };
+function sortLabel(keyName: LeaderboardKey, sort: LeaderboardSort): string {
+  if (keyName === 'multimodal-vision-documents' && sort === 'score-desc') return 'Source lens order';
+  return SORT_OPTIONS.find((option) => option.value === sort)?.label ?? sort;
 }
 
-/** Stable parameter ordering makes a filtered view shareable and deterministic. */
-export function serializeLeaderboardFilters(filters: LeaderboardFilterState): string {
-  const params = new URLSearchParams({ profile: filters.profile, sort: filters.sort });
-  const query = filters.query.trim();
-  if (query) params.set('q', query);
-  if (filters.includeEstimated) params.set('estimated', '1');
-  return params.toString();
+function FilterChecks({
+  legend,
+  values,
+  selected,
+  onToggle,
+}: {
+  readonly legend: string;
+  readonly values: readonly string[];
+  readonly selected: readonly string[];
+  readonly onToggle: (value: string) => void;
+}) {
+  return <fieldset className="leaderboard-filter-field leaderboard-check-filter">
+    <legend>{legend}</legend>
+    <div className="leaderboard-check-options">
+      {values.map((value) => <label key={value}>
+        <input
+          type="checkbox"
+          checked={selected.includes(value)}
+          onChange={() => onToggle(value)}
+        />
+        <span>{value}</span>
+      </label>)}
+    </div>
+  </fieldset>;
 }
 
-/** Keeps source-only lenses available while requiring an explicit choice for estimates. */
-export function visibleLeaderboardEntries(
-  entries: readonly LeaderboardEntry[],
-  filters: LeaderboardFilterState,
-  keyName: LeaderboardKey,
-): readonly LeaderboardEntry[] {
-  const query = filters.query.trim().toLocaleLowerCase();
-  const matchesQuery = (entry: LeaderboardEntry) => {
-    if (!query) return true;
-    return [entry.model.name, entry.model.creator, entry.model.slug]
-      .some((value) => value.toLocaleLowerCase().includes(query));
-  };
-  const ranked = entries.filter((entry) => entry.model.evidenceStatus !== 'estimated' && matchesQuery(entry));
-  const estimates = filters.includeEstimated
-    ? entries.filter((entry) => entry.model.evidenceStatus === 'estimated' && matchesQuery(entry)).slice().sort((left, right) => left.model.slug.localeCompare(right.model.slug))
-    : [];
-  const keepsMultimodalLensOrder = keyName === 'multimodal-vision-documents'
-    && filters.sort === LEADERBOARD_DEFINITIONS[keyName].defaultSort;
-  return [
-    ...(keepsMultimodalLensOrder ? ranked : sortLeaderboardEntries(ranked, filters.sort)),
-    ...estimates,
-  ];
-}
-
-export function LeaderboardFilters({ keyName, filters, onChange }: LeaderboardFiltersProps) {
-  const update = (changes: Partial<LeaderboardFilterState>) => onChange({ ...filters, ...changes });
-  const canIncludeEstimated = supportsEstimatedModels(keyName);
+export function LeaderboardFilters({ keyName, filters, onChange, capabilities }: LeaderboardFiltersProps) {
+  const routeCapabilities = capabilities ?? leaderboardFilterCapabilities(keyName);
+  const update = (changes: Partial<LeaderboardFilterState>) => onChange(normalizeLeaderboardQueryState(
+    { ...filters, ...changes },
+    LEADERBOARD_DEFINITIONS[keyName],
+    routeCapabilities,
+  ));
+  const sortOptions = SORT_OPTIONS.filter((option) => routeCapabilities.sorts.includes(option.value));
 
   return (
     <form className="leaderboard-filters" aria-label="Leaderboard filters" onSubmit={(event) => event.preventDefault()}>
@@ -100,7 +96,7 @@ export function LeaderboardFilters({ keyName, filters, onChange }: LeaderboardFi
         />
       </label>
 
-      <fieldset className="leaderboard-filter-field leaderboard-profile-field">
+      {routeCapabilities.supportsProfile ? <fieldset className="leaderboard-filter-field leaderboard-profile-field">
         <legend>Workload profile</legend>
         <div className="leaderboard-profile-options">
           {([
@@ -119,23 +115,61 @@ export function LeaderboardFilters({ keyName, filters, onChange }: LeaderboardFi
             </label>
           ))}
         </div>
-      </fieldset>
+      </fieldset> : null}
 
-      <label className="leaderboard-filter-field">
+      {routeCapabilities.metricKeys.length > 1 ? <label className="leaderboard-filter-field">
+        <span>Metric lens</span>
+        <select
+          aria-label="Metric lens"
+          value={filters.metricKey ?? ''}
+          onChange={(event) => update({ metricKey: event.target.value || null })}
+        >
+          <option value="">All published lenses</option>
+          {routeCapabilities.metricKeys.map((metricKey) => <option key={metricKey} value={metricKey}>{metricKey}</option>)}
+        </select>
+      </label> : null}
+
+      {sortOptions.length > 1 ? <label className="leaderboard-filter-field">
         <span>Sort leaderboard</span>
         <select value={filters.sort} onChange={(event) => {
-          const sort = event.target.value;
-          if (isLeaderboardSort(sort)) update({ sort });
+          const sort = event.target.value as LeaderboardSort;
+          if (routeCapabilities.sorts.includes(sort)) update({ sort });
         }}>
-          {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>
-            {keyName === 'multimodal-vision-documents' && option.value === 'score-desc'
-              ? 'Source lens order'
-              : option.label}
-          </option>)}
+          {sortOptions.map((option) => <option key={option.value} value={option.value}>{sortLabel(keyName, option.value)}</option>)}
         </select>
-      </label>
+      </label> : null}
 
-      {canIncludeEstimated ? <label className="leaderboard-estimated-control">
+      {routeCapabilities.providers && routeCapabilities.providers.length > 1 ? <FilterChecks
+        legend="Providers"
+        values={routeCapabilities.providers}
+        selected={filters.providers}
+        onToggle={(provider) => update({ providers: toggle(filters.providers, provider) })}
+      /> : null}
+
+      {routeCapabilities.sourceTypes && routeCapabilities.sourceTypes.length > 1 ? <FilterChecks
+        legend="Source type"
+        values={routeCapabilities.sourceTypes}
+        selected={filters.sourceTypes}
+        onToggle={(sourceType) => update({ sourceTypes: toggle(filters.sourceTypes, sourceType) as LeaderboardFilterState['sourceTypes'] })}
+      /> : null}
+
+      {routeCapabilities.evidenceStatuses && routeCapabilities.evidenceStatuses.length > 0 ? <label className="leaderboard-filter-field">
+        <span>Evidence</span>
+        <select aria-label="Evidence" value={filters.evidence ?? ''} onChange={(event) => update({ evidence: event.target.value || null })}>
+          <option value="">All evidence</option>
+          {routeCapabilities.evidenceStatuses.map((status) => <option key={status} value={status}>{status === 'source_only' ? 'Source-only' : status[0].toUpperCase() + status.slice(1)}</option>)}
+        </select>
+      </label> : null}
+
+      {routeCapabilities.supportsPrice ? <fieldset className="leaderboard-filter-field leaderboard-price-filter">
+        <legend>Price per 1M</legend>
+        <div className="leaderboard-price-inputs">
+          <label><span>Minimum</span><input aria-label="Minimum price per 1M" type="number" min="0" step="any" value={filters.priceMinimum ?? ''} onChange={(event) => update({ priceMinimum: parseOptionalPrice(event.target.value) })} /></label>
+          <label><span>Maximum</span><input aria-label="Maximum price per 1M" type="number" min="0" step="any" value={filters.priceMaximum ?? ''} onChange={(event) => update({ priceMaximum: parseOptionalPrice(event.target.value) })} /></label>
+        </div>
+      </fieldset> : null}
+
+      {routeCapabilities.supportsEstimated ? <label className="leaderboard-estimated-control">
         <input
           type="checkbox"
           aria-label="Include estimated BenchLM models"
@@ -143,7 +177,7 @@ export function LeaderboardFilters({ keyName, filters, onChange }: LeaderboardFi
           onChange={(event) => update({ includeEstimated: event.target.checked })}
         />
         <span>Include estimated BenchLM models</span>
-        <small>Supported and source-only evidence remain visible by default.</small>
+        <small>Estimated records remain visibly unranked and never receive leader badges.</small>
       </label> : null}
     </form>
   );

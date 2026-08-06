@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
 import type { LeaderboardEntry, LeaderboardSort } from '../benchmarks/leaderboards';
@@ -11,6 +11,7 @@ import {
   visibleLeaderboardEntries,
   type LeaderboardFilterState,
 } from './leaderboard-filters';
+import { leaderboardFilterCapabilities } from './leaderboard-filter-state';
 import { LeaderboardTable } from './leaderboard-table';
 
 const ISO_TIME = '2026-08-05T12:00:00.000Z';
@@ -91,7 +92,13 @@ function primaryOpenRouterPrice(): NonNullable<LeaderboardEntry['primaryPrice']>
 const DEFAULT_FILTERS: LeaderboardFilterState = {
   query: '',
   profile: 'balanced',
+  metricKey: null,
   sort: 'score-desc',
+  providers: [],
+  sourceTypes: [],
+  evidence: null,
+  priceMinimum: null,
+  priceMaximum: null,
   includeEstimated: false,
 };
 
@@ -267,6 +274,36 @@ describe('LeaderboardTable', () => {
     expect(screen.getByText('Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'))
       .toHaveAttribute('id', 'leaderboard-order-llm-value');
   });
+
+  it('does not expose table-header sort controls that the route data cannot support', () => {
+    const capabilities = leaderboardFilterCapabilities('llm-coding', [entry()]);
+    const CapabilityTable = LeaderboardTable as unknown as (props: {
+      readonly keyName: LeaderboardKey;
+      readonly entries: readonly LeaderboardEntry[];
+      readonly sort: LeaderboardSort;
+      readonly onSortChange: (sort: LeaderboardSort) => void;
+      readonly publishedAt: string;
+      readonly freshness: { readonly status: 'fresh'; readonly checkedAt: string };
+      readonly attribution: readonly [{ readonly sourceId: 'benchlm'; readonly label: string; readonly url: string; readonly updatedAt: string }];
+      readonly capabilities: typeof capabilities;
+    }) => ReturnType<typeof LeaderboardTable>;
+
+    render(<CapabilityTable
+      keyName="llm-coding"
+      entries={[entry()]}
+      sort="score-desc"
+      onSortChange={vi.fn()}
+      publishedAt={ISO_TIME}
+      freshness={{ status: 'fresh', checkedAt: ISO_TIME }}
+      attribution={[{ sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data', updatedAt: ISO_TIME }]}
+      capabilities={capabilities}
+    />);
+
+    expect(screen.getByRole('button', { name: 'Sort by metric' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sort by position' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sort by blended cost' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Sort by context window' })).not.toBeInTheDocument();
+  });
 });
 
 describe('LeaderboardFilters', () => {
@@ -309,6 +346,12 @@ describe('LeaderboardFilters', () => {
       profile: 'outputHeavy',
       sort: 'price-asc',
       query: 'Provider A',
+      metricKey: null,
+      providers: [],
+      sourceTypes: [],
+      evidence: null,
+      priceMinimum: null,
+      priceMaximum: null,
       includeEstimated: true,
     });
     expect(serializeLeaderboardFilters(parsed)).toBe('profile=outputHeavy&sort=price-asc&q=Provider+A&estimated=1');
@@ -395,11 +438,159 @@ describe('LeaderboardFilters', () => {
 
     expect(screen.getByRole('option', { name: 'Source lens order' })).toBeInTheDocument();
   });
+
+  it('applies provider, source, evidence, price, and metric filters before deterministic sorting', () => {
+    const alpha = entry({
+      model: {
+        ...entry().model,
+        modelKey: 'alpha',
+        slug: 'alpha',
+        name: 'Alpha',
+        creator: 'Provider A',
+        sourceType: 'Open Weight',
+      },
+      metric: { ...entry().metric!, modelKey: 'alpha', sourceModelId: 'alpha', value: 91 },
+      primaryPrice: { ...primaryOpenRouterPrice(), modelKey: 'alpha', sourceModelId: 'alpha', canonicalSlug: 'alpha' },
+      blendedCostPerMillion: 2,
+    });
+    const beta = entry({
+      model: {
+        ...entry().model,
+        modelKey: 'beta',
+        slug: 'beta',
+        name: 'Beta',
+        creator: 'Provider B',
+      },
+      metric: { ...entry().metric!, modelKey: 'beta', sourceModelId: 'beta', value: 99 },
+      primaryPrice: { ...primaryOpenRouterPrice(), modelKey: 'beta', sourceModelId: 'beta', canonicalSlug: 'beta' },
+      blendedCostPerMillion: 2,
+    });
+    const sourceOnly = entry({
+      model: {
+        ...entry().model,
+        modelKey: 'source-only',
+        slug: 'source-only',
+        name: 'Source only',
+        creator: 'Provider A',
+        evidenceStatus: 'source_only',
+      },
+      metric: { ...entry().metric!, modelKey: 'source-only', sourceModelId: 'source-only', value: 100 },
+      primaryPrice: { ...primaryOpenRouterPrice(), modelKey: 'source-only', sourceModelId: 'source-only', canonicalSlug: 'source-only' },
+      blendedCostPerMillion: 1,
+    });
+
+    const filters = {
+      ...DEFAULT_FILTERS,
+      metricKey: 'benchlm:category:coding',
+      providers: ['Provider A'],
+      sourceTypes: ['Open Weight'],
+      evidence: 'supported',
+      priceMinimum: 0,
+      priceMaximum: 5,
+    } as unknown as LeaderboardFilterState;
+
+    expect(visibleLeaderboardEntries([beta, sourceOnly, alpha], filters, 'llm-value').map((item) => item.model.slug))
+      .toEqual(['alpha']);
+  });
+
+  it('uses the fixed 50/50 representative primary price outside value and pricing routes', () => {
+    const representativeOnly = entry({
+      model: { ...entry().model, modelKey: 'representative', slug: 'representative' },
+      metric: { ...entry().metric!, modelKey: 'representative', sourceModelId: 'representative' },
+      primaryPrice: {
+        ...primaryOpenRouterPrice(),
+        modelKey: 'representative',
+        sourceModelId: 'representative',
+        canonicalSlug: 'representative',
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 9,
+      },
+      blendedCostPerMillion: null,
+    });
+    const filters = {
+      ...DEFAULT_FILTERS,
+      priceMinimum: 5,
+      priceMaximum: 5,
+    } as unknown as LeaderboardFilterState;
+
+    expect(visibleLeaderboardEntries([representativeOnly], filters, 'llm-coding').map((item) => [item.model.slug, item.blendedCostPerMillion]))
+      .toEqual([['representative', 5]]);
+  });
+
+  it('omits profile controls and normalizes a hidden non-default profile on non-pricing routes', () => {
+    render(<LeaderboardFilters keyName="llm-coding" filters={{ ...DEFAULT_FILTERS, profile: 'outputHeavy' }} onChange={vi.fn()} />);
+
+    expect(screen.queryByRole('radio', { name: 'Input-heavy' })).not.toBeInTheDocument();
+    expect(parseLeaderboardFilters('?profile=outputHeavy&sort=score-desc', 'llm-coding')).toMatchObject({
+      profile: 'balanced',
+      sort: 'score-desc',
+    });
+  });
+
+  it('renders only controls supported by the current route data and updates CSV-backed selections', () => {
+    const alpha = entry({
+      model: { ...entry().model, modelKey: 'alpha', slug: 'alpha', creator: 'Provider A', sourceType: 'Open Weight' },
+      metric: { ...entry().metric!, modelKey: 'alpha', sourceModelId: 'alpha' },
+      primaryPrice: { ...primaryOpenRouterPrice(), modelKey: 'alpha', sourceModelId: 'alpha', canonicalSlug: 'alpha' },
+      blendedCostPerMillion: null,
+    });
+    const beta = entry({
+      model: { ...entry().model, modelKey: 'beta', slug: 'beta', creator: 'Provider B' },
+      metric: { ...entry().metric!, modelKey: 'beta', sourceModelId: 'beta' },
+      primaryPrice: { ...primaryOpenRouterPrice(), modelKey: 'beta', sourceModelId: 'beta', canonicalSlug: 'beta' },
+      blendedCostPerMillion: null,
+    });
+    const capabilities = leaderboardFilterCapabilities('llm-coding', [alpha, beta]);
+    const onChange = vi.fn();
+    const RichFilters = LeaderboardFilters as unknown as (props: {
+      readonly keyName: LeaderboardKey;
+      readonly filters: LeaderboardFilterState;
+      readonly onChange: (filters: LeaderboardFilterState) => void;
+      readonly capabilities: typeof capabilities;
+    }) => ReturnType<typeof LeaderboardFilters>;
+
+    render(<RichFilters
+      keyName="llm-coding"
+      filters={{ ...DEFAULT_FILTERS, metricKey: null, providers: [], sourceTypes: [], evidence: null, priceMinimum: null, priceMaximum: null } as unknown as LeaderboardFilterState}
+      onChange={onChange}
+      capabilities={capabilities}
+    />);
+
+    expect(screen.getByRole('group', { name: 'Providers' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Source type' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Evidence' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Minimum price per 1M' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Input-heavy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Lifecycle' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Source rank' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Provider B' }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ providers: ['Provider B'] }));
+  });
+
+  it('normalizes an invalid price range before a control update reaches URL state', () => {
+    const priced = entry({ primaryPrice: primaryOpenRouterPrice(), blendedCostPerMillion: null });
+    const capabilities = leaderboardFilterCapabilities('llm-coding', [priced]);
+    const onChange = vi.fn();
+    const { rerender } = render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={onChange}
+      capabilities={capabilities}
+    />);
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum price per 1M' }), { target: { value: '9' } });
+    const withMinimum = onChange.mock.calls.at(-1)?.[0] as LeaderboardFilterState;
+    rerender(<LeaderboardFilters keyName="llm-coding" filters={withMinimum} onChange={onChange} capabilities={capabilities} />);
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Maximum price per 1M' }), { target: { value: '2' } });
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ priceMinimum: null, priceMaximum: null }));
+  });
 });
 
 describe('leaderboard routes and the Home decision snapshot', () => {
   it('mounts a category page from its registered route with normalized controls, attribution, related routes, and the MonoMind CTA', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'outputHeavy')));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced')));
     vi.stubGlobal('fetch', fetchMock);
     window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=outputHeavy&sort=price-asc&q=provider&estimated=1');
 
@@ -408,10 +599,41 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     expect(await screen.findByRole('heading', { name: 'AI coding model benchmarks', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('checkbox', { name: 'Include estimated BenchLM models' })).toBeChecked();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=outputHeavy&limit=50&includeEstimated=1');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=50&includeEstimated=1');
     expect(screen.getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('heading', { name: 'Related leaderboards', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
+  });
+
+  it('restores and canonically replaces a shared query without exposing unsupported controls', async () => {
+    const alpha = entry({
+      model: { ...entry().model, modelKey: 'alpha', slug: 'alpha', name: 'Alpha', creator: 'Provider A', sourceType: 'Open Weight' },
+      metric: { ...entry().metric!, modelKey: 'alpha', sourceModelId: 'alpha', value: 90 },
+      primaryPrice: null,
+      blendedCostPerMillion: null,
+    });
+    const beta = entry({
+      model: { ...entry().model, modelKey: 'beta', slug: 'beta', name: 'Beta', creator: 'Provider B' },
+      metric: { ...entry().metric!, modelKey: 'beta', sourceModelId: 'beta', value: 80 },
+      primaryPrice: null,
+      blendedCostPerMillion: null,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta]))));
+    window.history.replaceState({}, '', '/leaderboards/llm/coding/?utm_source=newsletter&profile=outputHeavy&provider=Provider+B');
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    render(<App />);
+
+    expect(await screen.findByRole('group', { name: 'Providers' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Provider B' })).toBeChecked();
+    expect(screen.queryByRole('radio', { name: 'Input-heavy' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Minimum price per 1M' })).not.toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider+B'));
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search model or provider' }), { target: { value: 'alpha' } });
+    await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc&q=alpha&provider=Provider+B'));
+    expect(replaceState).toHaveBeenCalled();
+    replaceState.mockRestore();
   });
 
   it('shows cached stale rows with an explicit freshness warning', async () => {

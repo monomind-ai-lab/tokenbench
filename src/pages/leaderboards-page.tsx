@@ -1,15 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { LEADERBOARD_NAVIGATION, LEADERBOARD_ROUTES, ROUTE_PATHS, type LeaderboardKey } from '../routing/routes';
 import type { DecisionPickEntry, DecisionPickGroup } from '../benchmarks/decision-picks';
 import { EmptyState, Skeleton, formatDateTime } from '../frontend/ui';
 import {
   LeaderboardFilters,
+} from '../frontend/leaderboard-filters';
+import {
+  leaderboardFilterCapabilities,
+  normalizeLeaderboardFilters,
   parseLeaderboardFilters,
+  sameLeaderboardFilters,
   serializeLeaderboardFilters,
   visibleLeaderboardEntries,
   type LeaderboardFilterState,
-} from '../frontend/leaderboard-filters';
+} from '../frontend/leaderboard-filter-state';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
 import { ProviderMark } from '../frontend/provider-mark';
 import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
@@ -88,7 +93,19 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const route = LEADERBOARD_ROUTES[keyName];
   const [filters, setFilters] = useLeaderboardFilters(keyName);
   const state = useBenchmarkLeaderboard(keyName, filters.profile, 50, undefined, filters.includeEstimated);
-  const entries = state.envelope ? visibleLeaderboardEntries(state.envelope.data.entries, filters, keyName) : [];
+  const publishedEntries = state.envelope?.data.entries;
+  const capabilities = useMemo(
+    () => leaderboardFilterCapabilities(keyName, publishedEntries),
+    [keyName, publishedEntries],
+  );
+
+  useEffect(() => {
+    if (!publishedEntries) return;
+    const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries);
+    if (!sameLeaderboardFilters(filters, normalized)) setFilters(normalized);
+  }, [filters, keyName, publishedEntries, setFilters]);
+
+  const entries = publishedEntries ? visibleLeaderboardEntries(publishedEntries, filters, keyName) : [];
 
   return <div className="content-stack leaderboard-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
@@ -99,15 +116,15 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     </section>
 
     <section className="panel leaderboard-filter-panel" aria-labelledby="leaderboard-filters-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Review the published revision</span><h2 id="leaderboard-filters-heading">Filter and sort</h2><p>Search by model or provider, choose a disclosed workload profile, and keep estimates visibly separate from ranked evidence.</p></div></div>
-      <LeaderboardFilters keyName={keyName} filters={filters} onChange={setFilters} />
+      <div className="panel-heading"><div><span className="eyebrow">Review the published revision</span><h2 id="leaderboard-filters-heading">Filter and sort</h2><p>Use the filters supported by this route’s published evidence. Estimated records remain visibly separate from ranked evidence.</p></div></div>
+      <LeaderboardFilters keyName={keyName} filters={filters} onChange={setFilters} capabilities={capabilities} />
     </section>
 
     <section aria-label={`${route.seo.h1} results`}>
       {state.phase === 'loading' ? <Skeleton label="Loading published benchmark data" /> : null}
       {state.phase === 'ready' && state.envelope ? (
         entries.length > 0
-          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} />
+          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} capabilities={capabilities} />
           : <>
             <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
             <LeaderboardEvidence
@@ -122,7 +139,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       {state.phase === 'stale' && state.envelope ? <>
         <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
         {entries.length > 0
-          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} evidenceLabel="Stale leaderboard evidence" />
+          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} evidenceLabel="Stale leaderboard evidence" capabilities={capabilities} />
           : <>
             <EmptyState title="No cached entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
             <LeaderboardEvidence

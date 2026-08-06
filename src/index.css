@@ -453,15 +453,20 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .leaderboard-methodology { max-width: 880px; margin: 24px 0 0; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--primary) 44%, var(--outline)); border-radius: 8px; background: color-mix(in srgb, var(--primary-soft) 34%, var(--surface)); color: var(--muted); font-size: 0.8rem; line-height: 1.6; }
 .leaderboard-methodology strong { color: var(--primary-strong); }
 .leaderboard-filter-panel { padding: 28px; }
-.leaderboard-filters { display: grid; grid-template-columns: minmax(220px, 1.4fr) minmax(260px, 1.5fr) minmax(170px, 0.8fr) minmax(210px, 1fr); align-items: end; gap: 18px; }
+.leaderboard-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); align-items: end; gap: 18px; }
 .leaderboard-filter-field { min-width: 0; display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .leaderboard-filter-field > span, .leaderboard-filter-field legend, .leaderboard-estimated-control > span { color: var(--muted); font-family: var(--font-label); font-size: 0.66rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
-.leaderboard-filter-field input[type='search'], .leaderboard-filter-field select { width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-low); }
+.leaderboard-filter-field input[type='search'], .leaderboard-filter-field input[type='number'], .leaderboard-filter-field select { width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-low); color: var(--text); }
 .leaderboard-filter-field input[type='search']::placeholder { color: var(--muted); }
 .leaderboard-profile-options { display: flex; flex-wrap: wrap; gap: 6px; }
 .leaderboard-profile-options label { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); color: var(--muted); font-size: 0.72rem; font-weight: 700; }
 .leaderboard-profile-options label:has(input:checked) { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); color: var(--primary-strong); }
-.leaderboard-profile-options input, .leaderboard-estimated-control input { width: 16px; height: 16px; min-height: 16px; margin: 0; accent-color: var(--primary); }
+.leaderboard-profile-options input, .leaderboard-check-options input, .leaderboard-estimated-control input { width: 16px; height: 16px; min-height: 16px; margin: 0; accent-color: var(--primary); }
+.leaderboard-check-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.leaderboard-check-options label { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+.leaderboard-check-options label:has(input:checked) { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); color: var(--primary-strong); }
+.leaderboard-price-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.leaderboard-price-inputs label { min-width: 0; display: grid; gap: 5px; color: var(--muted); font-family: var(--font-label); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .leaderboard-estimated-control { min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 3px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--outline)); border-radius: 8px; background: color-mix(in srgb, var(--primary-soft) 32%, var(--surface)); }
 .leaderboard-estimated-control small { grid-column: 2; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
 .leaderboard-results { min-width: 0; overflow: hidden; border: 1px solid var(--outline); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }

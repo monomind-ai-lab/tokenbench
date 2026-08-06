@@ -2,6 +2,7 @@ import type { LeaderboardEntry, LeaderboardSort } from '../benchmarks/leaderboar
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 import { formatDateTime } from './ui';
 import type { BenchmarkAttribution, BenchmarkFreshness } from './use-benchmarks';
+import type { LeaderboardQueryCapabilities } from './leaderboard-filter-state';
 
 interface LeaderboardTableProps {
   readonly keyName: LeaderboardKey;
@@ -12,6 +13,7 @@ interface LeaderboardTableProps {
   readonly freshness: BenchmarkFreshness;
   readonly attribution: readonly BenchmarkAttribution[];
   readonly evidenceLabel?: string;
+  readonly capabilities?: LeaderboardQueryCapabilities;
 }
 
 function tableLabel(keyName: LeaderboardKey): string {
@@ -137,10 +139,11 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
   </li>;
 }
 
-export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution, evidenceLabel: evidenceLabelText }: LeaderboardTableProps) {
+export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution, evidenceLabel: evidenceLabelText, capabilities }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
   const orderDescriptionId = `leaderboard-order-${keyName}`;
   const usesSourceLensOrder = keyName === 'multimodal-vision-documents' && sort === 'score-desc';
+  const canSort = (candidate: LeaderboardSort) => capabilities === undefined || capabilities.sorts.includes(candidate);
   const orderDescription = usesSourceLensOrder
     ? 'Current order preserves the published BenchLM multimodal, LMArena vision, and LMArena document lens groups.'
     : sort === 'pareto-score-desc'
@@ -154,11 +157,11 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, publish
         {orderDescription ? <caption id={orderDescriptionId} className="sr-only">{orderDescription}</caption> : null}
         <thead>
           <tr>
-            <th scope="col" aria-sort={sortDirection(sort, 'rank-asc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button></th>
+            <th scope="col" aria-sort={canSort('rank-asc') ? sortDirection(sort, 'rank-asc') : 'none'}>{canSort('rank-asc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button> : 'Position'}</th>
             <th scope="col">Model</th>
-            <th scope="col" aria-sort={usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by metric'}>Metric</button></th>
-            <th scope="col" aria-sort={sortDirection(sort, 'price-asc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('price-asc')} aria-label="Sort by blended cost">Blended cost</button></th>
-            <th scope="col" aria-sort={sortDirection(sort, 'context-desc')}><button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button></th>
+            <th scope="col" aria-sort={canSort('score-desc') ? (usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')) : 'none'}>{canSort('score-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by metric'}>Metric</button> : 'Metric'}</th>
+            <th scope="col" aria-sort={canSort('price-asc') ? sortDirection(sort, 'price-asc') : 'none'}>{canSort('price-asc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('price-asc')} aria-label="Sort by blended cost">Blended cost</button> : 'Blended cost'}</th>
+            <th scope="col" aria-sort={canSort('context-desc') ? sortDirection(sort, 'context-desc') : 'none'}>{canSort('context-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button> : 'Context'}</th>
           </tr>
         </thead>
         <tbody>
