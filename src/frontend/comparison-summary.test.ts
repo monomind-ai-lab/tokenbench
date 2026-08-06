@@ -301,6 +301,20 @@ describe('comparisonSummary', () => {
     expect(summary.sentences.join(' ')).not.toMatch(/higher supported BenchLM score|scores are tied/i);
   });
 
+  it('treats signed-zero scores as equal without an advantage sentence', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [
+      sharedRow(models[0], models[1], 'coding', -0, 0),
+      sharedRow(models[0], models[1], 'knowledge', 81, 81),
+      sharedRow(models[0], models[1], 'multimodal', 82, 82),
+      sharedRow(models[0], models[1], 'reasoning', 83, 83),
+    ]));
+
+    expect(summary.sentences).toEqual([
+      'The compatible supported BenchLM scores are tied across 4 shared metrics.',
+    ]);
+  });
+
   it('reports a price-only advantage only when both verified selected routes publish that rate', () => {
     const models = pair();
     const summary = comparisonSummary(comparisonWith(models, [], [
@@ -323,6 +337,18 @@ describe('comparisonSummary', () => {
     const summary = comparisonSummary(comparisonWith(models, [], [
       [price(models[0], 1.00001, 3)],
       [price(models[1], 1.00002, 3)],
+    ]));
+
+    expect(summary.sentences).toEqual([
+      'There is not enough shared evidence to make a supported BenchLM score comparison.',
+    ]);
+  });
+
+  it('treats signed-zero rates as equal without an advantage sentence', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [], [
+      [price(models[0], -0, 3)],
+      [price(models[1], 0, 3)],
     ]));
 
     expect(summary.sentences).toEqual([

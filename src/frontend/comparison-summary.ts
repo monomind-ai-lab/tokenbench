@@ -75,6 +75,7 @@ function scoreSentences(
     const metricA = row.modelA;
     const metricB = row.modelB;
     if (metricA === null || metricB === null) return [];
+    if (metricA.value === metricB.value) return [];
     const displayedA = formatMetricValue(metricA.value);
     const displayedB = formatMetricValue(metricB.value);
     if (displayedA === displayedB) return [];
@@ -93,6 +94,7 @@ function rateSentence(
   const left = publishedRate(routes[0], dimension);
   const right = publishedRate(routes[1], dimension);
   if (left === null || right === null) return null;
+  if (left === right) return null;
   const displayedLeft = formatRate(left);
   const displayedRight = formatRate(right);
   if (displayedLeft === displayedRight) return null;
