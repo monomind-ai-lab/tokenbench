@@ -9,6 +9,7 @@ import {
   fulfillJson,
   readyCodingLeaderboard,
   readyMediaLeaderboard,
+  stubNewsletterSignup,
   staleCodingLeaderboard,
   stubBenchmarkDirectory,
   stubHandlerBackedComparison,
@@ -1110,6 +1111,81 @@ test.describe('responsive compare hub coverage', () => {
         await expect(page.getByText(/Published revision:/)).toHaveCount(0);
         await assertNoHorizontalOverflow(page);
       }
+    }
+  });
+});
+
+test.describe('newsletter and alerts browser coverage', () => {
+  test('keeps the footer signup consentful, keyboard-submittable, loading-aware, and overflow-safe at mobile and desktop widths', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+
+    for (const width of [320, 1440]) {
+      await page.unrouteAll();
+      await page.setViewportSize({ width, height: 1000 });
+      await blockExternalRequests(page, origin);
+      await stubNewsletterSignup(page, origin, [{
+        status: 202,
+        body: { status: 'confirmation-required' },
+        delayMs: 200,
+      }]);
+      await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+      const footer = page.getByRole('contentinfo');
+      await footer.scrollIntoViewIfNeeded();
+      const alerts = footer.getByRole('checkbox', { name: /new models or price drops/i });
+      const form = footer.getByRole('form', { name: 'Newsletter signup' });
+      const email = footer.getByLabel('Email address');
+      const submit = footer.getByRole('button', { name: 'Get the cheatsheet' });
+
+      await expect(alerts).not.toBeChecked();
+      await email.fill('builder@example.com');
+      await email.press('Enter');
+      await expect(form).toHaveAttribute('aria-busy', 'true');
+      await expect(submit).toBeDisabled();
+      await expect(form.getByRole('status')).toHaveText('Check your email to confirm your subscription.');
+      await expect(email).toHaveValue('');
+      await assertNoHorizontalOverflow(page);
+    }
+  });
+
+  test('keeps compact compare alerts opt-in, keyboard submission, confirmation, retry guidance, and layout safe at mobile and desktop widths', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+
+    for (const width of [320, 1440]) {
+      await page.unrouteAll();
+      await page.setViewportSize({ width, height: 1000 });
+      await blockExternalRequests(page, origin);
+      await stubBenchmarkDirectory(page, origin, comparisonDirectoryEnvelope());
+      await stubNewsletterSignup(page, origin, [
+        { status: 202, body: { status: 'confirmation-required' } },
+        { status: 503, body: { status: 'temporarily-unavailable' } },
+      ]);
+      await page.goto('/compare/', { waitUntil: 'domcontentloaded' });
+
+      const alertsPanel = page.getByRole('complementary', { name: 'Model and price alerts' });
+      await alertsPanel.scrollIntoViewIfNeeded();
+      const alerts = alertsPanel.getByRole('checkbox', { name: /new models or price drops/i });
+      await expect(alerts).not.toBeChecked();
+      await expect(alertsPanel.getByRole('form', { name: 'Newsletter signup' })).toHaveCount(0);
+      await alerts.focus();
+      await page.keyboard.press('Space');
+
+      const form = alertsPanel.getByRole('form', { name: 'Newsletter signup' });
+      const email = alertsPanel.getByLabel('Email address');
+      const submit = alertsPanel.getByRole('button', { name: 'Notify me' });
+      await expect(form).toBeVisible();
+      await email.fill('builder@example.com');
+      await email.press('Enter');
+      await expect(form.getByRole('status')).toHaveText('Check your email to confirm your subscription.');
+
+      await email.fill('builder@example.com');
+      await email.press('Enter');
+      await expect(form.getByRole('alert')).toHaveText('We couldn’t complete that signup. Please try again.');
+      await expect(email).toHaveValue('builder@example.com');
+      await expect(submit).toBeEnabled();
+      await assertNoHorizontalOverflow(page);
     }
   });
 });

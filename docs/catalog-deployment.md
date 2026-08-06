@@ -186,6 +186,60 @@ against the integrated Pages Function implementation before deployment. A
 matching If-None-Match header on a published benchmark API response must produce
 304; no browser flow may make an upstream benchmark-provider request.
 
+## Newsletter signup boundary
+
+`POST /api/newsletter/subscribe` is a browser-form-only Pages Function. It
+accepts only JSON from a request whose `Origin` exactly matches the request URL
+origin. Missing, cross-origin, non-JSON, and oversized requests are rejected;
+there is intentionally no CORS or server-to-server subscription surface. A
+proxy or custom-domain configuration must preserve the browser's canonical
+origin instead of rewriting it. The response never reveals whether an address
+already exists in Brevo.
+
+The footer sends every accepted address through double opt-in for the monthly
+cheatsheet list. The separate model-and-price-alert list is included only when
+the user checks its explicit, initially unchecked consent box. The Compare
+prompt begins with that optional consent and then makes the monthly-cheatsheet
+offer explicit before submission. These are independent consent scopes: the
+monthly audience must never be repurposed as an alerts audience.
+
+An authorized Pages operator configures the following Function bindings without
+recording their values in source, browser bundles, logs, or this document:
+
+| Binding group | Verification before enabling signup |
+| --- | --- |
+| `BREVO_API_KEY` | A restricted Brevo credential is stored only as a Pages secret and is absent from every `VITE_` value, built asset, request log, and screenshot. |
+| `BREVO_CHEATSHEET_LIST_ID`, `BREVO_ALERTS_LIST_ID` | Two distinct lists exist; the monthly list is always selected and the alerts list is selected only after recorded opt-in. |
+| `BREVO_DOI_TEMPLATE_ID`, `BREVO_DOI_REDIRECT_URL` | The template is Brevo's reviewed double-opt-in confirmation template, uses the verified TokenBench sender, and redirects to the reviewed confirmation URL on the canonical origin. |
+| Brevo sender and unsubscribe settings | The sender is verified in Brevo and the delivered newsletter/template has the required unsubscribe or preference-management destination before any campaign draft review. |
+
+No dashboard setting, template, sender, list, secret, or campaign is created by
+this repository. A missing or invalid binding leaves signup unavailable with a
+generic retry response; it must not silently collect addresses elsewhere.
+
+## Frozen monthly artifact boundary
+
+The monthly cheatsheet is derived from one active benchmark revision and its
+matching catalog revision. The local generator reads explicit local snapshots,
+writes a fresh artifact directory, and emits a manifest containing deterministic
+filenames, byte counts, and SHA-256 digests. It does not upload those artifacts
+or publish a URL.
+
+Before a release candidate is considered for publication, generate the same
+frozen inputs twice into two new directories in the configured artifact root
+and compare the manifests' revision, filenames, byte counts, and SHA-256
+values. Treat any difference as a failed determinism check. Retain the exact
+verified changes envelope and, after separately authorized publication, the
+signed deployment receipt under that artifact root with the generated manifest;
+the generator deliberately does not invent either input. Do not replace an
+existing output directory.
+
+The campaign-draft command accepts only local relative paths beneath its
+configured artifact/state roots and a signed deployment receipt. Its
+`--artifact-base-url` must be the already-public immutable HTTPS location whose
+manifest-listed PDF and CSV URLs match that receipt. Remote artifact upload is
+outside this command and requires a separately authorized publication job.
+
 ## Ordered release checks
 
 1. Run the complete local gate and two documented UX/UI audit passes from the

@@ -92,6 +92,131 @@ The release gate must be rerun after integrating comparison, sitemap, browser,
 and configuration changes. A passing command from an earlier commit does not
 qualify a later release candidate.
 
+## Newsletter and monthly cheatsheet operations
+
+This section is a local runbook, not authorization to create Brevo resources,
+publish files, enable a scheduler, or send email. Keep all identifiers,
+credentials, recipient data, and receipt backups out of Git, browser bundles,
+logs, screenshots, and this document.
+
+### One-time operator verification
+
+An operator with separate Brevo authorization verifies the setup without
+recording values here:
+
+1. Create or identify a dedicated monthly-cheatsheet list and a distinct
+   model-and-price-alerts list. The alerts list represents optional consent only;
+   it is never a fallback recipient list for the monthly campaign.
+2. Prepare and review a Brevo double-opt-in template. It must use the verified
+   TokenBench sender, add contacts only after confirmation, use the approved
+   canonical confirmation redirect, and expose the required unsubscribe or
+   preference-management destination in delivered mail.
+3. Verify the campaign sender in Brevo and review its unsubscribe/settings
+   page. The recipient list used by the monthly campaign is the monthly list
+   only; alerts never receive a campaign just because they opted into alerts.
+4. Store the Pages-only double-opt-in bindings (`BREVO_API_KEY`, monthly and
+   alerts list IDs, DOI template ID, and DOI redirect URL) as protected Pages
+   secrets. Store the campaign credential, sender configuration, monthly list
+   ID, Ed25519 verification key, artifact root, and private state root only in
+   the local/CI environment that is authorized to create a draft. No value is a
+   `VITE_` variable. The corresponding local names are
+   `BREVO_CAMPAIGN_API_KEY`, either `BREVO_CAMPAIGN_SENDER_ID` or the sender
+   name/email pair, `BREVO_CAMPAIGN_MONTHLY_CHEATSHEET_LIST_ID`,
+   `TOKENBENCH_PUBLICATION_VERIFY_KEY`, `TOKENBENCH_NEWSLETTER_ARTIFACT_ROOT`,
+   and `TOKENBENCH_NEWSLETTER_STATE_ROOT`; record none of their values here.
+5. Confirm that `/api/newsletter/subscribe` stays browser-only: it requires an
+   `Origin` equal to the request URL origin, accepts JSON only, and returns a
+   generic response. Direct scripts, back-office servers, and cross-origin
+   callers are intentionally unsupported.
+
+The UI always requests double opt-in. The footer's monthly offer is the base
+audience and its alert checkbox starts unchecked. The Compare prompt begins
+with that same unchecked optional alert consent, then discloses the monthly
+cheatsheet before submission. Never infer alert permission from an address,
+from a monthly signup, or from a comparison viewed.
+
+### Local, deterministic artifact generation
+
+Work from one frozen published benchmark/catalog revision and its verified
+changes envelope. Use explicit local snapshot paths and a new output directory;
+the example placeholders below are intentionally not production paths:
+
+~~~sh
+npm run generate:cheatsheet -- \
+  --benchmarks inputs/frozen-benchmarks.json \
+  --catalog inputs/frozen-catalog.json \
+  --changes inputs/revision-changes.json \
+  --artifact-root newsletter-artifacts \
+  --out-dir newsletter-artifacts/2026-08-frozen \
+  --share-image
+~~~
+
+Run the generator a second time with the same inputs and another new output
+directory. Compare the two manifests' revision, catalog revision, filenames,
+byte counts, and SHA-256 values before any human review. Retain both manifests
+and the changes envelope as local evidence. A mismatch, a stale/non-published
+input, or an overwrite attempt is a stop condition—not a reason to hand-edit an
+artifact.
+
+This command writes only local artifacts. It does not upload them, put them at
+a public URL, create a Brevo list or template, schedule work, create a campaign,
+or send email.
+
+### Separately authorized artifact publication and Brevo draft
+
+Publishing the reviewed artifact bundle is a separate, explicitly authorized
+operation. It must create immutable public HTTPS URLs for every receipt-listed
+file, especially the PDF and CSV, then generate a signed deployment receipt
+that names that exact base URL. Do not point a receipt at mutable "latest"
+paths, private URLs, redirects of unknown provenance, or an unverified CDN
+response.
+
+Only after that publication and a human factual/editorial review may an
+authorized operator create a draft. The `--changes` path below names the exact
+verified input envelope retained under the artifact root; it is not a generated
+cheatsheet file:
+
+~~~sh
+npm run create:newsletter-draft -- \
+  --manifest 2026-08-frozen/tokenbench-cheatsheet.manifest.json \
+  --changes inputs/revision-changes.json \
+  --deployment-receipt receipts/2026-08-frozen-deployment.json \
+  --artifact-base-url https://artifacts.example.invalid/tokenbench/2026-08-frozen/
+~~~
+
+The command verifies the signed receipt, local file hashes, immutable public
+artifact URLs, and campaign dedupe state before creating or reconciling a
+Brevo **draft**. It neither uploads artifacts nor calls test-send, schedule, or
+send endpoints. Creating a draft is still a remote Brevo mutation and needs its
+own authorization; approving, scheduling, or sending that draft is a separate
+human action outside this repository.
+
+Back up the private state root—including receipt and dedupe records—before key
+rotation or changing the environment. Retain it with access controls sufficient
+to prove that a frozen revision was not drafted twice. Rotate the Ed25519
+verification key only alongside a verified backup of the receipts it validates;
+do not delete or recreate state merely to retry an ambiguous draft.
+
+### Non-activated monthly automation blueprint
+
+No monthly scheduler is created or enabled by this implementation. If one is
+later approved, recommend a UTC trigger only after the historical benchmark
+snapshot for that period is available. Each run must:
+
+1. Freeze exactly one active benchmark/catalog revision and its revision diff.
+2. Generate and hash the artifact bundle twice from those same inputs.
+3. Require human factual review of the subject/preview facts and human editorial
+   review of any optional variant that already passed the fact-validation gate.
+4. Hand the approved immutable bundle to a separately authorized publication
+   job, then verify the signed public receipt and URLs.
+5. Create a Brevo draft only after a separately authorized draft operation;
+   a human must still decide whether to schedule or send it.
+
+Do not create the trigger, upload job, template, list, campaign, schedule, or
+send action as part of this blueprint. Record authorizations and observed
+outcomes in the deployment evidence rather than treating a local command as
+approval.
+
 ## UX/UI audit matrix
 
 The two implementation passes used the installed Impeccable skill, source

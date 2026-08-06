@@ -21,6 +21,21 @@ benchmark providers directly. Published data retains source attribution,
 timestamps, and explicit unavailable or stale states rather than silently
 substituting values.
 
+## Newsletter and monthly cheatsheet
+
+The footer offers **The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)**
+through Brevo double opt-in. Its monthly-cheatsheet audience is distinct from
+the optional, initially unchecked alert consent for new models and price drops.
+The compact Compare prompt begins with that optional alert consent and reveals
+the email form only after it is selected.
+
+Local generation and draft-only campaign operations are documented in
+[docs/tokenbench-deployment.md](docs/tokenbench-deployment.md#newsletter-and-monthly-cheatsheet-operations).
+They operate on one frozen published revision and never grant authority to
+upload artifacts, enable a schedule, test-send, or send email. The campaign
+command can create a Brevo draft only after a separately authorized publication
+has made the signed artifact URLs public.
+
 ## What it calculates
 
 - A blended API cost per million tokens from the selected models and input/output mix.

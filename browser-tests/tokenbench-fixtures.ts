@@ -592,6 +592,34 @@ export async function fulfillJson(route: Route, value: unknown, status = 200): P
   });
 }
 
+export interface NewsletterSignupFixtureResponse {
+  readonly status: number;
+  readonly body: unknown;
+  readonly delayMs?: number;
+}
+
+/**
+ * Browser tests must never exercise a deployed email endpoint. This local
+ * sequence fixture mimics only the public response contract while preserving
+ * the component's real keyboard and form behavior.
+ */
+export async function stubNewsletterSignup(
+  page: Page,
+  origin: string,
+  responses: readonly NewsletterSignupFixtureResponse[],
+): Promise<void> {
+  if (responses.length === 0) throw new Error('Newsletter signup fixture requires at least one response.');
+  let requestIndex = 0;
+  await page.route(origin + '/api/newsletter/subscribe', async (route) => {
+    const response = responses[Math.min(requestIndex, responses.length - 1)]!;
+    requestIndex += 1;
+    if (response.delayMs !== undefined && response.delayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, response.delayMs));
+    }
+    await fulfillJson(route, response.body, response.status);
+  });
+}
+
 export async function stubBenchmarkDirectory(page: Page, origin: string, value: unknown = comparisonDirectoryEnvelope(), status = 200): Promise<void> {
   await page.route(origin + '/api/benchmarks', (route) => fulfillJson(route, value, status));
 }
