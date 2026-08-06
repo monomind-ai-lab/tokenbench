@@ -283,27 +283,69 @@ export function decisionSummaryEnvelope(): BenchmarkApiEnvelope<BenchmarkSummary
     representativePriceUsdPerMillion: 3,
     contextWindowTokens: 128_000,
   });
+  const overallLeader: DecisionPickEntry = {
+    ...entry('llm-overall', 1),
+    modelKey: 'browser:alpha',
+    slug: 'browser-alpha',
+    name: 'Browser Alpha',
+    provider: 'OpenAI',
+    score: 91,
+    representativePriceUsdPerMillion: 5,
+  };
+  const valueLeader: DecisionPickEntry = {
+    ...entry('llm-value', 1),
+    modelKey: 'browser:beta',
+    slug: 'browser-beta',
+    name: 'Browser Beta',
+    provider: 'Anthropic',
+    score: 86,
+    representativePriceUsdPerMillion: 2.5,
+  };
 
   return {
     revision: REVISION,
     publishedAt: TIMESTAMP,
     freshness: { status: 'fresh', checkedAt: TIMESTAMP },
-    attribution: [{
-      sourceId: 'benchlm',
-      label: 'Data from BenchLM.ai',
-      url: 'https://benchlm.ai/data',
-      updatedAt: TIMESTAMP,
-    }],
+    attribution: [
+      {
+        sourceId: 'benchlm',
+        label: 'Data from BenchLM.ai',
+        url: 'https://benchlm.ai/data',
+        updatedAt: TIMESTAMP,
+      },
+      {
+        sourceId: 'openrouter',
+        label: 'Catalog and pricing data from OpenRouter',
+        url: 'https://openrouter.ai/models',
+        updatedAt: TIMESTAMP,
+      },
+    ],
     data: {
       decisionPicks: DECISION_PICK_CATEGORIES.map((category) => ({
         ...category,
         entries: [1, 2, 3].map((rank) => entry(category.key, rank)),
       })),
       homeDecisionSnapshot: {
-        benchAlignLeader: { status: 'unavailable' },
-        valueFrontierLeader: { status: 'unavailable' },
-        lowestVerifiedRepresentativeRate: { status: 'unavailable' },
-        pricePerformancePoints: [],
+        benchAlignLeader: { status: 'ready', value: overallLeader, updatedAt: TIMESTAMP },
+        valueFrontierLeader: { status: 'ready', value: valueLeader, updatedAt: TIMESTAMP },
+        lowestVerifiedRepresentativeRate: {
+          status: 'ready',
+          value: {
+            modelKey: valueLeader.modelKey,
+            slug: valueLeader.slug,
+            name: valueLeader.name,
+            provider: valueLeader.provider,
+            evidenceStatus: 'supported',
+            representativePriceUsdPerMillion: valueLeader.representativePriceUsdPerMillion ?? 2.5,
+            contextWindowTokens: valueLeader.contextWindowTokens,
+            routePath: LEADERBOARD_ROUTES['llm-pricing-context'].pathname,
+          },
+          updatedAt: TIMESTAMP,
+        },
+        pricePerformancePoints: [
+          overallLeader,
+          { ...valueLeader, routePath: LEADERBOARD_ROUTES['llm-overall'].pathname },
+        ],
       },
     },
   };

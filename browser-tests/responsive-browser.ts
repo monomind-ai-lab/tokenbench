@@ -99,7 +99,7 @@ interface HydrationMatrixRoute {
 }
 
 const hydrationMatrix: readonly HydrationMatrixRoute[] = [
-  { path: '/', heading: 'Stop Guessing Your AI Costs. Start Optimizing.', hydratedClientMarker: '.home-page' },
+  { path: '/', heading: 'Transparent AI Costs. Verified Benchmarks.', hydratedClientMarker: '.home-page' },
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
   { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', hydratedClientMarker: '.calculator-page', visuallyVisibleHeading: false },
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
@@ -602,11 +602,11 @@ test.describe('motion and named call-to-action coverage', () => {
       await setStoredTheme(page, theme);
       await page.goto('/');
       for (const [path, name] of [
-        ['/', 'Calculate your costs'],
+        ['/', 'Compare models'],
         ['/leaderboards/llm/coding/', 'Talk to MonoMind'],
       ] as const) {
         await page.goto(path);
-        const cta = page.getByRole('link', { name });
+        const cta = page.getByRole('link', { name, exact: true });
         await expect(cta).toBeVisible();
         const presentation = await cta.evaluate((element) => {
           const style = getComputedStyle(element);
@@ -846,59 +846,53 @@ test.describe('generated static route runtime', () => {
 });
 
 test.describe('home and tools route runtime', () => {
-  test('adapts the home decision showcase grids from desktop to mobile', async ({ page }) => {
-    await blockExternalRequests(page);
+  test('keeps the ready Home decision snapshot responsive and overflow-safe', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
 
-    await page.setViewportSize({ width: 1024, height: 1000 });
-    await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeVisible();
+    for (const viewport of [
+      { width: 1440, height: 1000, columns: { decisions: 3, snapshot: 3, capabilities: 5 } },
+      { width: 375, height: 1000, columns: { decisions: 1, snapshot: 1, capabilities: 1 } },
+    ] as const) {
+      await page.setViewportSize(viewport);
+      for (const theme of ['dark', 'light'] as const) {
+        await setStoredTheme(page, theme);
+        await page.goto('/', { waitUntil: 'domcontentloaded' });
 
-    const desktop = await page.evaluate(() => {
-      const columnsFor = (label: string) => {
-        const element = document.querySelector(`[aria-label="${label}"]`);
-        if (!element) throw new Error(`Missing ${label}`);
-        const styles = getComputedStyle(element);
-        return { display: styles.display, columns: styles.gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length };
-      };
-      return {
-        terminal: columnsFor('TokenBench decision workflow'),
-        features: columnsFor('TokenBench decision features'),
-        teasers: columnsFor('TokenBench benchmark teasers'),
-      };
-    });
-    expect(desktop.terminal).toEqual({ display: 'grid', columns: 2 });
-    expect(desktop.features).toEqual({ display: 'grid', columns: 4 });
-    expect(desktop.teasers).toEqual({ display: 'grid', columns: 3 });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
+        await expect(page.getByRole('link', { name: 'Compare models', exact: true })).toHaveAttribute('href', '/compare/');
+        await expect(page.getByRole('link', { name: 'Calculate subscription vs API', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+        await expect(page.getByRole('link', { name: 'Browse leaderboards', exact: true })).toHaveAttribute('href', '/leaderboards/');
+        await expect(page.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeVisible();
 
-    await page.setViewportSize({ width: 768, height: 1000 });
-    const tablet = await page.evaluate(() => {
-      const columnsFor = (label: string) => {
-        const element = document.querySelector(`[aria-label="${label}"]`);
-        if (!element) throw new Error(`Missing ${label}`);
-        return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
-      };
-      return {
-        terminal: columnsFor('TokenBench decision workflow'),
-        features: columnsFor('TokenBench decision features'),
-        teasers: columnsFor('TokenBench benchmark teasers'),
-      };
-    });
-    expect(tablet).toEqual({ terminal: 2, features: 2, teasers: 2 });
+        const snapshot = page.getByRole('region', { name: 'Live decision snapshot' });
+        await expect(snapshot.getByText('Browser Alpha', { exact: true })).toHaveCount(2);
+        await expect(snapshot.getByText('Browser Beta', { exact: true })).toHaveCount(3);
+        await expect(snapshot.getByRole('img', { name: 'Price versus performance' })).toBeVisible();
+        await expect(snapshot.getByLabel('Decision snapshot evidence')).toContainText('Fresh');
+        await expect(snapshot.getByRole('link', { name: 'Data from BenchLM.ai' })).toBeVisible();
+        await expect(snapshot.getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toBeVisible();
 
-    await page.setViewportSize({ width: 375, height: 1000 });
-    const mobile = await page.evaluate(() => {
-      const columnsFor = (label: string) => {
-        const element = document.querySelector(`[aria-label="${label}"]`);
-        if (!element) throw new Error(`Missing ${label}`);
-        return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
-      };
-      return {
-        terminal: columnsFor('TokenBench decision workflow'),
-        features: columnsFor('TokenBench decision features'),
-        teasers: columnsFor('TokenBench benchmark teasers'),
-      };
-    });
-    expect(mobile).toEqual({ terminal: 1, features: 1, teasers: 1 });
+        await expect(page.getByText('Benchmark signals', { exact: true })).toHaveCount(0);
+        await expect(page.getByRole('group', { name: 'TokenBench decision workflow' })).toHaveCount(0);
+        const columns = await page.evaluate(() => {
+          const countColumns = (selector: string) => {
+            const element = document.querySelector(selector);
+            if (!element) throw new Error(`Missing ${selector}`);
+            return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
+          };
+          return {
+            decisions: countColumns('[aria-label="Three primary TokenBench decisions"]'),
+            snapshot: countColumns('.home-snapshot-grid'),
+            capabilities: countColumns('[aria-label="TokenBench product capabilities"]'),
+          };
+        });
+        expect(columns).toEqual(viewport.columns);
+        await assertNoHorizontalOverflow(page);
+      }
+    }
   });
 
   test('mounts the interactive tools directory without replacing static-only routes', async ({ page }) => {
@@ -1031,7 +1025,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
     await page.setViewportSize({ width: 390, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
 
     await page.keyboard.press('Tab');
     await expect(page.locator('.skip-link')).toBeFocused();

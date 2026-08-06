@@ -1,6 +1,7 @@
 import { ArrowRight, BadgeDollarSign, Download, Layers3, TrendingUp, Workflow } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { DecisionPickEntry, HomeDecisionSlot, HomeRepresentativeRate, PricePerformancePoint } from '../benchmarks/decision-picks';
+import { LeaderboardEvidence } from '../frontend/leaderboard-table';
 import { ProviderMark } from '../frontend/provider-mark';
 import { useHomeDecisionSnapshot } from '../frontend/use-benchmarks';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
@@ -55,10 +56,6 @@ const PRODUCT_FEATURES = [
 ] as const;
 
 type HomeSnapshotEntry = DecisionPickEntry | HomeRepresentativeRate;
-
-function unavailableSlot<T>(): HomeDecisionSlot<T> {
-  return { status: 'unavailable' };
-}
 
 function formatScore(score: number, unit: string): string {
   return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score)} ${unit}`;
@@ -140,22 +137,32 @@ function PricePerformancePlot({ points }: { readonly points: readonly PricePerfo
 
 function LiveDecisionSnapshot() {
   const state = useHomeDecisionSnapshot();
+  const envelope = state.envelope;
   const snapshot = state.homeDecisionSnapshot;
-  const benchAlignLeader = snapshot?.benchAlignLeader ?? unavailableSlot<DecisionPickEntry>();
-  const valueFrontierLeader = snapshot?.valueFrontierLeader ?? unavailableSlot<DecisionPickEntry>();
-  const lowestVerifiedRate = snapshot?.lowestVerifiedRepresentativeRate ?? unavailableSlot<HomeRepresentativeRate>();
 
   return <section className="panel home-snapshot-section" aria-label="Live decision snapshot">
     <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>A single published summary keeps the current decision facts together and preserves unavailable evidence as unavailable.</p></div></div>
-    {state.phase === 'loading' ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p> : null}
-    {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</p> : null}
-    {state.phase === 'error' ? <p className="home-snapshot-state">Published summary cannot be loaded.</p> : null}
-    <div className="home-snapshot-grid">
-      <DecisionSnapshotCard title="BenchAlign leader" slot={benchAlignLeader}>{(leader) => <dl><div><dt>Overall score</dt><dd>{formatScore(leader.score, leader.unit)}</dd></div></dl>}</DecisionSnapshotCard>
-      <DecisionSnapshotCard title="Value-frontier leader" slot={valueFrontierLeader}>{(leader) => <dl><div><dt>Representative price</dt><dd>{leader.representativePriceUsdPerMillion === null ? 'Unavailable' : formatRate(leader.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
-      <DecisionSnapshotCard title="Lowest verified API rate" slot={lowestVerifiedRate}>{(rate) => <dl><div><dt>Representative price</dt><dd>{formatRate(rate.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
-      <PricePerformancePlot points={snapshot?.pricePerformancePoints ?? []} />
-    </div>
+    {snapshot === null || envelope === null ? state.phase === 'loading'
+      ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p>
+      : state.phase === 'error'
+        ? <p className="home-snapshot-state home-snapshot-state-error" role="alert">Published decision snapshot could not be loaded. {state.error ?? 'Benchmark request failed.'}</p>
+        : <p className="home-snapshot-state" role="status">Published decision snapshot is unavailable. {state.error ?? 'No published snapshot was received.'}</p>
+      : <>
+        {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</p> : null}
+        <div className="home-snapshot-grid">
+          <DecisionSnapshotCard title="BenchAlign leader" slot={snapshot.benchAlignLeader}>{(leader) => <dl><div><dt>Overall score</dt><dd>{formatScore(leader.score, leader.unit)}</dd></div></dl>}</DecisionSnapshotCard>
+          <DecisionSnapshotCard title="Value-frontier leader" slot={snapshot.valueFrontierLeader}>{(leader) => <dl><div><dt>Representative price</dt><dd>{leader.representativePriceUsdPerMillion === null ? 'Unavailable' : formatRate(leader.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
+          <DecisionSnapshotCard title="Lowest verified API rate" slot={snapshot.lowestVerifiedRepresentativeRate}>{(rate) => <dl><div><dt>Representative price</dt><dd>{formatRate(rate.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
+          <PricePerformancePlot points={snapshot.pricePerformancePoints} />
+        </div>
+        <LeaderboardEvidence
+          publishedAt={envelope.publishedAt}
+          freshness={envelope.freshness}
+          attribution={envelope.attribution}
+          label="Decision snapshot evidence"
+          compact
+        />
+      </>}
     <a className="home-snapshot-method" href={ROUTE_PATHS.methodologyBenchAlign}>How rankings work <ArrowRight aria-hidden="true" size={14} /></a>
   </section>;
 }
@@ -210,7 +217,7 @@ export function HomePage() {
       </section>
 
       <aside className="panel home-monomind-banner" aria-label="MonoMind optimization services">
-        <span className="eyebrow">MonoMind AI Lab</span>
+        <h2 className="eyebrow">MonoMind AI Lab</h2>
         <p>Spending &gt;$1,000/mo on LLM tokens? MonoMind designs custom routing, prompt caching, and agent pipelines to cut API bills by up to 90%.</p>
         <a className="button" href="https://monomind.one/">Talk to MonoMind <ArrowRight aria-hidden="true" size={16} /></a>
       </aside>

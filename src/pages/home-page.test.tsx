@@ -116,6 +116,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What TokenBench gives you', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Built for AI builders', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeInTheDocument();
     expect(screen.queryByText('Benchmark signals')).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
     expect(screen.getByText(/cut API bills by up to 90%\./i)).toBeInTheDocument();
@@ -151,8 +152,61 @@ describe('HomePage', () => {
     );
     expect(within(snapshot).getByText(/Higher performance and lower representative price are better\./)).toBeInTheDocument();
     expect(within(snapshot).getByRole('link', { name: 'How rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
-    expect(within(snapshot).queryByRole('link', { name: /Data from|Catalog and pricing/i })).not.toBeInTheDocument();
+    for (const card of snapshot.querySelectorAll('.home-snapshot-card')) {
+      expect(within(card as HTMLElement).queryByRole('link', { name: /Data from|Catalog and pricing/i })).not.toBeInTheDocument();
+    }
     expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(3);
+  });
+
+  it('discloses the published date, freshness, and sources once after the highlights', async () => {
+    renderWithHomeSummary();
+
+    const snapshot = await screen.findByRole('region', { name: 'Live decision snapshot' });
+    const evidence = within(snapshot).getByLabelText('Decision snapshot evidence');
+
+    expect(within(snapshot).getAllByLabelText('Decision snapshot evidence')).toHaveLength(1);
+    expect(evidence).toHaveTextContent('Published');
+    expect(evidence).toHaveTextContent('Checked');
+    expect(evidence).toHaveTextContent('Fresh');
+    expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(within(evidence).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toHaveAttribute('href', 'https://openrouter.ai/models');
+  });
+
+  it('keeps loading distinct from published unavailable facts', async () => {
+    let resolveResponse: ((response: Response) => void) | undefined;
+    const fetchMock = vi.fn().mockReturnValue(new Promise<Response>((resolve) => {
+      resolveResponse = resolve;
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<HomePage />);
+
+    const snapshot = screen.getByRole('region', { name: 'Live decision snapshot' });
+
+    expect(
+      within(snapshot).getByText('Loading the published decision snapshot.'),
+    ).toHaveAttribute('role', 'status');
+    const unavailableCountWhileLoading = within(snapshot).queryAllByText('Unavailable').length;
+
+    if (!resolveResponse) throw new Error('Expected the Home summary request to start');
+    resolveResponse(new Response(JSON.stringify(homeSummaryFixture()), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    expect(await within(snapshot).findAllByText('Model Alpha')).toHaveLength(4);
+    expect(unavailableCountWhileLoading).toBe(0);
+  });
+
+  it('renders one request error without inventing unavailable snapshot facts', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+    render(<HomePage />);
+
+    const snapshot = screen.getByRole('region', { name: 'Live decision snapshot' });
+    const error = await within(snapshot).findByRole('alert');
+
+    expect(error).toHaveTextContent('Published decision snapshot could not be loaded.');
+    expect(error).toHaveTextContent('Benchmark request failed (500).');
+    expect(within(snapshot).queryByText('Unavailable')).not.toBeInTheDocument();
+    expect(within(snapshot).queryByLabelText('Decision snapshot evidence')).not.toBeInTheDocument();
   });
 
   it('states unavailable facts without substituting sample data', async () => {
@@ -175,6 +229,10 @@ describe('HomePage', () => {
 
     expect(staleNotice).toHaveAttribute('role', 'status');
     expect(staleNotice).toHaveTextContent('Refresh overdue.');
-    expect(screen.getByRole('region', { name: 'Live decision snapshot' })).toHaveTextContent('Model Alpha');
+    const snapshot = screen.getByRole('region', { name: 'Live decision snapshot' });
+    const evidence = within(snapshot).getByLabelText('Decision snapshot evidence');
+    expect(snapshot).toHaveTextContent('Model Alpha');
+    expect(evidence).toHaveTextContent('Stale');
+    expect(evidence).toHaveTextContent('Refresh overdue.');
   });
 });
