@@ -85,9 +85,11 @@ BenchLM check or cause a same-day refetch. A successful 304 likewise persists a
 daily manifest and advances BenchLM check freshness without publishing a new
 content revision.
 
-An overlapping lease loser waits for at most 30 seconds for the owner, then
-rehydrates the owner's exact completed manifest. If the owner releases the
-lease, the waiter may claim it and perform the check itself. If neither handoff
+An overlapping lease loser checks for the owner every 500 ms for at most 10
+seconds, then rehydrates the owner's exact completed manifest. If the owner
+releases the lease, the waiter may claim it and perform the check itself. This
+bound leaves enough of the Workers Paid 1,000-query invocation allowance for a
+maximum-size benchmark publication and its failure cleanup. If neither handoff
 completes in that bound, the waiter fails before fetching downstream sources or
 publishing, so it cannot supersede the winner with stale BenchLM projections.
 LMArena and LiteLLM otherwise continue to refresh on both scheduled runs.

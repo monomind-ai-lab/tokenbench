@@ -314,6 +314,7 @@ function createDatabase(options: {
     publicationStatements: [] as RecordedStatement[],
     batchSerializedBytes: [] as number[],
     batchStatements: [] as RecordedStatement[][],
+    queryCount: 0,
   };
 
   function readFirst<T>(sql: string, values: unknown[]): T | null {
@@ -341,9 +342,16 @@ function createDatabase(options: {
       sql,
       values,
       bind(...next: unknown[]) { return statement(sql, next); },
-      async first<T>() { return readFirst<T>(sql, values); },
-      async all<T>() { return { results: readAll<T>(sql, values) }; },
+      async first<T>() {
+        state.queryCount += 1;
+        return readFirst<T>(sql, values);
+      },
+      async all<T>() {
+        state.queryCount += 1;
+        return { results: readAll<T>(sql, values) };
+      },
       async run() {
+        state.queryCount += 1;
         const key = 'benchlm:daily-network-check';
         if (sql.includes('benchlm daily-check claim')) {
           const lease = String(values[0]);
@@ -489,6 +497,7 @@ function createDatabase(options: {
   const db = {
     prepare(sql: string) { return statement(sql); },
     async batch(statements: Statement[]) {
+      state.queryCount += statements.length;
       const recorded = statements.map((item) => ({ sql: item.sql, values: [...item.values] }));
       const serializedBytes = new TextEncoder().encode(JSON.stringify(recorded)).byteLength;
       state.batchSerializedBytes.push(serializedBytes);
@@ -1488,13 +1497,45 @@ describe('atomic benchmark ingestion', () => {
 
     expect(result).toMatchObject({
       status: 'failed',
-      error: 'BenchLM daily network check did not complete within 30000ms',
+      error: 'BenchLM daily network check did not complete within 10000ms',
     });
     expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
       lastSuccessAt: null,
       lastRevision: null,
       lastError: 'benchlm-daily-lease:2026-08-06T00:30:00.000Z|winner',
     });
+  });
+
+  it('keeps worst-case daily-check loser queries plus maximum publication below the invocation limit', async () => {
+    const claimBenchLmDailyCheck = requiredExport<(db: unknown, checkedAt: string, leaseId: string) => Promise<boolean>>('claimBenchLmDailyCheck');
+    const { env, db } = seededEnvironment();
+    const initial = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-05T00:15:00.000Z').dependencies,
+    );
+    expect(initial.status).toBe('published');
+    await expect(claimBenchLmDailyCheck(db.db, '2026-08-06T00:15:00.000Z', 'winner-budget')).resolves.toBe(true);
+    const queryCountBeforeLoser = db.state.queryCount;
+    const publicationBatchesBeforeLoser = db.state.publicationBatchCalls;
+
+    const result = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-06T00:16:00.000Z').dependencies,
+    );
+    const loserInvocationQueries = db.state.queryCount - queryCountBeforeLoser;
+    const { batch, pairs } = liveScaleBatch();
+    const plan = buildPublicationStatementPlan(db.db, 'benchmark-live-scale-budget', observedAt, observedAt,
+      `sha256:${'b'.repeat(64)}`, {
+        revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+        snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+      }, batch, pairs);
+
+    expect(result.status).toBe('failed');
+    // The measured loser path includes its one failure-state query. Combining
+    // it with the largest accepted publication and real cleanup plan models a
+    // commit failure after every allowed publication statement was attempted.
+    expect(loserInvocationQueries + 900 + plan.cleanup.length).toBeLessThanOrEqual(1_000);
+    expect(db.state.publicationBatchCalls).toBe(publicationBatchesBeforeLoser);
   });
 
   it('releases a claimed daily network-check lease after a handled BenchLM failure', async () => {

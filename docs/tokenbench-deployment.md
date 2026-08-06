@@ -36,15 +36,18 @@ projections. The daily BenchLM lease prevents overlapping cron or controlled
 invocations from checking upstream twice. The owner persists a hash-checked
 five-artifact daily manifest before completing the lease; failures before that
 point release it, while later LMArena, LiteLLM, or publication failures keep the
-verified BenchLM check complete for same-day reuse. An overlapping loser waits
-up to 30 seconds to rehydrate the winner's manifest or reclaim a released lease,
-and fails before downstream fetches or publication if neither happens. A 304
-updates daily check freshness without creating a content revision. The observed
-release failures were request-time CPU exhaustion and D1's aggregate 32 MiB RPC
-limit, not upstream throttling; no 429 pattern was observed. Reduce an upstream
-fetch cadence only after repeated provider-policy or rate-limit evidence. If an
-upstream becomes unstable without 429s, lower fetch concurrency before lowering
-freshness. Manual catalog rotations do not make upstream requests.
+verified BenchLM check complete for same-day reuse. An overlapping loser checks
+every 500 ms for up to 10 seconds to rehydrate the winner's manifest or reclaim
+a released lease, and fails before downstream fetches or publication if neither
+happens. The shorter polling bound reserves the remaining Workers Paid
+1,000-query invocation allowance for maximum-size publication and cleanup. A
+304 updates daily check freshness without creating a content revision. The
+observed release failures were request-time CPU exhaustion and D1's aggregate
+32 MiB RPC limit, not upstream throttling; no 429 pattern was observed. Reduce
+an upstream fetch cadence only after repeated provider-policy or rate-limit
+evidence. If an upstream becomes unstable without 429s, lower fetch concurrency
+before lowering freshness. Manual catalog rotations do not make upstream
+requests.
 
 ## Release inputs
 

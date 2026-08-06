@@ -180,8 +180,12 @@ const MAX_BENCHLM_DAILY_MANIFEST_BYTES = 64 * 1024;
 const BENCHLM_DAILY_CHECK_ARTIFACT = 'daily-network-check';
 const BENCHLM_DAILY_LEASE_PREFIX = 'benchlm-daily-lease:';
 const BENCHLM_DAILY_LEASE_MS = 15 * 60 * 1000;
-const BENCHLM_DAILY_WAIT_INTERVAL_MS = 250;
-const BENCHLM_DAILY_WAIT_ATTEMPTS = 120;
+// A loser performs at most 45 pre-publication D1 queries: three active-state
+// reads, the initial claim/state pair, and twenty claim/state polling pairs.
+// This leaves room below the 1,000-query cap for 900 publication statements,
+// seven cleanup statements, and one failure-state write.
+const BENCHLM_DAILY_WAIT_INTERVAL_MS = 500;
+const BENCHLM_DAILY_WAIT_ATTEMPTS = 20;
 const MAX_LMARENA_PAGE_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_PARQUET_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_INFO_BYTES = 64 * 1024;
