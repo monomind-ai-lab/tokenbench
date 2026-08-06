@@ -105,7 +105,7 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks', hydratedClientMarker: '.leaderboard-results[aria-label="AI coding model benchmarks"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings', hydratedClientMarker: '.leaderboard-results[aria-label="Text-to-image model rankings"]' },
   { path: '/compare/', heading: 'Compare AI models', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
-  { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page' },
+  { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
   { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
   { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
 ];
@@ -903,6 +903,7 @@ test.describe('handler-backed comparison browser coverage', () => {
     await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
     if (devEntryResponse) await devEntryResponse;
     await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', 'desktop', { timeout: 15_000 });
+    await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
     const alphaWorkloadCost = page.getByTestId('workload-cost-provider:alpha');
     await expect(alphaWorkloadCost).toHaveText('$3.50 / 1M');
     await expect(page.getByRole('radio', { name: 'Balanced' })).toBeChecked();
@@ -955,6 +956,28 @@ test.describe('keyboard and chart accessibility regressions', () => {
     await openCalculator(page);
 
     await activateSkipLinkAndAssertTarget(page, 'calculator');
+  });
+
+  test('moves focus to the persistent calculator target while the catalog is still loading', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 1000 });
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    let releaseCatalogRequest: (() => void) | undefined;
+    const catalogRequestReleased = new Promise<void>((resolve) => {
+      releaseCatalogRequest = resolve;
+    });
+    await page.route(origin + '/api/catalog', async (route) => {
+      await catalogRequestReleased;
+      await fulfillJson(route, FRONTEND_TEST_CATALOG);
+    });
+
+    try {
+      await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
+      await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
+      await activateSkipLinkAndAssertTarget(page, 'calculator');
+    } finally {
+      releaseCatalogRequest?.();
+    }
   });
 
   for (const guide of [

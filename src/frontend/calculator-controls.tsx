@@ -98,7 +98,7 @@ export function CalculatorControls({
   const selectedModels = models.filter((model) => selectedModelIds.includes(model.id));
 
   return (
-    <section id="calculator" className="controls-panel" aria-label="Calculator controls" tabIndex={-1}>
+    <section className="controls-panel" aria-label="Calculator controls">
       <div className="control-grid">
         <fieldset className="control-block">
           <legend><span className="control-legend"><GitBranch size={18} aria-hidden="true" />{UI_COPY.providerSelection}</span></legend>

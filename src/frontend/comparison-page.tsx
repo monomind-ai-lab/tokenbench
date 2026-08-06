@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { BenchmarkMetric, BenchmarkModel, BenchmarkSourceRecord } from '../benchmarks/contracts';
 import { primaryHostedPriceForModel, type PrimaryHostedPrice, type WorkloadProfile } from '../benchmarks/value';
 import { ROUTE_PATHS } from '../routing/routes';
@@ -278,9 +278,12 @@ function RelatedComparisons({ viewModel }: { readonly viewModel: ComparisonViewM
 
 export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
   const [profile, setProfile] = useState<WorkloadProfile>('balanced');
+  const [clientHydrated, setClientHydrated] = useState(false);
   const models = viewModel.models;
 
-  return <div className="comparison-page comparison-detail-page">
+  useEffect(() => setClientHydrated(true), []);
+
+  return <div className="comparison-page comparison-detail-page" data-client-hydrated={clientHydrated ? 'true' : 'false'}>
     <section className="comparison-intro" aria-labelledby="comparison-detail-heading">
       <nav className="comparison-breadcrumb" aria-label="Breadcrumb"><a href="/compare/">Compare</a><span aria-hidden="true">/</span><span aria-current="page">{modelDisplayLabel(models, 0)} vs {modelDisplayLabel(models, 1)}</span></nav>
       <h1 id="comparison-detail-heading">{modelDisplayLabel(models, 0)} vs {modelDisplayLabel(models, 1)}</h1>

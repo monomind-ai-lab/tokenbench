@@ -133,7 +133,7 @@ function CalculatorPage() {
 
   return (
     <PageFrame activePage="tools" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
-      <section className="content-stack calculator-page" aria-labelledby="calculator-heading">
+      <section id="calculator" className="content-stack calculator-page" aria-labelledby="calculator-heading" tabIndex={-1}>
         <h1 id="calculator-heading" className="sr-only">Subscription vs. API cost calculator</h1>
         {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
         {catalog ? <>
