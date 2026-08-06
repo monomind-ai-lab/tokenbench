@@ -1,6 +1,6 @@
-import { compareUtf8Binary } from '../benchmarks/contracts';
+import { compareUtf8Binary, type BenchmarkModel } from '../benchmarks/contracts';
 import { friendlyMetricLabel } from './comparison-summary';
-import type { ComparisonMetricRow } from './comparison-contracts';
+import { isSupportedBenchLmComparisonMetric, type ComparisonMetricRow } from './comparison-contracts';
 
 export interface RadarAxis {
   readonly label: string;
@@ -37,11 +37,15 @@ function isMatchingRankingEligibleScore(
     && metric.value >= 0;
 }
 
-function isScorePair(row: ComparisonMetricRow): boolean {
+function isScorePair(
+  row: ComparisonMetricRow,
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): boolean {
   const { modelA, modelB } = row;
   return row.unit === 'score'
     && modelA !== null
     && modelB !== null
+    && isSupportedBenchLmComparisonMetric(row, models)
     && modelA.sourceArtifactId === modelB.sourceArtifactId
     && isMatchingRankingEligibleScore(modelA, row)
     && isMatchingRankingEligibleScore(modelB, row);
@@ -53,9 +57,12 @@ function compareRadarEntries(left: RadarAxisEntry, right: RadarAxisEntry): numbe
     || compareUtf8Binary(left.identity, right.identity);
 }
 
-function radarAxisEntries(rows: readonly ComparisonMetricRow[]): readonly RadarAxisEntry[] {
+function radarAxisEntries(
+  rows: readonly ComparisonMetricRow[],
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): readonly RadarAxisEntry[] {
   const entries = rows
-    .filter(isScorePair)
+    .filter((row) => isScorePair(row, models))
     .map((row) => {
       const modelA = row.modelA!;
       const modelB = row.modelB!;
@@ -79,8 +86,11 @@ function radarAxisEntries(rows: readonly ComparisonMetricRow[]): readonly RadarA
   return entries.length >= 4 ? entries : [];
 }
 
-export function radarAxes(rows: readonly ComparisonMetricRow[]): readonly RadarAxis[] {
-  return radarAxisEntries(rows).map(({ axis }) => axis);
+export function radarAxes(
+  rows: readonly ComparisonMetricRow[],
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): readonly RadarAxis[] {
+  return radarAxisEntries(rows, models).map(({ axis }) => axis);
 }
 
 function roundedCoordinate(value: number): number {
@@ -122,19 +132,22 @@ function formatExactValue(value: number): string {
 export function ComparisonRadar({
   modelAName,
   modelBName,
+  models,
   rows,
 }: {
   readonly modelAName: string;
   readonly modelBName: string;
+  readonly models: readonly [BenchmarkModel, BenchmarkModel];
   readonly rows: readonly ComparisonMetricRow[];
 }) {
-  const entries = radarAxisEntries(rows);
+  const entries = radarAxisEntries(rows, models);
   if (entries.length === 0) return null;
 
   const axes = entries.map(({ axis }) => axis);
   const modelAPoints = axes.map((axis, index) => point(axis, index, axes.length, axis.modelA));
   const modelBPoints = axes.map((axis, index) => point(axis, index, axes.length, axis.modelB));
-  const boundaryPoints = axes.map((axis, index) => point(axis, index, axes.length, axis.maximum));
+  const boundaryPoints = axes.map((_axis, index) => radialPoint(index, axes.length, RADIUS));
+  const allValuesZero = axes.every((axis) => axis.maximum === 0);
   const chartLabel = `${modelAName} and ${modelBName} shared metric radar`;
 
   return <section className="comparison-radar">
@@ -144,6 +157,7 @@ export function ComparisonRadar({
         <li><span className="comparison-radar-legend-swatch comparison-radar-legend-swatch-a" aria-hidden="true" />{modelAName}: solid line</li>
         <li><span className="comparison-radar-legend-swatch comparison-radar-legend-swatch-b" aria-hidden="true" />{modelBName}: dashed line</li>
       </ul>
+      {allValuesZero ? <p className="comparison-radar-zero-note">All compatible source values are zero; plotted points meet at the center.</p> : null}
       <svg className="comparison-radar-chart" viewBox="0 0 320 320" role="img" aria-label={chartLabel}>
         <title>{chartLabel}</title>
         <polygon className="comparison-radar-boundary" points={svgPoints(boundaryPoints)} aria-hidden="true" />
