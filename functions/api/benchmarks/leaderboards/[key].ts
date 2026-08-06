@@ -317,10 +317,12 @@ export async function onRequestGet({
         && parsedFilters.state.sort === projection.leaderboard.definition.defaultSort,
     };
     const canonicalFilterParameters = leaderboardQueryToSearchParams(filterState);
-    // Profile is already a dedicated cursor field, and the route definition
-    // fixes the default sort. Omitting both retains compatibility with cursors
-    // emitted by materialized first pages before shared filters existed.
+    // Profile and estimated inclusion are dedicated cursor fields, and the
+    // route definition fixes the default sort. Omitting them retains
+    // compatibility with materialized first-page cursors while every other
+    // shared filter remains fingerprinted.
     canonicalFilterParameters.delete('profile');
+    canonicalFilterParameters.delete('estimated');
     if (filterState.sort === projection.leaderboard.definition.defaultSort) {
       canonicalFilterParameters.delete('sort');
     }

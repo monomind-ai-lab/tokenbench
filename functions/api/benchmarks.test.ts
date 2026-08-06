@@ -497,7 +497,8 @@ async function leaderboard(
         const snapshot = await readActiveBenchmarkSnapshot(d1(rows));
         if (snapshot) {
           const routeKey = key as LeaderboardKey;
-          const includeEstimated = url.searchParams.get('includeEstimated') === '1';
+          const includeEstimated = url.searchParams.get('includeEstimated') === '1'
+            || url.searchParams.get('estimated') === '1';
           const derivationProfile = effectiveLeaderboardProfile(routeKey, profileValue);
           const projection = cachedLeaderboardPaginationProjection(
             snapshot,
@@ -653,6 +654,116 @@ describe('cached benchmark APIs', () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(secondBody.data?.entries.map((entry) => entry.model.slug)).toEqual(['beta']);
+  });
+
+  it.each([
+    {
+      alias: 'includeEstimated',
+      firstQuery: '?includeEstimated=1',
+      secondQuery: '?estimated=1',
+      cursorLimit: 50,
+      expectedSlugs: ['beta', 'estimated'],
+    },
+    {
+      alias: 'estimated',
+      firstQuery: '?estimated=1&limit=1',
+      secondQuery: '?includeEstimated=1&limit=1',
+      cursorLimit: 1,
+      expectedSlugs: ['beta'],
+    },
+  ] as const)(
+    'continues an estimated page started with the $alias alias',
+    async ({ firstQuery, secondQuery, cursorLimit, expectedSlugs }) => {
+      vi.useFakeTimers();
+      vi.setSystemTime('2026-08-05T12:00:01.000Z');
+      const materializedCursor = encodeOpaqueValue({
+        v: 1,
+        r: REVISION,
+        k: 'llm-overall',
+        p: 'balanced',
+        l: 50,
+        e: true,
+        o: 1,
+      });
+      const cacheEntry = (variant: 'fresh' | 'stale'): ApiCacheEntry => ({
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'leaderboard:llm-overall:balanced:50::1',
+        variant,
+        chunkIndex: 0,
+        etag: `"materialized-estimated-leaderboard-${variant}"`,
+        body: JSON.stringify({
+          revision: REVISION,
+          publishedAt: PUBLISHED_AT,
+          freshness: { status: variant, checkedAt: CHECKED_AT },
+          attribution: [],
+          data: {
+            key: 'llm-overall',
+            profile: 'balanced',
+            entries: [],
+            pagination: { limit: 50, total: 3, nextCursor: materializedCursor },
+          },
+        }),
+      });
+      const rows = publishedRows({ apiCacheEntries: [cacheEntry('fresh'), cacheEntry('stale')] });
+      const expectedCursor = encodeOpaqueValue({
+        v: 1,
+        r: REVISION,
+        k: 'llm-overall',
+        p: 'balanced',
+        l: cursorLimit,
+        e: true,
+        o: 1,
+      });
+
+      const first = await leaderboard('llm-overall', firstQuery, rows, undefined, { failOnBenchmarkFactRead: true });
+      const firstBody = await first.json() as { data: { pagination: { nextCursor: string } } };
+      const second = await leaderboard(
+        'llm-overall',
+        `${secondQuery}&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor)}`,
+        rows,
+        undefined,
+        { failOnBenchmarkFactRead: true },
+      );
+      const secondBody = await second.json() as { data?: { entries: Array<{ model: { slug: string } }> } };
+
+      expect(first.status).toBe(200);
+      expect(firstBody.data.pagination.nextCursor).toBe(expectedCursor);
+      expect(second.status).toBe(200);
+      expect(secondBody.data?.entries.map((entry) => entry.model.slug)).toEqual(expectedSlugs);
+    },
+  );
+
+  it('keeps the dedicated estimated cursor flag and other filter fingerprints tamper-resistant', async () => {
+    const estimated = await leaderboard('llm-overall', '?estimated=1&limit=1');
+    const estimatedBody = await estimated.json() as { data: { pagination: { nextCursor: string } } };
+    const defaultPage = await leaderboard('llm-overall', '?limit=1');
+    const defaultBody = await defaultPage.json() as { data: { pagination: { nextCursor: string } } };
+    const withoutEstimated = await leaderboard(
+      'llm-overall',
+      `?limit=1&cursor=${encodeURIComponent(estimatedBody.data.pagination.nextCursor)}`,
+    );
+    const changedFilter = await leaderboard(
+      'llm-overall',
+      `?estimated=1&q=Alpha&limit=1&cursor=${encodeURIComponent(estimatedBody.data.pagination.nextCursor)}`,
+    );
+    const falseCursorOnEstimated = await leaderboard(
+      'llm-overall',
+      `?estimated=1&limit=1&cursor=${encodeURIComponent(defaultBody.data.pagination.nextCursor)}`,
+    );
+    const cursorSuffix = estimatedBody.data.pagination.nextCursor.at(-1);
+    const tamperedCursor = `${estimatedBody.data.pagination.nextCursor.slice(0, -1)}${cursorSuffix === 'A' ? 'B' : 'A'}`;
+    const tampered = await leaderboard(
+      'llm-overall',
+      `?estimated=1&limit=1&cursor=${encodeURIComponent(tamperedCursor)}`,
+    );
+
+    expect(estimated.status).toBe(200);
+    expect(defaultPage.status).toBe(200);
+    expect(withoutEstimated.status).toBe(400);
+    expect(changedFilter.status).toBe(400);
+    expect(falseCursorOnEstimated.status).toBe(400);
+    expect(tampered.status).toBe(400);
   });
 
   it('builds exact route availability while reading each complete fact collection only once', async () => {
