@@ -104,13 +104,16 @@ unknown fields. TokenBench does not expose a bulk OpenRouter mirror.
 - OpenRouter route facts are tied to the active sanitized catalog revision and
   its projection hash. They cannot be joined into an earlier benchmark revision.
 
-Allowed evidence is written to R2 before one transactional D1 publication
-batch. For BenchLM `models.json` and `benchmarks.json`, that evidence is the
-deterministic allowlist projection rather than the raw response bytes. Each
-source record has a source ID, artifact ID, URL, observed time, validators,
-snapshot key, sanitized content hash, original-response content hash, license,
-and attribution. An unchanged combined hash updates `checked_at` without
-creating a duplicate benchmark revision.
+Allowed evidence is written to R2 before RPC-bounded inactive D1 staging. One
+final D1 transaction promotes the complete benchmark revision and its
+materialized response cache together; failed or overlapping attempts leave the
+previous pointers active. For BenchLM `models.json` and `benchmarks.json`, that
+evidence is the deterministic allowlist projection rather than the raw response
+bytes. Each source record has a source ID, artifact ID, URL, observed time,
+validators, snapshot key, sanitized content hash, original-response content
+hash, license, and attribution. An unchanged combined hash updates `checked_at`
+without creating a duplicate benchmark revision, while rebuilding the response
+cache under an attempt-unique inactive cache revision before promotion.
 
 ## Sources excluded from v1
 

@@ -6,14 +6,17 @@ This runbook records the completed local release-candidate checks for TokenBench
 on 2026-08-06. The comparison implementation,
 expanded browser matrix, accessibility smoke pass, two Impeccable UX/UI passes,
 and a retained production-preview confirmation are complete. The progress board
-is not release evidence and was not changed by this audit.
+is managed separately and is not release evidence.
 
-An earlier Pages candidate and both ingestion Workers have been deployed, but
-production API smoke exposed intermittent Cloudflare 1102 CPU failures in
-request-time full-fact derivation. The current release candidate replaces those
-paths with revisioned materialized responses and bounded targeted reads. Its
-new migration, Worker versions, Pages build, custom-domain cutover, and final
-production smoke remain pending in the evidence table until observed.
+Production API smoke exposed intermittent Cloudflare 1102 CPU failures in
+request-time full-fact derivation. The merged release replaces those paths with
+revisioned materialized responses and bounded targeted reads. A production
+benchmark refresh then exposed D1's 32 MiB aggregate RPC limit; the follow-up
+hotfix stages inactive rows in 16 MiB-bounded calls and promotes both public
+pointers in one guarded transaction. The Pages build, migrations through 0006,
+and both Worker builds are deployed. Controlled cache publication and final
+production smoke passed on the Pages production hostname. The
+custom-domain cutover remains pending below until observed.
 
 Do not replace pending fields with estimates, planned values, screenshots from a
 different build, or copied dashboard data. Record only observed evidence from
@@ -23,14 +26,24 @@ The canonical production origin is https://tokenbench.monomind.one. The legacy
 ai-plans.monomind.one custom domain and its exact DNS record are removed during
 cutover; the underlying legacy Pages project is retained.
 
+## Fetch cadence decision
+
+Keep the checked-in catalog cadence: OpenRouter and OpenCode each refresh four
+times per day. Keep benchmark ingestion at twice per day. The observed release
+failures were request-time CPU exhaustion and D1's aggregate 32 MiB RPC limit,
+not upstream throttling; no 429 pattern was observed. Reduce an upstream fetch
+cadence only after repeated provider-policy or rate-limit evidence. If an
+upstream becomes unstable without 429s, lower fetch concurrency before lowering
+freshness. Manual catalog rotations do not make upstream requests.
+
 ## Release inputs
 
 | Input | Required evidence | Current status |
 | --- | --- | --- |
-| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | CPU-hot-path release candidate is locally verified on `codex/pages-cpu-hotpath`; final SHA is recorded after commit. |
+| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | Merged PRs #7 and #8; release merge is `65424e4`, with the Worker hotfix at `a857a6a`. |
 | Design baseline | [../DESIGN.md](../DESIGN.md) reviewed during both UX/UI passes. | Reviewed in both passes; dark technical hierarchy and the approved light-mode adaptation verified. |
 | Data-source policy | [data-sources.md](data-sources.md) reviewed for source, attribution, and Artificial Analysis restrictions. | Reviewed; source allowlists, visible attribution, and the Artificial Analysis prohibition remain intact. |
-| Data-plane configuration | Root and Worker Wrangler bindings checked against the approved Cloudflare target. | Binding names, schedules, and shared D1/R2 names inspected locally; remote target/history confirmation pending authorization. |
+| Data-plane configuration | Root and Worker Wrangler bindings checked against the approved Cloudflare target. | D1/R2 bindings and production target verified during the Worker deploy; migration history contains 0001-0006 exactly once. |
 | Comparison implementation | Integrated Pages Function, dynamic sitemap, canonicalization tests, and browser coverage. | Integrated and verified, including a real handler-rendered document backed by deterministic fake D1 data before browser hydration. |
 
 Do not place Cloudflare API tokens, account identifiers, private dashboard URLs,
@@ -54,13 +67,13 @@ git status --short
 
 | Gate | Required outcome | Recorded result |
 | --- | --- | --- |
-| Unit and API tests | Exit 0. | Pass: 43 files, 511 tests. |
+| Unit and API tests | Exit 0. | Pass: 43 files, 517 tests. |
 | Type check | Exit 0. | Pass: `tsc --noEmit`. |
 | Production build | Exit 0. | Pass: Vite built 23 crawlable fixed pages and the application bundle. |
 | Responsive browser suite | Exit 0 across the expanded route, viewport, theme, and state matrix. | Pass: 42/42 Playwright tests, including 100 primary-route navigations. |
 | Production-preview browser suite | Build first, serve only generated `dist` assets, and exit 0 across the same suite. | Pass: 42/42 Playwright tests, including 100 primary-route navigations. See the [retained production-preview audit](audit-evidence/2026-08-06/production-preview-audit.md). |
-| Diff check | Exit 0 with only intentional files. | Pass before the evidence commit; rerun on the final exact tree. |
-| Final worktree inspection | No unintended changes before an authorized push. | Scoped application, browser, and evidence files verified; final clean-status check remains part of the exact-tree rerun. |
+| Diff check | Exit 0 with only intentional files. | Pass on the exact merged implementation tree. |
+| Final worktree inspection | No unintended changes before an authorized push. | Clean after merging PR #8 and fast-forwarding local `main`; documentation changes are isolated on `codex/deployment-evidence`. |
 
 The release gate must be rerun after integrating comparison, sitemap, browser,
 and configuration changes. A passing command from an earlier commit does not
@@ -138,7 +151,7 @@ record authorization for each operation below before it occurs.
 | Operation | Required authorization and precondition | Evidence to record | Status |
 | --- | --- | --- | --- |
 | Push release files | Explicit approval to push the validated local commits to the approved Git remote and branch. | Commit SHA, remote branch, and clean status after push. | Authorized 2026-08-06 |
-| Apply remote D1 migration | Cloudflare credentials, confirmation of the target D1 database, and explicit approval to modify production schema. | Migration output/history showing 0004_benchmarks.sql and 0005_api_response_cache.sql exactly once. | Authorized 2026-08-06 |
+| Apply remote D1 migration | Cloudflare credentials, confirmation of the target D1 database, and explicit approval to modify production schema. | Migration output/history showing 0004_benchmarks.sql, 0005_api_response_cache.sql, and 0006_benchmark_publication_ownership.sql exactly once. | Authorized 2026-08-06 |
 | Deploy catalog Worker | Approval to change the named Worker when its code or configuration changed. | Worker deployment version and binding verification. | Authorized 2026-08-06 |
 | Deploy benchmark Worker | Approval to change the named Worker, plus confirmation that its D1/R2 bindings target the approved resources. | Worker version, deployment output, and binding verification. | Authorized 2026-08-06 |
 | Trigger controlled benchmark refresh | Approval to run a Cloudflare scheduled or dashboard trigger; never use the Worker fetch endpoint. | Trigger method/time, active revision, source records, R2 snapshot keys, and empty last_error values. | Authorized 2026-08-06 |
@@ -162,7 +175,7 @@ check fails; do not continue to a domain change or hostname removal.
    npx wrangler d1 migrations apply ai-plan-catalog --remote
    ~~~
 
-   Confirm 0004_benchmarks.sql and 0005_api_response_cache.sql are applied once
+   Confirm 0004_benchmarks.sql through 0006_benchmark_publication_ownership.sql are applied once
    before deploying changed ingestion or Pages code.
 4. Deploy a changed catalog Worker when needed and deploy the benchmark Worker:
 
@@ -195,17 +208,17 @@ authorized production deployment.
 
 | Check | Expected result | Recorded result |
 | --- | --- | --- |
-| Canonical home, tools, calculator, guides, leaderboards, and compare hub | HTTP 200 for each canonical route. | Pending |
-| Canonical indexable comparison | HTTP 200 with server-rendered H1, title, canonical metadata, and substantive body before JavaScript enhancement. | Pending |
-| Reversed valid comparison pair | HTTP 301 to the canonical lexical pair order. | Pending |
-| Unknown comparison model or invalid pair | HTTP 404. | Pending |
-| Fixed sitemap and comparison sitemap | HTTP 200 with XML; comparison sitemap contains only canonical indexable pairs. | Pending |
-| Benchmark API cache validation | First published response supplies ETag; a matching If-None-Match request returns HTTP 304. | Pending |
-| Request CPU resilience | Repeated cold/warm catalog, summary, and all UI leaderboard requests return 200/304 with zero 1102 events in a Pages tail. Run at least 20 rounds after cache seed. | Pending |
-| Paginated leaderboard CPU resilience | The largest materialized leaderboard projection returns 200 for `limit=1`, `limit=200`, and at least one valid cursor request, repeated cold/warm with zero 1102 events. | Pending |
+| Canonical home, tools, calculator, guides, leaderboards, and compare hub | HTTP 200 for each canonical route. | Pages production hostname: pass. Canonical hostname remains pending DNS cutover. |
+| Canonical indexable comparison | HTTP 200 with server-rendered H1, title, canonical metadata, and substantive body before JavaScript enhancement. | Pass on Pages production: 20/20 HTTP 200, one server-rendered H1, and canonical metadata present. |
+| Reversed valid comparison pair | HTTP 301 to the canonical lexical pair order. | Pass: HTTP 301 to `/compare/claude-opus-5-vs-gpt-5-6-sol`. |
+| Unknown comparison model or invalid pair | HTTP 404. | Pass: HTTP 404. |
+| Fixed sitemap and comparison sitemap | HTTP 200 with XML; comparison sitemap contains only canonical indexable pairs. | Pass: both fixed and comparison sitemaps return HTTP 200; comparison entries derive from the 32 active indexable pairs. |
+| Benchmark API cache validation | First published response supplies ETag; a matching If-None-Match request returns HTTP 304. | Pass: ETag present and exact conditional request returned HTTP 304. |
+| Request CPU resilience | Repeated cold/warm catalog, summary, and all UI leaderboard requests return 200/304 with zero 1102 events in a Pages tail. Run at least 20 rounds after cache seed. | Pass: 360/360 tailed requests across 20 rounds returned HTTP 200, with no Pages error-tail event. |
+| Paginated leaderboard CPU resilience | The largest materialized leaderboard projection returns 200 for `limit=1`, `limit=200`, and at least one valid cursor request, repeated cold/warm with zero 1102 events. | Pass in every stress round for `limit=1`, `limit=200`, and a valid cursor. |
 | Legacy hostname | The custom-domain attachment and exact DNS record are absent; the legacy Pages project remains available at its pages.dev hostname. | Pending |
 | Browser network isolation | No upstream benchmark-provider request appears while using published benchmark UI. | Pending |
-| Accessibility and visual evidence | Route matrix and screenshot references are complete; zero unresolved critical/high/medium audit findings. | Pending |
+| Accessibility and visual evidence | Route matrix and screenshot references are complete; zero unresolved critical/high/medium audit findings. | Pass: retained 42/42 source and 42/42 production-preview browser suites and linked audit evidence. |
 
 ## Deployment evidence
 
@@ -213,17 +226,17 @@ Populate this table only with observed values from the approved release.
 
 | Field | Value |
 | --- | --- |
-| Release commit SHA | Pending |
-| Pages deployment URL | Pending |
+| Release commit SHA | `65424e4` (PR #8 merge; Worker hotfix `a857a6a`) |
+| Pages deployment URL | `https://be870e81.tokenbench-27t.pages.dev` immutable preview; `https://tokenbench-27t.pages.dev` production. The Pages inputs are unchanged between deployed commit `59abd9f` and release merge `65424e4`. |
 | Canonical domain verification | Pending |
-| Catalog Worker version | Pending |
-| Benchmark Worker version | Pending |
-| Applied D1 migration evidence | Pending |
-| Active catalog revision | Pending |
-| Active benchmark revision | Pending |
-| Controlled refresh result | Pending |
-| R2 snapshot verification | Pending |
-| Production smoke summary | Pending |
+| Catalog Worker version | `4b87c50b-286b-41fc-bb2c-7a7ddedaf0a0` |
+| Benchmark Worker version | `5dbf76ae-07a6-4c4c-9094-1c8a1e996874` |
+| Applied D1 migration evidence | Remote history contains 0001-0006 exactly once; 0006 applied at 2026-08-06 05:27:21 UTC. |
+| Active catalog revision | `rev_20260806042720324_60e3d2562f08+manual-bootstrap-2026-08-04`; 55 cache keys, 110 chunks, fresh/stale variants. |
+| Active benchmark revision | `benchmark_f32f64428729b11acbee04155a439e41`; published 2026-08-06T06:20:00.658Z with 23 sources, 4,351 models, 1,829 metrics, 3,539 prices, and 400 comparison pairs. |
+| Controlled refresh result | Pass: deployed Cron completed in 21.424 s with outcome `ok`; benchmark cache has 75 keys, 150 chunks, two variants, zero invalid chunk groups, and a maximum chunk length of 1,323,595 characters. The normal `15 */12 * * *` schedule was restored and verified. |
+| R2 snapshot verification | Pass: all 23 active source snapshot keys are reachable; active-source refresh state has zero errors and zero revision mismatches. |
+| Production smoke summary | Pages production passed API/UI/cache/comparison/sitemap checks and 20-round error-tailed stress. Canonical DNS and legacy-host removal remain pending Cloudflare dashboard sign-in. |
 | Final evidence commit SHA | Pending |
 
 ## Rollback and incident handling
