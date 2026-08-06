@@ -196,9 +196,11 @@ describe('dynamic comparison Pages Function', () => {
     expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/compare/zeta-vs-alpha">');
     expect(html).toContain('<meta name="robots" content="index,follow">');
     expect(html).toContain('benchlm:category:coding');
-    expect(html).toContain('No verified subscription match');
+    expect(html).toContain('Comparison summary');
     expect(html).toContain('Evidence provenance');
-    expect(html).toContain('Related comparisons');
+    expect(html).toContain('Switch model pair');
+    expect(html).not.toContain('No verified subscription match');
+    expect(html).not.toContain('Related comparisons');
     expect(html).toContain('id="comparison-initial-data" type="application/json"');
     expect(html.indexOf('id="comparison-initial-data"')).toBeGreaterThan(html.indexOf('</div>'));
     expect(html).toContain('"@type":"WebPage"');

@@ -31,7 +31,7 @@ export interface ModelMarkProps extends MarkProps {
 }
 
 function logoUrl(brand: ProviderBrand, theme: MarkTheme, size: MarkSize): string | null {
-  const clientId = import.meta.env.VITE_BRANDFETCH_CLIENT_ID;
+  const clientId = import.meta.env?.VITE_BRANDFETCH_CLIENT_ID;
   if (!brand.domain || !clientId) return null;
   return `https://cdn.brandfetch.io/${brand.domain}/w/${size}/h/${size}/theme/${theme}/icon?c=${encodeURIComponent(clientId)}`;
 }

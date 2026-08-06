@@ -1,7 +1,13 @@
+import { execFile as execFileCallback } from 'node:child_process';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelMark, ProviderMark } from './provider-mark';
+
+const execFile = promisify(execFileCallback);
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -42,6 +48,25 @@ describe('ProviderMark', () => {
     const markup = renderToStaticMarkup(<ProviderMark providerId="openai" providerName="OpenAI" />);
 
     expect(markup).toContain('/theme/light/icon');
+  });
+
+  it('falls back without throwing during raw TSX SSR when Vite env injection is unavailable', async () => {
+    const projectRoot = process.cwd();
+    const providerMarkModule = pathToFileURL(resolve(projectRoot, 'src/frontend/provider-mark.tsx')).href;
+    const program = [
+      'const React = await import("react");',
+      'const { renderToStaticMarkup } = await import("react-dom/server");',
+      `const { ProviderMark } = await import(${JSON.stringify(providerMarkModule)});`,
+      'process.stdout.write(renderToStaticMarkup(React.createElement(ProviderMark, { providerId: "openai", providerName: "OpenAI" })));',
+    ].join('\n');
+
+    const { stdout, stderr } = await execFile(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', program], {
+      cwd: projectRoot,
+    });
+
+    expect(stderr).toBe('');
+    expect(stdout).toContain('provider-mark-fallback');
+    expect(stdout).toContain('aria-label="OpenAI"');
   });
 
   it('retries Brandfetch when a failed mark receives a new source', () => {
