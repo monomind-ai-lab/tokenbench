@@ -7,6 +7,7 @@
     "generate:guides": "tsx scripts/generate-guide-pages.ts",
     "generate:pages": "tsx scripts/generate-static-pages.ts",
     "generate:cheatsheet": "tsx scripts/generate-monthly-cheatsheet.ts",
+    "create:newsletter-draft": "tsx scripts/create-brevo-campaign-draft.ts",
     "predev": "npm run generate:pages",
     "dev": "vite --port=3000 --host=0.0.0.0",
     "prebuild": "npm run generate:pages",
