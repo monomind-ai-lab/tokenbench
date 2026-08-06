@@ -176,11 +176,60 @@ describe('comparison detail page', () => {
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('$2');
     expect(within(pricingTable).getByRole('row', { name: /Output API price/ })).toHaveTextContent('$8');
     expect(highlights!).toHaveTextContent('On Coding');
-    expect(screen.getByRole('rowheader', { name: 'Coding' })).toBeVisible();
+    expect(within(screen.getByRole('table', { name: 'Source metric comparison' })).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Evidence provenance' }).closest('section')).toHaveTextContent('Model A — route openrouter:provider:model-a · source openrouter · provider openrouter');
 
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
+  });
+
+  it('updates sparse-pair pricing claims when the controlled route changes', () => {
+    const model = viewModel();
+    const directRoute = {
+      ...model.priceChecks[0].checks[0]!,
+      routeId: 'direct:model-a',
+      providerId: 'provider-a-direct',
+      inputUsdPerMillion: 0.5,
+      outputUsdPerMillion: null,
+    };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      priceChecks: [
+        { ...model.priceChecks[0], selectedRouteId: directRoute.routeId, checks: [directRoute, ...model.priceChecks[0].checks] },
+        model.priceChecks[1],
+      ],
+    }} />);
+
+    const highlights = screen.getByRole('heading', { name: 'Evidence highlights' }).closest('section');
+    expect(highlights).not.toBeNull();
+    expect(within(highlights!).getByText(/^Input API price:/)).toHaveTextContent('Model A has the lower verified rate');
+
+    fireEvent.change(screen.getByLabelText('Model A pricing route'), { target: { value: 'openrouter:provider:model-a' } });
+
+    expect(within(highlights!).getByText(/^Input API price:/)).toHaveTextContent('Model B has the lower verified rate');
+    expect(highlights!).not.toHaveTextContent('Input API price: Model A has the lower verified rate');
+  });
+
+  it('shows the selected route verification status and updates it when the route changes', () => {
+    const model = denseComparisonViewModel();
+    const directRoute = { ...model.priceChecks[0].checks.find((route) => route.routeId === 'direct:model-a')!, verificationStatus: 'conflict' as const };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      priceChecks: [
+        { ...model.priceChecks[0], checks: model.priceChecks[0].checks.map((route) => route.routeId === directRoute.routeId ? directRoute : route) },
+        model.priceChecks[1],
+      ],
+    }} />);
+
+    const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
+    const verificationRow = within(pricingTable).getByRole('row', { name: /Verification status/ });
+    expect(verificationRow).toHaveTextContent('Conflict');
+    expect(verificationRow).toHaveTextContent('Primary');
+
+    fireEvent.change(screen.getByLabelText('Model A pricing route'), { target: { value: 'openrouter:provider:model-a' } });
+
+    expect(verificationRow).not.toHaveTextContent('Conflict');
+    expect(verificationRow).toHaveTextContent('Primary');
   });
 
   it('keeps exact selected-route provenance and missing route fields distinct from unavailable evidence', () => {
@@ -208,6 +257,7 @@ describe('comparison detail page', () => {
     const provenance = screen.getByRole('heading', { name: 'Evidence provenance' }).closest('section');
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Not published');
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).not.toHaveTextContent('Unavailable');
+    expect(within(pricingTable).getByRole('row', { name: /Verification status/ })).toHaveTextContent('Not published');
     expect(provenance).toHaveTextContent('Model A — Not published');
   });
 
@@ -237,6 +287,8 @@ describe('comparison detail page', () => {
     expect(screen.getAllByText('Not published').length).toBeGreaterThan(0);
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Unavailable');
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Not published');
+    expect(within(pricingTable).getByRole('row', { name: /Verification status/ })).toHaveTextContent('Unavailable');
+    expect(within(pricingTable).getByRole('row', { name: /Verification status/ })).toHaveTextContent('Not published');
     expect(provenance).not.toBeNull();
     expect(provenance!).toHaveTextContent('Route selection is ambiguous');
   });

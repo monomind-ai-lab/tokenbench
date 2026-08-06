@@ -927,17 +927,40 @@ test.describe('handler-backed comparison browser coverage', () => {
       await expect(page.locator('h1')).toHaveCount(1);
       await expect(page.locator('#comparison-initial-data')).toHaveCount(1);
       await expect(page.getByRole('heading', { name: 'Source metrics', level: 2 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Comparison summary', level: 2 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Comparable metric detail', level: 3 })).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Source metric comparison' }).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Route pricing and context comparison' }).getByRole('row', { name: /Verification status/ })).toBeVisible();
+      await expect(page.locator('.comparison-provenance')).toHaveCount(1);
+      await expect(page.getByRole('heading', { name: 'Workload view' })).toHaveCount(0);
+      await expect(page.locator('.comparison-model-heading img.provider-mark')).toHaveCount(0);
+      await expect(page.locator('.comparison-model-heading .provider-mark-fallback')).toHaveCount(2);
+      const rootText = await page.locator('#root').innerText();
+      expect(rootText).not.toContain('benchlm:category:coding');
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://tokenbench.monomind.one/compare/alpha-vs-beta');
     } finally {
       await context.close();
     }
   });
 
-  test('hydrates the handler-backed comparison so workload selection recalculates its displayed cost', async ({ page }) => {
-    test.setTimeout(45_000);
+  test('hydrates the handler-backed comparison with route-sensitive claims and no Task 5 regressions', async ({ page }) => {
+    test.setTimeout(90_000);
     const origin = previewOrigin();
+    const hydrationErrors: string[] = [];
+    const pageErrors: string[] = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error' && /hydration|didn't match|server rendered html/i.test(message.text())) hydrationErrors.push(message.text());
+    });
+    page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.setViewportSize({ width: 1024, height: 1000 });
     await blockExternalRequests(page, origin);
+    if (process.env.VITE_BRANDFETCH_CLIENT_ID) {
+      await page.route('https://cdn.brandfetch.io/**', (route) => route.fulfill({
+        status: 200,
+        contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="#137fec"/></svg>',
+      }));
+    }
     await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
     const devEntryResponse = handlerBackedAssetMode() === 'vite-source'
       ? page.waitForResponse((response) => response.url() === `${origin}/src/main.tsx`)
@@ -947,12 +970,39 @@ test.describe('handler-backed comparison browser coverage', () => {
     if (devEntryResponse) await devEntryResponse;
     await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', 'desktop', { timeout: 15_000 });
     await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
-    const alphaWorkloadCost = page.getByTestId('workload-cost-provider:alpha');
-    await expect(alphaWorkloadCost).toHaveText('$3.50 / 1M');
-    await expect(page.getByRole('radio', { name: 'Balanced' })).toBeChecked();
+    await expect(page.getByRole('heading', { name: 'Workload view' })).toHaveCount(0);
+    await expect(page.locator('.comparison-provenance')).toHaveCount(1);
+    const pricingTable = page.getByRole('table', { name: 'Route pricing and context comparison' });
+    const inputPrice = pricingTable.getByRole('row', { name: /Input API price/ });
+    const verification = pricingTable.getByRole('row', { name: /Verification status/ });
+    const inputPriceHighlight = page.getByText(/^Input API price:/);
+    await expect(inputPrice).toContainText('$0.5');
+    await expect(verification).toContainText('Primary');
+    await expect(inputPriceHighlight).toContainText('Alpha has the lower verified rate');
 
-    await page.getByRole('radio', { name: 'Output-heavy' }).click();
-    await expect(alphaWorkloadCost).toHaveText('$5.00 / 1M');
+    await page.getByLabel('Alpha pricing route').selectOption('openrouter:provider:alpha');
+
+    await expect(inputPrice).toContainText('$2');
+    await expect(inputPriceHighlight).toContainText('Beta has the lower verified rate');
+    await expect(inputPriceHighlight).not.toContainText('Alpha has the lower verified rate');
+    await expect(page.getByRole('heading', { name: 'Evidence provenance' }).locator('xpath=ancestor::section[1]')).toContainText('Alpha — route openrouter:provider:alpha · source openrouter · provider openrouter');
+    if (process.env.VITE_BRANDFETCH_CLIENT_ID) {
+      await expect(page.locator('.comparison-model-heading img.provider-mark')).toHaveCount(2);
+    }
+
+    for (const viewport of [{ width: 1440, height: 1000 }, { width: 375, height: 1000 }]) {
+      await page.setViewportSize(viewport);
+      for (const theme of ['dark', 'light'] as const) {
+        await setStoredTheme(page, theme);
+        await page.reload({ waitUntil: 'networkidle' });
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+        await assertNoHorizontalOverflow(page);
+      }
+    }
+
+    expect(hydrationErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
   });
 });
 

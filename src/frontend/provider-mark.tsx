@@ -37,10 +37,12 @@ function logoUrl(brand: ProviderBrand, theme: MarkTheme, size: MarkSize): string
 }
 
 function BrandMark({ brand, label, size = 20, theme = 'light', decorative = false, loading = 'lazy' }: MarkProps & { readonly brand: ProviderBrand; readonly label: string }) {
+  const [clientReady, setClientReady] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
-  const imageSource = logoUrl(brand, theme, size);
+  const imageSource = clientReady ? logoUrl(brand, theme, size) : null;
   const brandIdentity = `${brand.domain ?? ''}:${brand.label}:${brand.fallback}`;
 
+  useEffect(() => setClientReady(true), []);
   useEffect(() => setImageFailed(false), [brandIdentity, imageSource]);
 
   const source = imageFailed ? null : imageSource;

@@ -2,7 +2,8 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ModelMark, ProviderMark } from './provider-mark';
@@ -42,12 +43,13 @@ describe('ProviderMark', () => {
     expect(screen.queryByLabelText('Unknown lab')).not.toBeInTheDocument();
   });
 
-  it('renders with an SSR-safe light theme default', () => {
+  it('renders an SSR-safe fallback even when Brandfetch is configured', () => {
     vi.stubEnv('VITE_BRANDFETCH_CLIENT_ID', 'public-client');
 
     const markup = renderToStaticMarkup(<ProviderMark providerId="openai" providerName="OpenAI" />);
 
-    expect(markup).toContain('/theme/light/icon');
+    expect(markup).toContain('provider-mark-fallback');
+    expect(markup).not.toContain('cdn.brandfetch.io');
   });
 
   it('falls back without throwing during raw TSX SSR when Vite env injection is unavailable', async () => {
@@ -67,6 +69,37 @@ describe('ProviderMark', () => {
     expect(stderr).toBe('');
     expect(stdout).toContain('provider-mark-fallback');
     expect(stdout).toContain('aria-label="OpenAI"');
+  });
+
+  it('hydrates a raw SSR fallback without mismatch before upgrading to a configured Brandfetch image', async () => {
+    const projectRoot = process.cwd();
+    const providerMarkModule = pathToFileURL(resolve(projectRoot, 'src/frontend/provider-mark.tsx')).href;
+    const program = [
+      'const React = await import("react");',
+      'const { renderToStaticMarkup } = await import("react-dom/server");',
+      `const { ProviderMark } = await import(${JSON.stringify(providerMarkModule)});`,
+      'process.stdout.write(renderToStaticMarkup(React.createElement(ProviderMark, { providerId: "openai", providerName: "OpenAI", size: 24 })));',
+    ].join('\n');
+    const { stdout } = await execFile(process.execPath, ['--import', 'tsx', '--input-type=module', '--eval', program], { cwd: projectRoot });
+    const container = document.createElement('div');
+    container.innerHTML = stdout;
+    document.body.append(container);
+    vi.stubEnv('VITE_BRANDFETCH_CLIENT_ID', 'public-client');
+    const recoverableErrors: unknown[] = [];
+    const root = hydrateRoot(container, <ProviderMark providerId="openai" providerName="OpenAI" size={24} />, {
+      onRecoverableError: (error) => recoverableErrors.push(error),
+    });
+
+    try {
+      expect(container.querySelector('.provider-mark-fallback')).toBeInTheDocument();
+      await act(async () => {});
+
+      expect(recoverableErrors).toEqual([]);
+      expect(within(container).getByRole('img', { name: 'OpenAI' })).toHaveAttribute('src', expect.stringContaining('cdn.brandfetch.io/openai.com'));
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
   });
 
   it('retries Brandfetch when a failed mark receives a new source', () => {

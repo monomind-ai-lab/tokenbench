@@ -211,6 +211,16 @@ describe('ComparisonRadar', () => {
     expect(screen.getByRole('table', { name: 'Radar chart data' })).toBeInTheDocument();
   });
 
+  it('keeps raw metric and source provenance out of the visible fallback table', () => {
+    render(<ComparisonRadar modelAName="Alpha" modelBName="Beta" models={supportedModels()} rows={sharedMetricRows(4)} />);
+
+    const table = screen.getByRole('table', { name: 'Radar chart data' });
+    expect(within(table).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
+    expect(table).not.toHaveTextContent('benchlm:category:coding');
+    expect(table).not.toHaveTextContent('benchlm_raw_composite');
+    expect(table).not.toHaveTextContent('benchlm');
+  });
+
   it('provides a text legend for the solid and dashed series', () => {
     render(<ComparisonRadar modelAName="Alpha" modelBName="Beta" models={supportedModels()} rows={sharedMetricRows(4)} />);
 

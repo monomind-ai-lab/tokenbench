@@ -92,6 +92,14 @@ function routeListValue(selection: SelectedRouteState, value: readonly string[] 
   return unresolvedRouteValue(selection) ?? listValue(value);
 }
 
+function routeVerificationValue(selection: SelectedRouteState): ReactNode {
+  const unresolved = unresolvedRouteValue(selection);
+  if (unresolved) return unresolved;
+  if (selection.route.verificationStatus === 'primary') return 'Primary';
+  if (selection.route.verificationStatus === 'corroborating') return 'Corroborating';
+  return 'Conflict';
+}
+
 function modelEvidenceLabel(model: BenchmarkModel): string {
   if (model.evidenceStatus === 'supported') return 'Supported evidence';
   if (model.evidenceStatus === 'estimated') return 'Estimated evidence';
@@ -350,6 +358,7 @@ function PricingContext({
   ] as const;
   const routes = [selections[0].route, selections[1].route] as const;
   const rows: readonly { readonly label: string; readonly unit: string; readonly left: ReactNode; readonly right: ReactNode }[] = [
+    { label: 'Verification status', unit: 'route evidence', left: routeVerificationValue(selections[0]), right: routeVerificationValue(selections[1]) },
     { label: 'Input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.inputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.inputUsdPerMillion ?? null) },
     { label: 'Cached input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.cachedInputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.cachedInputUsdPerMillion ?? null) },
     { label: 'Output API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.outputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.outputUsdPerMillion ?? null) },
@@ -420,6 +429,13 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
     selectedRoute(viewModel.priceChecks[0], selectedRouteIds[0]),
     selectedRoute(viewModel.priceChecks[1], selectedRouteIds[1]),
   ] as const;
+  const summaryViewModel: ComparisonViewModel = {
+    ...viewModel,
+    priceChecks: [
+      { ...viewModel.priceChecks[0], selectedRouteId: selectedRouteIds[0] },
+      { ...viewModel.priceChecks[1], selectedRouteId: selectedRouteIds[1] },
+    ],
+  };
 
   useEffect(() => setClientHydrated(true), []);
   useEffect(() => {
@@ -428,7 +444,7 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
 
   return <div className="comparison-page comparison-detail-page" data-client-hydrated={clientHydrated ? 'true' : 'false'}>
     <PairHeader viewModel={viewModel} />
-    <Summary viewModel={viewModel} />
+    <Summary viewModel={summaryViewModel} />
     <SharedMetricView viewModel={viewModel} />
     <SourceMetrics models={viewModel.models} rows={viewModel.metricRows} />
     <PricingContext groups={viewModel.priceChecks} models={viewModel.models} onRouteChange={(index, routeId) => setSelectedRouteIds((current) => index === 0 ? [routeId, current[1]] : [current[0], routeId])} selectedRouteIds={selectedRouteIds} />

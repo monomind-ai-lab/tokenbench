@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { within } from '@testing-library/dom';
 import type { ActiveBenchmarkSnapshot } from '../_shared/benchmark-db';
 import type {
   BenchmarkComparisonPair,
@@ -163,6 +164,7 @@ async function request(pairValue: string, pathname = `/compare/${pairValue}`, pa
 }
 
 function initialViewModel(html: string): {
+  metricRows: Array<{ metricKey: string; sourceId: string; methodology: string }>;
   relatedPairs: Array<{ pairSlug: string; modelA: BenchmarkModel; modelB: BenchmarkModel }>;
   attribution: Array<{ sourceId: string; artifactId: string }>;
   priceChecks: Array<{ modelKey: string; selectedRouteId: string | null; checks: BenchmarkPriceCheck[] }>;
@@ -170,10 +172,24 @@ function initialViewModel(html: string): {
   const payload = html.match(/<script id="comparison-initial-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
   if (!payload) throw new Error('Expected the comparison hydration payload');
   return JSON.parse(payload) as {
+    metricRows: Array<{ metricKey: string; sourceId: string; methodology: string }>;
     relatedPairs: Array<{ pairSlug: string; modelA: BenchmarkModel; modelB: BenchmarkModel }>;
     attribution: Array<{ sourceId: string; artifactId: string }>;
     priceChecks: Array<{ modelKey: string; selectedRouteId: string | null; checks: BenchmarkPriceCheck[] }>;
   };
+}
+
+function renderedRoot(html: string): HTMLElement {
+  const rootStart = html.indexOf('<div id="root">');
+  const payloadStart = html.indexOf('<script id="comparison-initial-data"');
+  if (rootStart === -1 || payloadStart === -1 || payloadStart <= rootStart) {
+    throw new Error('Expected rendered comparison root before hydration payload');
+  }
+  const shell = document.createElement('div');
+  shell.innerHTML = html.slice(rootStart, payloadStart);
+  const root = shell.querySelector<HTMLElement>('#root');
+  if (!root) throw new Error('Expected rendered comparison root');
+  return root;
 }
 
 describe('dynamic comparison Pages Function', () => {
@@ -188,17 +204,31 @@ describe('dynamic comparison Pages Function', () => {
 
     const response = await request('zeta-vs-alpha');
     const html = await response.text();
+    const root = renderedRoot(html);
+    const rendered = within(root);
+    const provenance = rendered.getByRole('heading', { name: 'Evidence provenance' }).closest('section');
+    const rootWithoutProvenance = root.cloneNode(true) as HTMLElement;
+    rootWithoutProvenance.querySelector('.comparison-provenance')?.remove();
+    const data = initialViewModel(html);
 
     expect(response.status).toBe(200);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(html.replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Model A vs Model B</h1>');
+    expect(rendered.getByRole('heading', { level: 1, name: 'Model A vs Model B' })).toBeTruthy();
+    expect(rendered.getByRole('heading', { name: 'Comparison summary' })).toBeTruthy();
+    expect(within(rendered.getByRole('table', { name: 'Source metric comparison' })).getByRole('rowheader', { name: 'Coding' })).toBeTruthy();
+    expect(within(rendered.getByRole('table', { name: 'Route pricing and context comparison' })).getByRole('row', { name: /Verification status/ })).toBeTruthy();
+    expect(root.querySelectorAll('.comparison-provenance')).toHaveLength(1);
+    expect(provenance).not.toBeNull();
+    expect(rootWithoutProvenance.textContent).not.toContain('benchlm:category:coding');
+    expect(rootWithoutProvenance.textContent).not.toContain('benchlm_raw_composite');
+    expect(rootWithoutProvenance.textContent).not.toContain('benchlm-models');
+    expect(rootWithoutProvenance.textContent).not.toMatch(/\bbenchlm\b/);
+    expect(rootWithoutProvenance.textContent).not.toContain('Workload');
+    expect(data.metricRows[0]).toMatchObject({ metricKey: 'benchlm:category:coding', sourceId: 'benchlm', methodology: 'benchlm_raw_composite' });
     expect(html).toContain('<title>Model A vs Model B: Cost, Coding &amp; Benchmarks | TokenBench</title>');
     expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/compare/zeta-vs-alpha">');
     expect(html).toContain('<meta name="robots" content="index,follow">');
-    expect(html).toContain('benchlm:category:coding');
-    expect(html).toContain('Comparison summary');
-    expect(html).toContain('Evidence provenance');
-    expect(html).toContain('Switch model pair');
+    expect(rendered.getByRole('heading', { name: 'Switch model pair' })).toBeTruthy();
     expect(html).not.toContain('No verified subscription match');
     expect(html).not.toContain('Related comparisons');
     expect(html).toContain('id="comparison-initial-data" type="application/json"');

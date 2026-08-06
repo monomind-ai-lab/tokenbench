@@ -30,6 +30,7 @@ const REVISION_CONTENT_HASH = 'sha256:' + createHash('sha256').update(JSON.strin
   catalogRevision: CATALOG_REVISION,
   openrouterContentHash: OPENROUTER_CONTENT_HASH,
   artifacts: [
+    { sourceId: 'benchlm', artifactId: 'direct-pricing', contentHash: sha256('f') },
     { sourceId: 'benchlm', artifactId: 'models', contentHash: sha256('a') },
     { sourceId: 'lmarena', artifactId: 'text-to-image', contentHash: sha256('b') },
     { sourceId: 'openrouter', artifactId: OPENROUTER_ARTIFACT_ID, contentHash: OPENROUTER_CONTENT_HASH },
@@ -134,8 +135,8 @@ function primaryPrice(modelKey: string, input: number, output: number): Benchmar
   };
 }
 
-const alpha = benchmarkModel('provider:alpha', 'alpha', 'Alpha', 'benchlm', 'models', 'Alpha Labs');
-const beta = benchmarkModel('provider:beta', 'beta', 'Beta', 'benchlm', 'models', 'Beta Labs');
+const alpha = benchmarkModel('provider:alpha', 'alpha', 'Alpha', 'benchlm', 'models', 'OpenAI');
+const beta = benchmarkModel('provider:beta', 'beta', 'Beta', 'benchlm', 'models', 'Anthropic');
 const canvas = benchmarkModel('lmarena:canvas', 'canvas', 'Canvas', 'lmarena', 'text-to-image', 'Canvas Labs');
 const prism = benchmarkModel('lmarena:prism', 'prism', 'Prism', 'lmarena', 'text-to-image', 'Prism Labs');
 
@@ -147,6 +148,17 @@ const canvasImage = lmarenaMetric(canvas.modelKey, 1);
 const prismImage = lmarenaMetric(prism.modelKey, 2);
 const alphaPrice = primaryPrice(alpha.modelKey, 2, 8);
 const betaPrice = primaryPrice(beta.modelKey, 1, 4);
+const alphaDirectPrice = {
+  ...alphaPrice,
+  sourceId: 'benchlm',
+  providerId: 'alpha-direct',
+  inputUsdPerMillion: 0.5,
+  outputUsdPerMillion: null,
+  contextWindowTokens: 64_000,
+  routeId: 'direct:alpha',
+  maxInputTokens: 60_000,
+  sourceArtifactId: 'direct-pricing',
+} satisfies BenchmarkPriceCheck;
 
 const attribution = [
   { sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.example/data', updatedAt: TIMESTAMP },
@@ -343,6 +355,22 @@ const comparisonSources = [
   },
   {
     revision: REVISION,
+    source_id: 'benchlm',
+    artifact_id: 'direct-pricing',
+    source_url: 'https://benchlm.example/data/direct-pricing.json',
+    observed_at: TIMESTAMP,
+    etag: null,
+    last_modified: null,
+    upstream_revision: 'browser-direct-pricing-r1',
+    schema_version: '1.0',
+    snapshot_key: 'benchmarks/benchlm/direct-pricing.json',
+    content_hash: sha256('f'),
+    original_content_hash: sha256('6'),
+    license_id: 'MIT',
+    attribution_text: 'Direct pricing data from BenchLM.ai',
+  },
+  {
+    revision: REVISION,
     source_id: 'openrouter',
     artifact_id: OPENROUTER_ARTIFACT_ID,
     source_url: 'https://openrouter.example/api/v1/models',
@@ -440,7 +468,7 @@ export function handlerBackedComparisonDatabase(): D1Database {
       rawMetric(canvasImage),
       rawMetric(prismImage),
     ],
-    prices: [rawPrice(alphaPrice), rawPrice(betaPrice)],
+    prices: [rawPrice(alphaDirectPrice), rawPrice(alphaPrice), rawPrice(betaPrice)],
     pairs: [{
       revision: REVISION,
       pair_slug: 'alpha-vs-beta',

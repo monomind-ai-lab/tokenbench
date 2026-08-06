@@ -152,7 +152,7 @@ export function ComparisonRadar({
 
   return <section className="comparison-radar">
     <figure className="comparison-radar-figure">
-      <figcaption>Per-axis relative view: each axis scales to the higher published value for that exact shared metric. The table preserves the raw source values and units.</figcaption>
+      <figcaption>Per-axis relative view: each axis scales to the higher published value for that exact shared metric. The table preserves the exact published values and units.</figcaption>
       <ul className="comparison-radar-legend" aria-label="Radar chart series">
         <li><span className="comparison-radar-legend-swatch comparison-radar-legend-swatch-a" aria-hidden="true" />{modelAName}: solid line</li>
         <li><span className="comparison-radar-legend-swatch comparison-radar-legend-swatch-b" aria-hidden="true" />{modelBName}: dashed line</li>
@@ -171,10 +171,10 @@ export function ComparisonRadar({
         {modelBPoints.map(([cx, cy], index) => <circle className="comparison-radar-marker comparison-radar-marker-b" key={`b-${entries[index]!.identity}`} cx={cx} cy={cy} r="3" aria-hidden="true" />)}
       </svg>
       <table className="comparison-radar-table" aria-label="Radar chart data">
-        <caption>Exact source values used in the per-axis relative radar chart.</caption>
+        <caption>Exact published values used in the per-axis relative radar chart.</caption>
         <thead><tr><th scope="col">Metric</th><th scope="col">{modelAName}</th><th scope="col">{modelBName}</th><th scope="col">Unit</th></tr></thead>
-        <tbody>{entries.map(({ axis, identity, metricKey, methodology, sourceId, unit }) => <tr key={identity}>
-          <th scope="row">{axis.label}<small>{metricKey} · {sourceId} · {methodology}</small></th>
+        <tbody>{entries.map(({ axis, identity, unit }) => <tr key={identity}>
+          <th scope="row">{axis.label}</th>
           <td>{formatExactValue(axis.modelA)}</td>
           <td>{formatExactValue(axis.modelB)}</td>
           <td>{unit}</td>
