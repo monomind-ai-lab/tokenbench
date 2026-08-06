@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { PlanOffer } from '../catalog/contracts';
 import { decodeCalculatorShareState, encodeCalculatorShareState, type CalculatorShareState } from './calculator-share-state';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 
@@ -20,6 +21,16 @@ const validState: CalculatorShareState = {
   inputShareBasisPoints: 5_000,
   monthlyTokens: 10_000_000,
 };
+
+function nonIndividualPlan(kind: 'free' | 'team'): PlanOffer {
+  return {
+    ...FRONTEND_TEST_CATALOG.plans[1],
+    id: `provider-a:${kind}`,
+    displayName: kind === 'free' ? 'Free' : 'Team',
+    monthlyCostMicroDollars: kind === 'free' ? 0 : 80_000_000,
+    billingCycle: 'monthly',
+  };
+}
 
 describe('calculator share state', () => {
   it('round trips the calculator state through canonical, non-personal URL parameters', () => {
@@ -60,6 +71,17 @@ describe('calculator share state', () => {
         inputShareBasisPoints: 5_000,
         monthlyTokens: 1_000_000,
       },
+    });
+  });
+
+  it.each(['free', 'team'] as const)('normalizes a shared %s plan to no selected plan', (kind) => {
+    const excludedPlan = nonIndividualPlan(kind);
+    const catalog = { ...FRONTEND_TEST_CATALOG, plans: [...FRONTEND_TEST_CATALOG.plans, excludedPlan] };
+    const params = encodeCalculatorShareState({ ...validState, planId: excludedPlan.id });
+
+    expect(decodeCalculatorShareState(params, catalog)).toEqual({
+      wasNormalized: true,
+      state: { ...validState, planId: '' },
     });
   });
 

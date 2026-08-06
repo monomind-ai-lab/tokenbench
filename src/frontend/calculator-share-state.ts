@@ -1,4 +1,5 @@
 import type { CatalogResponse } from '../catalog/contracts';
+import { isPaidIndividualPlan } from './plan-filter';
 
 const STATE_KEYS = ['provider', 'plan', 'models', 'weights', 'input', 'tokens'] as const;
 
@@ -88,7 +89,11 @@ export function decodeCalculatorShareState(params: URLSearchParams, catalog: Cat
   if (!modelMixBasisPoints) return null;
 
   const normalizedModelIds = survivingModels.map((entry) => entry.id);
-  const hasValidPlan = planId === '' || catalog.plans.some((plan) => plan.id === planId && plan.providerId === providerId);
+  const hasValidPlan = planId === '' || catalog.plans.some((plan) => (
+    plan.id === planId
+    && plan.providerId === providerId
+    && isPaidIndividualPlan(plan)
+  ));
   const normalizedPlanId = hasValidPlan ? planId : '';
   const modelsChanged = normalizedModelIds.length !== selectedModelIds.length
     || normalizedModelIds.some((id, index) => id !== selectedModelIds[index])

@@ -75,6 +75,15 @@ function comparablePlan(overrides: Partial<PlanOffer> = {}): PlanOffer {
   };
 }
 
+function nonIndividualPlan(kind: 'free' | 'team'): PlanOffer {
+  return {
+    ...comparablePlan(),
+    id: `provider-a:${kind}`,
+    displayName: kind === 'free' ? 'Free' : 'Team',
+    monthlyCostMicroDollars: kind === 'free' ? 0 : 80_000_000,
+  };
+}
+
 type IneligibleCalculatorFixture = 'rolling' | 'guardrail' | 'credits' | 'unsupported-mix' | 'no-plan';
 
 function calculatorFixture(fixture: IneligibleCalculatorFixture): CatalogResponse {
@@ -195,6 +204,22 @@ describe('responsive calculator app shell', () => {
       .not.toHaveTextContent('Subscription is cheaper');
   });
 
+  it('does not present savings or breakeven metrics for an ineligible plan', async () => {
+    const catalog = calculatorFixture('rolling');
+    renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0].id }));
+
+    const result = await calculatedResult();
+    const differenceHeading = within(result).getByRole('heading', { name: 'Estimated difference' });
+    const differenceMetric = differenceHeading.closest<HTMLElement>('.value-metric');
+    if (!differenceMetric) throw new Error('Expected an estimated-difference metric');
+
+    expect(within(result).queryByRole('heading', { name: /Est\. Monthly Savings/i })).not.toBeInTheDocument();
+    expect(within(differenceMetric).getByText('Unavailable')).toHaveAttribute('data-savings-tone', 'neutral');
+    expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
+    expect(within(result).getByText('Efficiency').parentElement).toHaveTextContent('Unavailable');
+    expect(within(result).queryByText(/^Breakeven:/)).not.toBeInTheDocument();
+  });
+
   it.each<readonly [string, CatalogResponse, string]>([
     ['a lower fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] }, 'Subscription is cheaper'],
     ['an equal fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 50_000_000 })] }, 'Subscription and pay as you go cost the same'],
@@ -242,6 +267,19 @@ describe('responsive calculator app shell', () => {
       .toBe(calculatorPath({ planId: '', monthlyTokens: 1_000_000 })));
     expect(screen.getByRole('radio', { name: /Starter/i })).not.toBeChecked();
     expect(screen.getByRole('region', { name: 'Calculated plan value' })).toHaveTextContent('Choose a subscription with published capacity');
+  });
+
+  it.each(['free', 'team'] as const)('canonicalizes a shared %s plan as no selected individual plan', async (kind) => {
+    const excludedPlan = nonIndividualPlan(kind);
+    const catalog = { ...FRONTEND_TEST_CATALOG, plans: [...FRONTEND_TEST_CATALOG.plans, excludedPlan] };
+    renderCalculator(catalog, calculatorPath({ planId: excludedPlan.id }));
+
+    const result = await calculatedResult();
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`)
+      .toBe(calculatorPath({ planId: '' })));
+    within(screen.getByRole('group', { name: /Plan selection/i })).getAllByRole('radio')
+      .forEach((plan) => expect(plan).not.toBeChecked());
+    expect(result).toHaveTextContent('Choose a subscription with published capacity');
   });
 
   it('shares the hydrated state without replacing the current address', async () => {
@@ -504,7 +542,11 @@ describe('responsive calculator app shell', () => {
   });
 
   it('shows savings and separate full-width plan and API pricing panels with selected models highlighted', async () => {
-    render(<App />);
+    const selectedModelIds = FRONTEND_TEST_CATALOG.modelOffers.map((offer) => offer.id);
+    renderCalculator(
+      { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] },
+      calculatorPath({ planId: 'provider-a:comparable', modelIds: selectedModelIds.join(','), weights: '3334,3333,3333' }),
+    );
     const savingsHeading = await screen.findByRole('heading', { name: /Est\. Monthly Savings/i });
     expect(savingsHeading).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Cost-first recommendation/i })).not.toBeInTheDocument();
