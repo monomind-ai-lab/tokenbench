@@ -18,6 +18,7 @@ import {
   type LeaderboardEntry,
   type LeaderboardResult,
 } from './leaderboards';
+import { materializeDecisionPicks } from './decision-picks';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 import type { WorkloadProfile } from './value';
 
@@ -78,6 +79,9 @@ interface CompareDirectory {
 }
 
 interface BenchmarkFactIndexes {
+  /** Stable copies let additional materializations avoid rereading request inputs. */
+  readonly metrics: readonly BenchmarkMetric[];
+  readonly priceChecks: readonly BenchmarkPriceCheck[];
   readonly metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>;
   readonly pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>;
   readonly metricCategoriesByModel: ReadonlyMap<string, readonly string[]>;
@@ -97,11 +101,14 @@ function indexBenchmarkFacts(
   metrics: readonly BenchmarkMetric[],
   priceChecks: readonly BenchmarkPriceCheck[],
 ): BenchmarkFactIndexes {
+  const metricValues: BenchmarkMetric[] = [];
+  const priceValues: BenchmarkPriceCheck[] = [];
   const metricsByModel = new Map<string, BenchmarkMetric[]>();
   const pricesByModel = new Map<string, BenchmarkPriceCheck[]>();
   const categorySetsByModel = new Map<string, Set<string>>();
 
   for (const metric of metrics) {
+    metricValues.push(metric);
     const modelMetrics = metricsByModel.get(metric.modelKey);
     if (modelMetrics) modelMetrics.push(metric);
     else metricsByModel.set(metric.modelKey, [metric]);
@@ -111,6 +118,7 @@ function indexBenchmarkFacts(
     else categorySetsByModel.set(metric.modelKey, new Set([metric.category]));
   }
   for (const price of priceChecks) {
+    priceValues.push(price);
     const modelPrices = pricesByModel.get(price.modelKey);
     if (modelPrices) modelPrices.push(price);
     else pricesByModel.set(price.modelKey, [price]);
@@ -120,7 +128,13 @@ function indexBenchmarkFacts(
   for (const [modelKey, categories] of categorySetsByModel) {
     metricCategoriesByModel.set(modelKey, [...categories].sort(compareText));
   }
-  return { metricsByModel, pricesByModel, metricCategoriesByModel };
+  return {
+    metrics: metricValues,
+    priceChecks: priceValues,
+    metricsByModel,
+    pricesByModel,
+    metricCategoriesByModel,
+  };
 }
 
 export function supportsEstimatedLeaderboard(definition: typeof LEADERBOARD_DEFINITIONS[LeaderboardKey]): boolean {
@@ -242,10 +256,17 @@ function compareDirectory(snapshot: BenchmarkProjectionSnapshot, factIndexes: Be
 
 export function buildBenchmarkSummaryData(snapshot: BenchmarkProjectionSnapshot) {
   const factIndexes = indexBenchmarkFacts(snapshot.metrics, snapshot.priceChecks);
+  const decisions = materializeDecisionPicks({
+    ...snapshot,
+    metrics: factIndexes.metrics,
+    priceChecks: factIndexes.priceChecks,
+  });
   return {
     sources: sourceAvailability(snapshot),
     routes: routeAvailability(snapshot, factIndexes),
     compareDirectory: compareDirectory(snapshot, factIndexes),
+    decisionPicks: decisions.decisionPicks,
+    homeDecisionSnapshot: decisions.homeDecisionSnapshot,
   };
 }
 

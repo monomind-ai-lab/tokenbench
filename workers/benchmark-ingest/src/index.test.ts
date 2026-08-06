@@ -1298,6 +1298,8 @@ describe('atomic benchmark ingestion', () => {
       'leaderboard-projection:llm-overall:balanced:0',
       'fresh',
     );
+    const freshSummaryData = (JSON.parse(summaryFresh.body) as { data: Record<string, unknown> }).data;
+    const staleSummaryData = (JSON.parse(summaryStale.body) as { data: Record<string, unknown> }).data;
 
     expect(JSON.parse(summaryFresh.body)).toMatchObject({
       revision: result.revision,
@@ -1308,6 +1310,25 @@ describe('atomic benchmark ingestion', () => {
       revision: result.revision,
       freshness: { status: 'stale', checkedAt: observedAt, message: 'Published benchmark revision has not refreshed within 36 hours.' },
     });
+    expect((freshSummaryData.decisionPicks as Array<Record<string, unknown>>).map((group) => group.key)).toEqual([
+      'llm-overall',
+      'llm-agentic',
+      'llm-coding',
+      'llm-reasoning',
+      'multimodal-vision-documents',
+      'llm-knowledge',
+    ]);
+    expect((freshSummaryData.decisionPicks as Array<{ entries: Array<{ evidenceStatus: string }> }>)
+      .flatMap((group) => group.entries)
+      .every((entry) => entry.evidenceStatus === 'supported')).toBe(true);
+    expect(freshSummaryData.homeDecisionSnapshot).toMatchObject({
+      benchAlignLeader: expect.objectContaining({ status: expect.stringMatching(/^(ready|unavailable)$/) }),
+      valueFrontierLeader: expect.objectContaining({ status: expect.stringMatching(/^(ready|unavailable)$/) }),
+      lowestVerifiedRepresentativeRate: expect.objectContaining({ status: expect.stringMatching(/^(ready|unavailable)$/) }),
+      pricePerformancePoints: expect.any(Array),
+    });
+    expect(staleSummaryData.decisionPicks).toEqual(freshSummaryData.decisionPicks);
+    expect(staleSummaryData.homeDecisionSnapshot).toEqual(freshSummaryData.homeDecisionSnapshot);
     expect(JSON.parse(overallFresh.body)).toMatchObject({
       data: { key: 'llm-overall', profile: 'balanced', pagination: { limit: 50 } },
     });

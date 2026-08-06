@@ -9,6 +9,7 @@ import {
   onRequestGet as getBenchmarks,
 } from './benchmarks';
 import {
+  buildBenchmarkSummaryData as buildCanonicalBenchmarkSummaryData,
   cachedLeaderboardPaginationProjection,
   effectiveLeaderboardProfile,
   materializeLeaderboard,
@@ -693,6 +694,20 @@ describe('cached benchmark APIs', () => {
         ]),
       },
     });
+  });
+
+  it('delegates fallback decision projections to the canonical summary materializer', async () => {
+    const rows = publishedRows();
+    const snapshot = await readActiveBenchmarkSnapshot(d1(rows));
+    expect(snapshot).not.toBeNull();
+    if (!snapshot) return;
+    const expected = buildCanonicalBenchmarkSummaryData(snapshot);
+
+    const response = await summary(rows);
+    const body = await response.json() as { readonly data: Record<string, unknown> };
+
+    expect(body.data.decisionPicks).toEqual(expected.decisionPicks);
+    expect(body.data.homeDecisionSnapshot).toEqual(expected.homeDecisionSnapshot);
   });
 
   it('returns a deterministic minimal compare directory without synthetic scores or winners', async () => {

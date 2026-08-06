@@ -1,7 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LeaderboardKey } from '../routing/routes';
-import { leaderboardEndpoint, useBenchmarkLeaderboard } from './use-benchmarks';
+import {
+  benchmarkSummaryEndpoint,
+  leaderboardEndpoint,
+  useBenchmarkLeaderboard,
+  useDecisionPicks,
+  useHomeDecisionSnapshot,
+} from './use-benchmarks';
 
 const ISO_TIME = '2026-08-05T12:00:00.000Z';
 
@@ -413,6 +419,80 @@ function jsonResponse(body: unknown, status = 200) {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+function decisionPick(overrides: Record<string, unknown> = {}) {
+  return {
+    rank: 1,
+    modelKey: 'model-a',
+    slug: 'model-a',
+    name: 'Model A',
+    provider: 'Provider A',
+    score: 82.4,
+    unit: 'score',
+    evidenceStatus: 'supported',
+    updatedAt: ISO_TIME,
+    routePath: '/leaderboards/llm/overall/',
+    representativePriceUsdPerMillion: 3,
+    contextWindowTokens: 128_000,
+    ...overrides,
+  };
+}
+
+function decisionSummaryEnvelope(overrides: Record<string, unknown> = {}) {
+  const overall = decisionPick();
+  return {
+    revision: 'benchmark-revision-1',
+    publishedAt: ISO_TIME,
+    freshness: { status: 'fresh', checkedAt: ISO_TIME },
+    attribution: [BENCHLM_ATTRIBUTION, OPENROUTER_ATTRIBUTION],
+    data: {
+      decisionPicks: [
+        { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [overall] },
+        { key: 'llm-agentic', label: 'Agentic BenchAlign leaders', status: 'benchalign', entries: [] },
+        { key: 'llm-coding', label: 'Coding BenchAlign leaders', status: 'benchalign', entries: [] },
+        { key: 'llm-reasoning', label: 'Reasoning evidence lens', status: 'evidence-lens', entries: [] },
+        { key: 'multimodal-vision-documents', label: 'Vision and documents evidence lens', status: 'evidence-lens', entries: [] },
+        { key: 'llm-knowledge', label: 'Knowledge evidence lens', status: 'evidence-lens', entries: [] },
+      ],
+      homeDecisionSnapshot: {
+        benchAlignLeader: { status: 'ready', value: overall, updatedAt: ISO_TIME },
+        valueFrontierLeader: {
+          status: 'ready',
+          value: decisionPick({ routePath: '/leaderboards/llm/value/' }),
+          updatedAt: ISO_TIME,
+        },
+        lowestVerifiedRepresentativeRate: {
+          status: 'ready',
+          value: {
+            modelKey: 'model-a',
+            slug: 'model-a',
+            name: 'Model A',
+            provider: 'Provider A',
+            evidenceStatus: 'supported',
+            representativePriceUsdPerMillion: 3,
+            contextWindowTokens: 128_000,
+            routePath: '/leaderboards/llm/pricing-context/',
+          },
+          updatedAt: ISO_TIME,
+        },
+        pricePerformancePoints: [{
+          modelKey: 'model-a',
+          slug: 'model-a',
+          name: 'Model A',
+          provider: 'Provider A',
+          evidenceStatus: 'supported',
+          representativePriceUsdPerMillion: 3,
+          contextWindowTokens: 128_000,
+          routePath: '/leaderboards/llm/overall/',
+          score: 82.4,
+          unit: 'score',
+          updatedAt: ISO_TIME,
+        }],
+      },
+    },
+    ...overrides,
+  };
 }
 
 describe('useBenchmarkLeaderboard', () => {
@@ -1075,5 +1155,74 @@ describe('useBenchmarkLeaderboard', () => {
 
     await waitFor(() => expect(result.current.phase).toBe('unavailable'));
     expect(result.current.envelope).toBeNull();
+  });
+});
+
+describe('decision summary hooks', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reads supported picks from one bounded summary request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(decisionSummaryEnvelope()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useDecisionPicks());
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(benchmarkSummaryEndpoint()).toBe('/api/benchmarks');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks');
+    expect(result.current.decisionPicks?.[0]).toMatchObject({
+      key: 'llm-overall',
+      entries: [{ evidenceStatus: 'supported', routePath: '/leaderboards/llm/overall/' }],
+    });
+  });
+
+  it('keeps a stale Home decision snapshot available without inventing a fallback', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(decisionSummaryEnvelope({
+      freshness: { status: 'stale', checkedAt: ISO_TIME, message: 'Refresh overdue.' },
+    }))));
+
+    const { result } = renderHook(() => useHomeDecisionSnapshot());
+
+    await waitFor(() => expect(result.current.phase).toBe('stale'));
+    expect(result.current.homeDecisionSnapshot?.benchAlignLeader).toMatchObject({
+      status: 'ready',
+      value: { modelKey: 'model-a', evidenceStatus: 'supported' },
+    });
+    expect(result.current.homeDecisionSnapshot?.pricePerformancePoints).toHaveLength(1);
+    expect(result.current.error).toBe('Refresh overdue.');
+  });
+
+  it('shares one in-flight summary request between the picks and Home hooks', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(decisionSummaryEnvelope()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => ({
+      picks: useDecisionPicks(),
+      home: useHomeDecisionSnapshot(),
+    }));
+
+    await waitFor(() => expect(result.current.picks.phase).toBe('ready'));
+    expect(result.current.home.phase).toBe('ready');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a summary that lets an estimated model occupy a decision slot', async () => {
+    const payload = decisionSummaryEnvelope();
+    const estimated = decisionPick({ evidenceStatus: 'estimated' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: {
+        ...payload.data,
+        decisionPicks: [{ ...payload.data.decisionPicks[0], entries: [estimated] }, ...payload.data.decisionPicks.slice(1)],
+      },
+    })));
+
+    const { result } = renderHook(() => useDecisionPicks());
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.decisionPicks).toBeNull();
   });
 });

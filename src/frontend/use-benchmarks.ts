@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardDefinition, type LeaderboardEntry, type LeaderboardResult, type LeaderboardSort } from '../benchmarks/leaderboards';
 import { BENCHMARK_SOURCE_IDS } from '../benchmarks/contracts';
+import {
+  DECISION_PICK_CATEGORIES,
+  type DecisionPickEntry,
+  type DecisionPickGroup,
+  type HomeDecisionSnapshot,
+  type HomeDecisionSlot,
+  type HomeRepresentativeRate,
+  type PricePerformancePoint,
+} from '../benchmarks/decision-picks';
 import { blendedCostPerMillion, type WorkloadProfile } from '../benchmarks/value';
-import type { LeaderboardKey } from '../routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 
 export interface BenchmarkFreshness {
   readonly status: 'fresh' | 'stale';
@@ -508,4 +517,232 @@ export function useBenchmarkLeaderboard(
   }, [cursor, key, normalizedLimit, profile, requestIncludesEstimated, retryVersion]);
 
   return { ...state, retry };
+}
+
+export interface BenchmarkSummaryData {
+  readonly decisionPicks: readonly DecisionPickGroup[];
+  readonly homeDecisionSnapshot: HomeDecisionSnapshot;
+}
+
+interface BenchmarkSummaryState {
+  readonly phase: BenchmarkPhase;
+  readonly envelope: BenchmarkApiEnvelope<BenchmarkSummaryData> | null;
+  readonly error: string | null;
+  readonly retry: () => void;
+}
+
+export interface DecisionPicksState extends BenchmarkSummaryState {
+  readonly decisionPicks: readonly DecisionPickGroup[] | null;
+}
+
+export interface HomeDecisionSnapshotState extends BenchmarkSummaryState {
+  readonly homeDecisionSnapshot: HomeDecisionSnapshot | null;
+}
+
+function isDecisionPickEntry(value: unknown, key: LeaderboardKey): value is DecisionPickEntry {
+  if (!isRecord(value)) return false;
+  return Number.isSafeInteger(value.rank)
+    && (value.rank as number) > 0
+    && ['modelKey', 'slug', 'name', 'provider', 'unit', 'updatedAt', 'routePath'].every((field) => isNonEmptyString(value[field]))
+    && typeof value.score === 'number'
+    && Number.isFinite(value.score)
+    && value.evidenceStatus === 'supported'
+    && isFiniteIsoTimestamp(value.updatedAt)
+    && value.routePath === LEADERBOARD_ROUTES[key].pathname
+    && isNullableNonNegativeFiniteNumber(value.representativePriceUsdPerMillion)
+    && isNullablePositiveInteger(value.contextWindowTokens);
+}
+
+function isDecisionPickGroup(value: unknown, expected: typeof DECISION_PICK_CATEGORIES[number]): value is DecisionPickGroup {
+  if (!isRecord(value)
+    || value.key !== expected.key
+    || value.label !== expected.label
+    || value.status !== expected.status
+    || !Array.isArray(value.entries)
+    || value.entries.length > 3) return false;
+  const modelKeys = new Set<string>();
+  return value.entries.every((entry, index) => {
+    if (!isDecisionPickEntry(entry, expected.key) || entry.rank !== index + 1 || modelKeys.has(entry.modelKey)) return false;
+    modelKeys.add(entry.modelKey);
+    return true;
+  });
+}
+
+function isReadyOrUnavailable<T>(
+  value: unknown,
+  isReadyValue: (candidate: unknown) => candidate is T,
+): value is HomeDecisionSlot<T> {
+  if (!isRecord(value)) return false;
+  if (value.status === 'unavailable') return true;
+  return value.status === 'ready'
+    && isReadyValue(value.value)
+    && isFiniteIsoTimestamp(value.updatedAt);
+}
+
+function isHomeRepresentativeRate(value: unknown): value is HomeRepresentativeRate {
+  if (!isRecord(value)) return false;
+  return ['modelKey', 'slug', 'name', 'provider', 'routePath'].every((field) => isNonEmptyString(value[field]))
+    && value.evidenceStatus === 'supported'
+    && isNonNegativeFiniteNumber(value.representativePriceUsdPerMillion)
+    && isNullablePositiveInteger(value.contextWindowTokens)
+    && value.routePath === LEADERBOARD_ROUTES['llm-pricing-context'].pathname;
+}
+
+function isPricePerformancePoint(value: unknown): value is PricePerformancePoint {
+  if (!isRecord(value)) return false;
+  return ['modelKey', 'slug', 'name', 'provider', 'unit', 'updatedAt', 'routePath'].every((field) => isNonEmptyString(value[field]))
+    && value.evidenceStatus === 'supported'
+    && typeof value.score === 'number'
+    && Number.isFinite(value.score)
+    && isNonNegativeFiniteNumber(value.representativePriceUsdPerMillion)
+    && isNullablePositiveInteger(value.contextWindowTokens)
+    && isFiniteIsoTimestamp(value.updatedAt)
+    && value.routePath === LEADERBOARD_ROUTES['llm-overall'].pathname;
+}
+
+function isHomeDecisionSnapshot(value: unknown): value is HomeDecisionSnapshot {
+  if (!isRecord(value)
+    || !isReadyOrUnavailable(value.benchAlignLeader, (candidate): candidate is DecisionPickEntry => isDecisionPickEntry(candidate, 'llm-overall'))
+    || !isReadyOrUnavailable(value.valueFrontierLeader, (candidate): candidate is DecisionPickEntry => isDecisionPickEntry(candidate, 'llm-value'))
+    || !isReadyOrUnavailable(value.lowestVerifiedRepresentativeRate, isHomeRepresentativeRate)
+    || !Array.isArray(value.pricePerformancePoints)
+    || !value.pricePerformancePoints.every(isPricePerformancePoint)) return false;
+  const modelKeys = new Set<string>();
+  return value.pricePerformancePoints.every((point) => {
+    if (modelKeys.has(point.modelKey)) return false;
+    modelKeys.add(point.modelKey);
+    return true;
+  });
+}
+
+function isBenchmarkSummaryEnvelope(value: unknown): value is BenchmarkApiEnvelope<BenchmarkSummaryData> {
+  if (!isRecord(value)
+    || !isNonEmptyString(value.revision)
+    || !isFiniteIsoTimestamp(value.publishedAt)
+    || !isFreshness(value.freshness)
+    || !Array.isArray(value.attribution)
+    || value.attribution.length === 0
+    || !value.attribution.every(isAttribution)
+    || !isRecord(value.data)) return false;
+
+  const data = value.data;
+  return Array.isArray(data.decisionPicks)
+    && data.decisionPicks.length === DECISION_PICK_CATEGORIES.length
+    && data.decisionPicks.every((group, index) => isDecisionPickGroup(group, DECISION_PICK_CATEGORIES[index]))
+    && isHomeDecisionSnapshot(data.homeDecisionSnapshot);
+}
+
+function unavailableSummaryState(message: string): Omit<BenchmarkSummaryState, 'retry'> {
+  return { phase: 'unavailable', envelope: null, error: message };
+}
+
+/** The only summary request used for Home and leaderboard discovery data. */
+export function benchmarkSummaryEndpoint(): string {
+  return '/api/benchmarks';
+}
+
+type SummaryRequestOutcome =
+  | { readonly kind: 'ready'; readonly payload: BenchmarkApiEnvelope<BenchmarkSummaryData> }
+  | { readonly kind: 'unavailable'; readonly message: string }
+  | { readonly kind: 'error'; readonly message: string };
+
+let inFlightSummaryRequest: Promise<SummaryRequestOutcome> | null = null;
+
+async function requestBenchmarkSummary(): Promise<SummaryRequestOutcome> {
+  try {
+    const response = await fetch(benchmarkSummaryEndpoint(), {
+      headers: { accept: 'application/json' },
+    });
+    if (response.status === 404 || response.status === 503) {
+      return { kind: 'unavailable', message: 'Published benchmark data is unavailable.' };
+    }
+    if (!response.ok) return { kind: 'error', message: `Benchmark request failed (${response.status}).` };
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      return { kind: 'unavailable', message: 'Published benchmark data is unavailable.' };
+    }
+    if (!isBenchmarkSummaryEnvelope(payload)) {
+      return { kind: 'unavailable', message: 'Published benchmark data is unavailable.' };
+    }
+    return { kind: 'ready', payload };
+  } catch (error: unknown) {
+    return {
+      kind: 'error',
+      message: error instanceof Error ? error.message : 'Benchmark request failed.',
+    };
+  }
+}
+
+function sharedBenchmarkSummaryRequest(): Promise<SummaryRequestOutcome> {
+  if (inFlightSummaryRequest !== null) return inFlightSummaryRequest;
+  const request = requestBenchmarkSummary();
+  inFlightSummaryRequest = request;
+  void request.finally(() => {
+    if (inFlightSummaryRequest === request) inFlightSummaryRequest = null;
+  });
+  return request;
+}
+
+function useBenchmarkSummary(): BenchmarkSummaryState {
+  const [state, setState] = useState<Omit<BenchmarkSummaryState, 'retry'>>({
+    phase: 'loading',
+    envelope: null,
+    error: null,
+  });
+  const [retryVersion, setRetryVersion] = useState(0);
+  const requestVersion = useRef(0);
+  const retry = useCallback(() => setRetryVersion((version) => version + 1), []);
+
+  useEffect(() => {
+    const version = ++requestVersion.current;
+    let active = true;
+    setState({ phase: 'loading', envelope: null, error: null });
+
+    const load = async () => {
+      const outcome = await sharedBenchmarkSummaryRequest();
+      if (!active || requestVersion.current !== version) return;
+      if (outcome.kind === 'unavailable') {
+        setState(unavailableSummaryState(outcome.message));
+        return;
+      }
+      if (outcome.kind === 'error') {
+        setState({ phase: 'error', envelope: null, error: outcome.message });
+        return;
+      }
+      const payload = outcome.payload;
+      setState({
+        phase: payload.freshness.status === 'fresh' ? 'ready' : 'stale',
+        envelope: payload,
+        error: payload.freshness.status === 'stale'
+          ? payload.freshness.message ?? 'Published benchmark data is stale.'
+          : null,
+      });
+    };
+
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [retryVersion]);
+
+  return { ...state, retry };
+}
+
+export function useDecisionPicks(): DecisionPicksState {
+  const state = useBenchmarkSummary();
+  return {
+    ...state,
+    decisionPicks: state.envelope?.data.decisionPicks ?? null,
+  };
+}
+
+export function useHomeDecisionSnapshot(): HomeDecisionSnapshotState {
+  const state = useBenchmarkSummary();
+  return {
+    ...state,
+    homeDecisionSnapshot: state.envelope?.data.homeDecisionSnapshot ?? null,
+  };
 }
