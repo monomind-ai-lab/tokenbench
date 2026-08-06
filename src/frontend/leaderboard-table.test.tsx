@@ -396,7 +396,7 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(screen.getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
   });
 
-  it('shows a stale benchmark state instead of presenting stale rows as current rankings', async () => {
+  it('shows cached stale rows with an explicit freshness warning', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope(
       'llm-coding',
       'balanced',
@@ -408,10 +408,11 @@ describe('leaderboard routes and honest home teasers', () => {
     render(<App />);
 
     expect(await screen.findByRole('status')).toHaveTextContent('Stale benchmark data');
-    expect(screen.queryByRole('table', { name: 'AI coding model benchmarks' })).not.toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'AI coding model benchmarks' })).toBeInTheDocument();
+    expect(screen.getAllByText('Model A')).toHaveLength(2);
   });
 
-  it('keeps stale envelope metadata and source links visible without rendering stale rows as rankings', async () => {
+  it('keeps stale envelope metadata, source links, and cached rows visible together', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope(
       'llm-coding',
       'balanced',
@@ -428,8 +429,8 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(evidence).toHaveTextContent('Stale');
     expect(evidence).toHaveTextContent('2026');
     expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(screen.queryByRole('table', { name: 'AI coding model benchmarks' })).not.toBeInTheDocument();
-    expect(screen.queryByText('Model A')).not.toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'AI coding model benchmarks' })).toBeInTheDocument();
+    expect(screen.getAllByText('Model A')).toHaveLength(2);
   });
 
   it('keeps ready revision evidence visible when filters match zero rows', async () => {
@@ -460,7 +461,7 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('labels live llm-value rows as overall model value and keeps stale teasers unavailable', async () => {
+  it('labels live llm-value rows as overall model value and keeps cached stale teaser rows visible', async () => {
     const fetchMock = vi.fn((input: string) => {
       if (input.includes('llm-value')) return Promise.resolve(jsonResponse(apiEnvelope('llm-value', 'balanced', [
         entry({
@@ -496,8 +497,11 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(within(valueTeaser as HTMLElement).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' }))
       .toHaveAttribute('href', 'https://openrouter.ai/models');
     expect(screen.queryByRole('heading', { name: 'Coding Value', level: 3 })).not.toBeInTheDocument();
-    expect(await screen.findByText(/Stale benchmark data/)).toBeInTheDocument();
-    expect(screen.queryByText('Stale Image Model')).not.toBeInTheDocument();
+    const imageHeading = screen.getByRole('heading', { name: 'Image Generation', level: 3 });
+    const imageTeaser = imageHeading.closest('article');
+    expect(imageTeaser).not.toBeNull();
+    expect(await within(imageTeaser as HTMLElement).findByText(/Stale benchmark data/)).toBeInTheDocument();
+    expect(imageTeaser).toHaveTextContent('Stale Image Model');
     expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith('/api/benchmarks/leaderboards/'))).toBe(true);
   });
 });

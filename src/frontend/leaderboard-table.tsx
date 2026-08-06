@@ -11,6 +11,7 @@ interface LeaderboardTableProps {
   readonly publishedAt: string;
   readonly freshness: BenchmarkFreshness;
   readonly attribution: readonly BenchmarkAttribution[];
+  readonly evidenceLabel?: string;
 }
 
 function tableLabel(keyName: LeaderboardKey): string {
@@ -132,7 +133,7 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
   </li>;
 }
 
-export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution }: LeaderboardTableProps) {
+export function LeaderboardTable({ keyName, entries, sort, onSortChange, publishedAt, freshness, attribution, evidenceLabel: evidenceLabelText }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
   const orderDescriptionId = `leaderboard-order-${keyName}`;
   const usesSourceLensOrder = keyName === 'multimodal-vision-documents' && sort === 'score-desc';
@@ -170,6 +171,6 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, publish
     <ol className="leaderboard-card-list" aria-label={cardLabel(keyName)}>
       {rows.map(({ entry, position }) => <Card key={entry.model.modelKey} keyName={keyName} entry={entry} position={position} />)}
     </ol>
-    <LeaderboardEvidence publishedAt={publishedAt} freshness={freshness} attribution={attribution} />
+    <LeaderboardEvidence publishedAt={publishedAt} freshness={freshness} attribution={attribution} label={evidenceLabelText} />
   </section>;
 }

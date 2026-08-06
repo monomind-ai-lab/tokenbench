@@ -74,7 +74,7 @@ function LeaderboardState({
   readonly onRetry: () => void;
 }) {
   if (phase === 'stale') {
-    return <div className="empty-state leaderboard-state" role="status"><strong>Stale benchmark data</strong><p>{error ?? 'The published revision is past its freshness window, so TokenBench is not presenting its rows as current rankings.'}</p><button type="button" className="button button-secondary" onClick={onRetry}>Retry benchmark refresh</button></div>;
+    return <div className="empty-state leaderboard-state" role="status"><strong>Stale benchmark data</strong><p>{error ?? 'The published revision is past its freshness window. TokenBench is showing the last published results while the next refresh is overdue.'}</p><button type="button" className="button button-secondary" onClick={onRetry}>Retry benchmark refresh</button></div>;
   }
   if (phase === 'unavailable') {
     return <div className="empty-state leaderboard-state" role="status"><strong>Unavailable</strong><p>{error ?? 'No valid published benchmark revision is available for this route.'}</p><button type="button" className="button button-secondary" onClick={onRetry}>Retry benchmark request</button></div>;
@@ -119,13 +119,18 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       ) : null}
       {state.phase === 'stale' && state.envelope ? <>
         <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
-        <LeaderboardEvidence
-          publishedAt={state.envelope.publishedAt}
-          freshness={state.envelope.freshness}
-          attribution={state.envelope.attribution}
-          label="Stale leaderboard evidence"
-          compact
-        />
+        {entries.length > 0
+          ? <LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} evidenceLabel="Stale leaderboard evidence" />
+          : <>
+            <EmptyState title="No cached entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
+            <LeaderboardEvidence
+              publishedAt={state.envelope.publishedAt}
+              freshness={state.envelope.freshness}
+              attribution={state.envelope.attribution}
+              label="Stale leaderboard evidence"
+              compact
+            />
+          </>}
       </> : null}
       {state.phase === 'unavailable' || state.phase === 'error'
         ? <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />

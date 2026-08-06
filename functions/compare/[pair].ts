@@ -361,7 +361,7 @@ export async function onRequestGet({
 
   try {
     const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
-    if (!snapshot) return notFoundResponse();
+    if (!snapshot) return unavailableResponse();
     const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
     const resolved = resolvePair(resolvePairSlug, requested.pairSlug);
     if (!resolved) return notFoundResponse();

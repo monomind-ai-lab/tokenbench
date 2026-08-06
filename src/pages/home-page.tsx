@@ -72,7 +72,8 @@ function BenchmarkTeaser({
   supportedOnly,
 }: BenchmarkTeaserProps) {
   const state = useBenchmarkLeaderboard(keyName, 'balanced', 3);
-  const entries = state.phase === 'ready' && state.envelope
+  const hasPublishedEnvelope = state.envelope !== null && (state.phase === 'ready' || state.phase === 'stale');
+  const entries = hasPublishedEnvelope
     ? state.envelope.data.entries.filter((entry) => supportedOnly ? entry.model.evidenceStatus === 'supported' : entry.model.evidenceStatus !== 'estimated').slice(0, 3)
     : [];
   const attribution = state.envelope?.attribution ?? [];
@@ -81,14 +82,14 @@ function BenchmarkTeaser({
     <h3>{title}</h3>
     <p className="muted">{description}</p>
     {state.phase === 'loading' ? <p role="status">Loading published benchmark data.</p> : null}
-    {state.phase === 'ready' && entries.length > 0 ? <>
+    {state.phase === 'stale' ? <p role="status">Stale benchmark data{state.envelope ? ` · showing the last published results checked ${formatDateTime(state.envelope.freshness.checkedAt)}` : ''}</p> : null}
+    {hasPublishedEnvelope && entries.length > 0 ? <>
       <ol className="home-teaser-list" aria-label={`${title} published entries`}>
         {entries.map((entry, index) => <li key={entry.model.modelKey}><span>{index + 1}. {entry.model.name}</span><small>{metricSummary(entry)}</small></li>)}
       </ol>
-      <p className="home-teaser-meta">Fresh as of {formatDateTime(state.envelope?.freshness.checkedAt ?? null)}{attribution.map((source) => <span key={`${source.sourceId}-${source.url}`}> <span aria-hidden="true">·</span> <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></span>)}</p>
+      <p className="home-teaser-meta">{state.phase === 'stale' ? 'Last checked' : 'Fresh as of'} {formatDateTime(state.envelope?.freshness.checkedAt ?? null)}{attribution.map((source) => <span key={`${source.sourceId}-${source.url}`}> <span aria-hidden="true">·</span> <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></span>)}</p>
     </> : null}
-    {state.phase === 'ready' && entries.length === 0 ? <p role="status">Unavailable — no supported published entries are available for this teaser.</p> : null}
-    {state.phase === 'stale' ? <p role="status">Stale benchmark data{state.envelope ? ` · checked ${formatDateTime(state.envelope.freshness.checkedAt)}` : ''}</p> : null}
+    {hasPublishedEnvelope && entries.length === 0 ? <p role="status">Unavailable — no supported published entries are available for this teaser.</p> : null}
     {state.phase === 'unavailable' ? <p role="status">Unavailable — awaiting a valid published benchmark revision.</p> : null}
     {state.phase === 'error' ? <p role="status">Benchmark data unavailable — open the full route to retry.</p> : null}
     <a href={href}>View the full leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
