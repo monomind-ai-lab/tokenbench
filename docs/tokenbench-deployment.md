@@ -33,14 +33,18 @@ times per day. Keep benchmark ingestion at twice per day: LMArena and LiteLLM
 refresh on both runs, while BenchLM completes at most one successful upstream
 network check per UTC calendar day and otherwise reuses its verified immutable
 projections. The daily BenchLM lease prevents overlapping cron or controlled
-invocations from checking upstream twice; a handled failure releases it for a
-retry, and a 304 updates freshness without creating a content revision. The
-observed release failures were request-time CPU exhaustion and D1's aggregate
-32 MiB RPC limit, not upstream throttling; no 429 pattern was observed. Reduce
-an upstream fetch cadence only after repeated provider-policy or rate-limit
-evidence. If an upstream becomes unstable without 429s, lower fetch concurrency
-before lowering freshness. Manual catalog rotations do not make upstream
-requests.
+invocations from checking upstream twice. The owner persists a hash-checked
+five-artifact daily manifest before completing the lease; failures before that
+point release it, while later LMArena, LiteLLM, or publication failures keep the
+verified BenchLM check complete for same-day reuse. An overlapping loser waits
+up to 30 seconds to rehydrate the winner's manifest or reclaim a released lease,
+and fails before downstream fetches or publication if neither happens. A 304
+updates daily check freshness without creating a content revision. The observed
+release failures were request-time CPU exhaustion and D1's aggregate 32 MiB RPC
+limit, not upstream throttling; no 429 pattern was observed. Reduce an upstream
+fetch cadence only after repeated provider-policy or rate-limit evidence. If an
+upstream becomes unstable without 429s, lower fetch concurrency before lowering
+freshness. Manual catalog rotations do not make upstream requests.
 
 ## Release inputs
 
@@ -257,8 +261,10 @@ Populate this table only with observed values from the approved release.
   configuration only with authorization. Preserve logs and refresh-state errors
   for diagnosis.
 - Benchmark publication is revision-based: a failed refresh should leave the
-  last published revision active. Do not manually mutate publication-state rows
-  or delete R2 evidence as an ad hoc rollback.
+  last published revision active. A failed attempt may leave immutable R2
+  evidence or a completed BenchLM daily manifest without moving the publication
+  pointer; same-day retries verify and reuse that manifest. Do not manually
+  mutate publication-state rows or delete R2 evidence as an ad hoc rollback.
 - D1 migrations are append-only. Do not attempt destructive rollback SQL; use a
   reviewed forward migration or restore procedure approved for the affected
   production resource.

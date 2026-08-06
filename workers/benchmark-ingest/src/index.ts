@@ -176,9 +176,12 @@ const MAX_RETRIES = 2;
 const MAX_RETRY_DELAY_MS = 10_000;
 const MAX_ERROR_LENGTH = 1_000;
 const MAX_BENCHLM_BYTES = 8 * 1024 * 1024;
+const MAX_BENCHLM_DAILY_MANIFEST_BYTES = 64 * 1024;
 const BENCHLM_DAILY_CHECK_ARTIFACT = 'daily-network-check';
 const BENCHLM_DAILY_LEASE_PREFIX = 'benchlm-daily-lease:';
 const BENCHLM_DAILY_LEASE_MS = 15 * 60 * 1000;
+const BENCHLM_DAILY_WAIT_INTERVAL_MS = 250;
+const BENCHLM_DAILY_WAIT_ATTEMPTS = 120;
 const MAX_LMARENA_PAGE_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_PARQUET_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_INFO_BYTES = 64 * 1024;
@@ -578,15 +581,15 @@ export async function claimBenchLmDailyCheck(
 async function completeBenchLmDailyCheck(
   db: D1Database,
   checkedAt: string,
-  revision: string,
   leaseId: string,
-): Promise<void> {
+): Promise<boolean> {
   const lease = benchLmDailyLeaseValue(checkedAt, leaseId);
-  await db.prepare(`/* benchlm daily-check complete */
+  const result = await db.prepare(`/* benchlm daily-check complete */
     UPDATE benchmark_refresh_state
-    SET last_success_at = ?, last_revision = ?, last_error = NULL
+    SET last_success_at = ?, last_revision = NULL, last_error = NULL
     WHERE source_id = 'benchlm' AND artifact_id = '${BENCHLM_DAILY_CHECK_ARTIFACT}' AND last_error = ?
-  `).bind(checkedAt, revision, lease).run();
+  `).bind(checkedAt, lease).run();
+  return result.meta?.changes === 1;
 }
 
 async function releaseBenchLmDailyCheck(
@@ -600,6 +603,25 @@ async function releaseBenchLmDailyCheck(
     SET last_error = NULL
     WHERE source_id = 'benchlm' AND artifact_id = '${BENCHLM_DAILY_CHECK_ARTIFACT}' AND last_error = ?
   `).bind(lease).run();
+}
+
+interface BenchLmDailyCheckState {
+  lastSuccessAt: string | null;
+  lastError: string | null;
+}
+
+async function readBenchLmDailyCheckState(db: D1Database): Promise<BenchLmDailyCheckState | null> {
+  const row = await db.prepare(`
+    SELECT last_success_at AS lastSuccessAt, last_error AS lastError
+    FROM benchmark_refresh_state
+    WHERE source_id = 'benchlm' AND artifact_id = '${BENCHLM_DAILY_CHECK_ARTIFACT}'
+  `).first<Record<string, unknown>>();
+  if (!row) return null;
+  const record = requireRecord(row, 'BenchLM daily-check state');
+  return {
+    lastSuccessAt: nullableString(field(record, 'lastSuccessAt'), 'BenchLM daily-check last_success_at'),
+    lastError: nullableString(field(record, 'lastError'), 'BenchLM daily-check last_error'),
+  };
 }
 
 function binaryCompare(left: string, right: string): number {
@@ -936,6 +958,89 @@ export async function prepareStoredBenchLmSource(
     return { batch, evidence: [] };
   } catch (error) {
     throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
+  }
+}
+
+function benchLmDailyManifestKey(checkedAt: string): string {
+  const checked = parseUtcTimestamp(checkedAt);
+  if (!checked) throw new Error('BenchLM daily manifest checkedAt must be a finite UTC timestamp');
+  return `benchmarks/benchlm/daily-check/${new Date(checked.milliseconds).toISOString()}.json`;
+}
+
+async function persistBenchLmDailySource(
+  bucket: R2Bucket,
+  prepared: PreparedSource,
+  checkedAt: string,
+): Promise<void> {
+  const sources = prepared.batch.sources
+    .filter((source) => source.sourceId === 'benchlm')
+    .slice()
+    .sort((left, right) => binaryCompare(left.artifactId, right.artifactId));
+  const artifactIds = new Set(sources.map((source) => source.artifactId));
+  if (sources.length !== BENCHLM_ARTIFACTS.length
+    || BENCHLM_ARTIFACTS.some((artifact) => !artifactIds.has(artifact))) {
+    throw new Error('BenchLM daily manifest requires all five verified artifacts');
+  }
+  await writeEvidence(bucket, sources, prepared.evidence);
+  const bytes = jsonBytes({ schemaVersion: '1', checkedAt, sources });
+  if (bytes.byteLength > MAX_BENCHLM_DAILY_MANIFEST_BYTES) {
+    throw new Error(`BenchLM daily manifest exceeds ${MAX_BENCHLM_DAILY_MANIFEST_BYTES} byte limit`);
+  }
+  const contentHash = await sha256Digest(bytes);
+  const key = benchLmDailyManifestKey(checkedAt);
+  const existing = await bucket.get(key);
+  if (existing) {
+    const existingBytes = new Uint8Array(await existing.arrayBuffer());
+    if (await sha256Digest(existingBytes) !== contentHash
+      || existing.customMetadata?.content_hash !== contentHash) {
+      throw new Error('BenchLM daily manifest immutable key has mismatched content');
+    }
+    return;
+  }
+  await bucket.put(key, bytes, {
+    httpMetadata: { contentType: 'application/json' },
+    customMetadata: { content_hash: contentHash },
+  });
+}
+
+async function prepareCompletedBenchLmDailySource(
+  db: D1Database,
+  bucket: R2Bucket,
+  checkedAt: string,
+): Promise<PreparedSource | null> {
+  const state = await readBenchLmDailyCheckState(db);
+  const checked = parseUtcTimestamp(checkedAt);
+  const completedAt = state?.lastSuccessAt ?? null;
+  const completed = parseUtcTimestamp(completedAt);
+  if (!checked || completedAt === null || !completed || completed.date !== checked.date || state?.lastError !== null) return null;
+  try {
+    const object = await bucket.get(benchLmDailyManifestKey(completedAt));
+    if (!object) throw new Error('BenchLM completed daily manifest is missing');
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    if (bytes.byteLength > MAX_BENCHLM_DAILY_MANIFEST_BYTES) {
+      throw new Error(`BenchLM completed daily manifest exceeds ${MAX_BENCHLM_DAILY_MANIFEST_BYTES} byte limit`);
+    }
+    const contentHash = await sha256Digest(bytes);
+    if (object.customMetadata?.content_hash !== contentHash) {
+      throw new Error('BenchLM completed daily manifest content hash does not match exact bytes');
+    }
+    const manifest = requireRecord(decodeJson(bytes, 'BenchLM completed daily manifest'), 'BenchLM completed daily manifest');
+    if (manifest.schemaVersion !== '1') throw new Error('BenchLM completed daily manifest schemaVersion must be 1');
+    const manifestCheckedAt = requireString(manifest.checkedAt, 'BenchLM completed daily manifest checkedAt');
+    if (benchLmDailyManifestKey(manifestCheckedAt) !== benchLmDailyManifestKey(completedAt)) {
+      throw new Error('BenchLM completed daily manifest timestamp does not match refresh state');
+    }
+    if (!Array.isArray(manifest.sources)) throw new Error('BenchLM completed daily manifest sources must be an array');
+    const sources = new Map<string, StoredSourceRecord>();
+    for (const value of manifest.sources) {
+      const source = toStoredSourceRecord(requireRecord(value, 'BenchLM completed daily manifest source'));
+      const key = sourceKey(source.sourceId, source.artifactId);
+      if (sources.has(key)) throw new Error(`Duplicate BenchLM completed daily manifest source ${source.artifactId}`);
+      sources.set(key, source);
+    }
+    return await prepareStoredBenchLmSource(bucket, sources);
+  } catch (error) {
+    throw new RefreshFailure('benchlm', 'daily-network-check', error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -2284,11 +2389,37 @@ export async function refreshBenchmarkRevision(
     let benchLm: PreparedSource;
     if (benchLmFetchDue(previous, checkedAt)) {
       const leaseId = `${publicationAttemptId}:benchlm`;
-      if (await claimBenchLmDailyCheck(env.CATALOG_DB, checkedAt, leaseId)) {
+      const prepareClaimedBenchLm = async (): Promise<PreparedSource> => {
         benchLmLeaseId = leaseId;
-        benchLm = await prepareBenchLmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
+        const prepared = await prepareBenchLmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
+        await persistBenchLmDailySource(env.SOURCE_SNAPSHOTS, prepared, checkedAt);
+        if (!await completeBenchLmDailyCheck(env.CATALOG_DB, checkedAt, leaseId)) {
+          throw new RefreshFailure('benchlm', 'daily-network-check', 'BenchLM daily-check lease ownership was lost before completion');
+        }
+        benchLmLeaseId = null;
+        return prepared;
+      };
+      if (await claimBenchLmDailyCheck(env.CATALOG_DB, checkedAt, leaseId)) {
+        benchLm = await prepareClaimedBenchLm();
       } else {
-        benchLm = await prepareStoredBenchLmSource(env.SOURCE_SNAPSHOTS, previous);
+        let completed = await prepareCompletedBenchLmDailySource(env.CATALOG_DB, env.SOURCE_SNAPSHOTS, checkedAt);
+        for (let attempt = 0; completed === null && attempt < BENCHLM_DAILY_WAIT_ATTEMPTS; attempt += 1) {
+          await dependencies.sleep(BENCHLM_DAILY_WAIT_INTERVAL_MS);
+          if (await claimBenchLmDailyCheck(env.CATALOG_DB, checkedAt, leaseId)) {
+            completed = await prepareClaimedBenchLm();
+          } else {
+            completed = await prepareCompletedBenchLmDailySource(env.CATALOG_DB, env.SOURCE_SNAPSHOTS, checkedAt);
+          }
+        }
+        if (completed === null) {
+          throw new RefreshFailure(
+            'benchlm',
+            'daily-network-check',
+            `BenchLM daily network check did not complete within ${BENCHLM_DAILY_WAIT_INTERVAL_MS * BENCHLM_DAILY_WAIT_ATTEMPTS}ms`,
+            true,
+          );
+        }
+        benchLm = completed;
       }
     } else {
       benchLm = await prepareStoredBenchLmSource(env.SOURCE_SNAPSHOTS, previous);
@@ -2331,10 +2462,6 @@ export async function refreshBenchmarkRevision(
         env.CATALOG_DB,
         buildUnchangedPublicationStatementPlan(env.CATALOG_DB, snapshot, publicationAttemptId),
       );
-      if (benchLmLeaseId !== null) {
-        await completeBenchLmDailyCheck(env.CATALOG_DB, checkedAt, active.revision, benchLmLeaseId);
-        benchLmLeaseId = null;
-      }
       return { status: 'unchanged', revision: active.revision, checkedAt, error: null };
     }
     const generatedAt = normalized.sources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'leaderboard')?.upstreamRevision ?? checkedAt;
@@ -2354,10 +2481,6 @@ export async function refreshBenchmarkRevision(
         publicationAttemptId,
       ),
     );
-    if (benchLmLeaseId !== null) {
-      await completeBenchLmDailyCheck(env.CATALOG_DB, checkedAt, revision, benchLmLeaseId);
-      benchLmLeaseId = null;
-    }
     return { status: 'published', revision, checkedAt, error: null };
   } catch (error) {
     if (benchLmLeaseId !== null) {
@@ -2368,9 +2491,14 @@ export async function refreshBenchmarkRevision(
       }
     }
     const target = failureTarget(error);
+    const recordTarget = target.sourceId === 'benchlm' && target.artifactId === BENCHLM_DAILY_CHECK_ARTIFACT
+      ? { sourceId: 'benchlm' as const, artifactId: 'bundle' }
+      : target;
     const message = (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
     try {
-      await recordFailure(env, target.sourceId, target.artifactId, message);
+      // The synthetic daily row may contain another invocation's active lease
+      // or completed manifest pointer, so a non-owner must never overwrite it.
+      await recordFailure(env, recordTarget.sourceId, recordTarget.artifactId, message);
     } catch (recordError) {
       console.error(JSON.stringify({ message: 'benchmark refresh failure could not be recorded', error: recordError instanceof Error ? recordError.message : String(recordError) }));
     }

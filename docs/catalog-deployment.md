@@ -77,10 +77,20 @@ On later benchmark runs in a UTC day, the Worker rehydrates all five
 hash-verified immutable BenchLM projections from R2 instead of calling
 BenchLM. A conditional D1 daily-check lease allows only one overlapping
 invocation to make the upstream check; a 15-minute abandoned lease can be
-reclaimed, while handled failures release the lease for a retry. A successful
-304 advances benchmark freshness without publishing a new content revision.
-LMArena and LiteLLM continue to refresh on both scheduled runs, and the existing
-R2-before-atomic-D1 publication boundary remains in force.
+reclaimed. Before completing that lease, the owner persists any new immutable
+evidence plus a hash-checked manifest for the complete five-artifact bundle. A
+failure before that verified persistence releases the lease for a retry; a
+later LMArena, LiteLLM, or publication failure does not reopen the completed
+BenchLM check or cause a same-day refetch. A successful 304 likewise persists a
+daily manifest and advances BenchLM check freshness without publishing a new
+content revision.
+
+An overlapping lease loser waits for at most 30 seconds for the owner, then
+rehydrates the owner's exact completed manifest. If the owner releases the
+lease, the waiter may claim it and perform the check itself. If neither handoff
+completes in that bound, the waiter fails before fetching downstream sources or
+publishing, so it cannot supersede the winner with stale BenchLM projections.
+LMArena and LiteLLM otherwise continue to refresh on both scheduled runs.
 
 There is no public HTTP endpoint for a benchmark refresh. A controlled refresh
 must use an authorized Cloudflare scheduling or dashboard mechanism, not a
@@ -111,12 +121,20 @@ Benchmark ingestion follows the same publication boundary:
 1. It reads the active catalog revision, fetches only approved source artifacts,
    and validates source, license, and data-contract rules.
 2. It writes immutable evidence snapshots and content-hash metadata to R2
-   before publication.
+   before publication. A completed BenchLM daily check also leaves an immutable
+   five-artifact manifest that later same-day attempts can verify and rehydrate;
+   this source-check record is not itself a benchmark content publication.
 3. It stages a complete benchmark revision, related records, and materialized
    responses in D1 batches capped below the platform RPC limit. One final D1
    transaction switches both publication pointers only after staging succeeds.
 4. It records a failure in benchmark_refresh_state without replacing a previous
    published revision.
+
+Because R2 evidence is immutable and precedes the atomic D1 pointer switch, a
+later source or publication failure can leave unreferenced evidence or a
+completed BenchLM daily manifest. That is expected and safe: the last complete
+benchmark revision remains active, while the next same-day attempt reuses the
+verified BenchLM manifest instead of issuing another BenchLM request.
 
 Each successful publisher also materializes the public response layer. Catalog
 responses are keyed by the checked-in subscription-manifest revision and use a

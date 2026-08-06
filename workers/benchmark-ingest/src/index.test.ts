@@ -124,6 +124,12 @@ function requestHeaders(init: RequestInit | undefined): Headers {
   return new Headers(init?.headers);
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve(value: T): void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => { resolve = next; });
+  return { promise, resolve };
+}
+
 function requiredExport<T>(name: string): T {
   const value = (benchmarkIngest as Record<string, unknown>)[name];
   expect(value).toBeTypeOf('function');
@@ -316,6 +322,10 @@ function createDatabase(options: {
       const active = state.revisions.find((record) => record.revision === state.activeRevision);
       return active ? structuredClone(active) as T : null;
     }
+    if (sql.includes('FROM benchmark_refresh_state')) {
+      const row = state.refreshRows.get('benchlm:daily-network-check');
+      return row ? structuredClone(row) as T : null;
+    }
     return null;
   }
 
@@ -355,11 +365,10 @@ function createDatabase(options: {
         }
         if (sql.includes('benchlm daily-check complete')) {
           const checkedAt = String(values[0]);
-          const revision = String(values[1]);
-          const lease = String(values[2]);
+          const lease = String(values[1]);
           const existing = state.refreshRows.get(key);
           if (existing?.lastError !== lease) return { meta: { changes: 0 } };
-          state.refreshRows.set(key, { lastSuccessAt: checkedAt, lastRevision: revision, lastError: null });
+          state.refreshRows.set(key, { lastSuccessAt: checkedAt, lastRevision: null, lastError: null });
           return { meta: { changes: 1 } };
         }
         if (sql.includes('benchlm daily-check release')) {
@@ -1218,10 +1227,14 @@ describe('atomic benchmark ingestion', () => {
     expect(db.state.batchCalls).toBeGreaterThan(1);
     expect(db.state.publicationBatchCalls).toBe(db.state.batchCalls);
     const publicationIndex = events.indexOf('d1:publication');
-    const evidenceEvents = events.filter((event) => event.startsWith('r2:benchmarks/'));
+    const manifestEvents = events.filter((event) => event.startsWith('r2:benchmarks/benchlm/daily-check/'));
+    const evidenceEvents = events.filter((event) => event.startsWith('r2:benchmarks/')
+      && !event.startsWith('r2:benchmarks/benchlm/daily-check/'));
     expect(publicationIndex).toBeGreaterThanOrEqual(0);
     expect(evidenceEvents).not.toHaveLength(0);
     expect(evidenceEvents.every((event) => events.indexOf(event) < publicationIndex)).toBe(true);
+    expect(manifestEvents).toHaveLength(1);
+    expect(events.indexOf(manifestEvents[0])).toBeLessThan(publicationIndex);
     expect(events.filter((event) => event === 'd1:publication')).toHaveLength(db.state.publicationBatchCalls);
 
     const factTables = [
@@ -1382,11 +1395,13 @@ describe('atomic benchmark ingestion', () => {
     expect(db.state.revisions).toHaveLength(1);
     expect(db.state.revisions[0].checkedAt).toBe('2026-08-06T13:00:00.000Z');
     expect(lmArena304Responses).toBeGreaterThan(0);
-    expect(r2.objects.size).toBe(firstObjectCount);
-    expect(events.slice(eventCountAfterFirst)).toEqual(['d1:publication', 'd1:publication']);
+    expect(r2.objects.size).toBe(firstObjectCount + 1);
+    const secondEvents = events.slice(eventCountAfterFirst);
+    expect(secondEvents.filter((event) => event.startsWith('r2:benchmarks/benchlm/daily-check/'))).toHaveLength(1);
+    expect(secondEvents.slice(-2)).toEqual(['d1:publication', 'd1:publication']);
     expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
       lastSuccessAt: '2026-08-06T13:00:00.000Z',
-      lastRevision: first.revision,
+      lastRevision: null,
       lastError: null,
     });
   });
@@ -1461,6 +1476,27 @@ describe('atomic benchmark ingestion', () => {
     await expect(claimBenchLmDailyCheck(db.db, '2026-08-06T00:30:00.000Z', 'lease-b')).resolves.toBe(true);
   });
 
+  it('does not let a timed-out daily-check loser overwrite the winner lease', async () => {
+    const claimBenchLmDailyCheck = requiredExport<(db: unknown, checkedAt: string, leaseId: string) => Promise<boolean>>('claimBenchLmDailyCheck');
+    const { env, db } = seededEnvironment();
+
+    await expect(claimBenchLmDailyCheck(db.db, '2026-08-06T00:15:00.000Z', 'winner')).resolves.toBe(true);
+    const result = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-06T00:16:00.000Z').dependencies,
+    );
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: 'BenchLM daily network check did not complete within 30000ms',
+    });
+    expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
+      lastSuccessAt: null,
+      lastRevision: null,
+      lastError: 'benchlm-daily-lease:2026-08-06T00:30:00.000Z|winner',
+    });
+  });
+
   it('releases a claimed daily network-check lease after a handled BenchLM failure', async () => {
     const claimBenchLmDailyCheck = requiredExport<(db: unknown, checkedAt: string, leaseId: string) => Promise<boolean>>('claimBenchLmDailyCheck');
     const { env, db } = seededEnvironment();
@@ -1472,6 +1508,139 @@ describe('atomic benchmark ingestion', () => {
 
     expect(result.status).toBe('failed');
     await expect(claimBenchLmDailyCheck(db.db, '2026-08-06T00:15:00.000Z', 'lease-after-failure')).resolves.toBe(true);
+  });
+
+  it('does not refetch a verified BenchLM bundle when a later LMArena failure is retried the same UTC day', async () => {
+    const { env, db, r2 } = seededEnvironment();
+    const initial = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-05T00:15:00.000Z').dependencies,
+    );
+    const changedPricing = JSON.parse(fixture('pricing')) as { items: Array<Record<string, unknown>> };
+    changedPricing.items[0].inputPrice = 2.75;
+    const failedFetch = vi.fn(healthyFetch({
+      onRequest(url) {
+        if (url.hostname === 'benchlm.ai' && url.pathname.endsWith('/pricing.json')) {
+          return new Response(JSON.stringify(changedPricing), { headers: { etag: '"pricing-new-etag"' } });
+        }
+        if (url.hostname === 'datasets-server.huggingface.co' && url.searchParams.get('config') === 'agent') {
+          return new Response('denied', { status: 401 });
+        }
+        return undefined;
+      },
+    }));
+    const failed = await refreshBenchmarkRevision(
+      env,
+      dependencies(failedFetch, () => '2026-08-06T00:15:00.000Z').dependencies,
+    );
+
+    expect(failed.status).toBe('failed');
+    expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
+      lastSuccessAt: '2026-08-06T00:15:00.000Z',
+      lastRevision: null,
+      lastError: null,
+    });
+    expect(r2.objects.has('benchmarks/benchlm/daily-check/2026-08-06T00:15:00.000Z.json')).toBe(true);
+
+    const retryFetch = vi.fn(healthyFetch());
+
+    const retried = await refreshBenchmarkRevision(
+      env,
+      dependencies(retryFetch, () => '2026-08-06T00:30:00.000Z').dependencies,
+    );
+
+    expect(initial.status).toBe('published');
+    expect(retried).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    expect(retryFetch.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    const retriedPricing = (db.state.sourceRows.get(retried.revision as string) ?? [])
+      .find((source) => source.sourceId === 'benchlm' && source.artifactId === 'pricing');
+    expect(retriedPricing?.etag).toBe('"pricing-new-etag"');
+  });
+
+  it('waits for the daily-check winner before publishing changed non-BenchLM content', async () => {
+    const { env, db } = seededEnvironment();
+    const initial = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-05T00:15:00.000Z').dependencies,
+    );
+    expect(initial.status).toBe('published');
+
+    const changedPricing = JSON.parse(fixture('pricing')) as { items: Array<Record<string, unknown>> };
+    changedPricing.items[0].inputPrice = 2.75;
+    const changedLiteLlm = structuredClone(liteLlmFixture.payload) as Record<string, Record<string, unknown>>;
+    changedLiteLlm['azure/codex-mini'].input_cost_per_token = 0.0000025;
+
+    const winnerPricingRequested = deferred<void>();
+    const winnerPricingResponse = deferred<Response>();
+    const winnerFetch = vi.fn(healthyFetch({
+      onRequest(url) {
+        if (url.hostname === 'benchlm.ai' && url.pathname.endsWith('/pricing.json')) {
+          winnerPricingRequested.resolve(undefined);
+          return winnerPricingResponse.promise;
+        }
+        return undefined;
+      },
+    }));
+    const loserWaiting = deferred<void>();
+    const releaseLoserWait = deferred<void>();
+    const loserReachedLiteLlm = deferred<void>();
+    const loserLiteLlmResponse = deferred<Response>();
+    const loserFetch = vi.fn(healthyFetch({
+      onRequest(url) {
+        if (url.hostname === 'raw.githubusercontent.com') {
+          loserReachedLiteLlm.resolve(undefined);
+          return loserLiteLlmResponse.promise;
+        }
+        return undefined;
+      },
+    }));
+    const winnerTransport = dependencies(winnerFetch, () => '2026-08-06T00:15:00.000Z');
+    const loserTransport = dependencies(loserFetch, () => '2026-08-06T00:16:00.000Z');
+    const winnerPromise = refreshBenchmarkRevision(env, {
+      ...winnerTransport.dependencies,
+      publicationAttemptId: () => 'overlap-winner',
+    });
+    await winnerPricingRequested.promise;
+
+    const loserPromise = refreshBenchmarkRevision(env, {
+      ...loserTransport.dependencies,
+      publicationAttemptId: () => 'overlap-loser',
+      sleep: async () => {
+        loserWaiting.resolve(undefined);
+        await releaseLoserWait.promise;
+      },
+    });
+    const loserPhase = await Promise.race([
+      loserWaiting.promise.then(() => 'waiting' as const),
+      loserReachedLiteLlm.promise.then(() => 'downstream' as const),
+    ]);
+
+    winnerPricingResponse.resolve(new Response(JSON.stringify(changedPricing), {
+      headers: { etag: '"pricing-overlap-etag"' },
+    }));
+    const winner = await winnerPromise;
+    releaseLoserWait.resolve(undefined);
+    await loserReachedLiteLlm.promise;
+    loserLiteLlmResponse.resolve(new Response(JSON.stringify(changedLiteLlm), {
+      headers: { etag: '"litellm-overlap-etag"' },
+    }));
+    const loser = await loserPromise;
+
+    expect(loserPhase).toBe('waiting');
+    expect(winner).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    expect(loser).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
+    expect(loserFetch.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    const winnerPricing = (db.state.sourceRows.get(winner.revision as string) ?? [])
+      .find((source) => source.sourceId === 'benchlm' && source.artifactId === 'pricing');
+    const finalSources = db.state.sourceRows.get(db.state.activeRevision as string) ?? [];
+    const finalPricing = finalSources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'pricing');
+    const finalLiteLlm = finalSources.find((source) => source.sourceId === 'litellm');
+    expect(finalPricing).toMatchObject({
+      etag: '"pricing-overlap-etag"',
+      contentHash: winnerPricing?.contentHash,
+      snapshotKey: winnerPricing?.snapshotKey,
+    });
+    expect(finalLiteLlm?.etag).toBe('"litellm-overlap-etag"');
   });
 
   it('fails safely without a BenchLM request when a same-day stored projection is missing', async () => {
@@ -1642,7 +1811,10 @@ describe('atomic benchmark ingestion', () => {
     expect(storedSnapshot?.bytes).toEqual(originalBytes);
     expect(storedSnapshot?.customMetadata.original_content_hash).toBe(originalMetadata);
     expect(storedSnapshot?.customMetadata.original_content_hash).toBe(firstModels.originalContentHash);
-    expect(events.slice(eventsAfterFirst)).toEqual(['d1:publication', 'd1:publication']);
+    const secondEvents = events.slice(eventsAfterFirst);
+    expect(secondEvents.filter((event) => event.startsWith('r2:'))).toHaveLength(2);
+    expect(secondEvents).not.toContain(`r2:${firstModels.snapshotKey}`);
+    expect(secondEvents.slice(-2)).toEqual(['d1:publication', 'd1:publication']);
   });
 
   it('rejects a contaminated legacy OpenRouter snapshot before upstream fetches', async () => {
