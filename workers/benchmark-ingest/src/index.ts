@@ -1034,7 +1034,7 @@ async function fetchLmArenaHubParquet(
           throw new RefreshFailure('lmarena', artifactId, `lmarena/${artifactId} resolver returned an untrusted download location`);
         }
         const response = await dependencies.fetchImpl(downloadUrl, {
-          headers: hubRequestHeaders('application/octet-stream'), signal: abort.signal, redirect: 'error',
+          headers: hubRequestHeaders('application/octet-stream'), signal: abort.signal, redirect: 'manual',
         });
         if (!response.ok) {
           const transient = isTransientStatus(response.status);
