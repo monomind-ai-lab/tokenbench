@@ -101,6 +101,7 @@ export interface RefreshDependencies {
   clearTimeoutImpl: (timeout: ReturnType<typeof setTimeout>) => void;
   sleep: (timeout: number) => Promise<void>;
   random: () => number;
+  publicationAttemptId: () => string;
 }
 
 export interface RefreshResult {
@@ -184,10 +185,23 @@ const MAX_D1_PUBLICATION_STATEMENTS = 900;
 const MAX_D1_BOUND_PARAMETERS = 100;
 const MAX_D1_SQL_BYTES = 100 * 1024;
 const MAX_D1_JSON_PARAMETER_BYTES = 1_500_000;
+// D1 serializes every prepared statement in one batch into a single RPC value,
+// whose platform limit is 32 MiB. Keep a 50% safety margin for protocol
+// framing and string escaping while staging inactive publication rows.
+const MAX_D1_RPC_BATCH_BYTES = 16 * 1024 * 1024;
+// A scheduled Worker can run for at most 15 minutes. Pending rows older than
+// this 20-minute ownership window are therefore abandoned and safe to reclaim.
+const BENCHMARK_PUBLICATION_OWNERSHIP_WINDOW_MS = 20 * 60 * 1000;
 const BENCHMARK_API_RESPONSE_SCOPE = 'benchmarks' as const;
 const BENCHMARK_API_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1000;
 const BENCHMARK_LEADERBOARD_CACHE_LIMIT = 50;
-const MAX_API_RESPONSE_CHUNKS_PER_STATEMENT = 14;
+const MAX_API_RESPONSE_CHUNKS_PER_STATEMENT = 8;
+
+export interface PublicationStatementPlan {
+  readonly staging: readonly BoundStatement[];
+  readonly commit: readonly BoundStatement[];
+  readonly cleanup: readonly BoundStatement[];
+}
 
 interface MaterializedBenchmarkApiResponse {
   readonly cacheKey: string;
@@ -234,6 +248,7 @@ function defaultDependencies(): RefreshDependencies {
     clearTimeoutImpl: (timeout) => globalThis.clearTimeout(timeout),
     sleep: (timeout) => new Promise((resolve) => globalThis.setTimeout(resolve, timeout)),
     random: () => Math.random(),
+    publicationAttemptId: () => crypto.randomUUID(),
   };
 }
 
@@ -1462,6 +1477,14 @@ function d1ByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
+const d1StatementSerializedBytes = new WeakMap<object, number>();
+
+function serializedD1StatementBytes(sql: string, values: readonly unknown[]): number {
+  const serialized = JSON.stringify({ sql, values });
+  if (serialized === undefined) throw new Error('D1 statement is not serializable');
+  return d1ByteLength(serialized);
+}
+
 function boundedStatement(db: D1Database, sql: string, values: readonly unknown[]): BoundStatement {
   if (d1ByteLength(sql) > MAX_D1_SQL_BYTES) throw new Error('D1 SQL statement exceeds the 100KB limit');
   if (values.length > MAX_D1_BOUND_PARAMETERS) throw new Error('D1 statement exceeds the 100 bound-parameter limit');
@@ -1470,7 +1493,59 @@ function boundedStatement(db: D1Database, sql: string, values: readonly unknown[
       throw new Error('D1 bound string exceeds the 1.5MB ingestion safety limit');
     }
   }
-  return db.prepare(sql).bind(...values);
+  const statement = db.prepare(sql).bind(...values);
+  d1StatementSerializedBytes.set(statement as object, serializedD1StatementBytes(sql, values));
+  return statement;
+}
+
+function rpcBoundedStatementBatches(statements: readonly BoundStatement[]): BoundStatement[][] {
+  const batches: BoundStatement[][] = [];
+  let batch: BoundStatement[] = [];
+  let batchBytes = 2; // JSON array brackets.
+  for (const statement of statements) {
+    const statementBytes = d1StatementSerializedBytes.get(statement as object);
+    if (statementBytes === undefined) throw new Error('D1 publication statement is missing serialized-size metadata');
+    if (statementBytes + 2 > MAX_D1_RPC_BATCH_BYTES) {
+      throw new Error('A single D1 publication statement exceeds the RPC safety budget');
+    }
+    const nextBytes = batchBytes + (batch.length === 0 ? 0 : 1) + statementBytes;
+    if (batch.length > 0 && nextBytes > MAX_D1_RPC_BATCH_BYTES) {
+      batches.push(batch);
+      batch = [];
+      batchBytes = 2;
+    }
+    batch.push(statement);
+    batchBytes += (batch.length === 1 ? 0 : 1) + statementBytes;
+  }
+  if (batch.length > 0) batches.push(batch);
+  return batches;
+}
+
+export async function executePublicationStatementPlan(
+  db: D1Database,
+  plan: PublicationStatementPlan,
+): Promise<void> {
+  const stagingBatches = rpcBoundedStatementBatches(plan.staging);
+  const commitBatches = rpcBoundedStatementBatches(plan.commit);
+  const cleanupBatches = rpcBoundedStatementBatches(plan.cleanup);
+  if (commitBatches.length !== 1) {
+    throw new Error('D1 publication commit exceeds the atomic RPC safety budget');
+  }
+  try {
+    for (const batch of stagingBatches) await db.batch(batch);
+    await db.batch(commitBatches[0]);
+  } catch (error) {
+    // Staged rows are unreachable until the final pointer transaction. Clean
+    // them best-effort so repeated transient failures do not accumulate dead
+    // revisions; never let a cleanup error hide the publication failure.
+    try {
+      for (const batch of cleanupBatches) await db.batch(batch);
+    } catch {
+      // A later successful publication's retention pass removes any orphaned
+      // response revision. Public readers remain pinned to the prior revision.
+    }
+    throw error;
+  }
 }
 
 function jsonPayloads<T>(rows: readonly T[], label: string): string[] {
@@ -1752,22 +1827,33 @@ function materializedBenchmarkApiResponses(snapshot: ActiveBenchmarkSnapshot): r
   return materialized;
 }
 
+function benchmarkApiResponseStorageRevision(
+  snapshot: ActiveBenchmarkSnapshot,
+  publicationAttemptId: string,
+): string {
+  const checkedAtSuffix = snapshot.revision.checkedAt.replace(/[^0-9]/g, '');
+  if (checkedAtSuffix.length === 0) throw new Error('benchmark response cache requires a stable checked_at suffix');
+  if (!/^[0-9a-z-]+$/i.test(publicationAttemptId)) throw new Error('benchmark publication attempt ID is invalid');
+  return `${snapshot.revision.revision}+cache-${checkedAtSuffix}-${publicationAttemptId}`;
+}
+
 function appendMaterializedBenchmarkApiResponseStatements(
   statements: BoundStatement[],
   db: D1Database,
   snapshot: ActiveBenchmarkSnapshot,
+  responseRevision: string,
   updatedAt: string,
 ): void {
   statements.push(boundedStatement(db, UPSERT_API_RESPONSE_REVISION, [
     BENCHMARK_API_RESPONSE_SCOPE,
-    snapshot.revision.revision,
+    responseRevision,
     snapshot.revision.checkedAt,
     snapshot.revision.publishedAt,
     updatedAt,
   ]));
   statements.push(boundedStatement(db, 'DELETE FROM api_response_entries WHERE scope = ? AND revision = ?', [
     BENCHMARK_API_RESPONSE_SCOPE,
-    snapshot.revision.revision,
+    responseRevision,
   ]));
   const variants: MaterializedBenchmarkApiResponseVariant[] = materializedBenchmarkApiResponses(snapshot)
     .flatMap((entry) => [
@@ -1785,7 +1871,7 @@ function appendMaterializedBenchmarkApiResponseStatements(
       (scope, revision, cache_key, variant, chunk_index, etag, body)
       VALUES ${placeholders}`, chunk.flatMap((entry) => [
       BENCHMARK_API_RESPONSE_SCOPE,
-      snapshot.revision.revision,
+      responseRevision,
       entry.cacheKey,
       entry.variant,
       entry.chunkIndex,
@@ -1822,6 +1908,137 @@ function benchmarkApiResponseRetentionStatements(db: D1Database): readonly Bound
   ];
 }
 
+function pendingBenchmarkRevisionCleanupStatements(
+  db: D1Database,
+  revision: string,
+  ownershipPredicate: string,
+  ownershipValues: readonly unknown[],
+): readonly BoundStatement[] {
+  const pendingRevision = `EXISTS (
+    SELECT 1 FROM benchmark_revisions
+    WHERE revision = ? AND publication_state = 'pending' AND ${ownershipPredicate}
+  )`;
+  return [
+    'benchmark_comparison_pairs',
+    'benchmark_price_checks',
+    'benchmark_metrics',
+    'benchmark_models',
+    'benchmark_source_records',
+  ].map((table) => boundedStatement(db, `DELETE FROM ${table} WHERE revision = ? AND ${pendingRevision}`, [
+    revision,
+    revision,
+    ...ownershipValues,
+  ])).concat([
+    boundedStatement(db, `DELETE FROM benchmark_revisions
+      WHERE revision = ? AND publication_state = 'pending' AND ${ownershipPredicate}`, [revision, ...ownershipValues]),
+  ]);
+}
+
+function expiredPendingBenchmarkRevisionCleanupStatements(
+  db: D1Database,
+  revision: string,
+  checkedAt: string,
+): readonly BoundStatement[] {
+  const checkedAtMs = Date.parse(checkedAt);
+  if (!Number.isFinite(checkedAtMs)) throw new Error('benchmark checked_at must be an ISO timestamp');
+  const expiredBefore = new Date(checkedAtMs - BENCHMARK_PUBLICATION_OWNERSHIP_WINDOW_MS).toISOString();
+  return pendingBenchmarkRevisionCleanupStatements(db, revision, 'checked_at < ?', [expiredBefore]);
+}
+
+function ownedPendingBenchmarkRevisionCleanupStatements(
+  db: D1Database,
+  revision: string,
+  publicationAttemptId: string,
+): readonly BoundStatement[] {
+  return pendingBenchmarkRevisionCleanupStatements(db, revision, 'publication_attempt_id = ?', [publicationAttemptId]);
+}
+
+function inactiveApiResponseRevisionCleanupStatement(db: D1Database, revision: string): BoundStatement {
+  return boundedStatement(db, `DELETE FROM api_response_revisions
+    WHERE scope = ? AND revision = ?
+      AND NOT EXISTS (
+        SELECT 1 FROM api_response_publication_state
+        WHERE scope = ? AND active_revision = ?
+      )`, [
+    BENCHMARK_API_RESPONSE_SCOPE,
+    revision,
+    BENCHMARK_API_RESPONSE_SCOPE,
+    revision,
+  ]);
+}
+
+export function buildPublicationStatementPlan(
+  db: D1Database,
+  revision: string,
+  generatedAt: string,
+  checkedAt: string,
+  contentHash: string,
+  catalog: ActiveCatalogSource,
+  batch: NormalizedSourceBatch,
+  pairs: readonly BenchmarkComparisonPair[],
+  materializeApiResponses = true,
+  publicationAttemptId: string = crypto.randomUUID(),
+): PublicationStatementPlan {
+  const resolvePairSlug = createComparisonPairSlugResolver(batch.models);
+  for (const value of pairs) {
+    const pair = validateBenchmarkComparisonPair(value);
+    validateIndexableComparisonPairRoute(batch.models, pair, resolvePairSlug);
+  }
+  const staging: BoundStatement[] = [
+    ...expiredPendingBenchmarkRevisionCleanupStatements(db, revision, checkedAt),
+    boundedStatement(db, `INSERT INTO benchmark_revisions
+      (revision, generated_at, published_at, checked_at, publication_state, content_hash, catalog_revision, openrouter_content_hash, publication_attempt_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      revision,
+      generatedAt,
+      null,
+      checkedAt,
+      'pending',
+      contentHash,
+      catalog.revision,
+      catalog.contentHash,
+      publicationAttemptId,
+    ]),
+  ];
+  appendJsonEachStatements(staging, db, INSERT_BENCHMARK_SOURCES, [revision], batch.sources, 'benchmark source records');
+  appendJsonEachStatements(staging, db, INSERT_BENCHMARK_MODELS, [revision], batch.models, 'benchmark models');
+  appendJsonEachStatements(staging, db, INSERT_BENCHMARK_METRICS, [revision], batch.metrics, 'benchmark metrics');
+  appendJsonEachStatements(staging, db, INSERT_BENCHMARK_PRICES, [revision], batch.priceChecks, 'benchmark price checks');
+  appendJsonEachStatements(staging, db, INSERT_BENCHMARK_PAIRS, [revision], pairs, 'benchmark comparison pairs');
+  const commit: BoundStatement[] = [
+    boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'superseded' WHERE publication_state = 'published'`, []),
+    boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'published', published_at = ?
+      WHERE revision = ? AND publication_attempt_id = ?`, [checkedAt, revision, publicationAttemptId]),
+  ];
+  const cleanup: BoundStatement[] = [
+    ...ownedPendingBenchmarkRevisionCleanupStatements(db, revision, publicationAttemptId),
+  ];
+  let responseRevision: string | null = null;
+  if (materializeApiResponses) {
+    const snapshot = snapshotForApiResponses(revision, generatedAt, checkedAt, checkedAt, contentHash, catalog, batch, pairs);
+    responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
+    appendMaterializedBenchmarkApiResponseStatements(staging, db, snapshot, responseRevision, checkedAt);
+    cleanup.push(inactiveApiResponseRevisionCleanupStatement(db, responseRevision));
+  }
+  commit.push(
+    boundedStatement(db, `INSERT INTO benchmark_publication_state (singleton, active_revision, updated_at) VALUES (1, ?, ?)
+      ON CONFLICT(singleton) DO UPDATE SET active_revision = excluded.active_revision, updated_at = excluded.updated_at`, [revision, checkedAt]),
+  );
+  if (responseRevision !== null) {
+    // The benchmark pointer moves first inside this one transaction so the
+    // cache-pointer trigger can prove both scopes describe the same revision.
+    commit.push(
+      benchmarkApiResponsePointerStatement(db, responseRevision, checkedAt),
+      ...benchmarkApiResponseRetentionStatements(db),
+    );
+  }
+  commit.push(...refreshSuccessStatements(db, batch.sources, checkedAt, revision));
+  if (staging.length + commit.length > MAX_D1_PUBLICATION_STATEMENTS) {
+    throw new Error(`Benchmark publication exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);
+  }
+  return { staging, commit, cleanup };
+}
+
 export function buildPublicationStatements(
   db: D1Database,
   revision: string,
@@ -1832,45 +2049,54 @@ export function buildPublicationStatements(
   batch: NormalizedSourceBatch,
   pairs: readonly BenchmarkComparisonPair[],
   materializeApiResponses = true,
+  publicationAttemptId: string = crypto.randomUUID(),
 ): BoundStatement[] {
-  const resolvePairSlug = createComparisonPairSlugResolver(batch.models);
-  for (const value of pairs) {
-    const pair = validateBenchmarkComparisonPair(value);
-    validateIndexableComparisonPairRoute(batch.models, pair, resolvePairSlug);
-  }
-  const statements: BoundStatement[] = [
-    boundedStatement(db, `INSERT INTO benchmark_revisions
-      (revision, generated_at, published_at, checked_at, publication_state, content_hash, catalog_revision, openrouter_content_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [revision, generatedAt, null, checkedAt, 'pending', contentHash, catalog.revision, catalog.contentHash]),
+  const plan = buildPublicationStatementPlan(
+    db,
+    revision,
+    generatedAt,
+    checkedAt,
+    contentHash,
+    catalog,
+    batch,
+    pairs,
+    materializeApiResponses,
+    publicationAttemptId,
+  );
+  return [...plan.staging, ...plan.commit];
+}
+
+export function buildUnchangedPublicationStatementPlan(
+  db: D1Database,
+  snapshot: ActiveBenchmarkSnapshot,
+  publicationAttemptId: string,
+): PublicationStatementPlan {
+  const responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
+  const staging: BoundStatement[] = [];
+  appendMaterializedBenchmarkApiResponseStatements(
+    staging,
+    db,
+    snapshot,
+    responseRevision,
+    snapshot.revision.checkedAt,
+  );
+  const commit = [
+    boundedStatement(db, `UPDATE benchmark_revisions SET checked_at = ? WHERE revision = ?`, [
+      snapshot.revision.checkedAt,
+      snapshot.revision.revision,
+    ]),
+    benchmarkApiResponsePointerStatement(db, responseRevision, snapshot.revision.checkedAt),
+    ...benchmarkApiResponseRetentionStatements(db),
+    ...refreshSuccessStatements(db, snapshot.sources, snapshot.revision.checkedAt, snapshot.revision.revision),
   ];
-  appendJsonEachStatements(statements, db, INSERT_BENCHMARK_SOURCES, [revision], batch.sources, 'benchmark source records');
-  appendJsonEachStatements(statements, db, INSERT_BENCHMARK_MODELS, [revision], batch.models, 'benchmark models');
-  appendJsonEachStatements(statements, db, INSERT_BENCHMARK_METRICS, [revision], batch.metrics, 'benchmark metrics');
-  appendJsonEachStatements(statements, db, INSERT_BENCHMARK_PRICES, [revision], batch.priceChecks, 'benchmark price checks');
-  appendJsonEachStatements(statements, db, INSERT_BENCHMARK_PAIRS, [revision], pairs, 'benchmark comparison pairs');
-  statements.push(
-    boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'superseded' WHERE publication_state = 'published'`, []),
-    boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'published', published_at = ? WHERE revision = ?`, [checkedAt, revision]),
-  );
-  if (materializeApiResponses) {
-    const snapshot = snapshotForApiResponses(revision, generatedAt, checkedAt, checkedAt, contentHash, catalog, batch, pairs);
-    appendMaterializedBenchmarkApiResponseStatements(statements, db, snapshot, checkedAt);
-    // This pointer is intentionally written only after every fresh/stale
-    // projection row has been bounded and appended to the same transaction.
-    statements.push(
-      benchmarkApiResponsePointerStatement(db, revision, checkedAt),
-      ...benchmarkApiResponseRetentionStatements(db),
-    );
+  if (staging.length + commit.length > MAX_D1_PUBLICATION_STATEMENTS) {
+    throw new Error(`Unchanged benchmark refresh exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);
   }
-  statements.push(
-    boundedStatement(db, `INSERT INTO benchmark_publication_state (singleton, active_revision, updated_at) VALUES (1, ?, ?)
-      ON CONFLICT(singleton) DO UPDATE SET active_revision = excluded.active_revision, updated_at = excluded.updated_at`, [revision, checkedAt]),
-    ...refreshSuccessStatements(db, batch.sources, checkedAt, revision),
-  );
-  if (statements.length > MAX_D1_PUBLICATION_STATEMENTS) {
-    throw new Error(`Benchmark publication exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);
-  }
-  return statements;
+  return {
+    staging,
+    commit,
+    cleanup: [inactiveApiResponseRevisionCleanupStatement(db, responseRevision)],
+  };
 }
 
 async function recordFailure(env: BenchmarkIngestEnv, sourceId: BenchmarkSourceRecord['sourceId'], artifactId: string, error: unknown): Promise<void> {
@@ -1894,6 +2120,7 @@ export async function refreshBenchmarkRevision(
 ): Promise<RefreshResult> {
   const checkedAt = dependencies.now();
   try {
+    const publicationAttemptId = dependencies.publicationAttemptId();
     const catalog = await readActiveCatalogSource(env.CATALOG_DB);
     const active = await readActiveBenchmarkRevision(env.CATALOG_DB);
     const previous = await readActiveSourceRecords(env.CATALOG_DB, active?.revision ?? null);
@@ -1923,9 +2150,6 @@ export async function refreshBenchmarkRevision(
     const evidence = [...benchLm.evidence, ...liteLlm.evidence, ...pages.flatMap((page) => page.evidence)];
     if (active?.contentHash === contentHash && active.revision === revision) {
       if (active.publishedAt === null) throw new Error('active benchmark revision is missing published_at');
-      const unchangedStatements = [
-        boundedStatement(env.CATALOG_DB, `UPDATE benchmark_revisions SET checked_at = ? WHERE revision = ?`, [checkedAt, active.revision]),
-      ];
       const snapshot = snapshotForApiResponses(
         active.revision,
         active.generatedAt,
@@ -1936,21 +2160,29 @@ export async function refreshBenchmarkRevision(
         normalized,
         pairs,
       );
-      appendMaterializedBenchmarkApiResponseStatements(unchangedStatements, env.CATALOG_DB, snapshot, checkedAt);
-      unchangedStatements.push(
-        benchmarkApiResponsePointerStatement(env.CATALOG_DB, active.revision, checkedAt),
-        ...benchmarkApiResponseRetentionStatements(env.CATALOG_DB),
-        ...refreshSuccessStatements(env.CATALOG_DB, normalized.sources, checkedAt, active.revision),
+      await executePublicationStatementPlan(
+        env.CATALOG_DB,
+        buildUnchangedPublicationStatementPlan(env.CATALOG_DB, snapshot, publicationAttemptId),
       );
-      if (unchangedStatements.length > MAX_D1_PUBLICATION_STATEMENTS) {
-        throw new Error(`Unchanged benchmark refresh exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);
-      }
-      await env.CATALOG_DB.batch(unchangedStatements);
       return { status: 'unchanged', revision: active.revision, checkedAt, error: null };
     }
     const generatedAt = normalized.sources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'leaderboard')?.upstreamRevision ?? checkedAt;
     await writeEvidence(env.SOURCE_SNAPSHOTS, normalized.sources, evidence);
-    await env.CATALOG_DB.batch(buildPublicationStatements(env.CATALOG_DB, revision, generatedAt, checkedAt, contentHash, catalog, normalized, pairs));
+    await executePublicationStatementPlan(
+      env.CATALOG_DB,
+      buildPublicationStatementPlan(
+        env.CATALOG_DB,
+        revision,
+        generatedAt,
+        checkedAt,
+        contentHash,
+        catalog,
+        normalized,
+        pairs,
+        true,
+        publicationAttemptId,
+      ),
+    );
     return { status: 'published', revision, checkedAt, error: null };
   } catch (error) {
     const target = failureTarget(error);

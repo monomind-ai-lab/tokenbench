@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { BenchmarkComparisonPair, NormalizedSourceBatch } from '../../../src/benchmarks/contracts';
-import worker, { buildPublicationStatements, deriveComparisonPairs, refreshBenchmarkRevision } from './index';
+import worker, {
+  buildPublicationStatementPlan,
+  buildUnchangedPublicationStatementPlan,
+  deriveComparisonPairs,
+  executePublicationStatementPlan,
+  refreshBenchmarkRevision,
+} from './index';
 
 const observedAt = '2026-08-05T12:00:00.000Z';
 const benchLmArtifacts = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
@@ -54,6 +60,7 @@ interface RevisionRow {
   contentHash: string;
   catalogRevision: string;
   openrouterContentHash: string;
+  publicationAttemptId?: string | null;
 }
 
 interface RefreshRow {
@@ -256,6 +263,10 @@ function createDatabase(options: {
   activeBenchmark?: RevisionRow;
   activeSources?: SourceRow[];
   failPublicationBatch?: boolean;
+  failPublicationBatchNumber?: number;
+  maxBatchSerializedBytes?: number;
+  activeApiResponseRevision?: string;
+  activeApiResponseBodies?: string[];
   catalogSnapshotKey?: string;
   catalogContentHash?: string;
 }, events: string[]) {
@@ -270,6 +281,11 @@ function createDatabase(options: {
       contentHash: catalogContentHash,
     },
     activeRevision: options.activeBenchmark?.revision ?? null as string | null,
+    activeApiResponseRevision: options.activeApiResponseRevision ?? null as string | null,
+    apiResponseRevisions: new Set(options.activeApiResponseRevision ? [options.activeApiResponseRevision] : []),
+    apiResponseEntries: new Map(options.activeApiResponseRevision
+      ? [[options.activeApiResponseRevision, [...(options.activeApiResponseBodies ?? [])]]]
+      : [] as Array<[string, string[]]>),
     revisions: options.activeBenchmark ? [structuredClone(options.activeBenchmark)] : [] as RevisionRow[],
     sourceRows: new Map<string, SourceRow[]>(options.activeBenchmark
       ? [[options.activeBenchmark.revision, structuredClone(options.activeSources ?? [])]]
@@ -278,6 +294,8 @@ function createDatabase(options: {
     batchCalls: 0,
     publicationBatchCalls: 0,
     publicationStatements: [] as RecordedStatement[],
+    batchSerializedBytes: [] as number[],
+    batchStatements: [] as RecordedStatement[][],
   };
 
   function readFirst<T>(sql: string, values: unknown[]): T | null {
@@ -309,10 +327,14 @@ function createDatabase(options: {
   function apply(draft: typeof state, next: Statement): void {
     const { sql, values } = next;
     if (sql.startsWith('INSERT INTO benchmark_revisions')) {
+      if (draft.revisions.some((record) => record.revision === String(values[0]))) {
+        throw new Error('D1 UNIQUE constraint failed: benchmark_revisions.revision');
+      }
       draft.revisions.push({
         revision: String(values[0]), generatedAt: String(values[1]), publishedAt: values[2] === null ? null : String(values[2]),
         checkedAt: String(values[3]), publicationState: String(values[4]) as RevisionRow['publicationState'],
         contentHash: String(values[5]), catalogRevision: String(values[6]), openrouterContentHash: String(values[7]),
+        publicationAttemptId: String(values[8]),
       });
     } else if (sql.startsWith('INSERT INTO benchmark_source_records')) {
       const revision = String(values[0]);
@@ -333,18 +355,56 @@ function createDatabase(options: {
         });
       }
       draft.sourceRows.set(revision, rows);
+    } else if (sql.startsWith('DELETE FROM benchmark_revisions')) {
+      const revision = String(values[0]);
+      const existing = draft.revisions.find((record) => record.revision === revision);
+      const ownershipMatches = sql.includes('publication_attempt_id')
+        ? existing?.publicationAttemptId === String(values[1])
+        : existing !== undefined && existing.checkedAt < String(values[1]);
+      if (existing?.publicationState === 'pending' && ownershipMatches) {
+        draft.revisions = draft.revisions.filter((record) => record.revision !== revision);
+        draft.sourceRows.delete(revision);
+      }
     } else if (sql.includes("UPDATE benchmark_revisions SET publication_state = 'superseded'")) {
       draft.revisions.forEach((record) => {
         if (record.publicationState === 'published') record.publicationState = 'superseded';
       });
     } else if (sql.includes("UPDATE benchmark_revisions SET publication_state = 'published'")) {
       const revision = draft.revisions.find((record) => record.revision === String(values[1]));
-      if (revision) {
+      if (revision?.publicationAttemptId === String(values[2])) {
         revision.publicationState = 'published';
         revision.publishedAt = String(values[0]);
       }
     } else if (sql.includes('benchmark_publication_state')) {
-      draft.activeRevision = String(values[0]);
+      const target = draft.revisions.find((record) => record.revision === String(values[0]));
+      if (target?.publicationState !== 'published') {
+        throw new Error('benchmark publication pointer requires a published revision');
+      }
+      draft.activeRevision = target.revision;
+    } else if (sql.startsWith('INSERT INTO api_response_revisions')) {
+      draft.apiResponseRevisions.add(String(values[1]));
+    } else if (sql.startsWith('INSERT INTO api_response_entries')) {
+      for (let offset = 0; offset < values.length; offset += 7) {
+        const revision = String(values[offset + 1]);
+        const bodies = draft.apiResponseEntries.get(revision) ?? [];
+        bodies.push(String(values[offset + 6]));
+        draft.apiResponseEntries.set(revision, bodies);
+      }
+    } else if (sql.startsWith('DELETE FROM api_response_entries')) {
+      draft.apiResponseEntries.delete(String(values[1]));
+    } else if (sql.startsWith('INSERT INTO api_response_publication_state')) {
+      const target = String(values[1]);
+      if (String(values[0]) === 'benchmarks'
+        && (draft.activeRevision === null || !target.startsWith(`${draft.activeRevision}+cache-`))) {
+        throw new Error('benchmark cache pointer must match the active benchmark revision');
+      }
+      draft.activeApiResponseRevision = target;
+    } else if (sql.startsWith('DELETE FROM api_response_revisions')) {
+      const candidateRevision = String(values[1]);
+      if (candidateRevision !== draft.activeApiResponseRevision) {
+        draft.apiResponseRevisions.delete(candidateRevision);
+        draft.apiResponseEntries.delete(candidateRevision);
+      }
     } else if (sql.startsWith('UPDATE benchmark_revisions SET checked_at')) {
       const revision = draft.revisions.find((record) => record.revision === String(values[1]));
       if (revision) revision.checkedAt = String(values[0]);
@@ -366,16 +426,35 @@ function createDatabase(options: {
   const db = {
     prepare(sql: string) { return statement(sql); },
     async batch(statements: Statement[]) {
+      const recorded = statements.map((item) => ({ sql: item.sql, values: [...item.values] }));
+      const serializedBytes = new TextEncoder().encode(JSON.stringify(recorded)).byteLength;
+      state.batchSerializedBytes.push(serializedBytes);
+      state.batchStatements.push(recorded);
+      if (options.maxBatchSerializedBytes !== undefined && serializedBytes > options.maxBatchSerializedBytes) {
+        throw new Error(`D1 RPC payload exceeded ${options.maxBatchSerializedBytes} test bytes`);
+      }
       state.batchCalls += 1;
-      const isPublication = statements.some((item) => item.sql.startsWith('INSERT INTO benchmark_revisions'));
+      const isPublication = statements.some((item) => item.sql.includes('benchmark_revisions')
+        || item.sql.includes('benchmark_source_records')
+        || item.sql.includes('benchmark_models')
+        || item.sql.includes('benchmark_metrics')
+        || item.sql.includes('benchmark_price_checks')
+        || item.sql.includes('benchmark_comparison_pairs')
+        || item.sql.includes('benchmark_publication_state')
+        || item.sql.includes('api_response_revisions')
+        || item.sql.includes('api_response_entries')
+        || item.sql.includes('api_response_publication_state'));
       if (isPublication) {
         state.publicationBatchCalls += 1;
-        state.publicationStatements = statements.map((item) => ({ sql: item.sql, values: [...item.values] }));
+        state.publicationStatements.push(...statements.map((item) => ({ sql: item.sql, values: [...item.values] })));
         events.push('d1:publication');
       } else {
         events.push('d1:refresh');
       }
-      if (isPublication && options.failPublicationBatch) throw new Error('D1 batch rolled back');
+      if (isPublication && (options.failPublicationBatch && state.publicationBatchCalls === 1
+        || options.failPublicationBatchNumber === state.publicationBatchCalls)) {
+        throw new Error('D1 batch rolled back');
+      }
       const draft = structuredClone(state);
       for (const item of statements) apply(draft, item);
       Object.assign(state, draft);
@@ -388,6 +467,7 @@ function createDatabase(options: {
 function dependencies(fetchImpl: typeof fetch, now = () => observedAt) {
   const timeouts: number[] = [];
   const retries: number[] = [];
+  let publicationAttempt = 0;
   return {
     dependencies: {
       fetchImpl,
@@ -401,6 +481,7 @@ function dependencies(fetchImpl: typeof fetch, now = () => observedAt) {
       clearTimeoutImpl: () => undefined,
       sleep: async (timeout: number) => { retries.push(timeout); },
       random: () => 0,
+      publicationAttemptId: () => `test-attempt-${++publicationAttempt}`,
     },
     timeouts,
     retries,
@@ -474,7 +555,9 @@ function liveScaleBatch(): { batch: NormalizedSourceBatch; pairs: BenchmarkCompa
   }));
   // Task 7 observed 2,986 LiteLLM models and price checks. Deliberately wide
   // string/array fields force more than one <=1.5MB JSON parameter per table.
-  const wideMetadata = 'x'.repeat(700);
+  // Keep the fixture above D1's 32 MiB aggregate RPC ceiling once the fresh
+  // and stale summary/projection bodies are materialized.
+  const wideMetadata = 'x'.repeat(3_500);
   const liteModelKey = (index: number) => `litellm-${String(index).padStart(4, '0')}`;
   const liteLlmModels = Array.from({ length: 2_986 }, (_, index) => ({
     modelKey: liteModelKey(index), slug: liteModelKey(index), name: `LiteLLM ${index} ${wideMetadata}`, creator: 'LiteLLM',
@@ -832,15 +915,17 @@ describe('atomic benchmark ingestion', () => {
   it('serializes live-scale facts into a safe number of bounded D1 queries without dropping rows', () => {
     const { db } = createDatabase({}, []);
     const { batch, pairs } = liveScaleBatch();
-    const statements = buildPublicationStatements(db, 'benchmark-live-scale', observedAt, observedAt,
+    const plan = buildPublicationStatementPlan(db, 'benchmark-live-scale', observedAt, observedAt,
       `sha256:${'b'.repeat(64)}`, {
         revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
         snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
-      }, batch, pairs) as unknown as Statement[];
+      }, batch, pairs);
+    const statements = [...plan.staging, ...plan.commit] as unknown as Statement[];
 
-    // Three D1 reads precede this one transactional batch. Stay well below the 1,000-query Worker Paid cap.
-    expect(3 + statements.length).toBeLessThanOrEqual(903);
-    expect(3 + statements.length + 1).toBeLessThanOrEqual(904); // a failed batch can still write bounded last_error.
+    // Three D1 reads precede the staged statements and final pointer commit.
+    // Stay well below the 1,000-query Worker Paid cap.
+    expect(3 + plan.staging.length + plan.commit.length).toBeLessThanOrEqual(903);
+    expect(3 + plan.staging.length + plan.commit.length + plan.cleanup.length + 1).toBeLessThanOrEqual(911);
     expect(statements.every((statement) => statement.values.length <= 100)).toBe(true);
     expect(statements.every((statement) => new TextEncoder().encode(statement.sql).byteLength <= 100 * 1024)).toBe(true);
     expect(statements.flatMap((statement) => statement.values)
@@ -861,21 +946,229 @@ describe('atomic benchmark ingestion', () => {
       .toEqual(new Set(batch.priceChecks.map((price) => price.routeId)));
   });
 
-  it('writes exact projected evidence before one transactional publication batch', async () => {
+  it('stages a live-scale publication below the D1 RPC limit and commits both pointers last', async () => {
+    const d1RpcLimitBytes = 32 * 1024 * 1024;
+    const d1RpcSafetyBudgetBytes = 16 * 1024 * 1024;
+    const { db, state } = createDatabase({ maxBatchSerializedBytes: d1RpcSafetyBudgetBytes }, []);
+    const { batch, pairs } = liveScaleBatch();
+    const plan = buildPublicationStatementPlan(db, 'benchmark-live-scale', observedAt, observedAt,
+      `sha256:${'b'.repeat(64)}`, {
+        revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+        snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+      }, batch, pairs);
+    const plannedStatements = [...plan.staging, ...plan.commit] as unknown as Statement[];
+    const unbatchedBytes = new TextEncoder().encode(JSON.stringify(
+      plannedStatements.map((item) => ({ sql: item.sql, values: item.values })),
+    )).byteLength;
+
+    expect(unbatchedBytes).toBeGreaterThan(d1RpcLimitBytes);
+    await executePublicationStatementPlan(db, plan);
+
+    expect(state.batchStatements.length).toBeGreaterThan(1);
+    expect(Math.max(...state.batchSerializedBytes)).toBeLessThanOrEqual(d1RpcSafetyBudgetBytes);
+    const pointerSql = (statement: RecordedStatement) => statement.sql.startsWith('INSERT INTO api_response_publication_state')
+      || statement.sql.startsWith('INSERT INTO benchmark_publication_state');
+    expect(state.batchStatements.slice(0, -1).flat().some(pointerSql)).toBe(false);
+    expect(state.batchStatements.at(-1)?.filter(pointerSql)).toHaveLength(2);
+    expect(state.activeRevision).toBe('benchmark-live-scale');
+  });
+
+  it('cleans staged rows and keeps both prior pointers when a later publication RPC fails', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: `sha256:${'a'.repeat(64)}`,
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const previousApiRevision = 'benchmark-known-good+cache-20260805000000000';
+    const { db, state } = createDatabase({
+      activeBenchmark: previous,
+      activeApiResponseRevision: previousApiRevision,
+      failPublicationBatchNumber: 3,
+    }, []);
+    const { batch, pairs } = liveScaleBatch();
+    const plan = buildPublicationStatementPlan(db, 'benchmark-live-scale', observedAt, observedAt,
+      `sha256:${'b'.repeat(64)}`, {
+        revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+        snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+      }, batch, pairs);
+
+    await expect(executePublicationStatementPlan(db, plan)).rejects.toThrow('D1 batch rolled back');
+
+    expect(state.activeRevision).toBe(previous.revision);
+    expect(state.activeApiResponseRevision).toBe(previousApiRevision);
+    expect([...state.apiResponseRevisions]).toEqual([previousApiRevision]);
+    expect(state.revisions).toEqual([previous]);
+  });
+
+  it('prevents an overlapping attempt from deleting another attempt pending revision', async () => {
+    const { db, state } = createDatabase({}, []);
+    const fixtureBatch = liveScaleBatch().batch;
+    const batch: NormalizedSourceBatch = {
+      sources: fixtureBatch.sources,
+      models: fixtureBatch.models.slice(0, 2),
+      metrics: fixtureBatch.metrics.slice(0, 2),
+      priceChecks: fixtureBatch.priceChecks.slice(0, 2),
+      comparisonSeeds: [],
+    };
+    const catalog = {
+      revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+      snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const first = buildPublicationStatementPlan(db, 'benchmark-overlap', observedAt, observedAt,
+      `sha256:${'b'.repeat(64)}`, catalog, batch, [], true, 'attempt-a');
+    const second = buildPublicationStatementPlan(db, 'benchmark-overlap', observedAt, observedAt,
+      `sha256:${'b'.repeat(64)}`, catalog, batch, [], true, 'attempt-b');
+
+    await db.batch(first.staging as Statement[]);
+    await expect(executePublicationStatementPlan(db, second)).rejects.toThrow('UNIQUE constraint');
+
+    expect(state.revisions).toEqual([expect.objectContaining({
+      revision: 'benchmark-overlap',
+      publicationState: 'pending',
+      publicationAttemptId: 'attempt-a',
+    })]);
+    expect(state.sourceRows.get('benchmark-overlap')).toHaveLength(batch.sources.length);
+
+    await db.batch(first.commit as Statement[]);
+    expect(state.activeRevision).toBe('benchmark-overlap');
+  });
+
+  it('aborts a stale owner commit after its pending revision is reclaimed', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-known-good', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: `sha256:${'a'.repeat(64)}`,
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const previousApiRevision = 'benchmark-known-good+cache-initial';
+    const previousBodies = ['known-good-cache-body'];
+    const { db, state } = createDatabase({
+      activeBenchmark: previous,
+      activeApiResponseRevision: previousApiRevision,
+      activeApiResponseBodies: previousBodies,
+    }, []);
+    const fixtureBatch = liveScaleBatch().batch;
+    const batch: NormalizedSourceBatch = {
+      sources: fixtureBatch.sources,
+      models: fixtureBatch.models.slice(0, 2),
+      metrics: fixtureBatch.metrics.slice(0, 2),
+      priceChecks: fixtureBatch.priceChecks.slice(0, 2),
+      comparisonSeeds: [],
+    };
+    const catalog = {
+      revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+      snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const stale = buildPublicationStatementPlan(db, 'benchmark-reclaimed', observedAt, observedAt,
+      `sha256:${'b'.repeat(64)}`, catalog, batch, [], true, 'attempt-stale');
+    const replacement = buildPublicationStatementPlan(db, 'benchmark-reclaimed', observedAt,
+      '2026-08-05T12:21:00.000Z', `sha256:${'b'.repeat(64)}`, catalog, batch, [], true, 'attempt-replacement');
+
+    await db.batch(stale.staging as Statement[]);
+    await db.batch(replacement.staging as Statement[]);
+    await expect(db.batch(stale.commit as Statement[]))
+      .rejects.toThrow('benchmark publication pointer requires a published revision');
+
+    expect(state.activeRevision).toBe(previous.revision);
+    expect(state.activeApiResponseRevision).toBe(previousApiRevision);
+    expect(state.apiResponseEntries.get(previousApiRevision)).toEqual(previousBodies);
+    expect(state.revisions).toEqual([
+      previous,
+      expect.objectContaining({
+        revision: 'benchmark-reclaimed', publicationState: 'pending', publicationAttemptId: 'attempt-replacement',
+      }),
+    ]);
+
+    await db.batch(replacement.commit as Statement[]);
+    expect(state.activeRevision).toBe('benchmark-reclaimed');
+    expect(state.activeApiResponseRevision).toContain('attempt-replacement');
+  });
+
+  it('aborts an older unchanged cache commit after a changed revision publishes', async () => {
+    const previous: RevisionRow = {
+      revision: 'benchmark-r0', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: `sha256:${'a'.repeat(64)}`,
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const previousApiRevision = 'benchmark-r0+cache-initial';
+    const fixtureBatch = liveScaleBatch().batch;
+    const batch: NormalizedSourceBatch = {
+      sources: fixtureBatch.sources,
+      models: fixtureBatch.models.slice(0, 2),
+      metrics: fixtureBatch.metrics.slice(0, 2),
+      priceChecks: fixtureBatch.priceChecks.slice(0, 2),
+      comparisonSeeds: [],
+    };
+    const { db, state } = createDatabase({
+      activeBenchmark: previous,
+      activeSources: batch.sources,
+      activeApiResponseRevision: previousApiRevision,
+      activeApiResponseBodies: ['r0-complete-cache'],
+    }, []);
+    const snapshot = {
+      revision: previous,
+      sources: batch.sources,
+      models: batch.models,
+      metrics: batch.metrics,
+      priceChecks: batch.priceChecks,
+      comparisonPairs: [],
+    };
+    const unchanged = buildUnchangedPublicationStatementPlan(db, snapshot, 'attempt-unchanged');
+    const changed = buildPublicationStatementPlan(db, 'benchmark-r1', observedAt,
+      '2026-08-05T13:00:00.000Z', `sha256:${'b'.repeat(64)}`, {
+        revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+        snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+      }, batch, [], true, 'attempt-changed');
+
+    await db.batch(unchanged.staging as Statement[]);
+    await executePublicationStatementPlan(db, changed);
+    const changedApiRevision = state.activeApiResponseRevision;
+    const changedBodies = structuredClone(state.apiResponseEntries.get(changedApiRevision ?? '') ?? []);
+
+    await expect(db.batch(unchanged.commit as Statement[]))
+      .rejects.toThrow('benchmark cache pointer must match the active benchmark revision');
+
+    expect(state.activeRevision).toBe('benchmark-r1');
+    expect(state.activeApiResponseRevision).toBe(changedApiRevision);
+    expect(state.apiResponseEntries.get(changedApiRevision ?? '')).toEqual(changedBodies);
+    expect(changedBodies.length).toBeGreaterThan(0);
+
+    await db.batch(unchanged.cleanup as Statement[]);
+    expect([...state.apiResponseRevisions]).not.toContainEqual(expect.stringContaining('attempt-unchanged'));
+  });
+
+  it('keeps the active cache complete when a same-timestamp unchanged commit fails', async () => {
+    const { env, db } = seededEnvironment({ failPublicationBatchNumber: 4 });
+    const transport = dependencies(healthyFetch(), () => observedAt);
+    const first = await refreshBenchmarkRevision(env, transport.dependencies);
+    const activeApiRevision = db.state.activeApiResponseRevision;
+    const activeBodies = structuredClone(db.state.apiResponseEntries.get(activeApiRevision ?? '') ?? []);
+
+    const second = await refreshBenchmarkRevision(env, transport.dependencies);
+
+    expect(first.status).toBe('published');
+    expect(second.status).toBe('failed');
+    expect(db.state.activeRevision).toBe(first.revision);
+    expect(db.state.activeApiResponseRevision).toBe(activeApiRevision);
+    expect(db.state.apiResponseEntries.get(activeApiRevision ?? '')).toEqual(activeBodies);
+    expect(activeBodies.length).toBeGreaterThan(0);
+    expect([...db.state.apiResponseRevisions]).toEqual([activeApiRevision]);
+  });
+
+  it('writes exact projected evidence before staged publication and commits the pointers last', async () => {
     const { env, db, r2, events } = seededEnvironment();
     const transport = dependencies(healthyFetch());
 
     const result = await refreshBenchmarkRevision(env, transport.dependencies);
 
     expect(result).toMatchObject({ status: 'published', checkedAt: observedAt, error: null, revision: expect.any(String) });
-    expect(db.state.batchCalls).toBe(1);
-    expect(db.state.publicationBatchCalls).toBe(1);
+    expect(db.state.batchCalls).toBeGreaterThan(1);
+    expect(db.state.publicationBatchCalls).toBe(db.state.batchCalls);
     const publicationIndex = events.indexOf('d1:publication');
     const evidenceEvents = events.filter((event) => event.startsWith('r2:benchmarks/'));
     expect(publicationIndex).toBeGreaterThanOrEqual(0);
     expect(evidenceEvents).not.toHaveLength(0);
     expect(evidenceEvents.every((event) => events.indexOf(event) < publicationIndex)).toBe(true);
-    expect(events.filter((event) => event === 'd1:publication')).toHaveLength(1);
+    expect(events.filter((event) => event === 'd1:publication')).toHaveLength(db.state.publicationBatchCalls);
 
     const factTables = [
       'benchmark_source_records',
@@ -978,8 +1271,8 @@ describe('atomic benchmark ingestion', () => {
     expect(result.status).toBe('failed');
     expect(db.state.activeRevision).toBe(previous.revision);
     expect(db.state.revisions).toEqual([previous]);
-    expect(db.state.publicationBatchCalls).toBe(1);
-    expect(events.filter((event) => event === 'd1:publication')).toHaveLength(1);
+    expect(db.state.publicationBatchCalls).toBe(2);
+    expect(events.filter((event) => event === 'd1:publication')).toHaveLength(2);
     expect(events.indexOf('d1:publication')).toBeGreaterThan(events.findIndex((event) => event.startsWith('r2:benchmarks/')));
     expect(r2.objects.size).toBeGreaterThan(objectsBefore);
     expect([...db.state.refreshRows.values()].some((row) => row.lastError?.includes('D1 batch rolled back'))).toBe(true);
@@ -1036,7 +1329,7 @@ describe('atomic benchmark ingestion', () => {
     expect(db.state.revisions[0].checkedAt).toBe('2026-08-05T13:00:00.000Z');
     expect(lmArena304Responses).toBeGreaterThan(0);
     expect(r2.objects.size).toBe(firstObjectCount);
-    expect(events.slice(eventCountAfterFirst)).toEqual(['d1:refresh']);
+    expect(events.slice(eventCountAfterFirst)).toEqual(['d1:publication', 'd1:publication']);
   });
 
   it('publishes a new immutable revision when unchanged source artifacts were hashed before the derivation schema version', async () => {
@@ -1159,7 +1452,7 @@ describe('atomic benchmark ingestion', () => {
     expect(storedSnapshot?.bytes).toEqual(originalBytes);
     expect(storedSnapshot?.customMetadata.original_content_hash).toBe(originalMetadata);
     expect(storedSnapshot?.customMetadata.original_content_hash).toBe(firstModels.originalContentHash);
-    expect(events.slice(eventsAfterFirst)).toEqual(['d1:refresh']);
+    expect(events.slice(eventsAfterFirst)).toEqual(['d1:publication', 'd1:publication']);
   });
 
   it('rejects a contaminated legacy OpenRouter snapshot before upstream fetches', async () => {
@@ -1259,6 +1552,7 @@ describe('atomic benchmark ingestion', () => {
       clearTimeoutImpl: () => undefined,
       sleep: async (timeout) => { retries.push(timeout); },
       random: () => 0,
+      publicationAttemptId: () => 'timeout-attempt',
     });
 
     expect(result.status).toBe('failed');
@@ -1349,6 +1643,7 @@ describe('atomic benchmark ingestion', () => {
         },
         sleep: async (timeout) => { retries.push(timeout); },
         random: () => 0,
+        publicationAttemptId: () => 'stalled-attempt',
       });
 
       expect(result.status).toBe('failed');
@@ -1553,7 +1848,7 @@ describe('atomic benchmark ingestion', () => {
       revision: result.revision,
       data: { compareDirectory: { models: expect.any(Array) } },
     });
-  });
+  }, 10_000);
 
   it('preserves the active revision when a declared LMArena total has a missing required page', async () => {
     const previous: RevisionRow = {
