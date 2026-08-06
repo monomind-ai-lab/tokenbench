@@ -114,6 +114,14 @@ function lmarenaMetric(modelKey: string, rank: number): BenchmarkMetric {
   };
 }
 
+function lmarenaStyleMetric(modelKey: string, rank: number): BenchmarkMetric {
+  return {
+    ...lmarenaMetric(modelKey, rank),
+    metricKey: 'lmarena:text_style_control:overall',
+    category: 'text-style-control',
+  };
+}
+
 function primaryPrice(modelKey: string, input: number, output: number): BenchmarkPriceCheck {
   return {
     modelKey,
@@ -153,7 +161,9 @@ const betaReasoning = benchlmMetric(beta.modelKey, 'benchlm:category:reasoning',
 // qualifying for the score-only BenchLM radar.
 const alphaArena = lmarenaMetric(alpha.modelKey, 12);
 const betaArena = lmarenaMetric(beta.modelKey, 14);
+const alphaStyle = lmarenaStyleMetric(alpha.modelKey, 10);
 const canvasImage = lmarenaMetric(canvas.modelKey, 1);
+const canvasStyle = lmarenaStyleMetric(canvas.modelKey, 2);
 const prismImage = lmarenaMetric(prism.modelKey, 2);
 const alphaPrice = primaryPrice(alpha.modelKey, 2, 8);
 const betaPrice = primaryPrice(beta.modelKey, 1, 4);
@@ -522,7 +532,9 @@ export function handlerBackedComparisonDatabase(): D1Database {
       rawMetric(betaReasoning),
       rawMetric(alphaArena),
       rawMetric(betaArena),
+      rawMetric(alphaStyle),
       rawMetric(canvasImage),
+      rawMetric(canvasStyle),
       rawMetric(prismImage),
     ],
     prices: [rawPrice(alphaDirectPrice), rawPrice(alphaPrice), rawPrice(betaPrice)],

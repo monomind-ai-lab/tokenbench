@@ -126,7 +126,7 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
   { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks', hydratedClientMarker: '.leaderboard-results[aria-label="AI coding model benchmarks"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings', hydratedClientMarker: '.leaderboard-results[aria-label="Text-to-image model rankings"]' },
-  { path: '/compare/', heading: 'Compare AI models', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
+  { path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
   { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
   { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
@@ -1087,6 +1087,64 @@ test.describe('home and tools route runtime', () => {
   });
 });
 
+test.describe('responsive compare hub coverage', () => {
+  test('keeps the approved compare hub readable at 320 and 1440 in both themes', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, comparisonDirectoryEnvelope());
+
+    for (const viewport of [
+      { width: 320, layout: 'compact' },
+      { width: 1440, layout: 'wide' },
+    ] as const) {
+      await page.setViewportSize({ width: viewport.width, height: 1000 });
+      for (const theme of ['dark', 'light'] as const) {
+        await setStoredTheme(page, theme);
+        await page.goto('/compare/', { waitUntil: 'domcontentloaded' });
+
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', viewport.layout);
+        await expect(page.locator('.comparison-hub-page')).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Compare models side by side', level: 1 })).toBeVisible();
+        await expect(page.getByText('Choose two models to compare benchmark performance, API pricing, context limits, and evidence coverage.')).toBeVisible();
+        await expect(page.getByText(/Published revision:/)).toHaveCount(0);
+        await assertNoHorizontalOverflow(page);
+      }
+    }
+  });
+});
+
+interface ComparisonFixtureMetric {
+  readonly sourceArtifactId: string;
+}
+
+interface ComparisonFixtureMetricRow {
+  readonly metricKey: string;
+  readonly sourceId: string;
+  readonly unit: string;
+  readonly methodology: string;
+  readonly modelA: ComparisonFixtureMetric | null;
+  readonly modelB: ComparisonFixtureMetric | null;
+}
+
+interface ComparisonFixturePayload {
+  readonly metricRows: readonly ComparisonFixtureMetricRow[];
+  readonly relatedPairs: readonly {
+    readonly pairSlug: string;
+    readonly sharedMetricCount: number;
+  }[];
+  readonly attribution: readonly {
+    readonly sourceId: string;
+    readonly artifactId: string;
+  }[];
+}
+
+async function comparisonFixturePayload(page: Page): Promise<ComparisonFixturePayload> {
+  const payload = await page.locator('#comparison-initial-data').textContent();
+  if (!payload) throw new Error('Comparison fixture did not expose its SSR hydration payload.');
+  return JSON.parse(payload) as ComparisonFixturePayload;
+}
+
 test.describe('handler-backed compare browser coverage', () => {
   test('renders a dense server comparison document with only eligible radar axes before hydration', async ({ browser }) => {
     const origin = previewOrigin();
@@ -1134,7 +1192,7 @@ test.describe('handler-backed compare browser coverage', () => {
     }
   });
 
-  test('renders the sparse comparison with a ruled detail fallback before hydration', async ({ browser }) => {
+  test('keeps source-faithful sparse compare metadata aligned with its ruled detail fallback', async ({ browser }) => {
     const origin = previewOrigin();
     const context = await browser.newContext({ baseURL: origin, javaScriptEnabled: false });
     const page = await context.newPage();
@@ -1142,7 +1200,26 @@ test.describe('handler-backed compare browser coverage', () => {
       await blockExternalRequests(page, origin);
       await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
 
+      await page.goto(HANDLER_COMPARISON_PATH);
+      const densePayload = await comparisonFixturePayload(page);
+      const sparseMetadata = densePayload.relatedPairs.find((pair) => pair.pairSlug === 'canvas-vs-alpha');
+      expect(sparseMetadata).toBeDefined();
+
       await page.goto(HANDLER_SPARSE_COMPARISON_PATH);
+      const sparsePayload = await comparisonFixturePayload(page);
+      const sharedRows = sparsePayload.metricRows.filter((row) => row.modelA !== null && row.modelB !== null);
+      expect(sharedRows).toHaveLength(sparseMetadata?.sharedMetricCount ?? -1);
+      expect(sharedRows.map((row) => row.metricKey)).toEqual([
+        'lmarena:text_style_control:overall',
+        'lmarena:text_to_image:overall',
+      ]);
+      expect(sharedRows.every((row) => row.sourceId === 'lmarena'
+        && row.unit === 'arena_score'
+        && row.methodology === 'bradley_terry'
+        && row.modelA?.sourceArtifactId === row.modelB?.sourceArtifactId)).toBe(true);
+      expect(sparsePayload.attribution.some((source) => source.sourceId === 'lmarena'
+        && source.artifactId === 'text-to-image')).toBe(true);
+      expect(sharedRows.length).toBeLessThan(3);
       await expect(page.getByRole('heading', { name: 'Canvas vs Alpha', level: 1 })).toBeVisible();
       await expect(page.getByRole('img', { name: /shared metric radar/i })).toHaveCount(0);
       const fallback = page.locator('.comparison-radar-fallback');
