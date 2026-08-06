@@ -1,4 +1,5 @@
 import { CircleDollarSign, TrendingUp, WalletCards } from 'lucide-react';
+import { recommendCostFirst } from '../catalog/calculator';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
 import { UI_COPY } from '../data/mockData';
 import {
@@ -13,6 +14,60 @@ import { EmptyState } from './ui';
 
 interface TrendChartProps {
   readonly snapshot: CalculatorSnapshot;
+}
+
+interface ResultRecommendation {
+  readonly copy: string;
+  readonly unavailableFacts: readonly string[];
+}
+
+function resultRecommendation(selectedPlan: PlanOffer | undefined, snapshot: CalculatorSnapshot): ResultRecommendation {
+  if (!selectedPlan) {
+    return {
+      copy: 'Choose a subscription with published capacity before comparing it with pay as you go.',
+      unavailableFacts: ['No subscription plan is selected.'],
+    };
+  }
+  if (snapshot.selectedOffers.length === 0 || snapshot.estimatedMonthlySavingsMicroDollars === null) {
+    return {
+      copy: 'Unable to compare this subscription with pay as you go until you select a complete model mix.',
+      unavailableFacts: ['A complete selected-model mix is required to calculate an API-equivalent cost.'],
+    };
+  }
+
+  const eligibility = recommendCostFirst(
+    [selectedPlan],
+    snapshot.monthlyApiCostMicroDollars,
+    snapshot.monthlyTokens,
+    [...new Set(snapshot.selectedOffers.map((offer) => offer.modelId))],
+  );
+  const savings = snapshot.estimatedMonthlySavingsMicroDollars;
+  if (eligibility.caveats.length > 0) {
+    return {
+      copy: 'Unable to compare this subscription with pay as you go because its published entitlement does not verify this workload.',
+      unavailableFacts: eligibility.caveats,
+    };
+  }
+  if (savings > 0 && eligibility.kind === 'subscription') {
+    return {
+      copy: `Subscription is cheaper for this workload: ${selectedPlan.displayName} is ${formatCurrencyMicroDollars(savings)} below the API-equivalent cost.`,
+      unavailableFacts: [],
+    };
+  }
+  if (savings === 0) {
+    return {
+      copy: 'Subscription and pay as you go cost the same for this workload.',
+      unavailableFacts: [],
+    };
+  }
+  return {
+    copy: `Pay as you go is cheaper for this workload: it is ${formatCurrencyMicroDollars(Math.abs(savings))} below the subscription price.`,
+    unavailableFacts: [],
+  };
+}
+
+export function recommendationForResult(selectedPlan: PlanOffer | undefined, snapshot: CalculatorSnapshot): string {
+  return resultRecommendation(selectedPlan, snapshot).copy;
 }
 
 function TrendChart({ snapshot }: TrendChartProps) {
@@ -57,19 +112,26 @@ function TrendChart({ snapshot }: TrendChartProps) {
 function ValueSummary({ selectedPlan, snapshot }: ResultsDashboardProps) {
   const savings = snapshot.estimatedMonthlySavingsMicroDollars;
   const savingsTone = savings === null || savings === 0 ? 'neutral' : savings > 0 ? 'positive' : 'negative';
+  const recommendation = resultRecommendation(selectedPlan, snapshot);
 
   return (
     <article className="value-summary-card">
+      <p className="result-recommendation">{recommendation.copy}</p>
       <div className="value-summary-main">
+        <div className="value-metric value-subscription-price">
+          <h3>Subscription price</h3>
+          <strong>{selectedPlan ? formatCurrencyMicroDollars(selectedPlan.monthlyCostMicroDollars) : 'No plan selected'}</strong>
+          <span>{selectedPlan ? `${selectedPlan.displayName} per month` : 'Select a plan with published capacity to compare it.'}</span>
+        </div>
         <div className="value-metric">
-          <h2><CircleDollarSign aria-hidden="true" size={19} />{UI_COPY.apiEquivalentValue}</h2>
+          <h3><CircleDollarSign aria-hidden="true" size={19} />{UI_COPY.apiEquivalentValue}</h3>
           <strong>{formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)}</strong>
           <span>Total market value at expected usage</span>
         </div>
         <div className="value-metric value-savings">
-          <h2><WalletCards aria-hidden="true" size={19} />{UI_COPY.estimatedMonthlySavings}</h2>
+          <h3><WalletCards aria-hidden="true" size={19} />{UI_COPY.estimatedMonthlySavings}</h3>
           <strong data-savings-tone={savingsTone}>{formatCurrencyMicroDollars(savings)}</strong>
-          <span>{selectedPlan ? `API value minus ${selectedPlan.displayName}` : 'Select a plan to compare'}</span>
+          <span>{selectedPlan ? `Difference: API value minus ${selectedPlan.displayName}` : 'Difference unavailable until a plan is selected'}</span>
         </div>
       </div>
       <div className="value-summary-footer">
@@ -82,13 +144,24 @@ function ValueSummary({ selectedPlan, snapshot }: ResultsDashboardProps) {
           <strong>{formatSignedPercentBasisPoints(snapshot.efficiencyBasisPoints)}</strong>
         </div>
       </div>
+      <div className="value-summary-notes">
+        <section>
+          <h3>Assumptions</h3>
+          <p>API-equivalent cost uses the selected model mix, your input/output split, and monthly token volume. It does not invent capacity that a provider has not published.</p>
+        </section>
+        <section>
+          <h3>Unavailable facts</h3>
+          {recommendation.unavailableFacts.length > 0 ? <ul>{recommendation.unavailableFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul> : <p>Published plan capacity and selected-model support are available for this workload.</p>}
+        </section>
+      </div>
     </article>
   );
 }
 
 export function ResultsDashboard({ selectedPlan, snapshot }: ResultsDashboardProps) {
   return (
-    <section className="results-panel" aria-label="Calculated plan value">
+    <section id="calculator-result" className="results-panel" aria-label="Calculated plan value" tabIndex={-1}>
+      <header className="calculator-step-heading"><span>Step 4</span><h2>Review the recommendation</h2></header>
       {snapshot.selectedOffers.length === 0 ? (
         <EmptyState title="Select a verified model" description="Choose one or more models to calculate API-equivalent value, savings, breakeven, and the usage trend." />
       ) : (
@@ -97,7 +170,7 @@ export function ResultsDashboard({ selectedPlan, snapshot }: ResultsDashboardPro
           <article className="trend-panel">
             <div className="trend-heading">
               <div>
-                <h2>{UI_COPY.valueTrendAnalysis}</h2>
+                <h3>{UI_COPY.valueTrendAnalysis}</h3>
                 <p>API Equivalent Value ($) vs Est. Monthly Tokens</p>
               </div>
               <TrendingUp aria-hidden="true" size={21} />

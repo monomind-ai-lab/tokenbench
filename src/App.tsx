@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { redistributeModelMix } from './catalog/calculator';
 import { CalculatorControls } from './frontend/calculator-controls';
+import { decodeCalculatorShareState, encodeCalculatorShareState } from './frontend/calculator-share-state';
 import {
   applyWorkloadPreset,
   buildCalculatorSnapshot,
@@ -11,7 +12,8 @@ import {
 import { Comparison } from './frontend/comparison';
 import { AppShell } from './frontend/app-shell';
 import { API_ONLY_PROVIDER_IDS, paidIndividualPlans } from './frontend/plan-filter';
-import { ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
+import { recommendationForResult, ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
+import { ShareAction } from './frontend/share-action';
 import { useSitePreferences } from './frontend/site-preferences';
 import { ComparisonPage } from './frontend/comparison-page';
 import type { ComparisonViewModel } from './frontend/comparison-contracts';
@@ -22,7 +24,7 @@ import { CompareHubPage } from './pages/compare-hub-page';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
 import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
-import { matchRoute, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
+import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 import type { WorkloadPreset } from './frontend/calculator-state';
 
 interface PageFrameProps {
@@ -64,6 +66,9 @@ function CalculatorPage() {
   const [selection, setSelection] = useState({ selectedModelIds: [] as string[], modelMixBasisPoints: {} as Record<string, number> });
   const [inputShareBasisPoints, setInputShareBasisPoints] = useState(5_000);
   const [monthlyTokens, setMonthlyTokens] = useState(10_000_000);
+  const appliedSharedStateRef = useRef(false);
+  const hydratedSharedStateRef = useRef(false);
+  const skipSharedStateReconciliationRef = useRef(false);
   const selectedPreset = selectedWorkloadPreset(inputShareBasisPoints, monthlyTokens);
 
   const providerIds = useMemo(() => {
@@ -75,13 +80,45 @@ function CalculatorPage() {
   }, [catalog]);
 
   useEffect(() => {
+    if (!catalog || phase !== 'ready' || appliedSharedStateRef.current) return;
+    appliedSharedStateRef.current = true;
+
+    const decoded = decodeCalculatorShareState(new URLSearchParams(window.location.search), catalog);
+    if (!decoded) return;
+
+    hydratedSharedStateRef.current = true;
+    skipSharedStateReconciliationRef.current = true;
+    setSelectedProviderId(decoded.state.providerId);
+    setSelectedPlanId(decoded.state.planId);
+    setSelection({
+      selectedModelIds: [...decoded.state.selectedModelIds],
+      modelMixBasisPoints: { ...decoded.state.modelMixBasisPoints },
+    });
+    setInputShareBasisPoints(decoded.state.inputShareBasisPoints);
+    setMonthlyTokens(decoded.state.monthlyTokens);
+
+    if (decoded.wasNormalized) {
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(decoded.state)}${window.location.hash}`,
+      );
+    }
+  }, [catalog, phase]);
+
+  useEffect(() => {
     if (!catalog || providerIds.length === 0) return;
+    if (skipSharedStateReconciliationRef.current) {
+      skipSharedStateReconciliationRef.current = false;
+      return;
+    }
     const providerWithModels = providerIds.find((providerId) => catalog.modelOffers.some((offer) => offer.providerId === providerId));
     const nextProvider = selectedProviderId && providerIds.includes(selectedProviderId) ? selectedProviderId : providerWithModels ?? providerIds[0];
     if (nextProvider !== selectedProviderId) setSelectedProviderId(nextProvider);
     const providerPlans = paidIndividualPlans(catalog.plans, nextProvider);
     const planStillAvailable = providerPlans.some((plan) => plan.id === selectedPlanId);
-    if (!planStillAvailable) setSelectedPlanId(providerPlans[0]?.id ?? '');
+    if (selectedPlanId && !planStillAvailable) setSelectedPlanId(providerPlans[0]?.id ?? '');
+    if (!selectedPlanId && !hydratedSharedStateRef.current) setSelectedPlanId(providerPlans[0]?.id ?? '');
     const providerModels = catalog.modelOffers.filter((offer) => offer.providerId === nextProvider);
     const availableModelIds = new Set(providerModels.map((offer) => offer.id));
     const retainedIds = selection.selectedModelIds.filter((id) => availableModelIds.has(id));
@@ -102,6 +139,19 @@ function CalculatorPage() {
     monthlyTokens,
     selectedPlan,
   }), [inputShareBasisPoints, monthlyTokens, providerModels, selectedPlan, selection.modelMixBasisPoints, selection.selectedModelIds]);
+  const recommendation = recommendationForResult(selectedPlan, snapshot);
+  const canShare = selectedProviderId.length > 0
+    && selection.selectedModelIds.length > 0
+    && selection.selectedModelIds.reduce((total, modelId) => total + (selection.modelMixBasisPoints[modelId] ?? 0), 0) === 10_000
+    && monthlyTokens > 0;
+  const shareState = {
+    providerId: selectedProviderId,
+    planId: selectedPlanId,
+    selectedModelIds: selection.selectedModelIds,
+    modelMixBasisPoints: selection.modelMixBasisPoints,
+    inputShareBasisPoints,
+    monthlyTokens,
+  };
 
   const handleProviderChange = (providerId: string) => {
     if (!catalog) return;
@@ -130,15 +180,41 @@ function CalculatorPage() {
     setMonthlyTokens(values.monthlyTokens);
   };
 
+  const focusResult = () => document.getElementById('calculator-result')?.focus();
+
   return (
     <PageFrame activePage="calculator" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
       <section id="calculator" className="content-stack calculator-page" aria-labelledby="calculator-heading" tabIndex={-1}>
-        <h1 id="calculator-heading" className="sr-only">Subscription vs. API cost calculator</h1>
+        <header className="calculator-intro">
+          <h1 id="calculator-heading">Should you subscribe or pay as you go?</h1>
+          <p>Estimate the API-equivalent value of an AI subscription using the models, token volume, and input/output mix that match your workload.</p>
+        </header>
+        <details className="calculator-step-overview" open>
+          <summary>Four steps to a useful comparison</summary>
+          <ol>
+            <li><a href="#calculator-provider-plan">Provider and plan</a></li>
+            <li><a href="#calculator-models">Models you actually use</a></li>
+            <li><a href="#calculator-workload">Monthly workload</a></li>
+            <li><a href="#calculator-result">Recommendation</a></li>
+          </ol>
+        </details>
+        {!catalog ? <div className="calculator-loading-steps" aria-label="Calculator steps">
+          <header className="calculator-step-heading"><span>Step 1</span><h2>Choose a provider and plan</h2></header>
+          <header className="calculator-step-heading"><span>Step 2</span><h2>Choose the models you actually use</h2></header>
+          <header className="calculator-step-heading"><span>Step 3</span><h2>Describe your monthly workload</h2></header>
+          <header className="calculator-step-heading"><span>Step 4</span><h2>Review the recommendation</h2></header>
+        </div> : null}
         {phase === 'loading' && !catalog ? <Skeleton label="Loading verified catalog" /> : null}
         {catalog ? <>
-          <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} selectedPreset={selectedPreset} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
-          <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
+          <div className="calculator-guided-layout">
+            <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} selectedPreset={selectedPreset} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
+            <div className="calculator-guided-results">
+              <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
+              {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" text={recommendation} url={`${location.origin}${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
+            </div>
+          </div>
           <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} />
+          <button className="view-result-action" type="button" aria-controls="calculator-result" onClick={focusResult}>View result</button>
         </> : null}
       </section>
     </PageFrame>

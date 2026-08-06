@@ -2,8 +2,9 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { act, createElement, StrictMode } from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import type { CatalogResponse, PlanOffer } from '../catalog/contracts';
 import { AppShell, SiteHeader } from './app-shell';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import '../index.css';
@@ -20,6 +21,108 @@ function renderAt(pathname: string) {
   return render(<App />);
 }
 
+const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
+const selectedDirectOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
+
+interface CalculatorPathOptions {
+  readonly providerId?: string;
+  readonly planId?: string;
+  readonly modelIds?: string;
+  readonly weights?: string;
+  readonly inputShareBasisPoints?: number;
+  readonly monthlyTokens?: number;
+}
+
+function calculatorPath({
+  providerId = 'provider-a',
+  planId = 'provider-a:starter',
+  modelIds = selectedDirectOffer.id,
+  weights = '10000',
+  inputShareBasisPoints = 5_000,
+  monthlyTokens = 10_000_000,
+}: CalculatorPathOptions = {}) {
+  const params = new URLSearchParams({
+    provider: providerId,
+    plan: planId,
+    models: modelIds,
+    weights,
+    input: String(inputShareBasisPoints),
+    tokens: String(monthlyTokens),
+  });
+  return `${CALCULATOR_PATH}?${params}`;
+}
+
+function renderCalculator(catalog: CatalogResponse, pathname = calculatorPath()) {
+  respondWithCatalog(catalog);
+  return renderAt(pathname);
+}
+
+async function calculatedResult() {
+  await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+  return screen.getByRole('region', { name: 'Calculated plan value' });
+}
+
+function comparablePlan(overrides: Partial<PlanOffer> = {}): PlanOffer {
+  return {
+    ...FRONTEND_TEST_CATALOG.plans[1],
+    id: 'provider-a:comparable',
+    displayName: 'Comparable 10M',
+    monthlyCostMicroDollars: 20_000_000,
+    billingCycle: 'monthly',
+    supportedModelIds: [selectedDirectOffer.modelId],
+    entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 },
+    ...overrides,
+  };
+}
+
+type IneligibleCalculatorFixture = 'rolling' | 'guardrail' | 'credits' | 'unsupported-mix' | 'no-plan';
+
+function calculatorFixture(fixture: IneligibleCalculatorFixture): CatalogResponse {
+  const plan = comparablePlan();
+  switch (fixture) {
+    case 'rolling':
+      return { ...FRONTEND_TEST_CATALOG, plans: [{ ...plan, entitlement: { kind: 'rolling_limit', description: 'Rolling usage limit' } }] };
+    case 'guardrail':
+      return { ...FRONTEND_TEST_CATALOG, plans: [{ ...plan, entitlement: { kind: 'guardrail_limited', description: 'Guardrails vary by demand' } }] };
+    case 'credits':
+      return { ...FRONTEND_TEST_CATALOG, plans: [{ ...plan, entitlement: { kind: 'credits', description: 'Credits are not a fixed token allowance' } }] };
+    case 'unsupported-mix':
+      return { ...FRONTEND_TEST_CATALOG, plans: [{ ...plan, supportedModelIds: ['different-model'] }] };
+    case 'no-plan':
+      return FRONTEND_TEST_CATALOG;
+  }
+}
+
+function twoProviderCatalog(): CatalogResponse {
+  const providerBSource = {
+    ...FRONTEND_TEST_CATALOG.provenance[0],
+    id: 'provider-b-subscription',
+    providerId: 'provider-b',
+  };
+  const providerBPlan = {
+    ...comparablePlan(),
+    id: 'provider-b:fixed',
+    providerId: 'provider-b',
+    displayName: 'Provider B Fixed',
+    sourceId: providerBSource.id,
+    supportedModelIds: ['beta'],
+  };
+  const providerBOffer = {
+    ...selectedDirectOffer,
+    id: 'provider-b:beta:direct_provider',
+    providerId: 'provider-b',
+    displayName: 'Beta Direct',
+    modelId: 'beta',
+    sourceId: providerBSource.id,
+  };
+  return {
+    ...FRONTEND_TEST_CATALOG,
+    provenance: [...FRONTEND_TEST_CATALOG.provenance, providerBSource],
+    plans: [...FRONTEND_TEST_CATALOG.plans, providerBPlan],
+    modelOffers: [...FRONTEND_TEST_CATALOG.modelOffers, providerBOffer],
+  };
+}
+
 describe('responsive calculator app shell', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -27,6 +130,8 @@ describe('responsive calculator app shell', () => {
     window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
     respondWithCatalog();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it('keeps the TokenBench home showcase separate from calculator controls', () => {
     renderAt('/');
@@ -50,12 +155,118 @@ describe('responsive calculator app shell', () => {
   it('keeps the calculator controls and results on their dedicated route', async () => {
     renderAt('/tools/subscriptions-vs-apis/');
 
-    expect(screen.getByRole('heading', { name: 'Subscription vs. API cost calculator', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 1 })).toBeInTheDocument();
     expect(await screen.findByRole('group', { name: /Provider selection/i })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /Plan selection/i })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /Model selection/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Expected monthly usage/i)).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /Calculated plan value/i })).toBeInTheDocument();
+  });
+
+  it('presents the calculator as four guided steps and a plain-language result', async () => {
+    renderAt(calculatorPath());
+
+    expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Estimate the API-equivalent value of an AI subscription using the models, token volume, and input/output mix that match your workload.')).toBeInTheDocument();
+    expect(screen.getAllByText(/^Step [1-4]$/)).toHaveLength(4);
+    expect(screen.getByRole('heading', { name: 'Choose a provider and plan' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Choose the models you actually use' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Describe your monthly workload' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Review the recommendation' })).toBeInTheDocument();
+    const result = await calculatedResult();
+    expect(screen.getByText('Variable rolling entitlement · exact token capacity is not published.')).toBeInTheDocument();
+    expect(screen.getByText('Adjust model usage mix')).toBeInTheDocument();
+    expect(screen.getByText('For example, 10M tokens at a 50/50 input/output mix describes a balanced monthly workload.')).toBeInTheDocument();
+    expect(result).toHaveTextContent(/subscription|pay as you go/i);
+    expect(screen.getByRole('button', { name: 'Share result' })).toBeInTheDocument();
+  });
+
+  it.each<readonly [IneligibleCalculatorFixture]>([
+    ['rolling'],
+    ['guardrail'],
+    ['credits'],
+    ['unsupported-mix'],
+    ['no-plan'],
+  ])('does not call an ineligible %s subscription cheaper', async (fixture) => {
+    const catalog = calculatorFixture(fixture);
+    renderCalculator(catalog, calculatorPath({ planId: fixture === 'no-plan' ? '' : catalog.plans[0].id }));
+
+    expect(await calculatedResult())
+      .not.toHaveTextContent('Subscription is cheaper');
+  });
+
+  it.each<readonly [string, CatalogResponse, string]>([
+    ['a lower fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] }, 'Subscription is cheaper'],
+    ['an equal fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 50_000_000 })] }, 'Subscription and pay as you go cost the same'],
+    ['a more expensive fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 80_000_000 })] }, 'Pay as you go is cheaper'],
+    ['an entitlement without published capacity', calculatorFixture('rolling'), 'Unable to compare'],
+  ])('uses eligibility and savings to explain %s', async (_name, catalog, expectedRecommendation) => {
+    renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0]?.id ?? '' }));
+
+    expect(await calculatedResult())
+      .toHaveTextContent(expectedRecommendation);
+  });
+
+  it('hydrates shared state once, preserves the URL, and lets the visitor change provider afterward', async () => {
+    const pathname = calculatorPath({ planId: 'provider-a:fixed', inputShareBasisPoints: 8_000, monthlyTokens: 2_500_000 });
+    renderCalculator(twoProviderCatalog(), pathname);
+
+    await calculatedResult();
+    expect(screen.getByRole('radio', { name: /Fixed 10M/i })).toBeChecked();
+    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue('2,500,000');
+    expect(screen.getByLabelText(/Input share/i)).toHaveAttribute('aria-valuenow', '80');
+    expect(screen.getByRole('checkbox', { name: /Alpha Direct/i })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Alpha via OpenRouter/i })).not.toBeChecked();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Provider B' }));
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: /Provider B Fixed/i })).toBeChecked());
+    expect(screen.getByRole('checkbox', { name: /Beta Direct/i })).toBeChecked();
+    expect(`${window.location.pathname}${window.location.search}`).toBe(pathname);
+  });
+
+  it('canonicalizes recovered shared state once without selecting a replacement plan', async () => {
+    const recoveryPath = `${CALCULATOR_PATH}?${new URLSearchParams({
+      provider: 'provider-a',
+      plan: 'removed-plan',
+      models: `${selectedDirectOffer.id},removed-model`,
+      weights: '7000,3000',
+      input: '5000',
+      tokens: '1000000',
+      utm_source: 'test',
+    })}`;
+    renderCalculator(FRONTEND_TEST_CATALOG, recoveryPath);
+
+    await calculatedResult();
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}`)
+      .toBe(calculatorPath({ planId: '', monthlyTokens: 1_000_000 })));
+    expect(screen.getByRole('radio', { name: /Starter/i })).not.toBeChecked();
+    expect(screen.getByRole('region', { name: 'Calculated plan value' })).toHaveTextContent('Choose a subscription with published capacity');
+  });
+
+  it('shares the hydrated state without replacing the current address', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    const pathname = calculatorPath({ planId: 'provider-a:fixed', monthlyTokens: 2_500_000 });
+    renderCalculator(FRONTEND_TEST_CATALOG, pathname);
+
+    await calculatedResult();
+    fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}${pathname}`);
+    expect(`${window.location.pathname}${window.location.search}`).toBe(pathname);
+  });
+
+  it('focuses the calculated result from the persistent view-result action', async () => {
+    renderCalculator(FRONTEND_TEST_CATALOG);
+
+    const result = await calculatedResult();
+    const viewResult = document.querySelector<HTMLButtonElement>('.view-result-action');
+    if (!viewResult) throw new Error('Expected a persistent view-result action');
+    fireEvent.click(viewResult);
+
+    expect(result).toHaveFocus();
   });
 
   it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
