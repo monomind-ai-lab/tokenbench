@@ -3,6 +3,7 @@ import {
   type BenchmarkMetric,
   type BenchmarkModel,
   type BenchmarkPriceCheck,
+  type BenchmarkRevision,
   type BenchmarkSourceRecord,
   type ComparisonSeed,
   type NormalizedSourceBatch,
@@ -14,8 +15,34 @@ import {
   validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
+import {
+  buildBenchmarkSummaryData,
+  cachedLeaderboardPaginationProjection,
+  effectiveLeaderboardProfile,
+  leaderboardEvidenceReferences,
+  materializeLeaderboard,
+  supportsEstimatedLeaderboard,
+} from '../../../src/benchmarks/api-projections';
+import {
+  BENCHMARK_SUMMARY_CACHE_KEY,
+  benchmarkLeaderboardCacheKey,
+  benchmarkLeaderboardProjectionCacheKey,
+} from '../../../src/benchmarks/api-response-cache-keys';
+import { splitApiResponseBody } from '../../../src/cache/api-response-chunks';
 import { COMPARISON_ALLOWLIST } from '../../../src/benchmarks/comparison-allowlist';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
+import { LEADERBOARD_DEFINITIONS } from '../../../src/benchmarks/leaderboards';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/routes';
+import { WORKLOAD_PROFILES, type WorkloadProfile } from '../../../src/benchmarks/value';
+import {
+  attributionForAllSources,
+  attributionForEvidence,
+  benchmarkEnvelope,
+  encodeOpaqueValue,
+  etagForBenchmarkResponse,
+  freshnessFor,
+  type ActiveBenchmarkSnapshot,
+} from '../../../functions/_shared/benchmark-db';
 import {
   parseBenchLm,
   prepareBenchLmMixed,
@@ -150,13 +177,33 @@ const MAX_LMARENA_HUB_PARQUET_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_INFO_BYTES = 64 * 1024;
 const MAX_LITELLM_BYTES = 32 * 1024 * 1024;
 const MAX_LMARENA_PAGES_PER_SUBSET = 200;
-// D1's Worker Paid limit is 1,000 queries per invocation, including the three
-// pre-publication reads and a possible failure-state write. Keep the batch well
-// below that ceiling so a failed publication can still record its error.
+// Ingestion is deployed on Workers Paid (see wrangler.toml), whose D1 budget is
+// 1,000 queries per invocation. Keep headroom for the pre-publication reads and
+// a bounded failure-state write while allowing chunked scale-limit responses.
 const MAX_D1_PUBLICATION_STATEMENTS = 900;
 const MAX_D1_BOUND_PARAMETERS = 100;
 const MAX_D1_SQL_BYTES = 100 * 1024;
 const MAX_D1_JSON_PARAMETER_BYTES = 1_500_000;
+const BENCHMARK_API_RESPONSE_SCOPE = 'benchmarks' as const;
+const BENCHMARK_API_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1000;
+const BENCHMARK_LEADERBOARD_CACHE_LIMIT = 50;
+const MAX_API_RESPONSE_CHUNKS_PER_STATEMENT = 14;
+
+interface MaterializedBenchmarkApiResponse {
+  readonly cacheKey: string;
+  readonly etagFresh: string;
+  readonly etagStale: string;
+  readonly bodyFresh: string;
+  readonly bodyStale: string;
+}
+
+interface MaterializedBenchmarkApiResponseVariant {
+  readonly cacheKey: string;
+  readonly variant: 'fresh' | 'stale';
+  readonly chunkIndex: number;
+  readonly etag: string;
+  readonly body: string;
+}
 
 class RefreshFailure extends Error {
   constructor(
@@ -1520,6 +1567,261 @@ function refreshSuccessStatements(db: D1Database, sources: readonly BenchmarkSou
   return statements;
 }
 
+const UPSERT_API_RESPONSE_REVISION = `INSERT INTO api_response_revisions
+  (scope, revision, checked_at, published_at, created_at)
+  VALUES (?, ?, ?, ?, ?)
+  ON CONFLICT(scope, revision) DO UPDATE SET
+    checked_at = excluded.checked_at,
+    published_at = excluded.published_at,
+    created_at = excluded.created_at`;
+
+const UPSERT_API_RESPONSE_PUBLICATION = `INSERT INTO api_response_publication_state
+  (scope, active_revision, updated_at)
+  VALUES (?, ?, ?)
+  ON CONFLICT(scope) DO UPDATE SET
+    active_revision = excluded.active_revision,
+    updated_at = excluded.updated_at`;
+
+function snapshotForApiResponses(
+  revision: string,
+  generatedAt: string,
+  publishedAt: string,
+  checkedAt: string,
+  contentHash: string,
+  catalog: ActiveCatalogSource,
+  batch: NormalizedSourceBatch,
+  pairs: readonly BenchmarkComparisonPair[],
+): ActiveBenchmarkSnapshot {
+  const revisionRecord: BenchmarkRevision = {
+    revision,
+    generatedAt,
+    publishedAt,
+    checkedAt,
+    publicationState: 'published',
+    contentHash,
+    catalogRevision: catalog.revision,
+    openrouterContentHash: catalog.contentHash,
+  };
+  return {
+    revision: revisionRecord,
+    sources: batch.sources.slice().sort((left, right) => binaryCompare(left.sourceId, right.sourceId)
+      || binaryCompare(left.artifactId, right.artifactId)),
+    models: batch.models.slice().sort((left, right) => binaryCompare(left.slug, right.slug)
+      || binaryCompare(left.modelKey, right.modelKey)),
+    metrics: batch.metrics.slice().sort((left, right) => binaryCompare(left.modelKey, right.modelKey)
+      || binaryCompare(left.metricKey, right.metricKey)),
+    priceChecks: batch.priceChecks.slice().sort((left, right) => binaryCompare(left.modelKey, right.modelKey)
+      || binaryCompare(left.sourceId, right.sourceId)
+      || binaryCompare(left.providerId, right.providerId)
+      || binaryCompare(left.routeId, right.routeId)),
+    comparisonPairs: pairs.slice().sort((left, right) => binaryCompare(left.pairSlug, right.pairSlug)),
+  };
+}
+
+function leaderboardCursorForCache(
+  revision: string,
+  key: LeaderboardKey,
+  profile: WorkloadProfile,
+  includeEstimated: boolean,
+  offset: number,
+): string {
+  return encodeOpaqueValue({
+    v: 1,
+    r: revision,
+    k: key,
+    p: profile,
+    l: BENCHMARK_LEADERBOARD_CACHE_LIMIT,
+    e: includeEstimated,
+    o: offset,
+  });
+}
+
+function materializedBenchmarkApiResponses(snapshot: ActiveBenchmarkSnapshot): readonly MaterializedBenchmarkApiResponse[] {
+  const checkedAtMs = Date.parse(snapshot.revision.checkedAt);
+  if (!Number.isFinite(checkedAtMs)) throw new Error('benchmark response cache requires an ISO checked_at timestamp');
+  const fresh = freshnessFor(snapshot.revision, checkedAtMs);
+  const stale = freshnessFor(snapshot.revision, checkedAtMs + BENCHMARK_API_FRESHNESS_WINDOW_MS + 1);
+  const materialized: MaterializedBenchmarkApiResponse[] = [];
+  const response = (
+    cacheKey: string,
+    parameters: unknown,
+    freshBody: unknown,
+    staleBody: unknown,
+  ): void => {
+    const bodyFresh = JSON.stringify(freshBody);
+    const bodyStale = JSON.stringify(staleBody);
+    if (bodyFresh === undefined || bodyStale === undefined) {
+      throw new Error(`benchmark response cache ${cacheKey} is not JSON serializable`);
+    }
+    materialized.push({
+      cacheKey,
+      etagFresh: etagForBenchmarkResponse(snapshot.revision, fresh, parameters),
+      etagStale: etagForBenchmarkResponse(snapshot.revision, stale, parameters),
+      bodyFresh,
+      bodyStale,
+    });
+  };
+
+  const summaryParameters = { endpoint: 'benchmarks' };
+  const summary = buildBenchmarkSummaryData(snapshot);
+  response(
+    BENCHMARK_SUMMARY_CACHE_KEY,
+    summaryParameters,
+    benchmarkEnvelope(snapshot, fresh, attributionForAllSources(snapshot), summary),
+    benchmarkEnvelope(snapshot, stale, attributionForAllSources(snapshot), summary),
+  );
+
+  const derived = new Map<string, ReturnType<typeof materializeLeaderboard>>();
+  const projected = new Set<string>();
+  const keys = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[]).slice().sort(binaryCompare);
+  const profiles = (Object.keys(WORKLOAD_PROFILES) as WorkloadProfile[]).slice().sort(binaryCompare);
+  for (const key of keys) {
+    const definition = LEADERBOARD_DEFINITIONS[key];
+    const estimatedVariants = supportsEstimatedLeaderboard(definition) ? [false, true] : [false];
+    for (const profile of profiles) {
+      for (const includeEstimated of estimatedVariants) {
+        const derivationProfile = effectiveLeaderboardProfile(key, profile);
+        const derivationKey = `${key}\u0000${derivationProfile}\u0000${includeEstimated ? '1' : '0'}`;
+        let leaderboard = derived.get(derivationKey);
+        if (!leaderboard) {
+          leaderboard = materializeLeaderboard(snapshot, key, derivationProfile, includeEstimated);
+          derived.set(derivationKey, leaderboard);
+        }
+        const projectionKey = benchmarkLeaderboardProjectionCacheKey({
+          key,
+          profile: derivationProfile,
+          includeEstimated,
+        });
+        if (!projected.has(projectionKey)) {
+          const projection = cachedLeaderboardPaginationProjection(snapshot, leaderboard);
+          response(
+            projectionKey,
+            {
+              endpoint: 'leaderboard-projection',
+              key,
+              profile: derivationProfile,
+              includeEstimated,
+            },
+            projection,
+            projection,
+          );
+          projected.add(projectionKey);
+        }
+        const entries = leaderboard.entries;
+        const pagedEntries = entries.slice(0, BENCHMARK_LEADERBOARD_CACHE_LIMIT);
+        const nextCursor = pagedEntries.length < entries.length
+          ? leaderboardCursorForCache(snapshot.revision.revision, key, profile, includeEstimated, pagedEntries.length)
+          : null;
+        const payload = {
+          ...leaderboard.leaderboard,
+          profile,
+          entries: pagedEntries,
+          pagination: {
+            limit: BENCHMARK_LEADERBOARD_CACHE_LIMIT,
+            total: entries.length,
+            nextCursor,
+          },
+        };
+        const parameters = {
+          endpoint: 'leaderboard',
+          key,
+          profile,
+          limit: BENCHMARK_LEADERBOARD_CACHE_LIMIT,
+          cursor: '',
+          includeEstimated,
+        };
+        const attribution = attributionForEvidence(
+          snapshot,
+          leaderboardEvidenceReferences(snapshot, leaderboard.leaderboard.definition, pagedEntries),
+        );
+        response(
+          benchmarkLeaderboardCacheKey({
+            key,
+            profile,
+            limit: BENCHMARK_LEADERBOARD_CACHE_LIMIT,
+            cursor: null,
+            includeEstimated,
+          }),
+          parameters,
+          benchmarkEnvelope(snapshot, fresh, attribution, payload),
+          benchmarkEnvelope(snapshot, stale, attribution, payload),
+        );
+      }
+    }
+  }
+  return materialized;
+}
+
+function appendMaterializedBenchmarkApiResponseStatements(
+  statements: BoundStatement[],
+  db: D1Database,
+  snapshot: ActiveBenchmarkSnapshot,
+  updatedAt: string,
+): void {
+  statements.push(boundedStatement(db, UPSERT_API_RESPONSE_REVISION, [
+    BENCHMARK_API_RESPONSE_SCOPE,
+    snapshot.revision.revision,
+    snapshot.revision.checkedAt,
+    snapshot.revision.publishedAt,
+    updatedAt,
+  ]));
+  statements.push(boundedStatement(db, 'DELETE FROM api_response_entries WHERE scope = ? AND revision = ?', [
+    BENCHMARK_API_RESPONSE_SCOPE,
+    snapshot.revision.revision,
+  ]));
+  const variants: MaterializedBenchmarkApiResponseVariant[] = materializedBenchmarkApiResponses(snapshot)
+    .flatMap((entry) => [
+      { cacheKey: entry.cacheKey, variant: 'fresh' as const, etag: entry.etagFresh, body: entry.bodyFresh },
+      { cacheKey: entry.cacheKey, variant: 'stale' as const, etag: entry.etagStale, body: entry.bodyStale },
+    ].flatMap((variant) => splitApiResponseBody(variant.body).map((body, chunkIndex) => ({
+      ...variant,
+      chunkIndex,
+      body,
+    }))));
+  for (let offset = 0; offset < variants.length; offset += MAX_API_RESPONSE_CHUNKS_PER_STATEMENT) {
+    const chunk = variants.slice(offset, offset + MAX_API_RESPONSE_CHUNKS_PER_STATEMENT);
+    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    statements.push(boundedStatement(db, `INSERT INTO api_response_entries
+      (scope, revision, cache_key, variant, chunk_index, etag, body)
+      VALUES ${placeholders}`, chunk.flatMap((entry) => [
+      BENCHMARK_API_RESPONSE_SCOPE,
+      snapshot.revision.revision,
+      entry.cacheKey,
+      entry.variant,
+      entry.chunkIndex,
+      entry.etag,
+      entry.body,
+    ])));
+  }
+}
+
+function benchmarkApiResponsePointerStatement(db: D1Database, revision: string, updatedAt: string): BoundStatement {
+  return boundedStatement(db, UPSERT_API_RESPONSE_PUBLICATION, [
+    BENCHMARK_API_RESPONSE_SCOPE,
+    revision,
+    updatedAt,
+  ]);
+}
+
+function benchmarkApiResponseRetentionStatements(db: D1Database): readonly BoundStatement[] {
+  const retainedRevisions = `SELECT revisions.revision
+    FROM api_response_revisions AS revisions
+    LEFT JOIN api_response_publication_state AS publication
+      ON publication.scope = revisions.scope
+    WHERE revisions.scope = ?
+    ORDER BY (revisions.revision = publication.active_revision) DESC,
+      revisions.created_at DESC,
+      revisions.revision DESC
+    LIMIT 2`;
+  return [
+    boundedStatement(db, `DELETE FROM api_response_revisions
+      WHERE scope = ? AND revision NOT IN (${retainedRevisions})`, [
+      BENCHMARK_API_RESPONSE_SCOPE,
+      BENCHMARK_API_RESPONSE_SCOPE,
+    ]),
+  ];
+}
+
 export function buildPublicationStatements(
   db: D1Database,
   revision: string,
@@ -1529,6 +1831,7 @@ export function buildPublicationStatements(
   catalog: ActiveCatalogSource,
   batch: NormalizedSourceBatch,
   pairs: readonly BenchmarkComparisonPair[],
+  materializeApiResponses = true,
 ): BoundStatement[] {
   const resolvePairSlug = createComparisonPairSlugResolver(batch.models);
   for (const value of pairs) {
@@ -1548,6 +1851,18 @@ export function buildPublicationStatements(
   statements.push(
     boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'superseded' WHERE publication_state = 'published'`, []),
     boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'published', published_at = ? WHERE revision = ?`, [checkedAt, revision]),
+  );
+  if (materializeApiResponses) {
+    const snapshot = snapshotForApiResponses(revision, generatedAt, checkedAt, checkedAt, contentHash, catalog, batch, pairs);
+    appendMaterializedBenchmarkApiResponseStatements(statements, db, snapshot, checkedAt);
+    // This pointer is intentionally written only after every fresh/stale
+    // projection row has been bounded and appended to the same transaction.
+    statements.push(
+      benchmarkApiResponsePointerStatement(db, revision, checkedAt),
+      ...benchmarkApiResponseRetentionStatements(db),
+    );
+  }
+  statements.push(
     boundedStatement(db, `INSERT INTO benchmark_publication_state (singleton, active_revision, updated_at) VALUES (1, ?, ?)
       ON CONFLICT(singleton) DO UPDATE SET active_revision = excluded.active_revision, updated_at = excluded.updated_at`, [revision, checkedAt]),
     ...refreshSuccessStatements(db, batch.sources, checkedAt, revision),
@@ -1607,10 +1922,26 @@ export async function refreshBenchmarkRevision(
     const revision = await revisionIdForContentHash(contentHash);
     const evidence = [...benchLm.evidence, ...liteLlm.evidence, ...pages.flatMap((page) => page.evidence)];
     if (active?.contentHash === contentHash && active.revision === revision) {
+      if (active.publishedAt === null) throw new Error('active benchmark revision is missing published_at');
       const unchangedStatements = [
         boundedStatement(env.CATALOG_DB, `UPDATE benchmark_revisions SET checked_at = ? WHERE revision = ?`, [checkedAt, active.revision]),
-        ...refreshSuccessStatements(env.CATALOG_DB, normalized.sources, checkedAt, active.revision),
       ];
+      const snapshot = snapshotForApiResponses(
+        active.revision,
+        active.generatedAt,
+        active.publishedAt,
+        checkedAt,
+        active.contentHash,
+        catalog,
+        normalized,
+        pairs,
+      );
+      appendMaterializedBenchmarkApiResponseStatements(unchangedStatements, env.CATALOG_DB, snapshot, checkedAt);
+      unchangedStatements.push(
+        benchmarkApiResponsePointerStatement(env.CATALOG_DB, active.revision, checkedAt),
+        ...benchmarkApiResponseRetentionStatements(env.CATALOG_DB),
+        ...refreshSuccessStatements(env.CATALOG_DB, normalized.sources, checkedAt, active.revision),
+      );
       if (unchangedStatements.length > MAX_D1_PUBLICATION_STATEMENTS) {
         throw new Error(`Unchanged benchmark refresh exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);
       }

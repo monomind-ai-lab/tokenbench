@@ -23,7 +23,7 @@ resource identifier without a reviewed configuration change. The authenticated
 operator must verify the deployed binding names before enabling or changing
 schedules.
 
-## Database migration
+## Database migrations
 
 The root migration sequence is append-only. Migration
 [../migrations/0004_benchmarks.sql](../migrations/0004_benchmarks.sql) adds the
@@ -39,10 +39,22 @@ production operator may apply the remote migration from the repository root:
 npx wrangler d1 migrations apply ai-plan-catalog --remote
 ~~~
 
-Before deploying benchmark code, record operator-approved evidence that
-0004_benchmarks.sql appears exactly once in the remote migration history. Do
-not attempt a destructive schema rollback. If a later correction is necessary,
-use an approved additive migration and preserve the original migration record.
+Migration [../migrations/0005_api_response_cache.sql](../migrations/0005_api_response_cache.sql)
+adds revisioned API-response bodies, atomic scope pointers, and targeted
+comparison indexes. Response bodies are split on Unicode boundaries below D1's
+row limit. Fresh and stale variants are written completely before the pointer
+moves; only the active and immediately previous cache revisions are retained.
+
+Before deploying changed Pages or ingestion code, record operator-approved
+evidence that both 0004_benchmarks.sql and 0005_api_response_cache.sql appear
+exactly once in remote migration history. Do not attempt a destructive schema
+rollback. If a later correction is necessary, use an approved additive
+migration and preserve the original migration record.
+
+Both ingestion Workers require Workers Paid for their scheduled publication
+query budget. This is separate from Pages request-time CPU: Pages APIs use raw
+materialized responses or bounded targeted readers so normal requests do not
+rebuild the full fact graph.
 
 ## Scheduled ingestion
 
@@ -52,6 +64,14 @@ use an approved additive migration and preserve the original migration record.
 | tokenbench-catalog-ingest | 30 */6 * * * | Refreshes the approved OpenCode Zen catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
 | tokenbench-catalog-ingest | 0 */3 * * * | Rotates the reviewed manual subscription manifest. | Unverified providers remain provenance-only. |
 | tokenbench-benchmark-ingest | 15 */12 * * * | Refreshes approved BenchLM, LMArena, LiteLLM, and catalog-correlated route evidence. | This Worker is scheduled-only; its fetch handler intentionally returns 405. |
+
+The automated OpenRouter and OpenCode source fetches remain at four runs per
+day. That cadence should be reduced only after observed rate limiting (notably
+HTTP 429), a provider policy change, or sustained source errors attributable to
+request frequency. Ordinary 5xx failures do not justify slowing the catalog.
+LMArena stays at two runs per day; if it becomes unstable, reduce its fetch
+concurrency before reducing freshness cadence. Manual-manifest rotations do not
+make external provider requests.
 
 There is no public HTTP endpoint for a benchmark refresh. A controlled refresh
 must use an authorized Cloudflare scheduling or dashboard mechanism, not a
@@ -88,6 +108,15 @@ Benchmark ingestion follows the same publication boundary:
 4. It records a failure in benchmark_refresh_state without replacing a previous
    published revision.
 
+Each successful publisher also materializes the public response layer. Catalog
+responses are keyed by the checked-in subscription-manifest revision and use a
+catalog-pointer compare-and-set so overlapping cron runs cannot move the cache
+backward. Benchmark publication materializes summary, default first pages, and
+complete ordered pagination projections in the same atomic batch as its
+revision. An unchanged refresh rebuilds freshness variants without changing the
+content revision. A failed fetch or materialization leaves the prior complete
+response pointer active.
+
 LMArena Dataset Viewer remains the primary transport. If it exhausts retries
 for a timeout, 408, 429, or 5xx response, the Worker may use the official Hub
 Parquet fallback pinned to one verified dataset commit. The fallback preserves
@@ -113,12 +142,14 @@ The browser reads published data through Pages APIs:
 | --- | --- |
 | GET /api/catalog | Active catalog revision and its response validators. |
 | GET /api/benchmarks | Benchmark summary, source availability, leaderboard availability, and compare-directory data for the active benchmark revision. |
-| GET /api/benchmarks/leaderboards/:key | A workload-profiled, paginated leaderboard with source attribution and ETag support. |
-| GET /api/benchmarks/models/:slug | Evidence, metrics, route pricing facts, and related comparison pairs for one known model. |
+| GET /api/benchmarks/leaderboards/:key | Raw materialized default page plus bounded materialized pagination for every valid limit and cursor, with source attribution and ETag support. |
+| GET /api/benchmarks/models/:slug | Targeted evidence, metrics, route pricing facts, and related comparison pairs for one known model. |
 | /compare/:pair/ | A Pages Function target for canonical, server-rendered comparison pages. Valid non-indexable pairs remain useful with noindex,follow; reverse pairs redirect and invalid pairs return 404. |
 | /sitemaps/comparisons.xml | A dynamic sitemap target containing only canonical, indexable comparison pairs. |
 
-The comparison route and dynamic sitemap are release dependencies, not evidence
+Catalog, summary, and leaderboard cache hits do not parse or validate the full
+published fact graph. Model, comparison, and sitemap requests use indexed,
+targeted D1 reads. The comparison route and dynamic sitemap are release dependencies, not evidence
 that a currently unchecked-out build is production-ready. They must be tested
 against the integrated Pages Function implementation before deployment. A
 matching If-None-Match header on a published benchmark API response must produce
@@ -130,7 +161,7 @@ matching If-None-Match header on a published benchmark API response must produce
    integrated tree.
 2. Obtain authorization to commit and push the validated release.
 3. Obtain separate authorization and target confirmation for the remote D1
-   migration; verify 0004_benchmarks.sql once.
+   migration; verify 0004_benchmarks.sql and 0005_api_response_cache.sql once.
 4. Deploy any changed ingestion Worker. For benchmark changes, run one approved
    controlled refresh and verify revision, source, R2, and refresh-state
    integrity before deploying Pages.

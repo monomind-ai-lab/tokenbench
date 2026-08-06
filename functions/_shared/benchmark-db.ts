@@ -2,6 +2,7 @@ import {
   BENCHMARK_SOURCE_IDS,
   compareUtf8Binary,
   createComparisonPairSlugResolver,
+  isComparisonPairRouteSafe,
   validateBenchmarkComparisonPair,
   validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
@@ -61,6 +62,11 @@ export interface ActiveBenchmarkSnapshot {
 export interface EvidenceReference {
   readonly sourceId: BenchmarkSourceId;
   readonly sourceArtifactId: string;
+}
+
+export interface IndexableComparisonSitemapEntry {
+  readonly pairSlug: string;
+  readonly publishedAt: string;
 }
 
 const ACTIVE_REVISION_QUERY = `
@@ -307,16 +313,451 @@ async function validateRevisionIntegrity(
   }
 }
 
+async function readActiveBenchmarkRevision(db: D1Database): Promise<BenchmarkRevision | null> {
+  const revisionRows = await all<unknown>(db, ACTIVE_REVISION_QUERY);
+  if (revisionRows.length === 0) return null;
+  if (revisionRows.length !== 1) fail('active benchmark revision query returned multiple rows');
+  return mapRevision(revisionRows[0]);
+}
+
+function sortedSources(sources: readonly BenchmarkSourceRecord[]): readonly BenchmarkSourceRecord[] {
+  return sources.slice().sort((left, right) => {
+    const sourceOrder = compareText(left.sourceId, right.sourceId);
+    return sourceOrder !== 0 ? sourceOrder : compareText(left.artifactId, right.artifactId);
+  });
+}
+
+function sortedModels(models: readonly BenchmarkModel[]): readonly BenchmarkModel[] {
+  return models.slice().sort((left, right) => compareText(left.slug, right.slug) || compareText(left.modelKey, right.modelKey));
+}
+
+function sortedMetrics(metrics: readonly BenchmarkMetric[]): readonly BenchmarkMetric[] {
+  return metrics.slice().sort((left, right) => compareText(left.modelKey, right.modelKey) || compareText(left.metricKey, right.metricKey));
+}
+
+function sortedPriceChecks(priceChecks: readonly BenchmarkPriceCheck[]): readonly BenchmarkPriceCheck[] {
+  return priceChecks.slice().sort((left, right) => compareText(left.modelKey, right.modelKey)
+    || compareText(left.sourceId, right.sourceId)
+    || compareText(left.providerId, right.providerId)
+    || compareText(left.routeId, right.routeId));
+}
+
+function sortedComparisonPairs(pairs: readonly BenchmarkComparisonPair[]): readonly BenchmarkComparisonPair[] {
+  return pairs.slice().sort((left, right) => compareText(left.pairSlug, right.pairSlug));
+}
+
+function uniqueEvidenceReferences(references: readonly EvidenceReference[]): readonly EvidenceReference[] {
+  const byIdentity = new Map<string, EvidenceReference>();
+  for (const reference of references) {
+    byIdentity.set(artifactIdentity(reference.sourceId, reference.sourceArtifactId), reference);
+  }
+  return [...byIdentity.values()].sort((left, right) => compareText(
+    artifactIdentity(left.sourceId, left.sourceArtifactId),
+    artifactIdentity(right.sourceId, right.sourceArtifactId),
+  ));
+}
+
+async function readSourcesForEvidence(
+  db: D1Database,
+  revision: string,
+  references: readonly EvidenceReference[],
+): Promise<readonly BenchmarkSourceRecord[]> {
+  const wanted = uniqueEvidenceReferences(references);
+  if (wanted.length === 0) return [];
+  const evidenceJson = JSON.stringify(wanted.map((reference) => ({
+    sourceId: reference.sourceId,
+    sourceArtifactId: reference.sourceArtifactId,
+  })));
+  const rows = await all<unknown>(
+    db,
+    `WITH revision_scope AS (
+      SELECT ? AS revision
+    ),
+    requested_evidence AS (
+      SELECT
+        json_extract(value, '$.sourceId') AS source_id,
+        json_extract(value, '$.sourceArtifactId') AS artifact_id
+      FROM json_each(?)
+    )
+    SELECT sources.*
+    FROM requested_evidence AS evidence
+    CROSS JOIN revision_scope
+    INNER JOIN benchmark_source_records AS sources
+      ON sources.revision = revision_scope.revision
+      AND sources.source_id = evidence.source_id
+      AND sources.artifact_id = evidence.artifact_id
+    `,
+    revision,
+    evidenceJson,
+  );
+  assertRevisionRows(rows, revision, 'targeted benchmark sources');
+  const wantedIdentities = new Set(wanted.map((reference) => artifactIdentity(reference.sourceId, reference.sourceArtifactId)));
+  const sourcesByIdentity = new Map<string, BenchmarkSourceRecord>();
+  for (const source of rows.map(mapSource)) {
+    const identity = artifactIdentity(source.sourceId, source.artifactId);
+    if (!wantedIdentities.has(identity)) continue;
+    if (sourcesByIdentity.has(identity)) fail('targeted benchmark evidence has duplicate source attribution');
+    sourcesByIdentity.set(identity, source);
+  }
+  if (sourcesByIdentity.size !== wantedIdentities.size) fail('targeted benchmark evidence is missing source attribution');
+  return sortedSources([...sourcesByIdentity.values()]);
+}
+
+function validateTargetedFacts(
+  sources: readonly BenchmarkSourceRecord[],
+  models: readonly BenchmarkModel[],
+  metrics: readonly BenchmarkMetric[],
+  priceChecks: readonly BenchmarkPriceCheck[],
+): void {
+  validateNormalizedSourceBatch({
+    sources: [...sources],
+    models: [...models],
+    metrics: [...metrics],
+    priceChecks: [...priceChecks],
+    comparisonSeeds: [],
+  });
+}
+
+function emptyTargetedSnapshot(revision: BenchmarkRevision): ActiveBenchmarkSnapshot {
+  return {
+    revision,
+    sources: [],
+    models: [],
+    metrics: [],
+    priceChecks: [],
+    comparisonPairs: [],
+  };
+}
+
+function modelEvidenceReferences(models: readonly BenchmarkModel[]): readonly EvidenceReference[] {
+  return models.map((model) => ({ sourceId: model.sourceId, sourceArtifactId: model.sourceArtifactId }));
+}
+
+function metricEvidenceReferences(metrics: readonly BenchmarkMetric[]): readonly EvidenceReference[] {
+  return metrics.map((metric) => ({ sourceId: metric.sourceId, sourceArtifactId: metric.sourceArtifactId }));
+}
+
+function priceEvidenceReferences(priceChecks: readonly BenchmarkPriceCheck[]): readonly EvidenceReference[] {
+  return priceChecks.map((priceCheck) => ({ sourceId: priceCheck.sourceId, sourceArtifactId: priceCheck.sourceArtifactId }));
+}
+
+/**
+ * Reads the single model detail route without materializing every active
+ * benchmark fact. Publication-time validation still guards the full revision;
+ * this reader validates only the evidence it is about to display.
+ */
+export async function readActiveBenchmarkModelSnapshot(
+  db: D1Database,
+  slug: string,
+): Promise<ActiveBenchmarkSnapshot | null> {
+  const activeRevision = await readActiveBenchmarkRevision(db);
+  if (!activeRevision) return null;
+  const revision = activeRevision.revision;
+  const modelRows = await all<unknown>(
+    db,
+    'SELECT * FROM benchmark_models WHERE revision = ? AND slug = ? LIMIT 2',
+    revision,
+    slug,
+  );
+  assertRevisionRows(modelRows, revision, 'targeted benchmark models');
+  const matchedModels = modelRows.map(mapModel).filter((model) => model.slug === slug);
+  if (matchedModels.length === 0) return emptyTargetedSnapshot(activeRevision);
+  if (matchedModels.length !== 1) fail('targeted benchmark model query returned duplicate slugs');
+  const model = matchedModels[0];
+
+  const [metricRows, priceRows, pairRows] = await Promise.all([
+    all<unknown>(db, 'SELECT * FROM benchmark_metrics WHERE revision = ? AND model_key = ?', revision, model.modelKey),
+    all<unknown>(db, 'SELECT * FROM benchmark_price_checks WHERE revision = ? AND model_key = ?', revision, model.modelKey),
+    all<unknown>(
+      db,
+      'SELECT * FROM benchmark_comparison_pairs WHERE revision = ? AND (model_a_key = ? OR model_b_key = ?)',
+      revision,
+      model.modelKey,
+      model.modelKey,
+    ),
+  ]);
+  assertRevisionRows(metricRows, revision, 'targeted benchmark metrics');
+  assertRevisionRows(priceRows, revision, 'targeted benchmark price checks');
+  assertRevisionRows(pairRows, revision, 'targeted benchmark comparison pairs');
+  const metrics = sortedMetrics(metricRows.map(mapMetric).filter((metric) => metric.modelKey === model.modelKey));
+  const priceChecks = sortedPriceChecks(priceRows.map(mapPriceCheck).filter((priceCheck) => priceCheck.modelKey === model.modelKey));
+  const comparisonPairs = sortedComparisonPairs(pairRows
+    .map(mapComparisonPair)
+    .filter((pair) => pair.modelAKey === model.modelKey || pair.modelBKey === model.modelKey));
+  comparisonPairs.forEach(validateBenchmarkComparisonPair);
+  const sources = await readSourcesForEvidence(db, revision, [
+    ...modelEvidenceReferences([model]),
+    ...metricEvidenceReferences(metrics),
+    ...priceEvidenceReferences(priceChecks),
+  ]);
+  validateTargetedFacts(sources, [model], metrics, priceChecks);
+  return {
+    revision: activeRevision,
+    sources,
+    models: [model],
+    metrics,
+    priceChecks,
+    comparisonPairs,
+  };
+}
+
+const MAX_COMPARISON_ROUTE_CANDIDATES = 64;
+
+function comparisonRouteCandidateSlugs(pairSlug: string): readonly string[] {
+  const candidates = new Set<string>();
+  let splitAt = pairSlug.indexOf('-vs-');
+  while (splitAt >= 0) {
+    const left = pairSlug.slice(0, splitAt);
+    const right = pairSlug.slice(splitAt + 4);
+    if (left.length > 0 && right.length > 0) {
+      candidates.add(left);
+      candidates.add(right);
+    }
+    if (candidates.size > MAX_COMPARISON_ROUTE_CANDIDATES) return [];
+    splitAt = pairSlug.indexOf('-vs-', splitAt + 1);
+  }
+  return [...candidates].sort(compareText);
+}
+
+function uniqueModels(models: readonly BenchmarkModel[]): readonly BenchmarkModel[] {
+  const byKey = new Map<string, BenchmarkModel>();
+  for (const model of models) byKey.set(model.modelKey, model);
+  return sortedModels([...byKey.values()]);
+}
+
+function validateTargetedComparisonPairs(
+  pairs: readonly BenchmarkComparisonPair[],
+  models: readonly BenchmarkModel[],
+): void {
+  const modelsByKey = new Map(models.map((model) => [model.modelKey, model]));
+  for (const pair of pairs) {
+    validateBenchmarkComparisonPair(pair);
+    const modelA = modelsByKey.get(pair.modelAKey);
+    const modelB = modelsByKey.get(pair.modelBKey);
+    if (!modelA || !modelB) fail(`targeted comparison pair ${pair.pairSlug} is missing its model evidence`);
+    if (pair.indexable && pair.pairSlug !== `${modelA.slug}-vs-${modelB.slug}`) {
+      fail(`targeted indexable comparison pair ${pair.pairSlug} is not canonical`);
+    }
+  }
+}
+
+/**
+ * Returns only the models that can resolve this route, the two displayed
+ * models' evidence, and at most six directly related comparison records.
+ */
+export async function readActiveComparisonSnapshot(
+  db: D1Database,
+  pairSlug: string,
+): Promise<ActiveBenchmarkSnapshot | null> {
+  const activeRevision = await readActiveBenchmarkRevision(db);
+  if (!activeRevision) return null;
+  const revision = activeRevision.revision;
+  const routeCandidates = comparisonRouteCandidateSlugs(pairSlug);
+  if (routeCandidates.length === 0) return emptyTargetedSnapshot(activeRevision);
+  const candidatePlaceholders = routeCandidates.map(() => '?').join(', ');
+  const candidateRows = await all<unknown>(
+    db,
+    `SELECT * FROM benchmark_models WHERE revision = ? AND slug IN (${candidatePlaceholders})`,
+    revision,
+    ...routeCandidates,
+  );
+  assertRevisionRows(candidateRows, revision, 'targeted comparison route models');
+  const candidateSlugs = new Set(routeCandidates);
+  const routeModels = uniqueModels(candidateRows.map(mapModel).filter((model) => candidateSlugs.has(model.slug)));
+  const resolvePairSlug = createComparisonPairSlugResolver(routeModels);
+  const resolved = resolvePairSlug(pairSlug);
+  if (!resolved) {
+    const sources = await readSourcesForEvidence(db, revision, modelEvidenceReferences(routeModels));
+    validateTargetedFacts(sources, routeModels, [], []);
+    return {
+      revision: activeRevision,
+      sources,
+      models: routeModels,
+      metrics: [],
+      priceChecks: [],
+      comparisonPairs: [],
+    };
+  }
+  const currentModelKeys = [resolved.modelA.modelKey, resolved.modelB.modelKey] as const;
+  const [metricRows, priceRows, currentPairRows, relatedPairRows] = await Promise.all([
+    all<unknown>(
+      db,
+      'SELECT * FROM benchmark_metrics WHERE revision = ? AND model_key IN (?, ?)',
+      revision,
+      ...currentModelKeys,
+    ),
+    all<unknown>(
+      db,
+      'SELECT * FROM benchmark_price_checks WHERE revision = ? AND model_key IN (?, ?)',
+      revision,
+      ...currentModelKeys,
+    ),
+    all<unknown>(
+      db,
+      'SELECT * FROM benchmark_comparison_pairs WHERE revision = ? AND pair_slug = ? AND model_a_key = ? AND model_b_key = ? LIMIT 1',
+      revision,
+      resolved.canonicalPairSlug,
+      resolved.modelA.modelKey,
+      resolved.modelB.modelKey,
+    ),
+    all<unknown>(
+      db,
+      `SELECT * FROM benchmark_comparison_pairs
+       WHERE revision = ?
+         AND indexable = 1
+         AND (model_a_key = ? OR model_b_key = ? OR model_a_key = ? OR model_b_key = ?)
+         AND NOT (model_a_key = ? AND model_b_key = ?)
+       ORDER BY CASE WHEN featured_rank IS NULL THEN 1 ELSE 0 END ASC, featured_rank ASC, pair_slug COLLATE BINARY ASC
+       LIMIT 6`,
+      revision,
+      resolved.modelA.modelKey,
+      resolved.modelA.modelKey,
+      resolved.modelB.modelKey,
+      resolved.modelB.modelKey,
+      resolved.modelA.modelKey,
+      resolved.modelB.modelKey,
+    ),
+  ]);
+  assertRevisionRows(metricRows, revision, 'targeted comparison metrics');
+  assertRevisionRows(priceRows, revision, 'targeted comparison price checks');
+  assertRevisionRows(currentPairRows, revision, 'targeted current comparison pair');
+  assertRevisionRows(relatedPairRows, revision, 'targeted related comparison pairs');
+  const metrics = sortedMetrics(metricRows.map(mapMetric).filter((metric) => currentModelKeys.includes(metric.modelKey)));
+  const priceChecks = sortedPriceChecks(priceRows.map(mapPriceCheck).filter((priceCheck) => currentModelKeys.includes(priceCheck.modelKey)));
+  const currentPairs = currentPairRows
+    .map(mapComparisonPair)
+    .filter((pair) => pair.pairSlug === resolved.canonicalPairSlug
+      && pair.modelAKey === resolved.modelA.modelKey
+      && pair.modelBKey === resolved.modelB.modelKey);
+  if (currentPairs.length > 1) fail('targeted current comparison pair query returned multiple records');
+  const relatedPairs = relatedPairRows
+    .map(mapComparisonPair)
+    .filter((pair) => pair.indexable
+      && (pair.modelAKey === resolved.modelA.modelKey
+        || pair.modelBKey === resolved.modelA.modelKey
+        || pair.modelAKey === resolved.modelB.modelKey
+        || pair.modelBKey === resolved.modelB.modelKey)
+      && !(pair.modelAKey === resolved.modelA.modelKey && pair.modelBKey === resolved.modelB.modelKey));
+  const relatedModelKeys = [...new Set(relatedPairs.flatMap((pair) => [pair.modelAKey, pair.modelBKey]))]
+    .filter((modelKey) => !currentModelKeys.includes(modelKey));
+  const relatedModelRows = relatedModelKeys.length === 0
+    ? []
+    : await all<unknown>(
+      db,
+      `SELECT * FROM benchmark_models WHERE revision = ? AND model_key IN (${relatedModelKeys.map(() => '?').join(', ')})`,
+      revision,
+      ...relatedModelKeys,
+    );
+  assertRevisionRows(relatedModelRows, revision, 'targeted related comparison models');
+  const relatedModelKeySet = new Set(relatedModelKeys);
+  const relatedModels = relatedModelRows.map(mapModel).filter((model) => relatedModelKeySet.has(model.modelKey));
+  if (relatedModels.length !== relatedModelKeys.length) fail('targeted related comparison is missing a model');
+  const models = uniqueModels([...routeModels, ...relatedModels]);
+  const comparisonPairs = sortedComparisonPairs([...currentPairs, ...relatedPairs]);
+  validateTargetedComparisonPairs(comparisonPairs, models);
+  const sources = await readSourcesForEvidence(db, revision, [
+    ...modelEvidenceReferences(models),
+    ...metricEvidenceReferences(metrics),
+    ...priceEvidenceReferences(priceChecks),
+  ]);
+  validateTargetedFacts(sources, models, metrics, priceChecks);
+  return {
+    revision: activeRevision,
+    sources,
+    models,
+    metrics,
+    priceChecks,
+    comparisonPairs,
+  };
+}
+
+/** Reads the dynamic sitemap in one bounded publication-pointer query. */
+export async function readActiveIndexableComparisonSitemapEntries(
+  db: D1Database,
+): Promise<readonly IndexableComparisonSitemapEntry[]> {
+  const rows = await all<unknown>(db, `
+    WITH RECURSIVE
+      active_pairs AS (
+        SELECT pairs.revision, pairs.pair_slug, pairs.model_a_key, pairs.model_b_key, revisions.published_at
+        FROM benchmark_publication_state AS publication
+        INNER JOIN benchmark_revisions AS revisions
+          ON revisions.revision = publication.active_revision
+        INNER JOIN benchmark_comparison_pairs AS pairs
+          ON pairs.revision = revisions.revision
+        WHERE publication.singleton = 1
+          AND revisions.publication_state = 'published'
+          AND pairs.indexable = 1
+      ),
+      separators(revision, pair_slug, split_at) AS (
+        SELECT revision, pair_slug, instr(pair_slug, '-vs-')
+        FROM active_pairs
+        UNION ALL
+        SELECT revision, pair_slug,
+          CASE
+            WHEN instr(substr(pair_slug, split_at + 4), '-vs-') = 0 THEN 0
+            ELSE split_at + 3 + instr(substr(pair_slug, split_at + 4), '-vs-')
+          END
+        FROM separators
+        WHERE split_at > 0
+      ),
+      route_resolutions AS (
+        SELECT separators.revision, separators.pair_slug, COUNT(*) AS resolved_count
+        FROM separators
+        INNER JOIN benchmark_models AS left_model
+          ON left_model.revision = separators.revision
+          AND left_model.slug = substr(separators.pair_slug, 1, separators.split_at - 1)
+        INNER JOIN benchmark_models AS right_model
+          ON right_model.revision = separators.revision
+          AND right_model.slug = substr(separators.pair_slug, separators.split_at + 4)
+        WHERE separators.split_at > 0
+          AND left_model.model_key <> right_model.model_key
+        GROUP BY separators.revision, separators.pair_slug
+      )
+    SELECT active_pairs.pair_slug,
+      active_pairs.published_at,
+      active_pairs.model_a_key,
+      active_pairs.model_b_key,
+      model_a.slug AS model_a_slug,
+      model_b.slug AS model_b_slug,
+      COALESCE(route_resolutions.resolved_count, 0) AS resolved_count
+    FROM active_pairs
+    LEFT JOIN benchmark_models AS model_a
+      ON model_a.revision = active_pairs.revision AND model_a.model_key = active_pairs.model_a_key
+    LEFT JOIN benchmark_models AS model_b
+      ON model_b.revision = active_pairs.revision AND model_b.model_key = active_pairs.model_b_key
+    LEFT JOIN route_resolutions
+      ON route_resolutions.revision = active_pairs.revision AND route_resolutions.pair_slug = active_pairs.pair_slug
+    ORDER BY active_pairs.pair_slug COLLATE BINARY ASC
+  `);
+  const entries = rows.map((value, index) => {
+    const row = asRecord(value, `targeted comparison sitemap entry[${index}]`);
+    const pairSlug = requireNonBlankString(row.pair_slug, `targeted comparison sitemap entry[${index}].pair_slug`);
+    if (!isComparisonPairRouteSafe(pairSlug)) fail(`targeted comparison sitemap entry ${pairSlug} is not route-safe`);
+    const modelAKey = requireNonBlankString(row.model_a_key, `targeted comparison sitemap entry[${index}].model_a_key`);
+    const modelBKey = requireNonBlankString(row.model_b_key, `targeted comparison sitemap entry[${index}].model_b_key`);
+    const modelASlug = requireNonBlankString(row.model_a_slug, `targeted comparison sitemap entry[${index}].model_a_slug`);
+    const modelBSlug = requireNonBlankString(row.model_b_slug, `targeted comparison sitemap entry[${index}].model_b_slug`);
+    if (compareUtf8Binary(modelAKey, modelBKey) >= 0
+      || pairSlug !== `${modelASlug}-vs-${modelBSlug}`
+      || row.resolved_count !== 1) {
+      fail(`targeted comparison sitemap entry ${pairSlug} is not a unique canonical route`);
+    }
+    return {
+      pairSlug,
+      publishedAt: requireTimestamp(row.published_at, `targeted comparison sitemap entry[${index}].published_at`),
+    } satisfies IndexableComparisonSitemapEntry;
+  });
+  return entries.sort((left, right) => compareText(left.pairSlug, right.pairSlug));
+}
+
 /**
  * Reads exactly the revision selected by benchmark_publication_state. There is
  * deliberately no newest-revision fallback: an incomplete or unpublished
  * revision is never safe to expose.
  */
 export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<ActiveBenchmarkSnapshot | null> {
-  const revisionRows = await all<unknown>(db, ACTIVE_REVISION_QUERY);
-  if (revisionRows.length === 0) return null;
-  if (revisionRows.length !== 1) fail('active benchmark revision query returned multiple rows');
-  const activeRevision = mapRevision(revisionRows[0]);
+  const activeRevision = await readActiveBenchmarkRevision(db);
+  if (!activeRevision) return null;
   const revision = activeRevision.revision;
 
   const [sourceRows, modelRows, metricRows, priceRows, pairRows] = await Promise.all([
@@ -361,17 +802,11 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
 
   return {
     revision: activeRevision,
-    sources: sources.slice().sort((left, right) => {
-      const sourceOrder = compareText(left.sourceId, right.sourceId);
-      return sourceOrder !== 0 ? sourceOrder : compareText(left.artifactId, right.artifactId);
-    }),
-    models: models.slice().sort((left, right) => compareText(left.slug, right.slug) || compareText(left.modelKey, right.modelKey)),
-    metrics: metrics.slice().sort((left, right) => compareText(left.modelKey, right.modelKey) || compareText(left.metricKey, right.metricKey)),
-    priceChecks: priceChecks.slice().sort((left, right) => compareText(left.modelKey, right.modelKey)
-      || compareText(left.sourceId, right.sourceId)
-      || compareText(left.providerId, right.providerId)
-      || compareText(left.routeId, right.routeId)),
-    comparisonPairs: comparisonPairs.slice().sort((left, right) => compareText(left.pairSlug, right.pairSlug)),
+    sources: sortedSources(sources),
+    models: sortedModels(models),
+    metrics: sortedMetrics(metrics),
+    priceChecks: sortedPriceChecks(priceChecks),
+    comparisonPairs: sortedComparisonPairs(comparisonPairs),
   };
 }
 

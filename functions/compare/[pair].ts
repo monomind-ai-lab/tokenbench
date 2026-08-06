@@ -27,7 +27,7 @@ import { SITE_CONFIG } from '../../src/brand/site-config';
 import { escapeHtmlAttribute, escapeHtmlText, isHttpsUrl, serializeJsonForScript } from '../_shared/html';
 import {
   freshnessFor,
-  readActiveBenchmarkSnapshot,
+  readActiveComparisonSnapshot,
   type ActiveBenchmarkSnapshot,
   type BenchmarkApiEnv,
 } from '../_shared/benchmark-db';
@@ -360,7 +360,7 @@ export async function onRequestGet({
   if (!env.CATALOG_DB) return unavailableResponse();
 
   try {
-    const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
+    const snapshot = await readActiveComparisonSnapshot(env.CATALOG_DB, requested.pairSlug);
     if (!snapshot) return unavailableResponse();
     const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
     const resolved = resolvePair(resolvePairSlug, requested.pairSlug);

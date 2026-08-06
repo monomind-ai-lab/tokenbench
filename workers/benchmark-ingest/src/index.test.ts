@@ -21,6 +21,16 @@ interface RecordedStatement {
   values: unknown[];
 }
 
+interface ApiResponseCacheChunk {
+  scope: string;
+  revision: string;
+  cacheKey: string;
+  variant: 'fresh' | 'stale';
+  chunkIndex: number;
+  etag: string;
+  body: string;
+}
+
 interface SourceRow {
   sourceId: string;
   artifactId: string;
@@ -503,6 +513,43 @@ function jsonRowsFor(statements: readonly { sql: string; values: unknown[] }[], 
     .flatMap((statement) => JSON.parse(String(statement.values.at(-1))) as Record<string, unknown>[]);
 }
 
+function apiResponseCacheChunks(statements: readonly RecordedStatement[]): readonly ApiResponseCacheChunk[] {
+  return statements
+    .filter((statement) => statement.sql.includes('INSERT INTO api_response_entries'))
+    .flatMap((statement) => {
+      if (statement.values.length % 7 !== 0) throw new Error('cache entry statement must contain seven values per row');
+      return Array.from({ length: statement.values.length / 7 }, (_, index) => {
+        const values = statement.values.slice(index * 7, index * 7 + 7);
+        return {
+          scope: String(values[0]),
+          revision: String(values[1]),
+          cacheKey: String(values[2]),
+          variant: values[3] as ApiResponseCacheChunk['variant'],
+          chunkIndex: Number(values[4]),
+          etag: String(values[5]),
+          body: String(values[6]),
+        };
+      });
+    });
+}
+
+function joinedCachedResponse(
+  chunks: readonly ApiResponseCacheChunk[],
+  cacheKey: string,
+  variant: ApiResponseCacheChunk['variant'],
+): { etag: string; body: string } {
+  const responseChunks = chunks
+    .filter((chunk) => chunk.scope === 'benchmarks' && chunk.cacheKey === cacheKey && chunk.variant === variant)
+    .slice()
+    .sort((left, right) => left.chunkIndex - right.chunkIndex);
+  if (responseChunks.length === 0) throw new Error(`missing ${cacheKey}/${variant} cache response`);
+  const etag = responseChunks[0].etag;
+  responseChunks.forEach((chunk, index) => {
+    if (chunk.chunkIndex !== index || chunk.etag !== etag) throw new Error(`invalid ${cacheKey}/${variant} cache chunks`);
+  });
+  return { etag, body: responseChunks.map((chunk) => chunk.body).join('') };
+}
+
 describe('atomic benchmark ingestion', () => {
   it('publishes complete Hub-Parquet overall snapshots after exhausted transient Dataset Viewer failures', async () => {
     const { env, db, r2 } = seededEnvironment();
@@ -864,6 +911,57 @@ describe('atomic benchmark ingestion', () => {
       expect(snapshot?.customMetadata.original_content_hash).toBe(source.originalContentHash);
     }
     expect(sourceRows.some((source) => source.contentHash !== source.originalContentHash)).toBe(true);
+  });
+
+  it('materializes fresh and stale benchmark API responses before moving the response-cache pointer', async () => {
+    const { env, db } = seededEnvironment();
+
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);
+
+    expect(result).toMatchObject({ status: 'published', revision: expect.any(String) });
+    const chunks = apiResponseCacheChunks(db.state.publicationStatements);
+    const summaryFresh = joinedCachedResponse(chunks, 'summary', 'fresh');
+    const summaryStale = joinedCachedResponse(chunks, 'summary', 'stale');
+    const overallFresh = joinedCachedResponse(chunks, 'leaderboard:llm-overall:balanced:50::0', 'fresh');
+    const estimatedFresh = joinedCachedResponse(chunks, 'leaderboard:llm-overall:balanced:50::1', 'fresh');
+    const paginationProjection = joinedCachedResponse(
+      chunks,
+      'leaderboard-projection:llm-overall:balanced:0',
+      'fresh',
+    );
+
+    expect(JSON.parse(summaryFresh.body)).toMatchObject({
+      revision: result.revision,
+      freshness: { status: 'fresh', checkedAt: observedAt },
+      data: { compareDirectory: expect.any(Object) },
+    });
+    expect(JSON.parse(summaryStale.body)).toMatchObject({
+      revision: result.revision,
+      freshness: { status: 'stale', checkedAt: observedAt, message: 'Published benchmark revision has not refreshed within 36 hours.' },
+    });
+    expect(JSON.parse(overallFresh.body)).toMatchObject({
+      data: { key: 'llm-overall', profile: 'balanced', pagination: { limit: 50 } },
+    });
+    expect(JSON.parse(estimatedFresh.body)).toMatchObject({
+      data: { key: 'llm-overall', profile: 'balanced', pagination: { limit: 50 } },
+    });
+    expect(JSON.parse(paginationProjection.body)).toMatchObject({
+      revision: { revision: result.revision },
+      leaderboard: { profile: 'balanced' },
+      entries: expect.any(Array),
+    });
+    expect(summaryFresh.etag).not.toBe(summaryStale.etag);
+    expect(db.state.publicationStatements
+      .filter((statement) => statement.sql.includes('INSERT INTO api_response_entries'))
+      .every((statement) => statement.values.length <= 100)).toBe(true);
+
+    const finalEntryIndex = Math.max(...db.state.publicationStatements
+      .map((statement, index) => statement.sql.includes('INSERT INTO api_response_entries') ? index : -1));
+    const cachePointerIndex = db.state.publicationStatements
+      .findIndex((statement) => statement.sql.includes('api_response_publication_state'));
+    expect(cachePointerIndex).toBeGreaterThan(finalEntryIndex);
+    expect(db.state.publicationStatements.filter((statement) => statement.sql.includes('DELETE FROM api_response_')))
+      .toHaveLength(2);
   });
 
   it('leaves a failed publication batch invisible while allowing immutable R2 orphan evidence', async () => {
@@ -1448,6 +1546,13 @@ describe('atomic benchmark ingestion', () => {
     const sources = db.state.sourceRows.get(result.revision as string) ?? [];
     expect(sources.filter((source) => source.sourceId === 'lmarena'
       && source.artifactId.startsWith('text_style_control:'))).toHaveLength(200);
+    const summaryChunks = apiResponseCacheChunks(db.state.publicationStatements)
+      .filter((chunk) => chunk.cacheKey === 'summary' && chunk.variant === 'fresh');
+    expect(summaryChunks.length).toBeGreaterThan(1);
+    expect(JSON.parse(joinedCachedResponse(summaryChunks, 'summary', 'fresh').body)).toMatchObject({
+      revision: result.revision,
+      data: { compareDirectory: { models: expect.any(Array) } },
+    });
   });
 
   it('preserves the active revision when a declared LMArena total has a missing required page', async () => {

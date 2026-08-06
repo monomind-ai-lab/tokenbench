@@ -176,16 +176,45 @@ function isExactLmArenaMetric(model: BenchmarkModel, metric: BenchmarkMetric, me
 
 function selectMetric(
   model: BenchmarkModel,
-  metrics: readonly BenchmarkMetric[],
+  metricsForModel: readonly BenchmarkMetric[],
   predicate: (metric: BenchmarkMetric) => boolean,
 ): BenchmarkMetric | null {
-  const matches = metrics.filter(predicate).slice().sort((left, right) => {
+  const matches = metricsForModel.filter(predicate).slice().sort((left, right) => {
     const updatedOrder = compareText(right.sourceUpdatedAt, left.sourceUpdatedAt);
     if (updatedOrder !== 0) return updatedOrder;
     const artifactOrder = compareText(left.sourceArtifactId, right.sourceArtifactId);
     return artifactOrder !== 0 ? artifactOrder : compareText(left.sourceModelId, right.sourceModelId);
   });
   return matches.find((metric) => metric.modelKey === model.modelKey) ?? null;
+}
+
+interface LeaderboardFactIndexes {
+  readonly metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>;
+  readonly pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>;
+}
+
+/**
+ * Keep public leaderboard semantics unchanged while avoiding a full metric or
+ * price scan for every candidate model. This is especially important when the
+ * ingestion worker materializes all first-page response variants at once.
+ */
+function indexLeaderboardFacts(
+  metrics: readonly BenchmarkMetric[],
+  prices: readonly BenchmarkPriceCheck[],
+): LeaderboardFactIndexes {
+  const metricsByModel = new Map<string, BenchmarkMetric[]>();
+  const pricesByModel = new Map<string, BenchmarkPriceCheck[]>();
+  for (const metric of metrics) {
+    const entries = metricsByModel.get(metric.modelKey);
+    if (entries) entries.push(metric);
+    else metricsByModel.set(metric.modelKey, [metric]);
+  }
+  for (const price of prices) {
+    const entries = pricesByModel.get(price.modelKey);
+    if (entries) entries.push(price);
+    else pricesByModel.set(price.modelKey, [price]);
+  }
+  return { metricsByModel, pricesByModel };
 }
 
 function sourceRank(metric: BenchmarkMetric | null): number | null {
@@ -272,14 +301,14 @@ export function sortLeaderboardEntries(
 function buildBenchLmLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
-  metrics: readonly BenchmarkMetric[],
+  metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
 ): readonly LeaderboardEntry[] {
   const metricKey = definition.metricKeys[0];
   const entries = models
     .slice()
     .sort(compareModels)
     .flatMap((model) => {
-      const metric = selectMetric(model, metrics, (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
+      const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
       return metric ? [makeEntry(model, metric)] : [];
     });
   return sortLeaderboardEntries(entries, definition.defaultSort);
@@ -288,14 +317,14 @@ function buildBenchLmLeaderboard(
 function buildLmArenaLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
-  metrics: readonly BenchmarkMetric[],
+  metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
 ): readonly LeaderboardEntry[] {
   const metricKey = definition.metricKeys[0];
   const entries = models
     .slice()
     .sort(compareModels)
     .flatMap((model) => {
-      const metric = selectMetric(model, metrics, (candidate) => isExactLmArenaMetric(model, candidate, metricKey));
+      const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isExactLmArenaMetric(model, candidate, metricKey));
       return metric ? [makeEntry(model, metric)] : [];
     });
   return sortLeaderboardEntries(entries, definition.defaultSort);
@@ -304,8 +333,8 @@ function buildLmArenaLeaderboard(
 function buildValueLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
-  metrics: readonly BenchmarkMetric[],
-  prices: readonly BenchmarkPriceCheck[],
+  metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
+  pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>,
   profile: WorkloadProfile,
 ): readonly LeaderboardEntry[] {
   const metricKey = definition.metricKeys[0];
@@ -313,9 +342,9 @@ function buildValueLeaderboard(
     .slice()
     .sort(compareModels)
     .flatMap((model) => {
-      const metric = selectMetric(model, metrics, (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
+      const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
       if (!metric) return [];
-      const hostedPrice = primaryHostedPriceForModel(model.modelKey, prices, profile);
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], profile);
       return hostedPrice
         ? [makeEntry(model, metric, [metric], hostedPrice.price, hostedPrice.blendedCostPerMillion)]
         : [];
@@ -338,7 +367,7 @@ function allowsPricingContext(model: BenchmarkModel): boolean {
 
 function buildPricingContextLeaderboard(
   models: readonly BenchmarkModel[],
-  prices: readonly BenchmarkPriceCheck[],
+  pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>,
   profile: WorkloadProfile,
 ): readonly LeaderboardEntry[] {
   const entries = models
@@ -346,7 +375,7 @@ function buildPricingContextLeaderboard(
     .sort(compareModels)
     .flatMap((model) => {
       if (!allowsPricingContext(model)) return [];
-      const hostedPrice = primaryHostedPriceForModel(model.modelKey, prices, profile);
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], profile);
       if (!hostedPrice) return [];
       return [makeEntry(model, null, [], hostedPrice.price, hostedPrice.blendedCostPerMillion)];
     });
@@ -355,13 +384,13 @@ function buildPricingContextLeaderboard(
 
 function metricForMultimodalLens(
   model: BenchmarkModel,
-  metrics: readonly BenchmarkMetric[],
+  metricsForModel: readonly BenchmarkMetric[],
   metricKey: string,
 ): BenchmarkMetric | null {
   if (metricKey === BENCHLM_MULTIMODAL) {
-    return selectMetric(model, metrics, (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
+    return selectMetric(model, metricsForModel, (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
   }
-  return selectMetric(model, metrics, (candidate) => isExactLmArenaMetric(model, candidate, metricKey));
+  return selectMetric(model, metricsForModel, (candidate) => isExactLmArenaMetric(model, candidate, metricKey));
 }
 
 function multimodalGroup(entry: LeaderboardEntry, metricKeys: readonly string[]): number {
@@ -373,14 +402,14 @@ function multimodalGroup(entry: LeaderboardEntry, metricKeys: readonly string[])
 function buildMultimodalLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
-  metrics: readonly BenchmarkMetric[],
+  metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
 ): readonly LeaderboardEntry[] {
   const entries = models
     .slice()
     .sort(compareModels)
     .flatMap((model) => {
       const lenses = definition.metricKeys
-        .map((metricKey) => metricForMultimodalLens(model, metrics, metricKey))
+        .map((metricKey) => metricForMultimodalLens(model, metricsByModel.get(model.modelKey) ?? [], metricKey))
         .filter((metric): metric is BenchmarkMetric => metric !== null);
       return lenses.length > 0 ? [makeEntry(model, lenses[0], lenses)] : [];
     });
@@ -416,23 +445,24 @@ export function buildLeaderboard(
 ): LeaderboardResult {
   if (!isWorkloadProfile(profile)) throw new RangeError('profile must be a supported workload profile');
   const definition = LEADERBOARD_DEFINITIONS[key];
+  const indexes = indexLeaderboardFacts(metrics, prices);
   let entries: readonly LeaderboardEntry[];
 
   switch (definition.kind) {
     case 'benchlm':
-      entries = buildBenchLmLeaderboard(definition, models, metrics);
+      entries = buildBenchLmLeaderboard(definition, models, indexes.metricsByModel);
       break;
     case 'lmarena':
-      entries = buildLmArenaLeaderboard(definition, models, metrics);
+      entries = buildLmArenaLeaderboard(definition, models, indexes.metricsByModel);
       break;
     case 'value':
-      entries = buildValueLeaderboard(definition, models, metrics, prices, profile);
+      entries = buildValueLeaderboard(definition, models, indexes.metricsByModel, indexes.pricesByModel, profile);
       break;
     case 'pricing-context':
-      entries = buildPricingContextLeaderboard(models, prices, profile);
+      entries = buildPricingContextLeaderboard(models, indexes.pricesByModel, profile);
       break;
     case 'multimodal':
-      entries = buildMultimodalLeaderboard(definition, models, metrics);
+      entries = buildMultimodalLeaderboard(definition, models, indexes.metricsByModel);
       break;
   }
 

@@ -2,6 +2,10 @@ name = "tokenbench-catalog-ingest"
 main = "src/index.ts"
 compatibility_date = "2026-08-03"
 
+# Catalog publication can write hundreds of model rows plus immutable API
+# response projections. Deploy this ingestion Worker on Workers Paid; Pages
+# request handlers remain optimized for the request-time CPU ceiling.
+
 [vars]
 AUTOMATED_SOURCE_IDS = "openrouter-models,opencode-zen"
 

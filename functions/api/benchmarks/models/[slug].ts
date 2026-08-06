@@ -7,7 +7,7 @@ import {
   matchesExactEtag,
   modelNotFoundBenchmarkResponse,
   notModifiedBenchmarkResponse,
-  readActiveBenchmarkSnapshot,
+  readActiveBenchmarkModelSnapshot,
   unavailableBenchmarkResponse,
   type BenchmarkApiEnv,
   type EvidenceReference,
@@ -29,7 +29,7 @@ export async function onRequestGet({
   if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
 
   try {
-    const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
+    const snapshot = await readActiveBenchmarkModelSnapshot(env.CATALOG_DB, params?.slug ?? '');
     if (!snapshot) return unavailableBenchmarkResponse();
     const freshness = freshnessFor(snapshot.revision, Date.now());
     const slug = params?.slug;

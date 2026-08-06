@@ -1,6 +1,12 @@
 import type { ModelOffer, PlanOffer, SourceProvenance } from '../../../src/catalog/contracts';
 import { buildManualSubscriptionSource as buildManifest, buildManualSubscriptionSources as buildManifests, MANUAL_SUBSCRIPTION_PROVIDER_IDS } from '../../../src/catalog/manual-manifests';
 import { validateCatalogResponse } from '../../../src/catalog/validation';
+import {
+  catalogApiCacheProjections,
+  mergeManualSubscriptionPlans,
+  readPublishedCatalog,
+} from '../../../functions/api/catalog';
+import { splitApiResponseBody } from '../../../src/cache/api-response-chunks';
 
 type BoundStatement = unknown;
 interface D1Database { prepare(sql: string): { bind(...values: unknown[]): BoundStatement }; batch(statements: BoundStatement[]): Promise<unknown> }
@@ -283,6 +289,92 @@ async function parseBoundedJsonResponse(response: Response, label: string): Prom
   }
 }
 
+function hasAll(statement: BoundStatement): statement is { all(): Promise<{ results: unknown[] }> } {
+  return Boolean(statement) && typeof statement === 'object'
+    && typeof (statement as { all?: unknown }).all === 'function';
+}
+
+/**
+ * Publish every catalog response body and then move one cache pointer. The
+ * response cache is deliberately a second transaction: if materialization
+ * fails after a catalog refresh, Pages keeps serving the previous complete
+ * cache revision instead of exposing a partial response set.
+ */
+export async function publishCatalogApiCache(db: D1Database, now: string): Promise<void> {
+  const probe = db.prepare('SELECT active_revision FROM catalog_publication_state WHERE singleton = 1').bind();
+  // Lightweight test doubles and older local schemas may not expose D1 reads.
+  // Production D1 always does; migration rollout can therefore remain safe.
+  if (!hasAll(probe)) return;
+
+  const catalog = await readPublishedCatalog(db as Parameters<typeof readPublishedCatalog>[0]);
+  if (!catalog) throw new Error('Cannot materialize catalog API cache without a published catalog');
+  const expectedCatalogRevision = catalog.revision;
+  const response = mergeManualSubscriptionPlans(catalog);
+  const projections = catalogApiCacheProjections(response);
+  if (projections.length === 0) throw new Error('Catalog API cache contains no projections');
+
+  const scope = 'catalog';
+  const revision = response.revision;
+  const statements: BoundStatement[] = [
+    db.prepare(`INSERT INTO api_response_revisions
+      (scope, revision, checked_at, published_at, created_at)
+      VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(scope, revision) DO UPDATE SET
+        checked_at = excluded.checked_at,
+        published_at = excluded.published_at,
+        created_at = excluded.created_at`).bind(
+      scope,
+      revision,
+      response.freshness.checkedAt,
+      response.publishedAt,
+      now,
+    ),
+    db.prepare('DELETE FROM api_response_entries WHERE scope = ? AND revision = ?').bind(scope, revision),
+  ];
+  const variants = projections.flatMap((projection) => ([
+    ['fresh', projection.etagFresh, projection.bodyFresh],
+    ['stale', projection.etagStale, projection.bodyStale],
+  ] as const).flatMap(([variant, etag, body]) => splitApiResponseBody(body).map((chunk, chunkIndex) => [
+    scope, revision, projection.cacheKey, variant, chunkIndex, etag, chunk,
+  ] as const)));
+  // D1 permits 100 bound parameters per query. Fourteen seven-column rows keep
+  // each statement under that ceiling and the ingestion Worker's query budget.
+  for (let offset = 0; offset < variants.length; offset += 14) {
+    const chunk = variants.slice(offset, offset + 14);
+    const placeholders = chunk.map(() => '(?, ?, ?, ?, ?, ?, ?)').join(', ');
+    statements.push(db.prepare(`INSERT INTO api_response_entries
+      (scope, revision, cache_key, variant, chunk_index, etag, body)
+      VALUES ${placeholders}`).bind(...chunk.flat()));
+  }
+  statements.push(db.prepare(`INSERT INTO api_response_publication_state
+    (scope, active_revision, updated_at)
+    SELECT ?, ?, ?
+    WHERE EXISTS (
+      SELECT 1 FROM catalog_publication_state
+      WHERE singleton = 1 AND active_revision = ?
+    )
+    ON CONFLICT(scope) DO UPDATE SET
+      active_revision = excluded.active_revision,
+      updated_at = excluded.updated_at
+    WHERE EXISTS (
+      SELECT 1 FROM catalog_publication_state
+      WHERE singleton = 1 AND active_revision = ?
+    )`).bind(scope, revision, now, expectedCatalogRevision, expectedCatalogRevision));
+  statements.push(db.prepare(`DELETE FROM api_response_revisions
+    WHERE scope = ? AND revision NOT IN (
+      SELECT revisions.revision
+      FROM api_response_revisions AS revisions
+      LEFT JOIN api_response_publication_state AS publication
+        ON publication.scope = revisions.scope
+      WHERE revisions.scope = ?
+      ORDER BY (revisions.revision = publication.active_revision) DESC,
+        revisions.created_at DESC,
+        revisions.revision DESC
+      LIMIT 2
+    )`).bind(scope, scope));
+  await db.batch(statements);
+}
+
 export async function publishValidatedSource({
   db, snapshots, source, rawPayload, originalPayloadBytes, now,
 }: {
@@ -332,6 +424,7 @@ export async function publishValidatedSource({
     db.prepare('INSERT INTO source_refresh_state (source_id, last_success_at, last_revision, last_error) VALUES (?, ?, ?, NULL) ON CONFLICT(source_id) DO UPDATE SET last_success_at = excluded.last_success_at, last_revision = excluded.last_revision, last_error = NULL').bind(source.source.id, now, revision),
   );
   await db.batch(statements);
+  await publishCatalogApiCache(db, now);
   return { revision, snapshotKey };
 }
 
