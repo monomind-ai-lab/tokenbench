@@ -12,9 +12,13 @@ import {
   type ComparisonPairSlugResolver,
 } from '../../src/benchmarks/contracts';
 import {
+  comparisonPriceRoutes,
+  comparisonPriceSourceArtifactIdentity,
+  defaultComparisonPriceRoute,
+} from '../../src/benchmarks/comparison-pricing';
+import {
   compareComparisonMethodologies,
   compareComparisonMetricRows,
-  compareComparisonPriceChecks,
   compareComparisonSources,
   compareRelatedComparisons,
   type ComparisonMethodology,
@@ -117,13 +121,18 @@ function metricRows(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): 
 }
 
 function priceChecks(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): readonly [ComparisonPriceChecks, ComparisonPriceChecks] {
-  const checksFor = (modelKey: string): ComparisonPriceChecks => ({
-    modelKey,
-    checks: snapshot.priceChecks
-      .filter((check) => check.modelKey === modelKey)
-      .slice()
-      .sort(compareComparisonPriceChecks),
-  });
+  const sourcesByArtifactId = new Map(snapshot.sources.map((source) => [
+    comparisonPriceSourceArtifactIdentity(source.sourceId, source.artifactId),
+    source,
+  ]));
+  const checksFor = (modelKey: string): ComparisonPriceChecks => {
+    const checks = comparisonPriceRoutes(modelKey, snapshot.priceChecks, sourcesByArtifactId);
+    return {
+      modelKey,
+      selectedRouteId: defaultComparisonPriceRoute(modelKey, checks, sourcesByArtifactId)?.routeId ?? null,
+      checks,
+    };
+  };
   return [checksFor(resolved.modelA.modelKey), checksFor(resolved.modelB.modelKey)];
 }
 

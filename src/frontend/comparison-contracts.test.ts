@@ -73,8 +73,8 @@ const viewModel = {
   ],
   metricRows: [],
   priceChecks: [
-    { modelKey: 'provider:model-a', checks: [] },
-    { modelKey: 'provider:model-b', checks: [] },
+    { modelKey: 'provider:model-a', selectedRouteId: null, checks: [] },
+    { modelKey: 'provider:model-b', selectedRouteId: null, checks: [] },
   ],
   attribution: [benchLmSource],
   indexable: false,
@@ -155,12 +155,13 @@ function orderedHydrationPayload(): Record<string, any> {
   payload.priceChecks = [
     {
       modelKey: modelA.modelKey,
+      selectedRouteId: 'route-a',
       checks: [
         priceCheckRecord(modelA, 'alpha-provider', 'route-a'),
         priceCheckRecord(modelA, 'beta-provider', 'route-b'),
       ],
     },
-    { modelKey: modelB.modelKey, checks: [] },
+    { modelKey: modelB.modelKey, selectedRouteId: null, checks: [] },
   ];
   payload.attribution = [benchLmSource, lmArenaSource, openRouterSource];
   payload.methodology = [
@@ -221,6 +222,18 @@ describe('comparison SSR hydration contract', () => {
     expect(parseComparisonViewModel({ ...viewModel, canonicalPath: '/compare/model-a-vs-model-b/' })).toBeNull();
     expect(parseComparisonViewModel({ ...viewModel, subscriptionMatch: { planId: 'invented' } })).toBeNull();
     expect(parseComparisonViewModel({ ...viewModel, freshness: { status: 'unknown', checkedAt: viewModel.freshness.checkedAt } })).toBeNull();
+  });
+
+  it('rejects a selected price route that is not present in its model route group', () => {
+    const malformed = JSON.parse(JSON.stringify(viewModel)) as Record<string, any>;
+    malformed.priceChecks[0] = {
+      modelKey: 'provider:model-a',
+      selectedRouteId: 'direct:missing',
+      checks: [priceCheckRecord(viewModel.models[0], 'provider', 'direct:model-a')],
+    };
+    malformed.attribution = [benchLmSource, openRouterSource];
+
+    expect(parseComparisonViewModel(malformed)).toBeNull();
   });
 
   it('rejects a metric or price record that does not exactly belong to its labelled model lens', () => {
@@ -293,6 +306,7 @@ describe('comparison SSR hydration contract', () => {
       inputUsdPerMillion: 1, cachedInputUsdPerMillion: null, outputUsdPerMillion: 4, contextWindowTokens: 128000,
       verificationStatus: 'primary', canonicalSlug: null, maxInputTokens: null, maxOutputTokens: null, inputModalities: null, outputModalities: null, supportedParameters: null,
     }];
+    populated.priceChecks[0].selectedRouteId = 'openrouter:model-a';
     populated.attribution = [benchLmSource, openRouterSource];
     populated.methodology = [{ sourceId: 'benchlm', methodology: 'benchlm_raw_composite' }];
 
@@ -373,6 +387,36 @@ describe('comparison SSR hydration contract', () => {
     reordered.priceChecks[0].checks.reverse();
 
     expect(parseComparisonViewModel(reordered)).toBeNull();
+  });
+
+  it('accepts price routes ordered by source observation and rejects their binary-order reversal', () => {
+    const payload = JSON.parse(JSON.stringify(viewModel)) as Record<string, any>;
+    const newest = {
+      ...priceCheckRecord(viewModel.models[0], 'provider', 'direct:z'),
+      sourceId: 'benchlm',
+      sourceArtifactId: 'direct-new',
+    };
+    const oldest = {
+      ...priceCheckRecord(viewModel.models[0], 'provider', 'direct:a'),
+      sourceId: 'benchlm',
+      sourceArtifactId: 'direct-old',
+    };
+    payload.priceChecks[0] = {
+      modelKey: viewModel.models[0].modelKey,
+      selectedRouteId: 'direct:z',
+      checks: [newest, oldest],
+    };
+    payload.attribution = [
+      benchLmSource,
+      { ...benchLmSource, artifactId: 'direct-new', observedAt: '2026-08-06T12:00:00.000Z' },
+      { ...benchLmSource, artifactId: 'direct-old', observedAt: '2026-08-04T12:00:00.000Z' },
+    ];
+
+    expect(parseComparisonViewModel(payload)).toEqual(payload);
+    expect(parseComparisonViewModel({
+      ...payload,
+      priceChecks: [{ ...payload.priceChecks[0], selectedRouteId: 'direct:a', checks: [oldest, newest] }, payload.priceChecks[1]],
+    })).toBeNull();
   });
 
   it('rejects duplicate price-check identities that the server never emits', () => {
@@ -489,8 +533,8 @@ describe('comparison SSR hydration contract', () => {
       models: [utf8First, utf16First],
       canonicalPath: '/compare/private-use-vs-astral',
       priceChecks: [
-        { modelKey: utf8First.modelKey, checks: [] },
-        { modelKey: utf16First.modelKey, checks: [] },
+        { ...viewModel.priceChecks[0], modelKey: utf8First.modelKey, checks: [] },
+        { ...viewModel.priceChecks[1], modelKey: utf16First.modelKey, checks: [] },
       ],
     };
 

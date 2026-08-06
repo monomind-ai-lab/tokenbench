@@ -95,7 +95,13 @@ const sources = [
   },
 ];
 
-function targetedD1() {
+function targetedD1({
+  priceRows = [price(alpha.model_key, alpha.source_model_id), price(beta.model_key, beta.source_model_id)],
+  sourceRows = sources,
+}: {
+  readonly priceRows?: readonly Record<string, unknown>[];
+  readonly sourceRows?: readonly Record<string, unknown>[];
+} = {}) {
   const queries: string[] = [];
   return {
     queries,
@@ -112,7 +118,7 @@ function targetedD1() {
                 return { results: [metric(alpha.model_key, alpha.source_model_id, 90), metric(beta.model_key, beta.source_model_id, 80)] };
               }
               if (sql.includes('benchmark_price_checks') && sql.includes('model_key IN')) {
-                return { results: [price(alpha.model_key, alpha.source_model_id), price(beta.model_key, beta.source_model_id)] };
+                return { results: [...priceRows] };
               }
               if (sql.includes('benchmark_comparison_pairs') && sql.includes('pair_slug = ?')) {
                 return { results: [{
@@ -127,7 +133,7 @@ function targetedD1() {
                 }] };
               }
               if (sql.includes('benchmark_comparison_pairs') && sql.includes('indexable = 1')) return { results: [] };
-              if (sql.includes('benchmark_source_records')) return { results: sources };
+              if (sql.includes('benchmark_source_records')) return { results: [...sourceRows] };
               throw new Error(`Comparison page read an unscoped fact set: ${sql}`);
             },
           };
@@ -149,5 +155,62 @@ describe('targeted comparison Pages Function', () => {
     expect(response.status).toBe(200);
     expect((await response.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Alpha vs Beta</h1>');
     expect(db.queries.some((sql) => sql === 'SELECT * FROM benchmark_models WHERE revision = ?')).toBe(false);
+  });
+
+  it('keeps direct and router records with the same artifact ID source-distinct', async () => {
+    const sharedArtifactId = 'shared-pricing';
+    const direct = {
+      ...price(alpha.model_key, alpha.source_model_id),
+      source_id: 'benchlm',
+      provider_id: 'provider',
+      route_id: 'direct:provider/alpha',
+      output_usd_per_million: null,
+      source_artifact_id: sharedArtifactId,
+    };
+    const routed = {
+      ...price(alpha.model_key, alpha.source_model_id),
+      source_artifact_id: sharedArtifactId,
+    };
+    const db = targetedD1({
+      priceRows: [direct, routed, price(beta.model_key, beta.source_model_id)],
+      sourceRows: [
+        ...sources,
+        {
+          ...sources[0],
+          artifact_id: sharedArtifactId,
+          source_url: 'https://provider.example/pricing',
+          observed_at: '2026-08-07T00:00:00.000Z',
+          snapshot_key: 'benchlm/direct-pricing.json',
+        },
+        {
+          ...sources[1],
+          artifact_id: sharedArtifactId,
+          observed_at: '2026-08-06T00:00:00.000Z',
+          snapshot_key: 'openrouter/shared-pricing.json',
+        },
+      ],
+    });
+
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.monomind.one/compare/alpha-vs-beta'),
+      env: { CATALOG_DB: db },
+      params: { pair: 'alpha-vs-beta' },
+    });
+    const html = await response.text();
+    const payload = html.match(/<script id="comparison-initial-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+    if (!payload) throw new Error('Expected comparison hydration payload');
+    const viewModel = JSON.parse(payload) as {
+      priceChecks: Array<{ modelKey: string; selectedRouteId: string | null; checks: Array<{ routeId: string; outputUsdPerMillion: number | null }> }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(viewModel.priceChecks[0]).toEqual({
+      modelKey: alpha.model_key,
+      selectedRouteId: 'direct:provider/alpha',
+      checks: [
+        expect.objectContaining({ routeId: 'direct:provider/alpha', outputUsdPerMillion: null }),
+        expect.objectContaining({ routeId: `openrouter:${alpha.source_model_id}` }),
+      ],
+    });
   });
 });

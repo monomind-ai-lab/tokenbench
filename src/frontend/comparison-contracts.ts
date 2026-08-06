@@ -9,6 +9,7 @@ import {
   type BenchmarkSourceRecord,
   type MetricUnit,
 } from '../benchmarks/contracts';
+import { comparisonPriceRoutes, comparisonPriceSourceArtifactIdentity } from '../benchmarks/comparison-pricing';
 export interface ComparisonMetricRow {
   readonly metricKey: string;
   readonly category: string;
@@ -23,6 +24,8 @@ export interface ComparisonMetricRow {
 
 export interface ComparisonPriceChecks {
   readonly modelKey: string;
+  /** Always present in the published SSR payload; null means no verified route is available. */
+  readonly selectedRouteId?: string | null;
   /** Route records retain all pricing and context fields from the active revision. */
   readonly checks: readonly BenchmarkPriceCheck[];
 }
@@ -452,6 +455,8 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
   if (!value.metricRows.every((row) => isMetricRow(row, models))) return null;
   if (!value.priceChecks.every((group, index) => isRecord(group)
     && group.modelKey === models[index].modelKey
+    && Object.prototype.hasOwnProperty.call(group, 'selectedRouteId')
+    && isNullableText(group.selectedRouteId)
     && Array.isArray(group.checks)
     && group.checks.every((check) => isPriceCheck(check) && check.modelKey === models[index].modelKey))) return null;
   if (!value.attribution.every(isSourceRecord)) return null;
@@ -462,8 +467,17 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
     || !isStrictlyOrdered(metricRows, compareComparisonMetricRows)
     || !exactAttribution(attribution, models, metricRows, priceChecks)
     || !isStrictlyOrdered(attribution, compareComparisonSources)) return null;
-  if (!priceChecks.every((group) => hasUniqueIdentities(group.checks, comparisonPriceCheckIdentity)
-    && isStrictlyOrdered(group.checks, compareComparisonPriceChecks))) return null;
+  const sourcesByArtifactId = new Map(attribution.map((source) => [
+    comparisonPriceSourceArtifactIdentity(source.sourceId, source.artifactId),
+    source,
+  ]));
+  if (!priceChecks.every((group) => {
+    const expectedRoutes = comparisonPriceRoutes(group.modelKey, group.checks, sourcesByArtifactId);
+    return hasUniqueIdentities(group.checks, comparisonPriceCheckIdentity)
+      && expectedRoutes.length === group.checks.length
+      && expectedRoutes.every((check, index) => check === group.checks[index])
+      && group.selectedRouteId === (group.checks[0]?.routeId ?? null);
+  })) return null;
   if (!value.methodology.every((item) => isRecord(item)
     && isSourceId(item.sourceId)
     && typeof item.methodology === 'string'

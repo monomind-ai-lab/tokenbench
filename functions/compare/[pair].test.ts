@@ -165,12 +165,14 @@ async function request(pairValue: string, pathname = `/compare/${pairValue}`, pa
 function initialViewModel(html: string): {
   relatedPairs: Array<{ pairSlug: string; modelA: BenchmarkModel; modelB: BenchmarkModel }>;
   attribution: Array<{ sourceId: string; artifactId: string }>;
+  priceChecks: Array<{ modelKey: string; selectedRouteId?: string | null; checks: BenchmarkPriceCheck[] }>;
 } {
   const payload = html.match(/<script id="comparison-initial-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
   if (!payload) throw new Error('Expected the comparison hydration payload');
   return JSON.parse(payload) as {
     relatedPairs: Array<{ pairSlug: string; modelA: BenchmarkModel; modelB: BenchmarkModel }>;
     attribution: Array<{ sourceId: string; artifactId: string }>;
+    priceChecks: Array<{ modelKey: string; selectedRouteId?: string | null; checks: BenchmarkPriceCheck[] }>;
   };
 }
 
@@ -370,6 +372,64 @@ describe('dynamic comparison Pages Function', () => {
     expect(response.status).toBe(200);
     expect(data.attribution.map(({ sourceId, artifactId }) => ({ sourceId, artifactId }))).toEqual([
       { sourceId: 'benchlm', artifactId: 'benchlm-models' },
+      { sourceId: 'openrouter', artifactId: 'openrouter-catalog' },
+    ]);
+  });
+
+  it('publishes every source-backed verified price route and selects a partial direct route', async () => {
+    const base = snapshot();
+    const direct = {
+      ...price('provider:alpha', 2, 8),
+      sourceId: 'benchlm' as const,
+      providerId: 'alpha-labs',
+      routeId: 'direct:alpha',
+      outputUsdPerMillion: null,
+      contextWindowTokens: 256_000,
+      maxInputTokens: 240_000,
+      maxOutputTokens: 16_000,
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      supportedParameters: ['tools', 'json_schema'],
+      sourceArtifactId: 'direct-pricing',
+    } satisfies BenchmarkPriceCheck;
+    const missingArtifact = {
+      ...direct,
+      routeId: 'direct:missing-artifact',
+      sourceArtifactId: 'missing-artifact',
+    } satisfies BenchmarkPriceCheck;
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({
+      sources: [...base.sources, source('benchlm', 'direct-pricing', 'https://alpha.example/pricing', 'Alpha pricing')],
+      priceChecks: [
+        price('provider:alpha', 2, 8),
+        direct,
+        missingArtifact,
+        price('provider:beta', 1, 4),
+      ],
+    }));
+
+    const response = await request('zeta-vs-alpha');
+    const data = initialViewModel(await response.text());
+    const alphaPrices = data.priceChecks.find((group) => group.modelKey === 'provider:alpha');
+
+    expect(response.status).toBe(200);
+    expect(alphaPrices).toMatchObject({ modelKey: 'provider:alpha', selectedRouteId: 'direct:alpha' });
+    expect(alphaPrices?.checks[0]).toMatchObject({
+      routeId: 'direct:alpha',
+      inputUsdPerMillion: 2,
+      cachedInputUsdPerMillion: null,
+      outputUsdPerMillion: null,
+      contextWindowTokens: 256_000,
+      maxInputTokens: 240_000,
+      maxOutputTokens: 16_000,
+      inputModalities: ['text', 'image'],
+      outputModalities: ['text'],
+      supportedParameters: ['tools', 'json_schema'],
+      verificationStatus: 'primary',
+    });
+    expect(alphaPrices?.checks.map((check) => check.routeId)).toEqual(['direct:alpha', 'openrouter:provider:alpha']);
+    expect(data.attribution.map(({ sourceId, artifactId }) => ({ sourceId, artifactId }))).toEqual([
+      { sourceId: 'benchlm', artifactId: 'benchlm-models' },
+      { sourceId: 'benchlm', artifactId: 'direct-pricing' },
       { sourceId: 'openrouter', artifactId: 'openrouter-catalog' },
     ]);
   });
