@@ -10,7 +10,7 @@ is not release evidence and was not changed by this audit.
 
 No external release action has been taken: the branch has not been pushed, the
 remote migration has not been applied, Workers and Pages have not been deployed,
-and no domain, redirect, controlled refresh, or production smoke operation has
+and no domain, hostname removal, controlled refresh, or production smoke operation has
 been performed. Those fields remain pending explicit authorization and observed
 production evidence.
 
@@ -19,8 +19,8 @@ different build, or copied dashboard data. Record only observed evidence from
 the committed release candidate and the approved production target.
 
 The canonical production origin is https://tokenbench.monomind.one. The legacy
-ai-plans.monomind.one hostname is retained only long enough to redirect each
-path and query to the canonical host with HTTP 301.
+ai-plans.monomind.one custom domain and its exact DNS record are removed during
+cutover; the underlying legacy Pages project is retained.
 
 ## Release inputs
 
@@ -142,15 +142,15 @@ record authorization for each operation below before it occurs.
 | Deploy benchmark Worker | Approval to change the named Worker, plus confirmation that its D1/R2 bindings target the approved resources. | Worker version, deployment output, and binding verification. | Pending |
 | Trigger controlled benchmark refresh | Approval to run a Cloudflare scheduled or dashboard trigger; never use the Worker fetch endpoint. | Trigger method/time, active revision, source records, R2 snapshot keys, and empty last_error values. | Pending |
 | Deploy Pages | Approval to publish the release candidate to the approved Pages project. | Deployment URL and released commit SHA. | Pending |
-| Attach canonical domain | Approval and zone access to attach tokenbench.monomind.one while preserving the legacy hostname for redirect. | Domain status and canonical-host verification. | Pending |
-| Create redirect rule | Approval and zone access to alter public routing. Rule must preserve path/query, return 301, and exclude preview and localhost hosts. | Rule configuration reference and old-host smoke result. | Pending |
+| Attach canonical domain | Approval and zone access to attach tokenbench.monomind.one. | Domain status and canonical-host verification. | Authorized 2026-08-06 |
+| Remove legacy hostname | Approval and zone access to detach only ai-plans.monomind.one and remove its exact DNS record while retaining the legacy Pages project. | Domain attachment, DNS, and old-host verification. | Authorized 2026-08-06 |
 | Production smoke | Approval to access the named production environment after deploy. | Timestamped HTTP/browser outcomes below. | Pending |
 | Record and push final evidence | Explicit Git authorization after real deployment evidence exists. | Final documentation commit SHA and push confirmation. | Pending |
 
 ## Authorized production sequence
 
 Only an authorized operator may perform this sequence. Stop if an expected
-check fails; do not continue to a domain change or public traffic redirect.
+check fails; do not continue to a domain change or hostname removal.
 
 1. Complete the local gate and both audit passes. Ensure no critical, high, or
    medium findings remain.
@@ -180,8 +180,8 @@ check fails; do not continue to a domain change or public traffic redirect.
    npx wrangler pages deploy dist --project-name tokenbench
    ~~~
 
-7. Attach the canonical domain and configure the approved legacy-host redirect.
-   Do not redirect preview or localhost hosts.
+7. Attach the canonical domain. Detach only the approved legacy custom domain
+   and remove its exact DNS record; retain the legacy Pages project.
 8. Execute and record the production smoke checklist. Push final evidence only
    after all reported values are observed.
 
@@ -199,7 +199,7 @@ authorized production deployment.
 | Unknown comparison model or invalid pair | HTTP 404. | Pending |
 | Fixed sitemap and comparison sitemap | HTTP 200 with XML; comparison sitemap contains only canonical indexable pairs. | Pending |
 | Benchmark API cache validation | First published response supplies ETag; a matching If-None-Match request returns HTTP 304. | Pending |
-| Legacy hostname | HTTP 301 to the equivalent tokenbench.monomind.one path and query. | Pending |
+| Legacy hostname | The custom-domain attachment and exact DNS record are absent; the legacy Pages project remains available at its pages.dev hostname. | Pending |
 | Browser network isolation | No upstream benchmark-provider request appears while using published benchmark UI. | Pending |
 | Accessibility and visual evidence | Route matrix and screenshot references are complete; zero unresolved critical/high/medium audit findings. | Pending |
 
@@ -225,7 +225,7 @@ Populate this table only with observed values from the approved release.
 ## Rollback and incident handling
 
 - Stop the rollout when the local gate, migration verification, controlled
-  refresh, binding check, domain attachment, redirect, or production smoke check
+  refresh, binding check, domain attachment, hostname removal, or production smoke check
   fails. Record the failure without replacing it with a planned outcome.
 - For a Pages regression, use the authorized Cloudflare rollback mechanism to
   return to the last known-good Pages deployment. Record the deployment selected
@@ -239,7 +239,7 @@ Populate this table only with observed values from the approved release.
 - D1 migrations are append-only. Do not attempt destructive rollback SQL; use a
   reviewed forward migration or restore procedure approved for the affected
   production resource.
-- A domain or redirect rollback changes public traffic and requires the same
+- A domain or hostname rollback changes public traffic and requires the same
   explicit Cloudflare authorization as the original change.
 
 After any rollback, record the observed state, scope the corrective change, run

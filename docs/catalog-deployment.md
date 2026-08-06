@@ -134,12 +134,13 @@ matching If-None-Match header on a published benchmark API response must produce
    npx wrangler pages deploy dist --project-name tokenbench
    ~~~
 
-6. With separate domain and redirect authorization, attach the canonical
-   TokenBench domain, retain the legacy hostname long enough to redirect, and
-   configure the approved path-and-query-preserving 301.
+6. With separate domain-change authorization, attach the canonical TokenBench
+   domain, detach only the approved legacy custom domain, and remove its exact
+   DNS record while retaining the legacy Pages project.
 7. Run the production smoke checks and record real results, deployment
    identifiers, and any rollback decision in the runbook.
 
 The canonical production origin is https://tokenbench.monomind.one. The legacy
-ai-plans.monomind.one hostname must redirect to the equivalent canonical path
-and query with HTTP 301; preview and localhost hosts must not be redirected.
+ai-plans.monomind.one custom domain and its exact DNS record must be absent after
+cutover; the underlying legacy Pages project remains available at its pages.dev
+hostname.
