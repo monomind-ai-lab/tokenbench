@@ -29,7 +29,7 @@ import type { WorkloadPreset } from './frontend/calculator-state';
 
 interface PageFrameProps {
   readonly children: ReactNode;
-  readonly activePage: SiteNavigationPage;
+  readonly activePage?: SiteNavigationPage;
   readonly skipLinkTarget?: string;
   readonly skipLinkLabel?: string;
   readonly catalogState?: CatalogState;
@@ -209,7 +209,7 @@ function CalculatorPage() {
           <div className="calculator-guided-layout">
             <CalculatorControls catalog={catalog} providerIds={providerIds} selectedProviderId={selectedProviderId} selectedPlanId={selectedPlanId} selectedModelIds={selection.selectedModelIds} modelMixBasisPoints={selection.modelMixBasisPoints} inputShareBasisPoints={inputShareBasisPoints} monthlyTokens={monthlyTokens} selectedPreset={selectedPreset} onProviderChange={handleProviderChange} onPlanChange={setSelectedPlanId} onModelToggle={handleModelToggle} onModelShareChange={handleModelShareChange} onInputShareChange={setInputShareBasisPoints} onMonthlyTokensChange={(value) => setMonthlyTokens(Math.max(0, Number.isFinite(value) ? value : 0))} onPresetChange={handlePresetChange} />
             <div className="calculator-guided-results">
-              <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} />
+              <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} hasAvailableModels={providerModels.length > 0} />
               {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" text={recommendation} url={`${location.origin}${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
             </div>
           </div>
@@ -226,7 +226,7 @@ function HomeRoute() {
 }
 
 function ToolsRoute() {
-  return <PageFrame activePage="calculator"><ToolsPage /></PageFrame>;
+  return <PageFrame><ToolsPage /></PageFrame>;
 }
 
 function BenchAlignMethodologyRoute() {

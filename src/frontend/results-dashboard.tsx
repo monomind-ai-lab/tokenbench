@@ -117,7 +117,7 @@ function TrendChart({ snapshot, showBreakEven }: TrendChartProps) {
   );
 }
 
-function ValueSummary({ selectedPlan, snapshot, recommendation }: ResultsDashboardProps & { readonly recommendation: ResultRecommendation }) {
+function ValueSummary({ selectedPlan, snapshot, recommendation }: Pick<ResultsDashboardProps, 'selectedPlan' | 'snapshot'> & { readonly recommendation: ResultRecommendation }) {
   const savings = recommendation.comparisonAvailable ? snapshot.estimatedMonthlySavingsMicroDollars : null;
   const savingsTone = savings === null || savings === 0 ? 'neutral' : savings > 0 ? 'positive' : 'negative';
 
@@ -165,14 +165,16 @@ function ValueSummary({ selectedPlan, snapshot, recommendation }: ResultsDashboa
   );
 }
 
-export function ResultsDashboard({ selectedPlan, snapshot }: ResultsDashboardProps) {
+export function ResultsDashboard({ selectedPlan, snapshot, hasAvailableModels }: ResultsDashboardProps) {
   const recommendation = resultRecommendation(selectedPlan, snapshot);
 
   return (
     <section id="calculator-result" className="results-panel" aria-label="Calculated plan value" tabIndex={-1}>
       <header className="calculator-step-heading"><span>Step 4</span><h2>Review the recommendation</h2></header>
       {snapshot.selectedOffers.length === 0 ? (
-        <EmptyState title="Select a verified model" description="Choose one or more models to calculate API-equivalent value, savings, breakeven, and the usage trend." />
+        hasAvailableModels
+          ? <EmptyState title="Select a verified model" description="Choose one or more models to calculate API-equivalent value, savings, breakeven, and the usage trend." />
+          : <EmptyState title="No verified models are available for this provider" description="Choose another provider or retry catalog refresh." />
       ) : (
         <div className="results-grid">
           <ValueSummary selectedPlan={selectedPlan} snapshot={snapshot} recommendation={recommendation} />

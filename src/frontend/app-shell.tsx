@@ -12,7 +12,7 @@ interface AppShellProps {
   readonly children: ReactNode;
   readonly theme: 'light' | 'dark';
   readonly language: string;
-  readonly activePage: SiteNavigationPage;
+  readonly activePage?: SiteNavigationPage;
   readonly skipLinkTarget?: string;
   readonly skipLinkLabel?: string;
   readonly onThemeToggle: () => void;
@@ -27,7 +27,7 @@ interface AppShellProps {
 interface SiteHeaderProps {
   readonly theme: 'light' | 'dark';
   readonly language: string;
-  readonly activePage: SiteNavigationPage;
+  readonly activePage?: SiteNavigationPage;
   readonly onThemeToggle: () => void;
   readonly onLanguageChange: (language: string) => void;
 }

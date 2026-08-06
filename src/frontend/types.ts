@@ -23,6 +23,7 @@ export interface CalculatorControlsProps {
 export interface ResultsDashboardProps {
   readonly selectedPlan?: PlanOffer;
   readonly snapshot: ReturnType<typeof import('./calculator-state').buildCalculatorSnapshot>;
+  readonly hasAvailableModels: boolean;
 }
 
 export interface EmptySelectionProps {

@@ -15,7 +15,7 @@ import { generateGuidePages } from './generate-guide-pages';
 
 function activeNavigation(route: AppRoute): StaticNavigationPage {
   switch (route.kind) {
-    case 'tools':
+    case 'tools': return undefined;
     case 'calculator': return 'calculator';
     case 'home': return 'home';
     case 'compareHub': return 'compare';

@@ -53,6 +53,26 @@ async function assertNoHorizontalOverflow(page: Page): Promise<void> {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
 }
 
+const INTERNAL_FIXTURE_REVISIONS = ['browser-benchmark-r1', 'browser-catalog-r1', 'test-revision'] as const;
+
+async function assertFirstViewportOmitsInternalRevisions(page: Page): Promise<void> {
+  const visibleText = await page.evaluate(() => {
+    const textNodes: string[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const parent = node.parentElement;
+      const text = node.textContent?.trim();
+      if (!parent || !text) continue;
+      const bounds = parent.getBoundingClientRect();
+      if (bounds.bottom > 0 && bounds.top < window.innerHeight) textNodes.push(text);
+    }
+    return textNodes.join(' ');
+  });
+
+  for (const revision of INTERNAL_FIXTURE_REVISIONS) expect(visibleText).not.toContain(revision);
+}
+
 async function installInteractiveRouteStubs(page: Page): Promise<void> {
   const origin = previewOrigin();
   await blockExternalRequests(page, origin);
@@ -169,6 +189,61 @@ async function activateSkipLinkAndAssertTarget(page: Page, targetId: string): Pr
 }
 
 test.describe('responsive calculator browser harness', () => {
+  test('calculator result explains how to recover when the selected provider has no verified models', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await openCalculator(page, { ...FRONTEND_TEST_CATALOG, modelOffers: [] }, 200, false);
+
+    await expect(page.getByText('No verified models for this provider')).toBeVisible({ timeout: 15_000 });
+    const result = page.getByRole('region', { name: 'Calculated plan value' });
+    await expect(result.getByText('No verified models are available for this provider')).toBeVisible();
+    await expect(result).toContainText('Choose another provider or retry catalog refresh.');
+  });
+
+  test('calculator keeps its four decisions, result actions, and provider fallback usable across target viewports and themes', async ({ page }) => {
+    test.setTimeout(120_000);
+
+    for (const width of [320, 375, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ['dark', 'light'] as const) {
+        await setStoredTheme(page, theme);
+        await openCalculator(page);
+
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+        for (const heading of [
+          'Choose a provider and plan',
+          'Choose the models you actually use',
+          'Describe your monthly workload',
+          'Review the recommendation',
+        ]) {
+          await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+        }
+
+        const shareAction = page.getByRole('button', { name: 'Share result', exact: true });
+        await expect(shareAction).toBeVisible();
+        const shareBounds = await shareAction.evaluate((element) => element.getBoundingClientRect().toJSON());
+        expect(shareBounds.width).toBeGreaterThanOrEqual(44);
+        expect(shareBounds.height).toBeGreaterThanOrEqual(44);
+
+        const providerFallback = page.locator('.provider-choice .provider-mark-fallback').first();
+        await expect(providerFallback).toBeVisible();
+        const fallbackBounds = await providerFallback.evaluate((element) => element.getBoundingClientRect().toJSON());
+        expect(fallbackBounds.width).toBe(20);
+        expect(fallbackBounds.height).toBe(20);
+
+        if (width < 768) {
+          const resultAction = page.getByRole('button', { name: 'View result', exact: true });
+          await expect(resultAction).toBeVisible();
+          const resultBounds = await resultAction.evaluate((element) => element.getBoundingClientRect().toJSON());
+          expect(resultBounds.width).toBeGreaterThanOrEqual(44);
+          expect(resultBounds.height).toBeGreaterThanOrEqual(44);
+          await assertNoHorizontalOverflow(page);
+        }
+        await assertFirstViewportOmitsInternalRevisions(page);
+        await page.unrouteAll();
+      }
+    }
+  });
+
   for (const viewport of viewports) {
     test(`${viewport.width}px renders the expected mode without document overflow`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: 1000 });
@@ -181,7 +256,9 @@ test.describe('responsive calculator browser harness', () => {
         header: document.querySelector('.header-inner')?.getBoundingClientRect().toJSON(),
         nav: document.querySelector('.primary-nav')?.getBoundingClientRect().toJSON(),
         actions: document.querySelector('.header-actions')?.getBoundingClientRect().toJSON(),
-        rangeHeights: Array.from(document.querySelectorAll<HTMLInputElement>("input[type='range']")).map((input) => input.getBoundingClientRect().height),
+        rangeHeights: Array.from(document.querySelectorAll<HTMLInputElement>("input[type='range']"))
+          .map((input) => input.getBoundingClientRect().height)
+          .filter((height) => height > 0),
         controlsColumns: getComputedStyle(document.querySelector('.control-grid') as Element).gridTemplateColumns,
         resultsColumns: getComputedStyle(document.querySelector('.results-grid') as Element).gridTemplateColumns,
         comparisonTableDisplay: getComputedStyle(document.querySelector('.comparison-table') as Element).display,
@@ -193,7 +270,7 @@ test.describe('responsive calculator browser harness', () => {
       expect(dimensions.comparisonCardsDisplay).toBe(viewport.cards ? 'grid' : 'none');
       expect(dimensions.comparisonTableDisplay).toBe(viewport.cards ? 'none' : 'table');
       expect(dimensions.controlsColumns.split(' ').length).toBe(viewport.width >= 768 ? 2 : 1);
-      expect(dimensions.resultsColumns.split(' ').length).toBe(viewport.width >= 800 ? 2 : 1);
+      expect(dimensions.resultsColumns.split(' ').length).toBe(viewport.width >= 800 && viewport.width < 1024 ? 2 : 1);
 
       if (viewport.width < 768) {
         expect(dimensions.header?.right).toBeLessThanOrEqual(dimensions.clientWidth + 0.5);
@@ -846,6 +923,46 @@ test.describe('generated static route runtime', () => {
 });
 
 test.describe('home and tools route runtime', () => {
+  test('navigation does not mark Subscribe vs API as the current page for the tools directory', async ({ browser, page }) => {
+    const origin = previewOrigin();
+    const staticContext = await browser.newContext({ baseURL: origin, javaScriptEnabled: false });
+    const staticPage = await staticContext.newPage();
+    try {
+      await blockExternalRequests(staticPage, origin);
+      await staticPage.goto('/tools/');
+      await expect(staticPage.getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
+    } finally {
+      await staticContext.close();
+    }
+
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto('/tools/');
+
+    await expect(page.locator('.tools-page')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
+  });
+
+  test('navigation exposes the five approved destinations on compact Home', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
+    await page.getByRole('button', { name: 'Open navigation' }).click();
+    const navigation = page.getByRole('navigation', { name: 'Primary navigation' });
+    await expect(navigation).toBeVisible();
+    expect(await navigation.getByRole('link').allTextContents()).toEqual([
+      'Home',
+      'Subscribe vs API',
+      'Compare',
+      'Leaderboards',
+      'Guides',
+    ]);
+    await expect(navigation.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+    await assertNoHorizontalOverflow(page);
+  });
+
   test('keeps the ready Home decision snapshot responsive and overflow-safe', async ({ page }) => {
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
@@ -854,6 +971,7 @@ test.describe('home and tools route runtime', () => {
     for (const viewport of [
       { width: 1440, height: 1000, columns: { decisions: 3, snapshot: 3, capabilities: 5 } },
       { width: 375, height: 1000, columns: { decisions: 1, snapshot: 1, capabilities: 1 } },
+      { width: 320, height: 1000, columns: { decisions: 1, snapshot: 1, capabilities: 1 } },
     ] as const) {
       await page.setViewportSize(viewport);
       for (const theme of ['dark', 'light'] as const) {
@@ -891,6 +1009,7 @@ test.describe('home and tools route runtime', () => {
         });
         expect(columns).toEqual(viewport.columns);
         await assertNoHorizontalOverflow(page);
+        await assertFirstViewportOmitsInternalRevisions(page);
       }
     }
   });
