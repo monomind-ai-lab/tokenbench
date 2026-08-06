@@ -142,15 +142,19 @@ describe('responsive calculator app shell', () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  it('keeps the TokenBench home showcase separate from calculator controls', () => {
+  it('routes the clarified Home decision page through the global shell and preserves the footer signup', () => {
     renderAt('/');
 
-    expect(screen.getByRole('heading', { name: 'Stop Guessing Your AI Costs. Start Optimizing.', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Calculate your costs' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
-    expect(screen.getByRole('heading', { name: 'Overall Model Value', level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Human Preference', level: 3 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Image Generation', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare/');
+    expect(screen.getByRole('link', { name: 'Calculate subscription vs API' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
+    expect(screen.getByRole('region', { name: 'Live decision snapshot' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
+    const footer = screen.getByRole('contentinfo');
+    expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
+    expect(within(footer).getByRole('checkbox', { name: /Notify me when new models or price drops/i })).toBeInTheDocument();
   });
 
   it('makes the tools directory link to the subscription versus API calculator', () => {

@@ -397,7 +397,7 @@ describe('LeaderboardFilters', () => {
   });
 });
 
-describe('leaderboard routes and honest home teasers', () => {
+describe('leaderboard routes and the Home decision snapshot', () => {
   it('mounts a category page from its registered route with normalized controls, attribution, related routes, and the MonoMind CTA', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'outputHeavy')));
     vi.stubGlobal('fetch', fetchMock);
@@ -479,47 +479,13 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('labels live llm-value rows as overall model value and keeps cached stale teaser rows visible', async () => {
-    const fetchMock = vi.fn((input: string) => {
-      if (input.includes('llm-value')) return Promise.resolve(jsonResponse(apiEnvelope('llm-value', 'balanced', [
-        entry({
-          model: { ...entry().model, name: 'Overall Value Model' },
-          metric: { ...entry().metric!, metricKey: 'benchlm:overall:raw', category: 'overall', value: 90 },
-          primaryPrice: primaryOpenRouterPrice(),
-          blendedCostPerMillion: 2,
-          contextWindowTokens: 128_000,
-          onValueFrontier: true,
-        }),
-      ])));
-      if (input.includes('llm-human-preference')) return Promise.resolve(jsonResponse(apiEnvelope('llm-human-preference', 'balanced', [
-        entry({ model: { ...entry().model, name: 'Human Preference Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_style_control:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 }, sourceRank: 1 }),
-      ])));
-      return Promise.resolve(jsonResponse(apiEnvelope(
-        'media-text-to-image',
-        'balanced',
-        [entry({ model: { ...entry().model, name: 'Stale Image Model', sourceId: 'lmarena', evidenceStatus: 'source_only' }, metric: { ...entry().metric!, sourceId: 'lmarena', metricKey: 'lmarena:text_to_image:overall', unit: 'arena_score', methodology: 'bradley_terry', rank: 1 }, sourceRank: 1 })],
-        { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z' },
-      )));
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('renders the approved Home snapshot instead of independent cached teaser rows', () => {
     render(<HomePage />);
 
-    const valueHeading = await screen.findByRole('heading', { name: 'Overall Model Value', level: 3 });
-    expect(valueHeading).toBeInTheDocument();
-    expect(await screen.findByText(/Overall Value Model/)).toBeInTheDocument();
-    const valueTeaser = valueHeading.closest('article');
-    expect(valueTeaser).not.toBeNull();
-    expect(within(valueTeaser as HTMLElement).getByRole('link', { name: 'Data from BenchLM.ai' }))
-      .toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(within(valueTeaser as HTMLElement).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' }))
-      .toHaveAttribute('href', 'https://openrouter.ai/models');
-    expect(screen.queryByRole('heading', { name: 'Coding Value', level: 3 })).not.toBeInTheDocument();
-    const imageHeading = screen.getByRole('heading', { name: 'Image Generation', level: 3 });
-    const imageTeaser = imageHeading.closest('article');
-    expect(imageTeaser).not.toBeNull();
-    expect(await within(imageTeaser as HTMLElement).findByText(/Stale benchmark data/)).toBeInTheDocument();
-    expect(imageTeaser).toHaveTextContent('Stale Image Model');
-    expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith('/api/benchmarks/leaderboards/'))).toBe(true);
+    expect(screen.getByRole('region', { name: 'Live decision snapshot' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Overall Model Value', level: 3 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Human Preference', level: 3 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Image Generation', level: 3 })).not.toBeInTheDocument();
   });
 });

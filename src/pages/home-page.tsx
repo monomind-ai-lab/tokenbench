@@ -1,99 +1,163 @@
-import { ArrowRight, BadgeDollarSign, Layers3, TrendingUp, Workflow } from 'lucide-react';
+import { ArrowRight, BadgeDollarSign, Download, Layers3, TrendingUp, Workflow } from 'lucide-react';
+import type { ReactNode } from 'react';
+import type { DecisionPickEntry, HomeDecisionSlot, HomeRepresentativeRate, PricePerformancePoint } from '../benchmarks/decision-picks';
+import { ProviderMark } from '../frontend/provider-mark';
+import { useHomeDecisionSnapshot } from '../frontend/use-benchmarks';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
-import { formatDateTime } from '../frontend/ui';
-import { useBenchmarkLeaderboard } from '../frontend/use-benchmarks';
 
-const FEATURE_CARDS = [
+const DECISION_CARDS = [
   {
-    title: 'Price the decision you are actually making',
-    description: 'Compare a paid subscription with the direct API routes and model mix that match your expected monthly workload.',
-    Icon: BadgeDollarSign,
-  },
-  {
-    title: 'Keep model routes distinct',
-    description: 'Direct-provider, OpenRouter, and OpenCode Zen offers stay separate so their pricing and evidence are not blended together.',
+    title: 'Compare models',
+    description: 'Put the models you are considering side by side, with price and evidence kept in their original context.',
+    href: ROUTE_PATHS.compareHub,
     Icon: Layers3,
   },
   {
-    title: 'Use benchmark context honestly',
-    description: 'Model performance views identify their source and leave unavailable results unavailable rather than inventing a universal score.',
+    title: 'Calculate subscription vs API',
+    description: 'Turn your own monthly workload and model mix into a transparent subscription-versus-API calculation.',
+    href: ROUTE_PATHS.calculator,
+    Icon: BadgeDollarSign,
+  },
+  {
+    title: 'Browse leaderboards',
+    description: 'Start with supported performance evidence and inspect the exact ranking lens before deciding.',
+    href: ROUTE_PATHS.leaderboards,
+    Icon: TrendingUp,
+  },
+] as const;
+
+const PRODUCT_FEATURES = [
+  {
+    title: 'Exact route pricing',
+    description: 'Keep direct-provider, OpenRouter, and OpenCode Zen API routes distinct so a rate always has a clear route behind it.',
+    Icon: BadgeDollarSign,
+  },
+  {
+    title: 'Comparable performance evidence',
+    description: 'Review source-backed performance in the same view as pricing, while missing evidence stays visibly unavailable.',
     Icon: TrendingUp,
   },
   {
-    title: 'Design for the workload ahead',
-    description: 'Turn token volume, input/output mix, and provider constraints into a transparent starting point for a routing decision.',
+    title: 'Workload calculations',
+    description: 'Model your real input/output mix, token volume, and subscription assumptions instead of relying on a generic estimate.',
     Icon: Workflow,
   },
-] as const;
-
-const TEASERS = [
   {
-    title: 'Overall Model Value',
-    description: 'Supported BenchLM overall capability and disclosed workload price context, without relabeling the value frontier as coding evidence.',
-    keyName: 'llm-value',
-    href: LEADERBOARD_ROUTES['llm-value'].pathname,
-    supportedOnly: true,
+    title: 'Downloads',
+    description: 'Download the current evidence and calculations behind a model decision.',
+    Icon: Download,
   },
   {
-    title: 'Human Preference',
-    description: 'Human-preference evidence will be shown with its source timestamp and methodology when the published data is available.',
-    keyName: 'llm-human-preference',
-    href: LEADERBOARD_ROUTES['llm-human-preference'].pathname,
-    supportedOnly: false,
-  },
-  {
-    title: 'Image Generation',
-    description: 'Image-generation evidence will remain unavailable until a supported source revision can be attributed and displayed.',
-    keyName: 'media-text-to-image',
-    href: LEADERBOARD_ROUTES['media-text-to-image'].pathname,
-    supportedOnly: false,
+    title: 'Shareable results',
+    description: 'Send a reproducible calculator result to the people who need to act on it.',
+    Icon: Layers3,
   },
 ] as const;
 
-function TerminalPane({ label, children }: { readonly label: string; readonly children: string }) {
-  return <article className="panel" aria-label={label}><pre><code>{children}</code></pre></article>;
+type HomeSnapshotEntry = DecisionPickEntry | HomeRepresentativeRate;
+
+function unavailableSlot<T>(): HomeDecisionSlot<T> {
+  return { status: 'unavailable' };
 }
 
-function metricSummary(entry: { readonly metric: { readonly sourceId: string; readonly value: number } | null; readonly blendedCostPerMillion: number | null }) {
-  if (!entry.metric) return 'Metric Unavailable';
-  const metric = `${entry.metric.sourceId === 'lmarena' ? 'LMArena' : 'BenchLM'} ${entry.metric.value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  return entry.blendedCostPerMillion === null
-    ? metric
-    : `${metric} · $${entry.blendedCostPerMillion.toLocaleString(undefined, { maximumFractionDigits: 4 })} / 1M`;
+function formatScore(score: number, unit: string): string {
+  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score)} ${unit}`;
 }
 
-type BenchmarkTeaserProps = typeof TEASERS[number] & { readonly key?: string };
+function formatRate(rate: number): string {
+  return `$${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(rate)} / 1M`;
+}
 
-function BenchmarkTeaser({
+function DecisionSnapshotCard<T extends HomeSnapshotEntry>({
   title,
-  description,
-  keyName,
-  href,
-  supportedOnly,
-}: BenchmarkTeaserProps) {
-  const state = useBenchmarkLeaderboard(keyName, 'balanced', 3);
-  const hasPublishedEnvelope = state.envelope !== null && (state.phase === 'ready' || state.phase === 'stale');
-  const entries = hasPublishedEnvelope
-    ? state.envelope.data.entries.filter((entry) => supportedOnly ? entry.model.evidenceStatus === 'supported' : entry.model.evidenceStatus !== 'estimated').slice(0, 3)
-    : [];
-  const attribution = state.envelope?.attribution ?? [];
-
-  return <article className="panel" role="listitem">
+  slot,
+  children,
+}: {
+  readonly title: string;
+  readonly slot: HomeDecisionSlot<T>;
+  readonly children: (value: T) => ReactNode;
+}) {
+  return <article className="panel home-snapshot-card">
     <h3>{title}</h3>
-    <p className="muted">{description}</p>
-    {state.phase === 'loading' ? <p role="status">Loading published benchmark data.</p> : null}
-    {state.phase === 'stale' ? <p role="status">Stale benchmark data{state.envelope ? ` · showing the last published results checked ${formatDateTime(state.envelope.freshness.checkedAt)}` : ''}</p> : null}
-    {hasPublishedEnvelope && entries.length > 0 ? <>
-      <ol className="home-teaser-list" aria-label={`${title} published entries`}>
-        {entries.map((entry, index) => <li key={entry.model.modelKey}><span>{index + 1}. {entry.model.name}</span><small>{metricSummary(entry)}</small></li>)}
-      </ol>
-      <p className="home-teaser-meta">{state.phase === 'stale' ? 'Last checked' : 'Fresh as of'} {formatDateTime(state.envelope?.freshness.checkedAt ?? null)}{attribution.map((source) => <span key={`${source.sourceId}-${source.url}`}> <span aria-hidden="true">·</span> <a href={source.url} target="_blank" rel="noreferrer">{source.label}</a></span>)}</p>
-    </> : null}
-    {hasPublishedEnvelope && entries.length === 0 ? <p role="status">Unavailable — no supported published entries are available for this teaser.</p> : null}
-    {state.phase === 'unavailable' ? <p role="status">Unavailable — awaiting a valid published benchmark revision.</p> : null}
-    {state.phase === 'error' ? <p role="status">Benchmark data unavailable — open the full route to retry.</p> : null}
-    <a href={href}>View the full leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
+    {slot.status === 'unavailable' ? <p className="home-snapshot-unavailable" role="status">Unavailable</p> : <>
+      <a className="home-snapshot-model" href={slot.value.routePath}>
+        <ProviderMark providerId={slot.value.provider} providerName={slot.value.provider} decorative size={20} />
+        <span>{slot.value.name}</span>
+        <ArrowRight aria-hidden="true" size={14} />
+      </a>
+      <div className="home-snapshot-detail">{children(slot.value)}</div>
+    </>}
   </article>;
+}
+
+function pricePerformanceDescription(points: readonly PricePerformancePoint[]): string {
+  const values = points.map((point) => `${point.name}: $${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(point.representativePriceUsdPerMillion)} per 1M tokens and ${formatScore(point.score, point.unit)}.`);
+  return `${values.join(' ')} Higher performance and lower representative price are better.`;
+}
+
+function plotCoordinate(value: number, minimum: number, maximum: number, start: number, end: number): number {
+  if (maximum === minimum) return (start + end) / 2;
+  return start + ((value - minimum) / (maximum - minimum)) * (end - start);
+}
+
+function PricePerformancePlot({ points }: { readonly points: readonly PricePerformancePoint[] }) {
+  const descriptionId = 'home-price-performance-description';
+  if (points.length === 0) {
+    return <article className="panel home-price-performance-card">
+      <h3>Price versus performance</h3>
+      <p className="home-snapshot-unavailable" role="status">Unavailable</p>
+      <p className="muted">No supported model has both a representative verified API rate and comparable overall performance evidence in the published snapshot.</p>
+    </article>;
+  }
+
+  const prices = points.map((point) => point.representativePriceUsdPerMillion);
+  const scores = points.map((point) => point.score);
+  const lowPrice = Math.min(...prices);
+  const highPrice = Math.max(...prices);
+  const lowScore = Math.min(...scores);
+  const highScore = Math.max(...scores);
+  const description = pricePerformanceDescription(points);
+
+  return <article className="panel home-price-performance-card">
+    <div className="home-price-performance-heading"><div><h3>Price versus performance</h3><p className="muted">Supported overall evidence paired with a representative verified API rate.</p></div><a href={LEADERBOARD_ROUTES['llm-overall'].pathname}>Open overall benchmarks <ArrowRight aria-hidden="true" size={14} /></a></div>
+    <svg className="home-price-performance-plot" role="img" aria-label="Price versus performance" aria-describedby={descriptionId} viewBox="0 0 320 188">
+      <line x1="34" x2="300" y1="154" y2="154" />
+      <line x1="34" x2="34" y1="20" y2="154" />
+      <text x="166" y="181" textAnchor="middle">Lower representative price</text>
+      <text x="10" y="89" textAnchor="middle" transform="rotate(-90 10 89)">Higher performance</text>
+      {points.map((point) => {
+        const x = plotCoordinate(point.representativePriceUsdPerMillion, lowPrice, highPrice, 56, 282);
+        const y = plotCoordinate(point.score, lowScore, highScore, 132, 42);
+        return <g key={point.modelKey} className="home-price-performance-point">
+          <circle cx={x} cy={y} r="7" />
+          <text x={x} y={y - 12} textAnchor="middle">{point.name}</text>
+        </g>;
+      })}
+    </svg>
+    <p id={descriptionId} className="home-price-performance-description">{description}</p>
+  </article>;
+}
+
+function LiveDecisionSnapshot() {
+  const state = useHomeDecisionSnapshot();
+  const snapshot = state.homeDecisionSnapshot;
+  const benchAlignLeader = snapshot?.benchAlignLeader ?? unavailableSlot<DecisionPickEntry>();
+  const valueFrontierLeader = snapshot?.valueFrontierLeader ?? unavailableSlot<DecisionPickEntry>();
+  const lowestVerifiedRate = snapshot?.lowestVerifiedRepresentativeRate ?? unavailableSlot<HomeRepresentativeRate>();
+
+  return <section className="panel home-snapshot-section" aria-label="Live decision snapshot">
+    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>A single published summary keeps the current decision facts together and preserves unavailable evidence as unavailable.</p></div></div>
+    {state.phase === 'loading' ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p> : null}
+    {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</p> : null}
+    {state.phase === 'error' ? <p className="home-snapshot-state">Published summary cannot be loaded.</p> : null}
+    <div className="home-snapshot-grid">
+      <DecisionSnapshotCard title="BenchAlign leader" slot={benchAlignLeader}>{(leader) => <dl><div><dt>Overall score</dt><dd>{formatScore(leader.score, leader.unit)}</dd></div></dl>}</DecisionSnapshotCard>
+      <DecisionSnapshotCard title="Value-frontier leader" slot={valueFrontierLeader}>{(leader) => <dl><div><dt>Representative price</dt><dd>{leader.representativePriceUsdPerMillion === null ? 'Unavailable' : formatRate(leader.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
+      <DecisionSnapshotCard title="Lowest verified API rate" slot={lowestVerifiedRate}>{(rate) => <dl><div><dt>Representative price</dt><dd>{formatRate(rate.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
+      <PricePerformancePlot points={snapshot?.pricePerformancePoints ?? []} />
+    </div>
+    <a className="home-snapshot-method" href={ROUTE_PATHS.methodologyBenchAlign}>How rankings work <ArrowRight aria-hidden="true" size={14} /></a>
+  </section>;
 }
 
 export function HomePage() {
@@ -101,24 +165,35 @@ export function HomePage() {
     <div className="content-stack home-page">
       <section className="panel home-hero" aria-labelledby="home-hero-heading">
         <span className="eyebrow">TokenBench</span>
-        <h1 id="home-hero-heading">Stop Guessing Your AI Costs. Start Optimizing.</h1>
-        <p>Make source-aware AI cost and model decisions with transparent workload inputs, route-level pricing context, and honest benchmark availability.</p>
-        <div className="home-hero-actions">
-          <a className="button" href={`${ROUTE_PATHS.calculator}#calculator`}>Calculate your costs <ArrowRight aria-hidden="true" size={16} /></a>
-          <a className="button button-secondary" href={LEADERBOARD_ROUTES['llm-value'].pathname}>Explore model value</a>
-        </div>
-        <div className="home-terminal-grid" role="group" aria-label="TokenBench decision workflow">
-          <TerminalPane label="Workload input">$ monthly_tokens = 10,000,000</TerminalPane>
-          <TerminalPane label="Model route input">$ route = direct_provider_api</TerminalPane>
-          <TerminalPane label="Evidence result">✓ provider evidence attached</TerminalPane>
-          <TerminalPane label="Decision output">→ review the tradeoffs</TerminalPane>
+        <h1 id="home-hero-heading">Transparent AI Costs. Verified Benchmarks.</h1>
+        <p>The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.</p>
+        <div className="home-hero-actions" aria-label="Primary TokenBench decisions">
+          <a className="button" href={ROUTE_PATHS.compareHub}>Compare models <ArrowRight aria-hidden="true" size={16} /></a>
+          <a className="button button-secondary" href={ROUTE_PATHS.calculator}>Calculate subscription vs API</a>
+          <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Browse leaderboards</a>
         </div>
       </section>
 
-      <section className="home-feature-section" aria-labelledby="home-features-heading">
-        <div className="panel-heading"><div><span className="eyebrow">Decision support</span><h2 id="home-features-heading">A clearer path from usage to action</h2></div></div>
-        <div className="home-feature-grid" role="list" aria-label="TokenBench decision features">
-          {FEATURE_CARDS.map(({ title, description, Icon }) => (
+      <section className="home-feature-section" aria-labelledby="home-decisions-heading">
+        <div className="panel-heading"><div><span className="eyebrow">Start with the decision</span><h2 id="home-decisions-heading">Make three decisions faster</h2><p>Move from an AI question to the specific tool and evidence needed to answer it.</p></div></div>
+        <div className="home-feature-grid home-decision-grid" role="list" aria-label="Three primary TokenBench decisions">
+          {DECISION_CARDS.map(({ title, description, href, Icon }) => (
+            <article className="panel" role="listitem" key={title}>
+              <Icon aria-hidden="true" size={22} />
+              <h3>{title}</h3>
+              <p className="muted">{description}</p>
+              <a href={href}>Open {title} <ArrowRight aria-hidden="true" size={14} /></a>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <LiveDecisionSnapshot />
+
+      <section className="home-feature-section" aria-labelledby="home-product-heading">
+        <div className="panel-heading"><div><span className="eyebrow">Product capabilities</span><h2 id="home-product-heading">What TokenBench gives you</h2><p>One focused workspace for pricing, evidence, workload calculations, and results you can take with you.</p></div></div>
+        <div className="home-feature-grid" role="list" aria-label="TokenBench product capabilities">
+          {PRODUCT_FEATURES.map(({ title, description, Icon }) => (
             <article className="panel" role="listitem" key={title}>
               <Icon aria-hidden="true" size={22} />
               <h3>{title}</h3>
@@ -128,16 +203,15 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="panel home-benchmark-section" aria-labelledby="home-benchmark-heading">
-        <div className="panel-heading"><div><span className="eyebrow">Benchmark signals</span><h2 id="home-benchmark-heading">Evidence when it is ready, not invented before it is</h2><p>Each teaser reads only a published cached revision and keeps stale, unavailable, and missing measurements explicit.</p></div></div>
-        <div className="home-teaser-grid" role="list" aria-label="TokenBench benchmark teasers">
-          {TEASERS.map((teaser) => <BenchmarkTeaser key={teaser.keyName} {...teaser} />)}
-        </div>
+      <section className="panel home-builder-section" aria-labelledby="home-builders-heading">
+        <span className="eyebrow">A practical decision engine</span>
+        <h2 id="home-builders-heading">Built for AI builders</h2>
+        <p>Use the same transparent inputs to compare a new model, explain a budget choice, or hand an evidence-backed result to the rest of your team.</p>
       </section>
 
       <aside className="panel home-monomind-banner" aria-label="MonoMind optimization services">
         <span className="eyebrow">MonoMind AI Lab</span>
-        <p>Spending &gt;$1,000/mo on LLM tokens? MonoMind designs custom routing, prompt caching, and agent pipelines to cut API bills by up to 60%.</p>
+        <p>Spending &gt;$1,000/mo on LLM tokens? MonoMind designs custom routing, prompt caching, and agent pipelines to cut API bills by up to 90%.</p>
         <a className="button" href="https://monomind.one/">Talk to MonoMind <ArrowRight aria-hidden="true" size={16} /></a>
       </aside>
     </div>
