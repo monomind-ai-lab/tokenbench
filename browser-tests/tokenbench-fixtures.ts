@@ -9,8 +9,10 @@ import type {
   BenchmarkModel,
   BenchmarkPriceCheck,
 } from '../src/benchmarks/contracts';
+import { DECISION_PICK_CATEGORIES, type DecisionPickEntry } from '../src/benchmarks/decision-picks';
 import type { LeaderboardResult } from '../src/benchmarks/leaderboards';
-import type { BenchmarkApiEnvelope } from '../src/frontend/use-benchmarks';
+import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../src/frontend/use-benchmarks';
+import { LEADERBOARD_ROUTES } from '../src/routing/routes';
 
 export const HANDLER_COMPARISON_PATH = '/compare/alpha-vs-beta';
 
@@ -254,6 +256,47 @@ export function comparisonDirectoryEnvelope(options: {
   };
 }
 
+export function decisionSummaryEnvelope(): BenchmarkApiEnvelope<BenchmarkSummaryData> {
+  const entry = (key: typeof DECISION_PICK_CATEGORIES[number]['key'], rank: number): DecisionPickEntry => ({
+    rank,
+    modelKey: `${key}-browser-model-${rank}`,
+    slug: `${key}-browser-model-${rank}`,
+    name: `Browser Model ${rank}`,
+    provider: 'OpenAI',
+    score: 92 - rank,
+    unit: 'score',
+    evidenceStatus: 'supported',
+    updatedAt: TIMESTAMP,
+    routePath: LEADERBOARD_ROUTES[key].pathname,
+    representativePriceUsdPerMillion: 3,
+    contextWindowTokens: 128_000,
+  });
+
+  return {
+    revision: REVISION,
+    publishedAt: TIMESTAMP,
+    freshness: { status: 'fresh', checkedAt: TIMESTAMP },
+    attribution: [{
+      sourceId: 'benchlm',
+      label: 'Data from BenchLM.ai',
+      url: 'https://benchlm.ai/data',
+      updatedAt: TIMESTAMP,
+    }],
+    data: {
+      decisionPicks: DECISION_PICK_CATEGORIES.map((category) => ({
+        ...category,
+        entries: [1, 2, 3].map((rank) => entry(category.key, rank)),
+      })),
+      homeDecisionSnapshot: {
+        benchAlignLeader: { status: 'unavailable' },
+        valueFrontierLeader: { status: 'unavailable' },
+        lowestVerifiedRepresentativeRate: { status: 'unavailable' },
+        pricePerformancePoints: [],
+      },
+    },
+  };
+}
+
 const comparisonRevision = {
   revision: REVISION,
   generated_at: TIMESTAMP,
@@ -440,7 +483,7 @@ export async function fulfillJson(route: Route, value: unknown, status = 200): P
   });
 }
 
-export async function stubBenchmarkDirectory(page: Page, origin: string, value = comparisonDirectoryEnvelope(), status = 200): Promise<void> {
+export async function stubBenchmarkDirectory(page: Page, origin: string, value: unknown = comparisonDirectoryEnvelope(), status = 200): Promise<void> {
   await page.route(origin + '/api/benchmarks', (route) => fulfillJson(route, value, status));
 }
 

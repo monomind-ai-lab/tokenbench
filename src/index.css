@@ -509,7 +509,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .decision-pick-card-evidence-lens .eyebrow { color: var(--muted); }
 .decision-pick-card h3, .decision-pick-card h4 { margin: 0; font-family: var(--font-display); letter-spacing: -0.025em; }
 .decision-pick-card h3 { font-size: 1.15rem; line-height: 1.2; }
-.decision-pick-card-heading > a { flex: 0 0 auto; min-height: 36px; display: inline-flex; align-items: center; gap: 5px; color: var(--primary-strong); font-size: 0.66rem; font-weight: 800; line-height: 1.3; text-decoration: none; }
+.decision-pick-card-heading > a { flex: 0 0 auto; min-height: 44px; display: inline-flex; align-items: center; gap: 5px; color: var(--primary-strong); font-size: 0.66rem; font-weight: 800; line-height: 1.3; text-decoration: none; }
 .decision-pick-card-heading > a:hover { color: var(--primary); }
 .decision-pick-list { display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
 .decision-pick-entry { min-width: 0; padding: 13px; border: 1px solid color-mix(in srgb, var(--outline) 84%, transparent); border-radius: 9px; background: color-mix(in srgb, var(--surface-low) 78%, transparent); }
@@ -520,8 +520,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .decision-pick-provider .provider-mark { width: 20px; height: 20px; }
 .decision-pick-entry dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0 0; }
 .decision-pick-entry dl > div { min-width: 0; padding-top: 9px; border-top: 1px solid color-mix(in srgb, var(--outline) 82%, transparent); }
-.decision-pick-entry dt { color: var(--muted); font-family: var(--font-label); font-size: 0.53rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
-.decision-pick-entry dd { margin: 4px 0 0; color: var(--text); font-family: var(--font-label); font-size: 0.63rem; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; }
+.decision-pick-entry dt { color: var(--muted); font-family: var(--font-label); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.decision-pick-entry dd { margin: 4px 0 0; color: var(--text); font-family: var(--font-label); font-size: 0.8rem; font-weight: 700; line-height: 1.45; overflow-wrap: anywhere; }
 .decision-pick-card .empty-state { padding: 16px; }
 .decision-pick-card .empty-state p { margin-bottom: 0; }
 .leaderboard-directory { display: grid; gap: 26px; }

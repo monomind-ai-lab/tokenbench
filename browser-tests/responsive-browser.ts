@@ -3,6 +3,7 @@ import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
 import {
   HANDLER_COMPARISON_PATH,
   comparisonDirectoryEnvelope,
+  decisionSummaryEnvelope,
   emptyCodingLeaderboard,
   fulfillJson,
   readyCodingLeaderboard,
@@ -442,6 +443,47 @@ test.describe('responsive calculator browser harness', () => {
 });
 
 test.describe('leaderboard browser harness', () => {
+  test('keeps decision-pick facts readable and full links touch-sized at directory breakpoints', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await page.setViewportSize({ width: 375, height: 1000 });
+    const summaryResponse = page.waitForResponse((response) => response.url() === `${origin}/api/benchmarks`);
+    await page.goto('/leaderboards/');
+    expect((await summaryResponse).status()).toBe(200);
+    await expect(page.getByRole('region', { name: 'Coding leaders' })).toBeVisible({ timeout: 15_000 });
+
+    for (const width of [375, 1440]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const theme of ['dark', 'light'] as const) {
+        if (await page.locator('html').getAttribute('data-theme') !== theme) {
+          await page.getByRole('button', { name: `Toggle ${theme} theme` }).click();
+        }
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+
+        const cards = await page.locator('.decision-pick-card').evaluateAll((elements) => elements.map((element) => {
+          const label = element.querySelector('dt');
+          const value = element.querySelector('dd');
+          const fullLink = element.querySelector('.decision-pick-card-heading > a');
+          if (!label || !value || !fullLink) throw new Error('Decision pick card is missing a fact or full-view link.');
+          return {
+            labelFontSize: Number.parseFloat(getComputedStyle(label).fontSize),
+            valueFontSize: Number.parseFloat(getComputedStyle(value).fontSize),
+            fullLinkHeight: fullLink.getBoundingClientRect().height,
+          };
+        }));
+
+        expect(cards).toHaveLength(6);
+        for (const [index, card] of cards.entries()) {
+          expect(card.labelFontSize, `${width}px ${theme} card ${index + 1} fact label`).toBeGreaterThanOrEqual(12);
+          expect(card.valueFontSize, `${width}px ${theme} card ${index + 1} fact value`).toBeGreaterThanOrEqual(12);
+          expect(card.fullLinkHeight, `${width}px ${theme} card ${index + 1} full link`).toBeGreaterThanOrEqual(44);
+        }
+        await assertNoHorizontalOverflow(page);
+      }
+    }
+  });
+
   test('keeps every desktop sort control at a 44px minimum hit target', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
     await openCodingLeaderboard(page);
