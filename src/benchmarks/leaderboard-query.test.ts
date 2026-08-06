@@ -82,6 +82,7 @@ function entry(overrides: Partial<LeaderboardEntry> = {}): LeaderboardEntry {
 const DEFAULT_STATE: LeaderboardQueryState = {
   query: '',
   profile: 'balanced',
+  priceMode: 'representative',
   metricKey: null,
   sort: 'score-desc',
   providers: [],
@@ -97,18 +98,22 @@ describe('leaderboard query contract', () => {
     const alpha = entry({
       model: { ...entry().model, modelKey: 'alpha', slug: 'alpha', name: 'Alpha', creator: 'Provider A', sourceType: 'Open Weight' },
       metric: { ...entry().metric!, modelKey: 'alpha', sourceModelId: 'alpha', value: 90 },
+      primaryPrice: { ...entry().primaryPrice!, modelKey: 'alpha', sourceModelId: 'alpha', canonicalSlug: 'alpha' },
     });
     const zeta = entry({
       model: { ...entry().model, modelKey: 'zeta', slug: 'zeta', name: 'Zeta', creator: 'Provider A', sourceType: 'Open Weight' },
       metric: { ...entry().metric!, modelKey: 'zeta', sourceModelId: 'zeta', value: 90 },
+      primaryPrice: { ...entry().primaryPrice!, modelKey: 'zeta', sourceModelId: 'zeta', canonicalSlug: 'zeta' },
     });
     const wrongProvider = entry({
       model: { ...entry().model, modelKey: 'wrong-provider', slug: 'wrong-provider', creator: 'Provider B', sourceType: 'Open Weight' },
       metric: { ...entry().metric!, modelKey: 'wrong-provider', sourceModelId: 'wrong-provider', value: 99 },
+      primaryPrice: { ...entry().primaryPrice!, modelKey: 'wrong-provider', sourceModelId: 'wrong-provider', canonicalSlug: 'wrong-provider' },
     });
     const sourceOnly = entry({
       model: { ...entry().model, modelKey: 'source-only', slug: 'source-only', creator: 'Provider A', sourceType: 'Open Weight', evidenceStatus: 'source_only' },
       metric: { ...entry().metric!, modelKey: 'source-only', sourceModelId: 'source-only', value: 100 },
+      primaryPrice: { ...entry().primaryPrice!, modelKey: 'source-only', sourceModelId: 'source-only', canonicalSlug: 'source-only' },
     });
 
     const filtered = filterLeaderboardEntries([zeta, wrongProvider, sourceOnly, alpha], {
@@ -156,7 +161,7 @@ describe('leaderboard query contract', () => {
       .toEqual([['alpha', 5], ['zeta', 5]]);
   });
 
-  it('round trips a canonical supported query state and encodes CSV values once', () => {
+  it('round trips a canonical supported query state and encodes list values once', () => {
     const entries = [entry({
       model: { ...entry().model, creator: 'Provider B', sourceType: 'Open Weight' },
     }), entry()];
@@ -165,6 +170,7 @@ describe('leaderboard query contract', () => {
     const state: LeaderboardQueryState = {
       query: 'Alpha',
       profile: 'balanced',
+      priceMode: 'representative',
       metricKey: 'benchlm:category:coding',
       sort: 'price-asc',
       providers: ['Provider A', 'Provider B'],
@@ -178,8 +184,60 @@ describe('leaderboard query contract', () => {
     const params = leaderboardQueryToSearchParams(state);
 
     expect(params.toString())
-      .toBe('profile=balanced&sort=price-asc&q=Alpha&metric=benchlm%3Acategory%3Acoding&provider=Provider+A%2CProvider+B&sourceType=Open+Weight&evidence=supported&minPrice=0&maxPrice=5');
+      .toBe('profile=balanced&sort=price-asc&q=Alpha&metric=benchlm%3Acategory%3Acoding&provider=Provider+A&provider=Provider+B&sourceType=Open+Weight&evidence=supported&minPrice=0&maxPrice=5');
     expect(parseLeaderboardQuery(params, definition, capabilities, 'ui')).toEqual({ ok: true, state });
+  });
+
+  it('round trips providers containing commas with canonical repeated list parameters', () => {
+    const definition = LEADERBOARD_DEFINITIONS['llm-coding'];
+    const entries = [
+      entry({ model: { ...entry().model, creator: 'Provider, Inc.', sourceType: 'Open Weight' } }),
+      entry({ model: { ...entry().model, creator: 'Provider A', sourceType: 'Proprietary' } }),
+    ];
+    const capabilities = createLeaderboardQueryCapabilities(definition, entries);
+    const state: LeaderboardQueryState = {
+      ...DEFAULT_STATE,
+      providers: ['Provider A', 'Provider, Inc.'],
+      sourceTypes: ['Open Weight', 'Proprietary'],
+    };
+
+    const params = leaderboardQueryToSearchParams(state);
+
+    expect(params.getAll('provider')).toEqual(['Provider A', 'Provider, Inc.']);
+    expect(params.getAll('sourceType')).toEqual(['Open Weight', 'Proprietary']);
+    expect(params.toString()).toBe('profile=balanced&sort=score-desc&provider=Provider+A&provider=Provider%2C+Inc.&sourceType=Open+Weight&sourceType=Proprietary');
+    expect(parseLeaderboardQuery(params, definition, capabilities, 'ui')).toEqual({ ok: true, state });
+    expect(parseLeaderboardQuery(params, definition, capabilities, 'api')).toEqual({ ok: true, state });
+  });
+
+  it('uses only the explicit representative price mode even when a profile blend is present', () => {
+    const priced = entry({
+      primaryPrice: { ...entry().primaryPrice!, inputUsdPerMillion: 1, outputUsdPerMillion: 9 },
+      blendedCostPerMillion: 2,
+    });
+    const state = {
+      ...DEFAULT_STATE,
+      priceMode: 'representative',
+      priceMinimum: 5,
+      priceMaximum: 5,
+    } as LeaderboardQueryState & { readonly priceMode: 'representative' };
+
+    expect(filterLeaderboardEntries([priced], state).map((item) => item.blendedCostPerMillion)).toEqual([5]);
+  });
+
+  it('never falls back to a profile blend when representative price evidence is incomplete', () => {
+    const incomplete = entry({
+      primaryPrice: { ...entry().primaryPrice!, outputUsdPerMillion: null },
+      blendedCostPerMillion: 2,
+    });
+    const state = {
+      ...DEFAULT_STATE,
+      priceMode: 'representative',
+      priceMinimum: 2,
+      priceMaximum: 2,
+    } as LeaderboardQueryState & { readonly priceMode: 'representative' };
+
+    expect(filterLeaderboardEntries([incomplete], state)).toEqual([]);
   });
 
   it.each([
@@ -225,6 +283,6 @@ describe('leaderboard query contract', () => {
       ...DEFAULT_STATE,
       providers: [' Provider B ', 'Provider A'],
       sourceTypes: ['Open Weight'],
-    }).toString()).toBe('profile=balanced&sort=score-desc&provider=Provider+A%2CProvider+B&sourceType=Open+Weight');
+    }).toString()).toBe('profile=balanced&sort=score-desc&provider=Provider+A&provider=Provider+B&sourceType=Open+Weight');
   });
 });

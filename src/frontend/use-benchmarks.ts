@@ -266,6 +266,21 @@ function hasNoDisplayedPrice(entry: LeaderboardEntry): boolean {
   return entry.primaryPrice === null && entry.blendedCostPerMillion === null;
 }
 
+function hasOptionalRepresentativePrice(entry: LeaderboardEntry): boolean {
+  if (hasNoDisplayedPrice(entry)) return true;
+  const price = entry.primaryPrice;
+  if (price === null
+    || price.modelKey !== entry.model.modelKey
+    || price.sourceId !== 'openrouter'
+    || price.verificationStatus !== 'primary'
+    || !isNonNegativeFiniteNumber(price.inputUsdPerMillion)
+    || !isNonNegativeFiniteNumber(price.outputUsdPerMillion)
+    || !isNonNegativeFiniteNumber(entry.blendedCostPerMillion)) return false;
+  const expectedCost = (price.inputUsdPerMillion + price.outputUsdPerMillion) / 2;
+  return isNearlyEqual(entry.blendedCostPerMillion, expectedCost)
+    && entry.contextWindowTokens === validSelectedPriceContext(price.contextWindowTokens);
+}
+
 function hasRouteKindEntryInvariants(
   entry: LeaderboardEntry,
   definition: LeaderboardDefinition,
@@ -285,12 +300,12 @@ function hasRouteKindEntryInvariants(
       return hasModelMatchedPrimaryOpenRouterPrice(entry, profile)
         && entry.sourceRank === null;
     case 'benchlm':
-      return hasNoDisplayedPrice(entry)
+      return hasOptionalRepresentativePrice(entry)
         && entry.sourceRank === null
         && !entry.onValueFrontier;
     case 'lmarena':
     case 'multimodal':
-      return hasNoDisplayedPrice(entry) && !entry.onValueFrontier;
+      return hasOptionalRepresentativePrice(entry) && !entry.onValueFrontier;
   }
 }
 

@@ -6,6 +6,14 @@ import {
   type LeaderboardResult,
 } from '../../../../src/benchmarks/leaderboards';
 import {
+  createLeaderboardQueryCapabilities,
+  filterLeaderboardEntries,
+  hasValidLeaderboardQueryEncoding,
+  leaderboardQueryToSearchParams,
+  parseLeaderboardQuery,
+  type LeaderboardQueryState,
+} from '../../../../src/benchmarks/leaderboard-query';
+import {
   benchmarkLeaderboardCacheKey,
   benchmarkLeaderboardProjectionCacheKey,
 } from '../../../../src/benchmarks/api-response-cache-keys';
@@ -42,6 +50,8 @@ interface LeaderboardRequestParameters {
   readonly limit: number;
   readonly cursor: string | null;
   readonly includeEstimated: boolean;
+  readonly filterParameters: URLSearchParams;
+  readonly hasSharedFilters: boolean;
 }
 
 interface CursorPayload {
@@ -51,8 +61,44 @@ interface CursorPayload {
   readonly p: WorkloadProfile;
   readonly l: number;
   readonly e: boolean;
+  readonly f?: string;
   readonly o: number;
 }
+
+interface CursorRequestParameters {
+  readonly key: LeaderboardKey;
+  readonly profile: WorkloadProfile;
+  readonly limit: number;
+  readonly includeEstimated: boolean;
+  readonly filter: string;
+}
+
+const SHARED_FILTER_KEYS = new Set([
+  'q',
+  'profile',
+  'metric',
+  'sort',
+  'provider',
+  'evidence',
+  'sourceType',
+  'lifecycle',
+  'minPrice',
+  'maxPrice',
+  'estimated',
+]);
+const PAGINATION_KEYS = new Set(['limit', 'cursor', 'includeEstimated']);
+const DATA_DEPENDENT_FILTER_KEYS = new Set([
+  'q',
+  'metric',
+  'sort',
+  'provider',
+  'evidence',
+  'sourceType',
+  'lifecycle',
+  'minPrice',
+  'maxPrice',
+  'estimated',
+]);
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -84,26 +130,46 @@ function supportsEstimated(definition: LeaderboardDefinition): boolean {
 
 function parseRequest(key: unknown, url: URL): LeaderboardRequestParameters {
   if (!isLeaderboardKey(key)) throw new Error('invalid leaderboard key');
+  if ([...url.searchParams.keys()].some((name) => !SHARED_FILTER_KEYS.has(name) && !PAGINATION_KEYS.has(name))) {
+    throw new Error('unknown query key');
+  }
   const profileValue = oneQueryValue(url.searchParams, 'profile');
   const profile = profileValue ?? 'balanced';
   if (!isWorkloadProfile(profile)) throw new Error('invalid workload profile');
+  const definition = LEADERBOARD_DEFINITIONS[key];
+  if (definition.kind !== 'value' && definition.kind !== 'pricing-context' && profile !== 'balanced') {
+    throw new Error('unsupported workload profile');
+  }
   const includeEstimatedValue = oneQueryValue(url.searchParams, 'includeEstimated');
   if (includeEstimatedValue !== null && includeEstimatedValue !== '1') throw new Error('invalid estimated flag');
-  const includeEstimated = includeEstimatedValue === '1';
-  if (includeEstimated && !supportsEstimated(LEADERBOARD_DEFINITIONS[key])) {
+  const estimatedValue = oneQueryValue(url.searchParams, 'estimated');
+  if (estimatedValue !== null && estimatedValue !== '1') throw new Error('invalid estimated filter');
+  if (includeEstimatedValue !== null && estimatedValue !== null) throw new Error('duplicate estimated flag');
+  const includeEstimated = includeEstimatedValue === '1' || estimatedValue === '1';
+  if (includeEstimated && !supportsEstimated(definition)) {
     throw new Error('estimated evidence is not available for this route');
   }
   const cursor = oneQueryValue(url.searchParams, 'cursor');
+  const filterParameters = new URLSearchParams();
+  filterParameters.set('profile', profile);
+  for (const [name, value] of url.searchParams) {
+    if (name !== 'profile' && name !== 'estimated' && SHARED_FILTER_KEYS.has(name)) {
+      filterParameters.append(name, value);
+    }
+  }
+  if (includeEstimated) filterParameters.set('estimated', '1');
   return {
     key,
     profile,
     limit: parseLimit(oneQueryValue(url.searchParams, 'limit')),
     cursor: cursor || null,
     includeEstimated,
+    filterParameters,
+    hasSharedFilters: [...url.searchParams.keys()].some((name) => DATA_DEPENDENT_FILTER_KEYS.has(name)),
   };
 }
 
-function cursorFor(revision: string, request: Omit<LeaderboardRequestParameters, 'cursor'>, offset: number): string {
+function cursorFor(revision: string, request: CursorRequestParameters, offset: number): string {
   const payload: CursorPayload = {
     v: 1,
     r: revision,
@@ -111,6 +177,7 @@ function cursorFor(revision: string, request: Omit<LeaderboardRequestParameters,
     p: request.profile,
     l: request.limit,
     e: request.includeEstimated,
+    ...(request.filter ? { f: request.filter } : {}),
     o: offset,
   };
   return encodeOpaqueValue(payload);
@@ -119,7 +186,7 @@ function cursorFor(revision: string, request: Omit<LeaderboardRequestParameters,
 function offsetFromCursor(
   cursor: string,
   revision: string,
-  request: Omit<LeaderboardRequestParameters, 'cursor'>,
+  request: CursorRequestParameters,
 ): number {
   const payload = decodeOpaqueValue(cursor);
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid cursor');
@@ -130,6 +197,7 @@ function offsetFromCursor(
     || value.p !== request.profile
     || value.l !== request.limit
     || value.e !== request.includeEstimated
+    || !((value.f === undefined && request.filter === '') || value.f === request.filter)
     || !Number.isSafeInteger(value.o)
     || value.o === undefined
     || value.o < 1) {
@@ -198,7 +266,9 @@ export async function onRequestGet({
 }): Promise<Response> {
   let normalized: LeaderboardRequestParameters;
   try {
-    normalized = parseRequest(params?.key, new URL(request.url));
+    const requestUrl = new URL(request.url);
+    if (!hasValidLeaderboardQueryEncoding(requestUrl.search)) throw new Error('malformed query encoding');
+    normalized = parseRequest(params?.key, requestUrl);
   } catch {
     return invalidBenchmarkRequestResponse();
   }
@@ -208,7 +278,7 @@ export async function onRequestGet({
     const now = Date.now();
     // The interactive UI always asks for the first, normalized page. Serve its
     // published raw response before reading or deriving the full fact graph.
-    if (normalized.cursor === null) {
+    if (normalized.cursor === null && !normalized.hasSharedFilters) {
       const cached = await readApiResponseCache(
         env.CATALOG_DB,
         'benchmarks',
@@ -233,6 +303,28 @@ export async function onRequestGet({
     );
     if (!cachedProjection) return unavailableBenchmarkResponse();
     const projection = parsePaginationProjection(cachedProjection.body, normalized.key, derivationProfile);
+    const capabilities = createLeaderboardQueryCapabilities(projection.leaderboard.definition, projection.entries);
+    const parsedFilters = parseLeaderboardQuery(
+      normalized.filterParameters.toString(),
+      projection.leaderboard.definition,
+      capabilities,
+      'api',
+    );
+    if (!parsedFilters.ok) return invalidBenchmarkRequestResponse();
+    const filterState: LeaderboardQueryState = {
+      ...parsedFilters.state,
+      preserveSourceLensOrder: normalized.key === 'multimodal-vision-documents'
+        && parsedFilters.state.sort === projection.leaderboard.definition.defaultSort,
+    };
+    const canonicalFilterParameters = leaderboardQueryToSearchParams(filterState);
+    // Profile is already a dedicated cursor field, and the route definition
+    // fixes the default sort. Omitting both retains compatibility with cursors
+    // emitted by materialized first pages before shared filters existed.
+    canonicalFilterParameters.delete('profile');
+    if (filterState.sort === projection.leaderboard.definition.defaultSort) {
+      canonicalFilterParameters.delete('sort');
+    }
+    const canonicalFilter = canonicalFilterParameters.toString();
     const snapshot: ActiveBenchmarkSnapshot = {
       revision: projection.revision,
       sources: projection.sources,
@@ -251,6 +343,7 @@ export async function onRequestGet({
       profile: normalized.profile,
       limit: normalized.limit,
       includeEstimated: normalized.includeEstimated,
+      filter: canonicalFilter,
     } as const;
     let offset = 0;
     if (normalized.cursor) {
@@ -266,7 +359,9 @@ export async function onRequestGet({
       profile: normalized.profile,
       entries: projection.entries,
     };
-    const entries = projection.entries;
+    const entries = normalized.hasSharedFilters
+      ? filterLeaderboardEntries(projection.entries, filterState)
+      : projection.entries;
     if (offset >= entries.length && normalized.cursor !== null) return invalidBenchmarkRequestResponse();
     const pagedEntries = entries.slice(offset, offset + normalized.limit);
     const nextOffset = offset + pagedEntries.length;
@@ -280,6 +375,7 @@ export async function onRequestGet({
       limit: normalized.limit,
       cursor: normalized.cursor ?? '',
       includeEstimated: normalized.includeEstimated,
+      filter: canonicalFilter,
     });
     if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
 

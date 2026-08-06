@@ -61,8 +61,10 @@ export function visibleLeaderboardEntries(
   filters: LeaderboardFilterState,
   keyName: LeaderboardKey,
 ): readonly LeaderboardEntry[] {
+  const capabilities = leaderboardFilterCapabilities(keyName, entries);
   return filterLeaderboardEntries(entries, {
     ...filters,
+    priceMode: capabilities.priceMode,
     preserveSourceLensOrder: keyName === 'multimodal-vision-documents'
       && filters.sort === LEADERBOARD_DEFINITIONS[keyName].defaultSort,
   });
@@ -71,6 +73,7 @@ export function visibleLeaderboardEntries(
 export function sameLeaderboardFilters(left: LeaderboardFilterState, right: LeaderboardFilterState): boolean {
   return left.query === right.query
     && left.profile === right.profile
+    && left.priceMode === right.priceMode
     && left.metricKey === right.metricKey
     && left.sort === right.sort
     && left.evidence === right.evidence

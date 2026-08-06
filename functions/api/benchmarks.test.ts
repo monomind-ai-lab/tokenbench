@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   readActiveBenchmarkSnapshot,
+  encodeOpaqueValue,
   type ActiveBenchmarkSnapshot,
 } from '../_shared/benchmark-db';
 import {
@@ -604,6 +605,56 @@ describe('cached benchmark APIs', () => {
     await expect(response.text()).resolves.toBe(cachedBody);
   });
 
+  it('accepts the existing unfiltered cursor emitted by a materialized first page', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-05T12:00:01.000Z');
+    const cursor = encodeOpaqueValue({
+      v: 1,
+      r: REVISION,
+      k: 'llm-overall',
+      p: 'balanced',
+      l: 50,
+      e: false,
+      o: 1,
+    });
+    const cacheEntry = (variant: 'fresh' | 'stale'): ApiCacheEntry => ({
+      scope: 'benchmarks',
+      revision: REVISION,
+      cacheKey: 'leaderboard:llm-overall:balanced:50::0',
+      variant,
+      chunkIndex: 0,
+      etag: `"materialized-leaderboard-${variant}"`,
+      body: JSON.stringify({
+        revision: REVISION,
+        publishedAt: PUBLISHED_AT,
+        freshness: { status: variant, checkedAt: CHECKED_AT },
+        attribution: [],
+        data: {
+          key: 'llm-overall',
+          profile: 'balanced',
+          entries: [],
+          pagination: { limit: 50, total: 2, nextCursor: cursor },
+        },
+      }),
+    });
+    const rows = publishedRows({ apiCacheEntries: [cacheEntry('fresh'), cacheEntry('stale')] });
+
+    const first = await leaderboard('llm-overall', '', rows, undefined, { failOnBenchmarkFactRead: true });
+    const firstBody = await first.json() as { data: { pagination: { nextCursor: string } } };
+    const second = await leaderboard(
+      'llm-overall',
+      `?cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor)}`,
+      rows,
+      undefined,
+      { failOnBenchmarkFactRead: true },
+    );
+    const secondBody = await second.json() as { data?: { entries: Array<{ model: { slug: string } }> }; error?: string };
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(secondBody.data?.entries.map((entry) => entry.model.slug)).toEqual(['beta']);
+  });
+
   it('builds exact route availability while reading each complete fact collection only once', async () => {
     const summaryMetrics = [
       ...metrics.filter((candidate) => candidate.model_key !== 'provider:wrong-lens'),
@@ -934,6 +985,67 @@ describe('cached benchmark APIs', () => {
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({ error: 'Invalid benchmark request' });
+  });
+
+  it('applies supported shared filters and sorts from the complete bounded projection', async () => {
+    const response = await leaderboard(
+      'llm-overall',
+      '?q=Beta&sort=context-desc',
+      publishedRows(),
+      undefined,
+      { failOnBenchmarkFactRead: true },
+    );
+    const body = await response.json() as { data: {
+      entries: Array<{ model: { slug: string } }>;
+      pagination: { total: number; nextCursor: string | null };
+    } };
+
+    expect(response.status).toBe(200);
+    expect(body.data.entries.map((entry) => entry.model.slug)).toEqual(['beta']);
+    expect(body.data.pagination).toEqual({ limit: 50, total: 1, nextCursor: null });
+  });
+
+  it('round trips and filters an exact provider display name containing a comma', async () => {
+    const rows = publishedRows({
+      models: models.map((candidate) => candidate.model_key === 'provider:alpha'
+        ? { ...candidate, creator: 'Provider, Inc.' }
+        : candidate.model_key === 'provider:beta'
+          ? { ...candidate, creator: 'Provider B' }
+          : candidate),
+    });
+    const response = await leaderboard('llm-overall', '?provider=Provider%2C+Inc.&sort=score-desc', rows);
+    const body = await response.json() as { data: { entries: Array<{ model: { slug: string; creator: string } }> } };
+
+    expect(response.status).toBe(200);
+    expect(body.data.entries.map((entry) => [entry.model.slug, entry.model.creator]))
+      .toEqual([['alpha', 'Provider, Inc.']]);
+  });
+
+  it.each([
+    ['an unknown query key', '?unknown=1'],
+    ['a route-unsupported sort', '?sort=rank-asc'],
+    ['a duplicate scalar', '?sort=score-desc&sort=context-desc'],
+    ['a duplicate list value', '?provider=Provider&provider=Provider'],
+    ['a malformed percent escape', '?q=%ZZ'],
+    ['an invalid UTF-8 escape', '?q=%C0%AF'],
+  ])('strictly rejects %s before serving leaderboard bytes', async (_label, query) => {
+    const response = await leaderboard('llm-overall', query);
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: 'Invalid benchmark request' });
+  });
+
+  it('binds pagination cursors to the canonical shared filter state', async () => {
+    const first = await leaderboard('llm-overall', '?q=Provider&sort=score-desc&limit=1');
+    const firstBody = await first.json() as { data: { pagination: { nextCursor: string } } };
+    const reused = await leaderboard(
+      'llm-overall',
+      `?q=Alpha&sort=score-desc&limit=1&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor)}`,
+    );
+
+    expect(first.status).toBe(200);
+    expect(firstBody.data.pagination.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(reused.status).toBe(400);
   });
 
   it('defaults page size to 50 and enforces the safe limit ceiling of 200', async () => {

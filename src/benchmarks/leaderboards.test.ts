@@ -136,6 +136,61 @@ describe('Reasoning and Knowledge evidence lenses', () => {
 });
 
 describe('buildLeaderboard', () => {
+  it('materializes a complete verified 50/50 representative price without changing BenchLM score order', () => {
+    const alpha = model({ modelKey: 'alpha', slug: 'alpha' });
+    const beta = model({ modelKey: 'beta', slug: 'beta' });
+    const result = buildLeaderboard('llm-overall', [alpha, beta], [
+      metric({ modelKey: 'alpha', sourceModelId: 'alpha', value: 80 }),
+      metric({ modelKey: 'beta', sourceModelId: 'beta', value: 90 }),
+    ], [
+      price({ modelKey: 'alpha', sourceModelId: 'alpha', canonicalSlug: 'alpha', inputUsdPerMillion: 0, outputUsdPerMillion: 4 }),
+      price({ modelKey: 'beta', sourceModelId: 'beta', canonicalSlug: 'beta', inputUsdPerMillion: 1, outputUsdPerMillion: 5 }),
+    ], 'inputHeavy');
+
+    expect(result.entries.map((entry) => entry.model.slug)).toEqual(['beta', 'alpha']);
+    expect(result.entries.map((entry) => entry.blendedCostPerMillion)).toEqual([3, 2]);
+    expect(result.entries.every((entry) => entry.primaryPrice?.verificationStatus === 'primary')).toBe(true);
+  });
+
+  it('materializes the same fixed representative price for an exact LMArena row', () => {
+    const arena = model({
+      modelKey: 'lmarena:arena',
+      slug: 'arena',
+      sourceId: 'lmarena',
+      sourceModelId: 'arena',
+      evidenceStatus: 'source_only',
+    });
+    const arenaMetric = metric({
+      modelKey: arena.modelKey,
+      sourceModelId: arena.sourceModelId,
+      metricKey: 'lmarena:text_style_control:overall',
+      sourceId: 'lmarena',
+      sourceArtifactId: 'lmarena-text-style',
+      methodology: 'bradley_terry',
+      unit: 'arena_score',
+      rank: 1,
+      value: 1_200,
+    });
+    const result = buildLeaderboard('llm-human-preference', [arena], [arenaMetric], [
+      price({ modelKey: arena.modelKey, sourceModelId: arena.modelKey, canonicalSlug: arena.slug, inputUsdPerMillion: 2, outputUsdPerMillion: 8 }),
+    ], 'balanced');
+
+    expect(result.entries[0]).toMatchObject({
+      sourceRank: 1,
+      blendedCostPerMillion: 5,
+      primaryPrice: { modelKey: arena.modelKey, verificationStatus: 'primary' },
+    });
+  });
+
+  it('keeps an otherwise eligible row but omits representative pricing when either rate is missing', () => {
+    const result = buildLeaderboard('llm-overall', [model()], [metric()], [
+      price({ outputUsdPerMillion: null }),
+    ], 'balanced');
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({ primaryPrice: null, blendedCostPerMillion: null });
+  });
+
   it('requires supported BenchLM models and an exact ranking-eligible safe metric', () => {
     const categoryOnly = model({ modelKey: 'category-only', slug: 'category-only', rankingEligible: false });
     const estimated = model({ modelKey: 'estimated', slug: 'estimated', evidenceStatus: 'estimated' });

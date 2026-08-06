@@ -13,6 +13,7 @@ import {
 } from './leaderboard-filters';
 import { leaderboardFilterCapabilities } from './leaderboard-filter-state';
 import { LeaderboardTable } from './leaderboard-table';
+import '../index.css';
 
 const ISO_TIME = '2026-08-05T12:00:00.000Z';
 
@@ -92,6 +93,7 @@ function primaryOpenRouterPrice(): NonNullable<LeaderboardEntry['primaryPrice']>
 const DEFAULT_FILTERS: LeaderboardFilterState = {
   query: '',
   profile: 'balanced',
+  priceMode: 'representative',
   metricKey: null,
   sort: 'score-desc',
   providers: [],
@@ -101,6 +103,8 @@ const DEFAULT_FILTERS: LeaderboardFilterState = {
   priceMaximum: null,
   includeEstimated: false,
 };
+
+const PROFILE_FILTERS: LeaderboardFilterState = { ...DEFAULT_FILTERS, priceMode: 'profile' };
 
 function apiEnvelope(
   key: LeaderboardKey,
@@ -201,10 +205,12 @@ describe('LeaderboardTable', () => {
     expect(metricSort.closest('th')).toHaveAttribute('aria-sort', 'other');
     expect(screen.getAllByText('BenchLM multimodal').length).toBeGreaterThan(1);
     expect(screen.getAllByText('LMArena vision').length).toBeGreaterThan(1);
-    const cards = screen.getByRole('list', { name: 'Vision and document AI benchmark cards' });
-    expect(within(cards).getAllByRole('listitem')[0]).toHaveTextContent('Vision Model');
-    expect(within(cards).getAllByRole('listitem')[0]).toHaveTextContent('BenchLM multimodal');
-    expect(within(cards).getAllByRole('listitem')[0]).toHaveTextContent('LMArena vision');
+    const cards = document.querySelector<HTMLOListElement>('.leaderboard-card-list');
+    expect(cards).not.toBeNull();
+    const cardRows = within(cards!).getAllByRole('listitem', { hidden: true });
+    expect(cardRows[0]).toHaveTextContent('Vision Model');
+    expect(cardRows[0]).toHaveTextContent('BenchLM multimodal');
+    expect(cardRows[0]).toHaveTextContent('LMArena vision');
   });
 
   it.each([
@@ -309,7 +315,7 @@ describe('LeaderboardTable', () => {
 describe('LeaderboardFilters', () => {
   it('uses native controls for search, workload profile, sorting, and explicit estimated evidence', () => {
     const onChange = vi.fn();
-    render(<LeaderboardFilters keyName="llm-value" filters={DEFAULT_FILTERS} onChange={onChange} />);
+    render(<LeaderboardFilters keyName="llm-value" filters={PROFILE_FILTERS} onChange={onChange} />);
 
     const search = screen.getByRole('searchbox', { name: 'Search model or provider' });
     const profile = screen.getByRole('radio', { name: 'Input-heavy' });
@@ -319,13 +325,13 @@ describe('LeaderboardFilters', () => {
     expect(sort.tagName).toBe('SELECT');
 
     fireEvent.change(search, { target: { value: 'provider a' } });
-    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_FILTERS, query: 'provider a' });
+    expect(onChange).toHaveBeenLastCalledWith({ ...PROFILE_FILTERS, query: 'provider a' });
     fireEvent.click(profile);
-    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_FILTERS, profile: 'inputHeavy' });
+    expect(onChange).toHaveBeenLastCalledWith({ ...PROFILE_FILTERS, profile: 'inputHeavy' });
     fireEvent.change(sort, { target: { value: 'price-asc' } });
-    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_FILTERS, sort: 'price-asc' });
+    expect(onChange).toHaveBeenLastCalledWith({ ...PROFILE_FILTERS, sort: 'price-asc' });
     fireEvent.click(includeEstimated);
-    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_FILTERS, includeEstimated: true });
+    expect(onChange).toHaveBeenLastCalledWith({ ...PROFILE_FILTERS, includeEstimated: true });
   });
 
   it('omits the estimated-model control on pure LMArena and pricing routes', () => {
@@ -344,6 +350,7 @@ describe('LeaderboardFilters', () => {
 
     expect(parsed).toEqual({
       profile: 'outputHeavy',
+      priceMode: 'profile',
       sort: 'price-asc',
       query: 'Provider A',
       metricKey: null,
@@ -586,6 +593,24 @@ describe('LeaderboardFilters', () => {
 
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ priceMinimum: null, priceMaximum: null }));
   });
+
+  it('allows a long unbroken provider label to wrap inside a narrow filter control', () => {
+    const longProvider = 'ProviderWithAnExtremelyLongUnbrokenDisplayName';
+    const longEntry = entry({ model: { ...entry().model, creator: longProvider } });
+    const otherEntry = entry({
+      model: { ...entry().model, modelKey: 'other', slug: 'other', creator: 'Provider A' },
+      metric: { ...entry().metric!, modelKey: 'other', sourceModelId: 'other' },
+    });
+
+    render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={leaderboardFilterCapabilities('llm-coding', [longEntry, otherEntry])}
+    />);
+
+    expect(getComputedStyle(screen.getByText(longProvider)).overflowWrap).toBe('anywhere');
+  });
 });
 
 describe('leaderboard routes and the Home decision snapshot', () => {
@@ -634,6 +659,131 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc&q=alpha&provider=Provider+B'));
     expect(replaceState).toHaveBeenCalled();
     replaceState.mockRestore();
+  });
+
+  it('preserves a supported data-dependent sort until route capabilities load and when the URL is reopened', async () => {
+    const alpha = entry({
+      model: { ...entry().model, modelKey: 'alpha', slug: 'alpha', name: 'Alpha', contextWindowTokens: 32_000 },
+      metric: { ...entry().metric!, modelKey: 'alpha', sourceModelId: 'alpha', value: 99 },
+      contextWindowTokens: 32_000,
+    });
+    const beta = entry({
+      model: { ...entry().model, modelKey: 'beta', slug: 'beta', name: 'Beta', contextWindowTokens: 128_000 },
+      metric: { ...entry().metric!, modelKey: 'beta', sourceModelId: 'beta', value: 80 },
+      contextWindowTokens: 128_000,
+    });
+    let resolveResponse: ((response: Response) => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>((resolve) => { resolveResponse = resolve; })));
+    window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=balanced&sort=context-desc');
+
+    const firstRender = render(<App />);
+
+    expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
+    resolveResponse?.(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta])));
+    const firstTable = await screen.findByRole('table', { name: 'AI coding model benchmarks' });
+    expect(within(firstTable).getAllByRole('row')[1]).toHaveTextContent('Beta');
+    expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
+
+    firstRender.unmount();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [alpha, beta]))));
+    render(<App />);
+
+    const reopened = await screen.findByRole('table', { name: 'AI coding model benchmarks' });
+    expect(within(reopened).getAllByRole('row')[1]).toHaveTextContent('Beta');
+    expect(window.location.search).toBe('?profile=balanced&sort=context-desc');
+  });
+
+  it('applies canonical popstate query, profile, controls, and rows without a replace loop', async () => {
+    const valueEntry = (
+      modelKey: string,
+      name: string,
+      creator: string,
+      profile: 'balanced' | 'outputHeavy',
+    ) => {
+      const inputUsdPerMillion = modelKey === 'alpha' ? 1 : 3;
+      const outputUsdPerMillion = modelKey === 'alpha' ? 5 : 1;
+      const blendedCostPerMillion = profile === 'balanced'
+        ? inputUsdPerMillion * 0.75 + outputUsdPerMillion * 0.25
+        : (inputUsdPerMillion + outputUsdPerMillion) / 2;
+      return entry({
+        model: { ...entry().model, modelKey, slug: modelKey, name, creator },
+        metric: { ...entry().metric!, modelKey, sourceModelId: modelKey, metricKey: 'benchlm:overall:raw', category: 'overall' },
+        primaryPrice: {
+          ...primaryOpenRouterPrice(),
+          modelKey,
+          sourceModelId: modelKey,
+          canonicalSlug: modelKey,
+          inputUsdPerMillion,
+          outputUsdPerMillion,
+        },
+        blendedCostPerMillion,
+        contextWindowTokens: 128_000,
+        onValueFrontier: true,
+      });
+    };
+    const fetchMock = vi.fn((input: string) => {
+      const profile = String(input).includes('profile=outputHeavy') ? 'outputHeavy' : 'balanced';
+      return Promise.resolve(jsonResponse(apiEnvelope('llm-value', profile, [
+        valueEntry('alpha', 'Alpha', 'Provider A', profile),
+        valueEntry('beta', 'Beta', 'Provider B', profile),
+      ])));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    window.history.replaceState({}, '', '/leaderboards/llm/value/?profile=balanced&sort=pareto-score-desc');
+    const replaceState = vi.spyOn(window.history, 'replaceState');
+
+    render(<App />);
+    expect(await screen.findByRole('group', { name: 'Providers' })).toBeInTheDocument();
+    replaceState.mockClear();
+
+    window.history.pushState({}, '', '/leaderboards/llm/value/?profile=outputHeavy&sort=price-asc&q=Beta&provider=Provider+B');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    await waitFor(() => expect(screen.getByRole('radio', { name: 'Output-heavy' })).toBeChecked());
+    expect(screen.getByRole('searchbox', { name: 'Search model or provider' })).toHaveValue('Beta');
+    expect(screen.getByRole('checkbox', { name: 'Provider B' })).toBeChecked();
+    expect(await screen.findAllByText('Beta')).toHaveLength(2);
+    expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('profile=outputHeavy');
+    expect(replaceState).not.toHaveBeenCalled();
+    replaceState.mockRestore();
+  });
+
+  it('removes its popstate listener when the leaderboard page unmounts', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding'))));
+    window.history.replaceState({}, '', '/leaderboards/llm/coding/');
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+    const removeEventListener = vi.spyOn(window, 'removeEventListener');
+
+    const mounted = render(<App />);
+    await screen.findByRole('table', { name: 'AI coding model benchmarks' });
+    const popstateListener = addEventListener.mock.calls.find(([type]) => type === 'popstate')?.[1];
+
+    expect(popstateListener).toBeTypeOf('function');
+    mounted.unmount();
+    expect(removeEventListener).toHaveBeenCalledWith('popstate', popstateListener);
+    addEventListener.mockRestore();
+    removeEventListener.mockRestore();
+  });
+
+  it('restores a provider name containing a comma without splitting the value', async () => {
+    const incorporated = entry({
+      model: { ...entry().model, modelKey: 'inc', slug: 'inc', name: 'Incorporated Model', creator: 'Provider, Inc.' },
+      metric: { ...entry().metric!, modelKey: 'inc', sourceModelId: 'inc' },
+    });
+    const other = entry({
+      model: { ...entry().model, modelKey: 'other', slug: 'other', name: 'Other Model', creator: 'Provider A' },
+      metric: { ...entry().metric!, modelKey: 'other', sourceModelId: 'other' },
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(apiEnvelope('llm-coding', 'balanced', [incorporated, other]))));
+    window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
+
+    render(<App />);
+
+    expect(await screen.findByRole('checkbox', { name: 'Provider, Inc.' })).toBeChecked();
+    expect(screen.getAllByText('Incorporated Model')).toHaveLength(2);
+    expect(screen.queryByText('Other Model')).not.toBeInTheDocument();
+    expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
   });
 
   it('shows cached stale rows with an explicit freshness warning', async () => {

@@ -40,15 +40,6 @@ function useLeaderboardFilters(keyName: LeaderboardKey): [LeaderboardFilterState
     typeof window === 'undefined' ? '' : window.location.search,
     keyName,
   ));
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const query = serializeLeaderboardFilters(filters);
-    const current = window.location.search.replace(/^\?/, '');
-    if (current === query) return;
-    window.history.replaceState({}, '', `${window.location.pathname}?${query}${window.location.hash}`);
-  }, [filters]);
-
   return [filters, setFilters];
 }
 
@@ -104,6 +95,26 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries);
     if (!sameLeaderboardFilters(filters, normalized)) setFilters(normalized);
   }, [filters, keyName, publishedEntries, setFilters]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPopState = () => {
+      const restored = parseLeaderboardFilters(window.location.search, keyName, publishedEntries);
+      if (!sameLeaderboardFilters(filters, restored)) setFilters(restored);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [filters, keyName, publishedEntries, setFilters]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !publishedEntries) return;
+    const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries);
+    if (!sameLeaderboardFilters(filters, normalized)) return;
+    const query = serializeLeaderboardFilters(filters);
+    const current = window.location.search.replace(/^\?/, '');
+    if (current === query) return;
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}?${query}${window.location.hash}`);
+  }, [filters, keyName, publishedEntries]);
 
   const entries = publishedEntries ? visibleLeaderboardEntries(publishedEntries, filters, keyName) : [];
 

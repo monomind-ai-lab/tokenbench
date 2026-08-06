@@ -316,6 +316,7 @@ function buildBenchLmLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
   metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
+  pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>,
 ): readonly LeaderboardEntry[] {
   const metricKey = definition.metricKeys[0];
   const entries = models
@@ -323,7 +324,15 @@ function buildBenchLmLeaderboard(
     .sort(compareModels)
     .flatMap((model) => {
       const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
-      return metric ? [makeEntry(model, metric)] : [];
+      if (!metric) return [];
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy');
+      return [makeEntry(
+        model,
+        metric,
+        [metric],
+        hostedPrice?.price ?? null,
+        hostedPrice?.blendedCostPerMillion ?? null,
+      )];
     });
   return sortLeaderboardEntries(entries, definition.defaultSort);
 }
@@ -332,6 +341,7 @@ function buildLmArenaLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
   metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
+  pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>,
 ): readonly LeaderboardEntry[] {
   const metricKey = definition.metricKeys[0];
   const entries = models
@@ -339,7 +349,15 @@ function buildLmArenaLeaderboard(
     .sort(compareModels)
     .flatMap((model) => {
       const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isExactLmArenaMetric(model, candidate, metricKey));
-      return metric ? [makeEntry(model, metric)] : [];
+      if (!metric) return [];
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy');
+      return [makeEntry(
+        model,
+        metric,
+        [metric],
+        hostedPrice?.price ?? null,
+        hostedPrice?.blendedCostPerMillion ?? null,
+      )];
     });
   return sortLeaderboardEntries(entries, definition.defaultSort);
 }
@@ -417,6 +435,7 @@ function buildMultimodalLeaderboard(
   definition: LeaderboardDefinition,
   models: readonly BenchmarkModel[],
   metricsByModel: ReadonlyMap<string, readonly BenchmarkMetric[]>,
+  pricesByModel: ReadonlyMap<string, readonly BenchmarkPriceCheck[]>,
 ): readonly LeaderboardEntry[] {
   const entries = models
     .slice()
@@ -425,7 +444,15 @@ function buildMultimodalLeaderboard(
       const lenses = definition.metricKeys
         .map((metricKey) => metricForMultimodalLens(model, metricsByModel.get(model.modelKey) ?? [], metricKey))
         .filter((metric): metric is BenchmarkMetric => metric !== null);
-      return lenses.length > 0 ? [makeEntry(model, lenses[0], lenses)] : [];
+      if (lenses.length === 0) return [];
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy');
+      return [makeEntry(
+        model,
+        lenses[0],
+        lenses,
+        hostedPrice?.price ?? null,
+        hostedPrice?.blendedCostPerMillion ?? null,
+      )];
     });
 
   return entries.slice().sort((left, right) => {
@@ -464,10 +491,10 @@ export function buildLeaderboard(
 
   switch (definition.kind) {
     case 'benchlm':
-      entries = buildBenchLmLeaderboard(definition, models, indexes.metricsByModel);
+      entries = buildBenchLmLeaderboard(definition, models, indexes.metricsByModel, indexes.pricesByModel);
       break;
     case 'lmarena':
-      entries = buildLmArenaLeaderboard(definition, models, indexes.metricsByModel);
+      entries = buildLmArenaLeaderboard(definition, models, indexes.metricsByModel, indexes.pricesByModel);
       break;
     case 'value':
       entries = buildValueLeaderboard(definition, models, indexes.metricsByModel, indexes.pricesByModel, profile);
@@ -476,7 +503,7 @@ export function buildLeaderboard(
       entries = buildPricingContextLeaderboard(models, indexes.pricesByModel, profile);
       break;
     case 'multimodal':
-      entries = buildMultimodalLeaderboard(definition, models, indexes.metricsByModel);
+      entries = buildMultimodalLeaderboard(definition, models, indexes.metricsByModel, indexes.pricesByModel);
       break;
   }
 

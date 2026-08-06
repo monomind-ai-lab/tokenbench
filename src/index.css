@@ -463,7 +463,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .leaderboard-profile-options label:has(input:checked) { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); color: var(--primary-strong); }
 .leaderboard-profile-options input, .leaderboard-check-options input, .leaderboard-estimated-control input { width: 16px; height: 16px; min-height: 16px; margin: 0; accent-color: var(--primary); }
 .leaderboard-check-options { display: flex; flex-wrap: wrap; gap: 6px; }
-.leaderboard-check-options label { min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+.leaderboard-check-options label { min-width: 0; max-width: 100%; min-height: 44px; display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); color: var(--muted); font-size: 0.72rem; font-weight: 700; }
+.leaderboard-check-options label span { min-width: 0; overflow-wrap: anywhere; }
 .leaderboard-check-options label:has(input:checked) { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 52%, var(--surface)); color: var(--primary-strong); }
 .leaderboard-price-inputs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .leaderboard-price-inputs label { min-width: 0; display: grid; gap: 5px; color: var(--muted); font-family: var(--font-label); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }

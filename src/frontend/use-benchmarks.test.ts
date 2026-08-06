@@ -766,6 +766,26 @@ describe('useBenchmarkLeaderboard', () => {
     expect(result.current.envelope?.data.entries[0]?.onValueFrontier).toBe(false);
   });
 
+  it('accepts only an exact fixed representative price on a BenchLM capability row', async () => {
+    const payload = codingEnvelope({
+      primaryPrice: primaryOpenRouterPrice(),
+      blendedCostPerMillion: 3,
+      contextWindowTokens: 128_000,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      attribution: [BENCHLM_ATTRIBUTION, OPENROUTER_ATTRIBUTION],
+    })));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-coding'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.entries[0]).toMatchObject({
+      blendedCostPerMillion: 3,
+      primaryPrice: { verificationStatus: 'primary' },
+    });
+  });
+
   it.each([
     ['has no primary price', pricingEnvelope({ primaryPrice: null })],
     ['has a price for a different model', pricingEnvelope({

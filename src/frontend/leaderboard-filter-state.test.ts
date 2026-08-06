@@ -75,6 +75,7 @@ describe('leaderboard filter state', () => {
     expect(state).toEqual({
       query: 'Alpha',
       profile: 'balanced',
+      priceMode: 'representative',
       metricKey: null,
       sort: 'score-desc',
       providers: [],
