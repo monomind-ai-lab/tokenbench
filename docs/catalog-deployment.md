@@ -63,7 +63,7 @@ rebuild the full fact graph.
 | tokenbench-catalog-ingest | 0 */6 * * * | Refreshes the approved OpenRouter model catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
 | tokenbench-catalog-ingest | 30 */6 * * * | Refreshes the approved OpenCode Zen catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
 | tokenbench-catalog-ingest | 0 */3 * * * | Rotates the reviewed manual subscription manifest. | Unverified providers remain provenance-only. |
-| tokenbench-benchmark-ingest | 15 */12 * * * | Refreshes approved BenchLM, LMArena, LiteLLM, and catalog-correlated route evidence. | This Worker is scheduled-only; its fetch handler intentionally returns 405. |
+| tokenbench-benchmark-ingest | 15 */12 * * * | Refreshes LMArena, LiteLLM, and catalog-correlated route evidence twice daily; BenchLM completes at most one successful upstream check per UTC day. | This Worker is scheduled-only; its fetch handler intentionally returns 405. |
 
 The automated OpenRouter and OpenCode source fetches remain at four runs per
 day. That cadence should be reduced only after observed rate limiting (notably
@@ -72,6 +72,15 @@ request frequency. Ordinary 5xx failures do not justify slowing the catalog.
 LMArena stays at two runs per day; if it becomes unstable, reduce its fetch
 concurrency before reducing freshness cadence. Manual-manifest rotations do not
 make external provider requests.
+
+On later benchmark runs in a UTC day, the Worker rehydrates all five
+hash-verified immutable BenchLM projections from R2 instead of calling
+BenchLM. A conditional D1 daily-check lease allows only one overlapping
+invocation to make the upstream check; a 15-minute abandoned lease can be
+reclaimed, while handled failures release the lease for a retry. A successful
+304 advances benchmark freshness without publishing a new content revision.
+LMArena and LiteLLM continue to refresh on both scheduled runs, and the existing
+R2-before-atomic-D1 publication boundary remains in force.
 
 There is no public HTTP endpoint for a benchmark refresh. A controlled refresh
 must use an authorized Cloudflare scheduling or dashboard mechanism, not a

@@ -46,8 +46,10 @@ import {
 import {
   parseBenchLm,
   prepareBenchLmMixed,
+  rehydrateBenchLmProjections,
   type BenchLmPreparationInputs,
   type PreparedBenchLmPayloads,
+  type StoredBenchLmProjections,
 } from './benchlm';
 import {
   LMARENA_SUBSETS,
@@ -66,6 +68,7 @@ type BoundStatement = {
   bind(...values: unknown[]): BoundStatement;
   first<T = Record<string, unknown>>(): Promise<T | null>;
   all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
+  run(): Promise<{ meta?: { changes?: number } }>;
 };
 
 interface D1Database {
@@ -173,6 +176,9 @@ const MAX_RETRIES = 2;
 const MAX_RETRY_DELAY_MS = 10_000;
 const MAX_ERROR_LENGTH = 1_000;
 const MAX_BENCHLM_BYTES = 8 * 1024 * 1024;
+const BENCHLM_DAILY_CHECK_ARTIFACT = 'daily-network-check';
+const BENCHLM_DAILY_LEASE_PREFIX = 'benchlm-daily-lease:';
+const BENCHLM_DAILY_LEASE_MS = 15 * 60 * 1000;
 const MAX_LMARENA_PAGE_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_PARQUET_BYTES = 2 * 1024 * 1024;
 const MAX_LMARENA_HUB_INFO_BYTES = 64 * 1024;
@@ -487,7 +493,7 @@ async function readBoundedResponse(
   return bytes;
 }
 
-async function readStoredBytes(bucket: R2Bucket, source: StoredSourceRecord, label: string): Promise<{ bytes: Uint8Array; metadata: Record<string, string> }> {
+async function readStoredBytes(bucket: R2Bucket, source: BenchmarkSourceRecord, label: string): Promise<{ bytes: Uint8Array; metadata: Record<string, string> }> {
   const object = await bucket.get(source.snapshotKey);
   if (!object) throw new Error(`${label} immutable snapshot is missing`);
   const bytes = new Uint8Array(await object.arrayBuffer());
@@ -503,6 +509,97 @@ async function readStoredBytes(bucket: R2Bucket, source: StoredSourceRecord, lab
 
 function sourceKey(sourceId: string, artifactId: string): string {
   return `${sourceId}\u0000${artifactId}`;
+}
+
+function parseUtcTimestamp(value: unknown): { milliseconds: number; date: string } | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(value)) return null;
+  const milliseconds = Date.parse(value);
+  if (!Number.isFinite(milliseconds)) return null;
+  const normalized = value.includes('.') ? value : `${value.slice(0, -1)}.000Z`;
+  const iso = new Date(milliseconds).toISOString();
+  if (iso !== normalized) return null;
+  return { milliseconds, date: iso.slice(0, 10) };
+}
+
+/** Returns whether immutable active BenchLM projections need a UTC-day refresh. */
+export function benchLmFetchDue(
+  previous: ReadonlyMap<string, Pick<BenchmarkSourceRecord, 'observedAt'>>,
+  checkedAt: string,
+): boolean {
+  const checked = parseUtcTimestamp(checkedAt);
+  if (!checked) return true;
+  let latest: { milliseconds: number; date: string } | null = null;
+  for (const artifact of BENCHLM_ARTIFACTS) {
+    const source = previous.get(sourceKey('benchlm', artifact));
+    if (!source) return true;
+    const observed = parseUtcTimestamp(source.observedAt);
+    if (!observed) return true;
+    if (!latest || observed.milliseconds > latest.milliseconds) latest = observed;
+  }
+  return latest === null || latest.date !== checked.date;
+}
+
+function benchLmDailyLeaseValue(checkedAt: string, leaseId: string): string {
+  const checked = parseUtcTimestamp(checkedAt);
+  if (!checked) throw new Error('BenchLM daily lease checkedAt must be a finite UTC timestamp');
+  if (leaseId.trim().length === 0 || leaseId.includes('|')) {
+    throw new Error('BenchLM daily lease ID must be non-empty and cannot contain a pipe');
+  }
+  return `${BENCHLM_DAILY_LEASE_PREFIX}${new Date(checked.milliseconds + BENCHLM_DAILY_LEASE_MS).toISOString()}|${leaseId}`;
+}
+
+const CLAIM_BENCHLM_DAILY_CHECK = `/* benchlm daily-check claim */
+INSERT INTO benchmark_refresh_state (source_id, artifact_id, last_success_at, last_revision, last_error)
+SELECT 'benchlm', '${BENCHLM_DAILY_CHECK_ARTIFACT}', NULL, NULL, ?
+WHERE NOT EXISTS (
+  SELECT 1 FROM benchmark_refresh_state
+  WHERE source_id = 'benchlm' AND artifact_id = '${BENCHLM_DAILY_CHECK_ARTIFACT}'
+    AND (
+      strftime('%Y-%m-%d', last_success_at) = strftime('%Y-%m-%d', ?)
+      OR (
+        last_error GLOB '${BENCHLM_DAILY_LEASE_PREFIX}*|*'
+        AND substr(last_error, ${BENCHLM_DAILY_LEASE_PREFIX.length + 1}, 24) > ?
+      )
+    )
+)
+ON CONFLICT(source_id, artifact_id) DO UPDATE SET last_error = excluded.last_error`;
+
+/** Claims the one active BenchLM network check for a UTC day. */
+export async function claimBenchLmDailyCheck(
+  db: D1Database,
+  checkedAt: string,
+  leaseId: string,
+): Promise<boolean> {
+  const lease = benchLmDailyLeaseValue(checkedAt, leaseId);
+  const result = await db.prepare(CLAIM_BENCHLM_DAILY_CHECK).bind(lease, checkedAt, checkedAt).run();
+  return result.meta?.changes === 1;
+}
+
+async function completeBenchLmDailyCheck(
+  db: D1Database,
+  checkedAt: string,
+  revision: string,
+  leaseId: string,
+): Promise<void> {
+  const lease = benchLmDailyLeaseValue(checkedAt, leaseId);
+  await db.prepare(`/* benchlm daily-check complete */
+    UPDATE benchmark_refresh_state
+    SET last_success_at = ?, last_revision = ?, last_error = NULL
+    WHERE source_id = 'benchlm' AND artifact_id = '${BENCHLM_DAILY_CHECK_ARTIFACT}' AND last_error = ?
+  `).bind(checkedAt, revision, lease).run();
+}
+
+async function releaseBenchLmDailyCheck(
+  db: D1Database,
+  checkedAt: string,
+  leaseId: string,
+): Promise<void> {
+  const lease = benchLmDailyLeaseValue(checkedAt, leaseId);
+  await db.prepare(`/* benchlm daily-check release */
+    UPDATE benchmark_refresh_state
+    SET last_error = NULL
+    WHERE source_id = 'benchlm' AND artifact_id = '${BENCHLM_DAILY_CHECK_ARTIFACT}' AND last_error = ?
+  `).bind(lease).run();
 }
 
 function binaryCompare(left: string, right: string): number {
@@ -779,6 +876,64 @@ async function prepareBenchLmSource(
       }),
     });
     return { batch, evidence: sourceFromPreparedBenchLm(prepared, freshArtifacts, snapshotKeys) };
+  } catch (error) {
+    throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
+  }
+}
+
+/** Rehydrates the complete active BenchLM projection bundle without upstream I/O. */
+export async function prepareStoredBenchLmSource(
+  bucket: R2Bucket,
+  previous: ReadonlyMap<string, BenchmarkSourceRecord>,
+): Promise<PreparedSource> {
+  try {
+    const storedByArtifact = new Map<BenchLmArtifact, BenchmarkSourceRecord>();
+    for (const artifact of BENCHLM_ARTIFACTS) {
+      const source = previous.get(sourceKey('benchlm', artifact));
+      if (!source) throw new Error(`BenchLM ${artifact} immutable active snapshot is missing`);
+      if (source.sourceId !== 'benchlm' || source.artifactId !== artifact) {
+        throw new Error(`BenchLM ${artifact} immutable active snapshot has the wrong source identity`);
+      }
+      storedByArtifact.set(artifact, source);
+    }
+    const entries = await Promise.all(BENCHLM_ARTIFACTS.map(async (artifact) => {
+      const source = storedByArtifact.get(artifact);
+      if (!source) throw new Error(`BenchLM ${artifact} immutable active snapshot is missing`);
+      const { bytes } = await readStoredBytes(bucket, source, `BenchLM ${artifact}`);
+      return [artifact, {
+        projectedBytes: bytes,
+        projectedSha256: source.contentHash.slice('sha256:'.length),
+        originalSha256: source.originalContentHash.slice('sha256:'.length),
+        headers: { etag: source.etag, lastModified: source.lastModified },
+      }] as const;
+    }));
+    const prepared = await rehydrateBenchLmProjections(
+      Object.fromEntries(entries) as StoredBenchLmProjections,
+    );
+    const leaderBoard = storedByArtifact.get('leaderboard');
+    if (!leaderBoard) throw new Error('BenchLM leaderboard immutable active snapshot is missing');
+    const parsed = await parseBenchLm(prepared, leaderBoard.observedAt);
+    const batch = validateNormalizedSourceBatch({
+      ...parsed,
+      sources: parsed.sources.map((source) => {
+        const artifact = source.artifactId as BenchLmArtifact;
+        const stored = storedByArtifact.get(artifact);
+        if (!stored) throw new Error(`BenchLM ${source.artifactId} immutable active snapshot is missing`);
+        return {
+          ...source,
+          sourceUrl: stored.sourceUrl,
+          observedAt: stored.observedAt,
+          etag: stored.etag,
+          lastModified: stored.lastModified,
+          upstreamRevision: stored.upstreamRevision,
+          schemaVersion: stored.schemaVersion,
+          snapshotKey: stored.snapshotKey,
+          contentHash: stored.contentHash,
+          originalContentHash: stored.originalContentHash,
+        };
+      }),
+    });
+    return { batch, evidence: [] };
   } catch (error) {
     throw new RefreshFailure('benchlm', 'bundle', error instanceof Error ? error.message : String(error));
   }
@@ -2119,13 +2274,25 @@ export async function refreshBenchmarkRevision(
   dependencies: RefreshDependencies = defaultDependencies(),
 ): Promise<RefreshResult> {
   const checkedAt = dependencies.now();
+  let benchLmLeaseId: string | null = null;
   try {
     const publicationAttemptId = dependencies.publicationAttemptId();
     const catalog = await readActiveCatalogSource(env.CATALOG_DB);
     const active = await readActiveBenchmarkRevision(env.CATALOG_DB);
     const previous = await readActiveSourceRecords(env.CATALOG_DB, active?.revision ?? null);
     const openRouter = await loadOpenRouterCatalog(env.SOURCE_SNAPSHOTS, catalog);
-    const benchLm = await prepareBenchLmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
+    let benchLm: PreparedSource;
+    if (benchLmFetchDue(previous, checkedAt)) {
+      const leaseId = `${publicationAttemptId}:benchlm`;
+      if (await claimBenchLmDailyCheck(env.CATALOG_DB, checkedAt, leaseId)) {
+        benchLmLeaseId = leaseId;
+        benchLm = await prepareBenchLmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
+      } else {
+        benchLm = await prepareStoredBenchLmSource(env.SOURCE_SNAPSHOTS, previous);
+      }
+    } else {
+      benchLm = await prepareStoredBenchLmSource(env.SOURCE_SNAPSHOTS, previous);
+    }
     const liteLlm = await prepareLiteLlmSource(env.SOURCE_SNAPSHOTS, previous, checkedAt, dependencies);
     let pages: LmArenaPage[];
     try {
@@ -2164,6 +2331,10 @@ export async function refreshBenchmarkRevision(
         env.CATALOG_DB,
         buildUnchangedPublicationStatementPlan(env.CATALOG_DB, snapshot, publicationAttemptId),
       );
+      if (benchLmLeaseId !== null) {
+        await completeBenchLmDailyCheck(env.CATALOG_DB, checkedAt, active.revision, benchLmLeaseId);
+        benchLmLeaseId = null;
+      }
       return { status: 'unchanged', revision: active.revision, checkedAt, error: null };
     }
     const generatedAt = normalized.sources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'leaderboard')?.upstreamRevision ?? checkedAt;
@@ -2183,8 +2354,19 @@ export async function refreshBenchmarkRevision(
         publicationAttemptId,
       ),
     );
+    if (benchLmLeaseId !== null) {
+      await completeBenchLmDailyCheck(env.CATALOG_DB, checkedAt, revision, benchLmLeaseId);
+      benchLmLeaseId = null;
+    }
     return { status: 'published', revision, checkedAt, error: null };
   } catch (error) {
+    if (benchLmLeaseId !== null) {
+      try {
+        await releaseBenchLmDailyCheck(env.CATALOG_DB, checkedAt, benchLmLeaseId);
+      } catch (releaseError) {
+        console.error(JSON.stringify({ message: 'BenchLM daily-check lease could not be released', error: releaseError instanceof Error ? releaseError.message : String(releaseError) }));
+      }
+    }
     const target = failureTarget(error);
     const message = (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
     try {

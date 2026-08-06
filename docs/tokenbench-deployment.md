@@ -29,12 +29,18 @@ cutover; the underlying legacy Pages project is retained.
 ## Fetch cadence decision
 
 Keep the checked-in catalog cadence: OpenRouter and OpenCode each refresh four
-times per day. Keep benchmark ingestion at twice per day. The observed release
-failures were request-time CPU exhaustion and D1's aggregate 32 MiB RPC limit,
-not upstream throttling; no 429 pattern was observed. Reduce an upstream fetch
-cadence only after repeated provider-policy or rate-limit evidence. If an
-upstream becomes unstable without 429s, lower fetch concurrency before lowering
-freshness. Manual catalog rotations do not make upstream requests.
+times per day. Keep benchmark ingestion at twice per day: LMArena and LiteLLM
+refresh on both runs, while BenchLM completes at most one successful upstream
+network check per UTC calendar day and otherwise reuses its verified immutable
+projections. The daily BenchLM lease prevents overlapping cron or controlled
+invocations from checking upstream twice; a handled failure releases it for a
+retry, and a 304 updates freshness without creating a content revision. The
+observed release failures were request-time CPU exhaustion and D1's aggregate
+32 MiB RPC limit, not upstream throttling; no 429 pattern was observed. Reduce
+an upstream fetch cadence only after repeated provider-policy or rate-limit
+evidence. If an upstream becomes unstable without 429s, lower fetch concurrency
+before lowering freshness. Manual catalog rotations do not make upstream
+requests.
 
 ## Release inputs
 
