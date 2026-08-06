@@ -28,7 +28,7 @@ const OPENCODE_PRICING_URL = 'https://opencode.ai/docs/zen/';
 const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 const OPENROUTER_IDENTITY_FIELDS = [
-  'id', 'canonical_slug', 'name', 'created', 'description', 'context_length',
+  'id', 'canonical_slug', 'name', 'created', 'context_length',
 ] as const;
 const OPENROUTER_TRAILING_FIELDS = [
   'per_request_limits', 'supported_parameters', 'expiration_date', 'knowledge_cutoff',
