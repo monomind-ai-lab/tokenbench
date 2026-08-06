@@ -315,10 +315,39 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .skeleton { display: block; width: 75%; height: 18px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-low), var(--surface-high), var(--surface-low)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
 .skeleton-lg { width: 52%; height: 45px; }
 .skeleton-short { width: 40%; }
-.app-footer { width: min(100% - 64px, 1280px); margin: 0 auto; padding: 22px 0 34px; display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; }
+.app-footer { width: min(100% - 64px, 1280px); margin: 0 auto; padding: 22px 0 34px; display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(300px, 1.45fr); align-items: start; gap: 16px 28px; color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; }
 .footer-brand, .footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
 .app-footer a { min-height: 44px; display: inline-flex; align-items: center; color: var(--muted); font-weight: 700; text-decoration: none; }
 .app-footer a:hover { color: var(--primary-strong); }
+
+/* Newsletter consent is intentionally a small, explicit form: the footer
+   explains the monthly offer while Compare begins with alerts consent alone. */
+.newsletter-signup { min-width: 0; display: grid; align-content: start; gap: 11px; padding: 16px; border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--outline)); border-radius: 10px; background: color-mix(in srgb, var(--primary-soft) 28%, var(--surface)); color: var(--text); font-family: var(--font-body); }
+.newsletter-signup-offer { display: grid; gap: 5px; }
+.newsletter-signup h2 { margin: 0; font-family: var(--font-display); font-size: 0.95rem; font-weight: 650; letter-spacing: -0.025em; line-height: 1.25; }
+.newsletter-signup p { margin: 0; color: var(--muted); font-size: 0.69rem; line-height: 1.5; }
+.newsletter-signup-alert-control { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); color: var(--text); font-size: 0.73rem; font-weight: 700; line-height: 1.35; }
+.newsletter-signup-alert-control:has(input:checked) { border-color: color-mix(in srgb, var(--primary) 72%, var(--outline)); background: color-mix(in srgb, var(--primary-soft) 58%, var(--surface)); color: var(--primary-strong); }
+.newsletter-signup-alert-control input { flex: 0 0 auto; width: 18px; height: 18px; min-height: 18px; margin: 0; accent-color: var(--primary); }
+.newsletter-signup form { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; }
+.newsletter-signup form > label { grid-column: 1 / -1; color: var(--muted); font-family: var(--font-label); font-size: 0.61rem; font-weight: 800; letter-spacing: 0.065em; text-transform: uppercase; }
+.newsletter-signup form > input { width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface); font-size: 0.78rem; }
+.newsletter-signup form > input[aria-invalid='true'] { border-color: var(--danger); }
+.newsletter-signup form > p, .newsletter-signup form > [role='alert'] { grid-column: 1 / -1; }
+.newsletter-signup button { min-height: 44px; padding: 8px 12px; border: 1px solid var(--primary); border-radius: 7px; background: var(--primary-card); color: var(--primary-contrast); font-size: 0.72rem; font-weight: 800; white-space: nowrap; }
+.newsletter-signup button:disabled, .newsletter-signup input:disabled { cursor: not-allowed; opacity: 0.65; }
+.newsletter-signup-honeypot { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.newsletter-signup form > [role='status'], .newsletter-signup form > [role='alert'] { padding: 9px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); }
+.newsletter-signup form > [role='status'] { border-color: color-mix(in srgb, var(--primary) 46%, var(--outline)); color: var(--primary-strong); }
+.newsletter-signup form > [role='alert'] { border-color: color-mix(in srgb, var(--danger) 62%, var(--outline)); color: var(--danger); }
+.comparison-newsletter-signup { min-width: 0; }
+.comparison-newsletter-signup .newsletter-signup { padding: 14px 16px; background: color-mix(in srgb, var(--primary-soft) 22%, var(--surface)); box-shadow: none; }
+.comparison-newsletter-signup .newsletter-signup[data-compact='true'] { gap: 9px; }
+
+@media (max-width: 1023px) {
+  .app-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-footer .newsletter-signup { grid-column: 1 / -1; }
+}
 
 .guides-main { width: min(100% - 64px, 1120px); margin: 0 auto; padding: 40px 0 80px; }
 .eyebrow { display: inline-flex; align-items: center; gap: 7px; color: var(--primary-strong); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
@@ -581,7 +610,11 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .comparison-table { display: none; }
   .comparison-cards { display: grid; }
   .status-banner { align-items: flex-start; flex-direction: column; }
-  .app-footer { align-items: flex-start; flex-direction: column; }
+  .app-footer { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .app-footer .newsletter-signup { grid-column: auto; }
+  .newsletter-signup { padding: 14px; }
+  .newsletter-signup form { grid-template-columns: minmax(0, 1fr); }
+  .newsletter-signup button { width: 100%; }
   .guides-main { padding: 20px 0 56px; }
   .guides-hero { padding: 30px 22px; }
   .guides-hero h1 { font-size: clamp(2.45rem, 15vw, 4rem); }

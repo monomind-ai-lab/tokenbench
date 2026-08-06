@@ -51,6 +51,19 @@ describe('CompareHubPage', () => {
     expect(await screen.findByRole('link', { name: 'Model A vs Model B' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
   });
 
+  it('places a compact general alert opt-in after model selection', async () => {
+    respondWithDirectory();
+    render(<CompareHubPage />);
+
+    const selectorHeading = await screen.findByRole('heading', { name: 'Choose a model pair' });
+    const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench' });
+    expect(alerts).not.toBeChecked();
+    expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
+    const selectorPanel = selectorHeading.closest('section');
+    if (!selectorPanel) throw new Error('Expected the comparison selector panel');
+    expect(selectorPanel.compareDocumentPosition(alerts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('does not create selection controls when the published directory is unavailable', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: 'Benchmark data unavailable' }), { status: 503 })));
     render(<CompareHubPage />);

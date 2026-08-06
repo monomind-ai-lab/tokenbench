@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ModelPairPicker, type CompareDirectoryEnvelope, type DirectoryModel, type DirectoryPair, type EvidenceStatus, type SourceType } from '../frontend/model-pair-picker';
+import { NewsletterSignup } from '../frontend/newsletter-signup';
 import { guidePath } from '../guides/content';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
 
@@ -213,6 +214,8 @@ export function CompareHubPage() {
           {comparisonHref ? <a className="button" href={comparisonHref}>Compare selected models</a> : <button className="button" disabled type="button">Compare selected models</button>}
         </div>
       </section>
+
+      <div className="comparison-newsletter-signup"><NewsletterSignup alertLabel="Notify me when new models or price drops are added to TokenBench" compact context="compare" /></div>
 
       <section className="comparison-panel comparison-section" aria-labelledby="comparison-reviewed-heading">
         <div className="comparison-section-heading"><h2 id="comparison-reviewed-heading">Popular reviewed matchups</h2><p>Only source-backed, indexable pairs are listed as published matchup links.</p></div>

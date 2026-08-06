@@ -491,6 +491,22 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('button', { name: 'Retry loading catalog' })).toBeInTheDocument();
   });
 
+  it('places the monthly cheatsheet form in the shared footer', () => {
+    render(<AppShell
+      activePage="calculator"
+      language="en"
+      lastSuccessfulRefreshAt={null}
+      onLanguageChange={vi.fn()}
+      onThemeToggle={vi.fn()}
+      theme="dark"
+    ><p>Calculator content</p></AppShell>);
+
+    const footer = document.querySelector('footer');
+    if (!footer) throw new Error('Expected the shared site footer');
+    expect(within(footer).getByRole('heading', { name: 'The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)' })).toBeInTheDocument();
+    expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
+  });
+
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);
