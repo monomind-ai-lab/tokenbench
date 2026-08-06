@@ -8,6 +8,7 @@ import { ProviderMark } from './provider-mark';
 interface LeaderboardTableProps {
   readonly keyName: LeaderboardKey;
   readonly entries: readonly LeaderboardEntry[];
+  readonly rankOffset?: number;
   readonly sort: LeaderboardSort;
   readonly onSortChange: (sort: LeaderboardSort) => void;
   readonly capabilities?: LeaderboardQueryCapabilities;
@@ -145,7 +146,7 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
   </li>;
 }
 
-export function LeaderboardTable({ keyName, entries, sort, onSortChange, capabilities }: LeaderboardTableProps) {
+export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSortChange, capabilities }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
   const orderDescriptionId = `leaderboard-order-${keyName}`;
   const usesSourceLensOrder = keyName === 'multimodal-vision-documents' && sort === 'score-desc';
@@ -155,7 +156,7 @@ export function LeaderboardTable({ keyName, entries, sort, onSortChange, capabil
     : sort === 'pareto-score-desc'
       ? 'Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'
       : null;
-  let rankedPosition = 0;
+  let rankedPosition = Number.isSafeInteger(rankOffset) && rankOffset >= 0 ? rankOffset : 0;
   const rows = entries.map((entry) => ({ entry, position: isEstimated(entry) ? null : ++rankedPosition }));
   return <section className="leaderboard-results" aria-label={label}>
     <div className="leaderboard-desktop-table">

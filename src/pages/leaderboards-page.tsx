@@ -173,6 +173,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const requestFilterQuery = serializeLeaderboardFilters(requestFilters);
   const pageIdentity = `${keyName}\u0000${requestFilterQuery}`;
   const [pageState, setPageState] = useState<LeaderboardPageCursorState>(() => firstLeaderboardPage(pageIdentity));
+  const [recoveryNoticeIdentity, setRecoveryNoticeIdentity] = useState<string | null>(null);
   const activePage = pageState.identity === pageIdentity ? pageState : firstLeaderboardPage(pageIdentity);
   const state = useBenchmarkLeaderboard(
     keyName,
@@ -203,6 +204,12 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   }, [pageIdentity]);
 
   useEffect(() => {
+    if (state.phase !== 'error' || state.statusCode !== 400 || activePage.cursor === null) return;
+    setPageState(firstLeaderboardPage(pageIdentity));
+    setRecoveryNoticeIdentity(pageIdentity);
+  }, [activePage.cursor, pageIdentity, state.phase, state.statusCode]);
+
+  useEffect(() => {
     if (!publishedEntries) return;
     const normalized = normalizeLeaderboardFilters(keyName, filters, publishedEntries, capabilities);
     if (!sameLeaderboardFilters(filters, normalized)) setFilters(normalized);
@@ -230,6 +237,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
 
   const entries = publishedEntries ?? [];
   const pagination = state.envelope?.data.pagination;
+  const rankOffset = pagination ? activePage.previousCursors.length * pagination.limit : 0;
   const csvQuery = filterQuery;
   const csvHref = `/api/benchmarks/leaderboards/${encodeURIComponent(keyName)}/csv?${csvQuery}`;
   const shareUrl = typeof window === 'undefined'
@@ -238,6 +246,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const goToNextPage = () => {
     const nextCursor = pagination?.nextCursor;
     if (!nextCursor) return;
+    setRecoveryNoticeIdentity(null);
     setPageState((current) => {
       const active = current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity);
       return {
@@ -248,6 +257,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     });
   };
   const goToPreviousPage = () => {
+    setRecoveryNoticeIdentity(null);
     setPageState((current) => {
       const active = current.identity === pageIdentity ? current : firstLeaderboardPage(pageIdentity);
       if (active.previousCursors.length === 0) return active;
@@ -279,10 +289,13 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     </section>
 
     <section aria-label={`${route.seo.h1} results`}>
+      {recoveryNoticeIdentity === pageIdentity
+        ? <p className="leaderboard-recovery-notice" role="status">Leaderboard revision changed. Showing the first page of the latest results.</p>
+        : null}
       {state.phase === 'loading' ? <Skeleton label="Loading published benchmark data" /> : null}
       {state.phase === 'ready' && state.envelope ? (
         entries.length > 0
-          ? <><LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
+          ? <><LeaderboardTable keyName={keyName} entries={entries} rankOffset={rankOffset} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
             {pagination ? <LeaderboardPagination entriesCount={entries.length} limit={pagination.limit} total={pagination.total} pageIndex={activePage.previousCursors.length} hasNextPage={pagination.nextCursor !== null} onPrevious={goToPreviousPage} onNext={goToNextPage} /> : null}</>
           : <>
             <EmptyState title="No published entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />
@@ -292,7 +305,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       {state.phase === 'stale' && state.envelope ? <>
         <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
         {entries.length > 0
-          ? <><LeaderboardTable keyName={keyName} entries={entries} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
+          ? <><LeaderboardTable keyName={keyName} entries={entries} rankOffset={rankOffset} sort={filters.sort} onSortChange={(sort) => setFilters({ ...filters, sort })} capabilities={capabilities} />
             {pagination ? <LeaderboardPagination entriesCount={entries.length} limit={pagination.limit} total={pagination.total} pageIndex={activePage.previousCursors.length} hasNextPage={pagination.nextCursor !== null} onPrevious={goToPreviousPage} onNext={goToNextPage} /> : null}</>
           : <>
             <EmptyState title="No cached entries match these filters" description="Try a different model/provider search or include reviewed estimated BenchLM records where the route supports them." />

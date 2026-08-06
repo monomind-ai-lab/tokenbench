@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { LEADERBOARD_CURSOR_MAX_LENGTH } from '../benchmarks/leaderboard-cursor';
 import type { LeaderboardKey } from '../routing/routes';
 import type { LeaderboardQueryState } from '../benchmarks/leaderboard-query';
 import {
@@ -523,6 +524,27 @@ describe('useBenchmarkLeaderboard', () => {
       .toBe('/api/benchmarks/leaderboards/llm-pricing-context?profile=balanced&limit=50');
   });
 
+  it('accepts the maximum bounded leaderboard cursor and rejects an oversized page cursor', async () => {
+    const payload = codingEnvelope();
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        ...payload,
+        data: { ...payload.data, pagination: { limit: 50, total: 2, nextCursor: 'a'.repeat(LEADERBOARD_CURSOR_MAX_LENGTH) } },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        ...payload,
+        data: { ...payload.data, pagination: { limit: 50, total: 2, nextCursor: 'a'.repeat(LEADERBOARD_CURSOR_MAX_LENGTH + 1) } },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-coding'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
   it('fails closed when a filter-aware page response omits complete-projection capabilities or pagination', async () => {
     const filters: LeaderboardQueryState = {
       query: '',
@@ -722,6 +744,16 @@ describe('useBenchmarkLeaderboard', () => {
 
     await waitFor(() => expect(result.current.phase).toBe('unavailable'));
     expect(result.current.envelope).toBeNull();
+  });
+
+  it('preserves the generic API error while exposing a 400 status for page-level cursor recovery', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'Invalid benchmark request' }, 400)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-coding'));
+
+    await waitFor(() => expect(result.current.phase).toBe('error'));
+    expect(result.current.error).toBe('Benchmark request failed (400).');
+    expect(result.current.statusCode).toBe(400);
   });
 
   it('exposes an HTTP failure and retries the cached API request', async () => {

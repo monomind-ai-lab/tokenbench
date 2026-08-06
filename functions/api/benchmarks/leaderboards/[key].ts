@@ -14,6 +14,10 @@ import {
   type LeaderboardQueryState,
 } from '../../../../src/benchmarks/leaderboard-query';
 import { benchmarkLeaderboardCacheKey } from '../../../../src/benchmarks/api-response-cache-keys';
+import {
+  isValidLeaderboardCursor,
+  leaderboardFilterFingerprint,
+} from '../../../../src/benchmarks/leaderboard-cursor';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../src/benchmarks/value';
 import { cachedApiResponse, readApiResponseCache } from '../../../_shared/api-response-cache';
@@ -61,7 +65,7 @@ interface CursorRequestParameters {
   readonly profile: WorkloadProfile;
   readonly limit: number;
   readonly includeEstimated: boolean;
-  readonly filter: string;
+  readonly filterFingerprint: string;
 }
 
 const SHARED_FILTER_KEYS = new Set<string>(LEADERBOARD_QUERY_KEYS);
@@ -129,6 +133,7 @@ function parseRequest(key: unknown, url: URL): LeaderboardRequestParameters {
     throw new Error('estimated evidence is not available for this route');
   }
   const cursor = oneQueryValue(url.searchParams, 'cursor');
+  if (cursor !== null && cursor !== '' && !isValidLeaderboardCursor(cursor)) throw new Error('invalid cursor');
   const filterParameters = new URLSearchParams();
   filterParameters.set('profile', profile);
   for (const [name, value] of url.searchParams) {
@@ -156,10 +161,12 @@ function cursorFor(revision: string, request: CursorRequestParameters, offset: n
     p: request.profile,
     l: request.limit,
     e: request.includeEstimated,
-    ...(request.filter ? { f: request.filter } : {}),
+    ...(request.filterFingerprint ? { f: request.filterFingerprint } : {}),
     o: offset,
   };
-  return encodeOpaqueValue(payload);
+  const cursor = encodeOpaqueValue(payload);
+  if (!isValidLeaderboardCursor(cursor)) throw new Error('cursor exceeds the shared boundary');
+  return cursor;
 }
 
 function offsetFromCursor(
@@ -167,6 +174,7 @@ function offsetFromCursor(
   revision: string,
   request: CursorRequestParameters,
 ): number {
+  if (!isValidLeaderboardCursor(cursor)) throw new Error('invalid cursor');
   const payload = decodeOpaqueValue(cursor);
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('invalid cursor');
   const value = payload as Partial<CursorPayload>;
@@ -176,7 +184,7 @@ function offsetFromCursor(
     || value.p !== request.profile
     || value.l !== request.limit
     || value.e !== request.includeEstimated
-    || !((value.f === undefined && request.filter === '') || value.f === request.filter)
+    || !((value.f === undefined && request.filterFingerprint === '') || value.f === request.filterFingerprint)
     || !Number.isSafeInteger(value.o)
     || value.o === undefined
     || value.o < 1) {
@@ -270,13 +278,16 @@ export async function onRequestGet({
       canonicalFilterParameters.delete('sort');
     }
     const canonicalFilter = canonicalFilterParameters.toString();
+    const filterFingerprint = canonicalFilter === ''
+      ? ''
+      : await leaderboardFilterFingerprint(canonicalFilter);
 
     const cursorParameters = {
       key: normalized.key,
       profile: normalized.profile,
       limit: normalized.limit,
       includeEstimated: normalized.includeEstimated,
-      filter: canonicalFilter,
+      filterFingerprint,
     } as const;
     let offset = 0;
     if (normalized.cursor) {

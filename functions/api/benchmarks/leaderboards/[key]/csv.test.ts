@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CachedLeaderboardPaginationProjection } from '../../../../../src/benchmarks/api-projections';
+import { isValidLeaderboardCursor, LEADERBOARD_CURSOR_MAX_LENGTH } from '../../../../../src/benchmarks/leaderboard-cursor';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardEntry } from '../../../../../src/benchmarks/leaderboards';
+import { encodeOpaqueValue } from '../../../../_shared/benchmark-db';
 import { onRequestGet as leaderboardJsonResponse } from '../[key]';
 import { onRequestGet } from './csv';
 
@@ -236,6 +238,51 @@ describe('leaderboard CSV endpoint', () => {
     expect(filteredBody.data.entries.map((row) => row.model.modelKey)).toEqual(['needle-after-fifty']);
     expect(filteredBody.data.pagination.total).toBe(1);
     expect((await csv.text()).split('\r\n')[1]).toContain('Needle after fifty');
+  });
+
+  it('keeps the maximum legal provider filter cursor within the client boundary and rejects its oversized legacy form', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T01:00:00.000Z');
+    const providers = Array.from({ length: 24 }, (_, index) => `Provider-${String(index).padStart(2, '0')}-`.padEnd(120, String(index % 10)));
+    const fixture = cacheDatabase({ fresh: JSON.stringify(projection(providers.map((provider, index) => entry({
+      modelKey: `provider-${index}`,
+      name: `Provider model ${index}`,
+      provider,
+      score: 1_000 - index,
+    })))) });
+    const parameters = new URLSearchParams({ sort: 'score-desc', limit: '1' });
+    providers.forEach((provider) => parameters.append('provider', provider));
+
+    const first = await jsonResponse(`/api/benchmarks/leaderboards/llm-coding?${parameters}`, fixture);
+    const firstBody = await first.json() as { data: { pagination: { nextCursor: string } } };
+    const nextCursor = firstBody.data.pagination.nextCursor;
+    const second = await jsonResponse(
+      `/api/benchmarks/leaderboards/llm-coding?${parameters}&cursor=${encodeURIComponent(nextCursor)}`,
+      fixture,
+    );
+    const canonicalFilter = new URLSearchParams();
+    providers.forEach((provider) => canonicalFilter.append('provider', provider));
+    const oversizedLegacyCursor = encodeOpaqueValue({
+      v: 1,
+      r: REVISION,
+      k: 'llm-coding',
+      p: 'balanced',
+      l: 1,
+      e: false,
+      f: canonicalFilter.toString(),
+      o: 1,
+    });
+    const oversized = await jsonResponse(
+      `/api/benchmarks/leaderboards/llm-coding?${parameters}&cursor=${encodeURIComponent(oversizedLegacyCursor)}`,
+      fixture,
+    );
+
+    expect(first.status).toBe(200);
+    expect(isValidLeaderboardCursor(nextCursor)).toBe(true);
+    expect(nextCursor.length).toBeLessThanOrEqual(LEADERBOARD_CURSOR_MAX_LENGTH);
+    expect(second.status).toBe(200);
+    expect(oversizedLegacyCursor.length).toBeGreaterThan(LEADERBOARD_CURSOR_MAX_LENGTH);
+    expect(oversized.status).toBe(400);
   });
 
   it('exports the complete filtered ordering with revision and publication headers', async () => {

@@ -444,6 +444,9 @@ describe('LeaderboardPage', () => {
 
     await screen.findAllByText('Needle after fifty');
     expect(screen.getByText('Showing 51–51 of 51 published entries')).toBeInTheDocument();
+    expect(within(screen.getByRole('table', { name: 'Coding benchmark' })).getByText('#51')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Coding benchmark cards' })).getByText('#51')).toBeInTheDocument();
+    expect(screen.queryByText('Top Coding')).not.toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc'));
     fireEvent.click(screen.getByRole('button', { name: 'Previous page' }));
     await screen.findAllByText('Model 0');
@@ -451,6 +454,96 @@ describe('LeaderboardPage', () => {
       '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50&cursor=cursor-page-two',
       expect.objectContaining({ headers: { accept: 'application/json' } }),
     );
+  });
+
+  it('returns once to the latest first page when a revision invalidates a pagination cursor', async () => {
+    window.history.replaceState(null, '', '/leaderboards/llm/coding/?sort=score-desc');
+    const base = codingLeaderboardEnvelope();
+    const initialPage = {
+      ...base,
+      data: {
+        ...base.data,
+        pagination: { limit: 50, total: 2, nextCursor: 'cursor-stale-revision' },
+      },
+    };
+    const currentEntry = base.data.entries[0]!;
+    const revisedModelKey = 'openai:latest';
+    const revisedMetric = {
+      ...currentEntry.metric!,
+      modelKey: revisedModelKey,
+      sourceModelId: revisedModelKey,
+    };
+    const revisedPage = {
+      ...base,
+      revision: 'published-r2',
+      data: {
+        ...base.data,
+        entries: [{
+          ...currentEntry,
+          model: {
+            ...currentEntry.model,
+            modelKey: revisedModelKey,
+            slug: 'latest',
+            name: 'Latest revision leader',
+            sourceModelId: revisedModelKey,
+          },
+          metric: revisedMetric,
+          metrics: [revisedMetric],
+        }],
+        pagination: { limit: 50, total: 1, nextCursor: null },
+      },
+    };
+    let firstPageRequests = 0;
+    const fetchMock = vi.fn((input: string) => {
+      if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }));
+      if (input === '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50') {
+        firstPageRequests += 1;
+        return Promise.resolve(new Response(JSON.stringify(firstPageRequests === 1 ? initialPage : revisedPage), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      if (input === '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50&cursor=cursor-stale-revision') {
+        return Promise.resolve(new Response(JSON.stringify({ error: 'Invalid benchmark request' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      throw new Error(`Unexpected request: ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    await screen.findAllByText('Alpha');
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findAllByText('Latest revision leader');
+    expect(screen.getByText('Leaderboard revision changed. Showing the first page of the latest results.')).toBeInTheDocument();
+    expect(screen.getByText('Showing 1–1 of 1 published entries')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Previous page' })).toBeDisabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, 25); });
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/benchmarks/leaderboards/')).length).toBe(3);
+  });
+
+  it('keeps a first-page 400 visible as a generic benchmark API error', async () => {
+    const fetchMock = vi.fn((input: string) => Promise.resolve(new Response(JSON.stringify(
+      input === '/api/benchmarks' ? decisionSummaryEnvelope() : { error: 'Invalid benchmark request' },
+    ), {
+      status: input === '/api/benchmarks' ? 200 : 400,
+      headers: { 'content-type': 'application/json' },
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText('Benchmark request failed (400).')).toBeInTheDocument();
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, 25); });
+    expect(fetchMock.mock.calls.filter(([input]) => String(input).includes('/api/benchmarks/leaderboards/')).length).toBe(1);
   });
 
   it('omits a no-longer-published dynamic filter until complete capabilities can normalize the shared URL', async () => {

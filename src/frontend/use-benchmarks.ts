@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { activeBenchAlignSourceMetadata, type BenchAlignSourceMetadata } from '../benchmarks/benchalign-metadata';
+import { isValidLeaderboardCursor } from '../benchmarks/leaderboard-cursor';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardDefinition, type LeaderboardEntry, type LeaderboardResult, type LeaderboardSort } from '../benchmarks/leaderboards';
 import {
   LEADERBOARD_EVIDENCE_STATUSES,
@@ -65,6 +66,7 @@ export interface BenchmarkLeaderboardState {
   readonly phase: BenchmarkPhase;
   readonly envelope: BenchmarkApiEnvelope<LeaderboardPageResult> | null;
   readonly error: string | null;
+  readonly statusCode: number | null;
   readonly retry: () => void;
 }
 
@@ -152,8 +154,7 @@ function isLeaderboardPagination(value: unknown, expectedLimit?: number): value 
     && Number.isSafeInteger(value.total)
     && (value.total as number) >= 0
     && (value.total as number) <= 4_096
-    && (value.nextCursor === null || (typeof value.nextCursor === 'string'
-      && /^[A-Za-z0-9_-]{1,2048}$/u.test(value.nextCursor)));
+    && (value.nextCursor === null || isValidLeaderboardCursor(value.nextCursor));
 }
 
 function isLeaderboardCapabilities(value: unknown, key: LeaderboardKey): value is LeaderboardQueryCapabilities {
@@ -584,8 +585,8 @@ export function leaderboardEndpoint(
   return `/api/benchmarks/leaderboards/${encodeURIComponent(key)}?${query.toString()}`;
 }
 
-function unavailableState(message: string): Omit<BenchmarkLeaderboardState, 'retry'> {
-  return { phase: 'unavailable', envelope: null, error: message };
+function unavailableState(message: string, statusCode: number | null = null): Omit<BenchmarkLeaderboardState, 'retry'> {
+  return { phase: 'unavailable', envelope: null, error: message, statusCode };
 }
 
 /**
@@ -604,6 +605,7 @@ export function useBenchmarkLeaderboard(
     phase: 'loading',
     envelope: null,
     error: null,
+    statusCode: null,
   });
   const [retryVersion, setRetryVersion] = useState(0);
   const requestVersion = useRef(0);
@@ -624,18 +626,20 @@ export function useBenchmarkLeaderboard(
     const controller = new AbortController();
     const version = ++requestVersion.current;
     let active = true;
-    setState({ phase: 'loading', envelope: null, error: null });
+    setState({ phase: 'loading', envelope: null, error: null, statusCode: null });
 
     const load = async () => {
+      let statusCode: number | null = null;
       try {
         const response = await fetch(endpoint, {
           headers: { accept: 'application/json' },
           signal: controller.signal,
         });
         if (!active || controller.signal.aborted || requestVersion.current !== version) return;
+        statusCode = response.status;
 
         if (response.status === 404 || response.status === 503) {
-          setState(unavailableState('Published benchmark data is unavailable.'));
+          setState(unavailableState('Published benchmark data is unavailable.', response.status));
           return;
         }
         if (!response.ok) {
@@ -668,6 +672,7 @@ export function useBenchmarkLeaderboard(
           error: payload.freshness.status === 'stale'
             ? payload.freshness.message ?? 'Published benchmark data is stale.'
             : null,
+          statusCode: null,
         });
       } catch (error: unknown) {
         if (!active || controller.signal.aborted || requestVersion.current !== version) return;
@@ -675,6 +680,7 @@ export function useBenchmarkLeaderboard(
           phase: 'error',
           envelope: null,
           error: error instanceof Error ? error.message : 'Benchmark request failed.',
+          statusCode,
         });
       }
     };
