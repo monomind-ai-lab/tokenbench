@@ -923,9 +923,24 @@ function projectLmArenaHubParquetRow(value: unknown, subset: LmArenaSubset, inde
 }
 
 function projectLmArenaHubParquetPages(rows: unknown[], subset: LmArenaSubset): ProjectedLmArenaPage[] {
-  const overallRows = rows
+  const projectedOverallRows = rows
     .map((row, index) => projectLmArenaHubParquetRow(row, subset, index))
-    .filter((row) => row.category === 'overall')
+    .filter((row) => row.category === 'overall');
+  const identityCounts = new Map<string, number>();
+  for (const row of projectedOverallRows) {
+    const sourceModelId = String(row.model_name);
+    identityCounts.set(sourceModelId, (identityCounts.get(sourceModelId) ?? 0) + 1);
+  }
+  const ambiguousIdentityCount = [...identityCounts.values()].filter((count) => count > 1).length;
+  if (ambiguousIdentityCount > 0) {
+    console.warn(JSON.stringify({
+      message: 'excluded ambiguous duplicate LMArena model identities',
+      subset,
+      ambiguousIdentityCount,
+    }));
+  }
+  const overallRows = projectedOverallRows
+    .filter((row) => identityCounts.get(String(row.model_name)) === 1)
     .sort((left, right) => {
       const rankDifference = (left.rank as number) - (right.rank as number);
       if (rankDifference !== 0) return rankDifference;

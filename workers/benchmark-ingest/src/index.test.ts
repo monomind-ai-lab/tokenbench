@@ -155,12 +155,20 @@ function hubParquetRows(subset: string): Record<string, unknown>[] {
       { ...extraCategory, score: 0.2, score_ci_lower: 0.1, score_ci_upper: 0.3, observation_count: 10n, session_count: 2n },
     ];
   }
-  return [
+  const standardRows = [
     ...Array.from({ length: count }, (_, index) => ({
       ...common(index), rating: 1_200, rating_lower: 1_190, rating_upper: 1_210, variance: 1, vote_count: 10n,
     })),
     { ...extraCategory, rating: 1_100, rating_lower: 1_090, rating_upper: 1_110, variance: 1, vote_count: 9n },
   ];
+  if (subset === 'webdev') {
+    standardRows[0] = { ...standardRows[0], model_name: 'webdev-ambiguous' };
+    standardRows.push(
+      { ...standardRows[0], rating: 1_150, rank: 2n, vote_count: 20n },
+      { ...standardRows[0], model_name: 'webdev-unique', rank: 3n },
+    );
+  }
+  return standardRows;
 }
 
 function hubFallbackFetch(options: {
@@ -522,6 +530,10 @@ describe('atomic benchmark ingestion', () => {
     expect(textMetric).toMatchObject({ value: 1_200, voteCount: 10, rank: 1 });
     expect(jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')
       .some((metric) => metric.metricKey === 'lmarena:text_style_control:creative_writing')).toBe(false);
+    const webdevMetrics = jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')
+      .filter((metric) => metric.metricKey === 'lmarena:webdev:overall');
+    expect(webdevMetrics.some((metric) => metric.sourceModelId === 'webdev-ambiguous')).toBe(false);
+    expect(webdevMetrics.some((metric) => metric.sourceModelId === 'webdev-unique')).toBe(true);
     const finalTextPage = arenaSources.find((source) => source.artifactId === 'text_style_control:latest:overall:hub-parquet:rows-100-200');
     const finalTextSnapshot = finalTextPage ? r2.objects.get(finalTextPage.snapshotKey) : undefined;
     const finalTextProjection = JSON.parse(new TextDecoder().decode(finalTextSnapshot?.bytes)) as { rows: unknown[]; num_rows_total: number };
