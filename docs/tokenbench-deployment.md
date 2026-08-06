@@ -3,10 +3,10 @@
 ## Status and scope
 
 This runbook records the completed local release-candidate checks for TokenBench
-through application commit `8281bcd` on 2026-08-06. The comparison implementation,
-expanded browser matrix, accessibility smoke pass, and two Impeccable UX/UI passes
-are complete. The progress board is not release evidence and was not changed by
-this audit.
+through application commit `813458f` on 2026-08-06. The comparison implementation,
+expanded browser matrix, accessibility smoke pass, two Impeccable UX/UI passes,
+and a retained production-preview confirmation are complete. The progress board
+is not release evidence and was not changed by this audit.
 
 No external release action has been taken: the branch has not been pushed, the
 remote migration has not been applied, Workers and Pages have not been deployed,
@@ -26,7 +26,7 @@ path and query to the canonical host with HTTP 301.
 
 | Input | Required evidence | Current status |
 | --- | --- | --- |
-| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | Local application candidate `8281bcd`; push target and authorization pending. |
+| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | Local application candidate `813458f`; evidence documentation follows locally, while the push target and authorization remain pending. |
 | Design baseline | [../DESIGN.md](../DESIGN.md) reviewed during both UX/UI passes. | Reviewed in both passes; dark technical hierarchy and the approved light-mode adaptation verified. |
 | Data-source policy | [data-sources.md](data-sources.md) reviewed for source, attribution, and Artificial Analysis restrictions. | Reviewed; source allowlists, visible attribution, and the Artificial Analysis prohibition remain intact. |
 | Data-plane configuration | Root and Worker Wrangler bindings checked against the approved Cloudflare target. | Binding names, schedules, and shared D1/R2 names inspected locally; remote target/history confirmation pending authorization. |
@@ -46,6 +46,7 @@ npm test
 npm run lint
 npm run build
 npm run test:browser
+npm run test:browser:production
 git diff --check
 git status --short
 ~~~
@@ -55,9 +56,10 @@ git status --short
 | Unit and API tests | Exit 0. | Pass: 38 files, 480 tests. |
 | Type check | Exit 0. | Pass: `tsc --noEmit`. |
 | Production build | Exit 0. | Pass: Vite built 23 crawlable fixed pages and the application bundle. |
-| Responsive browser suite | Exit 0 across the expanded route, viewport, theme, and state matrix. | Pass: 37/37 Playwright tests, including 100 primary-route navigations. |
-| Diff check | Exit 0 with only intentional files. | Pass before the evidence commit; rerun in the final verification record. |
-| Final worktree inspection | No unintended changes before the authorized release commit. | Scoped application and browser commits verified; audit evidence/runbook remain the only expected documentation changes before their local commit. |
+| Responsive browser suite | Exit 0 across the expanded route, viewport, theme, and state matrix. | Pass: 41/41 Playwright tests in 8.4 minutes, including 100 primary-route navigations. |
+| Production-preview browser suite | Build first, serve only generated `dist` assets, and exit 0 across the same suite. | Pass: 41/41 Playwright tests in 4.8 minutes, including 100 primary-route navigations. See the [retained production-preview audit](audit-evidence/2026-08-06/production-preview-audit.md). |
+| Diff check | Exit 0 with only intentional files. | Pass before the evidence commit; rerun on the final exact tree. |
+| Final worktree inspection | No unintended changes before an authorized push. | Scoped application, browser, and evidence files verified; final clean-status check remains part of the exact-tree rerun. |
 
 The release gate must be rerun after integrating comparison, sitemap, browser,
 and configuration changes. A passing command from an earlier commit does not
@@ -65,23 +67,25 @@ qualify a later release candidate.
 
 ## UX/UI audit matrix
 
-Use the installed Impeccable skill for two passes against the production build.
-For every route below, inspect 320, 375, 768, 1024, and 1440 CSS-pixel widths in
-both light and dark themes. Capture evidence from the release candidate; do not
-claim a screenshot exists until its path or immutable review reference is added.
+The two implementation passes used the installed Impeccable skill, source
+detection, rendered Playwright coverage, and screenshot inspection. The compiled
+assets were then confirmed separately with a production-preview run. For every
+route below, that final run inspected 320, 375, 768, 1024, and 1440 CSS-pixel
+widths in both light and dark themes. The earlier screenshots remain design-pass
+evidence; production-preview evidence is labeled separately.
 
 | Route or state | Viewports | Themes | Pass 1 | Pass 2 | Evidence |
 | --- | --- | --- | --- | --- | --- |
-| Home: / | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
-| Tools: /tools/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
-| Calculator: /tools/subscriptions-vs-apis/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 light](audit-evidence/2026-08-06/pass-1-calculator-390-light.png), [pass 2 light](audit-evidence/2026-08-06/pass-2-calculator-390-light.png) |
-| Leaderboard directory: /leaderboards/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
-| Data-dense LLM leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 dark](audit-evidence/2026-08-06/pass-1-coding-390-dark.png), [pass 2 dark](audit-evidence/2026-08-06/pass-2-coding-390-dark.png) |
-| Media leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Table/card and all-width regression](../browser-tests/responsive-browser.ts) |
-| Compare hub: /compare/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
-| Canonical indexable comparison selected from the active revision | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [390 dark](audit-evidence/2026-08-06/pass-2-comparison-390-dark.png), [1440 light](audit-evidence/2026-08-06/pass-2-comparison-1440-light.png), [handler regression](../browser-tests/responsive-browser.ts) |
-| Guide hub: /guides/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [All-width regression](../browser-tests/responsive-browser.ts) |
-| One generated guide article | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 light](audit-evidence/2026-08-06/pass-1-article-390-light.png), [pass 2 light](audit-evidence/2026-08-06/pass-2-article-390-light.png) |
+| Home: / | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Production matrix](audit-evidence/2026-08-06/production-preview-audit.md) |
+| Tools: /tools/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Production matrix](audit-evidence/2026-08-06/production-preview-audit.md) |
+| Calculator: /tools/subscriptions-vs-apis/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 light](audit-evidence/2026-08-06/pass-1-calculator-390-light.png), [pass 2 light](audit-evidence/2026-08-06/pass-2-calculator-390-light.png), [production 320 light](audit-evidence/2026-08-06/production-calculator-320-light.png) |
+| Leaderboard directory: /leaderboards/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Production matrix](audit-evidence/2026-08-06/production-preview-audit.md) |
+| Data-dense LLM leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 dark](audit-evidence/2026-08-06/pass-1-coding-390-dark.png), [pass 2 dark](audit-evidence/2026-08-06/pass-2-coding-390-dark.png), [production 375 dark](audit-evidence/2026-08-06/production-coding-375-dark.png) |
+| Media leaderboard | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Production 768 light](audit-evidence/2026-08-06/production-media-768-light.png) |
+| Compare hub: /compare/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Production matrix](audit-evidence/2026-08-06/production-preview-audit.md) |
+| Canonical indexable comparison selected from the active revision | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 2 390 dark](audit-evidence/2026-08-06/pass-2-comparison-390-dark.png), [production 375 dark](audit-evidence/2026-08-06/production-comparison-375-dark.png), [production 1440 light](audit-evidence/2026-08-06/production-comparison-1440-light.png) |
+| Guide hub: /guides/ | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Production matrix](audit-evidence/2026-08-06/production-preview-audit.md) |
+| One generated guide article | 320, 375, 768, 1024, 1440 | Light, dark | Pass | Pass | [Pass 1 light](audit-evidence/2026-08-06/pass-1-article-390-light.png), [pass 2 light](audit-evidence/2026-08-06/pass-2-article-390-light.png), [production 1024 dark](audit-evidence/2026-08-06/production-article-1024-dark.png) |
 
 Each pass must cover:
 
@@ -100,9 +104,10 @@ Each pass must cover:
 
 The release gate is zero unresolved critical, high, or medium findings. The two
 passes used the Impeccable source detector, rendered Playwright coverage, and
-manual screenshot inspection. Impeccable's optional URL wrapper could not run
-because Puppeteer is not installed; no package was installed for the audit.
-Equivalent rendered checks used the repository's existing Playwright runtime.
+manual screenshot inspection, followed by the retained compiled-asset audit.
+Impeccable's optional URL wrapper could not run because Puppeteer is not
+installed; no package was installed for the audit. Equivalent rendered checks
+used the repository's existing Playwright runtime.
 
 | Pass | Route | Viewport | Theme | Severity | Evidence screenshot or reference | Expected behavior | Disposition and regression test |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -113,6 +118,9 @@ Equivalent rendered checks used the repository's existing Playwright runtime.
 | 1 | Home skip link | 390 | Both | Medium | [Keyboard regression](../browser-tests/responsive-browser.ts) | Activating the skip link must move focus to the main landmark. | Confirmed red with focus on `BODY`; made React and generated main targets programmatically focusable; regression passes. |
 | 1 | Compact navigation | 375 | Both | Medium | [Keyboard regression](../browser-tests/responsive-browser.ts) | Escape from the focused menu toggle or an open navigation item must close the menu. | Confirmed red on the focused toggle; moved Escape handling to the shared header boundary; regression passes. |
 | 1 | Calculator trend chart | 1024 | Both | Medium | [Chart regression](../browser-tests/responsive-browser.ts), [pass 2 light](audit-evidence/2026-08-06/pass-2-calculator-390-light.png) | The text alternative must expose the plotted current token and API-equivalent values. | Added both formatted current values to the chart accessible name; regression passes. |
+| Final review | Calculator and guides | 390 | Both | Medium | [Keyboard regression](../browser-tests/responsive-browser.ts) | Every skip link must move keyboard focus, not merely scroll the fragment target. | Confirmed red on the calculator target; made calculator and both hydrated guide targets programmatically focusable. Four route-specific skip regressions pass. |
+| Final review | All primary routes | All | Both | Medium | [Production matrix](audit-evidence/2026-08-06/production-preview-audit.md) | The matrix must prove client hydration, exactly one total H1, and removal of the generated static shell. | Added route-specific hydrated markers, total-H1 count, and static-shell absence across all 100 combinations. Dynamic comparison now proves a workload-driven recalculation. |
+| Final review | Audit provenance | All | Both | Medium | [Production-preview audit](audit-evidence/2026-08-06/production-preview-audit.md) | Release evidence must distinguish Vite source serving from compiled production assets. | Added a build-first production-preview command, retained its 41-test result and matrix manifest, and captured six screenshots from `dist`. |
 | 1/2 | Shared dense data surfaces | All | Both | Low | [DESIGN.md](../DESIGN.md) | Compact labels, fluid display endpoints, semantic state tones, and tight radii should remain deliberate rather than accidental drift. | Retained 109 type-ramp, 15 radius, and 5 semantic-color detector notices. They implement the approved dense TokenBench mockups; caption semantics, contrast, hit targets, overflow, and responsive composition pass. |
 | 1/2 | Shared typography | All | Both | Low | [DESIGN.md typography](../DESIGN.md) | Use the documented brand typography or its declared open-source substitute. | Retained Inter: DESIGN.md explicitly declares it as the abcDiatype substitute; JetBrains Mono remains limited to technical surfaces. |
 | 1/2 | Negative resource-validation fixture | N/A | N/A | Low | [Fixture](../scripts/mockup-contract.test.ts) | Detector findings must distinguish shipped UI from deliberate invalid test input. | The reported broken image is a protocol-relative `srcset` inside a rejection test and is never shipped; no production change required. |
@@ -128,7 +136,7 @@ record authorization for each operation below before it occurs.
 
 | Operation | Required authorization and precondition | Evidence to record | Status |
 | --- | --- | --- | --- |
-| Commit and push release files | Explicit approval to create the scoped commit and push to the approved Git remote and branch. | Commit SHA, remote branch, and clean status after push. | Pending |
+| Push release files | Explicit approval to push the validated local commits to the approved Git remote and branch. | Commit SHA, remote branch, and clean status after push. | Pending |
 | Apply remote D1 migration | Cloudflare credentials, confirmation of the target D1 database, and explicit approval to modify production schema. | Migration output/history showing 0004_benchmarks.sql exactly once. | Pending |
 | Deploy catalog Worker | Approval to change the named Worker when its code or configuration changed. | Worker deployment version and binding verification. | Pending |
 | Deploy benchmark Worker | Approval to change the named Worker, plus confirmation that its D1/R2 bindings target the approved resources. | Worker version, deployment output, and binding verification. | Pending |
