@@ -48,7 +48,8 @@ function evidenceLabel(status: EvidenceStatus): string {
 
 function modelOptionLabel(model: DirectoryModel, duplicateNames: ReadonlySet<string>): string {
   const label = `${model.name} · ${model.creator}`;
-  return duplicateNames.has(model.name) ? `${label} · ${model.slug}` : label;
+  const identity = duplicateNames.has(model.name) ? `${label} · ${model.slug}` : label;
+  return `${identity} · ${evidenceLabel(model.evidenceStatus)}`;
 }
 
 export function popularModels(

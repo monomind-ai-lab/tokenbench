@@ -43,6 +43,16 @@ describe('popularModels', () => {
 });
 
 describe('ModelPairPicker', () => {
+  it('includes each model evidence state in its option accessible name', () => {
+    render(<ControlledPicker />);
+
+    fireEvent.focus(screen.getByRole('combobox', { name: 'First model' }));
+
+    expect(screen.getByRole('option', { name: 'Alpha · Provider A · Supported evidence' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Beta · Provider B · Estimated evidence' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Gamma · Provider C · Source-only record' })).toBeInTheDocument();
+  });
+
   it('updates its controlled model values through the keyboard listbox pattern', () => {
     render(<ControlledPicker />);
 
@@ -73,8 +83,8 @@ describe('ModelPairPicker', () => {
 
     fireEvent.focus(screen.getByRole('combobox', { name: 'First model' }));
 
-    expect(screen.getByRole('option', { name: 'Shared · Provider A · shared-a' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Shared · Provider B · shared-b' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Shared · Provider A · shared-a · Supported evidence' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Shared · Provider B · shared-b · Supported evidence' })).toBeInTheDocument();
   });
 
   it('searches every selectable model after typing rather than only the popular rows', () => {
@@ -97,6 +107,6 @@ describe('ModelPairPicker', () => {
     expect(screen.queryByRole('option', { name: /Outside Popular/ })).not.toBeInTheDocument();
     fireEvent.change(first, { target: { value: 'outside' } });
 
-    expect(screen.getByRole('option', { name: 'Outside Popular · Provider' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Outside Popular · Provider · Source-only record' })).toBeInTheDocument();
   });
 });
