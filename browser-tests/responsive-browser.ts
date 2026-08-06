@@ -845,8 +845,8 @@ test.describe('guides browser harness', () => {
       }
       await expect(page.getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
-      await expect(page.getByRole('link', { name: 'Sources' })).toHaveAttribute('href', '/sources/');
-      await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/');
+      await expect(page.getByRole('link', { name: 'Sources' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
     });

@@ -77,6 +77,7 @@ describe('crawlable static-page generator', () => {
     expect(methodology).toContain('<h1>How BenchAlign rankings work</h1>');
     expect(methodology).toContain('TokenBench republishes BenchLM&#039;s BenchAlign results');
     expect(methodology).toContain('https://benchlm.ai/methodology');
+    expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
 
     expect(home).toContain('<a href="/methodology/benchalign/">Methodology</a>');
     expect(home).not.toContain('href="/sources/"');
@@ -95,19 +96,39 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
   });
 
-  it('uses supplied BenchAlign source metadata in the static methodology fallback without an upstream request', async () => {
+  it.each([
+    {
+      label: 'malicious markup',
+      upstreamRevision: '</strong><script>globalThis.compromised=true</script>',
+      schemaVersion: 'schema-malicious-environment',
+    },
+    {
+      label: 'a stale revision',
+      upstreamRevision: 'benchlm-method-2025-01-stale',
+      schemaVersion: 'schema-stale-environment',
+    },
+    {
+      label: 'mismatched revision and schema variables',
+      upstreamRevision: 'benchlm-method-from-revision-a',
+      schemaVersion: 'schema-from-revision-b',
+    },
+  ])('does not publish $label from free-text build variables without a validated active summary artifact', async ({
+    upstreamRevision,
+    schemaVersion,
+  }) => {
     const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
     outputRoots.push(root);
     const previousRevision = process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION;
     const previousSchema = process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION;
-    process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = 'benchlm-method-2026-08';
-    process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION = '1.0';
+    process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = upstreamRevision;
+    process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION = schemaVersion;
 
     try {
       await generateStaticPages(root);
       const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
-      expect(methodology).toContain('Published method version: <strong>benchlm-method-2026-08</strong>.');
-      expect(methodology).not.toContain('Published method version: <strong>Unavailable</strong>.');
+      expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
+      expect(methodology).not.toContain(upstreamRevision);
+      expect(methodology).not.toContain(schemaVersion);
     } finally {
       if (previousRevision === undefined) delete process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION;
       else process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = previousRevision;

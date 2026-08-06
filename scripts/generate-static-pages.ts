@@ -2,7 +2,6 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_CONFIG } from '../src/brand/site-config';
-import { publishedBenchAlignMethodVersion, type BenchAlignSourceMetadata } from '../src/benchmarks/benchalign-metadata';
 import {
   FIXED_ROUTES,
   LEADERBOARD_ROUTES,
@@ -34,7 +33,6 @@ function pageIntro(metadata: PageMetadata, body: string): string {
 function fixedPageContent(
   route: Exclude<AppRoute, { kind: 'guides' } | { kind: 'comparison' } | { kind: 'redirect' } | { kind: 'notFound' }>,
   metadata: PageMetadata,
-  activeBenchAlignSourceMetadata: BenchAlignSourceMetadata | null,
 ): string {
   switch (route.kind) {
     case 'home':
@@ -44,7 +42,10 @@ function fixedPageContent(
     case 'calculator':
       return pageIntro(metadata, `<p>Estimate how a paid individual AI subscription compares with direct API pricing. The interactive calculator mounts here in the browser; this crawlable summary explains its inputs and evidence boundaries.</p><section><h2>Use observed workload inputs</h2><p>Choose a provider, plan, model mix, input/output share, and expected monthly token volume. Treat unpublished or guardrail-limited capacity as variable rather than inventing a token cap.</p></section><section><h2>Review the source before purchasing</h2><p>${SITE_CONFIG.name} calculations are decision aids. Follow the provider evidence for current terms, included models, billing conditions, and availability before acting on an estimate.</p></section>`);
     case 'methodologyBenchAlign':
-      return pageIntro(metadata, `<p>${SITE_CONFIG.name} republishes BenchLM&#039;s BenchAlign results without recalculating them. <a href="https://benchlm.ai/methodology">Read BenchLM&#039;s methodology</a> for the source method.</p><section><h2>What each view represents</h2><p>Overall, Agentic, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge are BenchLM-published category evidence lenses, not additional TokenBench rankings.</p><p>Supported rows are source-published results eligible for their exact view. Reviewed estimated rows stay visibly estimated and appear after supported evidence where a route allows them; they are never silently promoted into a validated ranking. Missing measurements remain Unavailable, never zero.</p></section><section><h2>Metrics and runtime</h2><p>Weighted metrics affect the relevant BenchAlign method only. Display-only metrics add context without changing the published order. Runtime is a separate signal, not a substitute for capability evidence or a hidden ranking weight.</p></section><section><h2>Method and refresh status</h2><p>Published method version: <strong>${escapeHtml(publishedBenchAlignMethodVersion(activeBenchAlignSourceMetadata))}</strong>.</p><p>BenchLM refreshes its source output on its own schedule. TokenBench checks that source once daily within its broader Worker, which runs twice daily; a successful TokenBench check does not claim that BenchLM published a new method or result.</p></section>`);
+      // No canonical active-summary artifact is present in this build, so no
+      // source version can be proven here. The hydrated page reads the active
+      // same-origin summary and replaces this truthful fallback when available.
+      return pageIntro(metadata, `<p>${SITE_CONFIG.name} republishes BenchLM&#039;s BenchAlign results without recalculating them. <a href="https://benchlm.ai/methodology">Read BenchLM&#039;s methodology</a> for the source method.</p><section><h2>What each view represents</h2><p>Overall, Agentic, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge are BenchLM-published category evidence lenses, not additional TokenBench rankings.</p><p>Supported rows are source-published results eligible for their exact view. Reviewed estimated rows stay visibly estimated and appear after supported evidence where a route allows them; they are never silently promoted into a validated ranking. Missing measurements remain Unavailable, never zero.</p></section><section><h2>Metrics and runtime</h2><p>Weighted metrics affect the relevant BenchAlign method only. Display-only metrics add context without changing the published order. Runtime is a separate signal, not a substitute for capability evidence or a hidden ranking weight.</p></section><section><h2>Method and refresh status</h2><p>Published method version: <strong>Unavailable</strong>.</p><p>BenchLM refreshes its source output on its own schedule. TokenBench checks that source once daily within its broader Worker, which runs twice daily; a successful TokenBench check does not claim that BenchLM published a new method or result.</p></section>`);
     case 'compareHub':
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`);
     case 'leaderboards':
@@ -85,20 +86,13 @@ ${urls.map((url) => `  <url><loc>${escapeHtml(url)}</loc></url>`).join('\n')}
 `;
 }
 
-function sourceMetadataFromEnvironment(): BenchAlignSourceMetadata | null {
-  const upstreamRevision = process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION?.trim() || null;
-  const schemaVersion = process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION?.trim() || null;
-  return upstreamRevision || schemaVersion ? { upstreamRevision, schemaVersion } : null;
-}
-
 export async function generateStaticPages(rootDir: string): Promise<void> {
   const inputs = staticHtmlEntries(rootDir);
-  const activeBenchAlignSourceMetadata = sourceMetadataFromEnvironment();
 
   await Promise.all(FIXED_ROUTES.map(async ({ id, route }) => {
       if (route.kind === 'guides') return;
       const metadata = metadataForRoute(route);
-      const content = fixedPageContent(route, metadata, activeBenchAlignSourceMetadata);
+      const content = fixedPageContent(route, metadata);
       const outputPath = inputs[id];
       await mkdir(dirname(outputPath), { recursive: true });
       await writeFile(outputPath, documentHtml(
