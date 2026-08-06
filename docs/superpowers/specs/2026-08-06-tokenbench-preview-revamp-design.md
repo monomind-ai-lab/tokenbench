@@ -229,8 +229,10 @@ context window, representative verified API price, and lifecycle state when
 those fields exist. Popular reviewed pairs remain one-click shortcuts.
 
 A compact optional signup beside the comparison tools offers “Notify me when
-either model changes price or ranking.” The checkbox is unchecked by default;
-the email control appears when it is selected.
+new models or price drops are added to TokenBench.” The checkbox is unchecked
+by default; the email control appears when it is selected. The initial release
+is a general alerts preference, not pair-specific targeting or ranking-change
+notification.
 
 ## 9. Comparison result
 
