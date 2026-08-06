@@ -5,6 +5,14 @@ import type { RevisionChanges } from './revision-diff';
 import { campaignFromArtifacts, validateEditorialVariant } from './campaign';
 
 const encoder = new TextEncoder();
+const IMMUTABLE_ROOT = `https://artifacts.example.test/revisions/benchmark_fixture/sha256-${'a'.repeat(64)}/`;
+
+function artifactUrls() {
+  return {
+    pdf: `${IMMUTABLE_ROOT}tokenbench-cheatsheet.pdf`,
+    csv: `${IMMUTABLE_ROOT}tokenbench-cheatsheet.csv`,
+  };
+}
 
 function digest(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
@@ -81,7 +89,7 @@ describe('campaignFromArtifacts', () => {
     const draft = campaignFromArtifacts(
       bundle(),
       changes(),
-      'https://artifacts.example.test/newsletters/',
+      artifactUrls(),
     );
 
     expect(draft.subject).toBe('TokenBench August 2026: 2 new models and 1 verified price drop');
@@ -91,7 +99,8 @@ describe('campaignFromArtifacts', () => {
     expect(draft.htmlContent).toContain('benchmark_fixture');
     expect(draft.htmlContent).toContain('fixture:bravo');
     expect(draft.htmlContent).not.toContain('best model for everyone');
-    expect(draft.attachmentUrl).toBe('https://artifacts.example.test/newsletters/tokenbench-cheatsheet.pdf');
+    expect(draft.attachmentUrl).toBe(`${IMMUTABLE_ROOT}tokenbench-cheatsheet.pdf`);
+    expect(draft.htmlContent).toContain(`${IMMUTABLE_ROOT}tokenbench-cheatsheet.csv`);
   });
 
   it('keeps a no-change revision factual and deterministic', () => {
@@ -106,7 +115,7 @@ describe('campaignFromArtifacts', () => {
     const draft = campaignFromArtifacts(
       bundle(noChanges),
       noChanges,
-      'https://artifacts.example.test/newsletters/',
+      artifactUrls(),
     );
 
     expect(draft.subject).toBe('TokenBench August 2026: no new models or verified price drops');
@@ -134,17 +143,20 @@ describe('campaignFromArtifacts', () => {
     expect(() => campaignFromArtifacts(
       altered,
       changes(),
-      'https://artifacts.example.test/newsletters/',
+      artifactUrls(),
     )).toThrow(/frozen facts/i);
   });
 
   it('fails closed for non-HTTPS or ambiguous artifact base URLs', () => {
-    expect(() => campaignFromArtifacts(bundle(), changes(), 'http://artifacts.example.test/newsletters/'))
+    expect(() => campaignFromArtifacts(bundle(), changes(), {
+      ...artifactUrls(),
+      pdf: 'http://artifacts.example.test/tokenbench-cheatsheet.pdf',
+    }))
       .toThrow(/HTTPS/i);
-    expect(() => campaignFromArtifacts(bundle(), changes(), 'https://artifacts.example.test/newsletters'))
-      .toThrow(/directory/i);
-    expect(() => campaignFromArtifacts(bundle(), changes(), 'https://user:password@artifacts.example.test/newsletters/'))
-      .toThrow(/directory/i);
+    expect(() => campaignFromArtifacts(bundle(), changes(), {
+      ...artifactUrls(),
+      csv: 'https://user:password@artifacts.example.test/tokenbench-cheatsheet.csv',
+    })).toThrow(/HTTPS/i);
   });
 
   it('preserves generated HTML escaping for factual model identities', () => {
@@ -161,7 +173,7 @@ describe('campaignFromArtifacts', () => {
     const draft = campaignFromArtifacts(
       bundle(escapedChanges),
       escapedChanges,
-      'https://artifacts.example.test/newsletters/',
+      artifactUrls(),
     );
 
     expect(draft.htmlContent).toContain('fixture:&lt;alpha&amp;bravo&gt;');
@@ -170,43 +182,30 @@ describe('campaignFromArtifacts', () => {
 });
 
 describe('validateEditorialVariant', () => {
-  it('accepts a rephrased headline that cites only reviewed revision facts', () => {
+  it('accepts only an allowlisted template with every required reviewed fact ID', () => {
+    const reviewed = changes();
     const result = validateEditorialVariant(
       {
-        subject: '2 new models and 1 verified price drop in benchmark_fixture',
-        previewText: 'Revision benchmark_fixture updates fixture:alpha and fixture:bravo.',
+        templateId: 'monthly-all-changes-v1',
+        factIds: [...reviewed.newModels.map((fact) => fact.id), ...reviewed.priceDrops.map((fact) => fact.id)],
       },
-      { manifest: bundle().manifest, changes: changes() },
+      { manifest: bundle().manifest, changes: reviewed },
     );
 
     expect(result).toEqual({ valid: true });
   });
 
   it.each([
-    ['an unknown model identity', 'New madeup:omega model', 'Reviewed frozen facts.'],
-    ['an unknown named model', 'Orion is a new model', 'Reviewed frozen facts.'],
-    ['an unreviewed count', '99 new models', 'Reviewed frozen facts.'],
-    ['an unreviewed spelled count', 'three new models', 'Reviewed frozen facts.'],
-    ['an unreviewed price', 'Verified price drop', 'Price fell from $2 to $1.25.'],
-    ['a rank claim', 'fixture:alpha is rank #1', 'Reviewed frozen facts.'],
-    ['an unknown revision', 'Revision benchmark_other', 'Reviewed frozen facts.'],
-    ['HTML markup', '<strong>2 new models</strong>', 'Reviewed frozen facts.'],
-  ])('rejects %s', (_label, subject, previewText) => {
+    ['raw editorial prose', { subject: '2 new models', previewText: 'fixture:alpha is #1' }],
+    ['an unknown template', { templateId: 'free-form-v1', factIds: [] }],
+    ['a missing reviewed fact', { templateId: 'monthly-all-changes-v1', factIds: [changes().newModels[0]!.id] }],
+    ['a duplicate reviewed fact', { templateId: 'monthly-all-changes-v1', factIds: [
+      changes().newModels[0]!.id, changes().newModels[0]!.id,
+    ] }],
+    ['an injected fact ID', { templateId: 'monthly-all-changes-v1', factIds: ['fake\r\nclaim'] }],
+  ])('rejects %s', (_label, variant) => {
     const result = validateEditorialVariant(
-      { subject, previewText },
-      { manifest: bundle().manifest, changes: changes() },
-    );
-
-    expect(result.valid).toBe(false);
-  });
-
-  it('rejects an editorial variant that cites an unreviewed fact ID', () => {
-    const result = validateEditorialVariant(
-      {
-        subject: '2 new models and 1 verified price drop in benchmark_fixture',
-        previewText: 'Revision benchmark_fixture updates fixture:alpha and fixture:bravo.',
-        factIds: ['unreviewed-fact-id'],
-      },
+      variant,
       { manifest: bundle().manifest, changes: changes() },
     );
 

@@ -436,11 +436,11 @@ git commit -m "feat: generate monthly TokenBench cheatsheets"
 - Modify: `.env.example`
 
 **Interfaces:**
-- Produces: `campaignFromArtifacts(bundle, changes, artifactBaseUrl): CampaignDraft`
+- Produces: `campaignFromArtifacts(bundle, changes, { pdf, csv }): CampaignDraft`
 - Produces: `validateEditorialVariant(variant, factObject): EditorialValidationResult`
 - Produces: `BrevoCampaignConfig = { apiKey: string; sender: { id: number } | { name: string; email: string }; monthlyCheatsheetListId: number }`
 - `CampaignDraft = { dedupeKey: string; audience: 'monthly-cheatsheet'; name: string; subject: string; previewText: string; htmlContent: string; recipients: { listIds: readonly number[] }; attachmentUrl: string }`
-- CLI: `npm run create:newsletter-draft -- --manifest <manifest.json> --changes <changes.json> --artifact-base-url <https-url> --receipt-file <state.json>`
+- CLI: `npm run create:newsletter-draft -- --manifest <relative-manifest.json> --changes <relative-changes.json> --deployment-receipt <relative-signed-receipt.json> --artifact-base-url <immutable-https-url> --receipt-file <relative-state.json>`
 
 - [ ] **Step 1: Write failing fact-fidelity and draft-only tests**
 

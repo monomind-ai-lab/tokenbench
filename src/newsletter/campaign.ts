@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { compareUtf8Binary } from '../benchmarks/contracts';
 import {
   renderNewsletterHtml,
   subjectPreviewSet,
@@ -47,10 +48,8 @@ export interface CampaignDraft {
 }
 
 export interface EditorialVariant {
-  readonly subject: string;
-  readonly previewText: string;
-  /** Optional citations supplied by an editorial tool for its selected facts. */
-  readonly factIds?: readonly string[];
+  readonly templateId: 'monthly-all-changes-v1';
+  readonly factIds: readonly string[];
 }
 
 /** The only structured input an optional editorial helper may receive. */
@@ -61,7 +60,12 @@ export interface EditorialFactObject {
 
 export interface EditorialValidationResult {
   readonly valid: boolean;
-  readonly reason?: 'invalid-fact-object' | 'invalid-text' | 'unknown-fact-id' | 'unknown-model' | 'unreviewed-number' | 'rank-claim' | 'unknown-revision';
+  readonly reason?: 'invalid-fact-object' | 'invalid-selection' | 'unknown-template' | 'unknown-fact-id';
+}
+
+export interface CampaignArtifactUrls {
+  readonly pdf: string;
+  readonly csv: string;
 }
 
 const REQUIRED_ARTIFACTS = [
@@ -71,30 +75,6 @@ const REQUIRED_ARTIFACTS = [
   'tokenbench-cheatsheet.pdf',
   'tokenbench-cheatsheet-subjects.json',
 ] as const;
-
-const NUMBER_WORDS: Readonly<Record<string, number>> = {
-  zero: 0,
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  eleven: 11,
-  twelve: 12,
-  thirteen: 13,
-  fourteen: 14,
-  fifteen: 15,
-  sixteen: 16,
-  seventeen: 17,
-  eighteen: 18,
-  nineteen: 19,
-  twenty: 20,
-};
 
 function fail(message: string): never {
   throw new RangeError(message);
@@ -144,18 +124,29 @@ function verifiedArtifacts(bundle: CampaignArtifactBundle): ReadonlyMap<string, 
   return artifacts;
 }
 
-function artifactBaseUrl(value: string): URL {
-  if (typeof value !== 'string' || value.length === 0) fail('artifact base URL is required');
+function artifactUrl(value: string, name: string): string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 2_048) {
+    fail('artifact URL must be HTTPS');
+  }
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    fail('artifact base URL must be HTTPS');
+    fail('artifact URL must be HTTPS');
   }
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || !url.pathname.endsWith('/')) {
-    fail('artifact base URL must be an HTTPS directory URL');
+  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash
+    || !url.pathname.endsWith(`/${name}`)) {
+    fail('artifact URL must be HTTPS');
   }
-  return url;
+  return url.toString();
+}
+
+function validatedArtifactUrls(value: CampaignArtifactUrls): CampaignArtifactUrls {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) fail('artifact URLs are required');
+  return {
+    pdf: artifactUrl(value.pdf, 'tokenbench-cheatsheet.pdf'),
+    csv: artifactUrl(value.csv, 'tokenbench-cheatsheet.csv'),
+  };
 }
 
 function parseSubjectPreviews(bytes: Uint8Array): readonly SubjectPreview[] {
@@ -190,29 +181,9 @@ function matchingChanges(manifest: CampaignManifest, changes: RevisionChanges): 
     && manifest.changes.dedupeKey === changes.dedupeKey;
 }
 
-function numericFacts(manifest: CampaignManifest, changes: RevisionChanges): ReadonlySet<string> {
-  const values = new Set<string>([
-    String(changes.newModels.length),
-    String(changes.priceDrops.length),
-  ]);
-  for (const value of manifest.generatedAt.match(/\d+/gu) ?? []) values.add(String(Number(value)));
-  for (const price of changes.priceDrops) {
-    for (const value of [
-      price.previousInputUsdPerMillion,
-      price.currentInputUsdPerMillion,
-      price.previousOutputUsdPerMillion,
-      price.currentOutputUsdPerMillion,
-    ]) {
-      if (value !== null) values.add(String(value));
-    }
-  }
-  return values;
-}
-
-function writtenNumber(value: string): string | null {
-  const normalized = value.toLowerCase();
-  if (Object.hasOwn(NUMBER_WORDS, normalized)) return String(NUMBER_WORDS[normalized]!);
-  return /^\d+(?:\.\d+)?$/u.test(value) ? String(Number(value)) : null;
+function reviewedFactIds(changes: RevisionChanges): readonly string[] {
+  return [...changes.newModels.map((fact) => fact.id), ...changes.priceDrops.map((fact) => fact.id)]
+    .sort(compareUtf8Binary);
 }
 
 /**
@@ -220,7 +191,7 @@ function writtenNumber(value: string): string | null {
  * the frozen manifest/change object. It deliberately has no model/API call.
  */
 export function validateEditorialVariant(
-  variant: EditorialVariant,
+  variant: unknown,
   factObject: EditorialFactObject,
 ): EditorialValidationResult {
   const manifest = factObject?.manifest;
@@ -229,68 +200,45 @@ export function validateEditorialVariant(
     || !matchingChanges(manifest, changes)) {
     return invalidEditorial('invalid-fact-object');
   }
-  if (typeof variant?.subject !== 'string' || typeof variant.previewText !== 'string'
-    || variant.subject.trim().length === 0 || variant.previewText.trim().length === 0
-    || /[<>\u0000-\u001f]/u.test(variant.subject) || /[<>\u0000-\u001f]/u.test(variant.previewText)) {
-    return invalidEditorial('invalid-text');
+  if (!variant || typeof variant !== 'object' || Array.isArray(variant)) {
+    return invalidEditorial('invalid-selection');
   }
-  const text = `${variant.subject}\n${variant.previewText}`;
-  if (variant.factIds !== undefined) {
-    const reviewedFactIds = new Set([
-      ...changes.newModels.map((fact) => fact.id),
-      ...changes.priceDrops.map((fact) => fact.id),
-    ]);
-    if (!Array.isArray(variant.factIds) || variant.factIds.length === 0
-      || variant.factIds.some((id) => typeof id !== 'string' || !reviewedFactIds.has(id))) {
-      return invalidEditorial('unknown-fact-id');
-    }
+  const selection = variant as Record<string, unknown>;
+  if (Object.keys(selection).sort(compareUtf8Binary).join(',') !== 'factIds,templateId') {
+    return invalidEditorial('invalid-selection');
   }
-  if (/\b(?:rank|ranking|top\s*\d+|number\s+\d+)\b|#\s*\d+/iu.test(text)) {
-    return invalidEditorial('rank-claim');
+  if (selection.templateId !== 'monthly-all-changes-v1') {
+    return invalidEditorial('unknown-template');
   }
-
-  const knownModelOrRouteIds = new Set([
-    ...changes.newModels.map((fact) => fact.modelKey),
-    ...changes.priceDrops.flatMap((fact) => [fact.modelKey, fact.routeId]),
-  ]);
-  for (const candidate of text.match(/[A-Za-z0-9][A-Za-z0-9._-]*:[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?/gu) ?? []) {
-    if (!knownModelOrRouteIds.has(candidate)) return invalidEditorial('unknown-model');
+  if (!Array.isArray(selection.factIds)) return invalidEditorial('invalid-selection');
+  const supplied = selection.factIds;
+  if (supplied.some((id) => typeof id !== 'string' || id.length === 0 || id.length > 4_096
+    || /[\u0000-\u001f\u007f]/u.test(id))) {
+    return invalidEditorial('unknown-fact-id');
   }
-  const namedModelPatterns = [
-    /\b([A-Z][A-Za-z0-9._-]*)\s+(?:is|was|became)\s+(?:a\s+)?(?:new\s+)?model\b/gu,
-    /\b(?:new\s+)?model\s+(?:named\s+|called\s+)?([A-Z][A-Za-z0-9._-]*)\b/gu,
-  ] as const;
-  for (const pattern of namedModelPatterns) {
-    for (const match of text.matchAll(pattern)) {
-      if (!knownModelOrRouteIds.has(match[1]!)) return invalidEditorial('unknown-model');
-    }
-  }
-
-  const revisions = new Set([
-    manifest.revision,
-    manifest.catalogRevision,
-    changes.fromRevision,
-    changes.toRevision,
-  ]);
-  for (const candidate of text.match(/\b(?:benchmark|catalog)[A-Za-z0-9_.-]+\b/giu) ?? []) {
-    if (!revisions.has(candidate)) return invalidEditorial('unknown-revision');
-  }
-
-  const allowedNumbers = numericFacts(manifest, changes);
-  for (const candidate of text.match(/(?<![A-Za-z0-9_-])\d+(?:\.\d+)?(?![A-Za-z0-9_-])/gu) ?? []) {
-    if (!allowedNumbers.has(String(Number(candidate)))) return invalidEditorial('unreviewed-number');
-  }
-  const expectedNewModels = String(changes.newModels.length);
-  const expectedPriceDrops = String(changes.priceDrops.length);
-  for (const [, amount, kind] of text.matchAll(/\b(\d+(?:\.\d+)?|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:new\s+)?(models?|verified\s+price\s+drops?)\b/giu)) {
-    const expected = /model/iu.test(kind!) ? expectedNewModels : expectedPriceDrops;
-    if (writtenNumber(amount!) !== expected) return invalidEditorial('unreviewed-number');
-  }
-  for (const [, amount] of text.matchAll(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:USD|dollars?)\b/giu)) {
-    const value = writtenNumber(amount!);
-    if (!value || !allowedNumbers.has(value)) return invalidEditorial('unreviewed-number');
+  const expected = reviewedFactIds(changes);
+  if (supplied.length !== expected.length || supplied.some((id, index) => id !== expected[index])) {
+    return invalidEditorial('unknown-fact-id');
   }
   return { valid: true };
+}
+
+function htmlEscape(value: string): string {
+  return value
+    .replace(/&/gu, '&amp;')
+    .replace(/</gu, '&lt;')
+    .replace(/>/gu, '&gt;')
+    .replace(/"/gu, '&quot;')
+    .replace(/'/gu, '&#39;');
+}
+
+function renderCampaignHtml(
+  document: CheatsheetDocument,
+  changes: RevisionChanges,
+  urls: CampaignArtifactUrls,
+): string {
+  const downloads = `    <h2>Verified downloads</h2>\n    <p><a href="${htmlEscape(urls.pdf)}">PDF cheatsheet</a> · <a href="${htmlEscape(urls.csv)}">CSV data</a></p>\n`;
+  return renderNewsletterHtml(document, changes).replace('  </main>', `${downloads}  </main>`);
 }
 
 /**
@@ -301,7 +249,11 @@ export function validateEditorialVariant(
 export function campaignFromArtifacts(
   bundle: CampaignArtifactBundle,
   changes: RevisionChanges,
-  baseUrl: string,
+  artifactUrls: CampaignArtifactUrls,
+  editorialVariant: EditorialVariant = {
+    templateId: 'monthly-all-changes-v1',
+    factIds: reviewedFactIds(changes),
+  },
 ): CampaignDraft {
   const manifest = bundle?.manifest;
   if (!manifest || manifest.schemaVersion !== 'tokenbench-cheatsheet/v1') {
@@ -321,16 +273,17 @@ export function campaignFromArtifacts(
   if (JSON.stringify(variants) !== JSON.stringify(generatedVariants) || variants.length === 0) {
     fail('campaign subject variants do not match frozen facts');
   }
-  const url = artifactBaseUrl(baseUrl);
-  const attachmentUrl = new URL('tokenbench-cheatsheet.pdf', url).toString();
+  const urls = validatedArtifactUrls(artifactUrls);
+  const editorial = validateEditorialVariant(editorialVariant, { manifest, changes });
+  if (!editorial.valid) fail('campaign editorial selection is invalid');
   return {
     dedupeKey: changes.dedupeKey,
     audience: 'monthly-cheatsheet',
     name: campaignName(manifest, changes.dedupeKey),
     subject: variants[0]!.subject,
     previewText: variants[0]!.previewText,
-    htmlContent: newsletter,
+    htmlContent: renderCampaignHtml(document, changes, urls),
     recipients: { listIds: [] },
-    attachmentUrl,
+    attachmentUrl: urls.pdf,
   };
 }
