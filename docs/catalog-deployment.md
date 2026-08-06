@@ -103,8 +103,9 @@ Benchmark ingestion follows the same publication boundary:
    and validates source, license, and data-contract rules.
 2. It writes immutable evidence snapshots and content-hash metadata to R2
    before publication.
-3. It inserts a complete benchmark revision and related records in one D1 batch,
-   then switches benchmark_publication_state only after that batch succeeds.
+3. It stages a complete benchmark revision, related records, and materialized
+   responses in D1 batches capped below the platform RPC limit. One final D1
+   transaction switches both publication pointers only after staging succeeds.
 4. It records a failure in benchmark_refresh_state without replacing a previous
    published revision.
 
@@ -112,10 +113,11 @@ Each successful publisher also materializes the public response layer. Catalog
 responses are keyed by the checked-in subscription-manifest revision and use a
 catalog-pointer compare-and-set so overlapping cron runs cannot move the cache
 backward. Benchmark publication materializes summary, default first pages, and
-complete ordered pagination projections in the same atomic batch as its
-revision. An unchanged refresh rebuilds freshness variants without changing the
-content revision. A failed fetch or materialization leaves the prior complete
-response pointer active.
+complete ordered pagination projections under an attempt-unique inactive cache
+revision. Database triggers require the response-cache pointer to match the
+active published benchmark revision. An unchanged refresh rebuilds freshness
+variants without changing the content revision. A failed, stale, or overlapping
+publication leaves both prior complete pointers active.
 
 LMArena Dataset Viewer remains the primary transport. If it exhausts retries
 for a timeout, 408, 429, or 5xx response, the Worker may use the official Hub
