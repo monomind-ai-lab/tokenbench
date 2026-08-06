@@ -17,7 +17,7 @@ export function GuideCard({ guide }: { readonly guide: GuideArticle; readonly ke
 }
 
 export function GuidesHub() {
-  return <main id="guide-content" className="guides-main">
+  return <main id="guide-content" className="guides-main" tabIndex={-1}>
     <section className="guides-hero" aria-labelledby="guides-heading">
       <span className="eyebrow"><BookOpen aria-hidden="true" size={16} /> AI bill playbook</span>
       <h1 id="guides-heading">Spend smarter on AI</h1>
@@ -54,7 +54,7 @@ function GuideContextualLinks({ guide }: { readonly guide: GuideArticle }) {
 
 export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
   const recommendations = relatedGuides(guide);
-  return <main id="guide-content" className="guides-main article-main">
+  return <main id="guide-content" className="guides-main article-main" tabIndex={-1}>
     <nav className="breadcrumbs" aria-label="Breadcrumb"><a href={ROUTE_PATHS.guides}>Guides</a><ChevronRight aria-hidden="true" size={14} /><span aria-current="page">{guide.category}</span></nav>
     <article className="guide-article">
       <header className="article-header">
