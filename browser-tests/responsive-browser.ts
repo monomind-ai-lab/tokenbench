@@ -101,7 +101,7 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/', heading: 'Stop Guessing Your AI Costs. Start Optimizing.', hydratedClientMarker: '.home-page' },
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
   { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', hydratedClientMarker: '.calculator-page', visuallyVisibleHeading: false },
-  { path: '/leaderboards/', heading: 'AI model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
+  { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
   { path: '/leaderboards/llm/coding/', heading: 'AI coding model benchmarks', hydratedClientMarker: '.leaderboard-results[aria-label="AI coding model benchmarks"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text-to-image model rankings', hydratedClientMarker: '.leaderboard-results[aria-label="Text-to-image model rankings"]' },
   { path: '/compare/', heading: 'Compare AI models', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
@@ -658,7 +658,7 @@ test.describe('guides browser harness', () => {
 
 test.describe('generated static route runtime', () => {
   const hydratingLeaderboardRoutes = [
-    ['/leaderboards/', 'AI model leaderboards'],
+    ['/leaderboards/', 'Model leaderboards'],
     ['/leaderboards/llm/overall/', 'Overall AI model benchmarks'],
     ['/leaderboards/llm/coding/', 'AI coding model benchmarks'],
     ['/leaderboards/llm/agentic/', 'AI agentic model benchmarks'],

@@ -67,6 +67,13 @@ describe('route metadata registry', () => {
     expect(page.canonical).toBe(`${origin}/guides/track-claude-code-usage/`);
   });
 
+  it('keeps the crawlable leaderboard heading aligned with the interactive directory', () => {
+    const page = metadataForRoute({ kind: 'leaderboards' });
+
+    expect(page.h1).toBe('Model leaderboards');
+    expect(page.canonical).toBe(`${origin}/leaderboards/`);
+  });
+
   it('keeps dynamic comparison canonical and Open Graph URLs slashless', () => {
     const page = metadataForRoute({ kind: 'comparison', pair: 'a-vs-b' });
 

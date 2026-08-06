@@ -33,6 +33,7 @@ describe('crawlable static-page generator', () => {
 
     const home = await readFile(join(root, 'index.html'), 'utf8');
     const compareHub = await readFile(join(root, 'compare/index.html'), 'utf8');
+    const leaderboardDirectory = await readFile(join(root, 'leaderboards/index.html'), 'utf8');
     const leaderboard = await readFile(join(root, 'leaderboards/llm/overall/index.html'), 'utf8');
     const reasoning = await readFile(join(root, 'leaderboards/llm/reasoning/index.html'), 'utf8');
     const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
@@ -48,6 +49,9 @@ describe('crawlable static-page generator', () => {
 
     expect(compareHub).toContain('<h1>Compare AI models</h1>');
     expect(compareHub).toContain('Compare evidence, not a fabricated universal score');
+
+    expect(leaderboardDirectory).toContain('<h1>Model leaderboards</h1>');
+    expect(leaderboardDirectory).toContain('Explore current model leaders by capability, workload, cost, and human preference.');
 
     expect(leaderboard).toContain('<h1>Overall AI model benchmarks</h1>');
     expect(leaderboard).toContain('Live ranking data is not embedded in this static shell.');

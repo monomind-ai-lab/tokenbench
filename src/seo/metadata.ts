@@ -94,7 +94,7 @@ const pageDefinitions = {
   leaderboards: {
     title: `AI Model Leaderboards | ${SITE_CONFIG.name}`,
     description: `Browse ${SITE_CONFIG.name}'s source-aware AI model leaderboards for capability, coding, agentic work, human preference, multimodal tasks, and media generation.`,
-    h1: 'AI model leaderboards',
+    h1: 'Model leaderboards',
   },
   methodologyBenchAlign: {
     title: `How BenchAlign Rankings Work | ${SITE_CONFIG.name}`,

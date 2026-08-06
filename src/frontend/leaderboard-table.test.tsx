@@ -469,13 +469,13 @@ describe('leaderboard routes and honest home teasers', () => {
     expect(screen.queryByText('Model A')).not.toBeInTheDocument();
   });
 
-  it('renders the directory with registered category links without fixture rankings', () => {
+  it('renders the directory with concise registered category links without fixture rankings', () => {
     window.history.replaceState({}, '', '/leaderboards/');
 
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'AI model leaderboards', level: 1 })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'AI coding model benchmarks' }).some((link) => link.getAttribute('href') === '/leaderboards/llm/coding/')).toBe(true);
+    expect(screen.getByRole('heading', { name: 'Model leaderboards', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View Coding performance' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 

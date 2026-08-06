@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
-import { LEADERBOARD_NAVIGATION, LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
-import { EmptyState, Skeleton } from '../frontend/ui';
+import { LEADERBOARD_NAVIGATION, LEADERBOARD_ROUTES, ROUTE_PATHS, type LeaderboardKey } from '../routing/routes';
+import type { DecisionPickEntry, DecisionPickGroup } from '../benchmarks/decision-picks';
+import { EmptyState, Skeleton, formatDateTime } from '../frontend/ui';
 import {
   LeaderboardFilters,
   parseLeaderboardFilters,
@@ -10,7 +11,8 @@ import {
   type LeaderboardFilterState,
 } from '../frontend/leaderboard-filters';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
-import { useBenchmarkLeaderboard } from '../frontend/use-benchmarks';
+import { ProviderMark } from '../frontend/provider-mark';
+import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
 
 function methodologySummary(keyName: LeaderboardKey): string {
   if (keyName === 'llm-value') {
@@ -50,7 +52,7 @@ function RelatedLeaderboards({ keyName }: { readonly keyName?: LeaderboardKey })
   return <section className="leaderboard-related" aria-labelledby="related-leaderboards-heading">
     <div className="panel-heading"><div><span className="eyebrow">Explore by lens</span><h2 id="related-leaderboards-heading">Related leaderboards</h2></div></div>
     <nav aria-label="Related leaderboards">
-      {links.map((item) => <a key={item.key} href={item.pathname}>{LEADERBOARD_ROUTES[item.key].seo.h1} <ArrowRight aria-hidden="true" size={14} /></a>)}
+      {links.map((item) => <a key={item.key} href={item.pathname}>{item.label} <ArrowRight aria-hidden="true" size={14} /></a>)}
     </nav>
   </section>;
 }
@@ -142,25 +144,142 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   </div>;
 }
 
+const DECISION_GROUP_TITLES: Readonly<Partial<Record<DecisionPickGroup['key'], string>>> = {
+  'llm-overall': 'BenchAlign',
+  'llm-agentic': 'Agent',
+  'llm-coding': 'Coding',
+  'llm-reasoning': 'Reasoning',
+  'multimodal-vision-documents': 'Multimodal',
+  'llm-knowledge': 'Knowledge',
+};
+
+interface DirectoryGroup {
+  readonly title: string;
+  readonly keys: readonly LeaderboardKey[];
+}
+
+const DIRECTORY_GROUPS: readonly DirectoryGroup[] = [
+  {
+    title: 'Language models',
+    keys: [
+      'llm-overall',
+      'llm-agentic',
+      'llm-coding',
+      'llm-reasoning',
+      'llm-knowledge',
+      'llm-human-preference',
+      'llm-value',
+      'llm-pricing-context',
+    ],
+  },
+  { title: 'Multimodal', keys: ['multimodal-vision-documents'] },
+  {
+    title: 'Media',
+    keys: [
+      'media-text-to-image',
+      'media-image-editing',
+      'media-text-to-video',
+      'media-image-to-video',
+      'media-video-editing',
+    ],
+  },
+];
+
+function formatScore(score: number): string {
+  return new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score);
+}
+
+function decisionTitle(group: DecisionPickGroup): string {
+  return DECISION_GROUP_TITLES[group.key] ?? group.label;
+}
+
+function DecisionEntry({ entry }: { readonly entry: DecisionPickEntry; readonly key?: string }) {
+  return <li className="decision-pick-entry">
+    <div className="decision-pick-entry-heading">
+      <span className="decision-pick-rank">Rank {entry.rank}</span>
+      <span className="leaderboard-evidence-status evidence-supported">Supported evidence</span>
+    </div>
+    <h4>{entry.name}</h4>
+    <p className="decision-pick-provider"><ProviderMark providerId={entry.provider} providerName={entry.provider} decorative size={20} /><span>{entry.provider}</span></p>
+    <dl>
+      <div><dt>Score</dt><dd>{formatScore(entry.score)} {entry.unit}</dd></div>
+      <div><dt>Updated</dt><dd><time dateTime={entry.updatedAt}>Updated {formatDateTime(entry.updatedAt)}</time></dd></div>
+    </dl>
+  </li>;
+}
+
+function DecisionPickCard({ group }: { readonly group: DecisionPickGroup; readonly key?: string }) {
+  const title = decisionTitle(group);
+  const headingId = `decision-pick-${group.key}`;
+  const statusText = group.status === 'benchalign'
+    ? 'BenchAlign ranking'
+    : 'Evidence lens — not a BenchAlign ranking';
+  return <section
+    className={`panel decision-pick-card decision-pick-card-${group.status}`}
+    aria-label={`${title} leaders`}
+  >
+    <div className="decision-pick-card-heading">
+      <div><span className="eyebrow">{statusText}</span><h3 id={headingId}>{title}</h3></div>
+      <a href={group.entries[0]?.routePath ?? LEADERBOARD_ROUTES[group.key].pathname}>View full {title} benchmark <ArrowRight aria-hidden="true" size={14} /></a>
+    </div>
+    {group.entries.length > 0
+      ? <ol className="decision-pick-list">{group.entries.map((entry) => <DecisionEntry key={entry.modelKey} entry={entry} />)}</ol>
+      : <EmptyState
+        title="No supported ranking is published."
+        description="This view has no supported entry in the latest published benchmark summary."
+      />}
+  </section>;
+}
+
+function DecisionReadyPicks() {
+  const state = useDecisionPicks();
+  return <section className="decision-picks" aria-labelledby="decision-picks-heading">
+    <div className="panel-heading"><div><span className="eyebrow">Start with the supported signal</span><h2 id="decision-picks-heading">Decision-ready picks</h2><p>Each preview is limited to source-supported results from the current published summary.</p></div></div>
+    {state.phase === 'loading' ? <Skeleton label="Loading decision-ready picks" /> : null}
+    {state.phase === 'stale' ? <LeaderboardState phase="stale" error={state.error} onRetry={state.retry} /> : null}
+    {state.phase === 'ready' || state.phase === 'stale'
+      ? <div className="decision-picks-grid">{(state.decisionPicks ?? []).map((group) => <DecisionPickCard key={group.key} group={group} />)}</div>
+      : null}
+    {state.phase === 'unavailable' || state.phase === 'error'
+      ? <LeaderboardState phase={state.phase} error={state.error} onRetry={state.retry} />
+      : null}
+  </section>;
+}
+
+function LeaderboardDirectory() {
+  return <section className="leaderboard-directory" aria-labelledby="leaderboard-directory-list-heading">
+    <div className="panel-heading"><div><span className="eyebrow">All published views</span><h2 id="leaderboard-directory-list-heading">Full leaderboard directory</h2><p>Choose the evidence lens that matches your decision, then inspect its source and methodology.</p></div></div>
+    {DIRECTORY_GROUPS.map((group) => {
+      const headingId = `leaderboard-directory-${group.title.toLowerCase().replace(/\s+/g, '-')}`;
+      return <section className="leaderboard-directory-group" aria-labelledby={headingId} key={group.title}>
+        <h3 id={headingId}>{group.title}</h3>
+        <div className="leaderboard-directory-list" role="list" aria-label={`${group.title} leaderboard views`}>
+          {group.keys.map((key) => {
+            const route = LEADERBOARD_ROUTES[key];
+            const title = route.navigationLabel;
+            return <article className="panel" role="listitem" key={key}>
+              <h4><a href={route.pathname}>{title}</a></h4>
+              <p>{route.seo.summary}</p>
+              <a href={route.pathname}>View {title} <ArrowRight aria-hidden="true" size={14} /></a>
+            </article>;
+          })}
+        </div>
+      </section>;
+    })}
+  </section>;
+}
+
 export function LeaderboardDirectoryPage() {
   return <div className="content-stack leaderboard-page leaderboard-directory-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-directory-heading">
       <span className="eyebrow">TokenBench directory</span>
-      <h1 id="leaderboard-directory-heading">AI model leaderboards</h1>
-      <p>Choose the decision lens you need, then inspect the published source metric, freshness, and methodology on its dedicated route.</p>
-      <p className="leaderboard-methodology"><strong>Availability:</strong> Rankings are never embedded in the directory. Each route exposes only a valid active revision or an explicit Unavailable state.</p>
+      <h1 id="leaderboard-directory-heading">Model leaderboards</h1>
+      <p>Explore current model leaders by capability, workload, cost, and human preference.</p>
+      <p className="leaderboard-methodology"><strong>Method:</strong> Overall, Agent, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge remain clearly labeled evidence lenses. <a href={ROUTE_PATHS.methodologyBenchAlign}>How BenchAlign rankings work</a>.</p>
     </section>
 
-    <section className="leaderboard-directory" aria-labelledby="leaderboard-directory-list-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Registered routes</span><h2 id="leaderboard-directory-list-heading">Find the relevant evidence lens</h2></div></div>
-      <div role="list" aria-label="TokenBench leaderboard categories">
-        {LEADERBOARD_NAVIGATION.map((item) => <article className="panel" role="listitem" key={item.key}>
-          <h3><a href={item.pathname}>{LEADERBOARD_ROUTES[item.key].seo.h1}</a></h3>
-          <p>{LEADERBOARD_ROUTES[item.key].seo.summary}</p>
-          <a href={item.pathname}>Open leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
-        </article>)}
-      </div>
-    </section>
+    <DecisionReadyPicks />
+    <LeaderboardDirectory />
 
     <RelatedLeaderboards />
     <MonoMindCta />
