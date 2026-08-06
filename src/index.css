@@ -73,7 +73,7 @@ a { color: var(--primary-strong); }
 a:hover { color: var(--primary); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--tertiary); outline-offset: 3px; }
 
-.provider-mark { flex: 0 0 auto; width: auto; height: auto; object-fit: contain; }
+.provider-mark { flex: 0 0 auto; object-fit: contain; }
 .provider-mark-fallback { display: inline-flex; align-items: center; justify-content: center; border: 1px solid color-mix(in srgb, var(--outline) 76%, var(--text)); border-radius: 50%; background: var(--surface-high); color: var(--text); font-family: var(--font-label); font-size: 0.62em; font-weight: 800; line-height: 1; }
 
 #root, .app-shell { min-height: 100vh; }

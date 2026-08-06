@@ -189,6 +189,65 @@ async function activateSkipLinkAndAssertTarget(page: Page, targetId: string): Pr
 }
 
 test.describe('responsive calculator browser harness', () => {
+  test('successful provider images keep requested dimensions before and after an oversized Brandfetch asset loads', async ({ page }) => {
+    const origin = previewOrigin();
+    const requestedSizes = [20, 24, 32] as const;
+    let releaseResponses = () => {};
+    const responsesReleased = new Promise<void>((resolve) => { releaseResponses = resolve; });
+    let signalFirstRequest = () => {};
+    const firstRequest = new Promise<void>((resolve) => { signalFirstRequest = resolve; });
+
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await page.route('https://cdn.brandfetch.io/**', async (route) => {
+      signalFirstRequest();
+      await responsesReleased;
+      await route.fulfill({
+        status: 200,
+        contentType: 'image/svg+xml',
+        body: '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="400" height="200" fill="#137fec"/></svg>',
+      });
+    });
+    await page.goto('/');
+    await page.evaluate((sizes) => {
+      const fixture = document.createElement('div');
+      fixture.id = 'provider-mark-success-fixture';
+      fixture.style.display = 'flex';
+      fixture.style.gap = '4px';
+      for (const size of sizes) {
+        const image = document.createElement('img');
+        image.className = 'provider-mark';
+        image.alt = `Provider ${size}`;
+        image.width = size;
+        image.height = size;
+        image.src = `https://cdn.brandfetch.io/example.com/w/${size}/h/${size}/theme/light/icon?c=browser-test`;
+        fixture.append(image);
+      }
+      document.body.append(fixture);
+    }, requestedSizes);
+    await firstRequest;
+
+    const marks = page.locator('#provider-mark-success-fixture img.provider-mark');
+    const beforeLoad = await marks.evaluateAll((images) => images.map((image) => {
+      const bounds = image.getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height };
+    }));
+    expect(beforeLoad).toEqual(requestedSizes.map((size) => ({ width: size, height: size })));
+
+    releaseResponses();
+    await expect.poll(() => marks.evaluateAll((images) => images.map((image) => ({
+      naturalWidth: (image as HTMLImageElement).naturalWidth,
+      naturalHeight: (image as HTMLImageElement).naturalHeight,
+    })))).toEqual(requestedSizes.map(() => ({ naturalWidth: 400, naturalHeight: 200 })));
+
+    const afterLoad = await marks.evaluateAll((images) => images.map((image) => {
+      const bounds = image.getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height };
+    }));
+    expect(afterLoad).toEqual(beforeLoad);
+    await assertNoHorizontalOverflow(page);
+  });
+
   test('calculator result explains how to recover when the selected provider has no verified models', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, modelOffers: [] }, 200, false);
@@ -236,8 +295,8 @@ test.describe('responsive calculator browser harness', () => {
           const resultBounds = await resultAction.evaluate((element) => element.getBoundingClientRect().toJSON());
           expect(resultBounds.width).toBeGreaterThanOrEqual(44);
           expect(resultBounds.height).toBeGreaterThanOrEqual(44);
-          await assertNoHorizontalOverflow(page);
         }
+        await assertNoHorizontalOverflow(page);
         await assertFirstViewportOmitsInternalRevisions(page);
         await page.unrouteAll();
       }
@@ -266,6 +325,7 @@ test.describe('responsive calculator browser harness', () => {
       }));
 
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+      expect(dimensions.rangeHeights.length).toBeGreaterThan(0);
       expect(dimensions.rangeHeights.every((height) => height >= 44)).toBe(true);
       expect(dimensions.comparisonCardsDisplay).toBe(viewport.cards ? 'grid' : 'none');
       expect(dimensions.comparisonTableDisplay).toBe(viewport.cards ? 'none' : 'table');
