@@ -1,44 +1,7 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ModelPairPicker, type CompareDirectoryEnvelope, type DirectoryModel, type DirectoryPair, type EvidenceStatus, type SourceType } from '../frontend/model-pair-picker';
 import { guidePath } from '../guides/content';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
-
-type EvidenceStatus = 'supported' | 'estimated' | 'source_only';
-type SourceType = 'Proprietary' | 'Open Weight' | 'Unknown';
-type Picker = 'first' | 'second' | null;
-
-interface DirectoryModel {
-  readonly slug: string;
-  readonly name: string;
-  readonly creator: string;
-  readonly sourceType: SourceType;
-  readonly evidenceStatus: EvidenceStatus;
-  readonly utilitySelectable: boolean;
-  readonly metricCategories: readonly string[];
-}
-
-interface DirectoryPair {
-  readonly pairSlug: string;
-  readonly modelASlug: string;
-  readonly modelBSlug: string;
-  readonly featuredRank: number | null;
-  readonly sharedMetricCount: number;
-}
-
-interface CompareDirectoryEnvelope {
-  readonly revision: string;
-  readonly publishedAt: string;
-  readonly freshness: {
-    readonly status: 'fresh' | 'stale';
-    readonly checkedAt: string;
-    readonly message?: string;
-  };
-  readonly data: {
-    readonly compareDirectory: {
-      readonly models: readonly DirectoryModel[];
-      readonly indexablePairs: readonly DirectoryPair[];
-    };
-  };
-}
 
 interface DirectoryState {
   readonly phase: 'loading' | 'ready' | 'unavailable';
@@ -153,25 +116,6 @@ function parseDirectoryEnvelope(value: unknown): CompareDirectoryEnvelope | null
   };
 }
 
-function compareText(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function modelLabel(model: DirectoryModel): string {
-  return `${model.name} · ${model.creator}`;
-}
-
-function modelOptionLabel(model: DirectoryModel, duplicateNames: ReadonlySet<string>): string {
-  const label = modelLabel(model);
-  return duplicateNames.has(model.name) ? `${label} · ${model.slug}` : label;
-}
-
-function evidenceLabel(status: EvidenceStatus): string {
-  if (status === 'supported') return 'Supported evidence';
-  if (status === 'estimated') return 'Estimated evidence';
-  return 'Source-only record';
-}
-
 function modelPairLabel(pair: DirectoryPair, modelsBySlug: ReadonlyMap<string, DirectoryModel>): string {
   const modelA = modelsBySlug.get(pair.modelASlug);
   const modelB = modelsBySlug.get(pair.modelBSlug);
@@ -181,34 +125,15 @@ function modelPairLabel(pair: DirectoryPair, modelsBySlug: ReadonlyMap<string, D
     : `${modelA.name} vs ${modelB.name}`;
 }
 
-function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('en-US', {
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    month: 'short',
-    timeZone: 'UTC',
-    timeZoneName: 'short',
-    year: 'numeric',
-  }).format(new Date(value));
-}
-
-function CompareHubHero({ envelope }: { readonly envelope: CompareDirectoryEnvelope | null }) {
+function CompareHubHero() {
   return <section className="comparison-hub-hero" aria-labelledby="compare-hub-heading">
-    <h1 id="compare-hub-heading">Compare AI models</h1>
-    <p>Start with two known catalog models, then inspect the source metrics, route pricing, freshness, and methodology on the comparison page.</p>
-    {envelope ? <>
-      <p className="comparison-revision">Published revision: {envelope.revision}</p>
-      <dl className="comparison-revision-timing">
-        <div><dt>Publication time</dt><dd>{formatDateTime(envelope.publishedAt)}</dd></div>
-        <div><dt>Checked at</dt><dd>{formatDateTime(envelope.freshness.checkedAt)}</dd></div>
-      </dl>
-    </> : <p className="comparison-revision">Published revision: checking availability</p>}
+    <h1 id="compare-hub-heading">Compare models side by side</h1>
+    <p>Choose two models to compare benchmark performance, API pricing, context limits, and evidence coverage.</p>
   </section>;
 }
 
 /** Exact reviewed records take precedence; other known pairs remain server-canonicalized. */
-function comparisonPath(first: DirectoryModel, second: DirectoryModel, pairs: readonly DirectoryPair[]): string {
+export function comparisonPath(first: DirectoryModel, second: DirectoryModel, pairs: readonly DirectoryPair[]): string {
   const reviewedPair = pairs.find((pair) => (pair.modelASlug === first.slug && pair.modelBSlug === second.slug)
     || (pair.modelASlug === second.slug && pair.modelBSlug === first.slug));
   const pairSlug = reviewedPair?.pairSlug ?? `${first.slug}-vs-${second.slug}`;
@@ -252,89 +177,20 @@ function useCompareDirectory(): DirectoryState {
   return state;
 }
 
-function ModelCombobox({
-  label,
-  picker,
-  value,
-  activePicker,
-  activeOptionId,
-  onActivate,
-  onBlur,
-  onKeyDown,
-  onValueChange,
-}: {
-  readonly label: string;
-  readonly picker: Exclude<Picker, null>;
-  readonly value: string;
-  readonly activePicker: Picker;
-  readonly activeOptionId: string | undefined;
-  readonly onActivate: (picker: Exclude<Picker, null>) => void;
-  readonly onBlur: () => void;
-  readonly onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
-  readonly onValueChange: (value: string) => void;
-}) {
-  const id = `compare-${picker}-model`;
-  return <div className="comparison-model-combobox">
-    <label htmlFor={id}>{label}</label>
-    <input
-      aria-autocomplete="list"
-      aria-activedescendant={activePicker === picker ? activeOptionId : undefined}
-      aria-controls="comparison-model-options"
-      aria-expanded={activePicker === picker}
-      aria-haspopup="listbox"
-      id={id}
-      onBlur={onBlur}
-      onChange={(event) => onValueChange(event.currentTarget.value)}
-      onFocus={() => onActivate(picker)}
-      onKeyDown={onKeyDown}
-      placeholder="Enter a canonical model slug"
-      role="combobox"
-      type="search"
-      value={value}
-    />
-    <p>Selections are identified by canonical model slug; labels retain the creator for duplicate display names.</p>
-  </div>;
-}
-
 export function CompareHubPage() {
   const state = useCompareDirectory();
-  const [firstSlug, setFirstSlug] = useState('');
-  const [secondSlug, setSecondSlug] = useState('');
-  const [creatorFilter, setCreatorFilter] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [activePicker, setActivePicker] = useState<Picker>(null);
-  const [activeOptionIndex, setActiveOptionIndex] = useState(-1);
-
+  const [firstModelSlug, setFirstModelSlug] = useState('');
+  const [secondModelSlug, setSecondModelSlug] = useState('');
   const directory = state.envelope?.data.compareDirectory;
   const models = directory?.models ?? [];
   const pairs = directory?.indexablePairs ?? [];
   const modelsBySlug = useMemo(() => new Map(models.map((model) => [model.slug, model])), [models]);
-  const utilityModels = useMemo(() => models.filter((model) => model.utilitySelectable), [models]);
-  const utilityModelsBySlug = useMemo(() => new Map(utilityModels.map((model) => [model.slug, model])), [utilityModels]);
-  const duplicateModelNames = useMemo(() => {
-    const counts = new Map<string, number>();
-    utilityModels.forEach((model) => counts.set(model.name, (counts.get(model.name) ?? 0) + 1));
-    return new Set([...counts].filter(([, count]) => count > 1).map(([name]) => name));
-  }, [utilityModels]);
-  const creators = useMemo(() => [...new Set(utilityModels.map((model) => model.creator))].sort(compareText), [utilityModels]);
-  const categories = useMemo(() => [...new Set(utilityModels.flatMap((model) => model.metricCategories))].sort(compareText), [utilityModels]);
-  const filteredModels = useMemo(() => utilityModels.filter((model) => (creatorFilter === '' || model.creator === creatorFilter)
-    && (categoryFilter === '' || model.metricCategories.includes(categoryFilter))), [categoryFilter, creatorFilter, utilityModels]);
-  const activeQuery = activePicker === 'first' ? firstSlug : activePicker === 'second' ? secondSlug : '';
-  const selectableModels = useMemo(() => {
-    const query = activeQuery.trim().toLocaleLowerCase();
-    if (query === '') return filteredModels;
-    return filteredModels.filter((model) => [model.slug, model.name, model.creator]
-      .some((value) => value.toLocaleLowerCase().includes(query)));
-  }, [activeQuery, filteredModels]);
-
-  const first = utilityModelsBySlug.get(firstSlug) ?? null;
-  const second = utilityModelsBySlug.get(secondSlug) ?? null;
+  const selectableModelsBySlug = useMemo(() => new Map(models.filter((model) => model.utilitySelectable).map((model) => [model.slug, model])), [models]);
+  const first = selectableModelsBySlug.get(firstModelSlug) ?? null;
+  const second = selectableModelsBySlug.get(secondModelSlug) ?? null;
   const comparisonHref = first && second && first.slug !== second.slug ? comparisonPath(first, second, pairs) : null;
-  const activeOption = activeOptionIndex >= 0 ? selectableModels[activeOptionIndex] : undefined;
-  const activeOptionId = activeOption ? `comparison-model-option-${activeOptionIndex}` : undefined;
   const popularPairs = pairs.slice(0, 12);
-  const selectionMessage = !firstSlug && !secondSlug
+  const selectionMessage = !firstModelSlug && !secondModelSlug
     ? 'Select two distinct models to continue.'
     : first && second && first.slug === second.slug
       ? 'Choose two different known models to continue.'
@@ -342,74 +198,18 @@ export function CompareHubPage() {
         ? 'Choose two known models to continue.'
         : 'Two distinct known models are selected.';
 
-  const activatePicker = (picker: Exclude<Picker, null>) => {
-    setActivePicker(picker);
-    setActiveOptionIndex(-1);
-  };
-  const updatePickerValue = (picker: Exclude<Picker, null>, value: string) => {
-    if (picker === 'first') setFirstSlug(value);
-    else setSecondSlug(value);
-    setActivePicker(picker);
-    setActiveOptionIndex(-1);
-  };
-  const chooseModel = (model: DirectoryModel, picker = activePicker) => {
-    if (picker === 'second') setSecondSlug(model.slug);
-    else setFirstSlug(model.slug);
-    setActivePicker(null);
-    setActiveOptionIndex(-1);
-  };
-  const handleComboboxKeyDown = (picker: Exclude<Picker, null>, event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      setActivePicker(null);
-      setActiveOptionIndex(-1);
-      return;
-    }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (selectableModels.length === 0) return;
-      setActivePicker(picker);
-      setActiveOptionIndex((currentIndex) => {
-        if (event.key === 'ArrowDown') return currentIndex < 0 ? 0 : Math.min(currentIndex + 1, selectableModels.length - 1);
-        return currentIndex < 0 ? selectableModels.length - 1 : Math.max(currentIndex - 1, 0);
-      });
-      return;
-    }
-    if (event.key === 'Enter') {
-      const exactMatch = selectableModels.find((model) => model.slug === (picker === 'first' ? firstSlug : secondSlug));
-      const model = activePicker === picker && activeOptionIndex >= 0 ? selectableModels[activeOptionIndex] : exactMatch;
-      if (model) {
-        event.preventDefault();
-        chooseModel(model, picker);
-      }
-    }
-  };
-
-  return <div className="comparison-page comparison-hub-page" data-combobox-open={activePicker === null ? 'false' : 'true'}>
-    <CompareHubHero envelope={state.envelope} />
-    {state.phase === 'loading' ? <section className="comparison-state-panel" role="status"><strong>Loading published benchmark directory</strong><p>Checking the active revision and reviewed matchups.</p></section> : null}
+  return <div className="comparison-page comparison-hub-page">
+    <CompareHubHero />
+    {state.phase === 'loading' ? <section className="comparison-state-panel" role="status"><strong>Loading published benchmark directory</strong><p>Checking the available models and reviewed matchups.</p></section> : null}
     {state.phase === 'unavailable' ? <section className="comparison-state-panel comparison-empty-state" role="status"><strong>Unavailable</strong><p>The published benchmark directory is unavailable. No comparison navigation is being created from incomplete data.</p></section> : null}
     {state.phase === 'ready' && state.envelope && directory ? <>
       {state.envelope.freshness.status === 'stale' ? <section className="comparison-state-panel comparison-stale" role="status"><strong>Published benchmark revision is stale</strong><p>{state.envelope.freshness.message ?? 'Published benchmark revision is stale.'}</p></section> : null}
       <section className="comparison-panel comparison-selector-panel" aria-labelledby="comparison-select-heading">
-        <div className="comparison-section-heading"><h2 id="comparison-select-heading">Choose a model pair</h2><p>Both fields retain canonical slugs even when display names are the same.</p></div>
-        <div className="comparison-filter-grid">
-          <label><span>Provider or creator</span><select aria-label="Provider or creator" onChange={(event) => setCreatorFilter(event.currentTarget.value)} value={creatorFilter}><option value="">All creators</option>{creators.map((creator) => <option key={creator} value={creator}>{creator}</option>)}</select></label>
-          <label><span>Metric category</span><select aria-label="Metric category" onChange={(event) => setCategoryFilter(event.currentTarget.value)} value={categoryFilter}><option value="">All metric categories</option>{categories.map((category) => <option key={category} value={category}>{category}</option>)}</select></label>
-        </div>
-        <div className="comparison-picker-grid">
-          <ModelCombobox activeOptionId={activeOptionId} activePicker={activePicker} label="First model" onActivate={activatePicker} onBlur={() => { setActivePicker(null); setActiveOptionIndex(-1); }} onKeyDown={(event) => handleComboboxKeyDown('first', event)} onValueChange={(value) => updatePickerValue('first', value)} picker="first" value={firstSlug} />
-          <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstSlug(secondSlug); setSecondSlug(firstSlug); }} type="button">Swap selected models</button>
-          <ModelCombobox activeOptionId={activeOptionId} activePicker={activePicker} label="Second model" onActivate={activatePicker} onBlur={() => { setActivePicker(null); setActiveOptionIndex(-1); }} onKeyDown={(event) => handleComboboxKeyDown('second', event)} onValueChange={(value) => updatePickerValue('second', value)} picker="second" value={secondSlug} />
-        </div>
-        <ul aria-label="Available models" className="comparison-model-options" id="comparison-model-options" role="listbox">
-          {selectableModels.map((model, index) => <li aria-label={modelOptionLabel(model, duplicateModelNames)} aria-selected={(activePicker === 'second' ? secondSlug : firstSlug) === model.slug} data-active={activeOption?.slug === model.slug} id={`comparison-model-option-${index}`} key={model.slug} onClick={() => chooseModel(model)} onMouseDown={(event) => event.preventDefault()} role="option">
-            <strong>{modelLabel(model)}</strong><span><code>{model.slug}</code> · {evidenceLabel(model.evidenceStatus)}</span>
-          </li>)}
-        </ul>
-        {selectableModels.length === 0 ? <p className="comparison-empty-copy">No catalog models match these creator, metric-category, and search filters.</p> : null}
+        <div className="comparison-section-heading"><h2 id="comparison-select-heading">Choose a model pair</h2><p>Popular models appear first. Search to browse every selectable model in the published directory.</p></div>
+        <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={setFirstModelSlug} onSecondModelChange={setSecondModelSlug} pairs={pairs} secondModelSlug={secondModelSlug} />
         <div className="comparison-selection-action">
           <p aria-live="polite">{selectionMessage}</p>
+          <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstModelSlug(secondModelSlug); setSecondModelSlug(firstModelSlug); }} type="button">Swap selected models</button>
           {comparisonHref ? <a className="button" href={comparisonHref}>Compare selected models</a> : <button className="button" disabled type="button">Compare selected models</button>}
         </div>
       </section>
