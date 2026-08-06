@@ -8,11 +8,11 @@ import type {
   BenchmarkSourceRecord,
 } from '../../src/benchmarks/contracts';
 
-const readActiveBenchmarkSnapshot = vi.hoisted(() => vi.fn());
+const readActiveComparisonSnapshot = vi.hoisted(() => vi.fn());
 
 vi.mock('../_shared/benchmark-db', async () => {
   const actual = await vi.importActual<typeof import('../_shared/benchmark-db')>('../_shared/benchmark-db');
-  return { ...actual, readActiveBenchmarkSnapshot };
+  return { ...actual, readActiveComparisonSnapshot };
 });
 
 import { onRequestGet } from './[pair]';
@@ -178,7 +178,7 @@ describe('dynamic comparison Pages Function', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.setSystemTime(new Date('2026-08-05T18:00:00.000Z'));
-    readActiveBenchmarkSnapshot.mockResolvedValue(snapshot());
+    readActiveComparisonSnapshot.mockResolvedValue(snapshot());
   });
 
   it('renders the model-key canonical pair as complete crawlable HTML without upstream access', async () => {
@@ -223,7 +223,7 @@ describe('dynamic comparison Pages Function', () => {
     const privateUse = model(utf8First, 'private-use', 'Private use model');
     const astral = model(utf16First, 'astral', 'Astral model');
     const base = snapshot();
-    readActiveBenchmarkSnapshot.mockResolvedValue(snapshot({
+    readActiveComparisonSnapshot.mockResolvedValue(snapshot({
       models: [...base.models, privateUse, astral],
       comparisonPairs: [{
         pairSlug: 'private-use-vs-astral',
@@ -250,7 +250,7 @@ describe('dynamic comparison Pages Function', () => {
     const modelA = model('provider:unicode-a', '模型 %25 ?#', 'Unicode A');
     const modelB = model('provider:unicode-b', 'b#eta', 'Unicode B');
     const pairSlug = `${modelA.slug}-vs-${modelB.slug}`;
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({ models: [...base.models, modelA, modelB] }));
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({ models: [...base.models, modelA, modelB] }));
 
     const response = await request(pairSlug, `/compare/${encodeURIComponent(pairSlug)}`);
     const html = await response.text();
@@ -264,7 +264,7 @@ describe('dynamic comparison Pages Function', () => {
     const base = snapshot();
     const slashModel = model('provider:slash', 'slash/part', 'Slash model');
     const plainModel = model('provider:plain', 'plain', 'Plain model');
-    readActiveBenchmarkSnapshot.mockResolvedValue(snapshot({ models: [...base.models, slashModel, plainModel] }));
+    readActiveComparisonSnapshot.mockResolvedValue(snapshot({ models: [...base.models, slashModel, plainModel] }));
 
     const malformed = await request('ignored', '/compare/zeta%ZZ-vs-alpha');
     const mismatched = await request('zeta-vs-alpha', '/compare/zeta-vs-alpha', 'alpha-vs-zeta');
@@ -293,10 +293,10 @@ describe('dynamic comparison Pages Function', () => {
   });
 
   it('keeps valid persisted nonindexable and unpersisted pairs useful but noindex', async () => {
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({ comparisonPairs: [pair(false)] }));
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({ comparisonPairs: [pair(false)] }));
     const nonindexable = await request('zeta-vs-alpha');
 
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({ comparisonPairs: [] }));
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({ comparisonPairs: [] }));
     const unpersisted = await request('zeta-vs-alpha');
 
     expect(nonindexable.status).toBe(200);
@@ -306,7 +306,7 @@ describe('dynamic comparison Pages Function', () => {
   });
 
   it('requires the exact canonical persisted pair record before marking a utility page indexable', async () => {
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({
       comparisonPairs: [{ ...pair(true), pairSlug: 'alpha-vs-zeta' }],
     }));
 
@@ -330,7 +330,7 @@ describe('dynamic comparison Pages Function', () => {
       featuredRank: index + 1,
       sharedMetricCount: 2,
     } satisfies BenchmarkComparisonPair));
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({
       models: [...base.models, ...extraModels, delta, epsilon],
       comparisonPairs: [
         pair(true),
@@ -360,7 +360,7 @@ describe('dynamic comparison Pages Function', () => {
 
   it('serializes attribution only for source artifacts referenced by the displayed pair', async () => {
     const base = snapshot();
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(snapshot({
+    readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({
       sources: [...base.sources, source('benchlm', 'unrelated-benchlm', 'https://benchlm.example/unrelated', 'Unrelated BenchLM record')],
     }));
 
@@ -387,7 +387,7 @@ describe('dynamic comparison Pages Function', () => {
         base.sources[1],
       ],
     });
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(malicious);
+    readActiveComparisonSnapshot.mockResolvedValueOnce(malicious);
 
     const response = await request('zeta-vs-alpha');
     const html = await response.text();
@@ -403,7 +403,7 @@ describe('dynamic comparison Pages Function', () => {
   });
 
   it('returns a safe noindex 503 when there is no publication-pointer-selected revision', async () => {
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce(null);
+    readActiveComparisonSnapshot.mockResolvedValueOnce(null);
 
     const response = await request('zeta-vs-alpha');
     const html = await response.text();
@@ -417,11 +417,11 @@ describe('dynamic comparison Pages Function', () => {
   });
 
   it('returns an explicit noindex 503 for snapshot and SSR failures without mislabelling them as absent pairs', async () => {
-    readActiveBenchmarkSnapshot.mockRejectedValueOnce(new Error('D1 temporarily unavailable'));
+    readActiveComparisonSnapshot.mockRejectedValueOnce(new Error('D1 temporarily unavailable'));
     const snapshotFailure = await request('zeta-vs-alpha');
 
     const invalidPublication = snapshot();
-    readActiveBenchmarkSnapshot.mockResolvedValueOnce({
+    readActiveComparisonSnapshot.mockResolvedValueOnce({
       ...invalidPublication,
       revision: { ...invalidPublication.revision, publishedAt: null },
     });

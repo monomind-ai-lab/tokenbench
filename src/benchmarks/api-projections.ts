@@ -3,27 +3,37 @@ import {
   compareUtf8Binary,
   createComparisonPairSlugResolver,
   isComparisonPairRouteSafe,
+  type BenchmarkComparisonPair,
   type BenchmarkMetric,
   type BenchmarkModel,
   type BenchmarkPriceCheck,
+  type BenchmarkRevision,
   type BenchmarkSourceId,
-} from '../../src/benchmarks/contracts';
-import { buildLeaderboard, LEADERBOARD_DEFINITIONS } from '../../src/benchmarks/leaderboards';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../src/routing/routes';
-import { cachedApiResponse, readApiResponseCache } from '../_shared/api-response-cache';
+  type BenchmarkSourceRecord,
+} from './contracts';
 import {
-  attributionForAllSources,
-  benchmarkEnvelope,
-  etagForBenchmarkResponse,
-  freshnessFor,
-  jsonBenchmarkResponse,
-  matchesExactEtag,
-  notModifiedBenchmarkResponse,
-  readActiveBenchmarkSnapshot,
-  unavailableBenchmarkResponse,
-  type ActiveBenchmarkSnapshot,
-  type BenchmarkApiEnv,
-} from '../_shared/benchmark-db';
+  buildLeaderboard,
+  LEADERBOARD_DEFINITIONS,
+  type LeaderboardDefinition,
+  type LeaderboardEntry,
+  type LeaderboardResult,
+} from './leaderboards';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
+import type { WorkloadProfile } from './value';
+
+/** The immutable facts needed to materialize cache-safe Pages responses. */
+export interface BenchmarkProjectionSnapshot {
+  readonly sources: readonly BenchmarkSourceRecord[];
+  readonly models: readonly BenchmarkModel[];
+  readonly metrics: readonly BenchmarkMetric[];
+  readonly priceChecks: readonly BenchmarkPriceCheck[];
+  readonly comparisonPairs: readonly BenchmarkComparisonPair[];
+}
+
+export interface BenchmarkEvidenceReference {
+  readonly sourceId: BenchmarkSourceId;
+  readonly sourceArtifactId: string;
+}
 
 interface SourceAvailability {
   readonly sourceId: BenchmarkSourceId;
@@ -48,9 +58,8 @@ interface CompareDirectoryModel {
   readonly slug: string;
   readonly name: string;
   readonly creator: string;
-  readonly sourceType: ActiveBenchmarkSnapshot['models'][number]['sourceType'];
-  readonly evidenceStatus: ActiveBenchmarkSnapshot['models'][number]['evidenceStatus'];
-  /** True only when this model can safely form a utility route with every selectable peer. */
+  readonly sourceType: BenchmarkModel['sourceType'];
+  readonly evidenceStatus: BenchmarkModel['evidenceStatus'];
   readonly utilitySelectable: boolean;
   readonly metricCategories: readonly string[];
 }
@@ -76,6 +85,12 @@ interface BenchmarkFactIndexes {
 
 function compareText(left: string, right: string): number {
   return compareUtf8Binary(left, right);
+}
+
+// `buildLeaderboard` uses JavaScript text ordering for rendered entry ties;
+// keep cached estimated rows byte-for-byte compatible with that API result.
+function leaderboardEntryText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function indexBenchmarkFacts(
@@ -108,11 +123,11 @@ function indexBenchmarkFacts(
   return { metricsByModel, pricesByModel, metricCategoriesByModel };
 }
 
-function hasBenchLmEvidenceLens(definition: typeof LEADERBOARD_DEFINITIONS[LeaderboardKey]): boolean {
+export function supportsEstimatedLeaderboard(definition: typeof LEADERBOARD_DEFINITIONS[LeaderboardKey]): boolean {
   return ('sourceId' in definition && definition.sourceId === 'benchlm') || definition.kind === 'multimodal';
 }
 
-function sourceAvailability(snapshot: ActiveBenchmarkSnapshot): readonly SourceAvailability[] {
+function sourceAvailability(snapshot: BenchmarkProjectionSnapshot): readonly SourceAvailability[] {
   return BENCHMARK_SOURCE_IDS.map((sourceId) => {
     const records = snapshot.sources.filter((source) => source.sourceId === sourceId);
     return {
@@ -129,7 +144,7 @@ function sourceAvailability(snapshot: ActiveBenchmarkSnapshot): readonly SourceA
 }
 
 function routeAvailability(
-  snapshot: ActiveBenchmarkSnapshot,
+  snapshot: BenchmarkProjectionSnapshot,
   factIndexes: BenchmarkFactIndexes,
 ): readonly RouteAvailability[] {
   return (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
@@ -141,9 +156,6 @@ function routeAvailability(
         key,
         kind: definition.kind,
         metricKeys: definition.metricKeys,
-        // Availability is existential. Task 10 derives each row from one
-        // model's facts and frontier marking never removes a value row, so a
-        // one-model build is equivalent while keeping every scan model-local.
         available: snapshot.models.some((model) => buildLeaderboard(
           key,
           [model],
@@ -151,7 +163,7 @@ function routeAvailability(
           factIndexes.pricesByModel.get(model.modelKey) ?? [],
           'balanced',
         ).entries.length > 0),
-        supportsEstimated: hasBenchLmEvidenceLens(definition),
+        supportsEstimated: supportsEstimatedLeaderboard(definition),
       };
     });
 }
@@ -167,12 +179,7 @@ function resolvedUtilityPairIsExact(
       || (resolved.modelA.modelKey === right.modelKey && resolved.modelB.modelKey === left.modelKey));
 }
 
-/**
- * The hub promises that two selectable models produce a useful utility route.
- * Remove a model if either ordering with any other active model is unsafe or
- * ambiguous in the same resolver used by the Pages function.
- */
-function utilityRouteModels(snapshot: ActiveBenchmarkSnapshot): readonly BenchmarkModel[] {
+function utilityRouteModels(snapshot: BenchmarkProjectionSnapshot): readonly BenchmarkModel[] {
   const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
   const simpleModels = snapshot.models.filter((model) => isComparisonPairRouteSafe(model.slug)
     && !model.slug.includes('-vs-'));
@@ -185,13 +192,9 @@ function utilityRouteModels(snapshot: ActiveBenchmarkSnapshot): readonly Benchma
   return [...simpleModels, ...complexModels];
 }
 
-function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: BenchmarkFactIndexes): CompareDirectory {
+function compareDirectory(snapshot: BenchmarkProjectionSnapshot, factIndexes: BenchmarkFactIndexes): CompareDirectory {
   const utilityModels = utilityRouteModels(snapshot);
   const utilityModelKeys = new Set(utilityModels.map((model) => model.modelKey));
-  // A complex slug can be ambiguous as a free-form utility choice while still
-  // being the endpoint of one exact, server-validated published pair. Keep the
-  // latter as metadata so its reviewed link has labels, but do not expose it in
-  // the all-to-all selector.
   const indexablePairModelKeys = new Set(snapshot.comparisonPairs
     .filter((pair) => pair.indexable === true)
     .flatMap((pair) => [pair.modelAKey, pair.modelBKey]));
@@ -237,7 +240,7 @@ function compareDirectory(snapshot: ActiveBenchmarkSnapshot, factIndexes: Benchm
   return { models, indexablePairs };
 }
 
-export function buildBenchmarkSummaryData(snapshot: ActiveBenchmarkSnapshot) {
+export function buildBenchmarkSummaryData(snapshot: BenchmarkProjectionSnapshot) {
   const factIndexes = indexBenchmarkFacts(snapshot.metrics, snapshot.priceChecks);
   return {
     sources: sourceAvailability(snapshot),
@@ -246,33 +249,126 @@ export function buildBenchmarkSummaryData(snapshot: ActiveBenchmarkSnapshot) {
   };
 }
 
-export async function onRequestGet({ request, env }: { request: Request; env: BenchmarkApiEnv }): Promise<Response> {
-  if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
+function hasExactEstimatedBenchLmMetric(
+  model: BenchmarkModel,
+  metric: BenchmarkMetric,
+  definition: LeaderboardDefinition,
+): boolean {
+  return model.sourceId === 'benchlm'
+    && model.evidenceStatus === 'estimated'
+    && model.rankingEligible === false
+    && metric.modelKey === model.modelKey
+    && metric.sourceId === 'benchlm'
+    && metric.rankingEligible === false
+    && metric.rank === null
+    && definition.metricKeys.includes(metric.metricKey)
+    && metric.methodology === 'benchlm_raw_composite'
+    && metric.unit === 'score'
+    && Number.isFinite(metric.value);
+}
 
-  try {
-    const now = Date.now();
-    const cached = await readApiResponseCache(
-      env.CATALOG_DB,
-      'benchmarks',
-      'summary',
-      36 * 60 * 60 * 1000,
-      now,
-    );
-    if (cached) return cachedApiResponse(request, cached);
+function validContextWindow(value: number | null): number | null {
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
 
-    const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
-    if (!snapshot) return unavailableBenchmarkResponse();
+export function estimatedLeaderboardEntries(
+  snapshot: BenchmarkProjectionSnapshot,
+  definition: LeaderboardDefinition,
+): readonly LeaderboardEntry[] {
+  return snapshot.models
+    .filter((model) => model.sourceId === 'benchlm' && model.evidenceStatus === 'estimated')
+    .slice()
+    .sort((left, right) => leaderboardEntryText(left.slug, right.slug) || leaderboardEntryText(left.modelKey, right.modelKey))
+    .flatMap((model) => {
+      const metric = snapshot.metrics.find((candidate) => hasExactEstimatedBenchLmMetric(model, candidate, definition));
+      if (!metric) return [];
+      return [{
+        model,
+        metric,
+        metrics: [metric],
+        primaryPrice: null,
+        blendedCostPerMillion: null,
+        contextWindowTokens: validContextWindow(model.contextWindowTokens),
+        sourceRank: null,
+        onValueFrontier: false,
+      } satisfies LeaderboardEntry];
+    });
+}
 
-    const freshness = freshnessFor(snapshot.revision, now);
-    const etag = etagForBenchmarkResponse(snapshot.revision, freshness, { endpoint: 'benchmarks' });
-    if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
+export interface MaterializedLeaderboard {
+  readonly leaderboard: LeaderboardResult;
+  readonly entries: readonly LeaderboardEntry[];
+}
 
-    return jsonBenchmarkResponse(
-      benchmarkEnvelope(snapshot, freshness, attributionForAllSources(snapshot), buildBenchmarkSummaryData(snapshot)),
-      200,
-      etag,
-    );
-  } catch {
-    return unavailableBenchmarkResponse();
-  }
+export interface CachedLeaderboardPaginationProjection {
+  readonly revision: BenchmarkRevision;
+  readonly sources: readonly BenchmarkSourceRecord[];
+  readonly leaderboard: LeaderboardResult;
+  readonly entries: readonly LeaderboardEntry[];
+}
+
+export function effectiveLeaderboardProfile(key: LeaderboardKey, profile: WorkloadProfile): WorkloadProfile {
+  const kind = LEADERBOARD_DEFINITIONS[key].kind;
+  return kind === 'value' || kind === 'pricing-context' ? profile : 'balanced';
+}
+
+export function cachedLeaderboardPaginationProjection(
+  snapshot: BenchmarkProjectionSnapshot & { readonly revision: BenchmarkRevision },
+  materialized: MaterializedLeaderboard,
+): CachedLeaderboardPaginationProjection {
+  return {
+    revision: snapshot.revision,
+    sources: snapshot.sources,
+    leaderboard: materialized.leaderboard,
+    entries: materialized.entries,
+  };
+}
+
+export function materializeLeaderboard(
+  snapshot: BenchmarkProjectionSnapshot,
+  key: LeaderboardKey,
+  profile: WorkloadProfile,
+  includeEstimated: boolean,
+): MaterializedLeaderboard {
+  const leaderboard = buildLeaderboard(key, snapshot.models, snapshot.metrics, snapshot.priceChecks, profile);
+  const entries = includeEstimated
+    ? [...leaderboard.entries, ...estimatedLeaderboardEntries(snapshot, leaderboard.definition)]
+    : leaderboard.entries;
+  return { leaderboard, entries };
+}
+
+function displayedEvidence(entries: readonly LeaderboardEntry[]): readonly BenchmarkEvidenceReference[] {
+  return entries.flatMap((entry) => [
+    { sourceId: entry.model.sourceId, sourceArtifactId: entry.model.sourceArtifactId },
+    ...(entry.metric ? [{ sourceId: entry.metric.sourceId, sourceArtifactId: entry.metric.sourceArtifactId }] : []),
+    ...entry.metrics.map((metric) => ({ sourceId: metric.sourceId, sourceArtifactId: metric.sourceArtifactId })),
+    ...(entry.primaryPrice ? [{ sourceId: entry.primaryPrice.sourceId, sourceArtifactId: entry.primaryPrice.sourceArtifactId }] : []),
+  ]);
+}
+
+function routeEvidence(
+  snapshot: BenchmarkProjectionSnapshot,
+  definition: LeaderboardDefinition,
+): readonly BenchmarkEvidenceReference[] {
+  const sourceIds: readonly BenchmarkSourceId[] = definition.kind === 'value'
+    ? ['benchlm', 'openrouter']
+    : definition.kind === 'multimodal'
+      ? ['benchlm', 'lmarena']
+      : definition.kind === 'pricing-context'
+        ? ['openrouter']
+        : definition.kind === 'lmarena'
+          ? ['lmarena']
+          : ['benchlm'];
+  const wanted = new Set<BenchmarkSourceId>(sourceIds);
+  return snapshot.sources
+    .filter((source) => wanted.has(source.sourceId))
+    .map((source) => ({ sourceId: source.sourceId, sourceArtifactId: source.artifactId }));
+}
+
+export function leaderboardEvidenceReferences(
+  snapshot: BenchmarkProjectionSnapshot,
+  definition: LeaderboardDefinition,
+  entries: readonly LeaderboardEntry[],
+): readonly BenchmarkEvidenceReference[] {
+  return [...routeEvidence(snapshot, definition), ...displayedEvidence(entries)];
 }

@@ -3,16 +3,17 @@
 ## Status and scope
 
 This runbook records the completed local release-candidate checks for TokenBench
-through application commit `7696cfe` on 2026-08-06. The comparison implementation,
+on 2026-08-06. The comparison implementation,
 expanded browser matrix, accessibility smoke pass, two Impeccable UX/UI passes,
 and a retained production-preview confirmation are complete. The progress board
 is not release evidence and was not changed by this audit.
 
-No external release action has been taken: the branch has not been pushed, the
-remote migration has not been applied, Workers and Pages have not been deployed,
-and no domain, hostname removal, controlled refresh, or production smoke operation has
-been performed. Those fields remain pending explicit authorization and observed
-production evidence.
+An earlier Pages candidate and both ingestion Workers have been deployed, but
+production API smoke exposed intermittent Cloudflare 1102 CPU failures in
+request-time full-fact derivation. The current release candidate replaces those
+paths with revisioned materialized responses and bounded targeted reads. Its
+new migration, Worker versions, Pages build, custom-domain cutover, and final
+production smoke remain pending in the evidence table until observed.
 
 Do not replace pending fields with estimates, planned values, screenshots from a
 different build, or copied dashboard data. Record only observed evidence from
@@ -26,7 +27,7 @@ cutover; the underlying legacy Pages project is retained.
 
 | Input | Required evidence | Current status |
 | --- | --- | --- |
-| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | Local application candidate `7696cfe`; evidence documentation follows locally, while the push target and authorization remain pending. |
+| Release commit | Commit SHA, clean scoped diff, and approved branch/remote target. | CPU-hot-path release candidate is locally verified on `codex/pages-cpu-hotpath`; final SHA is recorded after commit. |
 | Design baseline | [../DESIGN.md](../DESIGN.md) reviewed during both UX/UI passes. | Reviewed in both passes; dark technical hierarchy and the approved light-mode adaptation verified. |
 | Data-source policy | [data-sources.md](data-sources.md) reviewed for source, attribution, and Artificial Analysis restrictions. | Reviewed; source allowlists, visible attribution, and the Artificial Analysis prohibition remain intact. |
 | Data-plane configuration | Root and Worker Wrangler bindings checked against the approved Cloudflare target. | Binding names, schedules, and shared D1/R2 names inspected locally; remote target/history confirmation pending authorization. |
@@ -53,7 +54,7 @@ git status --short
 
 | Gate | Required outcome | Recorded result |
 | --- | --- | --- |
-| Unit and API tests | Exit 0. | Pass: 38 files, 480 tests. |
+| Unit and API tests | Exit 0. | Pass: 43 files, 511 tests. |
 | Type check | Exit 0. | Pass: `tsc --noEmit`. |
 | Production build | Exit 0. | Pass: Vite built 23 crawlable fixed pages and the application bundle. |
 | Responsive browser suite | Exit 0 across the expanded route, viewport, theme, and state matrix. | Pass: 42/42 Playwright tests, including 100 primary-route navigations. |
@@ -136,16 +137,16 @@ record authorization for each operation below before it occurs.
 
 | Operation | Required authorization and precondition | Evidence to record | Status |
 | --- | --- | --- | --- |
-| Push release files | Explicit approval to push the validated local commits to the approved Git remote and branch. | Commit SHA, remote branch, and clean status after push. | Pending |
-| Apply remote D1 migration | Cloudflare credentials, confirmation of the target D1 database, and explicit approval to modify production schema. | Migration output/history showing 0004_benchmarks.sql exactly once. | Pending |
-| Deploy catalog Worker | Approval to change the named Worker when its code or configuration changed. | Worker deployment version and binding verification. | Pending |
-| Deploy benchmark Worker | Approval to change the named Worker, plus confirmation that its D1/R2 bindings target the approved resources. | Worker version, deployment output, and binding verification. | Pending |
-| Trigger controlled benchmark refresh | Approval to run a Cloudflare scheduled or dashboard trigger; never use the Worker fetch endpoint. | Trigger method/time, active revision, source records, R2 snapshot keys, and empty last_error values. | Pending |
-| Deploy Pages | Approval to publish the release candidate to the approved Pages project. | Deployment URL and released commit SHA. | Pending |
+| Push release files | Explicit approval to push the validated local commits to the approved Git remote and branch. | Commit SHA, remote branch, and clean status after push. | Authorized 2026-08-06 |
+| Apply remote D1 migration | Cloudflare credentials, confirmation of the target D1 database, and explicit approval to modify production schema. | Migration output/history showing 0004_benchmarks.sql and 0005_api_response_cache.sql exactly once. | Authorized 2026-08-06 |
+| Deploy catalog Worker | Approval to change the named Worker when its code or configuration changed. | Worker deployment version and binding verification. | Authorized 2026-08-06 |
+| Deploy benchmark Worker | Approval to change the named Worker, plus confirmation that its D1/R2 bindings target the approved resources. | Worker version, deployment output, and binding verification. | Authorized 2026-08-06 |
+| Trigger controlled benchmark refresh | Approval to run a Cloudflare scheduled or dashboard trigger; never use the Worker fetch endpoint. | Trigger method/time, active revision, source records, R2 snapshot keys, and empty last_error values. | Authorized 2026-08-06 |
+| Deploy Pages | Approval to publish the release candidate to the approved Pages project. | Deployment URL and released commit SHA. | Authorized 2026-08-06 |
 | Attach canonical domain | Approval and zone access to attach tokenbench.monomind.one. | Domain status and canonical-host verification. | Authorized 2026-08-06 |
 | Remove legacy hostname | Approval and zone access to detach only ai-plans.monomind.one and remove its exact DNS record while retaining the legacy Pages project. | Domain attachment, DNS, and old-host verification. | Authorized 2026-08-06 |
-| Production smoke | Approval to access the named production environment after deploy. | Timestamped HTTP/browser outcomes below. | Pending |
-| Record and push final evidence | Explicit Git authorization after real deployment evidence exists. | Final documentation commit SHA and push confirmation. | Pending |
+| Production smoke | Approval to access the named production environment after deploy. | Timestamped HTTP/browser outcomes below. | Authorized 2026-08-06 |
+| Record and push final evidence | Explicit Git authorization after real deployment evidence exists. | Final documentation commit SHA and push confirmation. | Authorized 2026-08-06 |
 
 ## Authorized production sequence
 
@@ -161,7 +162,8 @@ check fails; do not continue to a domain change or hostname removal.
    npx wrangler d1 migrations apply ai-plan-catalog --remote
    ~~~
 
-   Confirm 0004_benchmarks.sql is applied once before deploying benchmark code.
+   Confirm 0004_benchmarks.sql and 0005_api_response_cache.sql are applied once
+   before deploying changed ingestion or Pages code.
 4. Deploy a changed catalog Worker when needed and deploy the benchmark Worker:
 
    ~~~sh
@@ -199,6 +201,8 @@ authorized production deployment.
 | Unknown comparison model or invalid pair | HTTP 404. | Pending |
 | Fixed sitemap and comparison sitemap | HTTP 200 with XML; comparison sitemap contains only canonical indexable pairs. | Pending |
 | Benchmark API cache validation | First published response supplies ETag; a matching If-None-Match request returns HTTP 304. | Pending |
+| Request CPU resilience | Repeated cold/warm catalog, summary, and all UI leaderboard requests return 200/304 with zero 1102 events in a Pages tail. Run at least 20 rounds after cache seed. | Pending |
+| Paginated leaderboard CPU resilience | The largest materialized leaderboard projection returns 200 for `limit=1`, `limit=200`, and at least one valid cursor request, repeated cold/warm with zero 1102 events. | Pending |
 | Legacy hostname | The custom-domain attachment and exact DNS record are absent; the legacy Pages project remains available at its pages.dev hostname. | Pending |
 | Browser network isolation | No upstream benchmark-provider request appears while using published benchmark UI. | Pending |
 | Accessibility and visual evidence | Route matrix and screenshot references are complete; zero unresolved critical/high/medium audit findings. | Pending |

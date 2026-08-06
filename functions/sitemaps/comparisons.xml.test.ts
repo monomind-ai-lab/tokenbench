@@ -125,6 +125,25 @@ function publishedRows(overrides: Partial<D1Rows> = {}): D1Rows {
 
 function d1(rows: D1Rows) {
   const bindings: Array<{ readonly sql: string; readonly values: readonly unknown[] }> = [];
+  const activeRevision = () => rows.revisions.find((candidate) => {
+    if (!candidate || typeof candidate !== 'object') return false;
+    const record = candidate as Record<string, unknown>;
+    return record.revision === rows.activeRevision && record.publication_state === 'published';
+  }) as Record<string, unknown> | undefined;
+  const routeResolutionCount = (pairSlug: string): number => {
+    const modelsBySlug = new Map(rows.models
+      .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate) && typeof candidate === 'object')
+      .map((candidate) => [candidate.slug, candidate]));
+    let count = 0;
+    let splitAt = pairSlug.indexOf('-vs-');
+    while (splitAt >= 0) {
+      const left = modelsBySlug.get(pairSlug.slice(0, splitAt));
+      const right = modelsBySlug.get(pairSlug.slice(splitAt + 4));
+      if (left && right && left.model_key !== right.model_key) count += 1;
+      splitAt = pairSlug.indexOf('-vs-', splitAt + 1);
+    }
+    return count;
+  };
   return {
     bindings,
     prepare(sql: string) {
@@ -133,12 +152,36 @@ function d1(rows: D1Rows) {
           bindings.push({ sql, values });
           return {
             all: async () => {
+              if (sql.includes('WITH RECURSIVE') && sql.includes('benchmark_comparison_pairs')) {
+                const active = activeRevision();
+                if (!active) return { results: [] };
+                const modelsByKey = new Map(rows.models
+                  .filter((candidate): candidate is Record<string, unknown> => Boolean(candidate) && typeof candidate === 'object')
+                  .map((candidate) => [candidate.model_key, candidate]));
+                return {
+                  results: rows.pairs
+                    .filter((candidate): candidate is Record<string, unknown> => {
+                      if (!candidate || typeof candidate !== 'object') return false;
+                      const record = candidate as Record<string, unknown>;
+                      return record.revision === rows.activeRevision && record.indexable === 1;
+                    })
+                    .map((candidate) => {
+                      const modelA = modelsByKey.get(candidate.model_a_key);
+                      const modelB = modelsByKey.get(candidate.model_b_key);
+                      return {
+                        pair_slug: candidate.pair_slug,
+                        published_at: active.published_at,
+                        model_a_key: candidate.model_a_key,
+                        model_b_key: candidate.model_b_key,
+                        model_a_slug: modelA?.slug ?? null,
+                        model_b_slug: modelB?.slug ?? null,
+                        resolved_count: routeResolutionCount(candidate.pair_slug as string),
+                      };
+                    }),
+                };
+              }
               if (sql.includes('benchmark_publication_state')) {
-                const active = rows.revisions.find((candidate) => {
-                  if (!candidate || typeof candidate !== 'object') return false;
-                  const record = candidate as Record<string, unknown>;
-                  return record.revision === rows.activeRevision && record.publication_state === 'published';
-                });
+                const active = activeRevision();
                 return { results: active ? [active] : [] };
               }
               const key = sql.includes('benchmark_source_records') ? 'sources'
@@ -194,10 +237,11 @@ describe('comparison sitemap', () => {
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type')).toBe('application/xml; charset=utf-8');
       await expect(response.text()).resolves.toBe(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>${ORIGIN}/compare/alpha-vs-beta</loc><lastmod>${PUBLISHED_AT}</lastmod></url>\n  <url><loc>${ORIGIN}/compare/gamma-vs-zeta</loc><lastmod>${PUBLISHED_AT}</lastmod></url>\n</urlset>\n`);
-      expect(db.bindings).toHaveLength(6);
+      expect(db.bindings).toHaveLength(1);
       expect(db.bindings[0].sql).toContain('benchmark_publication_state');
       expect(db.bindings[0].sql).toContain('publication.active_revision');
-      expect(db.bindings[0].sql).not.toContain('ORDER BY');
+      expect(db.bindings[0].sql).toContain('WITH RECURSIVE');
+      expect(db.bindings[0].sql).toContain('ORDER BY');
       expect(fetchSpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import worker, { buildManualSubscriptionSource, buildManualSubscriptionSources, parseOpenCodeCatalog, parseOpenRouterModels, projectOpenRouterModelsPayload, publishValidatedSource, recordRefreshFailure } from './index';
+import { BOOTSTRAP_CATALOG } from '../../../src/catalog/bootstrap';
+import worker, { buildManualSubscriptionSource, buildManualSubscriptionSources, parseOpenCodeCatalog, parseOpenRouterModels, projectOpenRouterModelsPayload, publishCatalogApiCache, publishValidatedSource, recordRefreshFailure } from './index';
 
 interface Statement { sql: string; values: unknown[] }
 interface RefreshState { lastSuccessAt: string | null; lastRevision: string | null; lastError: string | null }
@@ -119,6 +120,147 @@ async function runScheduledOpenRouter({
 }
 
 describe('catalog ingestion', () => {
+  it('materializes every catalog response before switching the cache pointer', async () => {
+    const batches: Statement[][] = [];
+    const revision = { revision: 'rev-1', published_at: '2099-01-01T00:00:00.000Z', checked_at: '2099-01-01T00:00:00.000Z' };
+    const sourceRow = {
+      id: 'openrouter-models', provider_id: 'openrouter', source_url: 'https://openrouter.ai/api/v1/models',
+      observed_at: '2026-08-06T01:00:00.000Z', source_kind: 'official_json', confidence: 'official',
+      snapshot_key: 'openrouter-models/2026-08-06/hash.json', content_hash: `sha256:${'a'.repeat(64)}`,
+      parser_version: 'adapter-v1', evidence_locator: null, review_status: 'verified',
+    };
+    const modelRow = {
+      id: 'openai:gpt-4o:openrouter', provider_id: 'openai', display_name: 'GPT-4o', model_id: 'openai/gpt-4o',
+      pricing_basis: 'openrouter', route: 'openrouter', currency: 'USD', unit: 'micro_dollars_per_million_tokens',
+      input_micro_dollars_per_million: 2_500_000, cached_input_micro_dollars_per_million: null,
+      output_micro_dollars_per_million: 10_000_000, context_window_tokens: 128_000, max_output_tokens: 16_000,
+      availability: 'available', source_id: 'openrouter-models',
+    };
+    const database = {
+      prepare(sql: string) {
+        return {
+          bind(...values: unknown[]) {
+            const statement = { sql, values };
+            return {
+              ...statement,
+              async all() {
+                if (sql.includes('catalog_revisions')) return { results: [revision] };
+                if (sql.includes('source_records')) return { results: [sourceRow] };
+                if (sql.includes('plan_offers')) return { results: [] };
+                if (sql.includes('model_offers')) return { results: [modelRow] };
+                return { results: [] };
+              },
+            };
+          },
+        };
+      },
+      async batch(statements: unknown[]) { batches.push(statements as Statement[]); },
+    };
+
+    await publishCatalogApiCache(database, '2026-08-06T01:00:00.000Z');
+
+    expect(batches).toHaveLength(1);
+    const statements = batches[0];
+    const entryIndexes = statements.flatMap((statement, index) => statement.sql.includes('INSERT INTO api_response_entries') ? [index] : []);
+    const pointerIndex = statements.findIndex((statement) => statement.sql.includes('INSERT INTO api_response_publication_state'));
+    expect(entryIndexes.length).toBeGreaterThan(0);
+    expect(pointerIndex).toBeGreaterThan(Math.max(...entryIndexes));
+    const entryValues = statements
+      .filter((statement) => statement.sql.includes('INSERT INTO api_response_entries'))
+      .flatMap((statement) => Array.from({ length: statement.values.length / 7 }, (_, index) => statement.values.slice(index * 7, index * 7 + 7)));
+    const expectedResponseRevision = `rev-1+manual-${BOOTSTRAP_CATALOG.revision}`;
+    const expectedCacheKey = `catalog:bootstrap:${BOOTSTRAP_CATALOG.revision}`;
+    const wholeCatalogFresh = entryValues.find((values) => values[2] === expectedCacheKey && values[3] === 'fresh');
+    const wholeCatalogStale = entryValues.find((values) => values[2] === expectedCacheKey && values[3] === 'stale');
+    expect(wholeCatalogFresh?.[2]).toBe(expectedCacheKey);
+    expect(wholeCatalogStale?.[2]).toBe(expectedCacheKey);
+    expect(JSON.parse(String(wholeCatalogFresh?.[6]))).toMatchObject({
+      revision: expectedResponseRevision,
+      freshness: { status: 'fresh' },
+    });
+    expect(JSON.parse(String(wholeCatalogStale?.[6]))).toMatchObject({ freshness: { status: 'stale' } });
+    const pointer = statements[pointerIndex]!;
+    expect(pointer.sql).toContain('SELECT');
+    expect(pointer.sql).toContain('catalog_publication_state');
+    expect(pointer.sql).toContain('active_revision = ?');
+    expect(pointer.values).toEqual([
+      'catalog',
+      expectedResponseRevision,
+      '2026-08-06T01:00:00.000Z',
+      'rev-1',
+      'rev-1',
+    ]);
+    expect(statements.length).toBeLessThanOrEqual(7);
+  });
+
+  it('retains the prior complete cache pointer when a stale materialization loses its catalog CAS', async () => {
+    const state = {
+      activeCatalogRevision: 'rev-a',
+      activeCacheRevision: 'cache-known-good',
+      entryStatementCount: 0,
+    };
+    let pointerStatement: Statement | undefined;
+    const revision = { revision: 'rev-a', published_at: '2026-08-06T00:00:00.000Z', checked_at: '2026-08-06T01:00:00.000Z' };
+    const sourceRow = {
+      id: 'source-a', provider_id: 'provider-a', source_url: 'https://example.com/catalog',
+      observed_at: '2026-08-06T01:00:00.000Z', source_kind: 'official_json', confidence: 'official',
+      snapshot_key: null, content_hash: 'sha256:abc', parser_version: 'adapter-v1', evidence_locator: null, review_status: 'verified',
+    };
+    const modelRow = {
+      id: 'provider-a:model-a:direct', provider_id: 'provider-a', display_name: 'Model A', model_id: 'model-a',
+      pricing_basis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens',
+      input_micro_dollars_per_million: 1_000_000, cached_input_micro_dollars_per_million: null,
+      output_micro_dollars_per_million: 2_000_000, context_window_tokens: null, max_output_tokens: null,
+      availability: 'available', source_id: 'source-a',
+    };
+    const database = {
+      prepare(sql: string) {
+        return {
+          bind(...values: unknown[]) {
+            const statement = { sql, values };
+            return {
+              ...statement,
+              async all() {
+                if (sql.startsWith('SELECT active_revision FROM catalog_publication_state')) {
+                  return { results: [{ active_revision: state.activeCatalogRevision }] };
+                }
+                if (sql.includes('catalog_revisions')) return { results: [revision] };
+                if (sql.includes('source_records')) return { results: [sourceRow] };
+                if (sql.includes('plan_offers')) return { results: [] };
+                if (sql.includes('model_offers')) return { results: [modelRow] };
+                return { results: [] };
+              },
+            };
+          },
+        };
+      },
+      async batch(statements: unknown[]) {
+        // A newer cron has committed its facts and catalog pointer after this
+        // invocation read rev-a, but before this cache transaction begins.
+        state.activeCatalogRevision = 'rev-b';
+        for (const statement of statements as Statement[]) {
+          if (statement.sql.includes('INSERT INTO api_response_entries')) state.entryStatementCount += 1;
+          if (!statement.sql.includes('INSERT INTO api_response_publication_state')) continue;
+          pointerStatement = statement;
+          const exactCatalogCas = statement.sql.includes('catalog_publication_state')
+            && statement.sql.includes('active_revision = ?')
+            && statement.values.slice(-2).every((value) => value === 'rev-a');
+          // This small D1 model applies the production statement's conditional
+          // upsert: a missing/wrong guard behaves like the old unconditional write.
+          if (!exactCatalogCas || state.activeCatalogRevision === 'rev-a') {
+            state.activeCacheRevision = String(statement.values[1]);
+          }
+        }
+      },
+    };
+
+    await publishCatalogApiCache(database, '2026-08-06T01:00:00.000Z');
+
+    expect(state.entryStatementCount).toBeGreaterThan(0);
+    expect(pointerStatement?.values.slice(-2)).toEqual(['rev-a', 'rev-a']);
+    expect(state.activeCacheRevision).toBe('cache-known-good');
+  });
+
   it('projects OpenRouter before parsing, hashing, and R2 storage', async () => {
     const contaminated = {
       data: [{

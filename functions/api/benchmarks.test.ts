@@ -8,6 +8,14 @@ import {
   buildBenchmarkSummaryData,
   onRequestGet as getBenchmarks,
 } from './benchmarks';
+import {
+  cachedLeaderboardPaginationProjection,
+  effectiveLeaderboardProfile,
+  materializeLeaderboard,
+} from '../../src/benchmarks/api-projections';
+import { benchmarkLeaderboardProjectionCacheKey } from '../../src/benchmarks/api-response-cache-keys';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../src/routing/routes';
+import { isWorkloadProfile } from '../../src/benchmarks/value';
 import { onRequestGet as getLeaderboard } from './benchmarks/leaderboards/[key]';
 import { onRequestGet as getModel } from './benchmarks/models/[slug]';
 
@@ -367,7 +375,18 @@ type D1Rows = {
   metrics: unknown[];
   prices: unknown[];
   pairs: unknown[];
+  apiCacheEntries?: readonly ApiCacheEntry[];
 };
+
+interface ApiCacheEntry {
+  readonly scope: 'benchmarks';
+  readonly revision: string;
+  readonly cacheKey: string;
+  readonly variant: 'fresh' | 'stale';
+  readonly chunkIndex: number;
+  readonly etag: string;
+  readonly body: string;
+}
 
 function publishedRows(overrides: Partial<D1Rows> = {}): D1Rows {
   return {
@@ -384,6 +403,8 @@ function publishedRows(overrides: Partial<D1Rows> = {}): D1Rows {
 
 interface FakeD1Options {
   readonly bypassFactRevisionFilter?: boolean;
+  /** Proves a materialized response path never falls back to the full fact snapshot. */
+  readonly failOnBenchmarkFactRead?: boolean;
 }
 
 function d1(rows: D1Rows, options: FakeD1Options = {}) {
@@ -395,6 +416,32 @@ function d1(rows: D1Rows, options: FakeD1Options = {}) {
         bind(...values: unknown[]) {
           bindings.push({ sql, values });
           return { all: async () => {
+            if (sql.includes('api_response_entries')) {
+              const [scope, cacheKey, cutoff] = values;
+              const checkedAt = rows.revisions.find((candidate) => {
+                if (!candidate || typeof candidate !== 'object') return false;
+                const record = candidate as Record<string, unknown>;
+                return record.revision === rows.activeRevision && record.publication_state === 'published';
+              }) as Record<string, unknown> | undefined;
+              const variant = checkedAt && typeof checkedAt.checked_at === 'string' && typeof cutoff === 'string'
+                && checkedAt.checked_at >= cutoff
+                ? 'fresh'
+                : 'stale';
+              const entries = scope === 'benchmarks'
+                ? rows.apiCacheEntries?.filter((candidate) => candidate.cacheKey === cacheKey && candidate.variant === variant)
+                  .slice()
+                  .sort((left, right) => left.chunkIndex - right.chunkIndex)
+                : undefined;
+              return {
+                results: entries?.map((entry) => ({
+                  revision: entry.revision,
+                  variant: entry.variant,
+                  chunk_index: entry.chunkIndex,
+                  etag: entry.etag,
+                  body: entry.body,
+                })) ?? [],
+              };
+            }
             if (sql.includes('benchmark_publication_state')) {
               const joined = rows.revisions.find((candidate) => {
                 if (!candidate || typeof candidate !== 'object') return false;
@@ -402,6 +449,9 @@ function d1(rows: D1Rows, options: FakeD1Options = {}) {
                 return record.revision === rows.activeRevision && record.publication_state === 'published';
               });
               return { results: joined ? [joined] : [] };
+            }
+            if (options.failOnBenchmarkFactRead) {
+              throw new Error('full benchmark fact snapshot must not be read');
             }
             const key = sql.includes('benchmark_source_records') ? 'sources'
               : sql.includes('benchmark_models') ? 'models'
@@ -436,9 +486,48 @@ async function leaderboard(
   headers?: HeadersInit,
   options?: FakeD1Options,
 ): Promise<Response> {
+  let projectedRows = rows;
+  if (Object.prototype.hasOwnProperty.call(LEADERBOARD_ROUTES, key)) {
+    const url = new URL(`https://example.com/api/benchmarks/leaderboards/${key}${query}`);
+    const profileValue = url.searchParams.get('profile') ?? 'balanced';
+    if (isWorkloadProfile(profileValue)) {
+      try {
+        const snapshot = await readActiveBenchmarkSnapshot(d1(rows));
+        if (snapshot) {
+          const routeKey = key as LeaderboardKey;
+          const includeEstimated = url.searchParams.get('includeEstimated') === '1';
+          const derivationProfile = effectiveLeaderboardProfile(routeKey, profileValue);
+          const projection = cachedLeaderboardPaginationProjection(
+            snapshot,
+            materializeLeaderboard(snapshot, routeKey, derivationProfile, includeEstimated),
+          );
+          const cacheKey = benchmarkLeaderboardProjectionCacheKey({
+            key: routeKey,
+            profile: derivationProfile,
+            includeEstimated,
+          });
+          const projectionEntries: readonly ApiCacheEntry[] = (['fresh', 'stale'] as const).map((variant) => ({
+            scope: 'benchmarks',
+            revision: snapshot.revision.revision,
+            cacheKey,
+            variant,
+            chunkIndex: 0,
+            etag: `"projection-${routeKey}-${derivationProfile}-${includeEstimated ? '1' : '0'}-${variant}"`,
+            body: JSON.stringify(projection),
+          }));
+          projectedRows = {
+            ...rows,
+            apiCacheEntries: [...(rows.apiCacheEntries ?? []), ...projectionEntries],
+          };
+        }
+      } catch {
+        // Invalid fact fixtures intentionally exercise the unavailable path.
+      }
+    }
+  }
   return getLeaderboard({
     request: new Request(`https://example.com/api/benchmarks/leaderboards/${key}${query}`, { headers }),
-    env: { CATALOG_DB: d1(rows, options) },
+    env: { CATALOG_DB: d1(projectedRows, options) },
     params: { key },
   });
 }
@@ -454,6 +543,66 @@ async function model(slug: string, rows = publishedRows(), headers?: HeadersInit
 afterEach(() => vi.useRealTimers());
 
 describe('cached benchmark APIs', () => {
+  it('serves materialized summary bytes before touching a full benchmark fact snapshot', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-05T12:00:01.000Z');
+    const cachedBody = '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"fresh","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"cache":"summary"}}';
+
+    const response = await summary(publishedRows({
+      apiCacheEntries: [{
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'summary',
+        variant: 'fresh',
+        chunkIndex: 0,
+        etag: '"materialized-summary-fresh"',
+        body: cachedBody,
+      }, {
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'summary',
+        variant: 'stale',
+        chunkIndex: 0,
+        etag: '"materialized-summary-stale"',
+        body: '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"stale","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"cache":"summary"}}',
+      }],
+    }), undefined, { failOnBenchmarkFactRead: true });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe('"materialized-summary-fresh"');
+    await expect(response.text()).resolves.toBe(cachedBody);
+  });
+
+  it('serves a materialized normalized leaderboard without rebuilding the full fact snapshot', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-05T12:00:01.000Z');
+    const cachedBody = '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"fresh","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"key":"llm-overall","profile":"balanced","entries":[],"pagination":{"limit":50,"total":0,"nextCursor":null}}}';
+
+    const response = await leaderboard('llm-overall', '', publishedRows({
+      apiCacheEntries: [{
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'leaderboard:llm-overall:balanced:50::0',
+        variant: 'fresh',
+        chunkIndex: 0,
+        etag: '"materialized-leaderboard-fresh"',
+        body: cachedBody,
+      }, {
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'leaderboard:llm-overall:balanced:50::0',
+        variant: 'stale',
+        chunkIndex: 0,
+        etag: '"materialized-leaderboard-stale"',
+        body: '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"stale","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"key":"llm-overall","profile":"balanced","entries":[],"pagination":{"limit":50,"total":0,"nextCursor":null}}}',
+      }],
+    }), undefined, { failOnBenchmarkFactRead: true });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe('"materialized-leaderboard-fresh"');
+    await expect(response.text()).resolves.toBe(cachedBody);
+  });
+
   it('builds exact route availability while reading each complete fact collection only once', async () => {
     const summaryMetrics = [
       ...metrics.filter((candidate) => candidate.model_key !== 'provider:wrong-lens'),
@@ -793,6 +942,36 @@ describe('cached benchmark APIs', () => {
     expect(secondBody.data.entries.map((entry) => entry.model.slug)).toEqual(['beta']);
     expect(secondBody.data.pagination.nextCursor).toBeNull();
     expect(invalid.status).toBe(400);
+  });
+
+  it('serves every valid page size and cursor from the bounded projection cache', async () => {
+    const first = await leaderboard(
+      'llm-overall',
+      '?limit=1',
+      publishedRows(),
+      undefined,
+      { failOnBenchmarkFactRead: true },
+    );
+    const firstBody = await first.json() as { data: { pagination: { nextCursor: string } } };
+    const second = await leaderboard(
+      'llm-overall',
+      `?limit=1&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor)}`,
+      publishedRows(),
+      undefined,
+      { failOnBenchmarkFactRead: true },
+    );
+    const maximum = await leaderboard(
+      'llm-overall',
+      '?limit=200',
+      publishedRows(),
+      undefined,
+      { failOnBenchmarkFactRead: true },
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(maximum.status).toBe(200);
+    await expect(maximum.json()).resolves.toMatchObject({ data: { pagination: { limit: 200 } } });
   });
 
   it('returns 404 for an unknown active-revision model slug', async () => {

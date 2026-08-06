@@ -1,6 +1,8 @@
 import { BOOTSTRAP_CATALOG } from '../../src/catalog/bootstrap';
+import { catalogApiCacheKey, catalogApiEmptyProviderCacheKey } from '../../src/catalog/api-response-cache-keys';
 import type { CatalogResponse, ModelOffer, PlanOffer, SourceProvenance } from '../../src/catalog/contracts';
 import { validateCatalogResponse } from '../../src/catalog/validation';
+import { cachedApiResponse, readApiResponseCache } from '../_shared/api-response-cache';
 
 interface D1Statement {
   bind(...values: unknown[]): { all(): Promise<{ results: unknown[] }> };
@@ -37,7 +39,7 @@ function parseStoredJson<T>(value: string, field: string): T {
  * not hide plans until the next scheduled worker run. Models remain entirely
  * revisioned in D1; this overlay is intentionally limited to subscriptions.
  */
-function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogResponse {
+export function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogResponse {
   const manualPlansById = new Map(BOOTSTRAP_CATALOG.plans.map((plan) => [plan.id, plan]));
   const plans = [
     ...manualPlansById.values(),
@@ -57,7 +59,13 @@ function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogResponse
 
 export async function readPublishedCatalog(db: D1Database): Promise<CatalogResponse | null> {
   const revisions = await all<RevisionRow>(db,
-    "SELECT revision, published_at, checked_at FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1");
+    `SELECT revisions.revision, revisions.published_at, revisions.checked_at
+      FROM catalog_publication_state AS publication
+      INNER JOIN catalog_revisions AS revisions
+        ON revisions.revision = publication.active_revision
+      WHERE publication.singleton = 1
+        AND revisions.publication_state = 'published'
+      LIMIT 1`);
   const revision = revisions[0];
   if (!revision) return null;
 
@@ -93,7 +101,7 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
   });
 }
 
-function filterByProvider(catalog: CatalogResponse, providerId: string | null): CatalogResponse {
+export function filterByProvider(catalog: CatalogResponse, providerId: string | null): CatalogResponse {
   if (!providerId) return catalog;
   const plans = catalog.plans.filter((offer) => offer.providerId === providerId);
   const modelOffers = catalog.modelOffers.filter((offer) => offer.providerId === providerId);
@@ -101,7 +109,78 @@ function filterByProvider(catalog: CatalogResponse, providerId: string | null): 
   return { ...catalog, plans, modelOffers, provenance: catalog.provenance.filter((source) => source.providerId === providerId || sourceIds.has(source.id)) };
 }
 
+export interface CatalogApiCacheProjection {
+  readonly cacheKey: string;
+  readonly etagFresh: string;
+  readonly etagStale: string;
+  readonly bodyFresh: string;
+  readonly bodyStale: string;
+}
+
+function staleCatalog(catalog: CatalogResponse): CatalogResponse {
+  return {
+    ...catalog,
+    freshness: {
+      ...catalog.freshness,
+      status: 'stale',
+      message: 'Published catalog has not refreshed within 24 hours; showing the last verified revision.',
+    },
+  };
+}
+
+/** Build immutable whole-catalog and provider-filtered bodies off the request path. */
+export function catalogApiCacheProjections(catalog: CatalogResponse): readonly CatalogApiCacheProjection[] {
+  const providerIds = [...new Set([
+    ...catalog.plans.map((plan) => plan.providerId),
+    ...catalog.modelOffers.map((offer) => offer.providerId),
+  ])].sort();
+  const projections = [null, ...providerIds].map((providerId) => {
+    const filtered = filterByProvider(catalog, providerId);
+    const freshEtag = `"${filtered.revision}"`;
+    const staleEtag = `"${filtered.revision}:stale"`;
+    return {
+      cacheKey: catalogApiCacheKey(providerId),
+      etagFresh: freshEtag,
+      etagStale: staleEtag,
+      bodyFresh: JSON.stringify(filtered),
+      bodyStale: JSON.stringify(staleCatalog(filtered)),
+    };
+  });
+  const empty = { ...catalog, provenance: [], plans: [], modelOffers: [] };
+  projections.push({
+    cacheKey: catalogApiEmptyProviderCacheKey(),
+    etagFresh: `"${catalog.revision}"`,
+    etagStale: `"${catalog.revision}:stale"`,
+    bodyFresh: JSON.stringify(empty),
+    bodyStale: JSON.stringify(staleCatalog(empty)),
+  });
+  return projections;
+}
+
 export async function onRequestGet({ request, env }: { request: Request; env: Env }): Promise<Response> {
+  const providerId = new URL(request.url).searchParams.get('provider');
+  if (env.CATALOG_DB) {
+    try {
+      let cached = await readApiResponseCache(
+        env.CATALOG_DB,
+        'catalog',
+        catalogApiCacheKey(providerId),
+        24 * 60 * 60 * 1_000,
+      );
+      if (!cached && providerId) {
+        cached = await readApiResponseCache(
+          env.CATALOG_DB,
+          'catalog',
+          catalogApiEmptyProviderCacheKey(),
+          24 * 60 * 60 * 1_000,
+        );
+      }
+      if (cached) return cachedApiResponse(request, cached);
+    } catch {
+      // During migration rollout or before the first materialized publication,
+      // preserve the existing verified D1/bootstrap read path below.
+    }
+  }
   let catalog = BOOTSTRAP_CATALOG;
   if (env.CATALOG_DB) {
     try {
@@ -111,8 +190,8 @@ export async function onRequestGet({ request, env }: { request: Request; env: En
     }
   }
   if (catalog !== BOOTSTRAP_CATALOG) catalog = mergeManualSubscriptionPlans(catalog);
-  const filtered = filterByProvider(catalog, new URL(request.url).searchParams.get('provider'));
-  const etag = `"${filtered.revision}"`;
+  const filtered = filterByProvider(catalog.freshness.status === 'stale' ? staleCatalog(catalog) : catalog, providerId);
+  const etag = `"${filtered.revision}${filtered.freshness.status === 'stale' ? ':stale' : ''}"`;
   const headers = new Headers({
     'Cache-Control': 'public, max-age=0, must-revalidate',
     ETag: etag,
