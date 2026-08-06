@@ -1,7 +1,7 @@
 import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { renameSync, writeFileSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
+import { promises as fsPromises, renameSync, writeFileSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +18,28 @@ import {
   type BrevoCampaignConfig,
 } from './create-brevo-campaign-draft';
 
+const stateInstallRace = {
+  beforeInstall: undefined as undefined | ((destination: string) => Promise<void>),
+};
+
+function armStateInstallRace(callback: (destination: string) => Promise<void>): void {
+  stateInstallRace.beforeInstall = callback;
+  const injectRace = async (source: unknown, destination: unknown) => {
+    const callback = stateInstallRace.beforeInstall;
+    const sourcePath = String(source);
+    const destinationPath = String(destination);
+    if (!callback || !/\.(?:pending|receipt)\.json\..+\.tmp$/u.test(sourcePath)
+      || !/(?:pending|receipt)\.json$/u.test(destinationPath)) return;
+    stateInstallRace.beforeInstall = undefined;
+    await callback(destinationPath);
+  };
+  const actualLink = fsPromises.link;
+  vi.spyOn(fsPromises, 'link').mockImplementation(async (source, destination) => {
+    await injectRace(source, destination);
+    return actualLink(source, destination);
+  });
+}
+
 const temporaryRoots: string[] = [];
 const encoder = new TextEncoder();
 const TRUSTED_KEYS = generateKeyPairSync('ed25519');
@@ -25,6 +47,8 @@ const WRONG_KEYS = generateKeyPairSync('ed25519');
 const TRUSTED_PUBLIC_KEY = TRUSTED_KEYS.publicKey.export({ format: 'pem', type: 'spki' }).toString();
 
 afterEach(async () => {
+  stateInstallRace.beforeInstall = undefined;
+  vi.restoreAllMocks();
   await Promise.all(temporaryRoots.splice(0).map((path) => rm(path, { force: true, recursive: true })));
 });
 
@@ -745,6 +769,54 @@ describe('createNewsletterCampaignDraft', () => {
       },
     })).rejects.toThrow(/fsync failure/i);
     expect(fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('does not overwrite pending state installed at the final-install boundary', async () => {
+    const files = await artifactInputs();
+    const harness = brevoDraftHarness();
+    const racerState = 'racer-owned pending state\n';
+    armStateInstallRace(async (destination) => {
+      expect(destination).toMatch(/\/pending\.json$/u);
+      await writeFile(destination, racerState, { flag: 'wx' });
+    });
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
+    })).rejects.toMatchObject({ code: 'EEXIST' });
+
+    expect(await readFile(files.pendingPath, 'utf8')).toBe(racerState);
+    expect((await readdir(files.stateDirectory)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    expect(harness.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(0);
+  });
+
+  it('does not overwrite receipt state installed at the final-install boundary', async () => {
+    const files = await artifactInputs();
+    const harness = brevoDraftHarness();
+    const racerState = 'racer-owned receipt state\n';
+    let installs = 0;
+    armStateInstallRace(async (destination) => {
+      installs += 1;
+      if (destination.endsWith('/pending.json')) {
+        stateInstallRace.beforeInstall = async (receiptDestination) => {
+          expect(receiptDestination).toMatch(/\/receipt\.json$/u);
+          await writeFile(receiptDestination, racerState, { flag: 'wx' });
+        };
+        return;
+      }
+      throw new Error(`Unexpected state destination: ${destination}`);
+    });
+
+    await expect(createNewsletterCampaignDraft(files.args, {
+      environment: runtimeEnvironment(files), fetchImpl: harness.fetchImpl,
+    })).rejects.toMatchObject({ code: 'EEXIST' });
+
+    expect(installs).toBe(1);
+    expect(await readFile(files.receiptPath, 'utf8')).toBe(racerState);
+    expect(JSON.parse(await readFile(files.pendingPath, 'utf8'))).toMatchObject({
+      dedupeKey: files.changes.dedupeKey,
+    });
+    expect((await readdir(files.stateDirectory)).filter((name) => name.endsWith('.tmp'))).toEqual([]);
+    expect(harness.fetchImpl.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
   });
 
   it('keeps an unresolved pending outbox and refuses a retry POST when no exact draft is found', async () => {

@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, randomUUID, verify } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, promises as fsPromises } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
 import { link, lstat, mkdir, open, realpath, rename, unlink } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
@@ -743,12 +743,13 @@ async function writeStateFile(
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
-    await rename(temporary, path.path);
+    await fsPromises.link(temporary, path.path);
     const installed = await lstat(path.path);
     if (installed.isSymbolicLink() || !temporaryIdentity || !sameIdentity(temporaryIdentity, installed)) {
       fail('campaign state destination ownership changed');
     }
     await assertGuardedDirectory(path.directory);
+    await unlink(temporary);
     const directory = await open(
       path.directory.path,
       fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW,

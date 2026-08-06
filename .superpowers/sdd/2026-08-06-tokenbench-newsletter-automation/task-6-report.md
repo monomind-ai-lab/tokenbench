@@ -29,8 +29,9 @@ URL specified by the task brief.
 
 ## Safety boundaries
 
-- The only remote URLs reachable by the adapter are `POST /v3/emailCampaigns`
-  and a single `GET /v3/emailCampaigns/{id}` verification request.
+- The only remote URLs reachable by the adapter are bounded paginated
+  `GET /v3/emailCampaigns` reconciliation, `POST /v3/emailCampaigns` creation
+  when no exact draft exists, and `GET /v3/emailCampaigns/{id}` verification.
 - The POST payload has an exact monthly-cheatsheet list mapping from server-only
   configuration and intentionally omits schedule/send/test fields.
 - A returned campaign must have the same ID and `draft` status before an atomic
@@ -204,4 +205,63 @@ d6e7c65ad843a78344e1f781a318d17df27c6fcb5da231ab362d69d071508ba5  scripts/create
 ```
 
 The checked-in plan, operator documentation, `.env.example`, and managed
+`progress.md` were not modified in this round.
+
+## Review fix round 3
+
+Reviewed head: `6c9276b`.
+
+Durable state publication no longer uses POSIX `rename`, which can replace a
+destination created after the preceding absence check. Each fsynced temporary
+state file is now atomically hard-linked into its fixed destination. `link`
+fails with `EEXIST` without modifying the racer-owned destination; only after a
+successful identity-checked install is the temporary link removed and the
+opened state directory fsynced. Existing root, ancestor, leaf no-follow, and
+device/inode checks remain in force, and the `finally` cleanup removes the
+temporary link on collision and other ordinary failures.
+
+Two deterministic filesystem-boundary tests interpose an independent `wx`
+write immediately before the production install for `pending.json` and
+`receipt.json`. Against the reviewed `rename` implementation both tests were
+RED because the workflow resolved successfully and overwrote the independently
+installed state. With no-clobber installation both are GREEN: the workflow
+returns `EEXIST`, the racer bytes remain exact, no `.tmp` file remains, a pending
+collision performs zero POSTs, and a receipt collision preserves the durable
+pending record after exactly one mocked POST.
+
+The original safety-boundary prose was also corrected: reconciliation may issue
+bounded paginated campaign-list GETs before creation and campaign-detail GETs
+for exact candidates, rather than exactly one GET per workflow.
+
+Round-three verification evidence:
+
+```text
+npm test -- --run scripts/create-brevo-campaign-draft.test.ts \
+  -t 'final-install boundary'
+  RED: 2 tests failed because both workflows resolved and overwrote racer state.
+  GREEN: 2 tests passed; 36 tests skipped.
+
+npm test -- src/newsletter/revision-diff.test.ts src/newsletter/cheatsheet.test.ts \
+  scripts/generate-monthly-cheatsheet.test.ts src/newsletter/campaign.test.ts \
+  scripts/create-brevo-campaign-draft.test.ts
+  5 files passed; 116 tests passed.
+
+npm test
+  65 files passed; 868 tests passed.
+
+npm run lint
+  tsc --noEmit passed.
+
+git diff --check
+  passed.
+```
+
+Evidence SHA-256 values before commit:
+
+```text
+72f3898aab790ff2c38a8ecbcb8e5bfa1a8b0d6c852dfc6200e00f93fb0c59d0  scripts/create-brevo-campaign-draft.ts
+eceea0a67cb8211ccf517d7c747fe95ec403595b68cf518323aa49d3da7cf4e9  scripts/create-brevo-campaign-draft.test.ts
+```
+
+No live Brevo request was made. The checked-in plan, `.env.example`, and managed
 `progress.md` were not modified in this round.
