@@ -5,6 +5,7 @@ import { ROUTE_PATHS, type SiteNavigationPage } from '../routing/routes';
 import { LANGUAGES } from '../types';
 import { getResponsiveLayout } from './responsive';
 import { NewsletterSignup } from './newsletter-signup';
+import { SiteThemeProvider } from './site-preferences';
 import { formatDateTime, StatusBanner } from './ui';
 import type { CatalogPhase } from './use-catalog';
 
@@ -77,13 +78,15 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
   }, []);
 
   return (
-    <div className="app-shell" data-layout={layout}>
-      <a className="skip-link" href={`#${skipLinkTarget}`}>{skipLinkLabel}</a>
-      <SiteHeader theme={theme} language={language} activePage={activePage} onThemeToggle={onThemeToggle} onLanguageChange={onLanguageChange} />
-      {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
-      {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
-      <main id="page-content" className="page-main" tabIndex={-1}>{children}</main>
-      <SiteFooter status={catalogPhase ? `Catalog refresh: ${formatDateTime(lastSuccessfulRefreshAt)}${catalogPhase === 'loading' ? ' · Loading' : ''}` : 'Source-aware decision support.'} notice="Verify provider evidence before purchasing." />
-    </div>
+    <SiteThemeProvider theme={theme}>
+      <div className="app-shell" data-layout={layout}>
+        <a className="skip-link" href={`#${skipLinkTarget}`}>{skipLinkLabel}</a>
+        <SiteHeader theme={theme} language={language} activePage={activePage} onThemeToggle={onThemeToggle} onLanguageChange={onLanguageChange} />
+        {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
+        {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
+        <main id="page-content" className="page-main" tabIndex={-1}>{children}</main>
+        <SiteFooter status={catalogPhase ? `Catalog refresh: ${formatDateTime(lastSuccessfulRefreshAt)}${catalogPhase === 'loading' ? ' · Loading' : ''}` : 'Source-aware decision support.'} notice="Verify provider evidence before purchasing." />
+      </div>
+    </SiteThemeProvider>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { modelBrand, providerBrand } from '../brand/provider-brands';
 import type { ProviderBrand } from '../brand/provider-brands';
+import { useSiteTheme, type ThemeMode } from './site-preferences';
 
 declare global {
   interface ImportMeta {
@@ -9,7 +10,7 @@ declare global {
 }
 
 type MarkSize = 20 | 24 | 32;
-type MarkTheme = 'light' | 'dark';
+type MarkTheme = ThemeMode;
 type MarkLoading = 'eager' | 'lazy';
 
 interface MarkProps {
@@ -36,10 +37,12 @@ function logoUrl(brand: ProviderBrand, theme: MarkTheme, size: MarkSize): string
   return `https://cdn.brandfetch.io/${brand.domain}/w/${size}/h/${size}/theme/${theme}/icon?c=${encodeURIComponent(clientId)}`;
 }
 
-function BrandMark({ brand, label, size = 20, theme = 'light', decorative = false, loading = 'lazy' }: MarkProps & { readonly brand: ProviderBrand; readonly label: string }) {
+function BrandMark({ brand, label, size = 20, theme, decorative = false, loading = 'lazy' }: MarkProps & { readonly brand: ProviderBrand; readonly label: string }) {
   const [clientReady, setClientReady] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
-  const imageSource = clientReady ? logoUrl(brand, theme, size) : null;
+  const inheritedTheme = useSiteTheme();
+  const resolvedTheme = theme ?? inheritedTheme;
+  const imageSource = clientReady ? logoUrl(brand, resolvedTheme, size) : null;
   const brandIdentity = `${brand.domain ?? ''}:${brand.label}:${brand.fallback}`;
 
   useEffect(() => setClientReady(true), []);
@@ -54,6 +57,7 @@ function BrandMark({ brand, label, size = 20, theme = 'light', decorative = fals
         src={source}
         width={size}
         height={size}
+        style={{ width: `${size}px`, height: `${size}px` }}
         loading={loading}
         decoding="async"
         alt={decorative ? '' : label}

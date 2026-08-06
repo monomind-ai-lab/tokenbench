@@ -6,6 +6,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { hydrateRoot } from 'react-dom/client';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AppShell } from './app-shell';
 import { ModelMark, ProviderMark } from './provider-mark';
 
 const execFile = promisify(execFileCallback);
@@ -24,6 +25,30 @@ describe('ProviderMark', () => {
     expect(image).toHaveAttribute('loading', 'lazy');
     expect(image).toHaveAttribute('src', expect.stringContaining('cdn.brandfetch.io/openai.com'));
     expect(image).toHaveAttribute('src', expect.stringContaining('/theme/dark/icon'));
+  });
+
+  it('inherits the active shell theme and preserves an explicit theme override', () => {
+    vi.stubEnv('VITE_BRANDFETCH_CLIENT_ID', 'public-client');
+    const shell = (theme: 'light' | 'dark', markTheme?: 'light' | 'dark') => (
+      <AppShell
+        language="en"
+        lastSuccessfulRefreshAt={null}
+        onLanguageChange={vi.fn()}
+        onThemeToggle={vi.fn()}
+        theme={theme}
+      >
+        <ProviderMark providerId="openai" providerName="OpenAI" size={24} theme={markTheme} />
+      </AppShell>
+    );
+
+    const { rerender } = render(shell('dark'));
+    expect(screen.getByRole('img', { name: 'OpenAI' })).toHaveAttribute('src', expect.stringContaining('/theme/dark/icon'));
+
+    rerender(shell('light'));
+    expect(screen.getByRole('img', { name: 'OpenAI' })).toHaveAttribute('src', expect.stringContaining('/theme/light/icon'));
+
+    rerender(shell('light', 'dark'));
+    expect(screen.getByRole('img', { name: 'OpenAI' })).toHaveAttribute('src', expect.stringContaining('/theme/dark/icon'));
   });
 
   it('replaces a failed Brandfetch image with a labelled lettermark', () => {

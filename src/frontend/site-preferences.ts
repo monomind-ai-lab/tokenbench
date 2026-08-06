@@ -1,7 +1,17 @@
-import { useEffect, useState } from 'react';
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from 'react';
 import { SITE_CONFIG } from '../brand/site-config';
 
 export type ThemeMode = 'light' | 'dark';
+
+const SiteThemeContext = createContext<ThemeMode>('dark');
+
+export function SiteThemeProvider({ theme, children }: { readonly theme: ThemeMode; readonly children: ReactNode }) {
+  return createElement(SiteThemeContext.Provider, { value: theme }, children);
+}
+
+export function useSiteTheme(): ThemeMode {
+  return useContext(SiteThemeContext);
+}
 
 export function readStoredTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
