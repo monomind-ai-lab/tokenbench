@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { LEADERBOARD_ROUTES, matchRoute, ROUTE_PATHS, staticHtmlEntries } from './routes';
+import { LEADERBOARD_ROUTES, matchRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
+
+const APPROVED_LEADERBOARD_TITLES = {
+  'llm-overall': 'Overall benchmarks',
+  'llm-coding': 'Coding benchmark',
+  'llm-agentic': 'Agentic performance',
+  'llm-reasoning': 'Reasoning',
+  'llm-knowledge': 'Knowledge',
+  'llm-human-preference': 'Human preference',
+  'llm-value': 'Value frontier',
+  'llm-pricing-context': 'Pricing and context',
+  'multimodal-vision-documents': 'Multimodal',
+  'media-text-to-image': 'Text to image',
+  'media-image-editing': 'Image editing',
+  'media-text-to-video': 'Text to video',
+  'media-image-to-video': 'Image to video',
+  'media-video-editing': 'Video editing',
+} as const satisfies Record<LeaderboardKey, string>;
 
 const fixedRouteCases = [
   ['/', { kind: 'home' }],
@@ -108,5 +125,15 @@ describe('TokenBench route registry', () => {
     expect(LEADERBOARD_ROUTES['llm-reasoning'].navigationLabel).toBe('Reasoning');
     expect(LEADERBOARD_ROUTES['llm-knowledge'].navigationLabel).toBe('Knowledge');
     expect(LEADERBOARD_ROUTES['media-text-to-video'].navigationLabel).toBe('Text to video');
+  });
+
+  it('keeps every semantic leaderboard document title tied to its canonical H1', () => {
+    expect(Object.fromEntries(
+      Object.entries(LEADERBOARD_ROUTES).map(([key, route]) => [key, route.seo.h1]),
+    )).toEqual(APPROVED_LEADERBOARD_TITLES);
+
+    for (const [key, h1] of Object.entries(APPROVED_LEADERBOARD_TITLES) as Array<[LeaderboardKey, string]>) {
+      expect(LEADERBOARD_ROUTES[key].seo.title).toBe(`${h1} | TokenBench`);
+    }
   });
 });

@@ -299,7 +299,7 @@ function LeaderboardDirectory() {
         <div className="leaderboard-directory-list" role="list" aria-label={`${group.title} leaderboard views`}>
           {group.keys.map((key) => {
             const route = LEADERBOARD_ROUTES[key];
-            const title = route.navigationLabel;
+            const title = route.seo.h1;
             return <article className="panel" role="listitem" key={key}>
               <h4><a href={route.pathname}>{title}</a></h4>
               <p>{route.seo.summary}</p>

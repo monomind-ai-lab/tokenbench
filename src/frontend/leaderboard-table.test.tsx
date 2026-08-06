@@ -846,7 +846,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     render(<App />);
 
     expect(screen.getByRole('heading', { name: 'Model leaderboards', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View Coding performance' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
+    expect(screen.getByRole('link', { name: 'View Coding benchmark' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 

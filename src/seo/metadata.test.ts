@@ -1,8 +1,25 @@
 import { describe, expect, it } from 'vitest';
-import type { AppRoute } from '../routing/routes';
+import type { AppRoute, LeaderboardKey } from '../routing/routes';
 import { metadataForRoute } from './metadata';
 
 const origin = 'https://tokenbench.monomind.one';
+
+const APPROVED_LEADERBOARD_TITLES = {
+  'llm-overall': 'Overall benchmarks',
+  'llm-coding': 'Coding benchmark',
+  'llm-agentic': 'Agentic performance',
+  'llm-reasoning': 'Reasoning',
+  'llm-knowledge': 'Knowledge',
+  'llm-human-preference': 'Human preference',
+  'llm-value': 'Value frontier',
+  'llm-pricing-context': 'Pricing and context',
+  'multimodal-vision-documents': 'Multimodal',
+  'media-text-to-image': 'Text to image',
+  'media-image-editing': 'Image editing',
+  'media-text-to-video': 'Text to video',
+  'media-image-to-video': 'Image to video',
+  'media-video-editing': 'Video editing',
+} as const satisfies Record<LeaderboardKey, string>;
 
 const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'home' }, canonical: origin },
@@ -74,14 +91,15 @@ describe('route metadata registry', () => {
     expect(page.canonical).toBe(`${origin}/leaderboards/`);
   });
 
-  it.each([
-    ['llm-overall', 'Overall benchmarks'],
-    ['llm-coding', 'Coding benchmark'],
-    ['llm-agentic', 'Agentic performance'],
-    ['llm-human-preference', 'Human preference'],
-    ['media-image-editing', 'Image editing'],
-  ] as const)('uses the approved succinct H1 for %s', (key, h1) => {
-    expect(metadataForRoute({ kind: 'leaderboard', key }).h1).toBe(h1);
+  it('uses every approved succinct leaderboard title for document and social metadata', () => {
+    for (const [key, h1] of Object.entries(APPROVED_LEADERBOARD_TITLES) as Array<[LeaderboardKey, string]>) {
+      const page = metadataForRoute({ kind: 'leaderboard', key });
+      const title = `${h1} | TokenBench`;
+      expect(page.h1).toBe(h1);
+      expect(page.title).toBe(title);
+      expect(page.openGraph.title).toBe(title);
+      expect(page.twitter.title).toBe(title);
+    }
   });
 
   it('keeps dynamic comparison canonical and Open Graph URLs slashless', () => {

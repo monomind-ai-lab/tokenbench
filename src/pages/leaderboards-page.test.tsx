@@ -161,6 +161,18 @@ afterEach(() => {
 });
 
 describe('LeaderboardDirectoryPage', () => {
+  it('uses canonical route H1s for directory cards instead of navigation labels', () => {
+    respondWithSummary();
+
+    render(<LeaderboardDirectoryPage />);
+
+    const directory = screen.getByRole('region', { name: 'Full leaderboard directory' });
+    expect(within(directory).getByRole('link', { name: /^Coding benchmark$/ })).toHaveAttribute('href', '/leaderboards/llm/coding/');
+    expect(within(directory).getByRole('link', { name: /^Multimodal$/ })).toHaveAttribute('href', '/leaderboards/multimodal/vision-documents/');
+    expect(within(directory).queryByRole('link', { name: /^Coding performance$/ })).not.toBeInTheDocument();
+    expect(within(directory).queryByRole('link', { name: /^Vision and documents$/ })).not.toBeInTheDocument();
+  });
+
   it('shows decision-ready top-three groups before the full directory', async () => {
     const fetchMock = respondWithSummary();
 
