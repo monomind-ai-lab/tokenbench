@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { access, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BenchmarkRevision } from '../src/benchmarks/contracts';
 import type { CatalogResponse } from '../src/catalog/contracts';
-import type { RevisionChanges } from '../src/newsletter/revision-diff';
+import type { PublishedRevisionSnapshot, RevisionChanges } from '../src/newsletter/revision-diff';
 import {
   generateMonthlyCheatsheet,
   parseGenerateMonthlyCheatsheetArgs,
@@ -83,19 +83,50 @@ function catalogFixture(): CatalogResponse {
     freshness: { status: 'fresh', checkedAt: '2026-08-01T00:00:00.000Z' },
     plans: [],
     modelOffers: [],
-    provenance: [],
+    provenance: [{
+      id: 'openrouter-models', providerId: 'openrouter', sourceUrl: 'https://example.test/catalog',
+      observedAt: '2026-08-01T00:00:00.000Z', sourceKind: 'official_json', confidence: 'official',
+      snapshotKey: 'fixtures/catalog.json', contentHash: SHA, parserVersion: 'fixture-v1', reviewStatus: 'verified',
+    }],
   };
 }
 
-function changesFixture(overrides: Partial<RevisionChanges> = {}): RevisionChanges {
-  return {
+interface VerifiedChangesFixture {
+  readonly previous: PublishedRevisionSnapshot;
+  readonly current: PublishedRevisionSnapshot;
+  readonly changes?: RevisionChanges;
+}
+
+function changesFixture(overrides: Partial<VerifiedChangesFixture> = {}): VerifiedChangesFixture {
+  const previous: PublishedRevisionSnapshot = {
+    revision: 'benchmark_previous',
+    models: [{ modelKey: 'fixture:alpha' }],
+    priceChecks: [{
+      modelKey: 'fixture:alpha', providerId: 'openrouter', routeId: 'openrouter:alpha', verificationStatus: 'primary',
+      inputUsdPerMillion: 2, outputUsdPerMillion: 3,
+    }],
+  };
+  const current: PublishedRevisionSnapshot = {
+    revision: 'benchmark_fixture',
+    models: [{ modelKey: 'fixture:alpha' }],
+    priceChecks: [{
+      modelKey: 'fixture:alpha', providerId: 'openrouter', routeId: 'openrouter:alpha', verificationStatus: 'primary',
+      inputUsdPerMillion: 1, outputUsdPerMillion: 2,
+    }],
+  };
+  const priceDropId = JSON.stringify(['benchmark_fixture', 'price-drop', 'fixture:alpha', 'openrouter', 'openrouter:alpha']);
+  const changes: RevisionChanges = {
     fromRevision: 'benchmark_previous',
     toRevision: 'benchmark_fixture',
-    dedupeKey: 'fixture-dedupe',
-    newModels: [{ id: 'new-alpha', modelKey: 'fixture:new-model' }],
-    priceDrops: [],
-    ...overrides,
+    dedupeKey: JSON.stringify(['benchmark_previous', 'benchmark_fixture', priceDropId]),
+    newModels: [],
+    priceDrops: [{
+      id: priceDropId, modelKey: 'fixture:alpha', providerId: 'openrouter', routeId: 'openrouter:alpha',
+      previousInputUsdPerMillion: 2, currentInputUsdPerMillion: 1,
+      previousOutputUsdPerMillion: 3, currentOutputUsdPerMillion: 2,
+    }],
   };
+  return { previous, current, changes, ...overrides };
 }
 
 class FakePage {
@@ -104,6 +135,7 @@ class FakePage {
   readonly screenshotOptions: unknown[] = [];
   closed = false;
   failPdf = false;
+  onPdf: (() => Promise<void>) | undefined;
 
   async setContent(html: string): Promise<void> {
     this.contents.push(html);
@@ -113,6 +145,7 @@ class FakePage {
 
   async pdf(options: unknown): Promise<Uint8Array> {
     this.pdfOptions.push(options);
+    if (this.onPdf) await this.onPdf();
     if (this.failPdf) throw new Error('PDF failed');
     return new TextEncoder().encode("%PDF-1.4\n/CreationDate (D:20260806123456+08'00')\n/ModDate (D:20260806123456+08'00')\n");
   }
@@ -158,7 +191,7 @@ class FakeBrowser implements CheatsheetBrowser {
 }
 
 async function fixtureArgs(name: string, overrides: Partial<GenerateMonthlyCheatsheetArgs> = {}): Promise<GenerateMonthlyCheatsheetArgs> {
-  const root = await mkdtemp(join(tmpdir(), `tokenbench-cheatsheet-${name}-`));
+  const root = await realpath(await mkdtemp(join(tmpdir(), `tokenbench-cheatsheet-${name}-`)));
   temporaryRoots.push(root);
   const benchmarks = join(root, 'benchmarks.json');
   const catalog = join(root, 'catalog.json');
@@ -168,7 +201,15 @@ async function fixtureArgs(name: string, overrides: Partial<GenerateMonthlyCheat
     writeFile(catalog, `${JSON.stringify(catalogFixture(), null, 2)}\n`),
     writeFile(changes, `${JSON.stringify(changesFixture(), null, 2)}\n`),
   ]);
-  return { benchmarks, catalog, changes, outDir: join(root, 'artifacts'), shareImage: true, ...overrides };
+  return {
+    benchmarks,
+    catalog,
+    changes,
+    artifactRoot: join(root, 'newsletter-artifacts'),
+    outDir: join(root, 'newsletter-artifacts', 'artifacts'),
+    shareImage: true,
+    ...overrides,
+  };
 }
 
 function fakeDependencies(browser: FakeBrowser) {
@@ -182,6 +223,7 @@ async function runCli(args: GenerateMonthlyCheatsheetArgs): Promise<void> {
     '--catalog', args.catalog,
     '--changes', args.changes,
     '--out-dir', args.outDir,
+    ...(args.artifactRoot ? ['--artifact-root', args.artifactRoot] : []),
     ...(args.shareImage ? ['--share-image'] : []),
   ], { cwd: process.cwd() });
 }
@@ -220,6 +262,7 @@ describe('generateMonthlyCheatsheet', () => {
     expect(pdf).toContain("D:20260801000000+00'00'");
     expect(browser.contextOptions).toContainEqual(expect.objectContaining({ locale: 'en-US', timezoneId: 'UTC' }));
     expect(browser.contexts[0].page.pdfOptions).toEqual([expect.objectContaining({ format: 'A4', printBackground: true })]);
+    expect(browser.contexts[1].page.contents[0]).toContain('Content-Security-Policy');
     expect(browser.contexts.every((context) => context.page.closed && context.closed)).toBe(true);
     expect(browser.closed).toBe(true);
 
@@ -259,10 +302,160 @@ describe('generateMonthlyCheatsheet', () => {
 
   it('rejects mismatched frozen revisions before creating an output directory', async () => {
     const args = await fixtureArgs('mismatch');
-    await writeFile(args.changes, `${JSON.stringify(changesFixture({ toRevision: 'other_revision' }))}\n`);
+    const envelope = changesFixture();
+    await writeFile(args.changes, `${JSON.stringify({
+      ...envelope,
+      current: { ...envelope.current, revision: 'other_revision' },
+    })}\n`);
     const browser = new FakeBrowser();
 
-    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(/changes.*revision/i);
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(/current.*revision/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects a bare revision diff because its claimed price drops have no verified snapshots', async () => {
+    const args = await fixtureArgs('bare-diff');
+    await writeFile(args.changes, `${JSON.stringify(changesFixture().changes)}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(/verified previous and current/i);
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects output outside the configured artifact root', async () => {
+    const args = await fixtureArgs('outside-root');
+    const outside = join(dirname(args.artifactRoot!), 'outside');
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet({ ...args, outDir: outside }, fakeDependencies(browser)))
+      .rejects.toThrow(/artifact root/i);
+    await expect(access(outside)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it.each(['src', 'scripts', 'workers', 'browser-tests'])('rejects a configured artifact root inside the %s source tree', async (sourceTree) => {
+    const args = await fixtureArgs(`source-root-${sourceTree}`);
+    const sourceArtifactRoot = resolve(sourceTree, '.newsletter-artifacts-test');
+    const output = join(sourceArtifactRoot, 'artifacts');
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet({
+      ...args,
+      artifactRoot: sourceArtifactRoot,
+      outDir: output,
+    }, fakeDependencies(browser))).rejects.toThrow(/source directory/i);
+    await expect(access(output)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('rejects symbolic-link traversal anywhere beneath the artifact root', async () => {
+    const args = await fixtureArgs('symlink');
+    await mkdir(args.artifactRoot!, { recursive: true });
+    await symlink(resolve('src'), join(args.artifactRoot!, 'source-link'), 'dir');
+    const output = join(args.artifactRoot!, 'source-link', 'artifacts');
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet({ ...args, outDir: output }, fakeDependencies(browser)))
+      .rejects.toThrow(/symbolic link/i);
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('honors an exclusive publish lock and never removes another generator lock', async () => {
+    const args = await fixtureArgs('locked');
+    await mkdir(dirname(args.outDir), { recursive: true });
+    const lock = `${args.outDir}.lock`;
+    await writeFile(lock, 'other generator');
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(/locked/i);
+    expect(await readFile(lock, 'utf8')).toBe('other generator');
+    await expect(access(args.outDir)).rejects.toThrow();
+    expect(browser.contexts).toEqual([]);
+  });
+
+  it('publishes with no-replace semantics when another actor creates the target during rendering', async () => {
+    const args = await fixtureArgs('publish-race');
+    const browser = new FakeBrowser();
+    const originalNewContext = browser.newContext.bind(browser);
+    browser.newContext = async (options: unknown) => {
+      const context = await originalNewContext(options);
+      context.page.onPdf = async () => mkdir(args.outDir);
+      return context;
+    };
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(/new directory|already exists/i);
+    expect(await readdir(args.outDir)).toEqual([]);
+    await expect(access(`${args.outDir}.lock`)).rejects.toThrow();
+    expect((await readdir(dirname(args.outDir))).some((name) => name.startsWith(`.${basename(args.outDir)}.staging-`))).toBe(false);
+  });
+
+  it('does not unlink a foreign file that replaces its lock path during rendering', async () => {
+    const args = await fixtureArgs('lock-swap');
+    const browser = new FakeBrowser();
+    const originalNewContext = browser.newContext.bind(browser);
+    browser.newContext = async (options: unknown) => {
+      const context = await originalNewContext(options);
+      context.page.onPdf = async () => {
+        await unlink(`${args.outDir}.lock`);
+        await writeFile(`${args.outDir}.lock`, 'foreign lock');
+      };
+      return context;
+    };
+
+    await generateMonthlyCheatsheet(args, fakeDependencies(browser));
+
+    expect(await readFile(`${args.outDir}.lock`, 'utf8')).toBe('foreign lock');
+  });
+
+  it('derives the canonical revision diff when the verified envelope omits a claimed diff', async () => {
+    const args = await fixtureArgs('derived-diff');
+    const { previous, current } = changesFixture();
+    await writeFile(args.changes, `${JSON.stringify({ previous, current })}\n`);
+
+    const output = await generateMonthlyCheatsheet(args, fakeDependencies(new FakeBrowser()));
+
+    expect(output.manifest.changes).toEqual({
+      fromRevision: changesFixture().changes?.fromRevision,
+      toRevision: changesFixture().changes?.toRevision,
+      dedupeKey: changesFixture().changes?.dedupeKey,
+    });
+  });
+
+  it.each([
+    ['noncanonical fact id', (envelope: VerifiedChangesFixture) => ({
+      ...envelope,
+      changes: { ...envelope.changes!, priceDrops: [{ ...envelope.changes!.priceDrops[0], id: 'fabricated' }] },
+    })],
+    ['duplicate fact', (envelope: VerifiedChangesFixture) => ({
+      ...envelope,
+      changes: { ...envelope.changes!, priceDrops: [envelope.changes!.priceDrops[0], envelope.changes!.priceDrops[0]] },
+    })],
+    ['fabricated route', (envelope: VerifiedChangesFixture) => ({
+      ...envelope,
+      changes: { ...envelope.changes!, priceDrops: [{ ...envelope.changes!.priceDrops[0], routeId: 'openrouter:invented' }] },
+    })],
+    ['non-decreasing prior price', (envelope: VerifiedChangesFixture) => ({
+      ...envelope,
+      previous: {
+        ...envelope.previous,
+        priceChecks: [{ ...envelope.previous.priceChecks[0], inputUsdPerMillion: 1, outputUsdPerMillion: 2 }],
+      },
+    })],
+    ['current route values that differ from the benchmark', (envelope: VerifiedChangesFixture) => ({
+      ...envelope,
+      current: {
+        ...envelope.current,
+        priceChecks: [{ ...envelope.current.priceChecks[0], inputUsdPerMillion: 0.5 }],
+      },
+    })],
+  ] as const)('rejects a %s in a purported verified revision envelope', async (_label, mutate) => {
+    const args = await fixtureArgs(`forged-${_label.replaceAll(' ', '-')}`);
+    await writeFile(args.changes, `${JSON.stringify(mutate(changesFixture()))}\n`);
+    const browser = new FakeBrowser();
+
+    await expect(generateMonthlyCheatsheet(args, fakeDependencies(browser))).rejects.toThrow(/canonical|current snapshot|unique/i);
     await expect(access(args.outDir)).rejects.toThrow();
     expect(browser.contexts).toEqual([]);
   });

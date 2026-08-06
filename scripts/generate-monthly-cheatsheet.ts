@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, parse, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateNormalizedSourceBatch, type BenchmarkRevision } from '../src/benchmarks/contracts';
 import { validateCatalogResponse } from '../src/catalog/validation';
@@ -15,12 +15,18 @@ import {
   type FrozenBenchmarkSnapshot,
 } from '../src/newsletter/cheatsheet';
 import type { CatalogResponse } from '../src/catalog/contracts';
-import type { RevisionChanges } from '../src/newsletter/revision-diff';
+import {
+  diffPublishedRevisions,
+  type PublishedRevisionPriceCheck,
+  type PublishedRevisionSnapshot,
+  type RevisionChanges,
+} from '../src/newsletter/revision-diff';
 
 export interface GenerateMonthlyCheatsheetArgs {
   readonly benchmarks: string;
   readonly catalog: string;
   readonly changes: string;
+  readonly artifactRoot?: string;
   readonly outDir: string;
   readonly shareImage?: boolean;
 }
@@ -122,6 +128,12 @@ function requireNullableRate(value: unknown, label: string): number | null {
   return value;
 }
 
+function assertOnlyKeys(record: Record<string, unknown>, keys: readonly string[], label: string): void {
+  const allowed = new Set(keys);
+  const unknown = Object.keys(record).find((key) => !allowed.has(key));
+  if (unknown) fail(`${label}.${unknown} is not allowed`);
+}
+
 async function readLocalJson(path: string, label: string): Promise<unknown> {
   if (typeof path !== 'string' || path.trim().length === 0 || path.includes('://')) {
     fail(`${label} must be an explicit local JSON path`);
@@ -181,8 +193,10 @@ function parseBenchmarkSnapshot(value: unknown): FrozenBenchmarkSnapshot {
 
 function parseChanges(value: unknown): RevisionChanges {
   const record = asRecord(value, 'changes');
+  assertOnlyKeys(record, ['fromRevision', 'toRevision', 'dedupeKey', 'newModels', 'priceDrops'], 'changes');
   const newModels = asArray(record.newModels, 'changes.newModels').map((value, index) => {
     const fact = asRecord(value, `changes.newModels[${index}]`);
+    assertOnlyKeys(fact, ['id', 'modelKey'], `changes.newModels[${index}]`);
     return {
       id: requireString(fact.id, `changes.newModels[${index}].id`),
       modelKey: requireString(fact.modelKey, `changes.newModels[${index}].modelKey`),
@@ -190,6 +204,11 @@ function parseChanges(value: unknown): RevisionChanges {
   });
   const priceDrops = asArray(record.priceDrops, 'changes.priceDrops').map((value, index) => {
     const fact = asRecord(value, `changes.priceDrops[${index}]`);
+    assertOnlyKeys(fact, [
+      'id', 'modelKey', 'providerId', 'routeId',
+      'previousInputUsdPerMillion', 'currentInputUsdPerMillion',
+      'previousOutputUsdPerMillion', 'currentOutputUsdPerMillion',
+    ], `changes.priceDrops[${index}]`);
     return {
       id: requireString(fact.id, `changes.priceDrops[${index}].id`),
       modelKey: requireString(fact.modelKey, `changes.priceDrops[${index}].modelKey`),
@@ -201,31 +220,138 @@ function parseChanges(value: unknown): RevisionChanges {
       currentOutputUsdPerMillion: requireNullableRate(fact.currentOutputUsdPerMillion, `changes.priceDrops[${index}].currentOutputUsdPerMillion`),
     };
   });
-  return {
+  const changes = {
     fromRevision: requireString(record.fromRevision, 'changes.fromRevision'),
     toRevision: requireString(record.toRevision, 'changes.toRevision'),
     dedupeKey: requireString(record.dedupeKey, 'changes.dedupeKey'),
     newModels,
     priceDrops,
   };
+  const factIds = [...newModels.map((fact) => fact.id), ...priceDrops.map((fact) => fact.id)];
+  if (new Set(factIds).size !== factIds.length) fail('changes facts must have unique ids');
+  const routeIdentities = priceDrops.map((fact) => JSON.stringify([fact.modelKey, fact.providerId, fact.routeId]));
+  if (new Set(routeIdentities).size !== routeIdentities.length) fail('changes price-drop routes must be unique');
+  return changes;
+}
+
+function parsePublishedRevisionSnapshot(value: unknown, label: string): PublishedRevisionSnapshot {
+  const record = asRecord(value, label);
+  assertOnlyKeys(record, ['revision', 'models', 'priceChecks'], label);
+  const models = asArray(record.models, `${label}.models`).map((value, index) => {
+    const model = asRecord(value, `${label}.models[${index}]`);
+    assertOnlyKeys(model, ['modelKey'], `${label}.models[${index}]`);
+    return { modelKey: requireString(model.modelKey, `${label}.models[${index}].modelKey`) };
+  });
+  const modelKeys = models.map((model) => model.modelKey);
+  if (new Set(modelKeys).size !== modelKeys.length) fail(`${label}.models must be unique`);
+
+  const priceChecks = asArray(record.priceChecks, `${label}.priceChecks`).map((value, index) => {
+    const price = asRecord(value, `${label}.priceChecks[${index}]`);
+    assertOnlyKeys(price, [
+      'modelKey', 'providerId', 'routeId', 'verificationStatus',
+      'inputUsdPerMillion', 'outputUsdPerMillion',
+    ], `${label}.priceChecks[${index}]`);
+    const verificationStatus = requireString(
+      price.verificationStatus,
+      `${label}.priceChecks[${index}].verificationStatus`,
+    );
+    if (!['primary', 'corroborating', 'conflict'].includes(verificationStatus)) {
+      fail(`${label}.priceChecks[${index}].verificationStatus is invalid`);
+    }
+    const parsed: PublishedRevisionPriceCheck = {
+      modelKey: requireString(price.modelKey, `${label}.priceChecks[${index}].modelKey`),
+      providerId: requireString(price.providerId, `${label}.priceChecks[${index}].providerId`),
+      routeId: requireString(price.routeId, `${label}.priceChecks[${index}].routeId`),
+      verificationStatus: verificationStatus as PublishedRevisionPriceCheck['verificationStatus'],
+      inputUsdPerMillion: requireNullableRate(price.inputUsdPerMillion ?? null, `${label}.priceChecks[${index}].inputUsdPerMillion`),
+      outputUsdPerMillion: requireNullableRate(price.outputUsdPerMillion ?? null, `${label}.priceChecks[${index}].outputUsdPerMillion`),
+    };
+    if (!modelKeys.includes(parsed.modelKey)) fail(`${label}.priceChecks[${index}].modelKey must refer to a model`);
+    return parsed;
+  });
+  const priceIdentities = priceChecks.map((price) => JSON.stringify([
+    price.modelKey, price.providerId, price.routeId, price.verificationStatus,
+  ]));
+  if (new Set(priceIdentities).size !== priceIdentities.length) fail(`${label}.priceChecks must be unique`);
+  return {
+    revision: requireString(record.revision, `${label}.revision`),
+    models,
+    priceChecks,
+  };
+}
+
+function compareText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function canonicalPublishedSnapshot(snapshot: PublishedRevisionSnapshot): string {
+  const models = snapshot.models.map((model) => model.modelKey).slice().sort(compareText);
+  const prices = snapshot.priceChecks.map((price) => [
+    price.modelKey,
+    price.providerId,
+    price.routeId,
+    price.verificationStatus,
+    price.inputUsdPerMillion ?? null,
+    price.outputUsdPerMillion ?? null,
+  ]).slice().sort((left, right) => compareText(JSON.stringify(left), JSON.stringify(right)));
+  return JSON.stringify({ revision: snapshot.revision, models, prices });
+}
+
+function expectedCurrentRevision(snapshot: FrozenBenchmarkSnapshot): PublishedRevisionSnapshot {
+  return {
+    revision: snapshot.revision.revision,
+    models: snapshot.models.map((model) => ({ modelKey: model.modelKey })),
+    priceChecks: snapshot.priceChecks
+      .filter((price) => price.verificationStatus === 'primary')
+      .map((price) => ({
+        modelKey: price.modelKey,
+        providerId: price.providerId,
+        routeId: price.routeId,
+        verificationStatus: price.verificationStatus,
+        inputUsdPerMillion: price.inputUsdPerMillion,
+        outputUsdPerMillion: price.outputUsdPerMillion,
+      })),
+  };
+}
+
+function parseVerifiedChanges(value: unknown, snapshot: FrozenBenchmarkSnapshot): RevisionChanges {
+  const envelope = asRecord(value, 'changes envelope');
+  if (!Object.hasOwn(envelope, 'previous') || !Object.hasOwn(envelope, 'current')) {
+    fail('changes must contain verified previous and current published revision snapshots');
+  }
+  assertOnlyKeys(envelope, ['previous', 'current', 'changes'], 'changes envelope');
+  const previous = parsePublishedRevisionSnapshot(envelope.previous, 'changes envelope.previous');
+  const current = parsePublishedRevisionSnapshot(envelope.current, 'changes envelope.current');
+  if (previous.revision === current.revision) fail('changes envelope revisions must be different');
+  if (current.revision !== snapshot.revision.revision) {
+    fail('changes envelope current revision must target the benchmark revision');
+  }
+  if (canonicalPublishedSnapshot(current) !== canonicalPublishedSnapshot(expectedCurrentRevision(snapshot))) {
+    fail('changes envelope current snapshot must exactly match current benchmark models and primary routes');
+  }
+
+  const canonical = diffPublishedRevisions(previous, current);
+  if (Object.hasOwn(envelope, 'changes')) {
+    const claimed = parseChanges(envelope.changes);
+    if (JSON.stringify(claimed) !== JSON.stringify(canonical)) {
+      fail('changes envelope diff must be the canonical diff of its verified snapshots');
+    }
+  }
+  return canonical;
 }
 
 function assertRevisionRelationship(
   snapshot: FrozenBenchmarkSnapshot,
   catalog: CatalogResponse,
-  changes: RevisionChanges,
 ): void {
   if (snapshot.revision.catalogRevision !== catalog.revision) {
     fail('catalog revision must match the benchmark revision');
-  }
-  if (changes.toRevision !== snapshot.revision.revision) {
-    fail('changes revision must target the benchmark revision');
   }
 }
 
 async function absent(path: string): Promise<boolean> {
   try {
-    await stat(path);
+    await lstat(path);
     return false;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return true;
@@ -233,17 +359,59 @@ async function absent(path: string): Promise<boolean> {
   }
 }
 
-function outputLocation(outDir: string): { readonly output: string; readonly parent: string; readonly stagingPrefix: string } {
+function pathIsWithin(root: string, candidate: string): boolean {
+  const offset = relative(root, candidate);
+  return offset === '' || (offset !== '..' && !offset.startsWith(`..${sep}`) && !isAbsolute(offset));
+}
+
+async function assertNoSymbolicLinkAncestors(path: string): Promise<void> {
+  const absolute = resolve(path);
+  const pathRoot = parse(absolute).root;
+  const components = relative(pathRoot, absolute).split(sep).filter(Boolean);
+  let cursor = pathRoot;
+  for (const component of components) {
+    cursor = resolve(cursor, component);
+    try {
+      const metadata = await lstat(cursor);
+      if (metadata.isSymbolicLink()) fail(`refusing symbolic link traversal at ${cursor}`);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+  }
+}
+
+async function outputLocation(
+  outDir: string,
+  configuredArtifactRoot: string | undefined,
+): Promise<{ readonly output: string; readonly parent: string; readonly stagingPrefix: string; readonly lockPath: string }> {
   if (typeof outDir !== 'string' || outDir.trim().length === 0) fail('outDir must be a new local directory');
+  if (outDir.includes('://')) fail('outDir must be a new local directory');
+  const workspaceRoot = resolve(process.cwd());
+  const defaultArtifactRoot = resolve(workspaceRoot, 'newsletter-artifacts');
+  const artifactRoot = resolve(configuredArtifactRoot ?? defaultArtifactRoot);
   const output = resolve(outDir);
-  const sourceDirectory = resolve(process.cwd(), 'src');
-  if (output === sourceDirectory || output.startsWith(`${sourceDirectory}/`)) {
-    fail('outDir must not be inside the source directory');
+  if (pathIsWithin(workspaceRoot, artifactRoot) && !pathIsWithin(defaultArtifactRoot, artifactRoot)) {
+    fail('outDir and artifact root must not be inside the source directory');
+  }
+  if (!pathIsWithin(artifactRoot, output) || artifactRoot === output) {
+    fail('outDir must be beneath the configured artifact root');
   }
   const parent = dirname(output);
   const name = basename(output);
   if (name === '.' || name === '..' || name.length === 0) fail('outDir must name a new directory');
-  return { output, parent, stagingPrefix: `.${name}.staging-` };
+  await assertNoSymbolicLinkAncestors(artifactRoot);
+  await mkdir(artifactRoot, { recursive: true });
+  await assertNoSymbolicLinkAncestors(artifactRoot);
+  if (await realpath(artifactRoot) !== artifactRoot) fail('artifact root must use its canonical path');
+  await assertNoSymbolicLinkAncestors(parent);
+  await mkdir(parent, { recursive: true });
+  await assertNoSymbolicLinkAncestors(parent);
+  if (!pathIsWithin(artifactRoot, await realpath(parent))) {
+    fail('outDir parent must resolve beneath the configured artifact root');
+  }
+  await assertNoSymbolicLinkAncestors(output);
+  return { output, parent, stagingPrefix: `.${name}.staging-`, lockPath: `${output}.lock` };
 }
 
 function validatedStagingDirectory(staging: string, parent: string, prefix: string): boolean {
@@ -297,7 +465,7 @@ function renderShareHtml(document: CheatsheetDocument): string {
   const leaders = document.categories
     .flatMap((category) => category.entries.slice(0, 1).map((entry) => `${category.label}: ${entry.name}`))
     .slice(0, 3);
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; script-src 'none'; base-uri 'none'; form-action 'none'"><style>
     * { box-sizing: border-box; } body { margin: 0; background: #101827; color: #f8fafc; font-family: Arial, sans-serif; }
     main { display: flex; flex-direction: column; height: 630px; justify-content: center; padding: 72px; width: 1200px; }
     p { color: #b9c6de; font-size: 25px; margin: 14px 0; } h1 { font-size: 64px; line-height: 1.05; margin: 0; max-width: 960px; }
@@ -327,10 +495,42 @@ function stableFiles(files: readonly GeneratedCheatsheetFile[]): readonly Genera
   return files.slice().sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
 }
 
+async function publishNoReplace(staging: string, output: string, names: readonly string[]): Promise<void> {
+  try {
+    await mkdir(output, { mode: 0o700 });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') fail('outDir must be a new directory and already exists');
+    throw error;
+  }
+
+  const moved: string[] = [];
+  try {
+    for (const name of names) {
+      await rename(resolve(staging, name), resolve(output, name));
+      moved.push(name);
+    }
+    await rmdir(staging);
+  } catch (error) {
+    for (const name of moved.slice().reverse()) {
+      try {
+        await rename(resolve(output, name), resolve(staging, name));
+      } catch {
+        // Keep the original publication error and never delete an unknown file.
+      }
+    }
+    try {
+      await rmdir(output);
+    } catch {
+      // A non-empty target may contain another actor's file; leave it intact.
+    }
+    throw error;
+  }
+}
+
 /**
- * Generates a fully local artifact bundle in a sibling staging directory and
- * commits it through one atomic rename. Browser pages, contexts, and the
- * browser itself are closed on both success and failure.
+ * Generates a fully local artifact bundle in a sibling staging directory.
+ * An exclusive target lock and exclusive final-directory creation prevent
+ * clobbering; the manifest is moved last as the completion marker.
  */
 export async function generateMonthlyCheatsheet(
   args: GenerateMonthlyCheatsheetArgs,
@@ -343,16 +543,23 @@ export async function generateMonthlyCheatsheet(
   ]);
   const snapshot = parseBenchmarkSnapshot(rawSnapshot);
   const catalog = validateCatalogResponse(rawCatalog);
-  const changes = parseChanges(rawChanges);
-  assertRevisionRelationship(snapshot, catalog, changes);
+  const changes = parseVerifiedChanges(rawChanges, snapshot);
+  assertRevisionRelationship(snapshot, catalog);
   const document = buildCheatsheet(snapshot, catalog);
-  const { output, parent, stagingPrefix } = outputLocation(args.outDir);
-  if (!await absent(output)) fail('outDir must be a new directory');
-  await mkdir(parent, { recursive: true });
-  if (!await absent(output)) fail('outDir must be a new directory');
+  const { output, parent, stagingPrefix, lockPath } = await outputLocation(args.outDir, args.artifactRoot);
+  let lock: Awaited<ReturnType<typeof open>>;
+  try {
+    lock = await open(lockPath, 'wx', 0o600);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') fail('outDir is locked by another generator');
+    throw error;
+  }
+  const ownedLockIdentity = await lock.stat();
 
   let staging: string | undefined;
   try {
+    if (!await absent(output)) fail('outDir must be a new directory');
+    await assertNoSymbolicLinkAncestors(output);
     staging = await mkdtemp(resolve(parent, stagingPrefix));
     if (!validatedStagingDirectory(staging, parent, stagingPrefix)) fail('refusing an invalid staging directory');
     const generated: GeneratedCheatsheetFile[] = [];
@@ -385,19 +592,35 @@ export async function generateMonthlyCheatsheet(
       files: stableFiles(generated),
     };
     const manifestFile = await writeArtifact(staging, ARTIFACT_NAMES.manifest, `${JSON.stringify(manifest, null, 2)}\n`);
-    await rename(staging, output);
+    await assertNoSymbolicLinkAncestors(output);
+    await publishNoReplace(staging, output, [...generated.map((file) => file.name), manifestFile.name]);
     staging = undefined;
     return { document, manifest, files: stableFiles([...generated, manifestFile]) };
   } finally {
-    if (staging && validatedStagingDirectory(staging, parent, stagingPrefix)) {
-      await rm(staging, { force: true, recursive: true });
+    try {
+      if (staging && validatedStagingDirectory(staging, parent, stagingPrefix)) {
+        await rm(staging, { force: true, recursive: true });
+      }
+    } finally {
+      try {
+        await lock.close();
+      } finally {
+        try {
+          const currentLockIdentity = await lstat(lockPath);
+          if (currentLockIdentity.dev === ownedLockIdentity.dev && currentLockIdentity.ino === ownedLockIdentity.ino) {
+            await unlink(lockPath);
+          }
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }
     }
   }
 }
 
 /** Parses the intentionally small local-only CLI surface. */
 export function parseGenerateMonthlyCheatsheetArgs(argv: readonly string[]): GenerateMonthlyCheatsheetArgs {
-  const values: Partial<Record<'benchmarks' | 'catalog' | 'changes' | 'outDir', string>> = {};
+  const values: Partial<Record<'benchmarks' | 'catalog' | 'changes' | 'artifactRoot' | 'outDir', string>> = {};
   let shareImage = false;
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -412,9 +635,11 @@ export function parseGenerateMonthlyCheatsheetArgs(argv: readonly string[]): Gen
         ? 'catalog'
         : argument === '--changes'
           ? 'changes'
-          : argument === '--out-dir'
-            ? 'outDir'
-            : null;
+          : argument === '--artifact-root'
+            ? 'artifactRoot'
+            : argument === '--out-dir'
+              ? 'outDir'
+              : null;
     if (key === null) fail(`unknown argument: ${argument}`);
     const value = argv[index + 1];
     if (!value || value.startsWith('--')) fail(`${argument} must be supplied once with a value`);
@@ -429,6 +654,7 @@ export function parseGenerateMonthlyCheatsheetArgs(argv: readonly string[]): Gen
     benchmarks: values.benchmarks,
     catalog: values.catalog,
     changes: values.changes,
+    artifactRoot: values.artifactRoot,
     outDir: values.outDir,
     shareImage,
   };

@@ -126,7 +126,7 @@ function revision(): BenchmarkRevision {
 function benchmarkFixture(overrides: Partial<FrozenSnapshot> = {}): FrozenSnapshot {
   const alpha = model();
   const beta = model({
-    modelKey: 'fixture:beta', slug: 'beta', name: '=unsafe formula', sourceModelId: 'beta', contextWindowTokens: null,
+    modelKey: 'fixture:beta', slug: 'beta', name: '=unsafe formula', sourceModelId: 'beta', contextWindowTokens: 32_768,
   });
   const estimated = model({
     modelKey: 'fixture:estimated', slug: 'estimated', name: 'Estimated', sourceModelId: 'estimated', evidenceStatus: 'estimated',
@@ -136,8 +136,13 @@ function benchmarkFixture(overrides: Partial<FrozenSnapshot> = {}): FrozenSnapsh
     sources: [
       source(),
       source({
+        sourceId: 'lmarena', artifactId: 'lmarena-fixture', sourceUrl: 'https://example.test/lmarena',
+        licenseId: 'CC-BY-4.0', attributionText: 'Fixture LMArena evidence', snapshotKey: 'fixtures/lmarena.json',
+      }),
+      source({
         sourceId: 'openrouter', artifactId: 'catalog:catalog_fixture', sourceUrl: 'https://example.test/catalog',
         licenseId: 'OpenRouter-ToS', attributionText: 'Fixture catalog evidence', snapshotKey: 'fixtures/catalog.json',
+        upstreamRevision: 'catalog_fixture', contentHash: SHA, originalContentHash: SHA,
       }),
     ],
     models: [alpha, beta, alpha, estimated],
@@ -150,6 +155,11 @@ function benchmarkFixture(overrides: Partial<FrozenSnapshot> = {}): FrozenSnapsh
       metric({ metricKey: 'benchlm:category:reasoning', category: 'reasoning', value: 86 }),
       metric({ metricKey: 'benchlm:category:knowledge', category: 'knowledge', value: 85 }),
       metric({ metricKey: 'benchlm:category:multimodal', category: 'multimodal', value: 84 }),
+      metric({
+        metricKey: 'lmarena:vision_style_control:overall', category: 'multimodal', value: 1234, rank: 7,
+        unit: 'arena_score', sourceId: 'lmarena', sourceModelId: 'alpha-lmarena',
+        sourceArtifactId: 'lmarena-fixture', methodology: 'bradley_terry',
+      }),
     ],
     priceChecks: [price()],
     comparisonPairs: [] as BenchmarkComparisonPair[],
@@ -164,7 +174,18 @@ function catalogFixture(overrides: Partial<CatalogResponse> = {}): CatalogRespon
     freshness: { status: 'fresh', checkedAt: '2026-08-01T00:00:00.000Z' },
     plans: [],
     modelOffers: [],
-    provenance: [],
+    provenance: [{
+      id: 'openrouter-models',
+      providerId: 'openrouter',
+      sourceUrl: 'https://example.test/catalog',
+      observedAt: '2026-08-01T00:00:00.000Z',
+      sourceKind: 'official_json',
+      confidence: 'official',
+      snapshotKey: 'fixtures/catalog.json',
+      contentHash: SHA,
+      parserVersion: 'fixture-v1',
+      reviewStatus: 'verified',
+    }],
     ...overrides,
   };
 }
@@ -202,6 +223,14 @@ describe('monthly cheatsheet facts', () => {
       'multimodal-vision-documents',
       'llm-knowledge',
     ]);
+    expect(document.categories.map((category) => category.status)).toEqual([
+      'validated-ranking', 'validated-ranking', 'validated-ranking',
+      'evidence-lens', 'evidence-lens', 'evidence-lens',
+    ]);
+    expect(document.categories.map((category) => category.positionLabel)).toEqual([
+      'TokenBench category rank', 'TokenBench category rank', 'TokenBench category rank',
+      'Evidence position', 'Evidence position', 'Evidence position',
+    ]);
     expect(document.categories.every((category) => category.entries.length <= 10)).toBe(true);
     expect(document.categories.flatMap((category) => category.entries).every((entry) => entry.evidenceStatus === 'supported')).toBe(true);
     expect(document.categories[0].entries).toEqual(expect.arrayContaining([expect.objectContaining({
@@ -214,7 +243,56 @@ describe('monthly cheatsheet facts', () => {
     })]));
     expect(document.categories[0].entries.filter((entry) => entry.modelKey === 'fixture:alpha')).toHaveLength(1);
     expect(document.categories[0].entries.find((entry) => entry.modelKey === 'fixture:beta'))
-      .toMatchObject({ inputUsdPerMillion: null, outputUsdPerMillion: null, contextWindowTokens: null, routeId: null });
+      .toMatchObject({ inputUsdPerMillion: null, outputUsdPerMillion: null, contextWindowTokens: 32_768, routeId: null });
+  });
+
+  it('preserves every multimodal evidence lens and keeps source ranks separate from evidence positions', () => {
+    const document = buildCheatsheet(benchmarkFixture(), catalogFixture());
+    const multimodal = document.categories.find((category) => category.key === 'multimodal-vision-documents');
+    const alpha = multimodal?.entries.find((entry) => entry.modelKey === 'fixture:alpha');
+
+    expect(multimodal).toMatchObject({ status: 'evidence-lens', positionLabel: 'Evidence position' });
+    expect(alpha?.lenses).toEqual([
+      expect.objectContaining({
+        metricKey: 'benchlm:category:multimodal', score: 84, methodologyLabel: 'BenchLM raw composite', sourceRank: null,
+      }),
+      expect.objectContaining({
+        metricKey: 'lmarena:vision_style_control:overall', score: 1234,
+        methodologyLabel: 'LMArena Bradley-Terry', sourceRank: 7,
+      }),
+    ]);
+  });
+
+  it.each([
+    ['benchmark hash', benchmarkFixture({ revision: { ...revision(), openrouterContentHash: `sha256:${'b'.repeat(64)}` } }), catalogFixture()],
+    ['upstream revision', benchmarkFixture({
+      sources: benchmarkFixture().sources.map((record) => record.sourceId === 'openrouter'
+        ? { ...record, upstreamRevision: 'stale_catalog' }
+        : record),
+    }), catalogFixture()],
+    ['source artifact', benchmarkFixture({
+      sources: benchmarkFixture().sources.map((record) => record.sourceId === 'openrouter'
+        ? { ...record, artifactId: 'catalog:stale_catalog' }
+        : record),
+    }), catalogFixture()],
+    ['snapshot key', benchmarkFixture({
+      sources: benchmarkFixture().sources.map((record) => record.sourceId === 'openrouter'
+        ? { ...record, snapshotKey: 'fixtures/stale-catalog.json' }
+        : record),
+    }), catalogFixture()],
+    ['freshness', benchmarkFixture(), catalogFixture({
+      freshness: { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue' },
+    })],
+  ])('fails closed when the OpenRouter %s is not bound to the catalog revision', (_label, snapshot, catalog) => {
+    expect(() => buildCheatsheet(snapshot, catalog)).toThrow(/OpenRouter.*(?:hash|revision|snapshot|fresh)/i);
+  });
+
+  it('fails closed when an OpenRouter price row points at a stale source artifact', () => {
+    const snapshot = benchmarkFixture({
+      priceChecks: [price({ sourceArtifactId: 'catalog:stale_catalog' })],
+    });
+
+    expect(() => buildCheatsheet(snapshot, catalogFixture())).toThrow(/OpenRouter price.*artifact/i);
   });
 
   it('renders factual CSV and accessible HTML without spreadsheet or markup injection', () => {
@@ -229,20 +307,49 @@ describe('monthly cheatsheet facts', () => {
     expect(html).toContain('Alpha &lt;trusted&gt;');
     expect(html).not.toContain('Alpha <trusted>');
     expect(html).toContain('@media print');
+    expect(html).toContain('Content-Security-Policy');
+    expect(html).toContain("default-src 'none'");
+    expect(html).toContain('Evidence position');
+    expect(html).toContain('Evidence lens - not a validated TokenBench category rank');
+    expect(html).toContain('Validated TokenBench category ranking');
+    expect(html).toContain('lmarena:vision_style_control:overall');
+    expect(html).toContain('source rank 7');
+    expect(csv.split('\r\n')[0]).toContain('category_status');
+    expect(csv.split('\r\n')[0]).toContain('position_label');
+    expect(csv).toContain('evidence-lens');
+    expect(csv).toContain('lmarena:vision_style_control:overall');
     expect(html).not.toMatch(/https?:\/\//);
+    expect(html).not.toMatch(/[—–]/u);
+  });
+
+  it('keeps frozen revision, model, price, and context facts equal across CSV and HTML output', () => {
+    const document = buildCheatsheet(benchmarkFixture(), catalogFixture());
+    const csv = renderCheatsheetCsv(document);
+    const html = renderCheatsheetHtml(document);
+
+    for (const output of [csv, html]) {
+      expect(output).toContain(document.revision);
+      expect(output).toContain('fixture:alpha');
+      expect(output).toContain('1.25');
+      expect(output).toContain('5.5');
+    }
+    expect(csv).toContain('128000');
+    expect(html).toContain('128,000');
   });
 
   it('renders newsletter facts and stable subject previews from only the document and changes', () => {
     const document = buildCheatsheet(benchmarkFixture(), catalogFixture());
     const changes = changesFixture();
 
-    expect(renderNewsletterHtml(document, changes)).toContain('benchmark_fixture');
-    expect(renderNewsletterHtml(document, changes)).toContain('1 new model');
-    expect(renderNewsletterHtml(document, changes)).toContain('1 verified price drop');
+    const newsletter = renderNewsletterHtml(document, changes);
+    expect(newsletter).toContain('benchmark_fixture');
+    expect(newsletter).toContain('1 new model');
+    expect(newsletter).toContain('1 verified price drop');
+    expect(newsletter).toContain('Content-Security-Policy');
     expect(subjectPreviewSet(document, changes)).toEqual([
       {
         subject: 'TokenBench August 2026: 1 new model and 1 verified price drop',
-        previewText: 'Frozen benchmark revision benchmark_fixture with current category ranks, per-1M rates, and context windows.',
+        previewText: 'Frozen benchmark revision benchmark_fixture with validated ranks, evidence lenses, per-1M rates, and context windows.',
       },
       {
         subject: 'TokenBench August 2026 monthly model cheatsheet',

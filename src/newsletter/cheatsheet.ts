@@ -2,6 +2,8 @@ import type { BenchmarkProjectionSnapshot } from '../benchmarks/api-projections'
 import {
   isCanonicalIsoTimestamp,
   type BenchmarkMetric,
+  type BenchmarkModel,
+  type BenchmarkPriceCheck,
   type BenchmarkRevision,
 } from '../benchmarks/contracts';
 import { DECISION_PICK_CATEGORIES } from '../benchmarks/decision-picks';
@@ -13,6 +15,15 @@ import type { RevisionChanges } from './revision-diff';
 
 export type FrozenBenchmarkSnapshot = BenchmarkProjectionSnapshot & { readonly revision: BenchmarkRevision };
 
+export interface CheatsheetEvidenceLens {
+  readonly metricKey: string;
+  readonly score: number;
+  readonly scoreUnit: string;
+  readonly methodology: BenchmarkMetric['methodology'];
+  readonly methodologyLabel: string;
+  readonly sourceRank: number | null;
+}
+
 export interface CheatsheetEntry {
   readonly rank: number;
   readonly modelKey: string;
@@ -23,6 +34,7 @@ export interface CheatsheetEntry {
   readonly methodology: BenchmarkMetric['methodology'];
   readonly methodologyLabel: string;
   readonly sourceRank: number | null;
+  readonly lenses: readonly CheatsheetEvidenceLens[];
   readonly evidenceStatus: 'supported';
   readonly routeId: string | null;
   readonly inputUsdPerMillion: number | null;
@@ -33,6 +45,8 @@ export interface CheatsheetEntry {
 export interface CheatsheetCategory {
   readonly key: LeaderboardKey;
   readonly label: string;
+  readonly status: 'validated-ranking' | 'evidence-lens';
+  readonly positionLabel: 'TokenBench category rank' | 'Evidence position';
   readonly methodLabel: string;
   readonly entries: readonly CheatsheetEntry[];
 }
@@ -69,7 +83,7 @@ function isNonNegativeFinite(value: number | null): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
-function assertFrozenInputs(snapshot: FrozenBenchmarkSnapshot, catalog: CatalogResponse): void {
+function assertFrozenInputs(snapshot: FrozenBenchmarkSnapshot, catalog: CatalogResponse): readonly BenchmarkPriceCheck[] {
   if (!snapshot || !snapshot.revision || typeof snapshot.revision.revision !== 'string' || snapshot.revision.revision.length === 0) {
     throw new TypeError('benchmark snapshot must include a revision');
   }
@@ -82,6 +96,45 @@ function assertFrozenInputs(snapshot: FrozenBenchmarkSnapshot, catalog: CatalogR
   if (!catalog || typeof catalog.revision !== 'string' || catalog.revision !== snapshot.revision.catalogRevision) {
     throw new RangeError('catalog revision must match the benchmark revision');
   }
+  if (catalog.freshness.status !== 'fresh') {
+    throw new RangeError('OpenRouter catalog must be fresh before publishing prices');
+  }
+
+  const catalogSources = catalog.provenance.filter((source) => source.id === 'openrouter-models'
+    && source.providerId === 'openrouter');
+  if (catalogSources.length !== 1) {
+    throw new RangeError('OpenRouter catalog provenance must contain one verified source');
+  }
+  const [catalogSource] = catalogSources;
+  if (catalogSource.reviewStatus !== 'verified'
+    || !catalogSource.snapshotKey
+    || catalogSource.contentHash !== snapshot.revision.openrouterContentHash) {
+    throw new RangeError('OpenRouter catalog hash and verified snapshot must match the benchmark revision');
+  }
+
+  const benchmarkSources = snapshot.sources.filter((source) => source.sourceId === 'openrouter');
+  if (benchmarkSources.length !== 1) {
+    throw new RangeError('OpenRouter benchmark provenance must contain one source');
+  }
+  const [benchmarkSource] = benchmarkSources;
+  const expectedArtifactId = `catalog:${catalog.revision}`;
+  if (benchmarkSource.artifactId !== expectedArtifactId
+    || benchmarkSource.upstreamRevision !== catalog.revision) {
+    throw new RangeError('OpenRouter source artifact and upstream revision must match the catalog revision');
+  }
+  if (benchmarkSource.contentHash !== snapshot.revision.openrouterContentHash) {
+    throw new RangeError('OpenRouter source content hash must match the benchmark revision');
+  }
+  if (benchmarkSource.snapshotKey !== catalogSource.snapshotKey) {
+    throw new RangeError('OpenRouter source snapshot key must match catalog provenance');
+  }
+
+  const openRouterPrices = snapshot.priceChecks.filter((price) => price.sourceId === 'openrouter');
+  if (openRouterPrices.some((price) => price.providerId !== 'openrouter'
+    || price.sourceArtifactId !== expectedArtifactId)) {
+    throw new RangeError('OpenRouter price source artifact must match the catalog revision');
+  }
+  return openRouterPrices;
 }
 
 function methodologyLabel(methodology: BenchmarkMetric['methodology']): string {
@@ -89,7 +142,7 @@ function methodologyLabel(methodology: BenchmarkMetric['methodology']): string {
     case 'benchlm_raw_composite':
       return 'BenchLM raw composite';
     case 'bradley_terry':
-      return 'LMArena Bradley–Terry';
+      return 'LMArena Bradley-Terry';
     case 'ips':
       return 'IPS estimate';
   }
@@ -109,16 +162,37 @@ function candidateEntry(entry: LeaderboardEntry): entry is LeaderboardEntry & { 
     && Number.isFinite(entry.metric.value);
 }
 
-function priceFacts(snapshot: FrozenBenchmarkSnapshot, modelKey: string): Pick<CheatsheetEntry,
+function evidenceLenses(entry: LeaderboardEntry & { readonly metric: BenchmarkMetric }): readonly CheatsheetEvidenceLens[] {
+  const metrics = entry.metrics.length > 0 ? entry.metrics : [entry.metric];
+  const seen = new Set<string>();
+  return metrics.flatMap((metric) => {
+    if (seen.has(metric.metricKey) || !Number.isFinite(metric.value)) return [];
+    seen.add(metric.metricKey);
+    return [{
+      metricKey: metric.metricKey,
+      score: metric.value,
+      scoreUnit: metric.unit,
+      methodology: metric.methodology,
+      methodologyLabel: methodologyLabel(metric.methodology),
+      sourceRank: metric.sourceId === 'lmarena' && isPositiveSafeInteger(metric.rank) ? metric.rank : null,
+    }];
+  });
+}
+
+function priceFacts(
+  prices: readonly BenchmarkPriceCheck[],
+  model: BenchmarkModel,
+): Pick<CheatsheetEntry,
   'routeId' | 'inputUsdPerMillion' | 'outputUsdPerMillion' | 'contextWindowTokens'
 > {
-  const hostedPrice = primaryHostedPriceForModel(modelKey, snapshot.priceChecks, 'outputHeavy');
+  const modelContext = isPositiveSafeInteger(model.contextWindowTokens) ? model.contextWindowTokens : null;
+  const hostedPrice = primaryHostedPriceForModel(model.modelKey, prices, 'outputHeavy');
   if (!hostedPrice) {
     return {
       routeId: null,
       inputUsdPerMillion: null,
       outputUsdPerMillion: null,
-      contextWindowTokens: null,
+      contextWindowTokens: modelContext,
     };
   }
 
@@ -130,26 +204,30 @@ function priceFacts(snapshot: FrozenBenchmarkSnapshot, modelKey: string): Pick<C
       routeId: null,
       inputUsdPerMillion: null,
       outputUsdPerMillion: null,
-      contextWindowTokens: null,
+      contextWindowTokens: modelContext,
     };
   }
   return {
     routeId: price.routeId,
     inputUsdPerMillion,
     outputUsdPerMillion,
-    contextWindowTokens: isPositiveSafeInteger(price.contextWindowTokens) ? price.contextWindowTokens : null,
+    contextWindowTokens: isPositiveSafeInteger(price.contextWindowTokens) ? price.contextWindowTokens : modelContext,
   };
 }
 
-function categoryEntries(snapshot: FrozenBenchmarkSnapshot, key: LeaderboardKey): readonly CheatsheetEntry[] {
-  const leaderboard = buildLeaderboard(key, snapshot.models, snapshot.metrics, snapshot.priceChecks, 'balanced');
+function categoryEntries(
+  snapshot: FrozenBenchmarkSnapshot,
+  prices: readonly BenchmarkPriceCheck[],
+  key: LeaderboardKey,
+): readonly CheatsheetEntry[] {
+  const leaderboard = buildLeaderboard(key, snapshot.models, snapshot.metrics, prices, 'balanced');
   const seenModels = new Set<string>();
   const entries: CheatsheetEntry[] = [];
 
   for (const entry of leaderboard.entries) {
     if (!candidateEntry(entry) || seenModels.has(entry.model.modelKey)) continue;
     seenModels.add(entry.model.modelKey);
-    const facts = priceFacts(snapshot, entry.model.modelKey);
+    const facts = priceFacts(prices, entry.model);
     entries.push({
       rank: entries.length + 1,
       modelKey: entry.model.modelKey,
@@ -160,6 +238,7 @@ function categoryEntries(snapshot: FrozenBenchmarkSnapshot, key: LeaderboardKey)
       methodology: entry.metric.methodology,
       methodologyLabel: methodologyLabel(entry.metric.methodology),
       sourceRank: entry.sourceRank,
+      lenses: evidenceLenses(entry),
       evidenceStatus: 'supported',
       ...facts,
     });
@@ -174,7 +253,7 @@ function categoryEntries(snapshot: FrozenBenchmarkSnapshot, key: LeaderboardKey)
  * order from the leaderboard derivation rather than recreating either rule.
  */
 export function buildCheatsheet(snapshot: FrozenBenchmarkSnapshot, catalog: CatalogResponse): CheatsheetDocument {
-  assertFrozenInputs(snapshot, catalog);
+  const verifiedOpenRouterPrices = assertFrozenInputs(snapshot, catalog);
   return {
     revision: snapshot.revision.revision,
     catalogRevision: snapshot.revision.catalogRevision,
@@ -183,8 +262,10 @@ export function buildCheatsheet(snapshot: FrozenBenchmarkSnapshot, catalog: Cata
     categories: DECISION_PICK_CATEGORIES.map((category) => ({
       key: category.key,
       label: category.label,
+      status: category.status === 'benchalign' ? 'validated-ranking' : 'evidence-lens',
+      positionLabel: category.status === 'benchalign' ? 'TokenBench category rank' : 'Evidence position',
       methodLabel: categoryMethodLabel(category.key),
-      entries: categoryEntries(snapshot, category.key),
+      entries: categoryEntries(snapshot, verifiedOpenRouterPrices, category.key),
     })),
   };
 }
@@ -207,28 +288,32 @@ export function csvCell(value: string | number | null): string {
 /** Renders one deterministic RFC-4180-compatible fact table. */
 export function renderCheatsheetCsv(document: CheatsheetDocument): string {
   const header = [
-    'revision', 'generated_at', 'category_key', 'category_label', 'category_rank',
-    'model_key', 'model_name', 'provider', 'score', 'score_unit', 'methodology',
+    'revision', 'generated_at', 'category_key', 'category_label', 'category_status', 'position_label', 'category_position',
+    'model_key', 'model_name', 'provider', 'metric_key', 'score', 'score_unit', 'methodology', 'source_rank',
     'route_id', 'input_usd_per_million', 'output_usd_per_million', 'context_window_tokens', 'evidence_status',
   ];
-  const rows = document.categories.flatMap((category) => category.entries.map((entry) => [
+  const rows = document.categories.flatMap((category) => category.entries.flatMap((entry) => entry.lenses.map((lens) => [
     document.revision,
     document.generatedAt,
     category.key,
     category.label,
+    category.status,
+    category.positionLabel,
     entry.rank,
     entry.modelKey,
     entry.name,
     entry.provider,
-    entry.score,
-    entry.scoreUnit,
-    entry.methodologyLabel,
+    lens.metricKey,
+    lens.score,
+    lens.scoreUnit,
+    lens.methodologyLabel,
+    lens.sourceRank,
     entry.routeId,
     entry.inputUsdPerMillion,
     entry.outputUsdPerMillion,
     entry.contextWindowTokens,
     entry.evidenceStatus,
-  ].map(csvCell).join(',')));
+  ].map(csvCell).join(','))));
   return [header.map(csvCell).join(','), ...rows].join('\r\n').concat('\r\n');
 }
 
@@ -249,29 +334,36 @@ function displayContext(value: number | null): string {
   return value === null ? 'Unavailable' : value.toString().replace(/\B(?=(\d{3})+(?!\d))/gu, ',');
 }
 
-function displayRank(entry: CheatsheetEntry): string {
-  return entry.sourceRank === null ? entry.rank.toString() : `${entry.rank} (source ${entry.sourceRank})`;
+function displayLenses(entry: CheatsheetEntry): string {
+  return entry.lenses.map((lens) => {
+    const sourceRank = lens.sourceRank === null ? '' : `; source rank ${lens.sourceRank}`;
+    return `<span class="lens"><code>${htmlEscape(lens.metricKey)}</code>: ${htmlEscape(lens.score)} ${htmlEscape(lens.scoreUnit)}<br><span class="method-detail">${htmlEscape(lens.methodologyLabel)}${htmlEscape(sourceRank)}</span></span>`;
+  }).join('<br>');
 }
 
 function categoryTable(category: CheatsheetCategory): string {
   const rows = category.entries.map((entry) => `<tr>
-    <td>${htmlEscape(displayRank(entry))}</td>
-    <th scope="row">${htmlEscape(entry.name)}<br><span class="provider">${htmlEscape(entry.provider)}</span></th>
-    <td>${htmlEscape(entry.score)} ${htmlEscape(entry.scoreUnit)}<br><span class="method-detail">${htmlEscape(entry.methodologyLabel)}</span></td>
+    <td>${htmlEscape(entry.rank)}</td>
+    <th scope="row" data-model-key="${htmlEscape(entry.modelKey)}">${htmlEscape(entry.name)}<br><span class="provider">${htmlEscape(entry.provider)}</span></th>
+    <td>${displayLenses(entry)}</td>
     <td>${htmlEscape(entry.routeId ?? 'Unavailable')}</td>
     <td>${htmlEscape(displayUsd(entry.inputUsdPerMillion))}</td>
     <td>${htmlEscape(displayUsd(entry.outputUsdPerMillion))}</td>
     <td>${htmlEscape(displayContext(entry.contextWindowTokens))}</td>
   </tr>`).join('\n');
-  const empty = '<tr><td colspan="7">Unavailable — no supported rows in this frozen revision.</td></tr>';
+  const empty = '<tr><td colspan="7">Unavailable - no supported rows in this frozen revision.</td></tr>';
   const headingId = `category-${category.key}`;
+  const statusLabel = category.status === 'validated-ranking'
+    ? 'Validated TokenBench category ranking'
+    : 'Evidence lens - not a validated TokenBench category rank';
   return `<section class="category" aria-labelledby="${htmlEscape(headingId)}">
   <h2 id="${htmlEscape(headingId)}">${htmlEscape(category.label)}</h2>
+  <p class="method"><strong>Status:</strong> ${htmlEscape(statusLabel)}</p>
   <p class="method"><strong>Method:</strong> ${htmlEscape(category.methodLabel)}</p>
   <table>
     <caption>${htmlEscape(category.label)}</caption>
     <thead><tr>
-      <th scope="col">Category rank</th>
+      <th scope="col">${htmlEscape(category.positionLabel)}</th>
       <th scope="col">Model / provider</th>
       <th scope="col">Score / method</th>
       <th scope="col">Pricing route</th>
@@ -291,7 +383,8 @@ export function renderCheatsheetHtml(document: CheatsheetDocument): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TokenBench monthly cheatsheet — ${htmlEscape(document.revision)}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'none'; connect-src 'none'; script-src 'none'; base-uri 'none'; form-action 'none'">
+<title>TokenBench monthly cheatsheet - ${htmlEscape(document.revision)}</title>
 <style>
   :root { color: #172033; background: #fff; font-family: Arial, sans-serif; }
   @page { size: A4; margin: 13mm; }
@@ -354,7 +447,7 @@ export function subjectPreviewSet(document: CheatsheetDocument, changes: Revisio
   return [
     {
       subject: `TokenBench ${month}: ${summary}`,
-      previewText: `Frozen benchmark revision ${document.revision} with current category ranks, per-1M rates, and context windows.`,
+      previewText: `Frozen benchmark revision ${document.revision} with validated ranks, evidence lenses, per-1M rates, and context windows.`,
     },
     {
       subject: `TokenBench ${month} monthly model cheatsheet`,
@@ -364,7 +457,7 @@ export function subjectPreviewSet(document: CheatsheetDocument, changes: Revisio
 }
 
 function changedModelItems(changes: RevisionChanges): string {
-  if (changes.newModels.length === 0) return '<li>Unavailable — no newly published model identities in this revision.</li>';
+  if (changes.newModels.length === 0) return '<li>Unavailable - no newly published model identities in this revision.</li>';
   return changes.newModels
     .slice()
     .sort((left, right) => compareText(left.modelKey, right.modelKey))
@@ -373,7 +466,7 @@ function changedModelItems(changes: RevisionChanges): string {
 }
 
 function priceDropItems(changes: RevisionChanges): string {
-  if (changes.priceDrops.length === 0) return '<li>Unavailable — no verified route price drops in this revision.</li>';
+  if (changes.priceDrops.length === 0) return '<li>Unavailable - no verified route price drops in this revision.</li>';
   return changes.priceDrops
     .slice()
     .sort((left, right) => compareText(left.modelKey, right.modelKey)
@@ -387,7 +480,7 @@ function priceDropItems(changes: RevisionChanges): string {
 export function renderNewsletterHtml(document: CheatsheetDocument, changes: RevisionChanges): string {
   return `<!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><title>TokenBench monthly cheatsheet</title></head>
+<head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; form-action 'none'"><title>TokenBench monthly cheatsheet</title></head>
 <body>
   <main>
     <h1>TokenBench monthly LLM API cost &amp; benchmark cheatsheet</h1>
