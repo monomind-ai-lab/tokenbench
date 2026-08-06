@@ -1,6 +1,7 @@
 export const BENCHMARK_SOURCE_IDS = ['benchlm', 'lmarena', 'litellm', 'openrouter'] as const;
 /** Bump when derived benchmark records or their public route semantics change. */
 export const BENCHMARK_DERIVATION_SCHEMA_VERSION = '1';
+export const BENCHMARK_SOURCE_TEXT_MAX_BYTES = 64 * 1024;
 
 export type BenchmarkSourceId = typeof BENCHMARK_SOURCE_IDS[number];
 export type EvidenceStatus = 'supported' | 'estimated' | 'source_only';
@@ -38,6 +39,10 @@ export function isCanonicalIsoTimestamp(value: unknown): value is string {
   return value.endsWith('.000Z')
     ? value === canonical
     : value === canonical.replace(/\.000Z$/, 'Z');
+}
+
+export function isSha256Digest(value: unknown): value is string {
+  return typeof value === 'string' && /^sha256:[a-f0-9]{64}$/.test(value);
 }
 
 /**
@@ -273,6 +278,13 @@ function requireString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string' || value.trim().length === 0) fail(`${name} must be a non-empty string`);
 }
 
+function requireBoundedSourceString(value: unknown, name: string): asserts value is string {
+  requireString(value, name);
+  if (new TextEncoder().encode(value).byteLength > BENCHMARK_SOURCE_TEXT_MAX_BYTES) {
+    fail(`${name} exceeds the source text byte limit`);
+  }
+}
+
 function requireBoolean(value: unknown, name: string): asserts value is boolean {
   if (typeof value !== 'boolean') fail(`${name} must be a boolean`);
 }
@@ -312,7 +324,7 @@ function requireNullableString(value: unknown, name: string): void {
 }
 
 function requireSha256(value: unknown, name: string): asserts value is string {
-  if (typeof value !== 'string' || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+  if (!isSha256Digest(value)) {
     fail(`${name} must be a sha256: digest`);
   }
 }
@@ -422,15 +434,20 @@ function validateSourceRecord(value: unknown, index: number, sourceArtifacts: Se
   const source = requireRecord(value, name) as unknown as BenchmarkSourceRecord;
   requireSourceId(source.sourceId, `${name}.sourceId`);
   requireBenchmarkIdentifier(source.artifactId, `${name}.artifactId`);
+  requireBoundedSourceString(source.artifactId, `${name}.artifactId`);
+  requireBoundedSourceString(source.sourceUrl, `${name}.sourceUrl`);
   requireHttpsUrl(source.sourceUrl, `${name}.sourceUrl`);
   assertNoProhibitedText(source.sourceUrl, `${name}.sourceUrl`);
   requireIsoTimestamp(source.observedAt, `${name}.observedAt`);
   for (const key of ['etag', 'lastModified', 'upstreamRevision', 'schemaVersion'] as const) {
     requireNullableString(source[key], `${name}.${key}`);
-    if (source[key] !== null) assertNoProhibitedText(source[key], `${name}.${key}`);
+    if (source[key] !== null) {
+      requireBoundedSourceString(source[key], `${name}.${key}`);
+      assertNoProhibitedText(source[key], `${name}.${key}`);
+    }
   }
   for (const key of ['snapshotKey', 'attributionText'] as const) {
-    requireString(source[key], `${name}.${key}`);
+    requireBoundedSourceString(source[key], `${name}.${key}`);
     assertNoProhibitedText(source[key], `${name}.${key}`);
   }
   requireSha256(source.contentHash, `${name}.contentHash`);
@@ -442,6 +459,13 @@ function validateSourceRecord(value: unknown, index: number, sourceArtifacts: Se
   if (sourceArtifacts.has(identity)) fail(`Duplicate source artifact: ${source.sourceId}/${source.artifactId}`);
   sourceArtifacts.add(identity);
   return source;
+}
+
+/** Validates complete immutable source evidence with canonical artifact uniqueness. */
+export function validateBenchmarkSourceRecords(value: unknown): BenchmarkSourceRecord[] {
+  if (!Array.isArray(value)) fail('benchmark sources must be an array');
+  const sourceArtifacts = new Set<string>();
+  return value.map((source, index) => validateSourceRecord(source, index, sourceArtifacts));
 }
 
 function validateModel(
@@ -589,8 +613,8 @@ export function validateNormalizedSourceBatch(value: unknown): NormalizedSourceB
     fail('benchmark batch collections must be arrays');
   }
 
-  const sourceArtifacts = new Set<string>();
-  batch.sources.forEach((source, index) => validateSourceRecord(source, index, sourceArtifacts));
+  const sources = validateBenchmarkSourceRecords(batch.sources);
+  const sourceArtifacts = new Set(sources.map((source) => artifactIdentity(source.sourceId, source.artifactId)));
 
   const modelsByKey = new Map<string, BenchmarkModel>();
   const slugs = new Set<string>();

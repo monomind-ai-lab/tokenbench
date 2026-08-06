@@ -132,6 +132,10 @@ function projectionWithEntries(entries: readonly LeaderboardEntry[]): CachedLead
   };
 }
 
+function projectionBodyWithSources(sources: readonly unknown[]): string {
+  return JSON.stringify({ ...projection(), sources });
+}
+
 function entryWithIdentity(index: number): LeaderboardEntry {
   const fixture = entry();
   const modelKey = `model-${String(index).padStart(4, '0')}`;
@@ -315,6 +319,20 @@ describe('complete leaderboard projection cache reader', () => {
     )).rejects.toThrow(/revision/i);
   });
 
+  it.each([
+    ['contentHash', `sha256:${'c'.repeat(63)}`],
+    ['openrouterContentHash', `sha256:${'D'.repeat(64)}`],
+  ] as const)('rejects a revision whose %s is not an exact lowercase SHA-256 digest', (key, hash) => {
+    const base = projection();
+    const corrupt = { ...base, revision: { ...base.revision, [key]: hash } };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(corrupt),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/revision/i);
+  });
+
   it('returns null when the complete projection is not published', async () => {
     const fixture = cacheDatabase({});
 
@@ -407,6 +425,18 @@ describe('complete leaderboard projection cache reader', () => {
     ).entries.map((row) => row.model.modelKey)).toEqual(['alpha', 'beta', 'zeta']);
   });
 
+  it.each([
+    ['estimated-only', [estimatedEntry('beta')]],
+    ['mixed', [entry(), estimatedEntry('beta')]],
+  ] as const)('rejects an %s canonical base projection when estimated rows are excluded', (_label, rows) => {
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries(rows)),
+      'llm-coding',
+      'balanced',
+      false,
+    )).toThrow(/entry variant/i);
+  });
+
   it('rejects duplicate model identities in complete projection rows', () => {
     const duplicated = projectionWithEntries([entry(), entry()]);
 
@@ -454,6 +484,46 @@ describe('complete leaderboard projection cache reader', () => {
       'llm-coding',
       'balanced',
     )).toThrow(/route invariants/i);
+  });
+
+  it.each([
+    ['missing snapshot key', { ...source('benchlm', 'benchlm-models'), snapshotKey: undefined }],
+    ['invalid content hash', { ...source('benchlm', 'benchlm-models'), contentHash: 'sha256:pending' }],
+    ['invalid original content hash', { ...source('benchlm', 'benchlm-models'), originalContentHash: 'not-a-hash' }],
+    ['mismatched license', { ...source('benchlm', 'benchlm-models'), licenseId: 'OpenRouter-ToS' }],
+    ['non-HTTPS URL', { ...source('benchlm', 'benchlm-models'), sourceUrl: 'http://benchlm.example/data' }],
+    ['oversized attribution', { ...source('benchlm', 'benchlm-models'), attributionText: 'x'.repeat(65_537) }],
+  ])('rejects source evidence with a %s', (_label, corruptSource) => {
+    const base = projection();
+    expect(() => parseCompleteLeaderboardProjection(
+      projectionBodyWithSources([corruptSource, ...base.sources.slice(1)]),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/source evidence/i);
+  });
+
+  it.each(['etag', 'lastModified', 'upstreamRevision', 'schemaVersion'] as const)(
+    'rejects a non-nullable-string source %s',
+    (key) => {
+      const base = projection();
+      const corruptSource = { ...base.sources[0], [key]: 42 };
+
+      expect(() => parseCompleteLeaderboardProjection(
+        projectionBodyWithSources([corruptSource, ...base.sources.slice(1)]),
+        'llm-coding',
+        'balanced',
+      )).toThrow(/source evidence/i);
+    },
+  );
+
+  it('rejects duplicate source artifact identities', () => {
+    const base = projection();
+
+    expect(() => parseCompleteLeaderboardProjection(
+      projectionBodyWithSources([...base.sources, base.sources[0]]),
+      'llm-coding',
+      'balanced',
+    )).toThrow(/source evidence/i);
   });
 
   it('accepts the exact entry cap and rejects one additional entry', () => {

@@ -6,6 +6,8 @@ import {
 import { benchmarkLeaderboardProjectionCacheKey } from '../../src/benchmarks/api-response-cache-keys';
 import {
   isCanonicalIsoTimestamp,
+  isSha256Digest,
+  validateBenchmarkSourceRecords,
   type BenchmarkMetric,
   type BenchmarkSourceId,
 } from '../../src/benchmarks/contracts';
@@ -144,15 +146,6 @@ function isEntryLike(value: unknown): value is LeaderboardEntry {
     && typeof value.onValueFrontier === 'boolean';
 }
 
-function isSourceLike(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return isSourceId(value.sourceId)
-    && hasNonBlankString(value.artifactId)
-    && hasNonBlankString(value.sourceUrl)
-    && isCanonicalIsoTimestamp(value.observedAt)
-    && hasNonBlankString(value.attributionText);
-}
-
 function sameDefinition(key: LeaderboardKey, value: unknown): boolean {
   if (!isRecord(value)) return false;
   const expected = LEADERBOARD_DEFINITIONS[key];
@@ -280,6 +273,7 @@ function hasSelectedEntryVariant(
   entries: readonly LeaderboardEntry[],
   includeEstimated: boolean,
 ): boolean {
+  if (baseEntries.some((entry) => entry.model.evidenceStatus === 'estimated')) return false;
   if (entries.length < baseEntries.length || (!includeEstimated && entries.length !== baseEntries.length)) return false;
   if (!baseEntries.every((entry, index) => sameJsonValue(entry, entries[index]))) return false;
   const estimatedEntries = entries.slice(baseEntries.length);
@@ -341,9 +335,9 @@ export function parseCompleteLeaderboardProjection(
     || !isCanonicalIsoTimestamp(revision.publishedAt)
     || !isCanonicalIsoTimestamp(revision.checkedAt)
     || revision.publicationState !== 'published'
-    || !hasNonBlankString(revision.contentHash)
+    || !isSha256Digest(revision.contentHash)
     || !hasNonBlankString(revision.catalogRevision)
-    || !hasNonBlankString(revision.openrouterContentHash)) {
+    || !isSha256Digest(revision.openrouterContentHash)) {
     throw new Error('cached leaderboard projection revision is invalid');
   }
   const leaderboard = value.leaderboard;
@@ -354,9 +348,13 @@ export function parseCompleteLeaderboardProjection(
   if (leaderboard.key !== key || leaderboard.profile !== profile || !sameDefinition(key, leaderboard.definition)
     || !Array.isArray(leaderboard.entries)
     || !leaderboard.entries.every((entry) => isEntryLike(entry) && hasRouteEntryInvariants(entry, key, profile))
-    || !value.entries.every((entry) => isEntryLike(entry) && hasRouteEntryInvariants(entry, key, profile))
-    || !value.sources.every(isSourceLike)) {
+    || !value.entries.every((entry) => isEntryLike(entry) && hasRouteEntryInvariants(entry, key, profile))) {
     throw new Error('cached leaderboard projection route invariants are invalid');
+  }
+  try {
+    validateBenchmarkSourceRecords(value.sources);
+  } catch {
+    throw new Error('cached leaderboard projection source evidence is invalid');
   }
   if (!hasSelectedEntryVariant(
     leaderboard.entries as readonly LeaderboardEntry[],
