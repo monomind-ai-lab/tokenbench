@@ -276,6 +276,31 @@ describe('comparisonSummary', () => {
     });
   });
 
+  it('suppresses a score advantage when the displayed values round to the same string', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(
+      models,
+      [sharedRow(models[0], models[1], 'coding', 80.0001, 80.0002)],
+    ));
+
+    expect(summary.sentences).toEqual([
+      'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
+    ]);
+  });
+
+  it('does not describe four rounding-equal score pairs as exact ties', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [
+      sharedRow(models[0], models[1], 'coding', 80.0001, 80.0002),
+      sharedRow(models[0], models[1], 'knowledge', 81.0001, 81.0002),
+      sharedRow(models[0], models[1], 'multimodal', 82.0001, 82.0002),
+      sharedRow(models[0], models[1], 'reasoning', 83.0001, 83.0002),
+    ]));
+
+    expect(summary.coverage).toBe('strong');
+    expect(summary.sentences.join(' ')).not.toMatch(/higher supported BenchLM score|scores are tied/i);
+  });
+
   it('reports a price-only advantage only when both verified selected routes publish that rate', () => {
     const models = pair();
     const summary = comparisonSummary(comparisonWith(models, [], [
@@ -291,6 +316,18 @@ describe('comparisonSummary', () => {
         'There is not enough shared evidence to make a supported BenchLM score comparison.',
       ],
     });
+  });
+
+  it('suppresses a rate advantage when the displayed rates round to the same string', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [], [
+      [price(models[0], 1.00001, 3)],
+      [price(models[1], 1.00002, 3)],
+    ]));
+
+    expect(summary.sentences).toEqual([
+      'There is not enough shared evidence to make a supported BenchLM score comparison.',
+    ]);
   });
 
   it('uses the same deterministic primary route selection as comparison pricing', () => {

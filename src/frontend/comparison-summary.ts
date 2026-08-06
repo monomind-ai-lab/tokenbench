@@ -74,11 +74,14 @@ function scoreSentences(
   return rows.flatMap((row) => {
     const metricA = row.modelA;
     const metricB = row.modelB;
-    if (metricA === null || metricB === null || metricA.value === metricB.value) return [];
+    if (metricA === null || metricB === null) return [];
+    const displayedA = formatMetricValue(metricA.value);
+    const displayedB = formatMetricValue(metricB.value);
+    if (displayedA === displayedB) return [];
     const winnerIndex: 0 | 1 = metricA.value > metricB.value ? 0 : 1;
-    const winner = winnerIndex === 0 ? metricA : metricB;
-    const other = winnerIndex === 0 ? metricB : metricA;
-    return [`On ${friendlyMetricLabel(row.metricKey, row.category)}, ${displayedModelName(models, winnerIndex)} has a higher supported BenchLM score (${formatMetricValue(winner.value)} vs ${formatMetricValue(other.value)}).`];
+    const winnerValue = winnerIndex === 0 ? displayedA : displayedB;
+    const otherValue = winnerIndex === 0 ? displayedB : displayedA;
+    return [`On ${friendlyMetricLabel(row.metricKey, row.category)}, ${displayedModelName(models, winnerIndex)} has a higher supported BenchLM score (${winnerValue} vs ${otherValue}).`];
   });
 }
 
@@ -89,12 +92,15 @@ function rateSentence(
 ): string | null {
   const left = publishedRate(routes[0], dimension);
   const right = publishedRate(routes[1], dimension);
-  if (left === null || right === null || left === right) return null;
+  if (left === null || right === null) return null;
+  const displayedLeft = formatRate(left);
+  const displayedRight = formatRate(right);
+  if (displayedLeft === displayedRight) return null;
   const winnerIndex: 0 | 1 = left < right ? 0 : 1;
-  const winner = winnerIndex === 0 ? left : right;
-  const other = winnerIndex === 0 ? right : left;
+  const winnerValue = winnerIndex === 0 ? displayedLeft : displayedRight;
+  const otherValue = winnerIndex === 0 ? displayedRight : displayedLeft;
   const label = dimension === 'inputUsdPerMillion' ? 'Input API price' : 'Output API price';
-  return `${label}: ${displayedModelName(models, winnerIndex)} has the lower verified rate (${formatRate(winner)} vs ${formatRate(other)}).`;
+  return `${label}: ${displayedModelName(models, winnerIndex)} has the lower verified rate (${winnerValue} vs ${otherValue}).`;
 }
 
 function contextSentence(models: readonly [BenchmarkModel, BenchmarkModel]): string | null {
@@ -120,6 +126,10 @@ function coverageSentence(coverage: ComparisonSummary['coverage'], sharedMetricC
   return `Only ${sharedMetricCount} ${metricLabel} ${verb} available, so the score evidence is limited.`;
 }
 
+function scoreRowsAreExactlyTied(rows: readonly ComparisonMetricRow[]): boolean {
+  return rows.length > 0 && rows.every((row) => row.modelA?.value === row.modelB?.value);
+}
+
 /**
  * Derives bounded, evidence-specific comparison copy from the published view
  * model. No sentence selects a universal winner or fills in an absent fact.
@@ -136,7 +146,7 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
   ].filter((sentence): sentence is string => sentence !== null);
   const advantageClaims = [...scoreClaims, ...pricingClaims];
   const caveat = coverageSentence(coverage, compatibleRows.length);
-  const tiedScoreSentence = coverage === 'strong' && scoreClaims.length === 0
+  const tiedScoreSentence = coverage === 'strong' && scoreRowsAreExactlyTied(compatibleRows)
     ? `The compatible supported BenchLM scores are tied across ${compatibleRows.length} shared metrics.`
     : null;
   const sentences = caveat === null
