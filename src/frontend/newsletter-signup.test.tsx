@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewsletterSignup } from './newsletter-signup';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  document.body.removeAttribute('tabindex');
+});
 
 describe('NewsletterSignup', () => {
   it('leaves alerts unchecked and explains double opt in', () => {
@@ -61,6 +64,51 @@ describe('NewsletterSignup', () => {
       modelAndPriceAlerts: true,
       monthlyCheatsheet: true,
     });
+  });
+
+  it('moves focus from the disabled submit button to a delayed confirmation status', async () => {
+    let resolveRequest: (response: Response) => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; })));
+    render(<NewsletterSignup context="footer" />);
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
+    const submit = screen.getByRole('button', { name: 'Get the cheatsheet' });
+    submit.focus();
+    expect(submit).toHaveFocus();
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+    expect(submit).toBeDisabled();
+    document.body.tabIndex = -1;
+    document.body.focus();
+    expect(document.body).toHaveFocus();
+
+    resolveRequest(new Response('{"status":"confirmation-required"}', { status: 202 }));
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveAttribute('tabindex', '-1');
+    await waitFor(() => expect(status).toHaveFocus());
+  });
+
+  it('returns focus to the email input after a delayed malformed 202 retry', async () => {
+    let resolveRequest: (response: Response) => void = () => undefined;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; })));
+    render(<NewsletterSignup context="footer" />);
+
+    const email = screen.getByLabelText('Email address');
+    fireEvent.change(email, { target: { value: 'builder@example.com' } });
+    email.focus();
+    expect(email).toHaveFocus();
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+    expect(email).toBeDisabled();
+    document.body.tabIndex = -1;
+    document.body.focus();
+    expect(document.body).toHaveFocus();
+
+    resolveRequest(new Response('{"status":"confirmation-required"', { status: 202 }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t complete that signup. Please try again.');
+    await waitFor(() => expect(email).toHaveFocus());
+    expect(email).toBeEnabled();
+    expect(email).toHaveValue('builder@example.com');
   });
 
   it.each([
@@ -176,7 +224,8 @@ describe('NewsletterSignup', () => {
 
     expect(fetchSignup).toHaveBeenCalledTimes(1);
     resolveRequest(new Response('{"status":"confirmation-required"}', { status: 202 }));
-    await screen.findByRole('status');
+    const status = await screen.findByRole('status');
+    await waitFor(() => expect(status).toHaveFocus());
   });
 
   it('aborts an in-flight request when the signup unmounts', () => {
@@ -197,14 +246,17 @@ describe('NewsletterSignup', () => {
 
   it('ignores an aborted request outcome without showing retry guidance', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('Request aborted', 'AbortError')));
-    render(<NewsletterSignup context="footer" />);
+    render(<><button type="button">Outside signup</button><NewsletterSignup context="footer" /></>);
 
     const email = screen.getByLabelText('Email address');
     fireEvent.change(email, { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+    const outside = screen.getByRole('button', { name: 'Outside signup' });
+    outside.focus();
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'Get the cheatsheet' })).toBeEnabled());
     expect(email).toHaveValue('builder@example.com');
+    expect(outside).toHaveFocus();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });

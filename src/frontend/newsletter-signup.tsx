@@ -9,6 +9,7 @@ export interface NewsletterSignupProps {
 export const MODEL_PRICE_ALERT_LABEL = 'Notify me when new models or price drops are added to TokenBench.';
 
 type SignupFeedback = 'idle' | 'invalid-email' | 'confirmation-required' | 'retry';
+type PostSubmissionFocus = 'email' | 'confirmation-status';
 
 const MAX_EMAIL_LENGTH = 254;
 const MAX_LOCAL_PART_LENGTH = 64;
@@ -53,6 +54,9 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
   const [submitting, setSubmitting] = useState(false);
   const activeRequest = useRef<AbortController | null>(null);
   const submissionInFlight = useRef(false);
+  const emailInput = useRef<HTMLInputElement | null>(null);
+  const confirmationStatus = useRef<HTMLParagraphElement | null>(null);
+  const postSubmissionFocus = useRef<PostSubmissionFocus | null>(null);
   const isCompact = compact ?? context === 'compare';
   const showForm = !isCompact || modelAndPriceAlerts;
   const invalidEmail = feedback === 'invalid-email';
@@ -64,10 +68,19 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
         ? 'We couldn’t complete that signup. Please try again.'
         : null;
 
+  useEffect(() => {
+    if (submitting || postSubmissionFocus.current === null) return;
+    const focusTarget = postSubmissionFocus.current;
+    postSubmissionFocus.current = null;
+    if (focusTarget === 'confirmation-status') confirmationStatus.current?.focus();
+    else emailInput.current?.focus();
+  }, [feedback, submitting]);
+
   useEffect(() => () => {
     const controller = activeRequest.current;
     activeRequest.current = null;
     submissionInFlight.current = false;
+    postSubmissionFocus.current = null;
     controller?.abort();
   }, []);
 
@@ -98,6 +111,7 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
         signal: controller.signal,
       });
       if (response.status === 202 && isConfirmationRequiredResponse(await response.json())) {
+        postSubmissionFocus.current = 'confirmation-status';
         setEmail('');
         setFeedback('confirmation-required');
         return;
@@ -112,6 +126,7 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
         setSubmitting(false);
       }
     }
+    postSubmissionFocus.current = 'email';
     setFeedback('retry');
   };
 
@@ -123,7 +138,7 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
     <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label>
     {showForm ? <form aria-busy={submitting} aria-label="Newsletter signup" noValidate onSubmit={submitSignup}>
       <label htmlFor={`newsletter-email-${context}`}>Email address</label>
-      <input aria-describedby={invalidEmail ? `newsletter-email-error-${context}` : undefined} aria-invalid={invalidEmail || undefined} disabled={submitting} id={`newsletter-email-${context}`} name="email" onChange={(event) => { setEmail(event.target.value); setFeedback('idle'); }} required type="email" value={email} />
+      <input aria-describedby={invalidEmail ? `newsletter-email-error-${context}` : undefined} aria-invalid={invalidEmail || undefined} disabled={submitting} id={`newsletter-email-${context}`} name="email" onChange={(event) => { setEmail(event.target.value); setFeedback('idle'); }} ref={emailInput} required type="email" value={email} />
       <p>You’ll also receive the Monthly LLM API Cost &amp; Benchmark Cheatsheet (PDF/CSV).</p>
       <p>We’ll send a confirmation email before anything is delivered.</p>
       <div aria-hidden="true" className="newsletter-signup-honeypot">
@@ -131,7 +146,7 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
         <input autoComplete="off" disabled={submitting} id={`newsletter-website-${context}`} name="website" onChange={(event) => setHoneypot(event.target.value)} tabIndex={-1} type="text" value={honeypot} />
       </div>
       <button disabled={submitting} type="submit">{isCompact ? 'Notify me' : 'Get the cheatsheet'}</button>
-      {feedbackCopy ? <p id={invalidEmail ? `newsletter-email-error-${context}` : undefined} role={feedback === 'confirmation-required' ? 'status' : 'alert'}>{feedbackCopy}</p> : null}
+      {feedbackCopy ? <p id={invalidEmail ? `newsletter-email-error-${context}` : undefined} ref={feedback === 'confirmation-required' ? confirmationStatus : undefined} role={feedback === 'confirmation-required' ? 'status' : 'alert'} tabIndex={feedback === 'confirmation-required' ? -1 : undefined}>{feedbackCopy}</p> : null}
     </form> : null}
   </section>;
 }
