@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CompareHubPage } from './compare-hub-page';
 
@@ -51,17 +51,17 @@ describe('CompareHubPage', () => {
     expect(await screen.findByRole('link', { name: 'Model A vs Model B' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
   });
 
-  it('places a compact general alert opt-in after model selection', async () => {
+  it('places a compact general alert opt-in beside model selection in one tools group', async () => {
     respondWithDirectory();
     render(<CompareHubPage />);
 
-    const selectorHeading = await screen.findByRole('heading', { name: 'Choose a model pair' });
-    const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench' });
+    const tools = await screen.findByRole('group', { name: 'Comparison tools' });
+    const selectorPanel = within(tools).getByRole('region', { name: 'Choose a model pair' });
+    const alertsPanel = within(tools).getByRole('complementary', { name: 'Model and price alerts' });
+    const alerts = within(alertsPanel).getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' });
     expect(alerts).not.toBeChecked();
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
-    const selectorPanel = selectorHeading.closest('section');
-    if (!selectorPanel) throw new Error('Expected the comparison selector panel');
-    expect(selectorPanel.compareDocumentPosition(alerts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(Array.from(tools.children)).toEqual([selectorPanel, alertsPanel]);
   });
 
   it('does not create selection controls when the published directory is unavailable', async () => {

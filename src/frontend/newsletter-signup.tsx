@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 export interface NewsletterSignupProps {
   readonly context: 'footer' | 'compare';
@@ -6,18 +6,53 @@ export interface NewsletterSignupProps {
   readonly alertLabel?: string;
 }
 
+export const MODEL_PRICE_ALERT_LABEL = 'Notify me when new models or price drops are added to TokenBench.';
+
 type SignupFeedback = 'idle' | 'invalid-email' | 'confirmation-required' | 'retry';
 
-function hasPlausibleEmailAddress(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
+const MAX_EMAIL_LENGTH = 254;
+const MAX_LOCAL_PART_LENGTH = 64;
+const MAX_DOMAIN_LENGTH = 253;
+const EMAIL_CONTROL_OR_WHITESPACE_PATTERN = /[\u0000-\u001f\u007f-\u009f\s]/u;
+const DOMAIN_LABEL_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu;
+
+function isValidNewsletterEmailAddress(value: string): boolean {
+  if (value.length > MAX_EMAIL_LENGTH || EMAIL_CONTROL_OR_WHITESPACE_PATTERN.test(value)) return false;
+
+  const separator = value.indexOf('@');
+  if (separator <= 0 || separator !== value.lastIndexOf('@') || separator === value.length - 1) return false;
+
+  const localPart = value.slice(0, separator);
+  const domain = value.slice(separator + 1);
+  if (localPart.length > MAX_LOCAL_PART_LENGTH || domain.length > MAX_DOMAIN_LENGTH) return false;
+
+  const labels = domain.split('.');
+  return labels.length >= 2 && labels.every((label) => DOMAIN_LABEL_PATTERN.test(label));
 }
 
-export function NewsletterSignup({ context, compact, alertLabel = 'Send me alerts about new models or price drops' }: NewsletterSignupProps) {
+function isConfirmationRequiredResponse(value: unknown): value is { readonly status: 'confirmation-required' } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const keys = Reflect.ownKeys(value);
+  return keys.length === 1
+    && keys[0] === 'status'
+    && (value as Record<string, unknown>).status === 'confirmation-required';
+}
+
+function isAbortError(error: unknown): boolean {
+  return error !== null
+    && typeof error === 'object'
+    && 'name' in error
+    && error.name === 'AbortError';
+}
+
+export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_ALERT_LABEL }: NewsletterSignupProps) {
   const [modelAndPriceAlerts, setModelAndPriceAlerts] = useState(false);
   const [email, setEmail] = useState('');
   const [honeypot, setHoneypot] = useState('');
   const [feedback, setFeedback] = useState<SignupFeedback>('idle');
   const [submitting, setSubmitting] = useState(false);
+  const activeRequest = useRef<AbortController | null>(null);
+  const submissionInFlight = useRef(false);
   const isCompact = compact ?? context === 'compare';
   const showForm = !isCompact || modelAndPriceAlerts;
   const invalidEmail = feedback === 'invalid-email';
@@ -29,13 +64,24 @@ export function NewsletterSignup({ context, compact, alertLabel = 'Send me alert
         ? 'We couldn’t complete that signup. Please try again.'
         : null;
 
+  useEffect(() => () => {
+    const controller = activeRequest.current;
+    activeRequest.current = null;
+    submissionInFlight.current = false;
+    controller?.abort();
+  }, []);
+
   const submitSignup = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (submissionInFlight.current) return;
     const normalizedEmail = email.trim();
-    if (!hasPlausibleEmailAddress(normalizedEmail)) {
+    if (!isValidNewsletterEmailAddress(normalizedEmail)) {
       setFeedback('invalid-email');
       return;
     }
+    const controller = new AbortController();
+    submissionInFlight.current = true;
+    activeRequest.current = controller;
     setFeedback('idle');
     setSubmitting(true);
     try {
@@ -49,16 +95,22 @@ export function NewsletterSignup({ context, compact, alertLabel = 'Send me alert
           context,
           honeypot,
         }),
+        signal: controller.signal,
       });
-      if (response.status === 202) {
+      if (response.status === 202 && isConfirmationRequiredResponse(await response.json())) {
         setEmail('');
         setFeedback('confirmation-required');
         return;
       }
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
       // The browser receives the same retry guidance for network and service failures.
     } finally {
-      setSubmitting(false);
+      if (activeRequest.current === controller) {
+        activeRequest.current = null;
+        submissionInFlight.current = false;
+        setSubmitting(false);
+      }
     }
     setFeedback('retry');
   };

@@ -10,15 +10,15 @@ describe('NewsletterSignup', () => {
 
     expect(screen.getByRole('heading', { name: 'The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)' })).toBeInTheDocument();
     expect(screen.getByText('A downloadable, printable reference sheet listing top models, current per-1M token rates, context windows, and category ranks.')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: /new models or price drops/i })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' })).not.toBeChecked();
     expect(screen.getByText(/confirmation email/i)).toBeInTheDocument();
   });
 
   it('reveals monthly consent only after a compact comparison alert opt-in', () => {
-    render(<NewsletterSignup context="compare" alertLabel="Notify me when new models or price drops are added to TokenBench" />);
+    render(<NewsletterSignup context="compare" />);
 
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
-    const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench' });
+    const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' });
     expect(alerts).not.toBeChecked();
 
     fireEvent.click(alerts);
@@ -41,7 +41,7 @@ describe('NewsletterSignup', () => {
       headers: { 'content-type': 'application/json' },
     }));
     vi.stubGlobal('fetch', fetchSignup);
-    render(<NewsletterSignup context="compare" alertLabel="Notify me when new models or price drops are added to TokenBench" />);
+    render(<NewsletterSignup context="compare" />);
 
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
@@ -63,6 +63,31 @@ describe('NewsletterSignup', () => {
     });
   });
 
+  it.each([
+    ['non-JSON', 'secret backend diagnostic'],
+    ['malformed JSON', '{"status":"confirmation-required"'],
+    ['wrong status', '{"status":"subscribed","detail":"secret backend diagnostic"}'],
+    ['extra response fields', '{"status":"confirmation-required","detail":"secret backend diagnostic"}'],
+  ])('treats a 202 with %s as retryable without exposing its body', async (_case, body) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, {
+      status: 202,
+      headers: { 'content-type': 'application/json' },
+    })));
+    render(<NewsletterSignup context="compare" />);
+
+    const alerts = screen.getByRole('checkbox');
+    fireEvent.click(alerts);
+    const email = screen.getByLabelText('Email address');
+    fireEvent.change(email, { target: { value: 'builder@example.com' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('We couldn’t complete that signup. Please try again.');
+    expect(email).toHaveValue('builder@example.com');
+    expect(alerts).toBeChecked();
+    expect(screen.queryByText(/secret backend diagnostic/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Check your email to confirm your subscription.')).not.toBeInTheDocument();
+  });
+
   it('keeps an invalid address local to the form', () => {
     const fetchSignup = vi.fn();
     vi.stubGlobal('fetch', fetchSignup);
@@ -75,6 +100,26 @@ describe('NewsletterSignup', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid email address.');
     expect(email).toHaveAttribute('aria-invalid', 'true');
     expect(email).toHaveValue('not-an-email');
+    expect(fetchSignup).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['double dots in the domain', 'builder@example..com'],
+    ['a leading domain hyphen', 'builder@-example.com'],
+    ['a trailing domain hyphen', 'builder@example-.com'],
+    ['a local part longer than 64 characters', `${'a'.repeat(65)}@example.com`],
+    ['a domain label longer than 63 characters', `builder@${'a'.repeat(64)}.com`],
+  ])('rejects %s using the newsletter contract boundaries', (_case, address) => {
+    const fetchSignup = vi.fn();
+    vi.stubGlobal('fetch', fetchSignup);
+    render(<NewsletterSignup context="footer" />);
+
+    const email = screen.getByLabelText('Email address');
+    fireEvent.change(email, { target: { value: address } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a valid email address.');
+    expect(email).toHaveValue(address);
     expect(fetchSignup).not.toHaveBeenCalled();
   });
 
@@ -116,6 +161,52 @@ describe('NewsletterSignup', () => {
     resolveRequest(new Response('{"status":"confirmation-required"}', { status: 202 }));
     await screen.findByRole('status');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Get the cheatsheet' })).toBeEnabled());
+  });
+
+  it('does not start a duplicate request while submission is in flight', async () => {
+    let resolveRequest: (response: Response) => void = () => undefined;
+    const fetchSignup = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; }));
+    vi.stubGlobal('fetch', fetchSignup);
+    render(<NewsletterSignup context="footer" />);
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
+    const form = screen.getByRole('form', { name: 'Newsletter signup' });
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+
+    expect(fetchSignup).toHaveBeenCalledTimes(1);
+    resolveRequest(new Response('{"status":"confirmation-required"}', { status: 202 }));
+    await screen.findByRole('status');
+  });
+
+  it('aborts an in-flight request when the signup unmounts', () => {
+    let requestSignal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation((_input: RequestInfo | URL, init?: RequestInit) => {
+      requestSignal = init?.signal ?? undefined;
+      return new Promise<Response>(() => undefined);
+    }));
+    const { unmount } = render(<NewsletterSignup context="footer" />);
+
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+    unmount();
+
+    expect(requestSignal).toBeInstanceOf(AbortSignal);
+    expect(requestSignal?.aborted).toBe(true);
+  });
+
+  it('ignores an aborted request outcome without showing retry guidance', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('Request aborted', 'AbortError')));
+    render(<NewsletterSignup context="footer" />);
+
+    const email = screen.getByLabelText('Email address');
+    fireEvent.change(email, { target: { value: 'builder@example.com' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Get the cheatsheet' })).toBeEnabled());
+    expect(email).toHaveValue('builder@example.com');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 
   it('keeps the bot trap out of the accessible form and forwards its value', async () => {

@@ -205,17 +205,19 @@ export function CompareHubPage() {
     {state.phase === 'unavailable' ? <section className="comparison-state-panel comparison-empty-state" role="status"><strong>Unavailable</strong><p>The published benchmark directory is unavailable. No comparison navigation is being created from incomplete data.</p></section> : null}
     {state.phase === 'ready' && state.envelope && directory ? <>
       {state.envelope.freshness.status === 'stale' ? <section className="comparison-state-panel comparison-stale" role="status"><strong>Published benchmark revision is stale</strong><p>{state.envelope.freshness.message ?? 'Published benchmark revision is stale.'}</p></section> : null}
-      <section className="comparison-panel comparison-selector-panel" aria-labelledby="comparison-select-heading">
-        <div className="comparison-section-heading"><h2 id="comparison-select-heading">Choose a model pair</h2><p>Popular models appear first. Search to browse every selectable model in the published directory.</p></div>
-        <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={setFirstModelSlug} onSecondModelChange={setSecondModelSlug} pairs={pairs} secondModelSlug={secondModelSlug} />
-        <div className="comparison-selection-action">
-          <p aria-live="polite">{selectionMessage}</p>
-          <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstModelSlug(secondModelSlug); setSecondModelSlug(firstModelSlug); }} type="button">Swap selected models</button>
-          {comparisonHref ? <a className="button" href={comparisonHref}>Compare selected models</a> : <button className="button" disabled type="button">Compare selected models</button>}
-        </div>
-      </section>
+      <div aria-label="Comparison tools" className="comparison-tool-grid" role="group">
+        <section className="comparison-panel comparison-selector-panel" aria-labelledby="comparison-select-heading">
+          <div className="comparison-section-heading"><h2 id="comparison-select-heading">Choose a model pair</h2><p>Popular models appear first. Search to browse every selectable model in the published directory.</p></div>
+          <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={setFirstModelSlug} onSecondModelChange={setSecondModelSlug} pairs={pairs} secondModelSlug={secondModelSlug} />
+          <div className="comparison-selection-action">
+            <p aria-live="polite">{selectionMessage}</p>
+            <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstModelSlug(secondModelSlug); setSecondModelSlug(firstModelSlug); }} type="button">Swap selected models</button>
+            {comparisonHref ? <a className="button" href={comparisonHref}>Compare selected models</a> : <button className="button" disabled type="button">Compare selected models</button>}
+          </div>
+        </section>
 
-      <div className="comparison-newsletter-signup"><NewsletterSignup alertLabel="Notify me when new models or price drops are added to TokenBench" compact context="compare" /></div>
+        <aside aria-label="Model and price alerts" className="comparison-newsletter-signup"><NewsletterSignup compact context="compare" /></aside>
+      </div>
 
       <section className="comparison-panel comparison-section" aria-labelledby="comparison-reviewed-heading">
         <div className="comparison-section-heading"><h2 id="comparison-reviewed-heading">Popular reviewed matchups</h2><p>Only source-backed, indexable pairs are listed as published matchup links.</p></div>

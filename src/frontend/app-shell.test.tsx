@@ -504,6 +504,7 @@ describe('responsive calculator app shell', () => {
     const footer = document.querySelector('footer');
     if (!footer) throw new Error('Expected the shared site footer');
     expect(within(footer).getByRole('heading', { name: 'The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)' })).toBeInTheDocument();
+    expect(within(footer).getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' })).not.toBeChecked();
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
   });
 
