@@ -32,6 +32,12 @@ export interface ComparisonMethodology {
   readonly methodology: BenchmarkMethodology;
 }
 
+export interface ComparisonSummary {
+  readonly heading: string;
+  readonly sentences: readonly string[];
+  readonly coverage: 'strong' | 'limited' | 'none';
+}
+
 export interface RelatedComparison {
   readonly pairSlug: string;
   readonly modelA: BenchmarkModel;
@@ -91,6 +97,50 @@ export function compareRelatedComparisons(left: RelatedComparison, right: Relate
     return left.featuredRank - right.featuredRank;
   }
   return compareUtf8Binary(left.pairSlug, right.pairSlug);
+}
+
+function isBenchLmScoreMetricKey(metricKey: string): boolean {
+  return metricKey === 'benchlm:overall:raw' || /^benchlm:category:[^:]+$/.test(metricKey);
+}
+
+function isSupportedBenchLmMetricForComparison(
+  model: BenchmarkModel,
+  metric: BenchmarkMetric,
+  row: ComparisonMetricRow,
+): boolean {
+  return model.sourceId === 'benchlm'
+    && model.evidenceStatus === 'supported'
+    && (row.metricKey !== 'benchlm:overall:raw' || model.rankingEligible)
+    && metric.modelKey === model.modelKey
+    && metric.metricKey === row.metricKey
+    && metric.category === row.category
+    && metric.sourceId === 'benchlm'
+    && metric.unit === 'score'
+    && metric.methodology === 'benchlm_raw_composite'
+    && metric.rankingEligible
+    && Number.isFinite(metric.value);
+}
+
+/**
+ * Returns true only for the exact, supported BenchLM evidence that can make a
+ * metric-specific score comparison. Raw rows from other sources stay visible,
+ * but must not become a capability claim.
+ */
+export function isSupportedBenchLmComparisonMetric(
+  row: ComparisonMetricRow,
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): boolean {
+  const [modelA, modelB] = models;
+  const { modelA: metricA, modelB: metricB } = row;
+  return row.sourceId === 'benchlm'
+    && isBenchLmScoreMetricKey(row.metricKey)
+    && row.unit === 'score'
+    && row.methodology === 'benchlm_raw_composite'
+    && metricA !== null
+    && metricB !== null
+    && metricA.sourceArtifactId === metricB.sourceArtifactId
+    && isSupportedBenchLmMetricForComparison(modelA, metricA, row)
+    && isSupportedBenchLmMetricForComparison(modelB, metricB, row);
 }
 
 /**

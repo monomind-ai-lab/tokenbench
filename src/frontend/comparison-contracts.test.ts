@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseComparisonViewModel, type ComparisonViewModel } from './comparison-contracts';
+import {
+  isSupportedBenchLmComparisonMetric,
+  parseComparisonViewModel,
+  type ComparisonMetricRow,
+  type ComparisonViewModel,
+} from './comparison-contracts';
 
 const benchLmSource = {
   sourceId: 'benchlm' as const,
@@ -170,6 +175,43 @@ function orderedHydrationPayload(): Record<string, any> {
 }
 
 describe('comparison SSR hydration contract', () => {
+  it('recognizes only exact supported BenchLM rows as score-comparison evidence', () => {
+    const [modelA, modelB] = viewModel.models;
+    const metricKey = 'benchlm:category:coding';
+    const row = {
+      metricKey,
+      category: 'coding',
+      unit: 'score',
+      sourceId: 'benchlm',
+      methodology: 'benchlm_raw_composite',
+      modelA: metricRecord(modelA, metricKey, 'coding', 'benchlm', 'benchlm-models', 'benchlm_raw_composite', 'score'),
+      modelB: metricRecord(modelB, metricKey, 'coding', 'benchlm', 'benchlm-models', 'benchlm_raw_composite', 'score'),
+    } as unknown as ComparisonMetricRow;
+
+    expect(isSupportedBenchLmComparisonMetric(row, [modelA, modelB])).toBe(true);
+    expect(isSupportedBenchLmComparisonMetric({
+      ...row,
+      modelB: { ...row.modelB!, sourceId: 'lmarena', sourceArtifactId: 'lmarena-text-style' },
+    }, [modelA, modelB])).toBe(false);
+    expect(isSupportedBenchLmComparisonMetric({
+      ...row,
+      methodology: 'bradley_terry',
+      modelA: { ...row.modelA!, methodology: 'bradley_terry' },
+      modelB: { ...row.modelB!, methodology: 'bradley_terry' },
+    }, [modelA, modelB])).toBe(false);
+    expect(isSupportedBenchLmComparisonMetric({
+      ...row,
+      modelA: { ...row.modelA!, rankingEligible: false },
+    }, [modelA, modelB])).toBe(false);
+    expect(isSupportedBenchLmComparisonMetric({
+      ...row,
+      metricKey: 'benchlm:runtime:latency',
+      category: 'latency',
+      modelA: { ...row.modelA!, metricKey: 'benchlm:runtime:latency', category: 'latency' },
+      modelB: { ...row.modelB!, metricKey: 'benchlm:runtime:latency', category: 'latency' },
+    }, [modelA, modelB])).toBe(false);
+  });
+
   it('accepts a complete server view model including explicit unavailable arrays', () => {
     expect(parseComparisonViewModel(JSON.parse(JSON.stringify(viewModel)))).toEqual(viewModel);
   });
