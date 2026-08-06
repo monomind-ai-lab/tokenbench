@@ -126,7 +126,7 @@ describe('catalog ingestion', () => {
         canonical_slug: 'openai/gpt-4o',
         name: 'GPT-4o',
         created: 1_724_065_600,
-        description: 'A capable model',
+        description: 'Compared by Artificial Analysis',
         context_length: 128_000,
         architecture: {
           modality: 'text->text',
@@ -158,7 +158,7 @@ describe('catalog ingestion', () => {
       }],
       unknown_envelope_fact: 'remove me',
     };
-    const expectedBytes = new TextEncoder().encode('{"data":[{"id":"openai/gpt-4o","canonical_slug":"openai/gpt-4o","name":"GPT-4o","created":1724065600,"description":"A capable model","context_length":128000,"architecture":{"modality":"text->text","input_modalities":["text"],"output_modalities":["text"],"tokenizer":"o200k_base","instruct_type":null},"pricing":{"prompt":"0.0000025","completion":"0.00001","input_cache_read":"0.00000125","input_cache_write":"0.000003"},"top_provider":{"context_length":128000,"max_completion_tokens":16000,"is_moderated":false},"per_request_limits":null,"supported_parameters":["tools"],"expiration_date":null,"knowledge_cutoff":"2024-06"}]}');
+    const expectedBytes = new TextEncoder().encode('{"data":[{"id":"openai/gpt-4o","canonical_slug":"openai/gpt-4o","name":"GPT-4o","created":1724065600,"context_length":128000,"architecture":{"modality":"text->text","input_modalities":["text"],"output_modalities":["text"],"tokenizer":"o200k_base","instruct_type":null},"pricing":{"prompt":"0.0000025","completion":"0.00001","input_cache_read":"0.00000125","input_cache_write":"0.000003"},"top_provider":{"context_length":128000,"max_completion_tokens":16000,"is_moderated":false},"per_request_limits":null,"supported_parameters":["tools"],"expiration_date":null,"knowledge_cutoff":"2024-06"}]}');
     const projected = projectOpenRouterModelsPayload(contaminated);
     expect(new TextEncoder().encode(JSON.stringify(projected))).toEqual(expectedBytes);
 
