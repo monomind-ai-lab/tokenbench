@@ -141,6 +141,66 @@ describe('comparison detail page', () => {
     expect(screen.getByTestId('workload-cost-provider:model-a')).toHaveTextContent('Unavailable');
   });
 
+  it('attributes the exact selected direct route on desktop and mobile', () => {
+    const model = viewModel();
+    const directRoute = {
+      ...model.priceChecks[0].checks[0],
+      sourceId: 'benchlm' as const,
+      providerId: 'provider-a-direct',
+      routeId: 'direct:model-a',
+      sourceArtifactId: 'benchlm-models',
+      outputUsdPerMillion: null,
+    };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      priceChecks: [
+        {
+          modelKey: model.models[0].modelKey,
+          selectedRouteId: directRoute.routeId,
+          checks: [model.priceChecks[0].checks[0], directRoute],
+        },
+        model.priceChecks[1],
+      ],
+    }} />);
+
+    const expectedDirectAttribution = 'Model A — source benchlm · provider provider-a-direct';
+    const desktopInputRow = within(screen.getByRole('table', { name: 'Route pricing and context comparison' }))
+      .getByRole('row', { name: /Input API price/ });
+    expect(within(desktopInputRow).getByText(expectedDirectAttribution)).toBeVisible();
+
+    const mobilePricing = screen.getByLabelText('Pricing and context, ordered cards');
+    const mobileInputCard = within(mobilePricing).getByRole('heading', { name: 'Input API price' }).closest('article');
+    expect(mobileInputCard).not.toBeNull();
+    expect(within(mobileInputCard!).getByText(expectedDirectAttribution)).toBeVisible();
+  });
+
+  it('distinguishes ambiguous route selection from absent route evidence', () => {
+    const model = viewModel();
+    const sharedRoute = {
+      ...model.priceChecks[0].checks[0],
+      sourceId: 'benchlm' as const,
+      providerId: 'provider-a',
+      routeId: 'direct:shared',
+      sourceArtifactId: 'benchlm-models',
+    };
+    render(<ComparisonPage viewModel={{
+      ...model,
+      priceChecks: [
+        {
+          modelKey: model.models[0].modelKey,
+          selectedRouteId: null,
+          checks: [sharedRoute, { ...sharedRoute, providerId: 'provider-z' }],
+        },
+        { ...model.priceChecks[1], selectedRouteId: null, checks: [] },
+      ],
+    }} />);
+
+    const routeList = screen.getByLabelText('Selected routes used for pricing');
+    expect(within(routeList).getByText('Route selection is ambiguous')).toBeVisible();
+    expect(within(routeList).getByText('No verified route available')).toBeVisible();
+    expect(within(routeList).queryByText('No primary hosted route')).not.toBeInTheDocument();
+  });
+
   it('encodes related comparison paths and refuses non-HTTPS attribution targets', () => {
     const model = viewModel();
     render(<ComparisonPage viewModel={{

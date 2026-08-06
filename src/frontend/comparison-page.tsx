@@ -89,10 +89,16 @@ function relatedComparisonLabel(pair: RelatedComparison, duplicateNames: Readonl
   return `${modelLabel(pair.modelA)} vs ${modelLabel(pair.modelB)}`;
 }
 
-function selectedRoute(
-  group: ComparisonPriceChecks,
-): BenchmarkPriceCheck | null {
-  return selectedComparisonPriceCheck(group);
+type SelectedRouteState =
+  | { readonly status: 'selected'; readonly route: BenchmarkPriceCheck }
+  | { readonly status: 'ambiguous' | 'absent'; readonly route: null };
+
+function selectedRoute(group: ComparisonPriceChecks): SelectedRouteState {
+  const route = selectedComparisonPriceCheck(group);
+  if (route !== null) return { status: 'selected', route };
+  const routeIds = group.checks.map((check) => check.routeId);
+  const hasDuplicateRouteId = new Set(routeIds).size !== routeIds.length;
+  return { status: hasDuplicateRouteId ? 'ambiguous' : 'absent', route: null };
 }
 
 function routeWorkloadCost(route: BenchmarkPriceCheck | null, profile: WorkloadProfile): number | null {
@@ -116,12 +122,41 @@ function PriceRouteContext({
 }: {
   readonly models: readonly [BenchmarkModel, BenchmarkModel];
   readonly index: 0 | 1;
-  readonly route: BenchmarkPriceCheck | null;
+  readonly route: SelectedRouteState;
 }) {
   return <div className="comparison-route-context">
     <strong>{modelDisplayLabel(models, index)}</strong>
-    {route ? <code>{route.routeId}</code> : <span className="comparison-unavailable">No primary hosted route</span>}
+    {route.status === 'selected'
+      ? <code>{route.route.routeId}</code>
+      : <span className="comparison-unavailable">{route.status === 'ambiguous' ? 'Route selection is ambiguous' : 'No verified route available'}</span>}
   </div>;
+}
+
+function routeProvenanceLabel(
+  models: readonly [BenchmarkModel, BenchmarkModel],
+  index: 0 | 1,
+  selection: SelectedRouteState,
+): string {
+  const model = modelDisplayLabel(models, index);
+  if (selection.status === 'ambiguous') return `${model} — route selection ambiguous`;
+  if (selection.status === 'absent') return `${model} — no verified route available`;
+  const sourceId = selection.route.sourceId.trim() || 'unavailable';
+  const providerId = selection.route.providerId.trim() || 'unavailable';
+  return `${model} — source ${sourceId} · provider ${providerId}`;
+}
+
+function PriceRouteProvenance({
+  models,
+  routes,
+}: {
+  readonly models: readonly [BenchmarkModel, BenchmarkModel];
+  readonly routes: readonly [SelectedRouteState, SelectedRouteState];
+}) {
+  return <span className="comparison-route-provenance">
+    <span>{routeProvenanceLabel(models, 0, routes[0])}</span>
+    <br />
+    <span>{routeProvenanceLabel(models, 1, routes[1])}</span>
+  </span>;
 }
 
 function ModelIdentity({ models, index }: { readonly models: readonly [BenchmarkModel, BenchmarkModel]; readonly index: 0 | 1 }) {
@@ -177,7 +212,8 @@ function PricingContext({
   readonly models: readonly [BenchmarkModel, BenchmarkModel];
   readonly profile: WorkloadProfile;
 }) {
-  const routes = groups.map((group) => selectedRoute(group)) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
+  const selections = groups.map((group) => selectedRoute(group)) as [SelectedRouteState, SelectedRouteState];
+  const routes = selections.map((selection) => selection.route) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
   const leftWorkloadCost = formatCost(routeWorkloadCost(routes[0], profile));
   const rightWorkloadCost = formatCost(routeWorkloadCost(routes[1], profile));
   const leftRouteContext = routeContext(routes[0]);
@@ -219,14 +255,14 @@ function PricingContext({
       <table className="comparison-table">
         <caption>Route pricing and context comparison</caption>
         <thead><tr><th scope="col">Field</th><th scope="col">Source</th><th scope="col">Unit</th><th scope="col">{modelDisplayLabel(models, 0)}</th><th scope="col">{modelDisplayLabel(models, 1)}</th></tr></thead>
-        <tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th><td>OpenRouter</td><td>{row.unit}</td><td>{row.left}</td><td>{row.right}</td></tr>)}</tbody>
+        <tbody>{rows.map((row) => <tr key={row.label}><th scope="row">{row.label}</th><td><PriceRouteProvenance models={models} routes={selections} /></td><td>{row.unit}</td><td>{row.left}</td><td>{row.right}</td></tr>)}</tbody>
       </table>
     </div>
     <div className="comparison-mobile-cards" aria-label="Pricing and context, ordered cards">
-      {rows.map((row) => <article className="comparison-mobile-card" key={row.label}><h3>{row.label}</h3><dl><div><dt>Source</dt><dd>OpenRouter</dd></div><div><dt>Unit</dt><dd>{row.unit}</dd></div><div><dt>{modelDisplayLabel(models, 0)}</dt><dd>{row.mobileLeft}</dd></div><div><dt>{modelDisplayLabel(models, 1)}</dt><dd>{row.mobileRight}</dd></div></dl></article>)}
+      {rows.map((row) => <article className="comparison-mobile-card" key={row.label}><h3>{row.label}</h3><dl><div><dt>Source</dt><dd><PriceRouteProvenance models={models} routes={selections} /></dd></div><div><dt>Unit</dt><dd>{row.unit}</dd></div><div><dt>{modelDisplayLabel(models, 0)}</dt><dd>{row.mobileLeft}</dd></div><div><dt>{modelDisplayLabel(models, 1)}</dt><dd>{row.mobileRight}</dd></div></dl></article>)}
     </div>
-    <div className="comparison-route-list" aria-label="Primary hosted routes used for pricing">
-      <PriceRouteContext index={0} models={models} route={routes[0]} /><PriceRouteContext index={1} models={models} route={routes[1]} />
+    <div className="comparison-route-list" aria-label="Selected routes used for pricing">
+      <PriceRouteContext index={0} models={models} route={selections[0]} /><PriceRouteContext index={1} models={models} route={selections[1]} />
     </div>
   </section>;
 }
