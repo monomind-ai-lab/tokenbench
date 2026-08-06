@@ -95,6 +95,10 @@ unknown fields. TokenBench does not expose a bulk OpenRouter mirror.
   authorization, schema, size, and validation failures never activate the
   fallback. Parquet rows are reduced to the same field allowlist and 100-row
   JSON evidence pages, while each record retains the original Parquet SHA-256.
+  If one subset contains multiple `overall` rows with the same exact source
+  model identity, every measurement for that ambiguous identity is excluded
+  from rankings; TokenBench does not pick a preferred conflicting score. The
+  pinned original-file hash remains attached to the sanitized evidence.
 - LiteLLM uses raw GitHub ETag/304 where available and is recorded as
   corroborating evidence.
 - OpenRouter route facts are tied to the active sanitized catalog revision and
