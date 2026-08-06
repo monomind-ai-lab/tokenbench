@@ -14,6 +14,8 @@
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/overall/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/coding/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/agentic/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/reasoning/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/leaderboards/llm/knowledge/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/human-preference/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/value/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/pricing-context/</loc></url>

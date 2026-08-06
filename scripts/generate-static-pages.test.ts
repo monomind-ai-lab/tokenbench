@@ -34,6 +34,8 @@ describe('crawlable static-page generator', () => {
     const home = await readFile(join(root, 'index.html'), 'utf8');
     const compareHub = await readFile(join(root, 'compare/index.html'), 'utf8');
     const leaderboard = await readFile(join(root, 'leaderboards/llm/overall/index.html'), 'utf8');
+    const reasoning = await readFile(join(root, 'leaderboards/llm/reasoning/index.html'), 'utf8');
+    const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
     const guide = await readFile(join(root, 'guides/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
@@ -51,6 +53,13 @@ describe('crawlable static-page generator', () => {
     expect(leaderboard).toContain('Live ranking data is not embedded in this static shell.');
     expect(leaderboard).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/overall/">');
 
+    expect(reasoning).toContain('<h1>AI reasoning category evidence</h1>');
+    expect(reasoning).toContain('not a validated BenchAlign ranking');
+    expect(reasoning).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/reasoning/">');
+    expect(knowledge).toContain('<h1>AI knowledge category evidence</h1>');
+    expect(knowledge).toContain('If BenchLM has not published the reviewed category metric');
+    expect(knowledge).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/knowledge/">');
+
     expect(methodology).toContain('<h1>How BenchAlign rankings work</h1>');
     expect(methodology).toContain('TokenBench republishes BenchLM&#039;s BenchAlign results');
     expect(methodology).toContain('https://benchlm.ai/methodology');
@@ -61,6 +70,8 @@ describe('crawlable static-page generator', () => {
     expect(guide).toContain('https://tokenbench.monomind.one/guides/track-claude-code-usage/');
 
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/reasoning/</loc>');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/knowledge/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
     expect(new Set(sitemap.match(/<loc>[^<]+<\/loc>/g)).size).toBe(sitemap.match(/<loc>[^<]+<\/loc>/g)?.length);
@@ -97,7 +108,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(24);
+    expect(FIXED_ROUTES).toHaveLength(26);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

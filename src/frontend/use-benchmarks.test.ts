@@ -186,6 +186,45 @@ function codingEnvelope(entryOverrides: Record<string, unknown> = {}) {
   };
 }
 
+function categoryEvidenceEnvelope(
+  key: 'llm-reasoning' | 'llm-knowledge',
+  metricKey: 'benchlm:category:reasoning' | 'benchlm:category:knowledge',
+  entryOverrides: Record<string, unknown> = {},
+) {
+  const value = codingEnvelope();
+  const currentEntry = value.data.entries[0];
+  const category = metricKey === 'benchlm:category:reasoning' ? 'reasoning' : 'knowledge';
+  const metric = {
+    ...currentEntry.metric,
+    metricKey,
+    category,
+  };
+  return {
+    ...value,
+    attribution: [BENCHLM_ATTRIBUTION],
+    data: {
+      key,
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: [metricKey],
+        defaultSort: 'score-desc',
+      },
+      entries: [{
+        ...currentEntry,
+        metric,
+        metrics: [{ ...metric }],
+        primaryPrice: null,
+        blendedCostPerMillion: null,
+        contextWindowTokens: null,
+        onValueFrontier: false,
+        ...entryOverrides,
+      }],
+    },
+  };
+}
+
 function overallEnvelope(entryOverrides: Record<string, unknown> = {}) {
   const value = leaderboardEnvelope();
   const currentEntry = value.data.entries[0];
@@ -401,6 +440,57 @@ describe('useBenchmarkLeaderboard', () => {
       .toBe('/api/benchmarks/leaderboards/llm-human-preference?profile=balanced&limit=50');
     expect(leaderboardEndpoint('llm-pricing-context', 'balanced', 50, undefined, true))
       .toBe('/api/benchmarks/leaderboards/llm-pricing-context?profile=balanced&limit=50');
+  });
+
+  it.each([
+    ['llm-reasoning', 'benchlm:category:reasoning'],
+    ['llm-knowledge', 'benchlm:category:knowledge'],
+  ] as const)('accepts the published %s category evidence lens', async (key, metricKey) => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(categoryEvidenceEnvelope(key, metricKey))));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(key));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.definition.metricKeys).toEqual([metricKey]);
+    expect(result.current.envelope?.data.entries[0]?.metric?.metricKey).toBe(metricKey);
+  });
+
+  it('keeps an explicitly empty published Knowledge lens available to the frontend', async () => {
+    const payload = categoryEvidenceEnvelope('llm-knowledge', 'benchlm:category:knowledge');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: { ...payload.data, entries: [] },
+    })));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-knowledge'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.entries).toEqual([]);
+  });
+
+  it.each([
+    ['llm-reasoning', 'benchlm:category:reasoning', 'benchlm:category:knowledge'],
+    ['llm-knowledge', 'benchlm:category:knowledge', 'benchlm:category:reasoning'],
+  ] as const)('rejects a %s response that substitutes another category metric', async (key, metricKey, wrongMetricKey) => {
+    const payload = categoryEvidenceEnvelope(key, metricKey);
+    const currentEntry = payload.data.entries[0];
+    const wrongMetric = {
+      ...currentEntry.metric,
+      metricKey: wrongMetricKey,
+      category: wrongMetricKey.endsWith('reasoning') ? 'reasoning' : 'knowledge',
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: {
+        ...payload.data,
+        entries: [{ ...currentEntry, metric: wrongMetric, metrics: [{ ...wrongMetric }] }],
+      },
+    })));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(key));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
   });
 
   it('preserves published primary pricing and nullable source rank', async () => {

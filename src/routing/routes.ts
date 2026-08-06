@@ -44,6 +44,26 @@ export const LEADERBOARD_ROUTES = {
       summary: 'Agentic performance depends on the tools, policies, and task environment; inspect the evidence before generalizing a benchmark result.',
     },
   },
+  'llm-reasoning': {
+    pathname: '/leaderboards/llm/reasoning/',
+    navigationLabel: 'Reasoning',
+    seo: {
+      title: `AI Reasoning Category Evidence | ${SITE_CONFIG.name}`,
+      description: `Review supported AI reasoning category evidence from BenchLM with source-level methodology, timestamps, and ${SITE_CONFIG.name}'s explicit unavailable-data handling. This category evidence lens is not a validated BenchAlign ranking.`,
+      h1: 'AI reasoning category evidence',
+      summary: 'Reasoning is a BenchLM-published category evidence lens, not a validated BenchAlign ranking; inspect the exact source measurement before applying it to your workload.',
+    },
+  },
+  'llm-knowledge': {
+    pathname: '/leaderboards/llm/knowledge/',
+    navigationLabel: 'Knowledge',
+    seo: {
+      title: `AI Knowledge Category Evidence | ${SITE_CONFIG.name}`,
+      description: `Review supported AI knowledge category evidence from BenchLM with source-level methodology, timestamps, and ${SITE_CONFIG.name}'s explicit unavailable-data handling. This category evidence lens is not a validated BenchAlign ranking.`,
+      h1: 'AI knowledge category evidence',
+      summary: 'Knowledge is a BenchLM-published category evidence lens, not a validated BenchAlign ranking. If BenchLM has not published the reviewed category metric, this view remains unavailable rather than inferring a result.',
+    },
+  },
   'llm-human-preference': {
     pathname: '/leaderboards/llm/human-preference/',
     navigationLabel: 'Human preference',

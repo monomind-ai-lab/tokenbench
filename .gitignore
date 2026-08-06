@@ -15,6 +15,8 @@ dist/
 /leaderboards/llm/overall/index.html
 /leaderboards/llm/coding/index.html
 /leaderboards/llm/agentic/index.html
+/leaderboards/llm/reasoning/index.html
+/leaderboards/llm/knowledge/index.html
 /leaderboards/llm/human-preference/index.html
 /leaderboards/llm/value/index.html
 /leaderboards/llm/pricing-context/index.html

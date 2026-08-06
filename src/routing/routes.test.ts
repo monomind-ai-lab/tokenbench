@@ -16,6 +16,8 @@ const fixedRouteCases = [
   ['/leaderboards/llm/overall', { kind: 'leaderboard', key: 'llm-overall' }],
   ['/leaderboards/llm/coding', { kind: 'leaderboard', key: 'llm-coding' }],
   ['/leaderboards/llm/agentic', { kind: 'leaderboard', key: 'llm-agentic' }],
+  ['/leaderboards/llm/reasoning', { kind: 'leaderboard', key: 'llm-reasoning' }],
+  ['/leaderboards/llm/knowledge', { kind: 'leaderboard', key: 'llm-knowledge' }],
   ['/leaderboards/llm/human-preference', { kind: 'leaderboard', key: 'llm-human-preference' }],
   ['/leaderboards/llm/value', { kind: 'leaderboard', key: 'llm-value' }],
   ['/leaderboards/llm/pricing-context', { kind: 'leaderboard', key: 'llm-pricing-context' }],
@@ -53,6 +55,8 @@ describe('TokenBench route registry', () => {
     expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'methodologyBenchAlign' });
     expect(matchRoute('/leaderboard')).toEqual({ kind: 'redirect', to: '/leaderboards/' });
     expect(matchRoute('/leaderboard/llm/coding')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/coding/' });
+    expect(matchRoute('/leaderboard/llm/reasoning')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/reasoning/' });
+    expect(matchRoute('/leaderboard/llm/knowledge')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/knowledge/' });
     expect(matchRoute('/leaderboard/not-a-real-route/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/tools/')).toEqual({ kind: 'tools' });
     expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('Overall benchmarks');
@@ -80,8 +84,10 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/leaderboards/llm/agentic/index.html',
       '/generated-tokenbench/leaderboards/llm/coding/index.html',
       '/generated-tokenbench/leaderboards/llm/human-preference/index.html',
+      '/generated-tokenbench/leaderboards/llm/knowledge/index.html',
       '/generated-tokenbench/leaderboards/llm/overall/index.html',
       '/generated-tokenbench/leaderboards/llm/pricing-context/index.html',
+      '/generated-tokenbench/leaderboards/llm/reasoning/index.html',
       '/generated-tokenbench/leaderboards/llm/value/index.html',
       '/generated-tokenbench/leaderboards/media/image-editing/index.html',
       '/generated-tokenbench/leaderboards/media/image-to-video/index.html',
@@ -99,6 +105,8 @@ describe('TokenBench route registry', () => {
 
   it('keeps human-readable navigation labels on the single leaderboard registry', () => {
     expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('Overall benchmarks');
+    expect(LEADERBOARD_ROUTES['llm-reasoning'].navigationLabel).toBe('Reasoning');
+    expect(LEADERBOARD_ROUTES['llm-knowledge'].navigationLabel).toBe('Knowledge');
     expect(LEADERBOARD_ROUTES['media-text-to-video'].navigationLabel).toBe('Text to video');
   });
 });

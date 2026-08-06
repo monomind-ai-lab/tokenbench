@@ -20,6 +20,8 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
   { route: { kind: 'leaderboard', key: 'llm-coding' }, canonical: `${origin}/leaderboards/llm/coding/` },
   { route: { kind: 'leaderboard', key: 'llm-agentic' }, canonical: `${origin}/leaderboards/llm/agentic/` },
+  { route: { kind: 'leaderboard', key: 'llm-reasoning' }, canonical: `${origin}/leaderboards/llm/reasoning/` },
+  { route: { kind: 'leaderboard', key: 'llm-knowledge' }, canonical: `${origin}/leaderboards/llm/knowledge/` },
   { route: { kind: 'leaderboard', key: 'llm-human-preference' }, canonical: `${origin}/leaderboards/llm/human-preference/` },
   { route: { kind: 'leaderboard', key: 'llm-value' }, canonical: `${origin}/leaderboards/llm/value/` },
   { route: { kind: 'leaderboard', key: 'llm-pricing-context' }, canonical: `${origin}/leaderboards/llm/pricing-context/` },
@@ -70,5 +72,17 @@ describe('route metadata registry', () => {
 
     expect(page.canonical).toBe(`${origin}/compare/a-vs-b`);
     expect(page.openGraph.url).toBe(`${origin}/compare/a-vs-b`);
+  });
+
+  it.each([
+    ['llm-reasoning', 'Reasoning'],
+    ['llm-knowledge', 'Knowledge'],
+  ] as const)('labels %s as a category evidence lens rather than a BenchAlign ranking', (key, label) => {
+    const page = metadataForRoute({ kind: 'leaderboard', key });
+
+    expect(page.title).toContain(label);
+    expect(page.description).toContain('category evidence lens');
+    expect(page.description).toContain('not a validated BenchAlign ranking');
+    expect(page.canonical).toBe(`${origin}/leaderboards/llm/${label.toLowerCase()}/`);
   });
 });

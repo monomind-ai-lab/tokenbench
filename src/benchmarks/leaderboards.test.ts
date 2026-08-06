@@ -82,6 +82,8 @@ describe('frozen v1 leaderboard definitions', () => {
       'llm-overall': { metricKeys: ['benchlm:overall:raw'], defaultSort: 'score-desc' },
       'llm-coding': { metricKeys: ['benchlm:category:coding'], defaultSort: 'score-desc' },
       'llm-agentic': { metricKeys: ['benchlm:category:agentic'], defaultSort: 'score-desc' },
+      'llm-reasoning': { metricKeys: ['benchlm:category:reasoning'], defaultSort: 'score-desc' },
+      'llm-knowledge': { metricKeys: ['benchlm:category:knowledge'], defaultSort: 'score-desc' },
       'llm-human-preference': { metricKeys: ['lmarena:text_style_control:overall'], defaultSort: 'rank-asc' },
       'llm-value': { metricKeys: ['benchlm:overall:raw'], defaultSort: 'pareto-score-desc' },
       'llm-pricing-context': { sourceId: 'openrouter', defaultSort: 'price-asc', userSortable: true },
@@ -98,6 +100,38 @@ describe('frozen v1 leaderboard definitions', () => {
       'media-image-to-video': { metricKeys: ['lmarena:image_to_video:overall'], defaultSort: 'rank-asc' },
       'media-video-editing': { metricKeys: ['lmarena:video_edit:overall'], defaultSort: 'rank-asc' },
     });
+  });
+});
+
+describe('Reasoning and Knowledge evidence lenses', () => {
+  it.each([
+    ['llm-reasoning', 'benchlm:category:reasoning', 'reasoning', 'benchlm:category:knowledge', 'knowledge'],
+    ['llm-knowledge', 'benchlm:category:knowledge', 'knowledge', 'benchlm:category:reasoning', 'reasoning'],
+  ] as const)('maps %s to only its reviewed category metric', (key, metricKey, category, otherMetricKey, otherCategory) => {
+    const alpha = model({ modelKey: 'alpha', slug: 'alpha' });
+    const zeta = model({ modelKey: 'zeta', slug: 'zeta' });
+    const estimated = model({ modelKey: 'estimated', slug: 'estimated', evidenceStatus: 'estimated' });
+    const wrongLens = model({ modelKey: 'wrong-lens', slug: 'wrong-lens' });
+
+    expect(LEADERBOARD_DEFINITIONS[key].metricKeys).toEqual([metricKey]);
+
+    const result = buildLeaderboard(key, [wrongLens, zeta, estimated, alpha], [
+      metric({ modelKey: 'zeta', sourceModelId: 'zeta', metricKey, category, value: 90 }),
+      metric({ modelKey: 'alpha', sourceModelId: 'alpha', metricKey, category, value: 90 }),
+      metric({ modelKey: 'estimated', sourceModelId: 'estimated', metricKey, category, value: 100 }),
+      metric({ modelKey: 'wrong-lens', sourceModelId: 'wrong-lens', metricKey: otherMetricKey, category: otherCategory, value: 101 }),
+    ], [], 'balanced');
+
+    expect(result.entries.map((entry) => entry.model.slug)).toEqual(['alpha', 'zeta']);
+    expect(result.entries.every((entry) => entry.metric?.metricKey === metricKey)).toBe(true);
+  });
+
+  it('keeps a published-but-absent Knowledge lens explicitly empty', () => {
+    const result = buildLeaderboard('llm-knowledge', [model()], [
+      metric({ metricKey: 'benchlm:category:reasoning', category: 'reasoning' }),
+    ], [], 'balanced');
+
+    expect(result.entries).toEqual([]);
   });
 });
 

@@ -161,6 +161,28 @@ describe('parseBenchLm', () => {
     expect(batch.metrics.some((metric) => metric.metricKey === 'benchlm:category:coding')).toBe(false);
   });
 
+  it('preserves reviewed Reasoning evidence without inferring an absent Knowledge category', async () => {
+    const source = payloads();
+    const sourceModel = (source.models as { items: Array<Record<string, unknown>> }).items[0];
+    const ranking = sourceModel.ranking as { categoryRankingEligible: Record<string, boolean> };
+    const scores = sourceModel.scores as {
+      displayCategoryScores: Record<string, number | null>;
+      verifiedDisplayCategoryScores: Record<string, number | null>;
+    };
+    ranking.categoryRankingEligible.reasoning = true;
+    ranking.categoryRankingEligible.knowledge = true;
+    scores.displayCategoryScores.reasoning = 86.5;
+    scores.verifiedDisplayCategoryScores.reasoning = 87.25;
+    scores.displayCategoryScores.knowledge = 99.5;
+    scores.verifiedDisplayCategoryScores.knowledge = 99.75;
+
+    const batch = await parsePayloads(source);
+
+    expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.metricKey === 'benchlm:category:reasoning'))
+      .toMatchObject({ category: 'reasoning', value: 87.25, rankingEligible: true });
+    expect(batch.metrics.some((metric) => metric.metricKey === 'benchlm:category:knowledge')).toBe(false);
+  });
+
   it('fails before persistence when a prohibited definition has a non-zero weight', async () => {
     const source = payloads();
     const benchmarks = source.benchmarks as { items: Array<Record<string, unknown>> };

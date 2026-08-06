@@ -27,6 +27,8 @@ export interface LeaderboardDefinition {
 const BENCHLM_OVERALL = 'benchlm:overall:raw';
 const BENCHLM_CODING = 'benchlm:category:coding';
 const BENCHLM_AGENTIC = 'benchlm:category:agentic';
+const BENCHLM_REASONING = 'benchlm:category:reasoning';
+const BENCHLM_KNOWLEDGE = 'benchlm:category:knowledge';
 const BENCHLM_MULTIMODAL = 'benchlm:category:multimodal';
 const LMARENA_HUMAN_PREFERENCE = 'lmarena:text_style_control:overall';
 const LMARENA_VISION = 'lmarena:vision_style_control:overall';
@@ -50,6 +52,18 @@ export const LEADERBOARD_DEFINITIONS = {
     kind: 'benchlm',
     sourceId: 'benchlm',
     metricKeys: [BENCHLM_AGENTIC],
+    defaultSort: 'score-desc',
+  },
+  'llm-reasoning': {
+    kind: 'benchlm',
+    sourceId: 'benchlm',
+    metricKeys: [BENCHLM_REASONING],
+    defaultSort: 'score-desc',
+  },
+  'llm-knowledge': {
+    kind: 'benchlm',
+    sourceId: 'benchlm',
+    metricKeys: [BENCHLM_KNOWLEDGE],
     defaultSort: 'score-desc',
   },
   'llm-human-preference': {
