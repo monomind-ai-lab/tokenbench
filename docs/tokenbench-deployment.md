@@ -124,6 +124,9 @@ recording values here:
    name/email pair, `BREVO_CAMPAIGN_MONTHLY_CHEATSHEET_LIST_ID`,
    `TOKENBENCH_PUBLICATION_VERIFY_KEY`, `TOKENBENCH_NEWSLETTER_ARTIFACT_ROOT`,
    and `TOKENBENCH_NEWSLETTER_STATE_ROOT`; record none of their values here.
+   The same `TOKENBENCH_PUBLICATION_VERIFY_KEY` is required by the cheatsheet
+   generator to validate the frozen prior-publication receipt in the changes
+   envelope and by the draft CLI to validate the signed deployment receipt.
 5. Confirm that `/api/newsletter/subscribe` stays browser-only: it requires an
    `Origin` equal to the request URL origin, accepts JSON only, and returns a
    generic response. Direct scripts, back-office servers, and cross-origin
@@ -167,21 +170,29 @@ or send email.
 Publishing the reviewed artifact bundle is a separate, explicitly authorized
 operation. It must create immutable public HTTPS URLs for every receipt-listed
 file, especially the PDF and CSV, then generate a signed deployment receipt
-that names that exact base URL. Do not point a receipt at mutable "latest"
-paths, private URLs, redirects of unknown provenance, or an unverified CDN
-response.
+that names that exact base URL. The receipt's `artifactBaseUrl` must be an
+HTTPS trailing-slash URL whose path includes both `manifest.revision` and
+`sha256-<canonical-manifest-hash>` (the SHA-256 hex digest of the canonical
+manifest JSON). Do not point a receipt at mutable "latest" paths, private URLs,
+redirects of unknown provenance, or an unverified CDN response.
 
 Only after that publication and a human factual/editorial review may an
 authorized operator create a draft. The `--changes` path below names the exact
 verified input envelope retained under the artifact root; it is not a generated
-cheatsheet file:
+cheatsheet file. All three file arguments are relative to
+`TOKENBENCH_NEWSLETTER_ARTIFACT_ROOT`; the distinct, private
+`TOKENBENCH_NEWSLETTER_STATE_ROOT` contains only the CLI's internal locks and
+verified receipts. The shell guard deliberately refuses to run until an
+operator has copied the exact `artifactBaseUrl` from the already verified,
+signed deployment receipt—do not construct it by hand:
 
 ~~~sh
+: "${TOKENBENCH_SIGNED_ARTIFACT_BASE_URL:?copy the signed receipt artifactBaseUrl verbatim}"
 npm run create:newsletter-draft -- \
   --manifest 2026-08-frozen/tokenbench-cheatsheet.manifest.json \
   --changes inputs/revision-changes.json \
   --deployment-receipt receipts/2026-08-frozen-deployment.json \
-  --artifact-base-url https://artifacts.example.invalid/tokenbench/2026-08-frozen/
+  --artifact-base-url "$TOKENBENCH_SIGNED_ARTIFACT_BASE_URL"
 ~~~
 
 The command verifies the signed receipt, local file hashes, immutable public
@@ -190,6 +201,13 @@ Brevo **draft**. It neither uploads artifacts nor calls test-send, schedule, or
 send endpoints. Creating a draft is still a remote Brevo mutation and needs its
 own authorization; approving, scheduling, or sending that draft is a separate
 human action outside this repository.
+
+Deploying the catalog, configuring Pages, and deploying the signup endpoint do
+not provision or mutate Brevo resources. Once pre-existing DOI configuration is
+present, a user-initiated browser signup can request that DOI flow, but it
+cannot create a sender, list, template, or campaign. The explicitly and
+separately authorized draft CLI above is the only operator command here that
+intentionally creates or reconciles a remote Brevo campaign draft.
 
 Back up the private state root—including receipt and dedupe records—before key
 rotation or changing the environment. Retain it with access controls sufficient

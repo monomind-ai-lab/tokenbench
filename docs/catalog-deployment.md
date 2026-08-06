@@ -213,9 +213,15 @@ recording their values in source, browser bundles, logs, or this document:
 | `BREVO_DOI_TEMPLATE_ID`, `BREVO_DOI_REDIRECT_URL` | The template is Brevo's reviewed double-opt-in confirmation template, uses the verified TokenBench sender, and redirects to the reviewed confirmation URL on the canonical origin. |
 | Brevo sender and unsubscribe settings | The sender is verified in Brevo and the delivered newsletter/template has the required unsubscribe or preference-management destination before any campaign draft review. |
 
-No dashboard setting, template, sender, list, secret, or campaign is created by
-this repository. A missing or invalid binding leaves signup unavailable with a
-generic retry response; it must not silently collect addresses elsewhere.
+This catalog-deployment runbook and deployment of the signup endpoint provision
+nothing in Brevo: they do not create a dashboard setting, template, sender,
+list, secret, or campaign. After those resources already exist, a
+user-initiated browser signup may request the configured double opt-in flow; it
+still cannot create Brevo configuration or a campaign. The separately
+authorized campaign-draft CLI described in the deployment runbook is the only
+operation here that intentionally creates or reconciles a remote Brevo draft.
+A missing or invalid binding leaves signup unavailable with a generic retry
+response; it must not silently collect addresses elsewhere.
 
 ## Frozen monthly artifact boundary
 
@@ -234,11 +240,16 @@ signed deployment receipt under that artifact root with the generated manifest;
 the generator deliberately does not invent either input. Do not replace an
 existing output directory.
 
-The campaign-draft command accepts only local relative paths beneath its
-configured artifact/state roots and a signed deployment receipt. Its
-`--artifact-base-url` must be the already-public immutable HTTPS location whose
-manifest-listed PDF and CSV URLs match that receipt. Remote artifact upload is
-outside this command and requires a separately authorized publication job.
+The campaign-draft CLI accepts `--manifest`, `--changes`, and
+`--deployment-receipt` only as local relative input paths beneath
+`TOKENBENCH_NEWSLETTER_ARTIFACT_ROOT`. Its separate
+`TOKENBENCH_NEWSLETTER_STATE_ROOT` is private internal state for per-dedupe
+locks and verified draft receipts; it is never a CLI input location or a public
+artifact source. The CLI's `--artifact-base-url` must copy the exact signed
+receipt value: an already-public immutable HTTPS location whose path includes
+both the manifest revision and `sha256-<canonical-manifest-hash>`, with the
+manifest-listed PDF and CSV URLs matching that receipt. Remote artifact upload
+is outside this command and requires a separately authorized publication job.
 
 ## Ordered release checks
 
