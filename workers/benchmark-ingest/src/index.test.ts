@@ -196,6 +196,9 @@ function hubFallbackFetch(options: {
       });
     }
     if (url.hostname === downloadHost) {
+      if (init?.redirect === 'error') {
+        throw new TypeError('Invalid redirect value: Cloudflare Workers supports follow or manual');
+      }
       return new Response(new TextEncoder().encode(url.pathname.slice(1, -'.parquet'.length)));
     }
     return primary(input, init);
