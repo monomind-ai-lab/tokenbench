@@ -2,7 +2,7 @@
 
 ## Candidate and boundary
 
-- Application candidate: `813458fa3abafd30f63058cc5a57624ef9ba1241`
+- Application candidate: `7696cfe2d46ea3ba9eaa1ccc6cdf8436f56729c6`
 - Audit date: 2026-08-06 (Asia/Taipei)
 - Runtime: local Vite preview serving the generated `dist` directory on
   `http://127.0.0.1:4175`
@@ -25,9 +25,9 @@ Recorded result:
 Generated 23 crawlable fixed pages and public/sitemaps/static.xml.
 vite v6.4.3 building for production...
 ✓ 1729 modules transformed.
-✓ built in 1.81s
-Running 41 tests using 1 worker
-41 passed (4.8m)
+✓ built
+Running 42 tests using 1 worker
+42 passed
 ~~~
 
 The command first runs `npm run build`, then starts `vite preview` through
@@ -50,7 +50,7 @@ navigations.
 | `/leaderboards/llm/coding/` | Named coding leaderboard results | Pass | Pass | Pass | Pass |
 | `/leaderboards/media/text-to-image/` | Named media leaderboard results | Pass | Pass | Pass | Pass |
 | `/compare/` | `.comparison-hub-page` | Pass | Pass | Pass | Pass |
-| `/compare/alpha-vs-beta` | `.comparison-detail-page` | Pass | Pass | Pass | Pass |
+| `/compare/alpha-vs-beta` | Client-only comparison hydration sentinel | Pass | Pass | Pass | Pass |
 | `/guides/` | Hydrated guide hub | Pass | Pass | Pass | Pass |
 | `/guides/track-claude-code-usage/` | Hydrated guide article | Pass | Pass | Pass | Pass |
 
@@ -66,8 +66,9 @@ control below 768 CSS pixels.
   Alpha's displayed workload price from `$3.50 / 1M` to `$5.00 / 1M`.
 - Calculator focus order reached provider, plan, model, workload, language,
   theme, and evidence controls with a visible focus indicator.
-- Activating skip links moved focus to the home main landmark, calculator, guide
-  hub, and guide article targets.
+- Activating skip links moved focus to the home main landmark, persistent
+  calculator target (including before catalog data resolves), guide hub, and
+  guide article targets.
 - Escape closed compact navigation; chart alternative text exposed current
   tokens and API-equivalent value; reduced-motion behavior passed.
 - Calculator loading, empty, error, bootstrap, and stale states passed.
@@ -91,6 +92,11 @@ responsive composition, clipping, and unintended overlays.
 | Guide article | 1024 dark | [production-article-1024-dark.png](production-article-1024-dark.png) |
 
 Manual disposition: no unresolved critical, high, or medium visual finding.
+
+The final independent review also required the calculator target to persist
+during loading and the dynamic comparison's matrix marker to be client-only.
+Both were reproduced as failing regressions, fixed, and included in the 42-test
+suite recorded above.
 
 ## Impeccable audit disposition
 
