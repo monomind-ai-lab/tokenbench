@@ -108,6 +108,18 @@ function compactLabel(value: string, maxBytes: number, fallback: string): string
   return truncateUtf8(sanitizeCompactLabel(value) || fallback, maxBytes);
 }
 
+function summaryModelLabel(models: readonly [BenchmarkModel, BenchmarkModel], index: 0 | 1): string {
+  return compactLabel(displayedModelName(models, index), COMPACT_SCORE_MODEL_LABEL_UTF8_BYTES, 'Model');
+}
+
+function summaryCategoryLabel(value: string): string {
+  return compactLabel(value, COMPACT_SCORE_CATEGORY_LABEL_UTF8_BYTES, 'Metric');
+}
+
+function summarySentence(value: string): string {
+  return truncateUtf8(sanitizeCompactLabel(value), COMPACT_SCORE_CLAIM_UTF8_BYTES);
+}
+
 function compareMetricRowsForSummary(left: ComparisonMetricRow, right: ComparisonMetricRow): number {
   const labelOrder = compareUtf8Binary(
     friendlyMetricLabel(left.metricKey, left.category),
@@ -162,7 +174,7 @@ function scoreSentences(
   leads: readonly ScoreLead[],
   models: readonly [BenchmarkModel, BenchmarkModel],
 ): readonly string[] {
-  return leads.map((lead) => `On ${lead.category}, ${displayedModelName(models, lead.winnerIndex)} has a higher supported BenchLM score (${lead.winnerValue} vs ${lead.otherValue}).`);
+  return leads.map((lead) => `On ${summaryCategoryLabel(lead.category)}, ${summaryModelLabel(models, lead.winnerIndex)} has a higher supported BenchLM score (${lead.winnerValue} vs ${lead.otherValue}).`);
 }
 
 function joinLabels(labels: readonly string[]): string {
@@ -181,23 +193,17 @@ function compactScoreSentence(
     if (modelLeads.length === 0) return [];
     const labels = modelLeads
       .slice(0, COMPACT_SCORE_CATEGORIES_PER_MODEL)
-      .map((lead) => compactLabel(lead.category, COMPACT_SCORE_CATEGORY_LABEL_UTF8_BYTES, 'Metric'));
+      .map((lead) => summaryCategoryLabel(lead.category));
     const omittedCount = modelLeads.length - labels.length;
     const omittedCopy = omittedCount === 0
       ? ''
       : ` (and ${omittedCount} more categor${omittedCount === 1 ? 'y' : 'ies'})`;
     const scoreNoun = modelLeads.length === 1 ? 'a higher score' : 'higher scores';
-    const modelLabel = compactLabel(displayedModelName(models, winnerIndex), COMPACT_SCORE_MODEL_LABEL_UTF8_BYTES, 'Model');
+    const modelLabel = summaryModelLabel(models, winnerIndex);
     return [`${modelLabel} has ${scoreNoun} in ${joinLabels(labels)}${omittedCopy}`];
   });
   if (groupedClaims.length === 0) return null;
-  const claim = `Across compatible supported BenchLM categories, ${groupedClaims.join('; ')}.`;
-  // The documented component budgets above guarantee this aggregate fits the
-  // final claim cap while retaining a complete compact clause for each model.
-  if (utf8ByteLength(claim) > COMPACT_SCORE_CLAIM_UTF8_BYTES) {
-    throw new Error('Compact score evidence exceeded its bounded UTF-8 claim budget.');
-  }
-  return claim;
+  return `Across compatible supported BenchLM categories, ${groupedClaims.join('; ')}.`;
 }
 
 function rateSentence(
@@ -216,7 +222,7 @@ function rateSentence(
   const winnerValue = winnerIndex === 0 ? displayedLeft : displayedRight;
   const otherValue = winnerIndex === 0 ? displayedRight : displayedLeft;
   const label = dimension === 'inputUsdPerMillion' ? 'Input API price' : 'Output API price';
-  return `${label}: ${displayedModelName(models, winnerIndex)} has the lower verified rate (${winnerValue} vs ${otherValue}).`;
+  return `${label}: ${summaryModelLabel(models, winnerIndex)} has the lower verified rate (${winnerValue} vs ${otherValue}).`;
 }
 
 function contextSentence(models: readonly [BenchmarkModel, BenchmarkModel]): string | null {
@@ -226,7 +232,7 @@ function contextSentence(models: readonly [BenchmarkModel, BenchmarkModel]): str
   const winnerIndex: 0 | 1 = left > right ? 0 : 1;
   const winner = winnerIndex === 0 ? left : right;
   const other = winnerIndex === 0 ? right : left;
-  return `Context window: ${displayedModelName(models, winnerIndex)} has the larger published context window (${formatContextWindow(winner)} vs ${formatContextWindow(other)}).`;
+  return `Context window: ${summaryModelLabel(models, winnerIndex)} has the larger published context window (${formatContextWindow(winner)} vs ${formatContextWindow(other)}).`;
 }
 
 function coverageFor(sharedMetricCount: number): ComparisonSummary['coverage'] {
@@ -290,7 +296,7 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
     pricingClaims,
     claimLimit,
   );
-  const sentences = caveat === null ? evidenceClaims : [...evidenceClaims, caveat];
+  const sentences = (caveat === null ? evidenceClaims : [...evidenceClaims, caveat]).map(summarySentence);
 
   return { heading: 'Comparison summary', sentences, coverage };
 }

@@ -10,6 +10,14 @@ function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
 }
 
+function expectSafeSummarySentences(sentences: readonly string[]): void {
+  for (const sentence of sentences) {
+    expect(utf8ByteLength(sentence)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
+    expect(sentence).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
+    expect(new TextDecoder('utf-8', { fatal: true }).decode(new TextEncoder().encode(sentence))).toBe(sentence);
+  }
+}
+
 function model(
   modelKey: string,
   name: string,
@@ -401,6 +409,47 @@ describe('comparisonSummary', () => {
     ]);
     expect(utf8ByteLength(summary.sentences[0]!)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
     expect(summary.sentences.join(' ')).not.toMatch(/wins|best model|universal winner/i);
+  });
+
+  it('sanitizes ordinary supported score labels at Unicode byte boundaries', () => {
+    const alphaName = `A\u0000${'界'.repeat(11)}`;
+    const models = [model('provider:alpha', alphaName), model('provider:beta', 'Beta')] as const;
+    const category = `c\u0007${'🧠'.repeat(9)}`;
+    const compactAlphaName = `A ${'界'.repeat(9)}…`;
+    const compactCategory = `C ${'🧠'.repeat(6)}…`;
+    const summary = comparisonSummary(comparisonWith(models, [sharedRow(models[0], models[1], category, 90, 80)]));
+
+    expect(utf8ByteLength(compactAlphaName)).toBe(COMPACT_LABEL_BYTE_CAP);
+    expect(summary.sentences).toEqual([
+      `On ${compactCategory}, ${compactAlphaName} has a higher supported BenchLM score (90 vs 80).`,
+      'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
+    ]);
+    expectSafeSummarySentences(summary.sentences);
+  });
+
+  it('sanitizes bounded model labels in tied score pricing and context sentences', () => {
+    const alphaName = `Alpha\u0000${'x'.repeat(40)}`;
+    const betaName = `Beta\u0007${'y'.repeat(40)}`;
+    const models = [
+      model('provider:alpha', alphaName, { contextWindowTokens: 256_000 }),
+      model('provider:beta', betaName, { contextWindowTokens: 128_000 }),
+    ] as const;
+    const compactAlphaName = `Alpha ${'x'.repeat(23)}…`;
+    const compactBetaName = `Beta ${'y'.repeat(24)}…`;
+    const summary = comparisonSummary(comparisonWith(models, [
+      sharedRow(models[0], models[1], 'coding', 90, 90),
+      sharedRow(models[0], models[1], 'knowledge', 80, 80),
+      sharedRow(models[0], models[1], 'multimodal', 70, 70),
+      sharedRow(models[0], models[1], 'reasoning', 85, 85),
+    ], [[price(models[0], 1, 4)], [price(models[1], 2, 3)]]));
+
+    expect(summary.sentences).toEqual([
+      'The compatible supported BenchLM scores are tied across 4 shared metrics.',
+      `Input API price: ${compactAlphaName} has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).`,
+      `Output API price: ${compactBetaName} has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).`,
+      `Context window: ${compactAlphaName} has the larger published context window (256,000 tokens vs 128,000 tokens).`,
+    ]);
+    expectSafeSummarySentences(summary.sentences);
   });
 
   it('adds a limited-evidence caveat after one compatible shared metric', () => {
