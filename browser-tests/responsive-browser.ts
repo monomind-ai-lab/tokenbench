@@ -80,9 +80,9 @@ async function installCatalogFixture(page: Page, catalog: CatalogResponse, statu
       const headers = response.headers();
       expect(response.status(), `Expected ${description} to be delivered with status ${status}.`).toBe(status);
       expect(headers[CATALOG_FIXTURE_IDENTITY_HEADER], `Expected the browser to receive ${description}, not a cached or competing catalog response.`).toBe(signature);
-      expect(await response.json() as CatalogResponse, `Expected the browser to receive the full ${description} payload.`).toEqual(catalog);
 
       if (status >= 200 && status < 300) {
+        expect(await response.json() as CatalogResponse, `Expected the browser to receive the full ${description} payload.`).toEqual(catalog);
         await expect.poll(async () => page.evaluate((cacheKey) => {
           const raw = window.localStorage.getItem(cacheKey);
           if (!raw) return null;
@@ -694,11 +694,27 @@ test.describe('responsive calculator browser harness', () => {
 
   test('uses reference-matched outlined choices and selected preset states', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
+    const providerBSourceId = 'provider-b-subscription';
     await openCalculator(page, {
       ...FRONTEND_TEST_CATALOG,
+      provenance: [
+        ...FRONTEND_TEST_CATALOG.provenance,
+        {
+          ...FRONTEND_TEST_CATALOG.provenance[0],
+          id: providerBSourceId,
+          providerId: 'provider-b',
+          sourceUrl: 'https://provider-b.example/pricing',
+        },
+      ],
       plans: [
         ...FRONTEND_TEST_CATALOG.plans,
-        { ...FRONTEND_TEST_CATALOG.plans[0], id: 'provider-b:starter', providerId: 'provider-b', displayName: 'Provider B Starter' },
+        {
+          ...FRONTEND_TEST_CATALOG.plans[0],
+          id: 'provider-b:starter',
+          providerId: 'provider-b',
+          displayName: 'Provider B Starter',
+          sourceId: providerBSourceId,
+        },
       ],
     });
 
@@ -755,6 +771,7 @@ test.describe('responsive calculator browser harness', () => {
     await expect(page.getByRole('alert')).toContainText('Catalog unavailable');
     await expect(page.getByRole('heading', { name: /Individual Subscription Plans/i })).toBeVisible();
     await expect(page.getByRole('alert')).toContainText('checked-in verified bootstrap');
+    await expect.poll(() => page.evaluate((cacheKey) => window.localStorage.getItem(cacheKey), CATALOG_CACHE_KEY)).toBeNull();
 
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, freshness: { status: 'stale', checkedAt: '2026-08-02T00:00:00.000Z' } });
