@@ -83,7 +83,7 @@ function replaceUnpairedSurrogates(value: string): string {
 function sanitizeCompactLabel(value: string): string {
   return replaceUnpairedSurrogates(value)
     .normalize('NFC')
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
     .replace(/\s+/gu, ' ')
     .trim();
 }

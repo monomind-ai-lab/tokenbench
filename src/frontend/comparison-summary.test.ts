@@ -13,7 +13,7 @@ function utf8ByteLength(value: string): number {
 function expectSafeSummarySentences(sentences: readonly string[]): void {
   for (const sentence of sentences) {
     expect(utf8ByteLength(sentence)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
-    expect(sentence).not.toMatch(/[\u0000-\u001F\u007F-\u009F]/u);
+    expect(sentence).not.toMatch(/[\p{Cc}\p{Cf}]/u);
     expect(new TextDecoder('utf-8', { fatal: true }).decode(new TextEncoder().encode(sentence))).toBe(sentence);
   }
 }
@@ -423,6 +423,57 @@ describe('comparisonSummary', () => {
     expect(summary.sentences).toEqual([
       `On ${compactCategory}, ${compactAlphaName} has a higher supported BenchLM score (90 vs 80).`,
       'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
+    ]);
+    expectSafeSummarySentences(summary.sentences);
+  });
+
+  it('removes bidi and format controls from ordinary score labels without changing summary copy', () => {
+    const alphaName = 'Alpha🧠e\u0301\u202E\u2066\u2069\u200B';
+    const models = [model('provider:alpha', alphaName), model('provider:beta', 'Beta')] as const;
+    const category = 'coding\u202E\u2066\u2069\u200B';
+    const summary = comparisonSummary(comparisonWith(models, [sharedRow(models[0], models[1], category, 90, 80)]));
+
+    expect(summary.sentences).toEqual([
+      'On Coding, Alpha🧠é has a higher supported BenchLM score (90 vs 80).',
+      'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
+    ]);
+    expectSafeSummarySentences(summary.sentences);
+  });
+
+  it('removes bidi and format controls from compact score labels without changing summary copy', () => {
+    const models = [
+      model('provider:alpha', 'Alpha\u202E\u2066\u2069\u200B'),
+      model('provider:beta', 'Beta\u202E\u2067\u2069\u200C'),
+    ] as const;
+    const summary = comparisonSummary(comparisonWith(models, supportedScoreLeadRows(
+      models,
+      ['alpha-a\u202E', 'alpha-b\u2066', 'alpha-c\u200B', 'alpha-d\u2069'],
+      ['beta-a\u202E', 'beta-b\u2067', 'beta-c\u200C', 'beta-d\u2069'],
+    )));
+
+    expect(summary.sentences).toEqual([
+      'Across compatible supported BenchLM categories, Alpha has higher scores in Alpha A, Alpha B, and Alpha C (and 1 more category); Beta has higher scores in Beta A, Beta B, and Beta C (and 1 more category).',
+    ]);
+    expectSafeSummarySentences(summary.sentences);
+  });
+
+  it('removes bidi and format controls from tied price and context labels without changing summary copy', () => {
+    const models = [
+      model('provider:alpha', 'Alpha🧠e\u0301\u202E\u2066\u2069\u200B', { contextWindowTokens: 256_000 }),
+      model('provider:beta', 'Beta🐙n\u0303\u202E\u2067\u2069\u200C', { contextWindowTokens: 128_000 }),
+    ] as const;
+    const summary = comparisonSummary(comparisonWith(models, [
+      sharedRow(models[0], models[1], 'coding', 90, 90),
+      sharedRow(models[0], models[1], 'knowledge', 80, 80),
+      sharedRow(models[0], models[1], 'multimodal', 70, 70),
+      sharedRow(models[0], models[1], 'reasoning', 85, 85),
+    ], [[price(models[0], 1, 4)], [price(models[1], 2, 3)]]));
+
+    expect(summary.sentences).toEqual([
+      'The compatible supported BenchLM scores are tied across 4 shared metrics.',
+      'Input API price: Alpha🧠é has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
+      'Output API price: Beta🐙ñ has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).',
+      'Context window: Alpha🧠é has the larger published context window (256,000 tokens vs 128,000 tokens).',
     ]);
     expectSafeSummarySentences(summary.sentences);
   });
