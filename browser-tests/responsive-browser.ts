@@ -1633,25 +1633,26 @@ test.describe('handler-backed compare browser coverage', () => {
 test.describe('viewport and theme hydration matrix', () => {
   test('waits for the handler comparison hydration entry before completing document readiness', async ({ page }) => {
     const origin = previewOrigin();
+    const hydrationEntryPath = handlerBackedAssetMode() === 'vite-source' ? '/src/main.tsx' : '/assets/main.js';
     await blockExternalRequests(page, origin);
     await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
 
-    let markSourceEntryRequested: (() => void) | undefined;
-    const sourceEntryRequested = new Promise<void>((resolve) => {
-      markSourceEntryRequested = resolve;
+    let markHydrationEntryRequested: (() => void) | undefined;
+    const hydrationEntryRequested = new Promise<void>((resolve) => {
+      markHydrationEntryRequested = resolve;
     });
-    let releaseSourceEntry: (() => void) | undefined;
-    const sourceEntryReleased = new Promise<void>((resolve) => {
-      releaseSourceEntry = resolve;
+    let releaseHydrationEntry: (() => void) | undefined;
+    const hydrationEntryReleased = new Promise<void>((resolve) => {
+      releaseHydrationEntry = resolve;
     });
-    await page.route(origin + '/src/main.tsx', async (route) => {
-      markSourceEntryRequested?.();
-      await sourceEntryReleased;
+    await page.route(origin + hydrationEntryPath, async (route) => {
+      markHydrationEntryRequested?.();
+      await hydrationEntryReleased;
       await route.continue();
     });
 
     const navigation = page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'domcontentloaded' });
-    await sourceEntryRequested;
+    await hydrationEntryRequested;
     try {
       const readiness = await Promise.race([
         navigation.then(() => 'ready' as const),
@@ -1659,7 +1660,7 @@ test.describe('viewport and theme hydration matrix', () => {
       ]);
       expect(readiness).toBe('waiting');
     } finally {
-      releaseSourceEntry?.();
+      releaseHydrationEntry?.();
     }
 
     await navigation;
