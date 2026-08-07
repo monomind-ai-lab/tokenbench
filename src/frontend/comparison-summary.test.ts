@@ -3,6 +3,13 @@ import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck } from '../be
 import type { ComparisonMetricRow, ComparisonViewModel } from './comparison-contracts';
 import { comparisonSummary, friendlyMetricLabel } from './comparison-summary';
 
+const COMPACT_LABEL_BYTE_CAP = 32;
+const COMPACT_CLAIM_BYTE_CAP = 448;
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
 function model(
   modelKey: string,
   name: string,
@@ -77,6 +84,17 @@ function sharedRow(
     modelB: metric(modelB, metricKey, category, modelBValue),
     ...overrides,
   };
+}
+
+function supportedScoreLeadRows(
+  models: readonly [BenchmarkModel, BenchmarkModel],
+  alphaCategories: readonly string[],
+  betaCategories: readonly string[],
+): readonly ComparisonMetricRow[] {
+  return [
+    ...alphaCategories.map((category, index) => sharedRow(models[0], models[1], category, 10_000 + index, index)),
+    ...betaCategories.map((category, index) => sharedRow(models[0], models[1], category, index, 10_000 + index)),
+  ];
 }
 
 function price(
@@ -299,6 +317,90 @@ describe('comparisonSummary', () => {
     expect(summary.sentences).toEqual([
       'Across compatible supported BenchLM categories, Alpha has higher scores in Coding, Multimodal, and Vision; Beta has higher scores in Agentic, Knowledge, and Reasoning.',
     ]);
+  });
+
+  it('keeps compact labels intact at the exact 32-byte boundary', () => {
+    const alphaName = 'A'.repeat(COMPACT_LABEL_BYTE_CAP);
+    const betaName = 'B'.repeat(COMPACT_LABEL_BYTE_CAP);
+    const models = [model('provider:alpha', alphaName), model('provider:beta', betaName)] as const;
+    const alphaCategories = [
+      `${'C'.repeat(31)}1`,
+      `${'C'.repeat(31)}2`,
+      `${'C'.repeat(31)}3`,
+      `${'C'.repeat(31)}4`,
+    ];
+    const betaCategories = [
+      `${'D'.repeat(31)}1`,
+      `${'D'.repeat(31)}2`,
+      `${'D'.repeat(31)}3`,
+      `${'D'.repeat(31)}4`,
+    ];
+
+    const [claim] = comparisonSummary(comparisonWith(models, supportedScoreLeadRows(models, alphaCategories, betaCategories))).sentences;
+
+    expect(claim).toBe(`Across compatible supported BenchLM categories, ${alphaName} has higher scores in ${alphaCategories[0]}, ${alphaCategories[1]}, and ${alphaCategories[2]} (and 1 more category); ${betaName} has higher scores in ${betaCategories[0]}, ${betaCategories[1]}, and ${betaCategories[2]} (and 1 more category).`);
+    expect(claim).not.toContain('…');
+    expect(utf8ByteLength(claim!)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
+  });
+
+  it('truncates compact model and category labels one byte beyond the UTF-8 boundary', () => {
+    const alphaName = `A${'x'.repeat(COMPACT_LABEL_BYTE_CAP)}`;
+    const betaName = `B${'y'.repeat(COMPACT_LABEL_BYTE_CAP)}`;
+    const models = [model('provider:alpha', alphaName), model('provider:beta', betaName)] as const;
+    const alphaCategories = [
+      `A1${'x'.repeat(31)}`,
+      `A2${'x'.repeat(31)}`,
+      `A3${'x'.repeat(31)}`,
+    ];
+    const betaCategories = [
+      `B1${'y'.repeat(31)}`,
+      `B2${'y'.repeat(31)}`,
+      `B3${'y'.repeat(31)}`,
+    ];
+    const compactAlphaName = `A${'x'.repeat(28)}…`;
+    const compactBetaName = `B${'y'.repeat(28)}…`;
+    const compactAlphaCategories = [`A1${'x'.repeat(27)}…`, `A2${'x'.repeat(27)}…`, `A3${'x'.repeat(27)}…`];
+    const compactBetaCategories = [`B1${'y'.repeat(27)}…`, `B2${'y'.repeat(27)}…`, `B3${'y'.repeat(27)}…`];
+
+    const [claim] = comparisonSummary(comparisonWith(models, supportedScoreLeadRows(models, alphaCategories, betaCategories))).sentences;
+
+    expect(claim).toBe(`Across compatible supported BenchLM categories, ${compactAlphaName} has higher scores in ${compactAlphaCategories[0]}, ${compactAlphaCategories[1]}, and ${compactAlphaCategories[2]}; ${compactBetaName} has higher scores in ${compactBetaCategories[0]}, ${compactBetaCategories[1]}, and ${compactBetaCategories[2]}.`);
+    expect(utf8ByteLength(claim!)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
+  });
+
+  it('sanitizes control whitespace and truncates Unicode labels without splitting UTF-8', () => {
+    const models = pair();
+    const unicodeCategory = `alpha\u0000\n${'🧠'.repeat(9)}`;
+    const rows = supportedScoreLeadRows(models, [unicodeCategory, 'alpha-secondary', 'alpha-third'], ['beta-one', 'beta-two']);
+
+    const [claim] = comparisonSummary(comparisonWith(models, rows)).sentences;
+    const compactUnicodeLabel = `Alpha ${'🧠'.repeat(5)}…`;
+
+    expect(claim).toContain(compactUnicodeLabel);
+    expect(claim).not.toContain('\u0000');
+    expect(claim).not.toContain('\n');
+    expect(new TextDecoder('utf-8', { fatal: true }).decode(new TextEncoder().encode(claim))).toBe(claim);
+    expect(utf8ByteLength(claim!)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
+  });
+
+  it('bounds 1,023 supported category leads while retaining operational evidence slots', () => {
+    const models = pair({ contextWindowTokens: 128_000 }, { contextWindowTokens: 64_000 });
+    const alphaCategories = Array.from({ length: 512 }, (_, index) => `alpha-${String(index).padStart(4, '0')}-${'x'.repeat(40)}`);
+    const betaCategories = Array.from({ length: 511 }, (_, index) => `beta-${String(index).padStart(4, '0')}-${'y'.repeat(40)}`);
+    const summary = comparisonSummary(comparisonWith(
+      models,
+      supportedScoreLeadRows(models, alphaCategories, betaCategories),
+      [[price(models[0], 1, 4)], [price(models[1], 2, 3)]],
+    ));
+
+    expect(summary.sentences).toEqual([
+      `Across compatible supported BenchLM categories, Alpha has higher scores in Alpha 0000 X${'x'.repeat(17)}…, Alpha 0001 X${'x'.repeat(17)}…, and Alpha 0002 X${'x'.repeat(17)}… (and 509 more categories); Beta has higher scores in Beta 0000 Y${'y'.repeat(18)}…, Beta 0001 Y${'y'.repeat(18)}…, and Beta 0002 Y${'y'.repeat(18)}… (and 508 more categories).`,
+      'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
+      'Output API price: Beta has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).',
+      'Context window: Alpha has the larger published context window (128,000 tokens vs 64,000 tokens).',
+    ]);
+    expect(utf8ByteLength(summary.sentences[0]!)).toBeLessThanOrEqual(COMPACT_CLAIM_BYTE_CAP);
+    expect(summary.sentences.join(' ')).not.toMatch(/wins|best model|universal winner/i);
   });
 
   it('adds a limited-evidence caveat after one compatible shared metric', () => {

@@ -111,6 +111,43 @@ function denseComparisonViewModel(): ComparisonViewModel {
   };
 }
 
+function largeComparisonViewModel(): ComparisonViewModel {
+  const base = denseComparisonViewModel();
+  const [modelA, modelB] = base.models;
+  const metricTemplateA = base.metricRows[0]!.modelA!;
+  const metricTemplateB = base.metricRows[0]!.modelB!;
+  const categories = [
+    'published-evidence-category-00-with-full-name',
+    'published-evidence-category-01-with-full-name',
+    'published-evidence-category-02-with-full-name',
+    'published-evidence-category-03-with-full-name',
+    'published-evidence-category-04-with-full-name',
+    'published-evidence-category-05-with-full-name',
+    'published-evidence-category-06-with-full-name',
+    'published-evidence-category-07-with-full-name',
+    'published-evidence-category-08-with-full-name',
+    'published-evidence-category-09-with-full-name',
+  ] as const;
+
+  return {
+    ...base,
+    models: [{ ...modelA, benchmarkCount: categories.length }, { ...modelB, benchmarkCount: categories.length }],
+    metricRows: categories.map((category, index) => {
+      const metricKey = `benchlm:category:${category}`;
+      const modelAWins = index % 2 === 0;
+      return {
+        metricKey,
+        category,
+        unit: 'score' as const,
+        sourceId: 'benchlm' as const,
+        methodology: 'benchlm_raw_composite' as const,
+        modelA: { ...metricTemplateA, metricKey, category, value: modelAWins ? 90 : 80 },
+        modelB: { ...metricTemplateB, metricKey, category, value: modelAWins ? 80 : 90 },
+      };
+    }),
+  };
+}
+
 function directoryEnvelope(overrides: Record<string, unknown> = {}) {
   return {
     revision: 'published-r1',
@@ -158,6 +195,26 @@ describe('comparison detail page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
+  });
+
+  it('retains every full source metric row when compact highlights omit category names', () => {
+    render(<ComparisonPage viewModel={largeComparisonViewModel()} />);
+
+    const sourceMetrics = screen.getByRole('table', { name: 'Source metric comparison' });
+    const highlights = screen.getByRole('heading', { name: 'Evidence highlights' }).closest('section');
+    expect(within(sourceMetrics).getAllByRole('rowheader').map((row) => row.textContent)).toEqual([
+      'Published Evidence Category 00 With Full Name',
+      'Published Evidence Category 01 With Full Name',
+      'Published Evidence Category 02 With Full Name',
+      'Published Evidence Category 03 With Full Name',
+      'Published Evidence Category 04 With Full Name',
+      'Published Evidence Category 05 With Full Name',
+      'Published Evidence Category 06 With Full Name',
+      'Published Evidence Category 07 With Full Name',
+      'Published Evidence Category 08 With Full Name',
+      'Published Evidence Category 09 With Full Name',
+    ]);
+    expect(highlights).toHaveTextContent('and 2 more categories');
   });
 
   it('changes selected route operational values without changing metric claims or the canonical share URL', async () => {

@@ -10,6 +10,18 @@ import {
 
 export type { ComparisonSummary } from './comparison-contracts';
 
+const COMPACT_SCORE_CATEGORIES_PER_MODEL = 3;
+const COMPACT_SCORE_MODEL_LABEL_UTF8_BYTES = 32;
+const COMPACT_SCORE_CATEGORY_LABEL_UTF8_BYTES = 32;
+/**
+ * Compact score evidence is bounded by construction: two 32-byte model labels,
+ * three 32-byte category labels per model, and a ten-digit omitted-category
+ * count fit within this UTF-8 claim budget without dropping either model.
+ */
+const COMPACT_SCORE_CLAIM_UTF8_BYTES = 448;
+const ELLIPSIS = '…';
+const UTF8_ENCODER = new TextEncoder();
+
 function titleCase(value: string): string {
   return value
     .trim()
@@ -41,6 +53,59 @@ function formatContextWindow(value: number): string {
 function displayedModelName(models: readonly [BenchmarkModel, BenchmarkModel], index: 0 | 1): string {
   const model = models[index];
   return models[1 - index].name === model.name ? `${model.name} (${model.slug})` : model.name;
+}
+
+function utf8ByteLength(value: string): number {
+  return UTF8_ENCODER.encode(value).byteLength;
+}
+
+function replaceUnpairedSurrogates(value: string): string {
+  let result = '';
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xD800 && codeUnit <= 0xDBFF) {
+      const nextCodeUnit = value.charCodeAt(index + 1);
+      if (nextCodeUnit >= 0xDC00 && nextCodeUnit <= 0xDFFF) {
+        result += value.slice(index, index + 2);
+        index += 1;
+      } else {
+        result += '\uFFFD';
+      }
+    } else if (codeUnit >= 0xDC00 && codeUnit <= 0xDFFF) {
+      result += '\uFFFD';
+    } else {
+      result += value[index]!;
+    }
+  }
+  return result;
+}
+
+function sanitizeCompactLabel(value: string): string {
+  return replaceUnpairedSurrogates(value)
+    .normalize('NFC')
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, ' ')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  if (utf8ByteLength(value) <= maxBytes) return value;
+  const ellipsisBytes = utf8ByteLength(ELLIPSIS);
+  const contentBudget = maxBytes - ellipsisBytes;
+  if (contentBudget <= 0) return ELLIPSIS;
+  let result = '';
+  let usedBytes = 0;
+  for (const codePoint of value) {
+    const codePointBytes = utf8ByteLength(codePoint);
+    if (usedBytes + codePointBytes > contentBudget) break;
+    result += codePoint;
+    usedBytes += codePointBytes;
+  }
+  return `${result}${ELLIPSIS}`;
+}
+
+function compactLabel(value: string, maxBytes: number, fallback: string): string {
+  return truncateUtf8(sanitizeCompactLabel(value) || fallback, maxBytes);
 }
 
 function compareMetricRowsForSummary(left: ComparisonMetricRow, right: ComparisonMetricRow): number {
@@ -111,16 +176,28 @@ function compactScoreSentence(
   models: readonly [BenchmarkModel, BenchmarkModel],
 ): string | null {
   const groupedClaims = ([0, 1] as const).flatMap((winnerIndex) => {
-    const labels = leads
+    const modelLeads = leads
       .filter((lead) => lead.winnerIndex === winnerIndex)
-      .map((lead) => lead.category);
-    if (labels.length === 0) return [];
-    const scoreNoun = labels.length === 1 ? 'a higher score' : 'higher scores';
-    return [`${displayedModelName(models, winnerIndex)} has ${scoreNoun} in ${joinLabels(labels)}`];
+    if (modelLeads.length === 0) return [];
+    const labels = modelLeads
+      .slice(0, COMPACT_SCORE_CATEGORIES_PER_MODEL)
+      .map((lead) => compactLabel(lead.category, COMPACT_SCORE_CATEGORY_LABEL_UTF8_BYTES, 'Metric'));
+    const omittedCount = modelLeads.length - labels.length;
+    const omittedCopy = omittedCount === 0
+      ? ''
+      : ` (and ${omittedCount} more categor${omittedCount === 1 ? 'y' : 'ies'})`;
+    const scoreNoun = modelLeads.length === 1 ? 'a higher score' : 'higher scores';
+    const modelLabel = compactLabel(displayedModelName(models, winnerIndex), COMPACT_SCORE_MODEL_LABEL_UTF8_BYTES, 'Model');
+    return [`${modelLabel} has ${scoreNoun} in ${joinLabels(labels)}${omittedCopy}`];
   });
-  return groupedClaims.length > 0
-    ? `Across compatible supported BenchLM categories, ${groupedClaims.join('; ')}.`
-    : null;
+  if (groupedClaims.length === 0) return null;
+  const claim = `Across compatible supported BenchLM categories, ${groupedClaims.join('; ')}.`;
+  // The documented component budgets above guarantee this aggregate fits the
+  // final claim cap while retaining a complete compact clause for each model.
+  if (utf8ByteLength(claim) > COMPACT_SCORE_CLAIM_UTF8_BYTES) {
+    throw new Error('Compact score evidence exceeded its bounded UTF-8 claim budget.');
+  }
+  return claim;
 }
 
 function rateSentence(
