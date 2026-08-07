@@ -1,8 +1,11 @@
+import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import {
   attributionForAllSources,
   benchmarkEnvelope,
+  decodeOpaqueValue,
+  encodeOpaqueValue,
   type ActiveBenchmarkSnapshot,
 } from '../functions/_shared/benchmark-db';
 import {
@@ -21,9 +24,13 @@ import {
   createLeaderboardQueryCapabilities,
   filterLeaderboardEntries,
   hasValidLeaderboardQueryEncoding,
+  leaderboardQueryToSearchParams,
   parseLeaderboardQuery,
+  type LeaderboardQueryState,
 } from '../src/benchmarks/leaderboard-query';
-import { buildLeaderboard, LEADERBOARD_DEFINITIONS } from '../src/benchmarks/leaderboards';
+import { isValidLeaderboardCursor } from '../src/benchmarks/leaderboard-cursor';
+import { leaderboardCsv } from '../src/benchmarks/leaderboard-csv';
+import { buildLeaderboard, LEADERBOARD_DEFINITIONS, type LeaderboardResult } from '../src/benchmarks/leaderboards';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../src/routing/routes';
 
 const SAMPLE_TIMESTAMP = '2000-01-01T00:00:00.000Z';
@@ -89,7 +96,7 @@ function benchLmModel(modelKey: string, slug: string, name: string, scoreCount: 
     modelKey,
     slug,
     name,
-    creator: 'Sample Labs',
+    creator: 'LOCAL SAMPLE Labs',
     sourceType: 'Proprietary',
     reasoningType: null,
     releaseDate: null,
@@ -111,7 +118,7 @@ const SAMPLE_CANVAS: BenchmarkModel = {
   modelKey: 'local-sample:canvas',
   slug: 'sample-canvas',
   name: 'Sample Canvas',
-  creator: 'Sample Media Lab',
+  creator: 'LOCAL SAMPLE Media Lab',
   sourceType: 'Proprietary',
   reasoningType: null,
   releaseDate: null,
@@ -250,57 +257,198 @@ const SAMPLE_FRESHNESS = {
   message: LOCAL_SAMPLE_NOTICE,
 };
 
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 200;
+
+interface SamplePaginationRequest {
+  readonly limit: number;
+  readonly cursor: string | null;
+  readonly filters: URLSearchParams;
+}
+
+interface SampleCursorRequest {
+  readonly key: LeaderboardKey;
+  readonly profile: LeaderboardQueryState['profile'];
+  readonly limit: number;
+  readonly includeEstimated: boolean;
+  readonly filterIdentity: string;
+}
+
+interface SampleCursorPayload {
+  readonly v: 1;
+  readonly r: string;
+  readonly k: LeaderboardKey;
+  readonly p: LeaderboardQueryState['profile'];
+  readonly l: number;
+  readonly e: boolean;
+  readonly f?: string;
+  readonly o: number;
+}
+
+interface SampleFilteredLeaderboard {
+  readonly leaderboard: LeaderboardResult;
+  readonly entries: readonly LeaderboardResult['entries'][number][];
+  readonly capabilities: ReturnType<typeof createLeaderboardQueryCapabilities>;
+  readonly filters: LeaderboardQueryState;
+}
+
 function isLeaderboardKey(value: string): value is LeaderboardKey {
-  return Object.prototype.hasOwnProperty.call(LEADERBOARD_ROUTES, value);
+  return Object.prototype.hasOwnProperty.call(LEADERBOARD_ROUTES, value)
+    && Object.prototype.hasOwnProperty.call(LEADERBOARD_DEFINITIONS, value);
 }
 
-function parsedLimit(parameters: URLSearchParams): number | null {
-  const values = parameters.getAll('limit');
-  if (values.length > 1) return null;
-  const value = values[0] ?? '50';
-  if (!/^[1-9]\d*$/u.test(value)) return null;
+function oneQueryValue(parameters: URLSearchParams, name: string): string | null {
+  const values = parameters.getAll(name);
+  if (values.length > 1) throw new Error(`duplicate ${name}`);
+  return values[0] ?? null;
+}
+
+function parseLimit(value: string | null): number {
+  if (value === null) return DEFAULT_LIMIT;
+  if (!/^[1-9]\d*$/u.test(value)) throw new Error('invalid limit');
   const limit = Number(value);
-  return Number.isSafeInteger(limit) && limit <= 200 ? limit : null;
+  if (!Number.isSafeInteger(limit) || limit > MAX_LIMIT) throw new Error('invalid limit');
+  return limit;
 }
 
-function sampleLeaderboardResponse(key: LeaderboardKey, url: URL): unknown | null {
-  if (!hasValidLeaderboardQueryEncoding(url.search)) return null;
-  const limit = parsedLimit(url.searchParams);
-  if (limit === null) return null;
-  const cursors = url.searchParams.getAll('cursor');
-  if (cursors.length > 1 || (cursors[0] !== undefined && cursors[0] !== '')) return null;
-  const includeEstimated = url.searchParams.getAll('includeEstimated');
-  if (includeEstimated.length > 1 || (includeEstimated[0] !== undefined && includeEstimated[0] !== '1')) return null;
+function paginationRequest(url: URL): SamplePaginationRequest | null {
+  try {
+    if (!hasValidLeaderboardQueryEncoding(url.search)) return null;
+    const limit = parseLimit(oneQueryValue(url.searchParams, 'limit'));
+    const cursor = oneQueryValue(url.searchParams, 'cursor');
+    if (cursor !== null && cursor !== '' && !isValidLeaderboardCursor(cursor)) return null;
+    const includeEstimated = oneQueryValue(url.searchParams, 'includeEstimated');
+    if (includeEstimated !== null && includeEstimated !== '1') return null;
+    if (includeEstimated !== null && url.searchParams.has('estimated')) return null;
+    const filters = new URLSearchParams(url.searchParams);
+    filters.delete('limit');
+    filters.delete('cursor');
+    filters.delete('includeEstimated');
+    if (includeEstimated === '1') filters.set('estimated', '1');
+    return { limit, cursor: cursor || null, filters };
+  } catch {
+    return null;
+  }
+}
 
+function localFilterState(key: LeaderboardKey, filters: LeaderboardQueryState): LeaderboardQueryState {
+  return key === 'multimodal-vision-documents'
+    && filters.sort === LEADERBOARD_DEFINITIONS[key].defaultSort
+    ? { ...filters, preserveSourceLensOrder: true }
+    : filters;
+}
+
+function sampleFilteredLeaderboard(key: LeaderboardKey, parameters: URLSearchParams): SampleFilteredLeaderboard | null {
+  if (!hasValidLeaderboardQueryEncoding(parameters.toString())) return null;
   const definition = LEADERBOARD_DEFINITIONS[key];
-  const preliminary = buildLeaderboard(key, SAMPLE_SNAPSHOT.models, SAMPLE_SNAPSHOT.metrics, SAMPLE_SNAPSHOT.priceChecks);
-  const capabilities = createLeaderboardQueryCapabilities(definition, preliminary.entries);
-  const filters = new URLSearchParams(url.searchParams);
-  filters.delete('limit');
-  filters.delete('cursor');
-  filters.delete('includeEstimated');
-  if (includeEstimated[0] === '1') filters.set('estimated', '1');
-  const parsed = parseLeaderboardQuery(filters, definition, capabilities, 'api');
-  if (!parsed.ok) return null;
-
+  const preflight = parseLeaderboardQuery(
+    parameters,
+    definition,
+    createLeaderboardQueryCapabilities(definition),
+    'api-preflight',
+  );
+  if (!preflight.ok) return null;
   const leaderboard = buildLeaderboard(
     key,
     SAMPLE_SNAPSHOT.models,
     SAMPLE_SNAPSHOT.metrics,
     SAMPLE_SNAPSHOT.priceChecks,
-    parsed.state.profile,
+    preflight.state.profile,
   );
-  const entries = filterLeaderboardEntries(leaderboard.entries, parsed.state);
-  return benchmarkEnvelope(SAMPLE_SNAPSHOT, SAMPLE_FRESHNESS, attributionForAllSources(SAMPLE_SNAPSHOT), {
-    ...leaderboard,
-    entries: entries.slice(0, limit),
+  const capabilities = createLeaderboardQueryCapabilities(definition, leaderboard.entries);
+  const parsed = parseLeaderboardQuery(parameters, definition, capabilities, 'api');
+  if (!parsed.ok) return null;
+  const filters = localFilterState(key, parsed.state);
+  return {
+    leaderboard,
+    entries: filterLeaderboardEntries(leaderboard.entries, filters),
     capabilities,
+    filters,
+  };
+}
+
+function filterIdentity(filters: LeaderboardQueryState, key: LeaderboardKey): string {
+  const canonical = leaderboardQueryToSearchParams(filters);
+  canonical.delete('profile');
+  canonical.delete('estimated');
+  if (filters.sort === LEADERBOARD_DEFINITIONS[key].defaultSort) canonical.delete('sort');
+  const value = canonical.toString();
+  return value === '' ? '' : `sha256:${createHash('sha256').update(value).digest('hex')}`;
+}
+
+function cursorFor(request: SampleCursorRequest, offset: number): string {
+  const payload: SampleCursorPayload = {
+    v: 1,
+    r: SAMPLE_REVISION_ID,
+    k: request.key,
+    p: request.profile,
+    l: request.limit,
+    e: request.includeEstimated,
+    ...(request.filterIdentity ? { f: request.filterIdentity } : {}),
+    o: offset,
+  };
+  const cursor = encodeOpaqueValue(payload);
+  if (!isValidLeaderboardCursor(cursor)) throw new Error('sample cursor exceeds the public boundary');
+  return cursor;
+}
+
+function offsetFromCursor(cursor: string, request: SampleCursorRequest): number | null {
+  try {
+    if (!isValidLeaderboardCursor(cursor)) return null;
+    const decoded = decodeOpaqueValue(cursor);
+    if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) return null;
+    const value = decoded as Partial<SampleCursorPayload>;
+    if (value.v !== 1
+      || value.r !== SAMPLE_REVISION_ID
+      || value.k !== request.key
+      || value.p !== request.profile
+      || value.l !== request.limit
+      || value.e !== request.includeEstimated
+      || !((value.f === undefined && request.filterIdentity === '') || value.f === request.filterIdentity)
+      || !Number.isSafeInteger(value.o)
+      || value.o === undefined
+      || value.o < 1
+      || value.o % request.limit !== 0
+      || cursorFor(request, value.o) !== cursor) return null;
+    return value.o;
+  } catch {
+    return null;
+  }
+}
+
+function sampleLeaderboardResponse(key: LeaderboardKey, url: URL): unknown | null {
+  const pagination = paginationRequest(url);
+  if (!pagination) return null;
+  const sample = sampleFilteredLeaderboard(key, pagination.filters);
+  if (!sample) return null;
+  const request: SampleCursorRequest = {
+    key,
+    profile: sample.filters.profile,
+    limit: pagination.limit,
+    includeEstimated: sample.filters.includeEstimated,
+    filterIdentity: filterIdentity(sample.filters, key),
+  };
+  const offset = pagination.cursor === null ? 0 : offsetFromCursor(pagination.cursor, request);
+  if (offset === null || (pagination.cursor !== null && offset >= sample.entries.length)) return null;
+  const entries = sample.entries.slice(offset, offset + pagination.limit);
+  const nextOffset = offset + entries.length;
+  const nextCursor = nextOffset < sample.entries.length ? cursorFor(request, nextOffset) : null;
+  return benchmarkEnvelope(SAMPLE_SNAPSHOT, SAMPLE_FRESHNESS, attributionForAllSources(SAMPLE_SNAPSHOT), {
+    ...sample.leaderboard,
+    entries,
+    capabilities: sample.capabilities,
     pagination: {
-      limit,
-      total: entries.length,
-      nextCursor: null,
+      limit: pagination.limit,
+      total: sample.entries.length,
+      nextCursor,
     },
   });
+}
+
+function sampleCsvResponse(key: LeaderboardKey, url: URL): string | null {
+  if (!hasValidLeaderboardQueryEncoding(url.search)) return null;
+  const sample = sampleFilteredLeaderboard(key, url.searchParams);
+  return sample ? leaderboardCsv(sample.leaderboard, sample.filters) : null;
 }
 
 function sampleSummaryResponse(): unknown {
@@ -322,10 +470,39 @@ function writeJson(response: ServerResponse, status: number, body: unknown, head
   response.end(headOnly ? undefined : payload);
 }
 
+function methodologyHeader(key: LeaderboardKey): string {
+  switch (LEADERBOARD_DEFINITIONS[key].kind) {
+    case 'benchlm':
+    case 'value':
+      return 'benchlm_raw_composite';
+    case 'lmarena':
+      return 'bradley_terry';
+    case 'pricing-context':
+      return 'openrouter_price_route';
+    case 'multimodal':
+      return 'benchlm_raw_composite,bradley_terry';
+  }
+}
+
+function writeCsv(response: ServerResponse, key: LeaderboardKey, body: string, headOnly: boolean): void {
+  const filename = `tokenbench-${key}-${SAMPLE_TIMESTAMP.slice(0, 10)}-${SAMPLE_REVISION_ID}.csv`;
+  response.statusCode = 200;
+  response.setHeader('Cache-Control', 'no-store');
+  response.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  response.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  response.setHeader('Vary', 'Accept-Encoding');
+  response.setHeader('X-TokenBench-Freshness', 'stale');
+  response.setHeader('X-TokenBench-Methodology', methodologyHeader(key));
+  response.setHeader('X-TokenBench-Preview-Data', 'local-sample');
+  response.setHeader('X-TokenBench-Published-At', SAMPLE_TIMESTAMP);
+  response.setHeader('X-TokenBench-Revision', SAMPLE_REVISION_ID);
+  response.end(headOnly ? undefined : body);
+}
+
 function localPreviewMiddleware(request: IncomingMessage, response: ServerResponse, next: () => void): void {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
-  if (url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/leaderboards/')) {
+  if (url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
     next();
     return;
   }
@@ -338,13 +515,20 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
     writeJson(response, 200, sampleSummaryResponse(), headOnly);
     return;
   }
-  const match = /^\/api\/benchmarks\/leaderboards\/([^/]+)$/u.exec(url.pathname);
-  if (!match || !isLeaderboardKey(match[1]!)) {
-    writeJson(response, 404, { error: 'Benchmark leaderboard not found' }, headOnly);
+  const csvMatch = /^\/api\/benchmarks\/leaderboards\/([^/]+)\/csv$/u.exec(url.pathname);
+  if (csvMatch && isLeaderboardKey(csvMatch[1]!)) {
+    const body = sampleCsvResponse(csvMatch[1]!, url);
+    if (body === null) writeJson(response, 400, { error: 'Invalid sample leaderboard request' }, headOnly);
+    else writeCsv(response, csvMatch[1]!, body, headOnly);
     return;
   }
-  const body = sampleLeaderboardResponse(match[1]!, url);
-  writeJson(response, body === null ? 400 : 200, body ?? { error: 'Invalid sample leaderboard request' }, headOnly);
+  const match = /^\/api\/benchmarks\/leaderboards\/([^/]+)$/u.exec(url.pathname);
+  if (match && isLeaderboardKey(match[1]!)) {
+    const body = sampleLeaderboardResponse(match[1]!, url);
+    writeJson(response, body === null ? 400 : 200, body ?? { error: 'Invalid sample leaderboard request' }, headOnly);
+    return;
+  }
+  writeJson(response, 404, { error: 'Benchmark API route not found' }, headOnly);
 }
 
 /**

@@ -32,3 +32,21 @@ test('local preview renders clearly labeled sample coding rows from its own API'
   await expect(page.getByRole('table', { name: 'Coding benchmark' })).toContainText('Sample Atlas');
   await expect(page.getByRole('table', { name: 'Coding benchmark' })).toContainText('Sample Orbit');
 });
+
+test('local preview accepts the summary through the frontend runtime contract', async ({ page }) => {
+  const origin = previewOrigin();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.route((url) => url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:'), (route) => route.abort());
+
+  const responsePromise = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return url.origin === origin && url.pathname === '/api/benchmarks';
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const response = await responsePromise;
+
+  expect(response.status()).toBe(200);
+  expect(response.headers()['content-type']).toContain('application/json');
+  await expect(page.getByLabel('Live decision snapshot')).toContainText('Sample Atlas');
+  await expect(page.getByLabel('Decision snapshot evidence')).toContainText('LOCAL SAMPLE');
+});
