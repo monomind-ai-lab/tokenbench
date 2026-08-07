@@ -28,6 +28,7 @@ import {
   type RelatedComparison,
 } from '../../src/frontend/comparison-contracts';
 import { SITE_CONFIG } from '../../src/brand/site-config';
+import { themeBootstrapMarkup } from '../../src/brand/theme-bootstrap';
 import { escapeHtmlAttribute, escapeHtmlText, isHttpsUrl, serializeJsonForScript } from '../_shared/html';
 import {
   freshnessFor,
@@ -285,7 +286,7 @@ function shellDocument(viewModel: ComparisonViewModel): string {
     <meta name="twitter:title" content="${escapeHtmlAttribute(title)}">
     <meta name="twitter:description" content="${escapeHtmlAttribute(description)}">
     <meta name="twitter:image" content="${SITE_CONFIG.origin}/og-guides.png">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
+    ${themeBootstrapMarkup()}
     <link rel="stylesheet" href="/assets/tokenbench.css">
     ${scripts}
   </head>
@@ -307,7 +308,7 @@ function notFoundDocument(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtmlText(title)}</title>
     <meta name="robots" content="noindex,follow">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
+    ${themeBootstrapMarkup()}
     <link rel="stylesheet" href="/assets/tokenbench.css">
   </head>
   <body>
@@ -336,7 +337,7 @@ function unavailableDocument(): string {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtmlText(title)}</title>
     <meta name="robots" content="noindex,follow">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
+    ${themeBootstrapMarkup()}
     <link rel="stylesheet" href="/assets/tokenbench.css">
   </head>
   <body>

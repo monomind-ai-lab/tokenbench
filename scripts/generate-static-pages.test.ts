@@ -11,7 +11,7 @@ import { generateStaticPages } from './generate-static-pages';
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
 const requireFromTest = createRequire(import.meta.url);
-const THEME_BOOTSTRAP = "<script>try{document.documentElement.dataset.theme=localStorage.getItem('tokenbench:theme')==='dark'&&localStorage.getItem('tokenbench:theme:explicit')==='true'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>";
+const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme==='dark'&&explicit){document.documentElement.dataset.theme='dark'}else{if(theme==='dark')localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
 
 function gitCheckIgnoreStatus(pathname: string): number | null {
   const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', pathname], {

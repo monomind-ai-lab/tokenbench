@@ -19,7 +19,7 @@ vi.mock('../_shared/benchmark-db', async () => {
 import { onRequestGet } from './[pair]';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
-const THEME_BOOTSTRAP = "<script>try{document.documentElement.dataset.theme=localStorage.getItem('tokenbench:theme')==='dark'&&localStorage.getItem('tokenbench:theme:explicit')==='true'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>";
+const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme==='dark'&&explicit){document.documentElement.dataset.theme='dark'}else{if(theme==='dark')localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
 
 function model(modelKey: string, slug: string, name: string, creator = 'Example Labs'): BenchmarkModel {
   return {
@@ -193,6 +193,33 @@ function renderedRoot(html: string): HTMLElement {
   return root;
 }
 
+function executeThemeBootstrap(html: string, initialStorage: Readonly<Record<string, string>>): {
+  readonly theme: string | undefined;
+  readonly storedTheme: string | null;
+  readonly explicitMarker: string | null;
+} {
+  const script = html.match(/<script>(try\{[\s\S]*?)<\/script>/)?.[1];
+  if (!script) throw new Error('Expected an inline theme bootstrap');
+  const values = new Map(Object.entries(initialStorage));
+  const bootstrapDocument = { documentElement: { dataset: {} as Record<string, string> } };
+  const bootstrapStorage = {
+    getItem(key: string) {
+      return values.get(key) ?? null;
+    },
+    removeItem(key: string) {
+      values.delete(key);
+    },
+  };
+
+  new Function('document', 'localStorage', script)(bootstrapDocument, bootstrapStorage);
+
+  return {
+    theme: bootstrapDocument.documentElement.dataset.theme,
+    storedTheme: bootstrapStorage.getItem('tokenbench:theme'),
+    explicitMarker: bootstrapStorage.getItem('tokenbench:theme:explicit'),
+  };
+}
+
 describe('dynamic comparison Pages Function', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -328,6 +355,30 @@ describe('dynamic comparison Pages Function', () => {
       expect(html, pairValue).toContain('<meta name="robots" content="noindex,follow">');
       expect(html, pairValue).not.toContain('rel="canonical"');
       expect(html, pairValue).not.toContain('application/ld+json');
+    }
+  });
+
+  it('migrates bare legacy dark storage in every non-hydrated error shell while preserving explicit dark', async () => {
+    const notFound = await request('missing-vs-zeta');
+    readActiveComparisonSnapshot.mockResolvedValueOnce(null);
+    const unavailable = await request('zeta-vs-alpha');
+
+    for (const response of [notFound, unavailable]) {
+      const html = await response.text();
+
+      expect(executeThemeBootstrap(html, { 'tokenbench:theme': 'dark' })).toEqual({
+        theme: 'light',
+        storedTheme: null,
+        explicitMarker: null,
+      });
+      expect(executeThemeBootstrap(html, {
+        'tokenbench:theme': 'dark',
+        'tokenbench:theme:explicit': 'true',
+      })).toEqual({
+        theme: 'dark',
+        storedTheme: 'dark',
+        explicitMarker: 'true',
+      });
     }
   });
 

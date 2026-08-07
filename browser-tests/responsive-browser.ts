@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { CatalogResponse } from '../src/catalog/contracts';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
+import { themeBootstrapMarkup } from '../src/brand/theme-bootstrap';
 import {
   HANDLER_COMPARISON_PATH,
   HANDLER_SPARSE_COMPARISON_PATH,
@@ -1483,6 +1484,33 @@ async function comparisonInitialPayload(page: Page): Promise<unknown> {
 }
 
 test.describe('handler-backed compare browser coverage', () => {
+  test('runs the shared migration bootstrap in a non-hydrated comparison error shell', async ({ page }) => {
+    const origin = previewOrigin();
+    const errorPath = '/_fixture/comparison-theme-error';
+    await page.route(origin + errorPath, (route) => route.fulfill({
+      status: 503,
+      contentType: 'text/html',
+      body: `<!doctype html><html lang="en" data-theme="light"><head>${themeBootstrapMarkup()}</head><body><main>Comparison temporarily unavailable</main></body></html>`,
+    }));
+
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => localStorage.setItem('tokenbench:theme', 'dark'));
+    await page.goto(errorPath, { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBeNull();
+
+    await page.evaluate(() => {
+      localStorage.setItem('tokenbench:theme', 'dark');
+      localStorage.setItem('tokenbench:theme:explicit', 'true');
+    });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme:explicit'))).toBe('true');
+  });
+
   test('hydrates a handler comparison from a blank document', async ({ page }) => {
     const origin = previewOrigin();
     const errors = captureBrowserErrors(page);
