@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { CatalogResponse } from '../src/catalog/contracts';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
 import {
@@ -26,6 +27,84 @@ const viewports = [
 ] as const;
 
 type Theme = 'dark' | 'light';
+
+const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
+const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
+const CATALOG_FIXTURE_IDENTITY_HEADER = 'x-tokenbench-browser-catalog-fixture';
+
+interface CatalogFixture {
+  expectNextDelivery: () => Promise<void>;
+}
+
+function catalogFixtureSignature(catalog: CatalogResponse): string {
+  return `revision=${catalog.revision};plans=${catalog.plans.map((plan) => plan.id).join(',') || '-'};models=${catalog.modelOffers.map((offer) => offer.id).join(',') || '-'}`;
+}
+
+function isCatalogUrl(url: URL, origin: string): boolean {
+  return url.origin === origin && url.pathname === '/api/catalog';
+}
+
+async function clearCatalogFixtureCache(page: Page): Promise<void> {
+  // The test page can have navigated to the origin only to set its theme before
+  // this helper is called. Clear the catalog cache in that already-open page
+  // and before every following document so fixture responses cannot be masked
+  // by a prior calculator scenario.
+  await page.addInitScript((cacheKey) => {
+    window.localStorage.removeItem(cacheKey);
+  }, CATALOG_CACHE_KEY);
+  if (page.url() !== 'about:blank') {
+    await page.evaluate((cacheKey) => window.localStorage.removeItem(cacheKey), CATALOG_CACHE_KEY);
+  }
+}
+
+async function installCatalogFixture(page: Page, catalog: CatalogResponse, status = 200): Promise<CatalogFixture> {
+  const origin = previewOrigin();
+  const signature = catalogFixtureSignature(catalog);
+  const description = `catalog fixture ${signature}`;
+  const body = JSON.stringify(catalog);
+
+  await page.route((url) => isCatalogUrl(url, origin), (route) => route.fulfill({
+    status,
+    contentType: 'application/json',
+    headers: {
+      etag: `"${signature}"`,
+      'cache-control': 'no-store',
+      [CATALOG_FIXTURE_IDENTITY_HEADER]: signature,
+    },
+    body,
+  }));
+
+  return {
+    expectNextDelivery: async () => {
+      const response = await page.waitForResponse((candidate) => isCatalogUrl(new URL(candidate.url()), origin), { timeout: 15_000 });
+      const headers = response.headers();
+      expect(response.status(), `Expected ${description} to be delivered with status ${status}.`).toBe(status);
+      expect(headers[CATALOG_FIXTURE_IDENTITY_HEADER], `Expected the browser to receive ${description}, not a cached or competing catalog response.`).toBe(signature);
+      expect(catalogFixtureSignature(await response.json() as CatalogResponse), `Expected the browser to receive the full ${description} payload.`).toBe(signature);
+
+      if (status >= 200 && status < 300) {
+        await expect.poll(async () => page.evaluate((cacheKey) => {
+          const raw = window.localStorage.getItem(cacheKey);
+          if (!raw) return null;
+          try {
+            const catalog = JSON.parse(raw)?.catalog;
+            if (!catalog || typeof catalog.revision !== 'string' || !Array.isArray(catalog.plans) || !Array.isArray(catalog.modelOffers)) return null;
+            return `revision=${catalog.revision};plans=${catalog.plans.map((plan: { id?: unknown }) => plan.id).join(',') || '-'};models=${catalog.modelOffers.map((offer: { id?: unknown }) => offer.id).join(',') || '-'}`;
+          } catch {
+            return null;
+          }
+        }, CATALOG_CACHE_KEY), {
+          message: `Expected TokenBench to cache the delivered ${description} fixture.`,
+        }).toBe(signature);
+      }
+    },
+  };
+}
+
+async function resetCatalogFixtureLifecycle(page: Page): Promise<void> {
+  await page.unrouteAll({ behavior: 'wait' });
+  await clearCatalogFixtureCache(page);
+}
 
 function previewOrigin(): string {
   const baseURL = test.info().project.use.baseURL;
@@ -81,10 +160,11 @@ async function assertFirstViewportOmitsInternalRevisions(page: Page): Promise<vo
   for (const revision of INTERNAL_FIXTURE_REVISIONS) expect(visibleText).not.toContain(revision);
 }
 
-async function installInteractiveRouteStubs(page: Page): Promise<void> {
+async function installInteractiveRouteStubs(page: Page): Promise<CatalogFixture> {
   const origin = previewOrigin();
+  await resetCatalogFixtureLifecycle(page);
   await blockExternalRequests(page, origin);
-  await page.route(origin + '/api/catalog', (route) => fulfillJson(route, FRONTEND_TEST_CATALOG));
+  const catalogFixture = await installCatalogFixture(page, FRONTEND_TEST_CATALOG);
   await stubBenchmarkDirectory(page, origin);
   await page.route((url) => url.origin === origin && url.pathname.startsWith('/api/benchmarks/leaderboards/'), (route) => fulfillJson(route, {
     error: 'Published benchmark data is unavailable for this fixture route.',
@@ -92,6 +172,7 @@ async function installInteractiveRouteStubs(page: Page): Promise<void> {
   await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
   await stubLeaderboard(page, origin, 'media-text-to-image', readyMediaLeaderboard());
   await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+  return catalogFixture;
 }
 
 async function assertHydratedRouteFrame(
@@ -194,16 +275,23 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
 ];
 
+const hydrationThemes = ['dark', 'light'] as const;
+const HYDRATION_MATRIX_CASES_PER_VIEWPORT = hydrationThemes.length * hydrationMatrix.length;
+const HYDRATION_MATRIX_EXPECTED_CELL_MS = 2_000;
+const HYDRATION_MATRIX_FULL_LOAD_OVERHEAD_MS = 35_000;
+const HYDRATION_MATRIX_VIEWPORT_TIMEOUT_MS = HYDRATION_MATRIX_FULL_LOAD_OVERHEAD_MS
+  + HYDRATION_MATRIX_CASES_PER_VIEWPORT * HYDRATION_MATRIX_EXPECTED_CELL_MS;
+const HYDRATION_MATRIX_NAVIGATION_TIMEOUT_MS = 10_000;
+const HYDRATION_MATRIX_CELL_TIMEOUT_MS = 15_000;
+
 async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, status = 200, expectCalculator = true) {
   const origin = previewOrigin();
+  await resetCatalogFixtureLifecycle(page);
   await blockExternalRequests(page, origin);
-  await page.route(origin + '/api/catalog', (route) => route.fulfill({
-    status,
-    contentType: 'application/json',
-    headers: { etag: `"${catalog.revision}"` },
-    body: JSON.stringify(catalog),
-  }));
-  await page.goto('/tools/subscriptions-vs-apis/');
+  const catalogFixture = await installCatalogFixture(page, catalog, status);
+  const catalogDelivery = catalogFixture.expectNextDelivery();
+  await page.goto(CALCULATOR_PATH);
+  await catalogDelivery;
   if (expectCalculator) await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
 }
 
@@ -1667,24 +1755,66 @@ test.describe('viewport and theme hydration matrix', () => {
     await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
   });
 
-  test('keeps every primary route semantic and overflow-safe across supported viewports and themes', async ({ page }) => {
-    test.setTimeout(180_000);
-    await installInteractiveRouteStubs(page);
+  for (const viewport of viewports) {
+    test(`keeps every primary route semantic and overflow-safe at ${viewport.width}px across both themes`, async ({ page }) => {
+      // Twenty route/theme cells run in each viewport test. The 75s budget is
+      // 2s per observed steady-state cell plus 35s for the initial full app
+      // load and Vite's first-transform work. A stuck cell is still bounded to
+      // 15s (and its navigation to 10s), so this cannot hide a broken route.
+      test.setTimeout(HYDRATION_MATRIX_VIEWPORT_TIMEOUT_MS);
+      const startedAt = Date.now();
+      const completedCells: Array<{ readonly theme: Theme; readonly path: string; readonly elapsedMs: number }> = [];
+      let activeCell: { readonly theme: Theme; readonly path: string; readonly startedAt: number } | undefined;
 
-    for (const viewport of viewports) {
-      await page.setViewportSize({ width: viewport.width, height: 1000 });
-      for (const theme of ['dark', 'light'] as const) {
-        for (const route of hydrationMatrix) {
-          await setStoredTheme(page, theme);
-          await page.goto(route.path, { waitUntil: 'domcontentloaded' });
-          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-          await assertHydratedRouteFrame(page, route);
-          if (route.path === '/compare/') await assertCompareHubPickerInteractive(page);
-          if (viewport.width < 768) await assertCompactMenuPresence(page);
+      try {
+        const catalogFixture = await installInteractiveRouteStubs(page);
+        page.setDefaultNavigationTimeout(HYDRATION_MATRIX_NAVIGATION_TIMEOUT_MS);
+        await page.setViewportSize({ width: viewport.width, height: 1000 });
+
+        for (const theme of hydrationThemes) {
+          for (const route of hydrationMatrix) {
+            activeCell = { theme, path: route.path, startedAt: Date.now() };
+            const cell = activeCell;
+            await test.step(`viewport=${viewport.width}px theme=${theme} path=${route.path}`, async () => {
+              await setStoredTheme(page, theme);
+              const catalogDelivery = route.path === CALCULATOR_PATH ? catalogFixture.expectNextDelivery() : undefined;
+              await page.goto(route.path, { waitUntil: 'domcontentloaded', timeout: HYDRATION_MATRIX_NAVIGATION_TIMEOUT_MS });
+              if (catalogDelivery) await catalogDelivery;
+              await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+              await assertHydratedRouteFrame(page, route);
+              if (route.path === '/compare/') await assertCompareHubPickerInteractive(page);
+              if (viewport.width < 768) await assertCompactMenuPresence(page);
+            }, { timeout: HYDRATION_MATRIX_CELL_TIMEOUT_MS });
+            completedCells.push({ theme, path: route.path, elapsedMs: Date.now() - cell.startedAt });
+            activeCell = undefined;
+          }
         }
+      } catch (error) {
+        const active = activeCell ? {
+          viewport: viewport.width,
+          theme: activeCell.theme,
+          path: activeCell.path,
+          elapsedMs: Date.now() - activeCell.startedAt,
+        } : { viewport: viewport.width, phase: 'fixture setup', elapsedMs: Date.now() - startedAt };
+        const diagnostic = {
+          active,
+          completedCells,
+          elapsedMs: Date.now() - startedAt,
+          viewportBudgetMs: HYDRATION_MATRIX_VIEWPORT_TIMEOUT_MS,
+          cellBudgetMs: HYDRATION_MATRIX_CELL_TIMEOUT_MS,
+          navigationBudgetMs: HYDRATION_MATRIX_NAVIGATION_TIMEOUT_MS,
+        };
+        try {
+          await test.info().attach('hydration-matrix-failure.json', { body: JSON.stringify(diagnostic, null, 2), contentType: 'application/json' });
+        } catch {
+          // Preserve the original browser failure when Playwright has already
+          // closed the page or exhausted the surrounding test deadline.
+        }
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`Hydration matrix failed at ${JSON.stringify(active)}: ${message}`);
       }
-    }
-  });
+    });
+  }
 });
 
 test.describe('keyboard and chart accessibility regressions', () => {
