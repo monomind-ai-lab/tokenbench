@@ -666,13 +666,11 @@ interface HandlerDocument {
   readonly body: string;
 }
 
-const VITE_HANDLER_HYDRATION_ENTRY = [
-  'import { injectIntoGlobalHook } from "/@react-refresh";',
-  'injectIntoGlobalHook(window);',
-  'window.$RefreshReg$ = () => {};',
-  'window.$RefreshSig$ = () => (type) => type;',
-  'void import("/src/main.tsx");',
-].join('\n');
+// The browser server runs with HMR disabled (see playwright.config.ts), so the
+// real source entry does not need React Refresh bootstrapping. Importing
+// /@react-refresh would itself load Vite's websocket client and create
+// harness-only console errors under Chromium's localhost isolation.
+const VITE_HANDLER_HYDRATION_ENTRY = 'void import("/src/main.tsx");';
 
 const execFile = promisify(execFileCallback);
 
@@ -743,6 +741,20 @@ export async function stubHandlerBackedComparison(
     });
   }
   if (options.assetMode === 'as-served') return;
+  // The real handler document already supplies /assets/tokenbench.css. Vite's
+  // source remap imports the same stylesheet again as a JavaScript module from
+  // src/main.tsx, which adds a duplicate 94KB style injection and HMR client.
+  // Preserve the real stylesheet request and bypass only that duplicate module
+  // request so hydration timing reflects the app rather than dev-server setup.
+  await page.route(origin + '/src/index.css', async (route) => {
+    const documentPath = new URL(route.request().frame().url()).pathname;
+    const isHandlerComparison = documentPath === HANDLER_COMPARISON_PATH || documentPath === HANDLER_SPARSE_COMPARISON_PATH;
+    if (isHandlerComparison && route.request().resourceType() === 'script') {
+      await route.fulfill({ contentType: 'application/javascript', body: 'export {};' });
+      return;
+    }
+    await route.continue();
+  });
   await page.route(origin + '/assets/main.js', async (route) => {
     await route.fulfill({ contentType: 'application/javascript', body: VITE_HANDLER_HYDRATION_ENTRY });
   });

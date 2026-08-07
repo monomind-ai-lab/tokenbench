@@ -128,6 +128,21 @@ function scoreRowsAreExactlyTied(rows: readonly ComparisonMetricRow[]): boolean 
   return rows.length > 0 && rows.every((row) => row.modelA?.value === row.modelB?.value);
 }
 
+function cappedEvidenceClaims(
+  scoreClaims: readonly string[],
+  pricingClaims: readonly string[],
+  limit: number,
+): readonly string[] {
+  if (scoreClaims.length >= limit && pricingClaims.length > 0) {
+    // A dense benchmark result should not hide the selected, verified route
+    // entirely. Keep the score-specific reading bounded and reserve the last
+    // evidence-highlight slot for the highest-priority operational fact:
+    // input API price, then output price, then context.
+    return [...scoreClaims.slice(0, Math.max(0, limit - 1)), pricingClaims[0]!];
+  }
+  return [...scoreClaims, ...pricingClaims].slice(0, limit);
+}
+
 /**
  * Derives bounded, evidence-specific comparison copy from the published view
  * model. No sentence selects a universal winner or fills in an absent fact.
@@ -142,14 +157,14 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
     rateSentence('outputUsdPerMillion', routes, viewModel.models),
     contextSentence(viewModel.models),
   ].filter((sentence): sentence is string => sentence !== null);
-  const advantageClaims = [...scoreClaims, ...pricingClaims];
   const caveat = coverageSentence(coverage, compatibleRows.length);
   const tiedScoreSentence = coverage === 'strong' && scoreRowsAreExactlyTied(compatibleRows)
     ? `The compatible supported BenchLM scores are tied across ${compatibleRows.length} shared metrics.`
     : null;
-  const sentences = caveat === null
-    ? [...(tiedScoreSentence === null ? [] : [tiedScoreSentence]), ...advantageClaims].slice(0, 4)
-    : [...advantageClaims.slice(0, 3), caveat];
+  const scoreEvidenceClaims = tiedScoreSentence === null ? scoreClaims : [tiedScoreSentence];
+  const claimLimit = caveat === null ? 4 : 3;
+  const evidenceClaims = cappedEvidenceClaims(scoreEvidenceClaims, pricingClaims, claimLimit);
+  const sentences = caveat === null ? evidenceClaims : [...evidenceClaims, caveat];
 
   return { heading: 'Comparison summary', sentences, coverage };
 }

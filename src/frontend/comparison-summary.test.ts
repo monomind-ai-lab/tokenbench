@@ -234,7 +234,7 @@ describe('comparisonSummary', () => {
     },
   );
 
-  it('orders supported score, verified rate, and context advantages deterministically', () => {
+  it('keeps a verified operational rate in a dense supported-score summary', () => {
     const models = pair({ contextWindowTokens: 128_000 }, { contextWindowTokens: 64_000 });
     const summary = comparisonSummary(comparisonWith(
       models,
@@ -257,7 +257,7 @@ describe('comparisonSummary', () => {
         'On Coding, Alpha has a higher supported BenchLM score (91 vs 87).',
         'On Knowledge, Alpha has a higher supported BenchLM score (72 vs 68).',
         'On Multimodal, Alpha has a higher supported BenchLM score (76 vs 70).',
-        'On Reasoning, Beta has a higher supported BenchLM score (83 vs 80).',
+        'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
       ],
     });
   });

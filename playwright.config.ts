@@ -4,6 +4,13 @@ const webServerEnv = Object.fromEntries(
   Object.entries(process.env).filter(([name]) => name !== 'FORCE_COLOR' && name !== 'NO_COLOR'),
 ) as Record<string, string>;
 
+// Browser assertions treat console errors as application regressions. Vite's
+// development HMR client retries a WebSocket that Chromium blocks in this
+// isolated localhost harness, producing unrelated console errors on every
+// document navigation. The app is exercised through its production entry
+// points, so disable HMR for the deterministic browser server.
+webServerEnv.DISABLE_HMR = 'true';
+
 export default defineConfig({
   testDir: './browser-tests',
   testMatch: 'responsive-browser.ts',

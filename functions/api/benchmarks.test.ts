@@ -801,6 +801,8 @@ describe('cached benchmark APIs', () => {
   });
 
   it('returns the exact JSON envelope and deterministic active-revision availability metadata', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-05T12:00:01.000Z');
     const response = await summary(publishedRows({ sources: [...sources].reverse() }));
 
     expect(response.status).toBe(200);

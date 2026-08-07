@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
 import {
   HANDLER_COMPARISON_PATH,
@@ -113,6 +114,15 @@ async function assertCompactMenuPresence(page: Page): Promise<void> {
   await expect(menu).toHaveAttribute('aria-expanded', 'false');
 }
 
+async function assertCompareHubPickerInteractive(page: Page): Promise<void> {
+  const firstModel = page.getByRole('combobox', { name: 'First model' });
+  await firstModel.focus();
+  await expect(firstModel).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByRole('listbox', { name: 'Available models' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(firstModel).toHaveAttribute('aria-expanded', 'false');
+}
+
 interface HydrationMatrixRoute {
   readonly path: string;
   readonly heading: string;
@@ -123,11 +133,11 @@ interface HydrationMatrixRoute {
 const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/', heading: 'Transparent AI Costs. Verified Benchmarks.', hydratedClientMarker: '.home-page' },
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
-  { path: '/tools/subscriptions-vs-apis/', heading: 'Subscription vs. API cost calculator', hydratedClientMarker: '.calculator-page', visuallyVisibleHeading: false },
+  { path: '/tools/subscriptions-vs-apis/', heading: 'Should you subscribe or pay as you go?', hydratedClientMarker: '.calculator-page' },
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
   { path: '/leaderboards/llm/coding/', heading: 'Coding benchmark', hydratedClientMarker: '.leaderboard-results[aria-label="Coding benchmark"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text to image', hydratedClientMarker: '.leaderboard-results[aria-label="Text to image"]' },
-  { path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page[data-combobox-open]' },
+  { path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page' },
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
   { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
   { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
@@ -1271,9 +1281,14 @@ interface ComparisonFixturePayload {
 }
 
 async function comparisonFixturePayload(page: Page): Promise<ComparisonFixturePayload> {
+  const payload = await comparisonInitialPayload(page);
+  return payload as ComparisonFixturePayload;
+}
+
+async function comparisonInitialPayload(page: Page): Promise<unknown> {
   const payload = await page.locator('#comparison-initial-data').textContent();
   if (!payload) throw new Error('Comparison fixture did not expose its SSR hydration payload.');
-  return JSON.parse(payload) as ComparisonFixturePayload;
+  return JSON.parse(payload) as unknown;
 }
 
 test.describe('handler-backed compare browser coverage', () => {
@@ -1403,7 +1418,8 @@ test.describe('handler-backed compare browser coverage', () => {
     const pricingTable = page.getByRole('table', { name: 'Route pricing and context comparison' });
     const inputPrice = pricingTable.getByRole('row', { name: /Input API price/ });
     const verification = pricingTable.getByRole('row', { name: /Verification status/ });
-    const inputPriceHighlight = page.getByText(/^Input API price:/);
+    const highlights = page.getByRole('heading', { name: 'Evidence highlights', level: 2 }).locator('xpath=ancestor::section[1]');
+    const inputPriceHighlight = highlights.getByText(/^Input API price:/);
     await expect(inputPrice).toContainText('$0.5');
     await expect(verification).toContainText('Primary');
     await expect(inputPriceHighlight).toContainText('Alpha has the lower verified rate');
@@ -1422,11 +1438,21 @@ test.describe('handler-backed compare browser coverage', () => {
     await page.getByRole('combobox', { name: 'Second model' }).press('ArrowDown');
     await page.getByRole('combobox', { name: 'Second model' }).press('Enter');
     const sparseLink = page.getByRole('link', { name: 'View selected comparison', exact: true });
+    const sparseDevEntryResponse = handlerBackedAssetMode() === 'vite-source'
+      ? page.waitForResponse((response) => response.url() === `${origin}/src/main.tsx`
+        && response.request().resourceType() === 'script'
+        && response.request().frame() === page.mainFrame())
+      : null;
     await expect(sparseLink).toHaveAttribute('href', HANDLER_SPARSE_COMPARISON_PATH);
     await Promise.all([
       page.waitForURL(`**${HANDLER_SPARSE_COMPARISON_PATH}`),
       sparseLink.click(),
     ]);
+    const sparseViewModel = parseComparisonViewModel(await comparisonInitialPayload(page));
+    expect(sparseViewModel).not.toBeNull();
+    expect(sparseViewModel?.canonicalPath).toBe(HANDLER_SPARSE_COMPARISON_PATH);
+    if (sparseDevEntryResponse) await sparseDevEntryResponse;
+    await page.waitForLoadState('networkidle');
     await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
     await expect(page.getByRole('heading', { name: 'Canvas vs Alpha', level: 1 })).toBeVisible();
     await expect(page.getByRole('img', { name: /shared metric radar/i })).toHaveCount(0);
@@ -1477,6 +1503,7 @@ test.describe('viewport and theme hydration matrix', () => {
           await page.goto(route.path, { waitUntil: 'domcontentloaded' });
           await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
           await assertHydratedRouteFrame(page, route);
+          if (route.path === '/compare/') await assertCompareHubPickerInteractive(page);
           if (viewport.width < 768) await assertCompactMenuPresence(page);
         }
       }
@@ -1567,25 +1594,18 @@ test.describe('keyboard and chart accessibility regressions', () => {
     const chart = page.getByRole('img', { name: /API-equivalent value trend/i });
     await expect(chart).toBeVisible();
 
-    const expected = await page.evaluate(() => {
-      const currentTokens = document.querySelector('.chart-column-current > span:last-child')?.textContent?.trim();
-      const apiEquivalentValue = document.querySelector('.value-summary-card .value-metric strong')?.textContent?.trim();
-      const chartElement = document.querySelector('.trend-chart');
-      const describedBy = chartElement?.getAttribute('aria-describedby')?.split(/\s+/).filter(Boolean) ?? [];
-      const describedText = describedBy.map((id) => document.getElementById(id)?.textContent?.trim() ?? '').join(' ');
-      return {
-        currentTokens,
-        apiEquivalentValue,
-        accessibilityText: [
-          chartElement?.getAttribute('aria-label'),
-          chartElement?.getAttribute('aria-description'),
-          describedText,
-        ].filter(Boolean).join(' '),
-      };
+    // The default browser fixture selects all three Provider A routes at a
+    // 10M-token, 50/50 workload. Assert the rendered current bar and the
+    // matching API-equivalent card before reading the accessible description;
+    // the subscription-price card is intentionally not the chart value.
+    const currentColumn = page.locator('.chart-column-current');
+    const apiEquivalentMetric = page.locator('.value-metric').filter({
+      has: page.getByRole('heading', { name: 'API Equivalent Value', exact: true }),
     });
-    expect(expected.currentTokens).toBeTruthy();
-    expect(expected.apiEquivalentValue).toBeTruthy();
-    expect(expected.accessibilityText).toContain(expected.currentTokens!);
-    expect(expected.accessibilityText).toContain(expected.apiEquivalentValue!);
+    await expect(currentColumn.locator('.chart-bar')).toHaveAttribute('title', '10.0M: $44.16');
+    await expect(currentColumn.locator(':scope > span').last()).toHaveText('10.0M');
+    await expect(apiEquivalentMetric).toHaveCount(1);
+    await expect(apiEquivalentMetric.locator('strong')).toHaveText('$44.16');
+    await expect(chart).toHaveAttribute('aria-label', 'API-equivalent value trend by expected monthly tokens. Current mix: 10.0M tokens and $44.16 API-equivalent value.');
   });
 });
