@@ -265,7 +265,7 @@ function shellDocument(viewModel: ComparisonViewModel): string {
     .map((value) => `<script type="application/ld+json">${serializeJsonForScript(value)}</script>`)
     .join('\n    ');
   return `<!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -285,7 +285,7 @@ function shellDocument(viewModel: ComparisonViewModel): string {
     <meta name="twitter:title" content="${escapeHtmlAttribute(title)}">
     <meta name="twitter:description" content="${escapeHtmlAttribute(description)}">
     <meta name="twitter:image" content="${SITE_CONFIG.origin}/og-guides.png">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
     <link rel="stylesheet" href="/assets/tokenbench.css">
     ${scripts}
   </head>
@@ -301,12 +301,13 @@ function shellDocument(viewModel: ComparisonViewModel): string {
 function notFoundDocument(): string {
   const title = `Comparison not found | ${SITE_CONFIG.name}`;
   return `<!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtmlText(title)}</title>
     <meta name="robots" content="noindex,follow">
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
     <link rel="stylesheet" href="/assets/tokenbench.css">
   </head>
   <body>
@@ -329,12 +330,13 @@ function notFoundResponse(): Response {
 function unavailableDocument(): string {
   const title = `Comparison temporarily unavailable | ${SITE_CONFIG.name}`;
   return `<!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${escapeHtmlText(title)}</title>
     <meta name="robots" content="noindex,follow">
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
     <link rel="stylesheet" href="/assets/tokenbench.css">
   </head>
   <body>

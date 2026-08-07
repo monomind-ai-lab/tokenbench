@@ -32,7 +32,7 @@ export function headMarkup(metadata: PageMetadata, structuredData: unknown[]): s
     <meta name="twitter:title" content="${escapeHtml(metadata.twitter.title)}">
     <meta name="twitter:description" content="${escapeHtml(metadata.twitter.description)}">
     <meta name="twitter:image" content="${escapeHtml(metadata.twitter.image)}">
-    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}</script>
+    <script>try{document.documentElement.dataset.theme=localStorage.getItem('${SITE_CONFIG.themeStorageKey}')==='dark'&&localStorage.getItem('${SITE_CONFIG.themeExplicitStorageKey}')==='true'?'dark':'${SITE_CONFIG.defaultTheme}'}catch(e){document.documentElement.dataset.theme='${SITE_CONFIG.defaultTheme}'}</script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -59,7 +59,7 @@ export function staticChrome(content: string, activePage: StaticNavigationPage):
 
 export function documentHtml(head: string, content: string): string {
   return `<!doctype html>
-<html lang="en">
+<html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     ${head}
   </head>

@@ -11,6 +11,7 @@ import { generateStaticPages } from './generate-static-pages';
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
 const requireFromTest = createRequire(import.meta.url);
+const THEME_BOOTSTRAP = "<script>try{document.documentElement.dataset.theme=localStorage.getItem('tokenbench:theme')==='dark'&&localStorage.getItem('tokenbench:theme:explicit')==='true'?'dark':'light'}catch(e){document.documentElement.dataset.theme='light'}</script>";
 
 function gitCheckIgnoreStatus(pathname: string): number | null {
   const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', pathname], {
@@ -44,6 +45,8 @@ describe('crawlable static-page generator', () => {
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
     expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
+    expect(home).toContain('<html lang="en" data-theme="light">');
+    expect(home).toContain(THEME_BOOTSTRAP);
     expect(home).toContain('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.');
     expect(home).toContain('<meta name="description" content="The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.">');
     expect(home).toContain('<main id="page-content" class="page-main" tabindex="-1">');
@@ -83,6 +86,8 @@ describe('crawlable static-page generator', () => {
     expect(home).not.toContain('href="/sources/"');
 
     expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
+    expect(guide).toContain('<html lang="en" data-theme="light">');
+    expect(guide).toContain(THEME_BOOTSTRAP);
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
     expect(guide).toContain('https://tokenbench.monomind.one/guides/track-claude-code-usage/');

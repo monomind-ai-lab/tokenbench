@@ -5,6 +5,8 @@ export const SITE_CONFIG = {
   parentName: 'MonoMind AI Lab',
   parentUrl: 'https://monomind.one/',
   themeStorageKey: 'tokenbench:theme',
+  themeExplicitStorageKey: 'tokenbench:theme:explicit',
+  defaultTheme: 'light',
 } as const;
 
 export const HOME_PAGE_COPY = {

@@ -9,6 +9,22 @@ function mockupUrl(file: string, theme: string): string {
   return `${pathToFileURL(resolve(file)).href}?theme=${theme}`;
 }
 
+function mockupDefaultUrl(file: string): string {
+  return pathToFileURL(resolve(file)).href;
+}
+
+test('mockup documents default to light without a theme query override', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  for (const mockup of MOCKUP_PAGES) {
+    await page.goto(mockupDefaultUrl(mockup.file));
+
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('[data-theme-toggle]')).toHaveAttribute('aria-label', 'Toggle dark theme');
+    await expect(page.locator('[data-theme-toggle]')).toHaveAttribute('aria-pressed', 'false');
+  }
+});
+
 for (const mockup of MOCKUP_PAGES) {
   for (const theme of MOCKUP_THEMES) {
     for (const viewport of CHECK_VIEWPORTS) {

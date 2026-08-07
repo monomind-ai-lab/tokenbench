@@ -4,7 +4,7 @@
   if (requested === 'light' || requested === 'dark') root.dataset.theme = requested;
   const toggle = document.querySelector('[data-theme-toggle]');
   const sync = () => {
-    const dark = root.dataset.theme !== 'light';
+    const dark = root.dataset.theme === 'dark';
     toggle?.setAttribute('aria-pressed', String(dark));
     toggle?.setAttribute('aria-label', dark ? 'Toggle light theme' : 'Toggle dark theme');
   };

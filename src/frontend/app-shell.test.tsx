@@ -354,20 +354,23 @@ describe('responsive calculator app shell', () => {
       .toEqual(['Home', 'Subscribe vs API', 'Compare', 'Leaderboards', 'Guides']);
   });
 
-  it('defaults to dark and persists both TokenBench theme choices', async () => {
+  it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {
     render(<App />);
 
     await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
     expect(document.documentElement.dataset.theme).toBe('light');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBeNull();
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle dark theme' }));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
   });
 
   it('opens and closes primary navigation with its accessible mobile menu control', () => {
@@ -450,19 +453,19 @@ describe('responsive calculator app shell', () => {
     expect(usageRange).toHaveAttribute('aria-valuetext', '50,000,000 tokens');
   });
 
-  it('keeps calculator state while switching language and returns to the dark theme', async () => {
+  it('keeps calculator state while switching language and returns to the light theme', async () => {
     render(<App />);
     await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
     const usage = screen.getByLabelText(/Expected monthly usage/i);
     fireEvent.change(usage, { target: { value: '4200000' } });
-    fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 
     expect(usage).toHaveValue('4,200,000');
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
-    expect(screen.getByRole('button', { name: /Toggle light theme/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+    expect(screen.getByRole('button', { name: /Toggle dark theme/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('combobox', { name: /Language/i })).toHaveValue('zh-TW');
   });
 

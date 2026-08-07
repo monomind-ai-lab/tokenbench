@@ -1,15 +1,15 @@
-:root, [data-theme='dark'] {
-  color-scheme: dark;
-  --bg: #0f0f0f; --surface: #181818; --container: #222222; --elevated: #2a2a2a;
-  --text: #ffffff; --muted: #a8a8a8; --outline: #333333; --primary: #0007cd;
-  --primary-strong: #9dabff; --selected: #1b2374; --focus: #ffcf91; --shadow: none;
-}
-[data-theme='light'] {
+:root, [data-theme='light'] {
   color-scheme: light;
   --bg: #f7f8fc; --surface: #ffffff; --container: #eef1f7; --elevated: #e7ebf3;
   --text: #111318; --muted: #505866; --outline: #e0e4ef; --primary: #0007cd;
   --primary-strong: #0005a3; --selected: #e0e5ff; --focus: #8a4700;
   --shadow: 0 4px 18px rgba(31, 45, 64, .08);
+}
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0f0f0f; --surface: #181818; --container: #222222; --elevated: #2a2a2a;
+  --text: #ffffff; --muted: #a8a8a8; --outline: #333333; --primary: #0007cd;
+  --primary-strong: #9dabff; --selected: #1b2374; --focus: #ffcf91; --shadow: none;
 }
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--bg); }

@@ -45,7 +45,7 @@ test('provider marks switch Brandfetch variants with the site theme without chan
   await page.goto('/leaderboards/llm/coding/', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('table', { name: 'Coding benchmark' })).toBeVisible({ timeout: 15_000 });
   const mark = page.locator('.leaderboard-desktop-table .leaderboard-provider img.provider-mark').first();
-  await expect(mark).toHaveAttribute('src', /\/theme\/dark\/icon/);
+  await expect(mark).toHaveAttribute('src', /\/theme\/light\/icon/);
   await initialRequest;
 
   const reservedBounds = await mark.evaluate((image) => {
@@ -65,9 +65,9 @@ test('provider marks switch Brandfetch variants with the site theme without chan
     return { width: bounds.width, height: bounds.height };
   })).toEqual(reservedBounds);
 
-  await page.getByRole('button', { name: 'Toggle light theme' }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-  await expect(mark).toHaveAttribute('src', /\/theme\/light\/icon/);
+  await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(mark).toHaveAttribute('src', /\/theme\/dark\/icon/);
   await expect.poll(() => mark.evaluate((image) => {
     const bounds = image.getBoundingClientRect();
     return { width: bounds.width, height: bounds.height };

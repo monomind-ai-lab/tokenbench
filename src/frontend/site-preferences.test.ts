@@ -16,21 +16,21 @@ describe('Google Translate chrome suppression', () => {
     document.cookie = 'googtrans=; Max-Age=0; path=/;';
   });
 
-  it('uses stable defaults while server-rendering without browser globals', () => {
+  it('uses the light default while server-rendering without browser globals', () => {
     vi.stubGlobal('window', undefined);
     vi.stubGlobal('document', undefined);
 
-    expect(readStoredTheme()).toBe('dark');
+    expect(readStoredTheme()).toBe('light');
     expect(readLanguage()).toBe('en');
   });
 
-  it('hydrates a stored light/non-English preference without a recoverable server-markup mismatch', async () => {
+  it('migrates the legacy auto-persisted dark value to light without a recoverable server-markup mismatch', async () => {
     vi.stubGlobal('window', undefined);
     vi.stubGlobal('document', undefined);
     const serverMarkup = renderToString(createElement(StrictMode, null, createElement(PreferenceProbe)));
     vi.unstubAllGlobals();
 
-    localStorage.setItem('tokenbench:theme', 'light');
+    localStorage.setItem('tokenbench:theme', 'dark');
     document.cookie = 'googtrans=/en/zh-TW; path=/;';
     const container = document.createElement('div');
     container.innerHTML = serverMarkup;
@@ -42,11 +42,44 @@ describe('Google Translate chrome suppression', () => {
       root = hydrateRoot(container, createElement(StrictMode, null, createElement(PreferenceProbe)), { onRecoverableError: recoverable });
     });
 
-    expect(serverMarkup).toContain('data-theme="dark"');
+    expect(serverMarkup).toContain('data-theme="light"');
     expect(serverMarkup).toContain('data-language="en"');
     expect(recoverable).not.toHaveBeenCalled();
     expect(container.querySelector('output')).toHaveTextContent('light:zh-TW');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBeNull();
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
+
+    await act(async () => root?.unmount());
+    container.remove();
+  });
+
+  it('hydrates an explicitly stored dark/non-English preference without a recoverable server-markup mismatch', async () => {
+    vi.stubGlobal('window', undefined);
+    vi.stubGlobal('document', undefined);
+    const serverMarkup = renderToString(createElement(StrictMode, null, createElement(PreferenceProbe)));
+    vi.unstubAllGlobals();
+
+    localStorage.setItem('tokenbench:theme', 'dark');
+    localStorage.setItem('tokenbench:theme:explicit', 'true');
+    document.cookie = 'googtrans=/en/zh-TW; path=/;';
+    const container = document.createElement('div');
+    container.innerHTML = serverMarkup;
+    document.body.append(container);
+    const recoverable = vi.fn();
+    let root: Root | undefined;
+
+    await act(async () => {
+      root = hydrateRoot(container, createElement(StrictMode, null, createElement(PreferenceProbe)), { onRecoverableError: recoverable });
+    });
+
+    expect(serverMarkup).toContain('data-theme="light"');
+    expect(serverMarkup).toContain('data-language="en"');
+    expect(recoverable).not.toHaveBeenCalled();
+    expect(container.querySelector('output')).toHaveTextContent('dark:zh-TW');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
 
     await act(async () => root?.unmount());
     container.remove();
