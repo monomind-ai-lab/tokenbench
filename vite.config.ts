@@ -6,9 +6,15 @@ import { staticHtmlEntries } from './src/routing/routes';
 
 const generatedHtmlInputs = staticHtmlEntries(__dirname);
 
-export default defineConfig(() => {
+export default defineConfig(async ({ command }) => {
+  // Pages Functions own production APIs. Vite has no Functions runtime, so
+  // local serve/preview receives an explicitly stale synthetic sample instead.
+  // Keep this dynamic import out of `vite build` and every production bundle.
+  const localPreviewPlugins = command === 'serve'
+    ? [(await import('./scripts/local-preview-benchmark-api')).localPreviewBenchmarkApi()]
+    : [];
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), ...localPreviewPlugins],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

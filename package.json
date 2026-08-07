@@ -16,6 +16,7 @@
     "clean": "rm -rf dist server.js",
     "test": "NODE_OPTIONS=--no-experimental-webstorage vitest run",
     "test:browser": "env -u FORCE_COLOR -u NO_COLOR playwright test browser-tests/responsive-browser.ts",
+    "test:browser:local-preview": "env -u FORCE_COLOR -u NO_COLOR playwright test --config=playwright.local-preview.config.ts",
     "test:browser:provider-marks": "env -u FORCE_COLOR -u NO_COLOR playwright test --config=playwright.provider-marks.config.ts",
     "pretest:browser:production": "npm run build",
     "test:browser:production": "env -u FORCE_COLOR -u NO_COLOR TOKENBENCH_BROWSER_ASSET_MODE=production playwright test --config=playwright.production.config.ts browser-tests/responsive-browser.ts",
