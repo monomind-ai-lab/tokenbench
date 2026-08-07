@@ -80,7 +80,7 @@ async function installCatalogFixture(page: Page, catalog: CatalogResponse, statu
       const headers = response.headers();
       expect(response.status(), `Expected ${description} to be delivered with status ${status}.`).toBe(status);
       expect(headers[CATALOG_FIXTURE_IDENTITY_HEADER], `Expected the browser to receive ${description}, not a cached or competing catalog response.`).toBe(signature);
-      expect(catalogFixtureSignature(await response.json() as CatalogResponse), `Expected the browser to receive the full ${description} payload.`).toBe(signature);
+      expect(await response.json() as CatalogResponse, `Expected the browser to receive the full ${description} payload.`).toEqual(catalog);
 
       if (status >= 200 && status < 300) {
         await expect.poll(async () => page.evaluate((cacheKey) => {
@@ -89,13 +89,13 @@ async function installCatalogFixture(page: Page, catalog: CatalogResponse, statu
           try {
             const catalog = JSON.parse(raw)?.catalog;
             if (!catalog || typeof catalog.revision !== 'string' || !Array.isArray(catalog.plans) || !Array.isArray(catalog.modelOffers)) return null;
-            return `revision=${catalog.revision};plans=${catalog.plans.map((plan: { id?: unknown }) => plan.id).join(',') || '-'};models=${catalog.modelOffers.map((offer: { id?: unknown }) => offer.id).join(',') || '-'}`;
+            return catalog;
           } catch {
             return null;
           }
         }, CATALOG_CACHE_KEY), {
           message: `Expected TokenBench to cache the delivered ${description} fixture.`,
-        }).toBe(signature);
+        }).toEqual(catalog);
       }
     },
   };
@@ -408,6 +408,37 @@ test.describe('responsive calculator browser harness', () => {
     const result = page.getByRole('region', { name: 'Calculated plan value' });
     await expect(result.getByText('No verified models are available for this provider')).toBeVisible();
     await expect(result).toContainText('Choose another provider or retry catalog refresh.');
+  });
+
+  test('rejects a catalog response that reuses fixture IDs but changes its pricing payload', async ({ page }) => {
+    const origin = previewOrigin();
+    const mutatedCatalog: CatalogResponse = {
+      ...FRONTEND_TEST_CATALOG,
+      modelOffers: FRONTEND_TEST_CATALOG.modelOffers.map((offer, index) => index === 0
+        ? { ...offer, inputMicroDollarsPerMillion: offer.inputMicroDollarsPerMillion + 1 }
+        : offer),
+    };
+    const expectedSignature = catalogFixtureSignature(FRONTEND_TEST_CATALOG);
+
+    await resetCatalogFixtureLifecycle(page);
+    await blockExternalRequests(page, origin);
+    const fixture = await installCatalogFixture(page, FRONTEND_TEST_CATALOG);
+    // Register this competing response after the normal fixture so it wins the
+    // route match while preserving the same revision, IDs, marker, and ETag.
+    await page.route((url) => isCatalogUrl(url, origin), (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: {
+        etag: `"${expectedSignature}"`,
+        'cache-control': 'no-store',
+        [CATALOG_FIXTURE_IDENTITY_HEADER]: expectedSignature,
+      },
+      body: JSON.stringify(mutatedCatalog),
+    }));
+
+    const delivery = fixture.expectNextDelivery();
+    await page.goto(CALCULATOR_PATH);
+    await expect(delivery).rejects.toThrow(/receive the full catalog fixture/i);
   });
 
   test('calculator keeps its four decisions, result actions, and provider fallback usable across target viewports and themes', async ({ page }) => {
