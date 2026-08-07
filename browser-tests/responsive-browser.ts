@@ -1631,6 +1631,41 @@ test.describe('handler-backed compare browser coverage', () => {
 });
 
 test.describe('viewport and theme hydration matrix', () => {
+  test('waits for the handler comparison hydration entry before completing document readiness', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+
+    let markSourceEntryRequested: (() => void) | undefined;
+    const sourceEntryRequested = new Promise<void>((resolve) => {
+      markSourceEntryRequested = resolve;
+    });
+    let releaseSourceEntry: (() => void) | undefined;
+    const sourceEntryReleased = new Promise<void>((resolve) => {
+      releaseSourceEntry = resolve;
+    });
+    await page.route(origin + '/src/main.tsx', async (route) => {
+      markSourceEntryRequested?.();
+      await sourceEntryReleased;
+      await route.continue();
+    });
+
+    const navigation = page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'domcontentloaded' });
+    await sourceEntryRequested;
+    try {
+      const readiness = await Promise.race([
+        navigation.then(() => 'ready' as const),
+        new Promise<'waiting'>((resolve) => setTimeout(() => resolve('waiting'), 250)),
+      ]);
+      expect(readiness).toBe('waiting');
+    } finally {
+      releaseSourceEntry?.();
+    }
+
+    await navigation;
+    await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+  });
+
   test('keeps every primary route semantic and overflow-safe across supported viewports and themes', async ({ page }) => {
     test.setTimeout(180_000);
     await installInteractiveRouteStubs(page);

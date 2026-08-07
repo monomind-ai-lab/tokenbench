@@ -698,7 +698,10 @@ function activeHandlerComparisonDocumentPath(
 // real source entry does not need React Refresh bootstrapping. Importing
 // /@react-refresh would itself load Vite's websocket client and create
 // harness-only console errors under Chromium's localhost isolation.
-const VITE_HANDLER_HYDRATION_ENTRY = 'void import("/src/main.tsx");';
+// Keep the source entry in the module graph so the handler document's
+// DOMContentLoaded lifecycle cannot finish before React has loaded the code
+// that hydrates its server-rendered comparison content.
+const VITE_HANDLER_HYDRATION_ENTRY = 'import "/src/main.tsx";';
 
 const execFile = promisify(execFileCallback);
 
