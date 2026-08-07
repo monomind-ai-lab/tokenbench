@@ -63,10 +63,16 @@ function publishedRate(route: BenchmarkPriceCheck | null, dimension: 'inputUsdPe
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-function scoreSentences(
+interface ScoreLead {
+  readonly category: string;
+  readonly winnerIndex: 0 | 1;
+  readonly winnerValue: string;
+  readonly otherValue: string;
+}
+
+function scoreLeads(
   rows: readonly ComparisonMetricRow[],
-  models: readonly [BenchmarkModel, BenchmarkModel],
-): readonly string[] {
+): readonly ScoreLead[] {
   return rows.flatMap((row) => {
     const metricA = row.modelA;
     const metricB = row.modelB;
@@ -78,8 +84,43 @@ function scoreSentences(
     const winnerIndex: 0 | 1 = metricA.value > metricB.value ? 0 : 1;
     const winnerValue = winnerIndex === 0 ? displayedA : displayedB;
     const otherValue = winnerIndex === 0 ? displayedB : displayedA;
-    return [`On ${friendlyMetricLabel(row.metricKey, row.category)}, ${displayedModelName(models, winnerIndex)} has a higher supported BenchLM score (${winnerValue} vs ${otherValue}).`];
+    return [{
+      category: friendlyMetricLabel(row.metricKey, row.category),
+      winnerIndex,
+      winnerValue,
+      otherValue,
+    }];
   });
+}
+
+function scoreSentences(
+  leads: readonly ScoreLead[],
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): readonly string[] {
+  return leads.map((lead) => `On ${lead.category}, ${displayedModelName(models, lead.winnerIndex)} has a higher supported BenchLM score (${lead.winnerValue} vs ${lead.otherValue}).`);
+}
+
+function joinLabels(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels[0] ?? '';
+  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+  return `${labels.slice(0, -1).join(', ')}, and ${labels.at(-1)}`;
+}
+
+function compactScoreSentence(
+  leads: readonly ScoreLead[],
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): string | null {
+  const groupedClaims = ([0, 1] as const).flatMap((winnerIndex) => {
+    const labels = leads
+      .filter((lead) => lead.winnerIndex === winnerIndex)
+      .map((lead) => lead.category);
+    if (labels.length === 0) return [];
+    const scoreNoun = labels.length === 1 ? 'a higher score' : 'higher scores';
+    return [`${displayedModelName(models, winnerIndex)} has ${scoreNoun} in ${joinLabels(labels)}`];
+  });
+  return groupedClaims.length > 0
+    ? `Across compatible supported BenchLM categories, ${groupedClaims.join('; ')}.`
+    : null;
 }
 
 function rateSentence(
@@ -130,15 +171,17 @@ function scoreRowsAreExactlyTied(rows: readonly ComparisonMetricRow[]): boolean 
 
 function cappedEvidenceClaims(
   scoreClaims: readonly string[],
+  compactScoreClaim: string | null,
   pricingClaims: readonly string[],
   limit: number,
 ): readonly string[] {
-  if (scoreClaims.length >= limit && pricingClaims.length > 0) {
-    // A dense benchmark result should not hide the selected, verified route
-    // entirely. Keep the score-specific reading bounded and reserve the last
-    // evidence-highlight slot for the highest-priority operational fact:
-    // input API price, then output price, then context.
-    return [...scoreClaims.slice(0, Math.max(0, limit - 1)), pricingClaims[0]!];
+  const availableScoreSlots = pricingClaims.length > 0 ? Math.max(0, limit - 1) : limit;
+  if (scoreClaims.length > availableScoreSlots && compactScoreClaim !== null) {
+    // A dense benchmark result should not hide either model's supported
+    // category evidence. Collapse every category-specific lead into one
+    // bounded, model-grouped claim, while retaining bounded operational
+    // facts in priority order: input API price, output price, then context.
+    return [compactScoreClaim, ...pricingClaims].slice(0, limit);
   }
   return [...scoreClaims, ...pricingClaims].slice(0, limit);
 }
@@ -151,7 +194,8 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
   const compatibleRows = compatibleScoreRows(viewModel);
   const coverage = coverageFor(compatibleRows.length);
   const routes = viewModel.priceChecks.map(selectedComparisonPriceCheck) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
-  const scoreClaims = scoreSentences(compatibleRows, viewModel.models);
+  const supportedScoreLeads = scoreLeads(compatibleRows);
+  const scoreClaims = scoreSentences(supportedScoreLeads, viewModel.models);
   const pricingClaims = [
     rateSentence('inputUsdPerMillion', routes, viewModel.models),
     rateSentence('outputUsdPerMillion', routes, viewModel.models),
@@ -163,7 +207,12 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
     : null;
   const scoreEvidenceClaims = tiedScoreSentence === null ? scoreClaims : [tiedScoreSentence];
   const claimLimit = caveat === null ? 4 : 3;
-  const evidenceClaims = cappedEvidenceClaims(scoreEvidenceClaims, pricingClaims, claimLimit);
+  const evidenceClaims = cappedEvidenceClaims(
+    scoreEvidenceClaims,
+    tiedScoreSentence === null ? compactScoreSentence(supportedScoreLeads, viewModel.models) : null,
+    pricingClaims,
+    claimLimit,
+  );
   const sentences = caveat === null ? evidenceClaims : [...evidenceClaims, caveat];
 
   return { heading: 'Comparison summary', sentences, coverage };

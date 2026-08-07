@@ -41,6 +41,11 @@ async function blockExternalRequests(page: Page, origin = previewOrigin()): Prom
   await page.route((url) => url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:'), (route) => route.abort());
 }
 
+async function stubStaticPageThirdPartyAssets(page: Page): Promise<void> {
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }));
+  await page.route('https://translate.google.com/**', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }));
+}
+
 async function setStoredTheme(page: Page, theme: Theme): Promise<void> {
   if (page.url() === 'about:blank') {
     await page.goto(previewOrigin() + '/', { waitUntil: 'domcontentloaded' });
@@ -121,6 +126,52 @@ async function assertCompareHubPickerInteractive(page: Page): Promise<void> {
   await expect(page.getByRole('listbox', { name: 'Available models' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(firstModel).toHaveAttribute('aria-expanded', 'false');
+}
+
+async function assertHandlerComparisonClientInteractions(page: Page): Promise<void> {
+  const currentTheme = await page.locator('html').getAttribute('data-theme');
+  const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+  const themeToggle = page.getByRole('button', { name: `Toggle ${nextTheme} theme` });
+  await expect(themeToggle).toBeVisible();
+  await themeToggle.click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', nextTheme);
+
+  await assertCompareHubPickerInteractive(page);
+
+  const menu = page.locator('.menu-button');
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+  await menu.click();
+  await expect(menu).toHaveAccessibleName('Close navigation');
+  await expect(menu).toHaveAttribute('aria-expanded', 'true');
+  await menu.click();
+  await expect(menu).toHaveAccessibleName('Open navigation');
+  await expect(menu).toHaveAttribute('aria-expanded', 'false');
+}
+
+interface BrowserErrorCapture {
+  readonly consoleErrors: string[];
+  readonly pageErrors: string[];
+  readonly failedRequests: string[];
+}
+
+function captureBrowserErrors(page: Page): BrowserErrorCapture {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  const failedRequests: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  page.on('pageerror', (error) => pageErrors.push(error.message));
+  page.on('requestfailed', (request) => {
+    failedRequests.push(`${request.url()} (${request.failure()?.errorText ?? 'unknown failure'})`);
+  });
+  return { consoleErrors, pageErrors, failedRequests };
+}
+
+async function assertInteractiveHandlerComparison(page: Page): Promise<void> {
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', 'compact', { timeout: 15_000 });
+  await expect(page.locator('.comparison-detail-page')).toHaveAttribute('data-client-hydrated', 'true');
+  await assertHandlerComparisonClientInteractions(page);
 }
 
 interface HydrationMatrixRoute {
@@ -1292,6 +1343,95 @@ async function comparisonInitialPayload(page: Page): Promise<unknown> {
 }
 
 test.describe('handler-backed compare browser coverage', () => {
+  test('hydrates a handler comparison from a blank document', async ({ page }) => {
+    const origin = previewOrigin();
+    const errors = captureBrowserErrors(page);
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await stubHandlerBackedComparison(page, origin, { assetMode: 'vite-source' });
+
+    const sourceEntryResponse = page.waitForResponse((response) => response.url() === `${origin}/src/main.tsx`);
+    await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
+    await sourceEntryResponse;
+
+    await assertInteractiveHandlerComparison(page);
+    expect(errors.failedRequests).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+    expect(errors.pageErrors).toEqual([]);
+  });
+
+  test('passes handler fixture asset requests through for an unrelated document', async ({ page }) => {
+    const origin = previewOrigin();
+    const unrelatedDocumentPath = '/_fixture/unrelated-handler-assets';
+    const errors = captureBrowserErrors(page);
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await page.route(origin + '/assets/main.js', (route) => route.fulfill({
+      contentType: 'application/javascript',
+      body: 'document.documentElement.dataset.fixtureMainAsset = "passed";',
+    }));
+    await page.route(origin + '/assets/tokenbench.css', (route) => route.fulfill({
+      contentType: 'text/css',
+      body: ':root { --fixture-handler-css: passed; }',
+    }));
+    await page.route(origin + '/src/index.css', (route) => route.fulfill({
+      contentType: 'application/javascript',
+      body: 'document.documentElement.dataset.fixtureSourceAsset = "passed";',
+    }));
+    await page.route(origin + unrelatedDocumentPath, (route) => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html><head><link rel="stylesheet" href="/assets/tokenbench.css"></head><body><main>Unrelated asset fixture</main><script type="module" src="/assets/main.js"></script><script type="module" src="/src/index.css"></script></body></html>`,
+    }));
+    await stubHandlerBackedComparison(page, origin, { assetMode: 'vite-source' });
+
+    await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
+    await assertInteractiveHandlerComparison(page);
+    await page.goto(unrelatedDocumentPath, { waitUntil: 'networkidle' });
+
+    await expect(page.locator('html')).toHaveAttribute('data-fixture-main-asset', 'passed');
+    await expect(page.locator('html')).toHaveAttribute('data-fixture-source-asset', 'passed');
+    await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--fixture-handler-css').trim()))
+      .toBe('passed');
+    expect(errors.failedRequests).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+    expect(errors.pageErrors).toEqual([]);
+  });
+
+  test('hydrates a handler comparison after a compare-hub document', async ({ page }) => {
+    const origin = previewOrigin();
+    const errors = captureBrowserErrors(page);
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await stubStaticPageThirdPartyAssets(page);
+    await stubHandlerBackedComparison(page, origin, { assetMode: 'vite-source' });
+
+    await page.goto('/compare/', { waitUntil: 'domcontentloaded' });
+    await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
+
+    await assertInteractiveHandlerComparison(page);
+    expect(errors.failedRequests).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+    expect(errors.pageErrors).toEqual([]);
+  });
+
+  test('hydrates a sparse handler comparison after a dense handler document', async ({ page }) => {
+    const origin = previewOrigin();
+    const errors = captureBrowserErrors(page);
+    await page.setViewportSize({ width: 320, height: 1000 });
+    await blockExternalRequests(page, origin);
+    await stubHandlerBackedComparison(page, origin, { assetMode: 'vite-source' });
+
+    await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
+    await assertInteractiveHandlerComparison(page);
+    await page.goto(HANDLER_SPARSE_COMPARISON_PATH, { waitUntil: 'networkidle' });
+
+    await assertInteractiveHandlerComparison(page);
+    await expect(page.getByRole('heading', { name: 'Canvas vs Alpha', level: 1 })).toBeVisible();
+    expect(errors.failedRequests).toEqual([]);
+    expect(errors.consoleErrors).toEqual([]);
+    expect(errors.pageErrors).toEqual([]);
+  });
+
   test('renders a dense server comparison document with only eligible radar axes before hydration', async ({ browser }) => {
     const origin = previewOrigin();
     const context = await browser.newContext({ baseURL: origin, javaScriptEnabled: false });

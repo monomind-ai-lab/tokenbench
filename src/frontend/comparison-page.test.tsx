@@ -167,15 +167,16 @@ describe('comparison detail page', () => {
 
     const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
     const highlights = screen.getByRole('heading', { name: 'Evidence highlights' }).closest('section');
+    const scoreEvidence = 'Across compatible supported BenchLM categories, Model A has higher scores in Coding, Multimodal, and Reasoning; Model B has a higher score in Knowledge.';
     expect(highlights).not.toBeNull();
-    expect(highlights!).toHaveTextContent('On Coding');
+    expect(highlights!).toHaveTextContent(scoreEvidence);
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('$0.5');
 
     fireEvent.change(screen.getByLabelText('Model A pricing route'), { target: { value: 'openrouter:provider:model-a' } });
 
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('$2');
     expect(within(pricingTable).getByRole('row', { name: /Output API price/ })).toHaveTextContent('$8');
-    expect(highlights!).toHaveTextContent('On Coding');
+    expect(highlights!).toHaveTextContent(scoreEvidence);
     expect(within(screen.getByRole('table', { name: 'Source metric comparison' })).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Evidence provenance' }).closest('section')).toHaveTextContent('Model A — route openrouter:provider:model-a · source openrouter · provider openrouter');
 

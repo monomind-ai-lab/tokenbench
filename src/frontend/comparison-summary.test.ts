@@ -234,7 +234,7 @@ describe('comparisonSummary', () => {
     },
   );
 
-  it('keeps a verified operational rate in a dense supported-score summary', () => {
+  it('keeps opposing supported score evidence when a verified price reserves a dense-summary slot', () => {
     const models = pair({ contextWindowTokens: 128_000 }, { contextWindowTokens: 64_000 });
     const summary = comparisonSummary(comparisonWith(
       models,
@@ -254,12 +254,51 @@ describe('comparisonSummary', () => {
       heading: 'Comparison summary',
       coverage: 'strong',
       sentences: [
-        'On Coding, Alpha has a higher supported BenchLM score (91 vs 87).',
-        'On Knowledge, Alpha has a higher supported BenchLM score (72 vs 68).',
-        'On Multimodal, Alpha has a higher supported BenchLM score (76 vs 70).',
+        'Across compatible supported BenchLM categories, Alpha has higher scores in Coding, Knowledge, and Multimodal; Beta has a higher score in Reasoning.',
         'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
+        'Output API price: Beta has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).',
+        'Context window: Alpha has the larger published context window (128,000 tokens vs 64,000 tokens).',
       ],
     });
+  });
+
+  it('keeps balanced supported category leads compact and model-specific', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(
+      models,
+      [
+        sharedRow(models[0], models[1], 'reasoning', 80, 83),
+        sharedRow(models[0], models[1], 'coding', 91, 87),
+        sharedRow(models[0], models[1], 'multimodal', 76, 70),
+        sharedRow(models[0], models[1], 'knowledge', 68, 72),
+      ],
+      [
+        [price(models[0], 1, 4)],
+        [price(models[1], 2, 3)],
+      ],
+    ));
+
+    expect(summary.sentences).toEqual([
+      'Across compatible supported BenchLM categories, Alpha has higher scores in Coding and Multimodal; Beta has higher scores in Knowledge and Reasoning.',
+      'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
+      'Output API price: Beta has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).',
+    ]);
+  });
+
+  it('lists every supported category deterministically when many score claims exceed the cap', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [
+      sharedRow(models[0], models[1], 'vision', 78, 75),
+      sharedRow(models[0], models[1], 'agentic', 73, 76),
+      sharedRow(models[0], models[1], 'coding', 91, 87),
+      sharedRow(models[0], models[1], 'reasoning', 80, 83),
+      sharedRow(models[0], models[1], 'knowledge', 68, 72),
+      sharedRow(models[0], models[1], 'multimodal', 76, 70),
+    ]));
+
+    expect(summary.sentences).toEqual([
+      'Across compatible supported BenchLM categories, Alpha has higher scores in Coding, Multimodal, and Vision; Beta has higher scores in Agentic, Knowledge, and Reasoning.',
+    ]);
   });
 
   it('adds a limited-evidence caveat after one compatible shared metric', () => {

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import type { Page, Route } from '@playwright/test';
+import type { Frame, Page, Request, Route } from '@playwright/test';
 import { readActiveBenchmarkSnapshot, type D1Database } from '../functions/_shared/benchmark-db';
 import type {
   BenchmarkMetric,
@@ -666,6 +666,34 @@ interface HandlerDocument {
   readonly body: string;
 }
 
+type HandlerComparisonDocumentPath = typeof HANDLER_COMPARISON_PATH | typeof HANDLER_SPARSE_COMPARISON_PATH;
+
+const HANDLER_COMPARISON_DOCUMENT_PATHS = new Set<HandlerComparisonDocumentPath>([
+  HANDLER_COMPARISON_PATH,
+  HANDLER_SPARSE_COMPARISON_PATH,
+]);
+
+function handlerComparisonDocumentPath(request: Request): HandlerComparisonDocumentPath | null {
+  if (!request.isNavigationRequest()) return null;
+  try {
+    const pathname = new URL(request.url()).pathname;
+    return HANDLER_COMPARISON_DOCUMENT_PATHS.has(pathname as HandlerComparisonDocumentPath)
+      ? pathname as HandlerComparisonDocumentPath
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function activeHandlerComparisonDocumentPath(
+  route: Route,
+  page: Page,
+  activeHandlerDocumentByFrame: WeakMap<Frame, HandlerComparisonDocumentPath>,
+): HandlerComparisonDocumentPath | null {
+  const frame = route.request().frame();
+  return frame === page.mainFrame() ? activeHandlerDocumentByFrame.get(frame) ?? null : null;
+}
+
 // The browser server runs with HMR disabled (see playwright.config.ts), so the
 // real source entry does not need React Refresh bootstrapping. Importing
 // /@react-refresh would itself load Vite's websocket client and create
@@ -722,6 +750,13 @@ export async function stubHandlerBackedComparison(
   origin: string,
   options: { readonly assetMode?: 'vite-source' | 'as-served' } = {},
 ): Promise<void> {
+  const activeHandlerDocumentByFrame = new WeakMap<Frame, HandlerComparisonDocumentPath>();
+  page.on('request', (request) => {
+    if (!request.isNavigationRequest() || request.frame() !== page.mainFrame()) return;
+    const path = handlerComparisonDocumentPath(request);
+    if (path === null) activeHandlerDocumentByFrame.delete(request.frame());
+    else activeHandlerDocumentByFrame.set(request.frame(), path);
+  });
   const preflight = await readActiveBenchmarkSnapshot(handlerBackedComparisonDatabase());
   if (!preflight) throw new Error('Handler-backed comparison fixture has no active benchmark revision.');
   const responses = await Promise.all([
@@ -733,6 +768,9 @@ export async function stubHandlerBackedComparison(
       throw new Error(`Handler-backed comparison fixture for ${path} returned ${response.status} after a valid D1 preflight: ${response.body}`);
     }
     await page.route(origin + path, async (route) => {
+      if (route.request().isNavigationRequest() && route.request().frame() === page.mainFrame()) {
+        activeHandlerDocumentByFrame.set(route.request().frame(), path);
+      }
       await route.fulfill({
         status: response.status,
         headers: response.headers,
@@ -747,18 +785,32 @@ export async function stubHandlerBackedComparison(
   // Preserve the real stylesheet request and bypass only that duplicate module
   // request so hydration timing reflects the app rather than dev-server setup.
   await page.route(origin + '/src/index.css', async (route) => {
-    const documentPath = new URL(route.request().frame().url()).pathname;
-    const isHandlerComparison = documentPath === HANDLER_COMPARISON_PATH || documentPath === HANDLER_SPARSE_COMPARISON_PATH;
-    if (isHandlerComparison && route.request().resourceType() === 'script') {
+    const activeDocumentPath = activeHandlerComparisonDocumentPath(route, page, activeHandlerDocumentByFrame);
+    if (activeDocumentPath !== null && route.request().resourceType() === 'script') {
       await route.fulfill({ contentType: 'application/javascript', body: 'export {};' });
       return;
     }
-    await route.continue();
+    if (activeDocumentPath !== null) {
+      await route.continue();
+      return;
+    }
+    await route.fallback();
   });
   await page.route(origin + '/assets/main.js', async (route) => {
-    await route.fulfill({ contentType: 'application/javascript', body: VITE_HANDLER_HYDRATION_ENTRY });
+    if (activeHandlerComparisonDocumentPath(route, page, activeHandlerDocumentByFrame) === null) {
+      await route.fallback();
+      return;
+    }
+    await route.fulfill({
+      contentType: 'application/javascript',
+      body: VITE_HANDLER_HYDRATION_ENTRY,
+    });
   });
   await page.route(origin + '/assets/tokenbench.css', async (route) => {
+    if (activeHandlerComparisonDocumentPath(route, page, activeHandlerDocumentByFrame) === null) {
+      await route.fallback();
+      return;
+    }
     await route.fulfill({ contentType: 'text/css', body: '@import url("/src/index.css");' });
   });
 }
