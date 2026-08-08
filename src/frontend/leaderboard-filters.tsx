@@ -1,4 +1,5 @@
 import { Check } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import type { LeaderboardSort } from '../benchmarks/leaderboards';
 import { LEADERBOARD_DEFINITIONS } from '../benchmarks/leaderboards';
 import { normalizeLeaderboardQueryState } from '../benchmarks/leaderboard-query';
@@ -166,45 +167,51 @@ function PriceFilter({
   const lastIndex = domain.values.length - 1;
   const minimumId = `leaderboard-minimum-price-${keyName}`;
   const maximumId = `leaderboard-maximum-price-${keyName}`;
+  const rangeTrackStyle = {
+    '--range-start': `${(domain.minimumIndex / lastIndex) * 100}%`,
+    '--range-end': `${(domain.maximumIndex / lastIndex) * 100}%`,
+  } as CSSProperties & Record<'--range-start' | '--range-end', string>;
   return <fieldset className="leaderboard-filter-field leaderboard-price-filter">
     <legend>Price per 1M</legend>
-    <div className="leaderboard-price-inputs">
+    <div className="leaderboard-price-values">
       <label htmlFor={minimumId}>
         <span>Minimum</span>
         <output htmlFor={minimumId}>{formatPrice(domain.values[domain.minimumIndex]!)}</output>
-        <input
-          id={minimumId}
-          aria-label="Minimum price per 1M tokens"
-          aria-valuetext={formatPrice(domain.values[domain.minimumIndex]!)}
-          type="range"
-          min="0"
-          max={lastIndex}
-          step="1"
-          value={domain.minimumIndex}
-          onChange={(event) => {
-            const proposedIndex = Number(event.currentTarget.value);
-            onChange(Math.min(proposedIndex, domain.maximumIndex), domain.maximumIndex);
-          }}
-        />
       </label>
       <label htmlFor={maximumId}>
         <span>Maximum</span>
         <output htmlFor={maximumId}>{formatPrice(domain.values[domain.maximumIndex]!)}</output>
-        <input
-          id={maximumId}
-          aria-label="Maximum price per 1M tokens"
-          aria-valuetext={formatPrice(domain.values[domain.maximumIndex]!)}
-          type="range"
-          min="0"
-          max={lastIndex}
-          step="1"
-          value={domain.maximumIndex}
-          onChange={(event) => {
-            const proposedIndex = Number(event.currentTarget.value);
-            onChange(domain.minimumIndex, Math.max(proposedIndex, domain.minimumIndex));
-          }}
-        />
       </label>
+    </div>
+    <div className="leaderboard-price-range-stack" style={rangeTrackStyle}>
+      <input
+        id={minimumId}
+        aria-label="Minimum price per 1M tokens"
+        aria-valuetext={formatPrice(domain.values[domain.minimumIndex]!)}
+        type="range"
+        min="0"
+        max={lastIndex}
+        step="1"
+        value={domain.minimumIndex}
+        onChange={(event) => {
+          const proposedIndex = Number(event.currentTarget.value);
+          onChange(Math.min(proposedIndex, domain.maximumIndex), domain.maximumIndex);
+        }}
+      />
+      <input
+        id={maximumId}
+        aria-label="Maximum price per 1M tokens"
+        aria-valuetext={formatPrice(domain.values[domain.maximumIndex]!)}
+        type="range"
+        min="0"
+        max={lastIndex}
+        step="1"
+        value={domain.maximumIndex}
+        onChange={(event) => {
+          const proposedIndex = Number(event.currentTarget.value);
+          onChange(domain.minimumIndex, Math.max(proposedIndex, domain.minimumIndex));
+        }}
+      />
     </div>
   </fieldset>;
 }

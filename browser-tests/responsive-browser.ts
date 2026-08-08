@@ -11,6 +11,7 @@ import {
   emptyCodingLeaderboard,
   fulfillJson,
   readyCodingLeaderboard,
+  readyFilterControlsLeaderboard,
   readyMediaLeaderboard,
   stubNewsletterSignup,
   staleCodingLeaderboard,
@@ -843,6 +844,147 @@ test.describe('leaderboard browser harness', () => {
     }
   });
 
+  test('keeps the four filter rows ordered, scrollable, and URL-backed', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await stubLeaderboard(page, origin, 'llm-coding', readyFilterControlsLeaderboard());
+
+    for (const width of [320, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 1100 });
+      await page.goto('/leaderboards/llm/coding/');
+      await expect(page.getByRole('form', { name: 'Leaderboard filters' })).toBeVisible();
+
+      const geometry = await page.locator('.leaderboard-filters').evaluate((form) => {
+        const box = (selector: string) => {
+          const bounds = form.querySelector(selector)!.getBoundingClientRect();
+          return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+        };
+        return {
+          form: form.getBoundingClientRect().width,
+          search: box('.leaderboard-filter-search-row'),
+          selectors: box('.leaderboard-filter-selector-row'),
+          providers: box('.leaderboard-filter-provider-row'),
+          range: box('.leaderboard-filter-range-row'),
+        };
+      });
+
+      expect(geometry.search.width).toBeGreaterThanOrEqual(geometry.form - 1);
+      expect([geometry.search.y, geometry.selectors.y, geometry.providers.y, geometry.range.y])
+        .toEqual([...new Set([geometry.search.y, geometry.selectors.y, geometry.providers.y, geometry.range.y])].sort((a, b) => a - b));
+
+      const providerStrip = page.locator('.leaderboard-provider-options');
+      const providerGeometry = await providerStrip.evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        overflowX: getComputedStyle(element).overflowX,
+        flexWrap: getComputedStyle(element).flexWrap,
+      }));
+      if (width < 768) {
+        expect(providerGeometry.overflowX).toBe('auto');
+        expect(providerGeometry.flexWrap).toBe('nowrap');
+        expect(providerGeometry.scrollWidth).toBeGreaterThan(providerGeometry.clientWidth);
+      } else {
+        expect(providerGeometry.flexWrap).toBe('wrap');
+      }
+
+      for (const button of await page.getByRole('group', { name: 'Providers' }).getByRole('button').all()) {
+        const bounds = await button.boundingBox();
+        expect(bounds?.height).toBeGreaterThanOrEqual(44);
+      }
+      await assertNoHorizontalOverflow(page);
+    }
+
+    await page.setViewportSize({ width: 320, height: 1100 });
+    await page.goto('/leaderboards/llm/coding/');
+    await page.getByRole('button', { name: 'xAI' }).focus();
+    await expect(page.getByRole('button', { name: 'xAI' })).toBeFocused();
+    const focusedIsVisible = await page.getByRole('button', { name: 'xAI' }).evaluate((button) => {
+      const item = button.getBoundingClientRect();
+      const strip = button.parentElement!.getBoundingClientRect();
+      return item.left >= strip.left && item.right <= strip.right;
+    });
+    expect(focusedIsVisible).toBe(true);
+
+    await page.getByRole('button', { name: 'OpenAI' }).click();
+    await expect(page.getByRole('button', { name: 'OpenAI' })).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => new URL(page.url()).searchParams.getAll('provider')).toEqual(['OpenAI']);
+
+    const minimum = page.getByRole('slider', { name: 'Minimum price per 1M tokens' });
+    await minimum.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(() => new URL(page.url()).searchParams.get('minPrice')).toBe('0.5');
+  });
+
+  test('keeps filter selection legible across target themes', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await stubLeaderboard(page, origin, 'llm-coding', readyFilterControlsLeaderboard());
+
+    for (const width of [320, 1440]) {
+      await page.setViewportSize({ width, height: 1100 });
+      for (const theme of ['dark', 'light'] as const) {
+        await setStoredTheme(page, theme);
+        await page.goto('/leaderboards/llm/coding/?provider=OpenAI');
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+
+        const selected = page.getByRole('button', { name: 'OpenAI' });
+        const unselected = page.getByRole('button', { name: 'Anthropic' });
+        await expect(selected).toHaveAttribute('aria-pressed', 'true');
+        await expect(selected.locator('svg')).toBeVisible();
+        await expect(unselected.locator('svg')).toHaveCount(0);
+        const providerStyles = await Promise.all([selected, unselected].map((button) => button.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { background: style.backgroundColor, border: style.borderColor };
+        })));
+        expect(providerStyles[0]?.background).not.toBe(providerStyles[1]?.background);
+        expect(providerStyles[0]?.border).not.toBe(providerStyles[1]?.border);
+
+        const rangeStack = page.locator('.leaderboard-price-range-stack');
+        await expect(rangeStack).toBeVisible();
+        const rangePresentation = await rangeStack.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const track = getComputedStyle(element, '::before');
+          return {
+            width: bounds.width,
+            height: bounds.height,
+            trackBackground: track.backgroundImage,
+            trackHeight: track.height,
+            rangeStart: getComputedStyle(element).getPropertyValue('--range-start').trim(),
+            rangeEnd: getComputedStyle(element).getPropertyValue('--range-end').trim(),
+          };
+        });
+        expect(rangePresentation.width).toBeGreaterThan(0);
+        expect(rangePresentation.height).toBeGreaterThanOrEqual(44);
+        expect(rangePresentation.trackBackground).toContain('linear-gradient');
+        expect(rangePresentation.trackHeight).toBe('4px');
+        expect(rangePresentation.rangeStart).toBe('0%');
+        expect(rangePresentation.rangeEnd).toBe('100%');
+
+        const sliders = [
+          page.getByRole('slider', { name: 'Minimum price per 1M tokens' }),
+          page.getByRole('slider', { name: 'Maximum price per 1M tokens' }),
+        ];
+        for (const slider of sliders) {
+          await expect(slider).toBeVisible();
+          const presentation = await slider.evaluate((input) => {
+            const style = getComputedStyle(input);
+            const bounds = input.getBoundingClientRect();
+            return { appearance: style.appearance, height: bounds.height };
+          });
+          expect(presentation.appearance).toBe('none');
+          expect(presentation.height).toBeGreaterThanOrEqual(44);
+          await slider.focus();
+          await expect(slider).toBeFocused();
+        }
+        await assertNoHorizontalOverflow(page);
+      }
+    }
+  });
+
   test('keeps table semantics, named filters, and equivalent model cards across leaderboard breakpoints', async ({ page }) => {
     const origin = previewOrigin();
     await page.setViewportSize({ width: 1024, height: 1000 });
@@ -960,6 +1102,9 @@ test.describe('leaderboard browser harness', () => {
 
     await openCodingState(emptyCodingLeaderboard());
     await expect(page.getByText('No published entries match these filters')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('form', { name: 'Leaderboard filters' })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Providers' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'OpenAI' })).toBeVisible();
     await expect(page.locator('footer[aria-label="Published leaderboard evidence"]')).toBeVisible();
 
     await openCodingState({ error: 'Published benchmark data is unavailable.' }, 503);

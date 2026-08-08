@@ -828,6 +828,75 @@ export function readyMediaLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageRes
   return clone(MEDIA_LEADERBOARD_ENVELOPE) as BenchmarkApiEnvelope<LeaderboardPageResult>;
 }
 
+export function readyFilterControlsLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
+  const publishedRows = [
+    { modelKey: 'provider:anthropic-filter', slug: 'anthropic-filter', name: 'Anthropic Filter', provider: 'Anthropic', price: 0.125 },
+    { modelKey: 'provider:google-filter', slug: 'google-filter', name: 'Google Filter', provider: 'Google', price: 0.5 },
+    { modelKey: 'provider:meta-filter', slug: 'meta-filter', name: 'Meta Filter', provider: 'Meta', price: 2 },
+    { modelKey: 'provider:mistral-filter', slug: 'mistral-filter', name: 'Mistral Filter', provider: 'Mistral AI', price: 5 },
+    { modelKey: 'provider:openai-filter', slug: 'openai-filter', name: 'OpenAI Filter', provider: 'OpenAI', price: 25 },
+    { modelKey: 'provider:xai-filter', slug: 'xai-filter', name: 'xAI Filter', provider: 'xAI', price: 1000 },
+  ] as const;
+  const entries = publishedRows.map((row, index) => {
+    const model = benchmarkModel(row.modelKey, row.slug, row.name, 'benchlm', 'models', row.provider);
+    const metric = benchlmMetric(model.modelKey, 'benchlm:category:coding', 'coding', 96 - index);
+    const price = primaryPrice(model.modelKey, row.price, row.price);
+    return {
+      model,
+      metric,
+      metrics: [metric],
+      primaryPrice: price,
+      blendedCostPerMillion: row.price,
+      contextWindowTokens: price.contextWindowTokens,
+      sourceRank: null,
+      onValueFrontier: false,
+    };
+  });
+
+  return {
+    revision: REVISION,
+    publishedAt: TIMESTAMP,
+    freshness: { status: 'fresh', checkedAt: TIMESTAMP },
+    attribution: [
+      attribution[0],
+      {
+        sourceId: 'openrouter',
+        label: 'Catalog and pricing data from OpenRouter',
+        url: 'https://openrouter.example/models',
+        updatedAt: TIMESTAMP,
+      },
+    ],
+    data: {
+      key: 'llm-coding',
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: ['benchlm:category:coding'],
+        defaultSort: 'score-desc',
+      },
+      entries,
+      pagination: { limit: 50, total: entries.length, nextCursor: null },
+      capabilities: {
+        dataReady: true,
+        defaultProfile: 'balanced',
+        defaultSort: 'score-desc',
+        supportsProfile: false,
+        supportsEstimated: true,
+        supportsLifecycle: false,
+        priceMode: 'representative',
+        supportsPrice: true,
+        priceValues: [0.125, 0.5, 2, 5, 25, 1000],
+        metricKeys: ['benchlm:category:coding'],
+        sorts: ['score-desc', 'price-asc'],
+        providers: ['Anthropic', 'Google', 'Meta', 'Mistral AI', 'OpenAI', 'xAI'],
+        sourceTypes: ['Proprietary'],
+        evidenceStatuses: ['supported'],
+      },
+    },
+  };
+}
+
 export function staleCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
   const value = readyCodingLeaderboard();
   return {

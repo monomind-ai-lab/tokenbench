@@ -1,7 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { onRequestGet } from '../functions/compare/[pair]';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
-import { HANDLER_SPARSE_COMPARISON_PATH, handlerBackedComparisonDatabase } from './tokenbench-fixtures';
+import { useBenchmarkLeaderboard } from '../src/frontend/use-benchmarks';
+import {
+  HANDLER_SPARSE_COMPARISON_PATH,
+  handlerBackedComparisonDatabase,
+  readyFilterControlsLeaderboard,
+} from './tokenbench-fixtures';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 function embeddedComparisonPayload(html: string): unknown {
   const payload = html.match(/<script id="comparison-initial-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
@@ -31,5 +41,34 @@ describe('handler-backed comparison fixture', () => {
         { modelKey: 'provider:alpha', selectedRouteId: 'direct:alpha' },
       ],
     });
+  });
+});
+
+describe('leaderboard browser fixtures', () => {
+  it('keeps the rich filter-controls response valid across every published provider and price', async () => {
+    const fixture = readyFilterControlsLeaderboard();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture), {
+      headers: { 'content-type': 'application/json' },
+    })));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-coding'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.capabilities?.providers).toEqual([
+      'Anthropic',
+      'Google',
+      'Meta',
+      'Mistral AI',
+      'OpenAI',
+      'xAI',
+    ]);
+    expect(result.current.envelope?.data.capabilities?.priceValues).toEqual([
+      0.125,
+      0.5,
+      2,
+      5,
+      25,
+      1000,
+    ]);
   });
 });
