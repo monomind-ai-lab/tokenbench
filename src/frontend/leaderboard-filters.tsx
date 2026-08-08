@@ -238,8 +238,7 @@ export function LeaderboardFilters({ keyName, filters, onChange, capabilities }:
     )
     : null;
   const showSupplementary = routeCapabilities.supportsProfile
-    || showSourceTypes
-    || routeCapabilities.supportsEstimated;
+    || showSourceTypes;
 
   return (
     <form className="leaderboard-filters" aria-label="Leaderboard filters" onSubmit={(event) => event.preventDefault()}>
@@ -295,12 +294,23 @@ export function LeaderboardFilters({ keyName, filters, onChange, capabilities }:
         />
       </div> : null}
 
-      {priceDomain ? <div className="leaderboard-filter-range-row">
-        <PriceFilter
+      {priceDomain || routeCapabilities.supportsEstimated ? <div className="leaderboard-filter-range-row">
+        {priceDomain ? <PriceFilter
           keyName={keyName}
           domain={priceDomain}
           onChange={(minimumIndex, maximumIndex) => update(priceBoundsAt(priceDomain, minimumIndex, maximumIndex))}
-        />
+        /> : null}
+
+        {routeCapabilities.supportsEstimated ? <label className="leaderboard-estimated-control">
+          <input
+            type="checkbox"
+            aria-label="Include estimated models"
+            checked={filters.includeEstimated}
+            onChange={(event) => update({ includeEstimated: event.target.checked })}
+          />
+          <span>Include estimated models</span>
+          <small>Estimated entries stay unranked and do not receive leader badges.</small>
+        </label> : null}
       </div> : null}
 
       {showSupplementary ? <div className="leaderboard-filter-supplementary-row">
@@ -332,16 +342,6 @@ export function LeaderboardFilters({ keyName, filters, onChange, capabilities }:
           onToggle={(sourceType) => update({ sourceTypes: toggle(filters.sourceTypes, sourceType) as LeaderboardFilterState['sourceTypes'] })}
         /> : null}
 
-        {routeCapabilities.supportsEstimated ? <label className="leaderboard-estimated-control">
-          <input
-            type="checkbox"
-            aria-label="Include estimated models"
-            checked={filters.includeEstimated}
-            onChange={(event) => update({ includeEstimated: event.target.checked })}
-          />
-          <span>Include estimated models</span>
-          <small>Estimated entries stay unranked and do not receive leader badges.</small>
-        </label> : null}
       </div> : null}
     </form>
   );

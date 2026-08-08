@@ -669,7 +669,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .leaderboard-decision-picks .decision-pick-list { grid-template-columns: minmax(0, 1fr); }
   .leaderboard-filter-panel { padding: 22px; }
   .leaderboard-filter-selector-row, .leaderboard-filter-range-row, .leaderboard-filter-supplementary-row { grid-template-columns: minmax(0, 1fr); }
-  .leaderboard-provider-options { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; scroll-padding-inline: 4px; padding-block: 7px; margin-block: -7px; scrollbar-color: var(--surface-highest) transparent; scrollbar-width: thin; }
+  .leaderboard-provider-options { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; scroll-padding-inline: 7px; padding: 7px; margin: -7px; scrollbar-color: var(--surface-highest) transparent; scrollbar-width: thin; }
   .leaderboard-provider-options::-webkit-scrollbar { height: 6px; }
   .leaderboard-provider-options::-webkit-scrollbar-track { background: transparent; }
   .leaderboard-provider-options::-webkit-scrollbar-thumb { border: 1px solid transparent; border-radius: 999px; background: var(--surface-highest); background-clip: padding-box; }

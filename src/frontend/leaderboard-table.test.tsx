@@ -381,6 +381,13 @@ describe('LeaderboardFilters', () => {
       'leaderboard-filter-range-row',
       'leaderboard-filter-supplementary-row',
     ]);
+    const rangeRow = container.querySelector('.leaderboard-filter-range-row');
+    const supplementaryRow = container.querySelector('.leaderboard-filter-supplementary-row');
+    const estimated = screen.getByRole('checkbox', { name: 'Include estimated models' });
+    expect(estimated.closest('.leaderboard-filter-range-row')).toBe(rangeRow);
+    expect(estimated.closest('.leaderboard-filter-supplementary-row')).toBeNull();
+    expect(screen.getByRole('group', { name: 'Source type' }).closest('.leaderboard-filter-supplementary-row'))
+      .toBe(supplementaryRow);
   });
 
   it('uses human metric labels while preserving canonical option values', () => {

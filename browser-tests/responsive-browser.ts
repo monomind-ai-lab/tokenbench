@@ -855,6 +855,8 @@ test.describe('leaderboard browser harness', () => {
       await page.setViewportSize({ width, height: 1100 });
       await page.goto('/leaderboards/llm/coding/');
       await expect(page.getByRole('form', { name: 'Leaderboard filters' })).toBeVisible();
+      const rangeRow = page.locator('.leaderboard-filter-range-row');
+      await expect.soft(rangeRow.getByRole('checkbox', { name: 'Include estimated models' })).toBeVisible();
 
       const geometry = await page.locator('.leaderboard-filters').evaluate((form) => {
         const box = (selector: string) => {
@@ -867,12 +869,16 @@ test.describe('leaderboard browser harness', () => {
           selectors: box('.leaderboard-filter-selector-row'),
           providers: box('.leaderboard-filter-provider-row'),
           range: box('.leaderboard-filter-range-row'),
+          estimated: box('.leaderboard-estimated-control'),
         };
       });
 
       expect(geometry.search.width).toBeGreaterThanOrEqual(geometry.form - 1);
       expect([geometry.search.y, geometry.selectors.y, geometry.providers.y, geometry.range.y])
         .toEqual([...new Set([geometry.search.y, geometry.selectors.y, geometry.providers.y, geometry.range.y])].sort((a, b) => a - b));
+      expect.soft(geometry.estimated.y).toBeGreaterThanOrEqual(geometry.range.y);
+      expect.soft(geometry.estimated.y + geometry.estimated.height)
+        .toBeLessThanOrEqual(geometry.range.y + geometry.range.height);
 
       const providerStrip = page.locator('.leaderboard-provider-options');
       const providerGeometry = await providerStrip.evaluate((element) => ({
@@ -900,12 +906,13 @@ test.describe('leaderboard browser harness', () => {
     await page.goto('/leaderboards/llm/coding/');
     await page.getByRole('button', { name: 'xAI' }).focus();
     await expect(page.getByRole('button', { name: 'xAI' })).toBeFocused();
-    const focusedIsVisible = await page.getByRole('button', { name: 'xAI' }).evaluate((button) => {
+    const focusedClearance = await page.getByRole('button', { name: 'xAI' }).evaluate((button) => {
       const item = button.getBoundingClientRect();
       const strip = button.parentElement!.getBoundingClientRect();
-      return item.left >= strip.left && item.right <= strip.right;
+      return { start: item.left - strip.left, end: strip.right - item.right };
     });
-    expect(focusedIsVisible).toBe(true);
+    expect(focusedClearance.start).toBeGreaterThanOrEqual(6);
+    expect(focusedClearance.end).toBeGreaterThanOrEqual(6);
 
     await page.getByRole('button', { name: 'OpenAI' }).click();
     await expect(page.getByRole('button', { name: 'OpenAI' })).toHaveAttribute('aria-pressed', 'true');
