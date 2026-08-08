@@ -2,9 +2,26 @@ import { describe, expect, it } from 'vitest';
 import type { LeaderboardEntry } from '../benchmarks/leaderboards';
 import {
   leaderboardFilterCapabilities,
+  normalizeLeaderboardFilters,
   parseLeaderboardFilters,
   serializeLeaderboardFilters,
+  type LeaderboardFilterState,
+  type LeaderboardQueryCapabilities,
 } from './leaderboard-filter-state';
+
+const DEFAULT_FILTERS: LeaderboardFilterState = {
+  query: '',
+  profile: 'balanced',
+  priceMode: 'representative',
+  metricKey: null,
+  sort: 'score-desc',
+  providers: [],
+  sourceTypes: [],
+  evidence: null,
+  priceMinimum: null,
+  priceMaximum: null,
+  includeEstimated: false,
+};
 
 function entry(): LeaderboardEntry {
   return {
@@ -86,5 +103,41 @@ describe('leaderboard filter state', () => {
       includeEstimated: false,
     });
     expect(serializeLeaderboardFilters(state)).toBe('profile=balanced&sort=score-desc&q=Alpha&sourceType=Open+Weight&evidence=supported');
+  });
+
+  it('canonicalizes published endpoints without widening outside shared bounds', () => {
+    const capabilities: LeaderboardQueryCapabilities = {
+      dataReady: true,
+      defaultProfile: 'balanced',
+      defaultSort: 'score-desc',
+      supportsProfile: false,
+      supportsEstimated: true,
+      supportsLifecycle: false,
+      priceMode: 'representative',
+      supportsPrice: true,
+      priceValues: [2, 5],
+      metricKeys: ['benchlm:category:coding', 'benchlm:category:reasoning'],
+      sorts: ['score-desc', 'price-asc'],
+      providers: ['Provider A', 'Provider B'],
+      sourceTypes: ['Open Weight', 'Proprietary'],
+      evidenceStatuses: ['supported', 'source_only'],
+    };
+
+    expect(normalizeLeaderboardFilters('llm-coding', {
+      ...DEFAULT_FILTERS,
+      priceMinimum: 2,
+      priceMaximum: 5,
+    }, undefined, capabilities)).toMatchObject({
+      priceMinimum: null,
+      priceMaximum: null,
+    });
+    expect(normalizeLeaderboardFilters('llm-coding', {
+      ...DEFAULT_FILTERS,
+      priceMinimum: 10,
+      priceMaximum: null,
+    }, undefined, capabilities)).toMatchObject({
+      priceMinimum: 10,
+      priceMaximum: null,
+    });
   });
 });

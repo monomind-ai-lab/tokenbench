@@ -10,6 +10,7 @@ import {
 } from '../benchmarks/leaderboard-query';
 import { LEADERBOARD_DEFINITIONS, type LeaderboardEntry } from '../benchmarks/leaderboards';
 import type { LeaderboardKey } from '../routing/routes';
+import { createLeaderboardPriceDomain, priceBoundsAt } from './leaderboard-price-domain';
 
 /** Compatibility name for the UI's one shared query state; never a second state shape. */
 export type LeaderboardFilterState = LeaderboardQueryState;
@@ -75,7 +76,18 @@ export function normalizeLeaderboardFilters(
   capabilities?: LeaderboardQueryCapabilities,
 ): LeaderboardFilterState {
   const definition = LEADERBOARD_DEFINITIONS[keyName];
-  return normalizeLeaderboardQueryState(filters, definition, capabilities ?? leaderboardFilterCapabilities(keyName, entries));
+  const routeCapabilities = capabilities ?? leaderboardFilterCapabilities(keyName, entries);
+  const normalized = normalizeLeaderboardQueryState(filters, definition, routeCapabilities);
+  const priceDomain = createLeaderboardPriceDomain(
+    routeCapabilities.priceValues,
+    normalized.priceMinimum,
+    normalized.priceMaximum,
+  );
+  if (priceDomain === null) return normalized;
+  return {
+    ...normalized,
+    ...priceBoundsAt(priceDomain, priceDomain.minimumIndex, priceDomain.maximumIndex),
+  };
 }
 
 /** Preserves the published multimodal lens grouping only for its default view. */

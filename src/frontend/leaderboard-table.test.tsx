@@ -11,7 +11,10 @@ import {
   visibleLeaderboardEntries,
   type LeaderboardFilterState,
 } from './leaderboard-filters';
-import { leaderboardFilterCapabilities } from './leaderboard-filter-state';
+import {
+  leaderboardFilterCapabilities,
+  type LeaderboardQueryCapabilities,
+} from './leaderboard-filter-state';
 import { LeaderboardTable } from './leaderboard-table';
 import '../index.css';
 
@@ -105,6 +108,23 @@ const DEFAULT_FILTERS: LeaderboardFilterState = {
 };
 
 const PROFILE_FILTERS: LeaderboardFilterState = { ...DEFAULT_FILTERS, priceMode: 'profile' };
+
+const RICH_FILTER_CAPABILITIES: LeaderboardQueryCapabilities = {
+  dataReady: true,
+  defaultProfile: 'balanced',
+  defaultSort: 'score-desc',
+  supportsProfile: false,
+  supportsEstimated: true,
+  supportsLifecycle: false,
+  priceMode: 'representative',
+  supportsPrice: true,
+  priceValues: [0.125, 5, 1_000],
+  metricKeys: ['benchlm:category:coding', 'benchlm:category:reasoning'],
+  sorts: ['score-desc', 'price-asc'],
+  providers: ['Provider A', 'Provider B'],
+  sourceTypes: ['Open Weight', 'Proprietary'],
+  evidenceStatuses: ['supported', 'source_only'],
+};
 
 function apiEnvelope(
   key: LeaderboardKey,
@@ -344,14 +364,197 @@ describe('LeaderboardTable', () => {
 });
 
 describe('LeaderboardFilters', () => {
+  it('renders the approved common rows before supplementary controls', () => {
+    const { container } = render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={RICH_FILTER_CAPABILITIES}
+    />);
+
+    const rows = [...container.querySelectorAll('.leaderboard-filters > [class*="leaderboard-filter-"]')]
+      .map((element) => element.className);
+    expect(rows).toEqual([
+      'leaderboard-filter-search-row',
+      'leaderboard-filter-selector-row',
+      'leaderboard-filter-provider-row',
+      'leaderboard-filter-range-row',
+      'leaderboard-filter-supplementary-row',
+    ]);
+  });
+
+  it('uses human metric labels while preserving canonical option values', () => {
+    render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={RICH_FILTER_CAPABILITIES}
+    />);
+
+    expect(screen.getByRole('option', { name: 'Coding' })).toHaveValue('benchlm:category:coding');
+    expect(screen.queryByText('benchlm:category:coding')).not.toBeInTheDocument();
+  });
+
+  it('exposes providers as pressed toggle buttons and preserves sorted OR state', () => {
+    const onChange = vi.fn();
+    render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={{ ...DEFAULT_FILTERS, providers: ['Provider B'] }}
+      onChange={onChange}
+      capabilities={RICH_FILTER_CAPABILITIES}
+    />);
+
+    const providerA = screen.getByRole('button', { name: 'Provider A' });
+    const providerB = screen.getByRole('button', { name: 'Provider B' });
+    expect(providerA).toHaveAttribute('aria-pressed', 'false');
+    expect(providerB).toHaveAttribute('aria-pressed', 'true');
+    expect(providerB.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(providerA);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      providers: ['Provider A', 'Provider B'],
+    }));
+  });
+
+  it('clamps range handles and clears both bounds at the full endpoints', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={{ ...DEFAULT_FILTERS, priceMinimum: 3, priceMaximum: 900 }}
+      onChange={onChange}
+      capabilities={RICH_FILTER_CAPABILITIES}
+    />);
+
+    const minimum = screen.getByRole('slider', { name: 'Minimum price per 1M tokens' });
+    fireEvent.change(minimum, { target: { value: '4' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      priceMinimum: 900,
+      priceMaximum: 900,
+    }));
+    fireEvent.change(minimum, { target: { value: '0' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      priceMinimum: null,
+      priceMaximum: 900,
+    }));
+
+    rerender(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={{ ...DEFAULT_FILTERS, priceMinimum: null, priceMaximum: 900 }}
+      onChange={onChange}
+      capabilities={RICH_FILTER_CAPABILITIES}
+    />);
+    fireEvent.change(screen.getByRole('slider', { name: 'Maximum price per 1M tokens' }), {
+      target: { value: '3' },
+    });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
+      priceMinimum: null,
+      priceMaximum: null,
+    }));
+  });
+
+  it('uses source-neutral estimated copy', () => {
+    render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={RICH_FILTER_CAPABILITIES}
+    />);
+
+    expect(screen.getByRole('checkbox', { name: 'Include estimated models' })).toBeInTheDocument();
+    expect(screen.getByText('Estimated entries stay unranked and do not receive leader badges.')).toBeInTheDocument();
+    expect(screen.queryByText(/BenchLM/i)).not.toBeInTheDocument();
+  });
+
+  it('shows one published price without sliders and omits an unavailable price fieldset', () => {
+    const { rerender } = render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={{ ...RICH_FILTER_CAPABILITIES, priceValues: [2] }}
+    />);
+
+    const priceFieldset = screen.getByRole('group', { name: 'Price per 1M' });
+    expect(within(priceFieldset).queryAllByRole('slider')).toHaveLength(0);
+    expect(within(priceFieldset).getByText('$2.00').tagName).toBe('OUTPUT');
+
+    rerender(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={{ ...RICH_FILTER_CAPABILITIES, supportsPrice: false, priceValues: [] }}
+    />);
+    expect(screen.queryByRole('group', { name: 'Price per 1M' })).not.toBeInTheDocument();
+  });
+
+  it('orders Sort before Evidence when there is no Metric lens selector', () => {
+    const { container } = render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={{ ...RICH_FILTER_CAPABILITIES, metricKeys: ['benchlm:category:coding'] }}
+    />);
+
+    const selectorRow = container.querySelector('.leaderboard-filter-selector-row');
+    expect(selectorRow).not.toBeNull();
+    expect([...selectorRow!.children].map((control) => control.querySelector('span')?.textContent))
+      .toEqual(['Sort leaderboard', 'Evidence']);
+  });
+
+  it('keeps Workload profile and Source type in the final supplementary row', () => {
+    const { container } = render(<LeaderboardFilters
+      keyName="llm-value"
+      filters={PROFILE_FILTERS}
+      onChange={vi.fn()}
+      capabilities={{ ...RICH_FILTER_CAPABILITIES, supportsProfile: true, priceMode: 'profile' }}
+    />);
+
+    const supplementaryRow = container.querySelector('.leaderboard-filter-supplementary-row');
+    expect(supplementaryRow).not.toBeNull();
+    expect(screen.getByRole('group', { name: 'Workload profile' }).closest('.leaderboard-filter-supplementary-row'))
+      .toBe(supplementaryRow);
+    expect(screen.getByRole('group', { name: 'Source type' }).closest('.leaderboard-filter-supplementary-row'))
+      .toBe(supplementaryRow);
+    expect(supplementaryRow).toBe(container.querySelector('.leaderboard-filters')?.lastElementChild);
+  });
+
+  it('keeps only request-defining controls available while capabilities load', () => {
+    const loadingCapabilities: LeaderboardQueryCapabilities = {
+      ...RICH_FILTER_CAPABILITIES,
+      dataReady: false,
+      supportsPrice: null,
+      priceValues: null,
+      providers: null,
+      sourceTypes: null,
+      evidenceStatuses: null,
+    };
+    render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={DEFAULT_FILTERS}
+      onChange={vi.fn()}
+      capabilities={loadingCapabilities}
+    />);
+
+    expect(screen.getByRole('searchbox', { name: 'Search model or provider' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Include estimated models' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Providers' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Price per 1M' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Metric lens' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Sort leaderboard' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Evidence' })).not.toBeInTheDocument();
+  });
+
   it('uses native controls for search, workload profile, sorting, and explicit estimated evidence', () => {
     const onChange = vi.fn();
-    render(<LeaderboardFilters keyName="llm-value" filters={PROFILE_FILTERS} onChange={onChange} />);
+    render(<LeaderboardFilters
+      keyName="llm-value"
+      filters={PROFILE_FILTERS}
+      onChange={onChange}
+      capabilities={{ ...RICH_FILTER_CAPABILITIES, supportsProfile: true, priceMode: 'profile' }}
+    />);
 
     const search = screen.getByRole('searchbox', { name: 'Search model or provider' });
     const profile = screen.getByRole('radio', { name: 'Input-heavy' });
     const sort = screen.getByRole('combobox', { name: 'Sort leaderboard' });
-    const includeEstimated = screen.getByRole('checkbox', { name: 'Include estimated BenchLM models' });
+    const includeEstimated = screen.getByRole('checkbox', { name: 'Include estimated models' });
     expect(profile).toHaveAttribute('type', 'radio');
     expect(sort.tagName).toBe('SELECT');
 
@@ -367,10 +570,10 @@ describe('LeaderboardFilters', () => {
 
   it('omits the estimated-model control on pure LMArena and pricing routes', () => {
     const { rerender } = render(<LeaderboardFilters keyName="llm-human-preference" filters={DEFAULT_FILTERS} onChange={vi.fn()} />);
-    expect(screen.queryByRole('checkbox', { name: 'Include estimated BenchLM models' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Include estimated models' })).not.toBeInTheDocument();
 
     rerender(<LeaderboardFilters keyName="llm-pricing-context" filters={DEFAULT_FILTERS} onChange={vi.fn()} />);
-    expect(screen.queryByRole('checkbox', { name: 'Include estimated BenchLM models' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Include estimated models' })).not.toBeInTheDocument();
   });
 
   it('preserves normalized route profile, filters, and sort state in the URL query', () => {
@@ -472,6 +675,15 @@ describe('LeaderboardFilters', () => {
       keyName="multimodal-vision-documents"
       filters={DEFAULT_FILTERS}
       onChange={vi.fn()}
+      capabilities={{
+        ...RICH_FILTER_CAPABILITIES,
+        metricKeys: [
+          'benchlm:category:multimodal',
+          'lmarena:vision_style_control:overall',
+          'lmarena:document_style_control:overall',
+        ],
+        sorts: ['score-desc', 'rank-asc'],
+      }}
     />);
 
     expect(screen.getByRole('option', { name: 'Source lens order' })).toBeInTheDocument();
@@ -597,35 +809,18 @@ describe('LeaderboardFilters', () => {
     expect(screen.getByRole('group', { name: 'Providers' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Source type' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Evidence' })).toBeInTheDocument();
-    expect(screen.getByRole('spinbutton', { name: 'Minimum price per 1M' })).toBeInTheDocument();
+    const priceFieldset = screen.getByRole('group', { name: 'Price per 1M' });
+    expect(within(priceFieldset).queryByRole('slider')).not.toBeInTheDocument();
+    expect(within(priceFieldset).getByText('$3.00').tagName).toBe('OUTPUT');
     expect(screen.queryByRole('radio', { name: 'Input-heavy' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Lifecycle' })).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Source rank' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Provider B' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Provider B' }));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ providers: ['Provider B'] }));
   });
 
-  it('normalizes an invalid price range before a control update reaches URL state', () => {
-    const priced = entry({ primaryPrice: primaryOpenRouterPrice(), blendedCostPerMillion: null });
-    const capabilities = leaderboardFilterCapabilities('llm-coding', [priced]);
-    const onChange = vi.fn();
-    const { rerender } = render(<LeaderboardFilters
-      keyName="llm-coding"
-      filters={DEFAULT_FILTERS}
-      onChange={onChange}
-      capabilities={capabilities}
-    />);
-
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Minimum price per 1M' }), { target: { value: '9' } });
-    const withMinimum = onChange.mock.calls.at(-1)?.[0] as LeaderboardFilterState;
-    rerender(<LeaderboardFilters keyName="llm-coding" filters={withMinimum} onChange={onChange} capabilities={capabilities} />);
-    fireEvent.change(screen.getByRole('spinbutton', { name: 'Maximum price per 1M' }), { target: { value: '2' } });
-
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ priceMinimum: null, priceMaximum: null }));
-  });
-
-  it('allows a long unbroken provider label to wrap inside a narrow filter control', () => {
+  it('keeps a long unbroken provider label accessible from its toggle button', () => {
     const longProvider = 'ProviderWithAnExtremelyLongUnbrokenDisplayName';
     const longEntry = entry({ model: { ...entry().model, creator: longProvider } });
     const otherEntry = entry({
@@ -640,7 +835,7 @@ describe('LeaderboardFilters', () => {
       capabilities={leaderboardFilterCapabilities('llm-coding', [longEntry, otherEntry])}
     />);
 
-    expect(getComputedStyle(screen.getByText(longProvider)).overflowWrap).toBe('anywhere');
+    expect(screen.getByRole('button', { name: longProvider })).toHaveTextContent(longProvider);
   });
 });
 
@@ -655,7 +850,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     expect(await screen.findByRole('heading', { name: 'Coding benchmark', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByRole('checkbox', { name: 'Include estimated BenchLM models' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Include estimated models' })).toBeChecked();
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&q=provider&estimated=1&limit=50');
     expect(within(screen.getByLabelText('Published leaderboard evidence')).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('heading', { name: 'Related leaderboards', level: 2 })).toBeInTheDocument();
@@ -682,9 +877,9 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     render(<App />);
 
     expect(await screen.findByRole('group', { name: 'Providers' })).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Provider B' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Provider B' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('radio', { name: 'Input-heavy' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('spinbutton', { name: 'Minimum price per 1M' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('slider', { name: 'Minimum price per 1M tokens' })).not.toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider+B'));
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search model or provider' }), { target: { value: 'alpha' } });
@@ -783,7 +978,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Output-heavy' })).toBeChecked());
     expect(screen.getByRole('searchbox', { name: 'Search model or provider' })).toHaveValue('Beta');
-    expect(screen.getByRole('checkbox', { name: 'Provider B' })).toBeChecked();
+    expect(screen.getByRole('button', { name: 'Provider B' })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findAllByText('Beta')).toHaveLength(2);
     expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('profile=outputHeavy');
@@ -822,7 +1017,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     render(<App />);
 
-    expect(await screen.findByRole('checkbox', { name: 'Provider, Inc.' })).toBeChecked();
+    expect(await screen.findByRole('button', { name: 'Provider, Inc.' })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(screen.getAllByText('Incorporated Model')).toHaveLength(2));
     await waitFor(() => expect(screen.queryAllByText('Other Model')).toHaveLength(0));
     expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
