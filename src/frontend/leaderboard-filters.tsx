@@ -139,8 +139,8 @@ function ProviderTags({
           aria-pressed={isSelected}
           onClick={() => onToggle(value)}
         >
-          <span>{value}</span>
           {isSelected ? <Check aria-hidden="true" size={14} /> : null}
+          <span>{value}</span>
         </button>;
       })}
     </div>

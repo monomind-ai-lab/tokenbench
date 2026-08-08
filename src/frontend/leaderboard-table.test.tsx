@@ -409,6 +409,7 @@ describe('LeaderboardFilters', () => {
     expect(providerA).toHaveAttribute('aria-pressed', 'false');
     expect(providerB).toHaveAttribute('aria-pressed', 'true');
     expect(providerB.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    expect(providerB.firstElementChild?.tagName).toBe('svg');
     fireEvent.click(providerA);
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({
       providers: ['Provider A', 'Provider B'],
