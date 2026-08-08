@@ -157,6 +157,15 @@ function isLeaderboardPagination(value: unknown, expectedLimit?: number): value 
     && (value.nextCursor === null || isValidLeaderboardCursor(value.nextCursor));
 }
 
+function isStrictlyIncreasingNonNegativeNumbers(value: unknown): value is readonly number[] {
+  return Array.isArray(value) && value.every((item, index) => (
+    typeof item === 'number'
+      && Number.isFinite(item)
+      && item >= 0
+      && (index === 0 || item > value[index - 1]!)
+  ));
+}
+
 function isLeaderboardCapabilities(value: unknown, key: LeaderboardKey): value is LeaderboardQueryCapabilities {
   if (!isRecord(value)) return false;
   const definition = LEADERBOARD_DEFINITIONS[key];
@@ -165,6 +174,7 @@ function isLeaderboardCapabilities(value: unknown, key: LeaderboardKey): value i
   const priceMode = supportsProfile ? 'profile' : 'representative';
   const sourceTypes = value.sourceTypes;
   const evidenceStatuses = value.evidenceStatuses;
+  const priceValues = value.priceValues;
   return value.dataReady === true
     && value.defaultProfile === 'balanced'
     && value.defaultSort === definition.defaultSort
@@ -173,6 +183,8 @@ function isLeaderboardCapabilities(value: unknown, key: LeaderboardKey): value i
     && value.supportsLifecycle === false
     && value.priceMode === priceMode
     && typeof value.supportsPrice === 'boolean'
+    && isStrictlyIncreasingNonNegativeNumbers(priceValues)
+    && value.supportsPrice === (priceValues.length > 0)
     && Array.isArray(value.metricKeys)
     && value.metricKeys.length === definition.metricKeys.length
     && value.metricKeys.every((metric, index) => metric === definition.metricKeys[index])

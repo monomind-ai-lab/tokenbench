@@ -240,6 +240,41 @@ describe('leaderboard query contract', () => {
     expect(filterLeaderboardEntries([incomplete], state)).toEqual([]);
   });
 
+  it('publishes sorted unique representative prices from the complete projection', () => {
+    const definition = LEADERBOARD_DEFINITIONS['llm-coding'];
+    const prices = [
+      entry({ primaryPrice: { ...entry().primaryPrice!, inputUsdPerMillion: 0.125, outputUsdPerMillion: 0.125 } }),
+      entry({ primaryPrice: { ...entry().primaryPrice!, inputUsdPerMillion: 1, outputUsdPerMillion: 9 } }),
+      entry({ primaryPrice: { ...entry().primaryPrice!, inputUsdPerMillion: 5, outputUsdPerMillion: 5 } }),
+      entry({ primaryPrice: { ...entry().primaryPrice!, inputUsdPerMillion: 1, outputUsdPerMillion: null } }),
+    ];
+
+    const capabilities = createLeaderboardQueryCapabilities(definition, prices);
+
+    expect(capabilities.priceValues).toEqual([0.125, 5]);
+    expect(capabilities.supportsPrice).toBe(true);
+  });
+
+  it('publishes profile prices without falling back to representative prices', () => {
+    const definition = LEADERBOARD_DEFINITIONS['llm-value'];
+    const prices = [
+      entry({ blendedCostPerMillion: 2 }),
+      entry({ blendedCostPerMillion: 0.25 }),
+      entry({ blendedCostPerMillion: 2 }),
+      entry({ blendedCostPerMillion: null }),
+    ];
+
+    expect(createLeaderboardQueryCapabilities(definition, prices).priceValues)
+      .toEqual([0.25, 2]);
+  });
+
+  it('distinguishes an unknown projection from a loaded projection with no price', () => {
+    const definition = LEADERBOARD_DEFINITIONS['llm-coding'];
+
+    expect(createLeaderboardQueryCapabilities(definition).priceValues).toBeNull();
+    expect(createLeaderboardQueryCapabilities(definition, []).priceValues).toEqual([]);
+  });
+
   it.each([
     'unknown=1',
     'profile=not-real',

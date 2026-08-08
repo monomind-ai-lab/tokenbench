@@ -1291,8 +1291,8 @@ describe('atomic benchmark ingestion', () => {
     const chunks = apiResponseCacheChunks(db.state.publicationStatements);
     const summaryFresh = joinedCachedResponse(chunks, 'summary', 'fresh');
     const summaryStale = joinedCachedResponse(chunks, 'summary', 'stale');
-    const overallFresh = joinedCachedResponse(chunks, 'leaderboard:llm-overall:balanced:50::0', 'fresh');
-    const estimatedFresh = joinedCachedResponse(chunks, 'leaderboard:llm-overall:balanced:50::1', 'fresh');
+    const overallFresh = joinedCachedResponse(chunks, 'leaderboard:v2:llm-overall:balanced:50::0', 'fresh');
+    const estimatedFresh = joinedCachedResponse(chunks, 'leaderboard:v2:llm-overall:balanced:50::1', 'fresh');
     const paginationProjection = joinedCachedResponse(
       chunks,
       'leaderboard-projection:llm-overall:balanced:0',
@@ -1330,10 +1330,20 @@ describe('atomic benchmark ingestion', () => {
     expect(staleSummaryData.decisionPicks).toEqual(freshSummaryData.decisionPicks);
     expect(staleSummaryData.homeDecisionSnapshot).toEqual(freshSummaryData.homeDecisionSnapshot);
     expect(JSON.parse(overallFresh.body)).toMatchObject({
-      data: { key: 'llm-overall', profile: 'balanced', pagination: { limit: 50 } },
+      data: {
+        key: 'llm-overall',
+        profile: 'balanced',
+        pagination: { limit: 50 },
+        capabilities: { dataReady: true, supportsPrice: false, priceValues: [] },
+      },
     });
     expect(JSON.parse(estimatedFresh.body)).toMatchObject({
-      data: { key: 'llm-overall', profile: 'balanced', pagination: { limit: 50 } },
+      data: {
+        key: 'llm-overall',
+        profile: 'balanced',
+        pagination: { limit: 50 },
+        capabilities: { dataReady: true, supportsPrice: false, priceValues: [] },
+      },
     });
     expect(JSON.parse(paginationProjection.body)).toMatchObject({
       revision: { revision: result.revision },

@@ -202,19 +202,29 @@ describe('leaderboard CSV endpoint', () => {
       provider: index % 2 === 0 ? 'Provider A' : 'Provider B',
       score: 900 - index,
     }));
-    const needleAfterFifty = entry({
+    const tailEntry = entry({
       modelKey: 'needle-after-fifty',
       name: 'Needle after fifty',
       provider: 'Tail Provider',
-      score: 1_000,
+      score: 1,
     });
+    const needleAfterFifty = {
+      ...tailEntry,
+      blendedCostPerMillion: 7,
+      primaryPrice: {
+        ...tailEntry.primaryPrice!,
+        inputUsdPerMillion: 7,
+        outputUsdPerMillion: 7,
+      },
+    };
     const fixture = cacheDatabase({ fresh: JSON.stringify(projection([...firstFifty, needleAfterFifty])) });
 
     const first = await jsonResponse('/api/benchmarks/leaderboards/llm-coding?sort=score-desc&limit=50', fixture);
+    expect(first.status).toBe(200);
     const firstBody = await first.json() as { data: {
       entries: Array<{ model: { modelKey: string } }>;
       pagination: { limit: number; total: number; nextCursor: string | null };
-      capabilities?: { providers: readonly string[] | null };
+      capabilities?: { providers: readonly string[] | null; priceValues: readonly number[] };
     } };
     const second = await jsonResponse(
       `/api/benchmarks/leaderboards/llm-coding?sort=score-desc&limit=50&cursor=${encodeURIComponent(firstBody.data.pagination.nextCursor!)}`,
@@ -225,14 +235,14 @@ describe('leaderboard CSV endpoint', () => {
     const filteredBody = await filtered.json() as { data: { entries: Array<{ model: { modelKey: string } }>; pagination: { total: number } } };
     const csv = await csvResponse('/api/benchmarks/leaderboards/llm-coding/csv?q=Needle&sort=score-desc', fixture);
 
-    expect(first.status).toBe(200);
     expect(firstBody.data.entries).toHaveLength(50);
-    expect(firstBody.data.entries[0]?.model.modelKey).toBe('needle-after-fifty');
+    expect(firstBody.data.entries[0]?.model.modelKey).toBe('model-00');
     expect(firstBody.data.pagination).toMatchObject({ limit: 50, total: 51 });
     expect(firstBody.data.pagination.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(firstBody.data.capabilities?.providers).toEqual(['Provider A', 'Provider B', 'Tail Provider']);
+    expect(firstBody.data.capabilities?.priceValues).toEqual([3, 7]);
     expect(second.status).toBe(200);
-    expect(secondBody.data.entries.map((row) => row.model.modelKey)).toEqual(['model-49']);
+    expect(secondBody.data.entries.map((row) => row.model.modelKey)).toEqual(['needle-after-fifty']);
     expect(secondBody.data.pagination.nextCursor).toBeNull();
     expect(filtered.status).toBe(200);
     expect(filteredBody.data.entries.map((row) => row.model.modelKey)).toEqual(['needle-after-fifty']);

@@ -30,6 +30,7 @@ import {
 } from '../../../src/benchmarks/api-response-cache-keys';
 import { splitApiResponseBody } from '../../../src/cache/api-response-chunks';
 import { COMPARISON_ALLOWLIST } from '../../../src/benchmarks/comparison-allowlist';
+import { createLeaderboardQueryCapabilities } from '../../../src/benchmarks/leaderboard-query';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
 import { LEADERBOARD_DEFINITIONS } from '../../../src/benchmarks/leaderboards';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/routes';
@@ -2047,6 +2048,10 @@ function materializedBenchmarkApiResponses(snapshot: ActiveBenchmarkSnapshot): r
           projected.add(projectionKey);
         }
         const entries = leaderboard.entries;
+        const capabilities = createLeaderboardQueryCapabilities(
+          leaderboard.leaderboard.definition,
+          entries,
+        );
         const pagedEntries = entries.slice(0, BENCHMARK_LEADERBOARD_CACHE_LIMIT);
         const nextCursor = pagedEntries.length < entries.length
           ? leaderboardCursorForCache(snapshot.revision.revision, key, profile, includeEstimated, pagedEntries.length)
@@ -2055,6 +2060,7 @@ function materializedBenchmarkApiResponses(snapshot: ActiveBenchmarkSnapshot): r
           ...leaderboard.leaderboard,
           profile,
           entries: pagedEntries,
+          capabilities,
           pagination: {
             limit: BENCHMARK_LEADERBOARD_CACHE_LIMIT,
             total: entries.length,

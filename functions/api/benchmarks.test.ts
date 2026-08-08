@@ -579,13 +579,48 @@ describe('cached benchmark APIs', () => {
   it('serves a materialized normalized leaderboard without rebuilding the full fact snapshot', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-08-05T12:00:01.000Z');
-    const cachedBody = '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"fresh","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"key":"llm-overall","profile":"balanced","entries":[],"pagination":{"limit":50,"total":0,"nextCursor":null}}}';
+    const cachedData = {
+      key: 'llm-overall',
+      profile: 'balanced',
+      entries: [],
+      pagination: { limit: 50, total: 0, nextCursor: null },
+      capabilities: {
+        dataReady: true,
+        defaultProfile: 'balanced',
+        defaultSort: 'score-desc',
+        supportsProfile: false,
+        supportsEstimated: true,
+        supportsLifecycle: false,
+        priceMode: 'representative',
+        supportsPrice: false,
+        priceValues: [],
+        metricKeys: ['benchlm:overall:raw'],
+        sorts: ['score-desc'],
+        providers: [],
+        sourceTypes: [],
+        evidenceStatuses: [],
+      },
+    };
+    const cachedBody = JSON.stringify({
+      revision: REVISION,
+      publishedAt: PUBLISHED_AT,
+      freshness: { status: 'fresh', checkedAt: CHECKED_AT },
+      attribution: [],
+      data: cachedData,
+    });
+    const staleCachedBody = JSON.stringify({
+      revision: REVISION,
+      publishedAt: PUBLISHED_AT,
+      freshness: { status: 'stale', checkedAt: CHECKED_AT },
+      attribution: [],
+      data: cachedData,
+    });
 
     const response = await leaderboard('llm-overall', '', publishedRows({
       apiCacheEntries: [{
         scope: 'benchmarks',
         revision: REVISION,
-        cacheKey: 'leaderboard:llm-overall:balanced:50::0',
+        cacheKey: 'leaderboard:v2:llm-overall:balanced:50::0',
         variant: 'fresh',
         chunkIndex: 0,
         etag: '"materialized-leaderboard-fresh"',
@@ -593,11 +628,11 @@ describe('cached benchmark APIs', () => {
       }, {
         scope: 'benchmarks',
         revision: REVISION,
-        cacheKey: 'leaderboard:llm-overall:balanced:50::0',
+        cacheKey: 'leaderboard:v2:llm-overall:balanced:50::0',
         variant: 'stale',
         chunkIndex: 0,
         etag: '"materialized-leaderboard-stale"',
-        body: '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"stale","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"key":"llm-overall","profile":"balanced","entries":[],"pagination":{"limit":50,"total":0,"nextCursor":null}}}',
+        body: staleCachedBody,
       }],
     }), undefined, { failOnBenchmarkFactRead: true });
 
@@ -621,7 +656,7 @@ describe('cached benchmark APIs', () => {
     const cacheEntry = (variant: 'fresh' | 'stale'): ApiCacheEntry => ({
       scope: 'benchmarks',
       revision: REVISION,
-      cacheKey: 'leaderboard:llm-overall:balanced:50::0',
+      cacheKey: 'leaderboard:v2:llm-overall:balanced:50::0',
       variant,
       chunkIndex: 0,
       etag: `"materialized-leaderboard-${variant}"`,
@@ -635,6 +670,22 @@ describe('cached benchmark APIs', () => {
           profile: 'balanced',
           entries: [],
           pagination: { limit: 50, total: 2, nextCursor: cursor },
+          capabilities: {
+            dataReady: true,
+            defaultProfile: 'balanced',
+            defaultSort: 'score-desc',
+            supportsProfile: false,
+            supportsEstimated: true,
+            supportsLifecycle: false,
+            priceMode: 'representative',
+            supportsPrice: false,
+            priceValues: [],
+            metricKeys: ['benchlm:overall:raw'],
+            sorts: ['score-desc'],
+            providers: [],
+            sourceTypes: [],
+            evidenceStatuses: [],
+          },
         },
       }),
     });

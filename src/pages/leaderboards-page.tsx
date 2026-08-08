@@ -74,6 +74,7 @@ function sameLeaderboardCapabilities(
     && left.supportsLifecycle === right.supportsLifecycle
     && left.priceMode === right.priceMode
     && left.supportsPrice === right.supportsPrice
+    && sameValues(left.priceValues, right.priceValues)
     && sameValues(left.metricKeys, right.metricKeys)
     && sameValues(left.sorts, right.sorts)
     && sameValues(left.providers, right.providers)

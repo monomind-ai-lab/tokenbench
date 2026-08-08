@@ -39,6 +39,8 @@ export interface LeaderboardQueryCapabilities {
   readonly priceMode: LeaderboardPriceMode;
   /** `null` means the UI has not received route rows yet. */
   readonly supportsPrice: boolean | null;
+  /** `null` means the complete projection is not loaded; otherwise every supported price in ascending order. */
+  readonly priceValues: readonly number[] | null;
   readonly metricKeys: readonly string[];
   readonly sorts: readonly LeaderboardSort[];
   readonly providers: readonly string[] | null;
@@ -137,6 +139,16 @@ function priceForEntry(entry: LeaderboardEntry, mode: LeaderboardPriceMode): num
   return representativePrice(entry);
 }
 
+function priceValuesFor(
+  entries: readonly LeaderboardEntry[],
+  mode: LeaderboardPriceMode,
+): readonly number[] {
+  return [...new Set(entries
+    .map((entry) => priceForEntry(entry, mode))
+    .filter((value): value is number => value !== null))]
+    .sort((left, right) => left - right);
+}
+
 function metricKeysFor(entry: LeaderboardEntry): readonly string[] {
   return sortedUnique([
     ...(entry.metric === null ? [] : [entry.metric.metricKey]),
@@ -178,6 +190,7 @@ export function createLeaderboardQueryCapabilities(
   const routeEntriesKnown = entries !== undefined;
   const routeEntries = entries ?? [];
   const priceMode: LeaderboardPriceMode = usesVisibleProfile(definition) ? 'profile' : 'representative';
+  const priceValues = routeEntriesKnown ? priceValuesFor(routeEntries, priceMode) : null;
   return {
     dataReady: routeEntriesKnown,
     defaultProfile: 'balanced',
@@ -186,9 +199,8 @@ export function createLeaderboardQueryCapabilities(
     supportsEstimated: supportsEstimatedModels(definition),
     supportsLifecycle: false,
     priceMode,
-    supportsPrice: routeEntriesKnown
-      ? routeEntries.some((entry) => priceForEntry(entry, priceMode) !== null)
-      : null,
+    supportsPrice: priceValues === null ? null : priceValues.length > 0,
+    priceValues,
     metricKeys: [...definition.metricKeys],
     sorts: routeEntriesKnown
       ? allowedSorts(definition, routeEntries, priceMode)

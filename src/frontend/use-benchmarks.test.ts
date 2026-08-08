@@ -160,6 +160,33 @@ function leaderboardEnvelope(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function completeValueProjection() {
+  const payload = leaderboardEnvelope();
+  return {
+    ...payload,
+    data: {
+      ...payload.data,
+      pagination: { limit: 50, total: 1, nextCursor: null },
+      capabilities: {
+        dataReady: true,
+        defaultProfile: 'balanced',
+        defaultSort: 'pareto-score-desc',
+        supportsProfile: true,
+        supportsEstimated: true,
+        supportsLifecycle: false,
+        priceMode: 'profile',
+        supportsPrice: true,
+        priceValues: [2],
+        metricKeys: ['benchlm:overall:raw'],
+        sorts: ['score-desc', 'pareto-score-desc', 'price-asc', 'context-desc'],
+        providers: ['Provider A'],
+        sourceTypes: ['Proprietary'],
+        evidenceStatuses: ['supported'],
+      },
+    },
+  };
+}
+
 function codingEnvelope(entryOverrides: Record<string, unknown> = {}) {
   const value = leaderboardEnvelope();
   const currentEntry = value.data.entries[0];
@@ -588,29 +615,8 @@ describe('useBenchmarkLeaderboard', () => {
       priceMaximum: null,
       includeEstimated: false,
     };
-    const payload = leaderboardEnvelope();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
-      ...payload,
-      data: {
-        ...payload.data,
-        pagination: { limit: 50, total: 1, nextCursor: null },
-        capabilities: {
-          dataReady: true,
-          defaultProfile: 'balanced',
-          defaultSort: 'pareto-score-desc',
-          supportsProfile: true,
-          supportsEstimated: true,
-          supportsLifecycle: false,
-          priceMode: 'profile',
-          supportsPrice: true,
-          metricKeys: ['benchlm:overall:raw'],
-          sorts: ['score-desc', 'pareto-score-desc', 'price-asc', 'context-desc'],
-          providers: ['Provider A'],
-          sourceTypes: ['Proprietary'],
-          evidenceStatuses: ['supported'],
-        },
-      },
-    })));
+    const payload = completeValueProjection();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
 
     const { result } = renderHook(() => useBenchmarkLeaderboard(
       'llm-value',
@@ -623,6 +629,42 @@ describe('useBenchmarkLeaderboard', () => {
 
     await waitFor(() => expect(result.current.phase).toBe('ready'));
     expect(result.current.envelope?.data.capabilities?.sorts).toEqual(['score-desc', 'pareto-score-desc', 'price-asc', 'context-desc']);
+  });
+
+  it('rejects a complete projection with a malformed price domain', async () => {
+    const filters: LeaderboardQueryState = {
+      query: '',
+      profile: 'balanced',
+      priceMode: 'profile',
+      metricKey: null,
+      sort: 'pareto-score-desc',
+      providers: [],
+      sourceTypes: [],
+      evidence: null,
+      priceMinimum: null,
+      priceMaximum: null,
+      includeEstimated: false,
+    };
+    const payload = completeValueProjection();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: {
+        ...payload.data,
+        pagination: { limit: 50, total: 1, nextCursor: null },
+        capabilities: {
+          ...payload.data.capabilities,
+          supportsPrice: true,
+          priceValues: [5, 2, 2],
+        },
+      },
+    })));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard(
+      'llm-value', 'balanced', 50, undefined, false, filters,
+    ));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
   });
 
   it.each([

@@ -17,7 +17,7 @@ export interface BenchmarkLeaderboardCacheParameters {
  * encoded cursor state is restricted to bounded base64url before this key.
  */
 export function benchmarkLeaderboardCacheKey(parameters: BenchmarkLeaderboardCacheParameters): string {
-  return `leaderboard:${parameters.key}:${parameters.profile}:${parameters.limit}:${parameters.cursor ?? ''}:${parameters.includeEstimated ? '1' : '0'}`;
+  return `leaderboard:v2:${parameters.key}:${parameters.profile}:${parameters.limit}:${parameters.cursor ?? ''}:${parameters.includeEstimated ? '1' : '0'}`;
 }
 
 export interface BenchmarkLeaderboardProjectionCacheParameters {
