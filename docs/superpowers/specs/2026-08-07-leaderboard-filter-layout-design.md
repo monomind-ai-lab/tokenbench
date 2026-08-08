@@ -1,7 +1,7 @@
 # Leaderboard Filter and Sort Layout Design
 
 **Date:** 2026-08-07
-**Status:** Approved direction; awaiting written-spec review
+**Status:** Approved 2026-08-08
 **Project:** TokenBench
 
 ## 1. Outcome
@@ -206,10 +206,11 @@ not implied by this layout refinement.
   `evidence`, `minPrice`, `maxPrice`, and `estimated` continue to serialize the
   common controls.
 - Existing shared URLs continue to parse. Numeric price bounds from an older URL
-  remain exact numeric bounds. An active bound between published prices is inserted
-  into the slider's ordered domain; a bound at or beyond the complete data range is
-  normalized to the equivalent open endpoint. A valid narrow range that happens to
-  contain no published price remains visible and correctly produces no matches.
+  remain exact numeric bounds. An active bound between or outside published prices
+  is inserted into the slider's ordered domain. Only a lower bound at or below the
+  published minimum and an upper bound at or above the published maximum normalize
+  to their equivalent open endpoints. A valid range outside or between published
+  prices remains visible and correctly produces no matches.
 - The price-domain data is derived from the same display-price function used by
   filtering: workload-aware blended prices on supported specialized pages and
   representative prices elsewhere.
