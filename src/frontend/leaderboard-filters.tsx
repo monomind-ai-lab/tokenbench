@@ -244,6 +244,8 @@ function PriceFilter({
           onChange(domain.minimumIndex, Math.max(proposedIndex, domain.minimumIndex));
         }}
       />
+      <span aria-hidden="true" className="leaderboard-price-range-dot leaderboard-price-range-dot-minimum" />
+      <span aria-hidden="true" className="leaderboard-price-range-dot leaderboard-price-range-dot-maximum" />
     </div>
   </fieldset>;
 }

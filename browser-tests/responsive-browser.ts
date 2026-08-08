@@ -994,6 +994,16 @@ test.describe('leaderboard browser harness', () => {
             selectedColor,
             inactiveColor,
             surfaceColor,
+            dots: Array.from(element.querySelectorAll<HTMLElement>('.leaderboard-price-range-dot')).map((dot) => {
+              const style = getComputedStyle(dot);
+              return {
+                width: style.width,
+                height: style.height,
+                background: style.backgroundColor,
+                border: style.borderColor,
+                pointerEvents: style.pointerEvents,
+              };
+            }),
           };
         });
         expect(rangePresentation.width).toBeGreaterThan(0);
@@ -1002,6 +1012,22 @@ test.describe('leaderboard browser harness', () => {
         expect(rangePresentation.trackHeight).toBe('4px');
         expect(rangePresentation.rangeStart).toBe('0%');
         expect(rangePresentation.rangeEnd).toBe('100%');
+        expect(rangePresentation.dots).toEqual([
+          {
+            width: '22px',
+            height: '22px',
+            background: rangePresentation.selectedColor,
+            border: rangePresentation.surfaceColor,
+            pointerEvents: 'none',
+          },
+          {
+            width: '22px',
+            height: '22px',
+            background: rangePresentation.selectedColor,
+            border: rangePresentation.surfaceColor,
+            pointerEvents: 'none',
+          },
+        ]);
         if (theme === 'dark') {
           expect.soft(rangePresentation.selectedToken).not.toBe('');
           expect(contrastRatio(rangePresentation.selectedColor, rangePresentation.inactiveColor))
@@ -1026,6 +1052,19 @@ test.describe('leaderboard browser harness', () => {
           await slider.focus();
           await expect(slider).toBeFocused();
         }
+        const focusTreatment = await rangeStack.evaluate((element) => {
+          const style = getComputedStyle(element, '::after');
+          return {
+            outlineStyle: style.outlineStyle,
+            outlineWidth: style.outlineWidth,
+            pointerEvents: style.pointerEvents,
+          };
+        });
+        expect(focusTreatment).toEqual({
+          outlineStyle: 'solid',
+          outlineWidth: '3px',
+          pointerEvents: 'none',
+        });
         await assertNoHorizontalOverflow(page);
       }
     }
@@ -1053,6 +1092,69 @@ test.describe('leaderboard browser harness', () => {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.mouse.click(bounds.x + bounds.width - 22, bounds.y + 4);
     await expect(maximum).toBeFocused();
+  });
+
+  test('keeps equal and adjacent range thumbs independently pointer-focusable', async ({ page }) => {
+    test.setTimeout(120_000);
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await stubLeaderboard(page, origin, 'llm-coding', readyFilterControlsLeaderboard());
+    await page.setViewportSize({ width: 320, height: 1100 });
+
+    for (const scenario of [
+      { label: 'equal', query: '?minPrice=2&maxPrice=2' },
+      { label: 'adjacent', query: '?minPrice=2&maxPrice=5' },
+    ] as const) {
+      for (const target of ['minimum', 'maximum'] as const) {
+        await page.goto(`/leaderboards/llm/coding/${scenario.query}`);
+        const stack = page.locator('.leaderboard-price-range-stack');
+        await stack.waitFor({ state: 'visible' });
+        const minimum = page.getByRole('slider', { name: 'Minimum price per 1M tokens' });
+        const maximum = page.getByRole('slider', { name: 'Maximum price per 1M tokens' });
+        const initial = {
+          minimum: Number(await minimum.inputValue()),
+          maximum: Number(await maximum.inputValue()),
+        };
+        await stack.evaluate((element) => element.scrollIntoView({ block: 'center', behavior: 'instant' as ScrollBehavior }));
+        const geometry = await stack.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const dotBounds = Array.from(element.querySelectorAll<HTMLElement>('.leaderboard-price-range-dot'))
+            .map((dot) => dot.getBoundingClientRect());
+          return {
+            bounds: { x: bounds.x, y: bounds.y, width: bounds.width },
+            dotBounds: dotBounds.map((dot) => ({ x: dot.x, y: dot.y })),
+          };
+        });
+        const { bounds, dotBounds } = geometry;
+        const semanticCenter = (value: number) => bounds.x + 22 + (bounds.width - 44) * (value / 5);
+        const minimumCenter = semanticCenter(initial.minimum);
+        const maximumCenter = semanticCenter(initial.maximum);
+        expect(dotBounds[0]?.x).toBeCloseTo(minimumCenter - 11, 0);
+        expect(dotBounds[0]?.y).toBeCloseTo(bounds.y + 11, 0);
+        expect(dotBounds[1]?.x).toBeCloseTo(maximumCenter - 11, 0);
+        expect(dotBounds[1]?.y).toBeCloseTo(bounds.y + 11, 0);
+
+        await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+        const center = target === 'minimum' ? minimumCenter : maximumCenter;
+        const direction = target === 'minimum' ? -1 : 1;
+        await page.mouse.click(center + 30 * direction, bounds.y + 22);
+        const intended = target === 'minimum' ? minimum : maximum;
+        await expect(intended, `${scenario.label} ${target} directional lane`).toBeFocused();
+        await expect.poll(async () => ({
+          minimum: Number(await minimum.inputValue()),
+          maximum: Number(await maximum.inputValue()),
+        })).toEqual(target === 'minimum'
+          ? { minimum: expect.any(Number), maximum: initial.maximum }
+          : { minimum: initial.minimum, maximum: expect.any(Number) });
+        const changed = {
+          minimum: Number(await minimum.inputValue()),
+          maximum: Number(await maximum.inputValue()),
+        };
+        expect(changed[target]).not.toBe(initial[target]);
+        expect(changed.minimum).toBeLessThanOrEqual(changed.maximum);
+      }
+    }
   });
 
   test('keeps table semantics, named filters, and equivalent model cards across leaderboard breakpoints', async ({ page }) => {

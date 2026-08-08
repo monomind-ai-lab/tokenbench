@@ -491,17 +491,20 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .leaderboard-price-values label { min-width: 0; display: grid; gap: 4px; color: var(--muted); font-family: var(--font-label); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
 .leaderboard-price-values label:last-child { justify-items: end; text-align: right; }
 .leaderboard-price-values output { color: var(--text); font-size: 0.68rem; letter-spacing: 0; text-transform: none; }
-.leaderboard-price-range-stack { position: relative; min-height: 44px; }
+.leaderboard-price-range-stack { --range-minimum-hit-start: clamp(0px, calc(var(--range-start-position) - 44px), calc(100% - 44px)); --range-maximum-hit-start: clamp(0px, var(--range-end-position), calc(100% - 44px)); position: relative; min-height: 44px; }
 .leaderboard-price-range-stack::before { content: ''; position: absolute; inset: 20px 22px auto; height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--outline) 0 var(--range-start), var(--range-selected) var(--range-start) var(--range-end), var(--outline) var(--range-end) 100%); }
 .leaderboard-price-range-stack:has(input:focus-visible)::after { content: ''; position: absolute; inset: 0; z-index: 2; pointer-events: none; outline: 3px solid var(--tertiary); outline-offset: 3px; }
 .leaderboard-price-range-stack input[type='range'] { position: absolute; inset: 0; width: 100%; height: 44px; min-height: 44px; margin: 0; appearance: none; pointer-events: auto; outline: 0; background: transparent; }
-.leaderboard-price-range-stack input[type='range']:first-of-type { clip-path: inset(0 calc(100% - var(--range-start-position) - 22px) 0 calc(var(--range-start-position) - 22px)); }
-.leaderboard-price-range-stack input[type='range']:last-of-type { clip-path: inset(0 calc(100% - var(--range-end-position) - 22px) 0 calc(var(--range-end-position) - 22px)); }
+.leaderboard-price-range-stack input[type='range']:first-of-type { clip-path: inset(0 calc(100% - var(--range-minimum-hit-start) - 44px) 0 var(--range-minimum-hit-start)); }
+.leaderboard-price-range-stack input[type='range']:last-of-type { clip-path: inset(0 calc(100% - var(--range-maximum-hit-start) - 44px) 0 var(--range-maximum-hit-start)); }
 .leaderboard-price-range-stack input[type='range']::-webkit-slider-runnable-track { height: 4px; border: 0; background: transparent; }
-.leaderboard-price-range-stack input[type='range']::-webkit-slider-thumb { width: 44px; height: 44px; margin-top: -20px; appearance: none; pointer-events: all; border: 0; border-radius: 50%; background: radial-gradient(circle, var(--range-selected) 0 8px, var(--surface) 8px 10px, var(--range-selected) 10px 11px, transparent 11px); }
+.leaderboard-price-range-stack input[type='range']::-webkit-slider-thumb { width: 44px; height: 44px; margin-top: -20px; appearance: none; pointer-events: all; border: 0; border-radius: 50%; background: transparent; }
 .leaderboard-price-range-stack input[type='range']::-moz-range-track { height: 4px; border: 0; background: transparent; }
 .leaderboard-price-range-stack input[type='range']::-moz-range-progress { height: 4px; background: transparent; }
-.leaderboard-price-range-stack input[type='range']::-moz-range-thumb { width: 44px; height: 44px; pointer-events: all; border: 0; border-radius: 50%; background: radial-gradient(circle, var(--range-selected) 0 8px, var(--surface) 8px 10px, var(--range-selected) 10px 11px, transparent 11px); }
+.leaderboard-price-range-stack input[type='range']::-moz-range-thumb { width: 44px; height: 44px; pointer-events: all; border: 0; border-radius: 50%; background: transparent; }
+.leaderboard-price-range-dot { position: absolute; top: 50%; z-index: 1; width: 22px; height: 22px; box-sizing: border-box; transform: translate(-50%, -50%); pointer-events: none; border: 2px solid var(--surface); border-radius: 50%; background: var(--range-selected); }
+.leaderboard-price-range-dot-minimum { left: var(--range-start-position); }
+.leaderboard-price-range-dot-maximum { left: var(--range-end-position); }
 .leaderboard-filter-supplementary-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 16px; padding-top: 18px; border-top: 1px solid var(--outline); }
 .leaderboard-estimated-control { min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px; row-gap: 3px; padding: 9px 10px; border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--outline)); border-radius: 8px; background: color-mix(in srgb, var(--primary-soft) 32%, var(--surface)); }
 .leaderboard-estimated-control small { grid-column: 2; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
