@@ -480,7 +480,7 @@ describe('LeaderboardFilters', () => {
       capabilities={{ ...RICH_FILTER_CAPABILITIES, priceValues: [2] }}
     />);
 
-    const priceFieldset = screen.getByRole('group', { name: 'Price per 1M' });
+    const priceFieldset = screen.getByRole('group', { name: 'Price per 1M tokens' });
     expect(within(priceFieldset).queryAllByRole('slider')).toHaveLength(0);
     expect(within(priceFieldset).getByText('$2.00').tagName).toBe('OUTPUT');
 
@@ -490,7 +490,31 @@ describe('LeaderboardFilters', () => {
       onChange={vi.fn()}
       capabilities={{ ...RICH_FILTER_CAPABILITIES, supportsPrice: false, priceValues: [] }}
     />);
-    expect(screen.queryByRole('group', { name: 'Price per 1M' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Price per 1M tokens' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['lower bound', { priceMinimum: 10, priceMaximum: null }, '$10.00 or more'],
+    ['upper bound', { priceMinimum: null, priceMaximum: 1 }, 'Up to $1.00'],
+  ] as const)('keeps an exact one-price %s visible until the user clears it', (_label, bounds, activeCopy) => {
+    const onChange = vi.fn();
+    render(<LeaderboardFilters
+      keyName="llm-coding"
+      filters={{ ...DEFAULT_FILTERS, ...bounds }}
+      onChange={onChange}
+      capabilities={{ ...RICH_FILTER_CAPABILITIES, priceValues: [2] }}
+    />);
+
+    const priceFieldset = screen.getByText('$2.00').closest('fieldset');
+    expect(priceFieldset).not.toBeNull();
+    expect(within(priceFieldset!).getByText(activeCopy)).toBeVisible();
+    expect(within(priceFieldset!).queryByRole('slider')).not.toBeInTheDocument();
+    fireEvent.click(within(priceFieldset!).getByRole('button', { name: 'Clear price filter' }));
+    expect(onChange).toHaveBeenLastCalledWith({
+      ...DEFAULT_FILTERS,
+      priceMinimum: null,
+      priceMaximum: null,
+    });
   });
 
   it('orders Sort before Evidence when there is no Metric lens selector', () => {
@@ -544,7 +568,7 @@ describe('LeaderboardFilters', () => {
     expect(screen.getByRole('searchbox', { name: 'Search model or provider' })).toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Include estimated models' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Providers' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Price per 1M' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Price per 1M tokens' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Metric lens' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Sort leaderboard' })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: 'Evidence' })).not.toBeInTheDocument();
@@ -817,7 +841,7 @@ describe('LeaderboardFilters', () => {
     expect(screen.getByRole('group', { name: 'Providers' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Source type' })).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Evidence' })).toBeInTheDocument();
-    const priceFieldset = screen.getByRole('group', { name: 'Price per 1M' });
+    const priceFieldset = screen.getByRole('group', { name: 'Price per 1M tokens' });
     expect(within(priceFieldset).queryByRole('slider')).not.toBeInTheDocument();
     expect(within(priceFieldset).getByText('$3.00').tagName).toBe('OUTPUT');
     expect(screen.queryByRole('radio', { name: 'Input-heavy' })).not.toBeInTheDocument();

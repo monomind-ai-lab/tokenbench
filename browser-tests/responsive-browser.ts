@@ -30,6 +30,24 @@ const viewports = [
 
 type Theme = 'dark' | 'light';
 
+function contrastRatio(left: string, right: string): number {
+  const channels = (color: string) => {
+    const values = color.match(/[\d.]+/gu)?.slice(0, 3).map(Number);
+    if (!values || values.length !== 3) throw new Error(`Expected a computed RGB color, received ${color}.`);
+    return values.map((channel) => {
+      const normalized = channel / 255;
+      return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+    });
+  };
+  const luminance = (color: string) => {
+    const [red, green, blue] = channels(color);
+    return 0.2126 * red! + 0.7152 * green! + 0.0722 * blue!;
+  };
+  const lighter = Math.max(luminance(left), luminance(right));
+  const darker = Math.min(luminance(left), luminance(right));
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
 const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
 const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
 const CATALOG_FIXTURE_IDENTITY_HEADER = 'x-tokenbench-browser-catalog-fixture';
@@ -955,6 +973,16 @@ test.describe('leaderboard browser harness', () => {
         const rangePresentation = await rangeStack.evaluate((element) => {
           const bounds = element.getBoundingClientRect();
           const track = getComputedStyle(element, '::before');
+          const colorProbe = document.createElement('span');
+          element.append(colorProbe);
+          const resolveColor = (value: string) => {
+            colorProbe.style.color = value;
+            return getComputedStyle(colorProbe).color;
+          };
+          const selectedColor = resolveColor('var(--range-selected, var(--primary))');
+          const inactiveColor = resolveColor('var(--outline)');
+          const surfaceColor = resolveColor('var(--surface)');
+          colorProbe.remove();
           return {
             width: bounds.width,
             height: bounds.height,
@@ -962,6 +990,10 @@ test.describe('leaderboard browser harness', () => {
             trackHeight: track.height,
             rangeStart: getComputedStyle(element).getPropertyValue('--range-start').trim(),
             rangeEnd: getComputedStyle(element).getPropertyValue('--range-end').trim(),
+            selectedToken: getComputedStyle(element).getPropertyValue('--range-selected').trim(),
+            selectedColor,
+            inactiveColor,
+            surfaceColor,
           };
         });
         expect(rangePresentation.width).toBeGreaterThan(0);
@@ -970,6 +1002,13 @@ test.describe('leaderboard browser harness', () => {
         expect(rangePresentation.trackHeight).toBe('4px');
         expect(rangePresentation.rangeStart).toBe('0%');
         expect(rangePresentation.rangeEnd).toBe('100%');
+        if (theme === 'dark') {
+          expect.soft(rangePresentation.selectedToken).not.toBe('');
+          expect(contrastRatio(rangePresentation.selectedColor, rangePresentation.inactiveColor))
+            .toBeGreaterThanOrEqual(3);
+          expect(contrastRatio(rangePresentation.selectedColor, rangePresentation.surfaceColor))
+            .toBeGreaterThanOrEqual(3);
+        }
 
         const sliders = [
           page.getByRole('slider', { name: 'Minimum price per 1M tokens' }),
@@ -990,6 +1029,30 @@ test.describe('leaderboard browser harness', () => {
         await assertNoHorizontalOverflow(page);
       }
     }
+  });
+
+  test('keeps both range thumbs pointer-focusable across their 44px hit squares', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await stubLeaderboard(page, origin, 'llm-coding', readyFilterControlsLeaderboard());
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto('/leaderboards/llm/coding/');
+
+    const stack = page.locator('.leaderboard-price-range-stack');
+    await stack.scrollIntoViewIfNeeded();
+    const bounds = await stack.boundingBox();
+    if (!bounds) throw new Error('Expected a visible shared price range.');
+    const minimum = page.getByRole('slider', { name: 'Minimum price per 1M tokens' });
+    const maximum = page.getByRole('slider', { name: 'Maximum price per 1M tokens' });
+
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.mouse.click(bounds.x + 22, bounds.y + 40);
+    await expect(minimum).toBeFocused();
+
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.mouse.click(bounds.x + bounds.width - 22, bounds.y + 4);
+    await expect(maximum).toBeFocused();
   });
 
   test('keeps table semantics, named filters, and equivalent model cards across leaderboard breakpoints', async ({ page }) => {

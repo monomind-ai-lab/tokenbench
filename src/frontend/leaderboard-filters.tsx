@@ -93,6 +93,16 @@ function formatPrice(value: number): string {
   return PRICE_FORMATTER.format(value);
 }
 
+function activePriceSummary(domain: LeaderboardPriceDomain): string | null {
+  const bounds = priceBoundsAt(domain, domain.minimumIndex, domain.maximumIndex);
+  if (bounds.priceMinimum !== null && bounds.priceMaximum !== null) {
+    return `${formatPrice(bounds.priceMinimum)}–${formatPrice(bounds.priceMaximum)}`;
+  }
+  if (bounds.priceMinimum !== null) return `${formatPrice(bounds.priceMinimum)} or more`;
+  if (bounds.priceMaximum !== null) return `Up to ${formatPrice(bounds.priceMaximum)}`;
+  return null;
+}
+
 function FilterChecks({
   legend,
   values,
@@ -158,21 +168,43 @@ function PriceFilter({
   readonly onChange: (minimumIndex: number, maximumIndex: number) => void;
 }) {
   if (domain.publishedMinimum === domain.publishedMaximum) {
+    const activeSummary = domain.values.length > 1 ? activePriceSummary(domain) : null;
+    const publishedIndex = domain.values.indexOf(domain.publishedMinimum);
     return <fieldset className="leaderboard-filter-field leaderboard-price-filter">
-      <legend>Price per 1M</legend>
-      <output>{formatPrice(domain.publishedMinimum)}</output>
+      <legend>Price per 1M tokens</legend>
+      <div className="leaderboard-single-price-published">
+        <span>Published price</span>
+        <output>{formatPrice(domain.publishedMinimum)}</output>
+      </div>
+      {activeSummary ? <div className="leaderboard-single-price-active">
+        <span>Active filter</span>
+        <output>{activeSummary}</output>
+        <button type="button" className="button button-secondary button-small" onClick={() => onChange(publishedIndex, publishedIndex)}>Clear price filter</button>
+      </div> : null}
     </fieldset>;
   }
 
   const lastIndex = domain.values.length - 1;
   const minimumId = `leaderboard-minimum-price-${keyName}`;
   const maximumId = `leaderboard-maximum-price-${keyName}`;
+  const minimumFraction = domain.minimumIndex / lastIndex;
+  const maximumFraction = domain.maximumIndex / lastIndex;
+  const minimumPercent = minimumFraction * 100;
+  const maximumPercent = maximumFraction * 100;
+  const minimumShift = 22 * (1 - 2 * minimumFraction);
+  const maximumShift = 22 * (1 - 2 * maximumFraction);
+  const position = (percent: number, shift: number) => `calc(${percent}% ${shift < 0 ? '-' : '+'} ${Math.abs(shift)}px)`;
   const rangeTrackStyle = {
-    '--range-start': `${(domain.minimumIndex / lastIndex) * 100}%`,
-    '--range-end': `${(domain.maximumIndex / lastIndex) * 100}%`,
-  } as CSSProperties & Record<'--range-start' | '--range-end', string>;
+    '--range-start': `${minimumPercent}%`,
+    '--range-end': `${maximumPercent}%`,
+    '--range-start-position': position(minimumPercent, minimumShift),
+    '--range-end-position': position(maximumPercent, maximumShift),
+  } as CSSProperties & Record<
+    '--range-start' | '--range-end' | '--range-start-position' | '--range-end-position',
+    string
+  >;
   return <fieldset className="leaderboard-filter-field leaderboard-price-filter">
-    <legend>Price per 1M</legend>
+    <legend>Price per 1M tokens</legend>
     <div className="leaderboard-price-values">
       <label htmlFor={minimumId}>
         <span>Minimum</span>
