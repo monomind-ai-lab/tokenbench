@@ -155,6 +155,7 @@ interface LmArenaPage {
   rowCount: number;
   revision: string;
   totalRows: number | null;
+  sourceModelIds: string[];
 }
 
 const BENCHLM_ARTIFACTS = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
@@ -1192,6 +1193,17 @@ function projectLmArenaPage(payload: unknown, subset: LmArenaSubset, offset: num
   return { rows, num_rows_total: totalRows };
 }
 
+function lmArenaPageSourceModelIds(rows: readonly unknown[], subset: LmArenaSubset): string[] {
+  return rows.map((value, index) => {
+    const envelope = requireRecord(value, `LMArena ${subset} projected row ${index}`);
+    const row = requireRecord(envelope.row, `LMArena ${subset} projected row ${index}.row`);
+    if (typeof row.model_name !== 'string' || row.model_name.trim().length === 0) {
+      throw new Error(`LMArena ${subset} projected row ${index}.row.model_name must be a non-empty string`);
+    }
+    return row.model_name;
+  });
+}
+
 function isHubRevision(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{40}$/.test(value);
 }
@@ -1458,6 +1470,7 @@ async function fetchLmArenaHubParquetPages(
           rowCount: projection.rows.length,
           revision,
           totalRows: projection.num_rows_total,
+          sourceModelIds: lmArenaPageSourceModelIds(projection.rows, subset),
         } satisfies LmArenaPage;
       } catch (error) {
         throw new RefreshFailure('lmarena', artifactId, error instanceof Error ? error.message : String(error));
@@ -1501,7 +1514,34 @@ async function reuseLmArenaPage(
     rowCount: projection.rows.length,
     revision: source.upstreamRevision,
     totalRows: projection.num_rows_total,
+    sourceModelIds: lmArenaPageSourceModelIds(projection.rows, subset),
   };
+}
+
+function excludeAmbiguousLmArenaPageIdentities(pages: readonly LmArenaPage[], subset: LmArenaSubset): LmArenaPage[] {
+  const identityCounts = new Map<string, number>();
+  for (const sourceModelId of pages.flatMap((page) => page.sourceModelIds)) {
+    identityCounts.set(sourceModelId, (identityCounts.get(sourceModelId) ?? 0) + 1);
+  }
+  const ambiguousIdentities = new Set([...identityCounts]
+    .filter(([, count]) => count > 1)
+    .map(([sourceModelId]) => sourceModelId));
+  const filteredPages = pages.map((page) => ({
+    ...page,
+    batch: validateNormalizedSourceBatch({
+      ...page.batch,
+      models: page.batch.models.filter((model) => !ambiguousIdentities.has(model.sourceModelId)),
+      metrics: page.batch.metrics.filter((metric) => !ambiguousIdentities.has(metric.sourceModelId)),
+    }),
+  }));
+  if (filteredPages.every((page) => page.batch.models.length === 0)) {
+    throw new RefreshFailure(
+      'lmarena',
+      `${subset}:latest:overall`,
+      `LMArena subset ${subset} has no usable unambiguous model identities`,
+    );
+  }
+  return filteredPages;
 }
 
 async function fetchLmArenaSubset(
@@ -1571,6 +1611,7 @@ async function fetchLmArenaSubset(
           rowCount: projection.rows.length,
           revision,
           totalRows: projection.num_rows_total,
+          sourceModelIds: lmArenaPageSourceModelIds(projection.rows, subset),
         };
       } catch (error) {
         throw new RefreshFailure('lmarena', artifactId, error instanceof Error ? error.message : String(error));
@@ -1599,7 +1640,7 @@ async function fetchLmArenaSubset(
   if (declaredTotal === null || pages.reduce((count, page) => count + page.rowCount, 0) !== declaredTotal) {
     throw new RefreshFailure('lmarena', `${subset}:latest:overall`, 'LMArena pages do not cover the verified num_rows_total');
   }
-  return pages;
+  return excludeAmbiguousLmArenaPageIdentities(pages, subset);
 }
 
 async function mapWithConcurrency<T, R>(items: readonly T[], concurrency: number, operation: (item: T) => Promise<R>): Promise<R[]> {

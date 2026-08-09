@@ -120,6 +120,23 @@ function arenaResponse(
   });
 }
 
+function arenaRowWithModelName(value: unknown, modelName: string): unknown {
+  const envelope = value as { row_idx: number; row: Record<string, unknown>; truncated_cells: unknown[] };
+  return { ...envelope, row: { ...envelope.row, model_name: modelName } };
+}
+
+function arenaPageResponse(
+  subset: string,
+  offset: number,
+  rows: unknown[],
+  total: number,
+  revision = 'lmarena-revision',
+): Response {
+  return new Response(JSON.stringify({ rows, num_rows_total: total }), {
+    headers: { 'content-type': 'application/json', etag: `"${subset}-${offset}-etag"`, 'x-revision': revision },
+  });
+}
+
 function requestHeaders(init: RequestInit | undefined): Headers {
   return new Headers(init?.headers);
 }
@@ -2211,6 +2228,128 @@ describe('atomic benchmark ingestion', () => {
     })).dependencies);
 
     expect(result.status).toBe('published');
+  });
+
+  it('excludes same-page ambiguous Dataset Viewer WebDev identities without dropping snapshot provenance', async () => {
+    const ambiguousModel = 'gpt-5.3-codex (codex-harness)';
+    const firstRows = arenaRows('webdev', 0, 100);
+    firstRows[56] = arenaRowWithModelName(firstRows[56], ambiguousModel);
+    firstRows[71] = arenaRowWithModelName(firstRows[71], ambiguousModel);
+    const finalRows = arenaRows('webdev', 100, 10);
+    const { env, db, r2 } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch({
+      onRequest(url) {
+        if (url.hostname !== 'datasets-server.huggingface.co') return undefined;
+        const subset = url.searchParams.get('config') ?? 'agent';
+        const offset = Number(url.searchParams.get('offset'));
+        if (subset === 'webdev') {
+          return offset === 0
+            ? arenaPageResponse(subset, offset, firstRows, 110, 'same-page-revision')
+            : arenaPageResponse(subset, offset, finalRows, 110, 'same-page-revision');
+        }
+        if (subset === 'text_style_control') {
+          return arenaPageResponse(
+            subset,
+            offset,
+            [arenaRowWithModelName(arenaRows(subset, 0, 1)[0], ambiguousModel)],
+            1,
+            'same-page-revision',
+          );
+        }
+        return arenaResponse(subset, offset, 1, 'same-page-revision', 1);
+      },
+    })).dependencies);
+
+    expect(result.status).toBe('published');
+    const metrics = jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')
+      .filter((metric) => metric.metricKey === 'lmarena:webdev:overall');
+    expect(metrics).not.toContainEqual(expect.objectContaining({
+      modelKey: 'source:lmarena:gpt-5.3-codex%20(codex-harness)',
+      sourceModelId: ambiguousModel,
+    }));
+    expect(metrics).toContainEqual(expect.objectContaining({ sourceModelId: 'webdev-model-0', rank: 1 }));
+    expect(jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')).toContainEqual(expect.objectContaining({
+      metricKey: 'lmarena:text_style_control:overall',
+      sourceModelId: ambiguousModel,
+    }));
+
+    const sources = (db.state.sourceRows.get(result.revision as string) ?? [])
+      .filter((candidate) => candidate.sourceId === 'lmarena' && candidate.artifactId.startsWith('webdev:'));
+    expect(sources.map((source) => source.artifactId)).toEqual([
+      'webdev:latest:overall:rows-0-100',
+      'webdev:latest:overall:rows-100-200',
+    ]);
+    expect(sources.every((source) => source.upstreamRevision === 'same-page-revision')).toBe(true);
+    const firstSnapshot = r2.objects.get(sources[0]?.snapshotKey ?? 'missing');
+    const firstProjection = JSON.parse(new TextDecoder().decode(firstSnapshot?.bytes)) as {
+      rows: { row: { model_name: string } }[];
+      num_rows_total: number;
+    };
+    expect(firstProjection.num_rows_total).toBe(110);
+    expect(firstProjection.rows[56]).toMatchObject({ row: { model_name: ambiguousModel, rank: 57 } });
+    expect(firstProjection.rows[71]).toMatchObject({ row: { model_name: ambiguousModel, rank: 72 } });
+    expect(firstProjection.rows.filter((row) => row.row.model_name === ambiguousModel)).toHaveLength(2);
+    expect(r2.objects.get(sources[1]?.snapshotKey ?? 'missing')).toBeDefined();
+  });
+
+  it('excludes cross-page ambiguous Dataset Viewer WebDev identities without dropping page snapshots', async () => {
+    const ambiguousModel = 'gpt-5.3-codex (codex-harness)';
+    const firstRows = arenaRows('webdev', 0, 100);
+    firstRows[0] = arenaRowWithModelName(firstRows[0], ambiguousModel);
+    const finalRows = [arenaRowWithModelName(arenaRows('webdev', 100, 1)[0], ambiguousModel)];
+    const { env, db, r2 } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch({
+      onRequest(url) {
+        if (url.hostname !== 'datasets-server.huggingface.co') return undefined;
+        const subset = url.searchParams.get('config') ?? 'agent';
+        const offset = Number(url.searchParams.get('offset'));
+        if (subset !== 'webdev') return arenaResponse(subset, offset, 1, 'cross-page-revision', 1);
+        return offset === 0
+          ? arenaPageResponse(subset, offset, firstRows, 101, 'cross-page-revision')
+          : arenaPageResponse(subset, offset, finalRows, 101, 'cross-page-revision');
+      },
+    })).dependencies);
+
+    expect(result.status).toBe('published');
+    const metrics = jsonRowsFor(db.state.publicationStatements, 'benchmark_metrics')
+      .filter((metric) => metric.metricKey === 'lmarena:webdev:overall');
+    expect(metrics).not.toContainEqual(expect.objectContaining({
+      modelKey: 'source:lmarena:gpt-5.3-codex%20(codex-harness)',
+      sourceModelId: ambiguousModel,
+    }));
+    expect(metrics).toContainEqual(expect.objectContaining({ sourceModelId: 'webdev-model-1', rank: 2 }));
+
+    const sources = (db.state.sourceRows.get(result.revision as string) ?? [])
+      .filter((candidate) => candidate.sourceId === 'lmarena' && candidate.artifactId.startsWith('webdev:'));
+    expect(sources.map((source) => source.artifactId)).toEqual([
+      'webdev:latest:overall:rows-0-100',
+      'webdev:latest:overall:rows-100-200',
+    ]);
+    const snapshots = sources.map((source) => JSON.parse(new TextDecoder().decode(r2.objects.get(source.snapshotKey)?.bytes)) as {
+      rows: { row: { model_name: string } }[];
+    });
+    expect(snapshots.map((snapshot) => snapshot.rows.some((row) => row.row.model_name === ambiguousModel)))
+      .toEqual([true, true]);
+  });
+
+  it('fails explicitly when a Dataset Viewer subset has no usable model identities', async () => {
+    const ambiguousModel = 'gpt-5.3-codex (codex-harness)';
+    const rows = arenaRows('webdev', 0, 2).map((row) => arenaRowWithModelName(row, ambiguousModel));
+    const { env, db } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch({
+      onRequest(url) {
+        if (url.hostname !== 'datasets-server.huggingface.co') return undefined;
+        const subset = url.searchParams.get('config') ?? 'agent';
+        const offset = Number(url.searchParams.get('offset'));
+        return subset === 'webdev'
+          ? arenaPageResponse(subset, offset, rows, 2, 'no-usable-revision')
+          : arenaResponse(subset, offset, 1, 'no-usable-revision', 1);
+      },
+    })).dependencies);
+
+    expect(result.status).toBe('failed');
+    expect(result.error).toMatch(/lmarena subset webdev.*no usable.*identit/i);
+    expect(db.state.publicationBatchCalls).toBe(0);
   });
 
   it('fetches all LMArena pages announced by a >100-row total with a common revision and no more than six in flight', async () => {

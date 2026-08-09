@@ -395,10 +395,15 @@ export function parseLmArenaSubset(
       fail(`LMArena row ${index} category ${row.category} does not match descriptor category ${artifactProvenance.category}`);
     }
   });
+  const identityCounts = new Map<string, number>();
+  for (const row of parsedRows) {
+    identityCounts.set(row.sourceModelId, (identityCounts.get(row.sourceModelId) ?? 0) + 1);
+  }
+  const unambiguousRows = parsedRows.filter((row) => identityCounts.get(row.sourceModelId) === 1);
   const modelsByKey = new Map<string, BenchmarkModel>();
   const metrics: BenchmarkMetric[] = [];
 
-  for (const row of parsedRows) {
+  for (const row of unambiguousRows) {
     const reviewedModelKey = resolveCanonicalModelKey('lmarena', row.sourceModelId);
     const modelKey = reviewedModelKey ?? sourceSpecificModelKey('lmarena', row.sourceModelId);
     const existingModel = modelsByKey.get(modelKey);
