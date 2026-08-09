@@ -2,9 +2,6 @@ name = "tokenbench-benchmark-ingest"
 main = "src/index.ts"
 compatibility_date = "2026-08-05"
 
-[limits]
-cpu_ms = 300_000
-
 # This Worker uses D1 batches for atomic benchmark publications. Deploy it on
 # Workers Paid: the configured query budget relies on the Paid D1 allowance.
 [observability]
