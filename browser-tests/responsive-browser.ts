@@ -743,7 +743,7 @@ test.describe('responsive calculator browser harness', () => {
       ],
     });
 
-    const choiceStyles = await page.evaluate(() => {
+    const readChoiceStyles = () => page.evaluate(() => {
       const provider = getComputedStyle(document.querySelector('.provider-choice.choice-selected') as HTMLElement);
       const selected = getComputedStyle(document.querySelector('.provider-choice.choice-selected') as HTMLElement);
       const unselected = getComputedStyle(document.querySelector('.provider-choice:not(.choice-selected)') as HTMLElement);
@@ -756,11 +756,17 @@ test.describe('responsive calculator browser harness', () => {
         unselectedBackground: unselected.backgroundColor,
       };
     });
+    await expect.poll(async () => {
+      const styles = await readChoiceStyles();
+      return {
+        borderDistinct: styles.selectedBorder !== styles.unselectedBorder,
+        backgroundDistinct: styles.selectedBackground !== styles.unselectedBackground,
+      };
+    }).toEqual({ borderDistinct: true, backgroundDistinct: true });
+    const choiceStyles = await readChoiceStyles();
 
     expect(choiceStyles.selectedRadius).toBe('4px');
     expect(choiceStyles.selectedShadow).toBe('none');
-    expect(choiceStyles.selectedBorder).not.toBe(choiceStyles.unselectedBorder);
-    expect(choiceStyles.selectedBackground).not.toBe(choiceStyles.unselectedBackground);
     const monthlyUsage = page.getByLabel('Expected monthly usage');
     const usagePosition = await page.getByText('Expected monthly usage').boundingBox();
     const presetsPosition = await page.getByText('Presets', { exact: true }).boundingBox();
