@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewsletterSignup } from './newsletter-signup';
 
@@ -7,9 +8,18 @@ afterEach(() => {
   document.body.removeAttribute('tabindex');
 });
 
+function renderSignup(element: ReactElement) {
+  return render(element);
+}
+
+function fillProfile() {
+  fireEvent.change(screen.getByLabelText('First name'), { target: { value: 'Ada' } });
+  fireEvent.change(screen.getByLabelText('Company'), { target: { value: 'Analytical Engines' } });
+}
+
 describe('NewsletterSignup', () => {
   it('leaves alerts unchecked and explains double opt in', () => {
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
     expect(screen.getByRole('heading', { name: 'The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)' })).toBeInTheDocument();
     expect(screen.getByText('A downloadable, printable reference sheet listing top models, current per-1M token rates, context windows, and category ranks.')).toBeInTheDocument();
@@ -18,7 +28,7 @@ describe('NewsletterSignup', () => {
   });
 
   it('reveals monthly consent only after a compact comparison alert opt-in', () => {
-    render(<NewsletterSignup context="compare" />);
+    renderSignup(<NewsletterSignup context="compare" />);
 
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
     const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' });
@@ -33,7 +43,7 @@ describe('NewsletterSignup', () => {
   });
 
   it('allows a comparison placement to opt out of compact disclosure', () => {
-    render(<NewsletterSignup compact={false} context="compare" />);
+    renderSignup(<NewsletterSignup compact={false} context="compare" />);
 
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
   });
@@ -44,9 +54,10 @@ describe('NewsletterSignup', () => {
       headers: { 'content-type': 'application/json' },
     }));
     vi.stubGlobal('fetch', fetchSignup);
-    render(<NewsletterSignup context="compare" />);
+    renderSignup(<NewsletterSignup context="compare" />);
 
     fireEvent.click(screen.getByRole('checkbox'));
+    fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
 
@@ -58,8 +69,10 @@ describe('NewsletterSignup', () => {
     }));
     const [, request] = fetchSignup.mock.calls[0]!;
     expect(JSON.parse((request as RequestInit).body as string)).toEqual({
+      company: 'Analytical Engines',
       context: 'compare',
       email: 'builder@example.com',
+      firstName: 'Ada',
       honeypot: '',
       modelAndPriceAlerts: true,
       monthlyCheatsheet: true,
@@ -69,8 +82,9 @@ describe('NewsletterSignup', () => {
   it('moves focus from the disabled submit button to a delayed confirmation status', async () => {
     let resolveRequest: (response: Response) => void = () => undefined;
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; })));
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
     const submit = screen.getByRole('button', { name: 'Get the cheatsheet' });
     submit.focus();
@@ -91,8 +105,9 @@ describe('NewsletterSignup', () => {
   it('returns focus to the email input after a delayed malformed 202 retry', async () => {
     let resolveRequest: (response: Response) => void = () => undefined;
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; })));
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     const email = screen.getByLabelText('Email address');
     fireEvent.change(email, { target: { value: 'builder@example.com' } });
     email.focus();
@@ -121,10 +136,11 @@ describe('NewsletterSignup', () => {
       status: 202,
       headers: { 'content-type': 'application/json' },
     })));
-    render(<NewsletterSignup context="compare" />);
+    renderSignup(<NewsletterSignup context="compare" />);
 
     const alerts = screen.getByRole('checkbox');
     fireEvent.click(alerts);
+    fillProfile();
     const email = screen.getByLabelText('Email address');
     fireEvent.change(email, { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
@@ -139,8 +155,9 @@ describe('NewsletterSignup', () => {
   it('keeps an invalid address local to the form', () => {
     const fetchSignup = vi.fn();
     vi.stubGlobal('fetch', fetchSignup);
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     const email = screen.getByLabelText('Email address');
     fireEvent.change(email, { target: { value: 'not-an-email' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
@@ -160,8 +177,9 @@ describe('NewsletterSignup', () => {
   ])('rejects %s using the newsletter contract boundaries', (_case, address) => {
     const fetchSignup = vi.fn();
     vi.stubGlobal('fetch', fetchSignup);
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     const email = screen.getByLabelText('Email address');
     fireEvent.change(email, { target: { value: address } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
@@ -172,7 +190,7 @@ describe('NewsletterSignup', () => {
   });
 
   it('uses the form’s accessible invalid-email feedback instead of browser-native blocking', () => {
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
     expect(screen.getByRole('form', { name: 'Newsletter signup' })).toHaveAttribute('novalidate');
   });
@@ -182,8 +200,9 @@ describe('NewsletterSignup', () => {
       '{"status":"temporarily-unavailable"}',
       { status: 503, headers: { 'content-type': 'application/json' } },
     )));
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
 
@@ -195,8 +214,9 @@ describe('NewsletterSignup', () => {
   it('disables signup controls while a submission is in flight', async () => {
     let resolveRequest: (response: Response) => void = () => undefined;
     vi.stubGlobal('fetch', vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; })));
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     const email = screen.getByLabelText('Email address');
     const alerts = screen.getByRole('checkbox', { name: /new models or price drops/i });
     fireEvent.change(email, { target: { value: 'builder@example.com' } });
@@ -215,8 +235,9 @@ describe('NewsletterSignup', () => {
     let resolveRequest: (response: Response) => void = () => undefined;
     const fetchSignup = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { resolveRequest = resolve; }));
     vi.stubGlobal('fetch', fetchSignup);
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
     const form = screen.getByRole('form', { name: 'Newsletter signup' });
     fireEvent.submit(form);
@@ -234,8 +255,9 @@ describe('NewsletterSignup', () => {
       requestSignal = init?.signal ?? undefined;
       return new Promise<Response>(() => undefined);
     }));
-    const { unmount } = render(<NewsletterSignup context="footer" />);
+    const { unmount } = renderSignup(<NewsletterSignup context="footer" />);
 
+    fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
     unmount();
@@ -248,6 +270,7 @@ describe('NewsletterSignup', () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new DOMException('Request aborted', 'AbortError')));
     render(<><button type="button">Outside signup</button><NewsletterSignup context="footer" /></>);
 
+    fillProfile();
     const email = screen.getByLabelText('Email address');
     fireEvent.change(email, { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
@@ -264,13 +287,14 @@ describe('NewsletterSignup', () => {
   it('keeps the bot trap out of the accessible form and forwards its value', async () => {
     const fetchSignup = vi.fn().mockResolvedValue(new Response('{"status":"confirmation-required"}', { status: 202 }));
     vi.stubGlobal('fetch', fetchSignup);
-    render(<NewsletterSignup context="footer" />);
+    renderSignup(<NewsletterSignup context="footer" />);
 
     expect(screen.queryByRole('textbox', { name: 'Website' })).not.toBeInTheDocument();
     const honeypot = document.querySelector<HTMLInputElement>('input[name="website"]');
     expect(honeypot).not.toBeNull();
     expect(honeypot).toHaveAttribute('tabindex', '-1');
     fireEvent.change(honeypot!, { target: { value: 'bot-filled-this' } });
+    fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
 

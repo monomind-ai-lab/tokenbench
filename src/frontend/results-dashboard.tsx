@@ -48,7 +48,7 @@ function resultRecommendation(selectedPlan: PlanOffer | undefined, snapshot: Cal
   const savings = snapshot.estimatedMonthlySavingsMicroDollars;
   if (eligibility.caveats.length > 0) {
     return {
-      copy: 'Unable to compare this subscription with pay as you go because its published entitlement does not verify this workload.',
+      copy: 'TokenBench can calculate the API-equivalent cost and subscription fee, but the published entitlement cannot verify coverage for this workload.',
       unavailableFacts: eligibility.caveats,
       comparisonAvailable: false,
     };
@@ -125,20 +125,20 @@ function ValueSummary({ selectedPlan, snapshot, recommendation }: Pick<ResultsDa
     <article className="value-summary-card">
       <p className="result-recommendation">{recommendation.copy}</p>
       <div className="value-summary-main">
-        <div className="value-metric value-subscription-price">
-          <h3>Subscription price</h3>
-          <strong>{selectedPlan ? formatCurrencyMicroDollars(selectedPlan.monthlyCostMicroDollars) : 'No plan selected'}</strong>
-          <span>{selectedPlan ? `${selectedPlan.displayName} per month` : 'Select a plan with published capacity to compare it.'}</span>
-        </div>
         <div className="value-metric">
-          <h3><CircleDollarSign aria-hidden="true" size={19} />{UI_COPY.apiEquivalentValue}</h3>
+          <h3><CircleDollarSign aria-hidden="true" size={19} />What does API usage cost?</h3>
           <strong>{formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)}</strong>
-          <span>Total market value at expected usage</span>
+          <span>{UI_COPY.apiEquivalentValue} for the selected model mix and monthly workload.</span>
+        </div>
+        <div className="value-metric value-subscription-price">
+          <h3>What does the subscription cost?</h3>
+          <strong>{selectedPlan ? formatCurrencyMicroDollars(selectedPlan.monthlyCostMicroDollars) : 'No plan selected'}</strong>
+          <span>{selectedPlan ? `${selectedPlan.displayName} per month` : 'Select a plan to compare its published fee.'}</span>
         </div>
         <div className="value-metric value-savings">
-          <h3><WalletCards aria-hidden="true" size={19} />{recommendation.comparisonAvailable ? UI_COPY.estimatedMonthlySavings : 'Estimated difference'}</h3>
-          <strong data-savings-tone={savingsTone}>{recommendation.comparisonAvailable ? formatCurrencyMicroDollars(savings) : 'Unavailable'}</strong>
-          <span>{recommendation.comparisonAvailable && selectedPlan ? `Difference: API value minus ${selectedPlan.displayName}` : 'Difference unavailable because this plan is not comparable to the selected workload.'}</span>
+          <h3><WalletCards aria-hidden="true" size={19} />Can the plan cover this workload?</h3>
+          <strong data-savings-tone={savingsTone}>{recommendation.comparisonAvailable ? formatCurrencyMicroDollars(savings) : 'Not verified'}</strong>
+          <span>{recommendation.comparisonAvailable && selectedPlan ? `${UI_COPY.estimatedMonthlySavings}: API cost minus ${selectedPlan.displayName}.` : 'Coverage-dependent savings, breakeven, and efficiency are withheld.'}</span>
         </div>
       </div>
       <div className="value-summary-footer">

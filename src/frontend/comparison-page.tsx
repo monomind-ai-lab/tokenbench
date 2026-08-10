@@ -52,8 +52,8 @@ function unavailable(): ReactNode {
   return <span className="comparison-unavailable">Unavailable</span>;
 }
 
-function notPublished(): ReactNode {
-  return <span className="comparison-not-published">Not published</span>;
+function notVerified(): ReactNode {
+  return <span className="comparison-not-published">Not verified</span>;
 }
 
 function metricValue(metric: BenchmarkMetric | null): ReactNode {
@@ -61,22 +61,22 @@ function metricValue(metric: BenchmarkMetric | null): ReactNode {
 }
 
 function priceValue(value: number | null): ReactNode {
-  return value === null ? notPublished() : `$${formatNumber(value)}`;
+  return value === null ? notVerified() : `$${formatNumber(value)}`;
 }
 
 function tokenValue(value: number | null): ReactNode {
-  return value === null ? notPublished() : new Intl.NumberFormat('en-US').format(value);
+  return value === null ? notVerified() : new Intl.NumberFormat('en-US').format(value);
 }
 
 function listValue(value: readonly string[] | null): ReactNode {
-  if (value === null) return notPublished();
+  if (value === null) return notVerified();
   if (value.length === 0) return 'None published';
   return value.join(', ');
 }
 
 function unresolvedRouteValue(selection: SelectedRouteState): ReactNode | null {
   if (selection.status === 'ambiguous') return unavailable();
-  if (selection.status === 'absent') return notPublished();
+  if (selection.status === 'absent') return notVerified();
   return null;
 }
 
@@ -90,14 +90,6 @@ function routeTokenValue(selection: SelectedRouteState, value: number | null): R
 
 function routeListValue(selection: SelectedRouteState, value: readonly string[] | null): ReactNode {
   return unresolvedRouteValue(selection) ?? listValue(value);
-}
-
-function routeVerificationValue(selection: SelectedRouteState): ReactNode {
-  const unresolved = unresolvedRouteValue(selection);
-  if (unresolved) return unresolved;
-  if (selection.route.verificationStatus === 'primary') return 'Primary';
-  if (selection.route.verificationStatus === 'corroborating') return 'Corroborating';
-  return 'Conflict';
 }
 
 function modelEvidenceLabel(model: BenchmarkModel): string {
@@ -131,7 +123,7 @@ function selectableRoutes(group: ComparisonPriceChecks): readonly BenchmarkPrice
 }
 
 function routeAvailability(selection: SelectedRouteState): ReactNode {
-  if (selection.status === 'absent') return notPublished();
+  if (selection.status === 'absent') return notVerified();
   return <span className="comparison-unavailable">Unavailable — route selection is ambiguous</span>;
 }
 
@@ -266,21 +258,16 @@ function PairHeader({ viewModel }: { readonly viewModel: ComparisonViewModel }) 
 function Summary({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
   const summary = comparisonSummary(viewModel);
   const coverage = summary.coverage === 'strong'
-    ? 'Four or more compatible supported metrics are available for metric-specific reading.'
+    ? 'Broad shared-metric coverage'
     : summary.coverage === 'limited'
-      ? 'The shared supported score evidence is limited, so read each published field independently.'
-      : 'No compatible shared supported score evidence is available for a benchmark comparison.';
-  return <>
-    <section className="comparison-panel comparison-section" aria-labelledby="comparison-summary-heading">
-      <div className="comparison-section-heading"><h2 id="comparison-summary-heading">{summary.heading}</h2><p>{coverage}</p></div>
-    </section>
-    <section className="comparison-panel comparison-section" aria-labelledby="comparison-highlights-heading">
-      <div className="comparison-section-heading"><h2 id="comparison-highlights-heading">Evidence highlights</h2><p>Each statement is tied to a named metric, pricing dimension, or published context fact.</p></div>
-      {summary.sentences.length === 0
-        ? <p className="comparison-empty-copy">No additional evidence-specific highlight is published for this pair.</p>
-        : <ol className="comparison-highlights-list">{summary.sentences.map((sentence) => <li key={sentence}>{sentence}</li>)}</ol>}
-    </section>
-  </>;
+      ? 'Limited shared-metric coverage'
+      : 'Insufficient shared-metric coverage';
+  return <section className="comparison-panel comparison-section" aria-labelledby="comparison-summary-heading">
+    <div className="comparison-section-heading"><h2 id="comparison-summary-heading">Key implications</h2><p>{summary.heading} · {coverage}. Each finding is tied to a published metric, price, context, or modality fact.</p></div>
+    {summary.sentences.length === 0
+      ? <p className="comparison-empty-copy">No decision-relevant implication can be verified for this pair yet.</p>
+      : <ol className="comparison-highlights-list">{summary.sentences.map((sentence) => <li key={sentence}>{sentence}</li>)}</ol>}
+  </section>;
 }
 
 function SharedMetricView({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
@@ -336,7 +323,7 @@ function RoutePicker({
     <span>{label}</span>
     {options.length === 0 ? <span className="comparison-route-picker-state">{routeAvailability(selection)}</span> : <select aria-label={label} onChange={(event) => onChange(event.currentTarget.value || null)} value={hasSelectedOption ? selectedRouteId ?? '' : ''}>
       {!hasSelectedOption ? <option value="">Choose a published route</option> : null}
-      {options.map((route) => <option key={route.routeId} value={route.routeId}>{route.routeId}</option>)}
+      {options.map((route) => <option key={route.routeId} value={route.routeId}>{route.routeId} · {route.verificationStatus}</option>)}
     </select>}
   </label>;
 }
@@ -358,20 +345,16 @@ function PricingContext({
   ] as const;
   const routes = [selections[0].route, selections[1].route] as const;
   const rows: readonly { readonly label: string; readonly unit: string; readonly left: ReactNode; readonly right: ReactNode }[] = [
-    { label: 'Verification status', unit: 'route evidence', left: routeVerificationValue(selections[0]), right: routeVerificationValue(selections[1]) },
     { label: 'Input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.inputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.inputUsdPerMillion ?? null) },
     { label: 'Cached input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.cachedInputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.cachedInputUsdPerMillion ?? null) },
     { label: 'Output API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.outputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.outputUsdPerMillion ?? null) },
     { label: 'Route context', unit: 'tokens', left: routeTokenValue(selections[0], routes[0]?.contextWindowTokens ?? null), right: routeTokenValue(selections[1], routes[1]?.contextWindowTokens ?? null) },
-    { label: 'Maximum input', unit: 'tokens', left: routeTokenValue(selections[0], routes[0]?.maxInputTokens ?? null), right: routeTokenValue(selections[1], routes[1]?.maxInputTokens ?? null) },
-    { label: 'Maximum output', unit: 'tokens', left: routeTokenValue(selections[0], routes[0]?.maxOutputTokens ?? null), right: routeTokenValue(selections[1], routes[1]?.maxOutputTokens ?? null) },
     { label: 'Input modalities', unit: 'published list', left: routeListValue(selections[0], routes[0]?.inputModalities ?? null), right: routeListValue(selections[1], routes[1]?.inputModalities ?? null) },
     { label: 'Output modalities', unit: 'published list', left: routeListValue(selections[0], routes[0]?.outputModalities ?? null), right: routeListValue(selections[1], routes[1]?.outputModalities ?? null) },
-    { label: 'Supported parameters', unit: 'published list', left: routeListValue(selections[0], routes[0]?.supportedParameters ?? null), right: routeListValue(selections[1], routes[1]?.supportedParameters ?? null) },
   ];
 
   return <section className="comparison-panel comparison-section" aria-labelledby="comparison-pricing-heading">
-    <div className="comparison-section-heading"><h2 id="comparison-pricing-heading">Pricing and context</h2><p>Route selection changes only operational pricing and context fields. Missing route facts remain not published.</p></div>
+    <div className="comparison-section-heading"><h2 id="comparison-pricing-heading">Pricing and context</h2><p>Verification is shown beside each selected route. Missing facts remain <em>Not verified</em>.</p></div>
     <div className="comparison-route-picker-grid">
       <RoutePicker group={groups[0]} index={0} models={models} onChange={(routeId) => onRouteChange(0, routeId)} selectedRouteId={selectedRouteIds[0]} />
       <RoutePicker group={groups[1]} index={1} models={models} onChange={(routeId) => onRouteChange(1, routeId)} selectedRouteId={selectedRouteIds[1]} />

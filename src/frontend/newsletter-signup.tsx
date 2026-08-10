@@ -8,7 +8,7 @@ export interface NewsletterSignupProps {
 
 export const MODEL_PRICE_ALERT_LABEL = 'Notify me when new models or price drops are added to TokenBench.';
 
-type SignupFeedback = 'idle' | 'invalid-email' | 'confirmation-required' | 'retry';
+type SignupFeedback = 'idle' | 'invalid-profile' | 'invalid-email' | 'confirmation-required' | 'retry';
 type PostSubmissionFocus = 'email' | 'confirmation-status';
 
 const MAX_EMAIL_LENGTH = 254;
@@ -48,6 +48,8 @@ function isAbortError(error: unknown): boolean {
 
 export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_ALERT_LABEL }: NewsletterSignupProps) {
   const [modelAndPriceAlerts, setModelAndPriceAlerts] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [honeypot, setHoneypot] = useState('');
   const [feedback, setFeedback] = useState<SignupFeedback>('idle');
@@ -62,6 +64,8 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
   const invalidEmail = feedback === 'invalid-email';
   const feedbackCopy = feedback === 'invalid-email'
     ? 'Enter a valid email address.'
+    : feedback === 'invalid-profile'
+      ? 'Enter your first name and company.'
     : feedback === 'confirmation-required'
       ? 'Check your email to confirm your subscription.'
       : feedback === 'retry'
@@ -88,6 +92,12 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
     event.preventDefault();
     if (submissionInFlight.current) return;
     const normalizedEmail = email.trim();
+    const normalizedFirstName = firstName.trim();
+    const normalizedCompany = company.trim();
+    if (!normalizedFirstName || !normalizedCompany) {
+      setFeedback('invalid-profile');
+      return;
+    }
     if (!isValidNewsletterEmailAddress(normalizedEmail)) {
       setFeedback('invalid-email');
       return;
@@ -102,6 +112,8 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
+          firstName: normalizedFirstName,
+          company: normalizedCompany,
           email: normalizedEmail,
           monthlyCheatsheet: true,
           modelAndPriceAlerts,
@@ -113,6 +125,8 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
       if (response.status === 202 && isConfirmationRequiredResponse(await response.json())) {
         postSubmissionFocus.current = 'confirmation-status';
         setEmail('');
+        setFirstName('');
+        setCompany('');
         setFeedback('confirmation-required');
         return;
       }
@@ -137,6 +151,10 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
     </div> : null}
     <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label>
     {showForm ? <form aria-busy={submitting} aria-label="Newsletter signup" noValidate onSubmit={submitSignup}>
+      <label htmlFor={`newsletter-first-name-${context}`}>First name</label>
+      <input autoComplete="given-name" disabled={submitting} id={`newsletter-first-name-${context}`} maxLength={120} name="firstName" onChange={(event) => { setFirstName(event.target.value); setFeedback('idle'); }} required type="text" value={firstName} />
+      <label htmlFor={`newsletter-company-${context}`}>Company</label>
+      <input autoComplete="organization" disabled={submitting} id={`newsletter-company-${context}`} maxLength={120} name="company" onChange={(event) => { setCompany(event.target.value); setFeedback('idle'); }} required type="text" value={company} />
       <label htmlFor={`newsletter-email-${context}`}>Email address</label>
       <input aria-describedby={invalidEmail ? `newsletter-email-error-${context}` : undefined} aria-invalid={invalidEmail || undefined} disabled={submitting} id={`newsletter-email-${context}`} name="email" onChange={(event) => { setEmail(event.target.value); setFeedback('idle'); }} ref={emailInput} required type="email" value={email} />
       <p>You’ll also receive the Monthly LLM API Cost &amp; Benchmark Cheatsheet (PDF/CSV).</p>

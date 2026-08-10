@@ -157,12 +157,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .home-price-performance-point text { fill: var(--text); font-weight: 800; }
 .home-price-performance-description { margin: 0; color: var(--muted); font-size: 0.76rem; line-height: 1.55; }
 .home-snapshot-method { justify-self: start; }
+.home-calculator-banner { display: flex; align-items: center; justify-content: space-between; gap: 28px; padding: clamp(28px, 5vw, 52px); border-color: color-mix(in srgb, var(--primary) 46%, var(--outline)); background: linear-gradient(135deg, color-mix(in srgb, var(--primary-soft) 46%, var(--surface)), var(--surface) 70%); box-shadow: none; }
+.home-calculator-banner div { max-width: 780px; }
+.home-calculator-banner h2 { margin: 8px 0 10px; font-family: var(--font-display); font-size: clamp(1.8rem, 3.2vw, 2.75rem); font-weight: 500; letter-spacing: -0.045em; line-height: 1.1; }
+.home-calculator-banner p { margin: 0; color: var(--muted); font-size: 0.9rem; line-height: 1.65; }
+.home-calculator-banner .button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.home-guide-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.home-feature-section > .panel-heading > a { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; color: var(--primary-strong); font-size: 0.76rem; font-weight: 800; text-decoration: none; }
 .home-builder-section { display: grid; justify-items: start; gap: 14px; padding: clamp(28px, 5vw, 52px); border-color: color-mix(in srgb, var(--primary) 34%, var(--outline)); background: color-mix(in srgb, var(--primary-soft) 28%, var(--surface)); box-shadow: none; }
 .home-builder-section h2, .home-builder-section p { max-width: 760px; margin: 0; }
 .home-builder-section p { color: var(--muted); font-size: 0.98rem; line-height: 1.65; }
 .home-monomind-banner { display: grid; justify-items: start; gap: 16px; padding: clamp(28px, 5vw, 56px); border-color: color-mix(in srgb, var(--primary) 52%, var(--outline)); background: radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 32%, transparent), transparent 56%), var(--surface); box-shadow: none; }
 .home-monomind-banner h2 { margin: 0; }
-.home-monomind-banner p { max-width: 760px; margin: 0; font-family: var(--font-display); font-size: clamp(1.35rem, 2.7vw, 2.15rem); font-weight: 500; letter-spacing: -0.035em; line-height: 1.25; }
+.home-monomind-label { display: flex; align-items: center; gap: 10px; }
+.home-monomind-label img { width: 26px; height: 26px; object-fit: contain; }
+.home-monomind-banner p { max-width: 760px; margin: 0; font-size: 0.9rem; line-height: 1.65; }
 .tools-hero h1 { max-width: 700px; }
 .tools-directory-grid { display: grid; grid-template-columns: minmax(0, min(100%, 520px)); gap: 16px; }
 .tools-directory-grid .panel { border-color: color-mix(in srgb, var(--primary) 34%, var(--outline)); }
@@ -344,10 +353,14 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .skeleton { display: block; width: 75%; height: 18px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-low), var(--surface-high), var(--surface-low)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
 .skeleton-lg { width: 52%; height: 45px; }
 .skeleton-short { width: 40%; }
-.app-footer { width: min(100% - 64px, 1280px); margin: 0 auto; padding: 22px 0 34px; display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(300px, 1.45fr); align-items: start; gap: 16px 28px; color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; }
-.footer-brand, .footer-links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.app-footer { width: min(100% - 64px, 1280px); margin: 0 auto; padding: 42px 0 34px; color: var(--muted); font-family: var(--font-label); font-size: 0.66rem; }
+.footer-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(140px, 0.55fr) minmax(140px, 0.55fr) minmax(320px, 1.5fr); align-items: start; gap: 24px 36px; }
+.footer-brand, .footer-links { display: grid; align-content: start; gap: 8px; }
+.footer-brand strong, .footer-links strong { color: var(--text); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.footer-brand p { max-width: 270px; margin: 0; font-family: var(--font-body); font-size: 0.78rem; line-height: 1.6; }
 .app-footer a { min-height: 44px; display: inline-flex; align-items: center; color: var(--muted); font-weight: 700; text-decoration: none; }
 .app-footer a:hover { color: var(--primary-strong); }
+.footer-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--outline); }
 
 /* Newsletter consent is intentionally a small, explicit form: the footer
    explains the monthly offer while Compare begins with alerts consent alone. */
@@ -374,8 +387,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .comparison-newsletter-signup .newsletter-signup[data-compact='true'] { gap: 9px; }
 
 @media (max-width: 1023px) {
-  .app-footer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .app-footer .newsletter-signup { grid-column: 1 / -1; }
+  .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .footer-grid .newsletter-signup { grid-column: 1 / -1; }
+  .home-guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .guides-main { width: min(100% - 64px, 1120px); margin: 0 auto; padding: 40px 0 80px; }
@@ -625,7 +639,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 @media (min-width: 1024px) {
   .calculator-guided-layout { grid-template-columns: minmax(0, 1.3fr) minmax(360px, 0.7fr); gap: 34px; }
   .calculator-guided-results .results-grid { grid-template-columns: minmax(0, 1fr); }
-  .calculator-guided-results .value-summary-card { position: sticky; top: calc(var(--header-height) + 18px); }
+  .calculator-guided-results .value-summary-card { position: relative; }
 }
 
 @media (min-width: 1440px) {
@@ -645,6 +659,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 }
 
 @media (max-width: 767px) {
+  .home-calculator-banner { align-items: flex-start; flex-direction: column; }
+  .home-guide-grid, .footer-grid { grid-template-columns: minmax(0, 1fr); }
+  .footer-grid .newsletter-signup { grid-column: auto; }
   .header-inner, .status-banner, .page-main, .app-footer, .guides-main { width: min(100% - 24px, 1280px); }
   .top-header { --header-height: 64px; }
   .header-inner { position: relative; min-height: 64px; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; }

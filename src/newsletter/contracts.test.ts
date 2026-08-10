@@ -3,6 +3,8 @@ import { parseNewsletterSignup } from './contracts';
 
 function signup(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    firstName: 'Ada',
+    company: 'Analytical Engines',
     email: 'builder@example.com',
     monthlyCheatsheet: true,
     modelAndPriceAlerts: false,
@@ -15,6 +17,8 @@ function signup(overrides: Record<string, unknown> = {}): Record<string, unknown
 describe('parseNewsletterSignup', () => {
   it('normalizes surrounding whitespace in a valid email address', () => {
     expect(parseNewsletterSignup(signup({ email: '  builder@example.com  ' }))).toEqual({
+      firstName: 'Ada',
+      company: 'Analytical Engines',
       email: 'builder@example.com',
       monthlyCheatsheet: true,
       modelAndPriceAlerts: false,
@@ -71,6 +75,15 @@ describe('parseNewsletterSignup', () => {
 
   it('rejects fields outside the explicit signup contract', () => {
     expect(parseNewsletterSignup(signup({ campaign: 'summer' }))).toBeNull();
+  });
+
+  it('requires trimmed first name and company values', () => {
+    expect(parseNewsletterSignup(signup({ firstName: '  ' }))).toBeNull();
+    expect(parseNewsletterSignup(signup({ company: '' }))).toBeNull();
+    expect(parseNewsletterSignup(signup({ firstName: '  Ada  ', company: '  Analytical Engines  ' }))).toMatchObject({
+      firstName: 'Ada',
+      company: 'Analytical Engines',
+    });
   });
 
   it('requires each consent, context, and honeypot field with its documented type', () => {

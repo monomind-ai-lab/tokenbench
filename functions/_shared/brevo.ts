@@ -127,6 +127,10 @@ export async function createDoubleOptInContact(
         },
         body: JSON.stringify({
           email: signup.email,
+          attributes: {
+            FIRSTNAME: signup.firstName,
+            COMPANY: signup.company,
+          },
           includeListIds,
           templateId: config.doiTemplateId,
           redirectionUrl: config.doiRedirectUrl,

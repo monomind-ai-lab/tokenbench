@@ -29,6 +29,8 @@ function bindings(overrides: Record<string, unknown> = {}) {
 
 function signup(overrides: Partial<NewsletterSignup> = {}): NewsletterSignup {
   return {
+    firstName: 'Ada',
+    company: 'Analytical Engines',
     email: 'builder@example.com',
     monthlyCheatsheet: true,
     modelAndPriceAlerts: false,
@@ -73,6 +75,10 @@ describe('createDoubleOptInContact', () => {
     });
     expect(JSON.parse(String(init?.body))).toEqual({
       email: 'builder@example.com',
+      attributes: {
+        FIRSTNAME: 'Ada',
+        COMPANY: 'Analytical Engines',
+      },
       includeListIds,
       templateId: 21,
       redirectionUrl: 'https://tokenbench.monomind.one/newsletter/confirmed/',

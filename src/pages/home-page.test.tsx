@@ -112,9 +112,10 @@ describe('HomePage', () => {
     expect(screen.getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare/');
     expect(screen.getByRole('link', { name: 'Calculate subscription vs API' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
-    expect(screen.getByRole('heading', { name: 'Make three decisions faster', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What TokenBench gives you', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Make the next decision with less guessing', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Built for AI builders', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeInTheDocument();
     expect(screen.queryByText('Benchmark signals')).not.toBeInTheDocument();

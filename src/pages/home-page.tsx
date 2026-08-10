@@ -5,28 +5,8 @@ import { LeaderboardEvidence } from '../frontend/leaderboard-table';
 import { ProviderMark } from '../frontend/provider-mark';
 import { useHomeDecisionSnapshot } from '../frontend/use-benchmarks';
 import { HOME_PAGE_COPY } from '../brand/site-config';
+import { GUIDE_BY_SLUG, guidePath } from '../guides/content';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
-
-const DECISION_CARDS = [
-  {
-    title: 'Compare models',
-    description: 'Put the models you are considering side by side, with price and evidence kept in their original context.',
-    href: ROUTE_PATHS.compareHub,
-    Icon: Layers3,
-  },
-  {
-    title: 'Calculate subscription vs API',
-    description: 'Turn your own monthly workload and model mix into a transparent subscription-versus-API calculation.',
-    href: ROUTE_PATHS.calculator,
-    Icon: BadgeDollarSign,
-  },
-  {
-    title: 'Browse leaderboards',
-    description: 'Start with supported performance evidence and inspect the exact ranking lens before deciding.',
-    href: ROUTE_PATHS.leaderboards,
-    Icon: TrendingUp,
-  },
-] as const;
 
 const PRODUCT_FEATURES = [
   {
@@ -54,6 +34,12 @@ const PRODUCT_FEATURES = [
     description: 'Send a reproducible calculator result to the people who need to act on it.',
     Icon: Layers3,
   },
+] as const;
+
+const CURATED_GUIDE_SLUGS = [
+  'reduce-llm-api-costs-caching-batch-output-limits',
+  'openrouter-guide-model-routing-cost-controls',
+  'track-claude-code-usage',
 ] as const;
 
 type HomeSnapshotEntry = DecisionPickEntry | HomeRepresentativeRate;
@@ -182,21 +168,12 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="home-feature-section" aria-labelledby="home-decisions-heading">
-        <div className="panel-heading"><div><span className="eyebrow">Start with the decision</span><h2 id="home-decisions-heading">Make three decisions faster</h2><p>Move from an AI question to the specific tool and evidence needed to answer it.</p></div></div>
-        <div className="home-feature-grid home-decision-grid" role="list" aria-label="Three primary TokenBench decisions">
-          {DECISION_CARDS.map(({ title, description, href, Icon }) => (
-            <article className="panel" role="listitem" key={title}>
-              <Icon aria-hidden="true" size={22} />
-              <h3>{title}</h3>
-              <p className="muted">{description}</p>
-              <a href={href}>Open {title} <ArrowRight aria-hidden="true" size={14} /></a>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <LiveDecisionSnapshot />
+
+      <section className="panel home-calculator-banner" aria-labelledby="home-calculator-heading">
+        <div><span className="eyebrow">Subscribe vs API</span><h2 id="home-calculator-heading">Should you subscribe or pay as you go?</h2><p>Choose your model mix, describe the monthly workload, and inspect the resulting cost and coverage implication without assuming unpublished capacity.</p></div>
+        <a className="button" href={ROUTE_PATHS.calculator}>Open the calculator <ArrowRight aria-hidden="true" size={16} /></a>
+      </section>
 
       <section className="home-feature-section" aria-labelledby="home-product-heading">
         <div className="panel-heading"><div><span className="eyebrow">Product capabilities</span><h2 id="home-product-heading">What TokenBench gives you</h2><p>One focused workspace for pricing, evidence, workload calculations, and results you can take with you.</p></div></div>
@@ -211,6 +188,18 @@ export function HomePage() {
         </div>
       </section>
 
+      <section className="home-feature-section" aria-labelledby="home-guides-heading">
+        <div className="panel-heading"><div><span className="eyebrow">Practical guides</span><h2 id="home-guides-heading">Make the next decision with less guessing</h2><p>Curated operating guides for cost control, routing, and usage visibility.</p></div><a href={ROUTE_PATHS.guides}>Browse all guides <ArrowRight aria-hidden="true" size={14} /></a></div>
+        <div className="home-feature-grid home-guide-grid" role="list">
+          {CURATED_GUIDE_SLUGS.map((slug) => GUIDE_BY_SLUG.get(slug)).filter((guide) => guide !== undefined).map((guide) => <article className="panel" role="listitem" key={guide.slug}>
+            <span className="eyebrow">{guide.category}</span>
+            <h3>{guide.title}</h3>
+            <p className="muted">{guide.description}</p>
+            <a href={guidePath(guide.slug)}>Read guide <ArrowRight aria-hidden="true" size={14} /></a>
+          </article>)}
+        </div>
+      </section>
+
       <section className="panel home-builder-section" aria-labelledby="home-builders-heading">
         <span className="eyebrow">A practical decision engine</span>
         <h2 id="home-builders-heading">Built for AI builders</h2>
@@ -218,8 +207,8 @@ export function HomePage() {
       </section>
 
       <aside className="panel home-monomind-banner" aria-label="MonoMind optimization services">
-        <h2 className="eyebrow">MonoMind AI Lab</h2>
-        <p>Spending &gt;$1,000/mo on LLM tokens? MonoMind designs custom routing, prompt caching, and agent pipelines to cut API bills by up to 90%.</p>
+        <div className="home-monomind-label"><img src="/brand/monomind-tokenbench.png" alt="" /><h2 className="eyebrow">MonoMind AI Lab</h2></div>
+        <p>Spending over $1,000/month on LLM tokens? MonoMind designs routing, caching, and agent pipelines that can cut API bills by up to 90%.</p>
         <a className="button" href="https://monomind.one/">Talk to MonoMind <ArrowRight aria-hidden="true" size={16} /></a>
       </aside>
     </div>

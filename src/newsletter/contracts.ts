@@ -1,4 +1,6 @@
 export interface NewsletterSignup {
+  readonly firstName: string;
+  readonly company: string;
   readonly email: string;
   readonly monthlyCheatsheet: true;
   readonly modelAndPriceAlerts: boolean;
@@ -6,7 +8,8 @@ export interface NewsletterSignup {
   readonly honeypot: string;
 }
 
-const SIGNUP_FIELDS = new Set(['email', 'monthlyCheatsheet', 'modelAndPriceAlerts', 'context', 'honeypot']);
+const SIGNUP_FIELDS = new Set(['firstName', 'company', 'email', 'monthlyCheatsheet', 'modelAndPriceAlerts', 'context', 'honeypot']);
+const MAX_PROFILE_FIELD_LENGTH = 120;
 const MAX_EMAIL_LENGTH = 254;
 const MAX_LOCAL_PART_LENGTH = 64;
 const MAX_DOMAIN_LENGTH = 253;
@@ -46,8 +49,9 @@ export function parseNewsletterSignup(value: unknown): NewsletterSignup | null {
 
   try {
     if (!hasExactSignupFields(value)) return null;
-    const { email, monthlyCheatsheet, modelAndPriceAlerts, context, honeypot } = value;
-    if (typeof email !== 'string' || monthlyCheatsheet !== true
+    const { firstName, company, email, monthlyCheatsheet, modelAndPriceAlerts, context, honeypot } = value;
+    if (typeof firstName !== 'string' || typeof company !== 'string'
+      || typeof email !== 'string' || monthlyCheatsheet !== true
       || typeof modelAndPriceAlerts !== 'boolean'
       || (context !== 'footer' && context !== 'compare')
       || typeof honeypot !== 'string') {
@@ -55,9 +59,15 @@ export function parseNewsletterSignup(value: unknown): NewsletterSignup | null {
     }
 
     const normalizedEmail = email.trim();
-    if (!isValidEmailAddress(normalizedEmail)) return null;
+    const normalizedFirstName = firstName.trim();
+    const normalizedCompany = company.trim();
+    if (normalizedFirstName.length === 0 || normalizedFirstName.length > MAX_PROFILE_FIELD_LENGTH
+      || normalizedCompany.length === 0 || normalizedCompany.length > MAX_PROFILE_FIELD_LENGTH
+      || !isValidEmailAddress(normalizedEmail)) return null;
 
     return {
+      firstName: normalizedFirstName,
+      company: normalizedCompany,
       email: normalizedEmail,
       monthlyCheatsheet,
       modelAndPriceAlerts,

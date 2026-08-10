@@ -61,7 +61,34 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
 }
 
 export function SiteFooter({ status, notice }: SiteFooterProps) {
-  return <footer className="app-footer"><div className="footer-brand"><a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a><span>{status}</span></div><div className="footer-links"><a href={ROUTE_PATHS.methodologyBenchAlign}>Methodology</a><span>{notice}</span></div><NewsletterSignup context="footer" /></footer>;
+  return <footer className="app-footer">
+    <div className="footer-grid">
+      <section className="footer-brand" aria-label="About TokenBench">
+        <strong>{SITE_CONFIG.name}</strong>
+        <p>Source-aware model, pricing, and workload evidence for practical AI decisions.</p>
+      </section>
+      <nav className="footer-links" aria-label="Explore">
+        <strong>Explore</strong>
+        <a href={ROUTE_PATHS.calculator}>Subscribe vs API</a>
+        <a href={ROUTE_PATHS.compareHub}>Compare models</a>
+        <a href={ROUTE_PATHS.leaderboards}>Leaderboards</a>
+        <a href={ROUTE_PATHS.guides}>Guides</a>
+      </nav>
+      <nav className="footer-links" aria-label="Trust">
+        <strong>Trust</strong>
+        <a href={ROUTE_PATHS.methodologyBenchAlign}>Methodology</a>
+        <a href={ROUTE_PATHS.leaderboards}>Data sources</a>
+        <a href="/privacy/">Privacy</a>
+        <span>{notice}</span>
+      </nav>
+      <NewsletterSignup context="footer" />
+    </div>
+    <div className="footer-meta">
+      <a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a>
+      <span>Double opt-in required. Unsubscribe at any time.</span>
+      <span className="sr-only">{status}</span>
+    </div>
+  </footer>;
 }
 
 export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, lastSuccessfulRefreshAt, onRetry }: AppShellProps) {

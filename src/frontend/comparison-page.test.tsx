@@ -179,16 +179,15 @@ describe('comparison detail page', () => {
 
     const sourceMetrics = screen.getByRole('table', { name: 'Source metric comparison' });
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
-    expect(screen.getByRole('heading', { name: 'Comparison summary' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Key implications' })).toBeVisible();
     expect(screen.getByRole('img', { name: /shared metric radar/i })).toBeVisible();
     expect(within(sourceMetrics).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
     expect(within(sourceMetrics).queryByText('benchlm:category:coding')).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Workload view' })).not.toBeInTheDocument();
-    expect(screen.getAllByText('Not published').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not verified').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('heading', { name: 'Evidence provenance' })).toHaveLength(1);
-    expect(headings.indexOf('Comparison summary')).toBeLessThan(headings.indexOf('Evidence highlights'));
-    expect(headings.indexOf('Evidence highlights')).toBeLessThan(headings.indexOf('Shared metric view'));
+    expect(headings.indexOf('Key implications')).toBeLessThan(headings.indexOf('Shared metric view'));
     expect(headings.indexOf('Shared metric view')).toBeLessThan(headings.indexOf('Source metrics'));
     expect(headings.indexOf('Source metrics')).toBeLessThan(headings.indexOf('Pricing and context'));
     expect(headings.indexOf('Pricing and context')).toBeLessThan(headings.indexOf('Evidence provenance'));
@@ -201,7 +200,7 @@ describe('comparison detail page', () => {
     render(<ComparisonPage viewModel={largeComparisonViewModel()} />);
 
     const sourceMetrics = screen.getByRole('table', { name: 'Source metric comparison' });
-    const highlights = screen.getByRole('heading', { name: 'Evidence highlights' }).closest('section');
+    const highlights = screen.getByRole('heading', { name: 'Key implications' }).closest('section');
     expect(within(sourceMetrics).getAllByRole('rowheader').map((row) => row.textContent)).toEqual([
       'Published Evidence Category 00 With Full Name',
       'Published Evidence Category 01 With Full Name',
@@ -223,7 +222,7 @@ describe('comparison detail page', () => {
     render(<ComparisonPage viewModel={denseComparisonViewModel()} />);
 
     const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
-    const highlights = screen.getByRole('heading', { name: 'Evidence highlights' }).closest('section');
+    const highlights = screen.getByRole('heading', { name: 'Key implications' }).closest('section');
     const scoreEvidence = 'Across compatible supported BenchLM categories, Model A has higher scores in Coding, Multimodal, and Reasoning; Model B has a higher score in Knowledge.';
     expect(highlights).not.toBeNull();
     expect(highlights!).toHaveTextContent(scoreEvidence);
@@ -258,7 +257,7 @@ describe('comparison detail page', () => {
       ],
     }} />);
 
-    const highlights = screen.getByRole('heading', { name: 'Evidence highlights' }).closest('section');
+    const highlights = screen.getByRole('heading', { name: 'Key implications' }).closest('section');
     expect(highlights).not.toBeNull();
     expect(within(highlights!).getByText(/^Input API price:/)).toHaveTextContent('Model A has the lower verified rate');
 
@@ -279,15 +278,13 @@ describe('comparison detail page', () => {
       ],
     }} />);
 
-    const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
-    const verificationRow = within(pricingTable).getByRole('row', { name: /Verification status/ });
-    expect(verificationRow).toHaveTextContent('Conflict');
-    expect(verificationRow).toHaveTextContent('Primary');
+    const routePicker = screen.getByLabelText('Model A pricing route');
+    expect(within(routePicker).getByRole('option', { name: /direct:model-a · conflict/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Model B pricing route')).toHaveTextContent('primary');
 
     fireEvent.change(screen.getByLabelText('Model A pricing route'), { target: { value: 'openrouter:provider:model-a' } });
 
-    expect(verificationRow).not.toHaveTextContent('Conflict');
-    expect(verificationRow).toHaveTextContent('Primary');
+    expect(routePicker).toHaveValue('openrouter:provider:model-a');
   });
 
   it('keeps exact selected-route provenance and missing route fields distinct from unavailable evidence', () => {
@@ -299,7 +296,7 @@ describe('comparison detail page', () => {
     const mobilePricing = screen.getByLabelText('Pricing and context, ordered cards');
     expect(provenance).not.toBeNull();
     expect(provenance!).toHaveTextContent('Model A — route direct:model-a · source benchlm · provider provider-a-direct');
-    expect(within(pricingTable).getByRole('row', { name: /Output API price/ })).toHaveTextContent('Not published');
+    expect(within(pricingTable).getByRole('row', { name: /Output API price/ })).toHaveTextContent('Not verified');
     expect(within(mobilePricing).queryByText('Source')).not.toBeInTheDocument();
     expect(within(pricingTable).queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();
   });
@@ -313,9 +310,8 @@ describe('comparison detail page', () => {
 
     const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
     const provenance = screen.getByRole('heading', { name: 'Evidence provenance' }).closest('section');
-    expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Not published');
+    expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Not verified');
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).not.toHaveTextContent('Unavailable');
-    expect(within(pricingTable).getByRole('row', { name: /Verification status/ })).toHaveTextContent('Not published');
     expect(provenance).toHaveTextContent('Model A — Not published');
   });
 
@@ -342,11 +338,9 @@ describe('comparison detail page', () => {
     expect(screen.queryByRole('img', { name: /shared metric radar/i })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Comparable metric detail' })).toBeVisible();
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Not published').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Not verified').length).toBeGreaterThan(0);
     expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Unavailable');
-    expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Not published');
-    expect(within(pricingTable).getByRole('row', { name: /Verification status/ })).toHaveTextContent('Unavailable');
-    expect(within(pricingTable).getByRole('row', { name: /Verification status/ })).toHaveTextContent('Not published');
+    expect(within(pricingTable).getByRole('row', { name: /Input API price/ })).toHaveTextContent('Not verified');
     expect(provenance).not.toBeNull();
     expect(provenance!).toHaveTextContent('Route selection is ambiguous');
   });

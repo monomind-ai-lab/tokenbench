@@ -58,7 +58,7 @@ function renderCalculator(catalog: CatalogResponse, pathname = calculatorPath())
 }
 
 async function calculatedResult() {
-  await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+  await screen.findByRole('heading', { name: /What does API usage cost?/i });
   return screen.getByRole('region', { name: 'Calculated plan value' });
 }
 
@@ -146,8 +146,8 @@ describe('responsive calculator app shell', () => {
     renderAt('/');
 
     expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare/');
-    expect(screen.getByRole('link', { name: 'Calculate subscription vs API' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getAllByRole('link', { name: 'Compare models' })[0]).toHaveAttribute('href', '/compare/');
+    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('region', { name: 'Live decision snapshot' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
@@ -215,12 +215,11 @@ describe('responsive calculator app shell', () => {
     renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0].id }));
 
     const result = await calculatedResult();
-    const differenceHeading = within(result).getByRole('heading', { name: 'Estimated difference' });
+    const differenceHeading = within(result).getByRole('heading', { name: 'Can the plan cover this workload?' });
     const differenceMetric = differenceHeading.closest<HTMLElement>('.value-metric');
     if (!differenceMetric) throw new Error('Expected an estimated-difference metric');
 
-    expect(within(result).queryByRole('heading', { name: /Est\. Monthly Savings/i })).not.toBeInTheDocument();
-    expect(within(differenceMetric).getByText('Unavailable')).toHaveAttribute('data-savings-tone', 'neutral');
+    expect(within(differenceMetric).getByText('Not verified')).toHaveAttribute('data-savings-tone', 'neutral');
     expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
     expect(within(result).getByText('Efficiency').parentElement).toHaveTextContent('Unavailable');
     expect(within(result).queryByText(/^Breakeven:/)).not.toBeInTheDocument();
@@ -230,7 +229,7 @@ describe('responsive calculator app shell', () => {
     ['a lower fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] }, 'Subscription is cheaper'],
     ['an equal fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 50_000_000 })] }, 'Subscription and pay as you go cost the same'],
     ['a more expensive fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 80_000_000 })] }, 'Pay as you go is cheaper'],
-    ['an entitlement without published capacity', calculatorFixture('rolling'), 'Unable to compare'],
+    ['an entitlement without published capacity', calculatorFixture('rolling'), 'Not verified'],
   ])('uses eligibility and savings to explain %s', async (_name, catalog, expectedRecommendation) => {
     renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0]?.id ?? '' }));
 
@@ -316,7 +315,7 @@ describe('responsive calculator app shell', () => {
   it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
     renderAt('/tools/subscriptions-vs-apis/');
 
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '20000001' } });
 
     const guidance = await screen.findByRole('status', { name: 'High-volume optimization guidance' });
@@ -327,7 +326,7 @@ describe('responsive calculator app shell', () => {
   it('renders derived metrics, evidence links, and separated pricing basis comparisons', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /API[- ]equivalent value/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /What does API usage cost?/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Direct provider API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenRouter API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
@@ -338,7 +337,7 @@ describe('responsive calculator app shell', () => {
   it('renders the TokenBench shared chrome with its canonical navigation', async () => {
     render(<App />);
 
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
@@ -357,7 +356,7 @@ describe('responsive calculator app shell', () => {
   it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {
     render(<App />);
 
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(localStorage.getItem('tokenbench:theme')).toBeNull();
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
@@ -402,7 +401,7 @@ describe('responsive calculator app shell', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     const providerGroup = screen.getByRole('group', { name: /Provider selection/i });
     expect(within(providerGroup).getByRole('radio', { name: 'Provider A' })).toBeInTheDocument();
     expect(within(providerGroup).queryByRole('radio', { name: 'Provider B' })).not.toBeInTheDocument();
@@ -419,7 +418,7 @@ describe('responsive calculator app shell', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: /API Equivalent Value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     const planGroup = screen.getByRole('group', { name: /Plan Selection/i });
     expect(within(planGroup).getByRole('radio', { name: /Starter/i })).toBeInTheDocument();
     expect(within(planGroup).queryByRole('radio', { name: /Free/i })).not.toBeInTheDocument();
@@ -428,7 +427,7 @@ describe('responsive calculator app shell', () => {
 
   it('redistributes selected model usage and changes derived values when a preset is edited', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
 
     const modelGroup = screen.getByRole('group', { name: /Model selection/i });
     const checkboxes = within(modelGroup).getAllByRole('checkbox');
@@ -455,7 +454,7 @@ describe('responsive calculator app shell', () => {
 
   it('keeps calculator state while switching language and returns to the light theme', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     const usage = screen.getByLabelText(/Expected monthly usage/i);
     fireEvent.change(usage, { target: { value: '4200000' } });
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
@@ -477,7 +476,7 @@ describe('responsive calculator app shell', () => {
     const retry = screen.getByRole('button', { name: /Retry loading catalog/i });
     respondWithCatalog();
     fireEvent.click(retry);
-    await waitFor(() => expect(screen.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('heading', { name: /What does API usage cost?/i })).toBeInTheDocument());
   });
 
   it('announces one recovery banner when the fallback notice duplicates the catalog error', () => {
@@ -520,7 +519,7 @@ describe('responsive calculator app shell', () => {
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
     expect(document.querySelector('[data-layout="compact"]')).toBeInTheDocument();
     expect(screen.getAllByTestId('offer-card').length).toBeGreaterThan(0);
   });
@@ -560,7 +559,7 @@ describe('responsive calculator app shell', () => {
 
   it('gives every range control a minimum 44px touch target', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /API[- ]equivalent value/i });
+    await screen.findByRole('heading', { name: /What does API usage cost?/i });
 
     const ranges = screen.getAllByRole('slider');
     expect(ranges.length).toBeGreaterThan(0);
@@ -573,7 +572,7 @@ describe('responsive calculator app shell', () => {
       { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] },
       calculatorPath({ planId: 'provider-a:comparable', modelIds: selectedModelIds.join(','), weights: '3334,3333,3333' }),
     );
-    const savingsHeading = await screen.findByRole('heading', { name: /Est\. Monthly Savings/i });
+    const savingsHeading = await screen.findByRole('heading', { name: /Can the plan cover this workload?/i });
     expect(savingsHeading).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Cost-first recommendation/i })).not.toBeInTheDocument();
 

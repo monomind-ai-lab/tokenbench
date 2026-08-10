@@ -5,6 +5,8 @@ const ORIGIN = 'https://tokenbench.monomind.one';
 
 function signup(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
+    firstName: 'Ada',
+    company: 'Analytical Engines',
     email: 'builder@example.com',
     monthlyCheatsheet: true,
     modelAndPriceAlerts: false,
