@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   DecisionPickEntry,
@@ -10,13 +10,26 @@ import { HomePage } from './home-page';
 
 const UPDATED_AT = '2026-08-06T12:00:00.000Z';
 
-const DECISION_PICK_GROUPS: readonly DecisionPickGroup[] = [
+const EMPTY_DECISION_PICK_GROUPS: readonly DecisionPickGroup[] = [
   { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [] },
   { key: 'llm-agentic', label: 'Agentic BenchAlign leaders', status: 'benchalign', entries: [] },
   { key: 'llm-coding', label: 'Coding BenchAlign leaders', status: 'benchalign', entries: [] },
   { key: 'llm-reasoning', label: 'Reasoning evidence lens', status: 'evidence-lens', entries: [] },
   { key: 'multimodal-vision-documents', label: 'Vision and documents evidence lens', status: 'evidence-lens', entries: [] },
   { key: 'llm-knowledge', label: 'Knowledge evidence lens', status: 'evidence-lens', entries: [] },
+];
+
+function leaderFor(routePath: string, name: string, score: number): DecisionPickEntry {
+  return supportedOverallLeader({ modelKey: `openai:${name}`, slug: name, name, score, routePath });
+}
+
+const DECISION_PICK_GROUPS: readonly DecisionPickGroup[] = [
+  { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/overall/', 'Model Alpha', 92)] },
+  { key: 'llm-agentic', label: 'Agentic BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/agentic/', 'Model Agentic', 88)] },
+  { key: 'llm-coding', label: 'Coding BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/coding/', 'Model Coding', 84)] },
+  { key: 'llm-reasoning', label: 'Reasoning evidence lens', status: 'evidence-lens', entries: [leaderFor('/leaderboards/llm/reasoning/', 'Model Reasoning', 80)] },
+  { key: 'multimodal-vision-documents', label: 'Vision and documents evidence lens', status: 'evidence-lens', entries: [leaderFor('/leaderboards/multimodal/vision-documents/', 'Model Multimodal', 77)] },
+  { key: 'llm-knowledge', label: 'Knowledge evidence lens', status: 'evidence-lens', entries: [leaderFor('/leaderboards/llm/knowledge/', 'Model Knowledge', 75)] },
 ];
 
 function supportedOverallLeader(overrides: Partial<DecisionPickEntry> = {}): DecisionPickEntry {
@@ -76,6 +89,7 @@ function unavailableHomeSnapshot(): HomeDecisionSnapshot {
 function homeSummaryFixture(
   snapshot: HomeDecisionSnapshot = readyHomeSnapshot(),
   freshness: BenchmarkApiEnvelope<BenchmarkSummaryData>['freshness'] = { status: 'fresh', checkedAt: UPDATED_AT },
+  decisionPicks: readonly DecisionPickGroup[] = DECISION_PICK_GROUPS,
 ): BenchmarkApiEnvelope<BenchmarkSummaryData> {
   return {
     revision: 'published-home-r1',
@@ -86,7 +100,7 @@ function homeSummaryFixture(
       { sourceId: 'openrouter', label: 'Catalog and pricing data from OpenRouter', url: 'https://openrouter.ai/models', updatedAt: UPDATED_AT },
     ],
     data: {
-      decisionPicks: DECISION_PICK_GROUPS,
+      decisionPicks,
       homeDecisionSnapshot: snapshot,
     },
   };
@@ -113,6 +127,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('link', { name: 'Calculate subscription vs API' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByText(/Updated /)).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What TokenBench gives you', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Make the next decision with less guessing', level: 2 })).toBeInTheDocument();
@@ -135,42 +150,43 @@ describe('HomePage', () => {
     expect(within(capabilities).getByRole('heading', { name: 'Shareable results' })).toBeInTheDocument();
   });
 
-  it('renders all four live snapshot slots from one defensible envelope', async () => {
+  it('renders the five decision-route leader cards from one defensible envelope', async () => {
     const { fetchMock } = renderWithHomeSummary();
 
-    const snapshot = await screen.findByRole('region', { name: 'Live decision snapshot' });
+    const snapshot = await screen.findByRole('region', { name: 'Market at a glance' });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks');
-    expect(within(snapshot).getByText('BenchAlign leader')).toBeInTheDocument();
-    expect(within(snapshot).getByText('Value-frontier leader')).toBeInTheDocument();
-    expect(within(snapshot).getByText('Lowest verified API rate')).toBeInTheDocument();
-    expect(within(snapshot).getAllByText('Model Alpha')).toHaveLength(4);
-    expect(within(snapshot).getAllByText('$2.50 / 1M')).toHaveLength(2);
+    expect(within(snapshot).getByRole('heading', { name: 'Overall', level: 3 })).toBeInTheDocument();
+    expect(within(snapshot).getByRole('heading', { name: 'Coding', level: 3 })).toBeInTheDocument();
+    expect(within(snapshot).getByRole('heading', { name: 'Agentic', level: 3 })).toBeInTheDocument();
+    expect(within(snapshot).getByRole('heading', { name: 'Reasoning', level: 3 })).toBeInTheDocument();
+    expect(within(snapshot).getByRole('heading', { name: 'Multimodal', level: 3 })).toBeInTheDocument();
+    expect(within(snapshot).queryByRole('heading', { name: 'Knowledge', level: 3 })).not.toBeInTheDocument();
+    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(5);
+    expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/leaderboards/llm/overall/');
     expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
-    expect(within(snapshot).getByRole('img', { name: 'Price versus performance' })).toHaveAccessibleDescription(
-      'Model Alpha: $2.50 per 1M tokens and 92 score. Higher performance and lower representative price are better.',
-    );
-    expect(within(snapshot).getByText(/Higher performance and lower representative price are better\./)).toBeInTheDocument();
+    expect(within(snapshot).getAllByText('Source rank #1')).toHaveLength(3);
+    expect(within(snapshot).getAllByText('Not ranked by source')).toHaveLength(2);
+    expect(within(snapshot).getByRole('link', { name: 'Open all leaderboards' })).toHaveAttribute('href', '/leaderboards/');
+    expect(within(snapshot).getByRole('link', { name: 'Compare two models' })).toHaveAttribute('href', '/compare/');
     expect(within(snapshot).getByRole('link', { name: 'How rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
-    for (const card of snapshot.querySelectorAll('.home-snapshot-card')) {
-      expect(within(card as HTMLElement).queryByRole('link', { name: /Data from|Catalog and pricing/i })).not.toBeInTheDocument();
-    }
-    expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(3);
+    expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(5);
   });
 
-  it('discloses the published date, freshness, and sources once after the highlights', async () => {
+  it('labels provenance without repeating a source-artifact update ledger', async () => {
     renderWithHomeSummary();
 
-    const snapshot = await screen.findByRole('region', { name: 'Live decision snapshot' });
-    const evidence = within(snapshot).getByLabelText('Decision snapshot evidence');
+    const snapshot = await screen.findByRole('region', { name: 'Market at a glance' });
+    const provenance = snapshot.querySelector('.home-snapshot-provenance');
 
-    expect(within(snapshot).getAllByLabelText('Decision snapshot evidence')).toHaveLength(1);
-    expect(evidence).toHaveTextContent('Published');
-    expect(evidence).toHaveTextContent('Checked');
-    expect(evidence).toHaveTextContent('Fresh');
-    expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(within(evidence).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toHaveAttribute('href', 'https://openrouter.ai/models');
+    expect(provenance).not.toBeNull();
+    expect(provenance!).toHaveTextContent('Source published');
+    expect(provenance!).toHaveTextContent('Checked');
+    expect(provenance!).not.toHaveTextContent('Updated');
+    expect(within(provenance as HTMLElement).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
+    expect(within(provenance as HTMLElement).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toHaveAttribute('href', 'https://openrouter.ai/models');
+    expect(within(snapshot).queryByLabelText('Decision snapshot evidence')).not.toBeInTheDocument();
   });
 
   it('keeps loading distinct from published unavailable facts', async () => {
@@ -181,7 +197,7 @@ describe('HomePage', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<HomePage />);
 
-    const snapshot = screen.getByRole('region', { name: 'Live decision snapshot' });
+    const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
 
     expect(
       within(snapshot).getByText('Loading the published decision snapshot.'),
@@ -193,29 +209,36 @@ describe('HomePage', () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
-    expect(await within(snapshot).findAllByText('Model Alpha')).toHaveLength(4);
+    expect(await within(snapshot).findAllByText('Model Alpha')).toHaveLength(1);
     expect(unavailableCountWhileLoading).toBe(0);
   });
 
-  it('renders one request error without inventing unavailable snapshot facts', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
+  it('offers a dedicated retry state when the published snapshot cannot be transported', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
     render(<HomePage />);
 
-    const snapshot = screen.getByRole('region', { name: 'Live decision snapshot' });
+    const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
     const error = await within(snapshot).findByRole('alert');
 
     expect(error).toHaveTextContent('Published decision snapshot could not be loaded.');
     expect(error).toHaveTextContent('Benchmark request failed (500).');
     expect(within(snapshot).queryByText('Unavailable')).not.toBeInTheDocument();
-    expect(within(snapshot).queryByLabelText('Decision snapshot evidence')).not.toBeInTheDocument();
+    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(0);
+
+    fireEvent.click(within(error).getByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.length).toBeGreaterThan(1));
   });
 
-  it('states unavailable facts without substituting sample data', async () => {
-    renderWithHomeSummary(homeSummaryFixture(unavailableHomeSnapshot()));
+  it('omits structurally unsupported cards instead of labelling them unavailable', async () => {
+    renderWithHomeSummary(homeSummaryFixture(unavailableHomeSnapshot(), undefined, EMPTY_DECISION_PICK_GROUPS));
 
-    const snapshot = await screen.findByRole('region', { name: 'Live decision snapshot' });
+    const snapshot = await screen.findByRole('region', { name: 'Market at a glance' });
 
-    expect(within(snapshot).getAllByText('Unavailable')).toHaveLength(4);
+    expect(within(snapshot).queryByText('Unavailable')).not.toBeInTheDocument();
+    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(0);
+    expect(within(snapshot).getByText('No decision route has a supported leader in the active revision.')).toBeInTheDocument();
     expect(within(snapshot).queryByText(/sample|example model/i)).not.toBeInTheDocument();
     expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(0);
   });
@@ -230,10 +253,8 @@ describe('HomePage', () => {
 
     expect(staleNotice).toHaveAttribute('role', 'status');
     expect(staleNotice).toHaveTextContent('Refresh overdue.');
-    const snapshot = screen.getByRole('region', { name: 'Live decision snapshot' });
-    const evidence = within(snapshot).getByLabelText('Decision snapshot evidence');
+    const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
     expect(snapshot).toHaveTextContent('Model Alpha');
-    expect(evidence).toHaveTextContent('Stale');
-    expect(evidence).toHaveTextContent('Refresh overdue.');
+    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(5);
   });
 });

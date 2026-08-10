@@ -1123,7 +1123,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
   it('renders the approved Home snapshot instead of independent cached teaser rows', () => {
     render(<HomePage />);
 
-    expect(screen.getByRole('region', { name: 'Live decision snapshot' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Market at a glance' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Overall Model Value', level: 3 })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Human Preference', level: 3 })).not.toBeInTheDocument();

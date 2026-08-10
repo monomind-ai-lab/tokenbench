@@ -6,7 +6,7 @@ import { LANGUAGES } from '../types';
 import { getResponsiveLayout } from './responsive';
 import { NewsletterSignup } from './newsletter-signup';
 import { SiteThemeProvider } from './site-preferences';
-import { formatDateTime, StatusBanner } from './ui';
+import { StatusBanner } from './ui';
 import type { CatalogPhase } from './use-catalog';
 
 interface AppShellProps {
@@ -21,7 +21,6 @@ interface AppShellProps {
   readonly catalogPhase?: CatalogPhase;
   readonly notice?: string;
   readonly error?: string;
-  readonly lastSuccessfulRefreshAt: string | null;
   readonly onRetry?: () => void;
 }
 
@@ -34,7 +33,6 @@ interface SiteHeaderProps {
 }
 
 interface SiteFooterProps {
-  readonly status: ReactNode;
   readonly notice: ReactNode;
 }
 
@@ -60,7 +58,12 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
   </header>;
 }
 
-export function SiteFooter({ status, notice }: SiteFooterProps) {
+/**
+ * The footer is a decision surface, not a data log. It never repeats catalog
+ * refresh state or source-update history; those belong to the pages that
+ * publish the evidence.
+ */
+export function SiteFooter({ notice }: SiteFooterProps) {
   return <footer className="app-footer">
     <div className="footer-grid">
       <section className="footer-brand" aria-label="About TokenBench">
@@ -86,12 +89,11 @@ export function SiteFooter({ status, notice }: SiteFooterProps) {
     <div className="footer-meta">
       <a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a>
       <span>Double opt-in required. Unsubscribe at any time.</span>
-      <span className="sr-only">{status}</span>
     </div>
   </footer>;
 }
 
-export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, lastSuccessfulRefreshAt, onRetry }: AppShellProps) {
+export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, onRetry }: AppShellProps) {
   // Match server markup on the first client render; the viewport sync happens
   // after hydration so narrow comparison pages are never abandoned in a
   // mismatched wide-shell DOM.
@@ -112,7 +114,7 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
         {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
         {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
         <main id="page-content" className="page-main" tabIndex={-1}>{children}</main>
-        <SiteFooter status={catalogPhase ? `Catalog refresh: ${formatDateTime(lastSuccessfulRefreshAt)}${catalogPhase === 'loading' ? ' · Loading' : ''}` : 'Source-aware decision support.'} notice="Verify provider evidence before purchasing." />
+        <SiteFooter notice="Verify provider evidence before purchasing." />
       </div>
     </SiteThemeProvider>
   );

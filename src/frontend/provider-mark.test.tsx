@@ -32,7 +32,6 @@ describe('ProviderMark', () => {
     const shell = (theme: 'light' | 'dark', markTheme?: 'light' | 'dark') => (
       <AppShell
         language="en"
-        lastSuccessfulRefreshAt={null}
         onLanguageChange={vi.fn()}
         onThemeToggle={vi.fn()}
         theme={theme}

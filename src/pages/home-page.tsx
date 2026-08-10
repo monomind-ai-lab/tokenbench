@@ -1,12 +1,10 @@
 import { ArrowRight, BadgeDollarSign, Download, Layers3, TrendingUp, Workflow } from 'lucide-react';
-import type { ReactNode } from 'react';
-import type { DecisionPickEntry, HomeDecisionSlot, HomeRepresentativeRate, PricePerformancePoint } from '../benchmarks/decision-picks';
-import { LeaderboardEvidence } from '../frontend/leaderboard-table';
+import type { DecisionPickEntry, DecisionPickGroup } from '../benchmarks/decision-picks';
 import { ProviderMark } from '../frontend/provider-mark';
-import { useHomeDecisionSnapshot } from '../frontend/use-benchmarks';
+import { useDecisionPicks } from '../frontend/use-benchmarks';
 import { HOME_PAGE_COPY } from '../brand/site-config';
 import { GUIDE_BY_SLUG, guidePath } from '../guides/content';
-import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
+import { LEADERBOARD_ROUTES, ROUTE_PATHS, type LeaderboardKey } from '../routing/routes';
 
 const PRODUCT_FEATURES = [
   {
@@ -42,7 +40,25 @@ const CURATED_GUIDE_SLUGS = [
   'track-claude-code-usage',
 ] as const;
 
-type HomeSnapshotEntry = DecisionPickEntry | HomeRepresentativeRate;
+/**
+ * The market section republishes leaders for the five decision routes. Cards
+ * are omitted when the active revision has no supported leader, so the page
+ * never renders a structurally unavailable card.
+ */
+const MARKET_LEADER_CARDS: readonly { readonly key: LeaderboardKey; readonly title: string }[] = [
+  { key: 'llm-overall', title: 'Overall' },
+  { key: 'llm-coding', title: 'Coding' },
+  { key: 'llm-agentic', title: 'Agentic' },
+  { key: 'llm-reasoning', title: 'Reasoning' },
+  { key: 'multimodal-vision-documents', title: 'Multimodal' },
+];
+
+interface MarketLeaderCard {
+  readonly key: LeaderboardKey;
+  readonly title: string;
+  readonly status: DecisionPickGroup['status'];
+  readonly leader: DecisionPickEntry;
+}
 
 function formatScore(score: number, unit: string): string {
   return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score)} ${unit}`;
@@ -52,105 +68,79 @@ function formatRate(rate: number): string {
   return `$${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(rate)} / 1M`;
 }
 
-function DecisionSnapshotCard<T extends HomeSnapshotEntry>({
-  title,
-  slot,
-  children,
-}: {
-  readonly title: string;
-  readonly slot: HomeDecisionSlot<T>;
-  readonly children: (value: T) => ReactNode;
-}) {
+function formatCheckedAt(value: string): string {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return 'Unavailable';
+  return new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }).format(new Date(timestamp));
+}
+
+/**
+ * Reads the published leader for each decision route without sorting or
+ * re-ranking a filtered subset. `evidence-lens` routes publish evidence the
+ * source does not rank, so they are labelled instead of given a position.
+ */
+function marketLeaderCards(groups: readonly DecisionPickGroup[] | null): readonly MarketLeaderCard[] {
+  if (groups === null) return [];
+  return MARKET_LEADER_CARDS.flatMap(({ key, title }) => {
+    const group = groups.find((candidate) => candidate.key === key);
+    const leader = group?.entries[0];
+    if (!group || !leader) return [];
+    return [{ key, title, status: group.status, leader }];
+  });
+}
+
+function MarketLeaderArticle({ card }: { readonly card: MarketLeaderCard; readonly key?: string }) {
+  const { leader } = card;
   return <article className="panel home-snapshot-card">
-    <h3>{title}</h3>
-    {slot.status === 'unavailable' ? <p className="home-snapshot-unavailable" role="status">Unavailable</p> : <>
-      <a className="home-snapshot-model" href={slot.value.routePath}>
-        <ProviderMark providerId={slot.value.provider} providerName={slot.value.provider} decorative size={20} />
-        <span>{slot.value.name}</span>
-        <ArrowRight aria-hidden="true" size={14} />
-      </a>
-      <div className="home-snapshot-detail">{children(slot.value)}</div>
-    </>}
+    <div className="home-snapshot-card-heading">
+      <h3>{card.title}</h3>
+      <span className="home-snapshot-rank">{card.status === 'benchalign' && Number.isSafeInteger(leader.rank) && leader.rank > 0 ? `Source rank #${leader.rank}` : 'Not ranked by source'}</span>
+    </div>
+    <a className="home-snapshot-model" href={leader.routePath}>
+      <ProviderMark providerId={leader.provider} providerName={leader.provider} decorative size={20} />
+      <span>{leader.name}</span>
+      <ArrowRight aria-hidden="true" size={14} />
+    </a>
+    <dl>
+      <div><dt>Published value</dt><dd>{formatScore(leader.score, leader.unit)}</dd></div>
+      {leader.representativePriceUsdPerMillion === null
+        ? null
+        : <div><dt>Representative price</dt><dd>{formatRate(leader.representativePriceUsdPerMillion)}</dd></div>}
+    </dl>
   </article>;
 }
 
-function pricePerformanceDescription(points: readonly PricePerformancePoint[]): string {
-  const values = points.map((point) => `${point.name}: $${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(point.representativePriceUsdPerMillion)} per 1M tokens and ${formatScore(point.score, point.unit)}.`);
-  return `${values.join(' ')} Higher performance and lower representative price are better.`;
-}
-
-function plotCoordinate(value: number, minimum: number, maximum: number, start: number, end: number): number {
-  if (maximum === minimum) return (start + end) / 2;
-  return start + ((value - minimum) / (maximum - minimum)) * (end - start);
-}
-
-function PricePerformancePlot({ points }: { readonly points: readonly PricePerformancePoint[] }) {
-  const descriptionId = 'home-price-performance-description';
-  if (points.length === 0) {
-    return <article className="panel home-price-performance-card">
-      <h3>Price versus performance</h3>
-      <p className="home-snapshot-unavailable" role="status">Unavailable</p>
-      <p className="muted">No supported model has both a representative verified API rate and comparable overall performance evidence in the published snapshot.</p>
-    </article>;
-  }
-
-  const prices = points.map((point) => point.representativePriceUsdPerMillion);
-  const scores = points.map((point) => point.score);
-  const lowPrice = Math.min(...prices);
-  const highPrice = Math.max(...prices);
-  const lowScore = Math.min(...scores);
-  const highScore = Math.max(...scores);
-  const description = pricePerformanceDescription(points);
-
-  return <article className="panel home-price-performance-card">
-    <div className="home-price-performance-heading"><div><h3>Price versus performance</h3><p className="muted">Supported overall evidence paired with a representative verified API rate.</p></div><a href={LEADERBOARD_ROUTES['llm-overall'].pathname}>Open overall benchmarks <ArrowRight aria-hidden="true" size={14} /></a></div>
-    <svg className="home-price-performance-plot" role="img" aria-label="Price versus performance" aria-describedby={descriptionId} viewBox="0 0 320 188">
-      <line x1="34" x2="300" y1="154" y2="154" />
-      <line x1="34" x2="34" y1="20" y2="154" />
-      <text x="166" y="181" textAnchor="middle">Lower representative price</text>
-      <text x="10" y="89" textAnchor="middle" transform="rotate(-90 10 89)">Higher performance</text>
-      {points.map((point) => {
-        const x = plotCoordinate(point.representativePriceUsdPerMillion, lowPrice, highPrice, 56, 282);
-        const y = plotCoordinate(point.score, lowScore, highScore, 132, 42);
-        return <g key={point.modelKey} className="home-price-performance-point">
-          <circle cx={x} cy={y} r="7" />
-          <text x={x} y={y - 12} textAnchor="middle">{point.name}</text>
-        </g>;
-      })}
-    </svg>
-    <p id={descriptionId} className="home-price-performance-description">{description}</p>
-  </article>;
-}
-
-function LiveDecisionSnapshot() {
-  const state = useHomeDecisionSnapshot();
+function MarketAtAGlance() {
+  const state = useDecisionPicks();
   const envelope = state.envelope;
-  const snapshot = state.homeDecisionSnapshot;
+  const cards = marketLeaderCards(state.decisionPicks);
 
-  return <section className="panel home-snapshot-section" aria-label="Live decision snapshot">
-    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>A single published summary keeps the current decision facts together and preserves unavailable evidence as unavailable.</p></div></div>
-    {snapshot === null || envelope === null ? state.phase === 'loading'
+  return <section className="panel home-snapshot-section" aria-label="Market at a glance">
+    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>Leaders for each decision route, republished from the active source revision without recalculation.</p></div></div>
+    {state.phase === 'loading'
       ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p>
       : state.phase === 'error'
-        ? <p className="home-snapshot-state home-snapshot-state-error" role="alert">Published decision snapshot could not be loaded. {state.error ?? 'Benchmark request failed.'}</p>
-        : <p className="home-snapshot-state" role="status">Published decision snapshot is unavailable. {state.error ?? 'No published snapshot was received.'}</p>
-      : <>
-        {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</p> : null}
-        <div className="home-snapshot-grid">
-          <DecisionSnapshotCard title="BenchAlign leader" slot={snapshot.benchAlignLeader}>{(leader) => <dl><div><dt>Overall score</dt><dd>{formatScore(leader.score, leader.unit)}</dd></div></dl>}</DecisionSnapshotCard>
-          <DecisionSnapshotCard title="Value-frontier leader" slot={snapshot.valueFrontierLeader}>{(leader) => <dl><div><dt>Representative price</dt><dd>{leader.representativePriceUsdPerMillion === null ? 'Unavailable' : formatRate(leader.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
-          <DecisionSnapshotCard title="Lowest verified API rate" slot={snapshot.lowestVerifiedRepresentativeRate}>{(rate) => <dl><div><dt>Representative price</dt><dd>{formatRate(rate.representativePriceUsdPerMillion)}</dd></div></dl>}</DecisionSnapshotCard>
-          <PricePerformancePlot points={snapshot.pricePerformancePoints} />
+        ? <div className="home-snapshot-state home-snapshot-state-error" role="alert">
+          <p>Published decision snapshot could not be loaded. {state.error ?? 'Benchmark request failed.'}</p>
+          <button className="button button-secondary" onClick={state.retry} type="button">Retry</button>
         </div>
-        <LeaderboardEvidence
-          publishedAt={envelope.publishedAt}
-          freshness={envelope.freshness}
-          attribution={envelope.attribution}
-          label="Decision snapshot evidence"
-          compact
-        />
-      </>}
-    <a className="home-snapshot-method" href={ROUTE_PATHS.methodologyBenchAlign}>How rankings work <ArrowRight aria-hidden="true" size={14} /></a>
+        : <>
+          {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</p> : null}
+          {cards.length === 0
+            ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
+            : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}
+          {envelope === null ? null : <p className="home-snapshot-provenance">
+            <span>Source published {formatCheckedAt(envelope.publishedAt)}</span>
+            <span aria-hidden="true">·</span>
+            <span>Checked {formatCheckedAt(envelope.freshness.checkedAt)}</span>
+            {envelope.attribution.map((source) => <a href={source.url} key={source.sourceId} rel="noreferrer" target="_blank">{source.label}</a>)}
+          </p>}
+        </>}
+    <div className="home-snapshot-actions">
+      <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Open all leaderboards <ArrowRight aria-hidden="true" size={14} /></a>
+      <a className="button button-secondary" href={ROUTE_PATHS.compareHub}>Compare two models <ArrowRight aria-hidden="true" size={14} /></a>
+      <a className="home-snapshot-method" href={ROUTE_PATHS.methodologyBenchAlign}>How rankings work <ArrowRight aria-hidden="true" size={14} /></a>
+    </div>
   </section>;
 }
 
@@ -168,7 +158,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <LiveDecisionSnapshot />
+      <MarketAtAGlance />
 
       <section className="panel home-calculator-banner" aria-labelledby="home-calculator-heading">
         <div><span className="eyebrow">Subscribe vs API</span><h2 id="home-calculator-heading">Should you subscribe or pay as you go?</h2><p>Choose your model mix, describe the monthly workload, and inspect the resulting cost and coverage implication without assuming unpublished capacity.</p></div>

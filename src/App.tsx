@@ -50,7 +50,6 @@ function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalo
       catalogPhase={catalogState?.phase}
       notice={catalogState?.notice}
       error={catalogState?.error}
-      lastSuccessfulRefreshAt={catalogState?.lastSuccessfulRefreshAt ?? null}
       onRetry={catalogState?.retry}
     >
       {children}

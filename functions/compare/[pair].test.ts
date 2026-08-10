@@ -242,9 +242,14 @@ describe('dynamic comparison Pages Function', () => {
     expect(response.status).toBe(200);
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(rendered.getByRole('heading', { level: 1, name: 'Model A vs Model B' })).toBeTruthy();
-    expect(rendered.getByRole('heading', { name: 'Comparison summary' })).toBeTruthy();
+    expect(rendered.getByRole('heading', { name: 'Key implications' })).toBeTruthy();
+    expect(rendered.queryByRole('heading', { name: 'Evidence highlights' })).toBeNull();
     expect(within(rendered.getByRole('table', { name: 'Source metric comparison' })).getByRole('rowheader', { name: 'Coding' })).toBeTruthy();
-    expect(within(rendered.getByRole('table', { name: 'Route pricing and context comparison' })).getByRole('row', { name: /Verification status/ })).toBeTruthy();
+    const pricingTable = rendered.getByRole('table', { name: 'Route pricing and context comparison' });
+    expect(within(pricingTable).queryByRole('rowheader', { name: 'Verification status' })).toBeNull();
+    expect(within(pricingTable).queryByRole('rowheader', { name: 'Maximum input' })).toBeNull();
+    expect(within(pricingTable).queryByRole('rowheader', { name: 'Maximum output' })).toBeNull();
+    expect(within(pricingTable).queryByRole('rowheader', { name: 'Supported parameters' })).toBeNull();
     expect(root.querySelectorAll('.comparison-provenance')).toHaveLength(1);
     expect(provenance).not.toBeNull();
     expect(rootWithoutProvenance.textContent).not.toContain('benchlm:category:coding');

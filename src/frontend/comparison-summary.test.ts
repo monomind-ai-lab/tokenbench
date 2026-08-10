@@ -247,7 +247,7 @@ describe('comparisonSummary', () => {
     const summary = comparisonSummary(sparseComparisonViewModel());
 
     expect(summary.coverage).toBe('none');
-    expect(summary.sentences.join(' ')).toMatch(/not enough shared evidence/i);
+    expect(summary.sentences).toEqual([]);
     expect(summary.sentences.join(' ')).not.toMatch(/wins|best model/i);
   });
 
@@ -277,10 +277,10 @@ describe('comparisonSummary', () => {
     ));
 
     expect(summary).toEqual({
-      heading: 'Comparison summary',
+      heading: 'Key implications',
       coverage: 'strong',
       sentences: [
-        'Across compatible supported BenchLM categories, Alpha has higher scores in Coding, Knowledge, and Multimodal; Beta has a higher score in Reasoning.',
+        'Across compatible supported BenchLM categories, Alpha has higher scores in Multimodal, Coding, and Knowledge; Beta has a higher score in Reasoning.',
         'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
         'Output API price: Beta has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).',
         'Context window: Alpha has the larger published context window (128,000 tokens vs 64,000 tokens).',
@@ -305,7 +305,7 @@ describe('comparisonSummary', () => {
     ));
 
     expect(summary.sentences).toEqual([
-      'Across compatible supported BenchLM categories, Alpha has higher scores in Coding and Multimodal; Beta has higher scores in Knowledge and Reasoning.',
+      'Across compatible supported BenchLM categories, Alpha has higher scores in Multimodal and Coding; Beta has higher scores in Knowledge and Reasoning.',
       'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
       'Output API price: Beta has the lower verified rate ($3 / 1M tokens vs $4 / 1M tokens).',
     ]);
@@ -323,7 +323,7 @@ describe('comparisonSummary', () => {
     ]));
 
     expect(summary.sentences).toEqual([
-      'Across compatible supported BenchLM categories, Alpha has higher scores in Coding, Multimodal, and Vision; Beta has higher scores in Agentic, Knowledge, and Reasoning.',
+      'Across compatible supported BenchLM categories, Alpha has higher scores in Multimodal, Coding, and Vision; Beta has higher scores in Knowledge, Agentic, and Reasoning.',
     ]);
   });
 
@@ -422,7 +422,6 @@ describe('comparisonSummary', () => {
     expect(utf8ByteLength(compactAlphaName)).toBe(COMPACT_LABEL_BYTE_CAP);
     expect(summary.sentences).toEqual([
       `On ${compactCategory}, ${compactAlphaName} has a higher supported BenchLM score (90 vs 80).`,
-      'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
     ]);
     expectSafeSummarySentences(summary.sentences);
   });
@@ -435,7 +434,6 @@ describe('comparisonSummary', () => {
 
     expect(summary.sentences).toEqual([
       'On Coding, Alpha🧠é has a higher supported BenchLM score (90 vs 80).',
-      'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
     ]);
     expectSafeSummarySentences(summary.sentences);
   });
@@ -503,16 +501,15 @@ describe('comparisonSummary', () => {
     expectSafeSummarySentences(summary.sentences);
   });
 
-  it('adds a limited-evidence caveat after one compatible shared metric', () => {
+  it('states the single shared-metric finding without metric-count filler', () => {
     const models = pair();
     const summary = comparisonSummary(comparisonWith(models, [sharedRow(models[0], models[1], 'coding', 88, 80)]));
 
     expect(summary).toEqual({
-      heading: 'Comparison summary',
+      heading: 'Key implications',
       coverage: 'limited',
       sentences: [
         'On Coding, Alpha has a higher supported BenchLM score (88 vs 80).',
-        'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
       ],
     });
   });
@@ -524,9 +521,7 @@ describe('comparisonSummary', () => {
       [sharedRow(models[0], models[1], 'coding', 80.0001, 80.0002)],
     ));
 
-    expect(summary.sentences).toEqual([
-      'Only 1 compatible shared BenchLM metric is available, so the score evidence is limited.',
-    ]);
+    expect(summary.sentences).toEqual([]);
   });
 
   it('does not describe four rounding-equal score pairs as exact ties', () => {
@@ -564,11 +559,10 @@ describe('comparisonSummary', () => {
     ]));
 
     expect(summary).toEqual({
-      heading: 'Comparison summary',
+      heading: 'Key implications',
       coverage: 'none',
       sentences: [
         'Input API price: Alpha has the lower verified rate ($1 / 1M tokens vs $2 / 1M tokens).',
-        'There is not enough shared evidence to make a supported BenchLM score comparison.',
       ],
     });
   });
@@ -580,9 +574,7 @@ describe('comparisonSummary', () => {
       [price(models[1], 1.00002, 3)],
     ]));
 
-    expect(summary.sentences).toEqual([
-      'There is not enough shared evidence to make a supported BenchLM score comparison.',
-    ]);
+    expect(summary.sentences).toEqual([]);
   });
 
   it('treats signed-zero rates as equal without an advantage sentence', () => {
@@ -592,9 +584,7 @@ describe('comparisonSummary', () => {
       [price(models[1], 0, 3)],
     ]));
 
-    expect(summary.sentences).toEqual([
-      'There is not enough shared evidence to make a supported BenchLM score comparison.',
-    ]);
+    expect(summary.sentences).toEqual([]);
   });
 
   it('honors the published route instead of recalculating a lower-priced route', () => {
@@ -610,7 +600,6 @@ describe('comparisonSummary', () => {
     expect(summary.sentences).toEqual([
       'Input API price: Beta has the lower verified rate ($2 / 1M tokens vs $10 / 1M tokens).',
       'Output API price: Beta has the lower verified rate ($2 / 1M tokens vs $10 / 1M tokens).',
-      'There is not enough shared evidence to make a supported BenchLM score comparison.',
     ]);
   });
 
@@ -635,7 +624,6 @@ describe('comparisonSummary', () => {
 
     expect(summary.sentences).toEqual([
       'Input API price: Alpha has the lower verified rate ($0.5 / 1M tokens vs $2 / 1M tokens).',
-      'There is not enough shared evidence to make a supported BenchLM score comparison.',
     ]);
   });
 
@@ -644,11 +632,10 @@ describe('comparisonSummary', () => {
     const summary = comparisonSummary(comparisonWith(models));
 
     expect(summary).toEqual({
-      heading: 'Comparison summary',
+      heading: 'Key implications',
       coverage: 'none',
       sentences: [
         'Context window: Alpha has the larger published context window (256,000 tokens vs 128,000 tokens).',
-        'There is not enough shared evidence to make a supported BenchLM score comparison.',
       ],
     });
   });
@@ -663,14 +650,36 @@ describe('comparisonSummary', () => {
     ]));
 
     expect(summary).toEqual({
-      heading: 'Comparison summary',
+      heading: 'Key implications',
       coverage: 'strong',
       sentences: ['The compatible supported BenchLM scores are tied across 4 shared metrics.'],
     });
     expect(summary.sentences.join(' ')).not.toMatch(/wins|higher capability|best model/i);
   });
 
-  it('keeps the caveat within the four-sentence cap when evidence is limited', () => {
+  it('states a verified modality difference from the selected routes', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [], [
+      [price(models[0], 1, 1, { inputModalities: ['text', 'image'], outputModalities: ['text'] })],
+      [price(models[1], 1, 1, { inputModalities: ['text'], outputModalities: ['text'] })],
+    ]));
+
+    expect(summary.sentences).toEqual([
+      'Input modalities: Alpha additionally accepts image on the selected route.',
+    ]);
+  });
+
+  it('does not invent a modality difference when either selected route publishes none', () => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [], [
+      [price(models[0], 1, 1, { inputModalities: ['text', 'image'] })],
+      [price(models[1], 1, 1, { inputModalities: null })],
+    ]));
+
+    expect(summary.sentences).toEqual([]);
+  });
+
+  it('caps key implications at four findings and never adds metric-count filler', () => {
     const models = pair({ contextWindowTokens: 256_000 }, { contextWindowTokens: 128_000 });
     const summary = comparisonSummary(comparisonWith(
       models,
@@ -683,6 +692,7 @@ describe('comparisonSummary', () => {
     ));
 
     expect(summary.sentences).toHaveLength(4);
-    expect(summary.sentences.at(-1)).toBe('Only 3 compatible shared BenchLM metrics are available, so the score evidence is limited.');
+    expect(summary.coverage).toBe('limited');
+    expect(summary.sentences.join(' ')).not.toMatch(/compatible shared BenchLM metric|score evidence is limited|not enough shared evidence/i);
   });
 });

@@ -281,10 +281,36 @@ describe('comparison detail page', () => {
     const routePicker = screen.getByLabelText('Model A pricing route');
     expect(within(routePicker).getByRole('option', { name: /direct:model-a · conflict/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Model B pricing route')).toHaveTextContent('primary');
+    expect(routePicker.closest('label')).toHaveTextContent('Conflicting source evidence');
 
     fireEvent.change(screen.getByLabelText('Model A pricing route'), { target: { value: 'openrouter:provider:model-a' } });
 
     expect(routePicker).toHaveValue('openrouter:provider:model-a');
+    expect(routePicker.closest('label')).toHaveTextContent('Primary source');
+  });
+
+  it('omits the cached input row until one selected route publishes that rate', () => {
+    const model = viewModel();
+    render(<ComparisonPage viewModel={model} />);
+
+    const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
+    expect(within(pricingTable).queryByRole('rowheader', { name: 'Cached input API price' })).not.toBeInTheDocument();
+  });
+
+  it('shows the cached input row when either selected route publishes that rate', () => {
+    const model = viewModel();
+    render(<ComparisonPage viewModel={{
+      ...model,
+      priceChecks: [
+        { ...model.priceChecks[0], checks: model.priceChecks[0].checks.map((check) => ({ ...check, cachedInputUsdPerMillion: 0.5 })) },
+        model.priceChecks[1],
+      ],
+    }} />);
+
+    const pricingTable = screen.getByRole('table', { name: 'Route pricing and context comparison' });
+    const cachedRow = within(pricingTable).getByRole('rowheader', { name: 'Cached input API price' }).closest('tr');
+    expect(cachedRow).toHaveTextContent('$0.5');
+    expect(cachedRow).toHaveTextContent('Not verified');
   });
 
   it('keeps exact selected-route provenance and missing route fields distinct from unavailable evidence', () => {

@@ -149,7 +149,7 @@ describe('responsive calculator app shell', () => {
     expect(screen.getAllByRole('link', { name: 'Compare models' })[0]).toHaveAttribute('href', '/compare/');
     expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
-    expect(screen.getByRole('region', { name: 'Live decision snapshot' })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Market at a glance' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
     const footer = screen.getByRole('contentinfo');
@@ -157,6 +157,9 @@ describe('responsive calculator app shell', () => {
     expect(within(footer).getByRole('checkbox', { name: /Notify me when new models or price drops/i })).toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(within(footer).queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
+    expect(footer).not.toHaveTextContent(/Catalog refresh/i);
+    expect(footer).not.toHaveTextContent(/Updated /i);
+    expect(footer).toHaveTextContent('Double opt-in required. Unsubscribe at any time.');
   });
 
   it('makes the tools directory link to the subscription versus API calculator', () => {
@@ -223,6 +226,29 @@ describe('responsive calculator app shell', () => {
     expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
     expect(within(result).getByText('Efficiency').parentElement).toHaveTextContent('Unavailable');
     expect(within(result).queryByText(/^Breakeven:/)).not.toBeInTheDocument();
+  });
+
+  it.each<readonly [IneligibleCalculatorFixture | 'covered' | 'insufficient', string]>([
+    ['covered', 'The published allowance covers this workload under the selected model limits.'],
+    ['insufficient', 'The published allowance is below this workload.'],
+    ['credits', 'The plan includes credits. The provider does not publish a stable token conversion, so TokenBench cannot verify token coverage.'],
+    ['rolling', 'The provider publishes a rolling usage limit without a numeric monthly cap or reset schedule, so TokenBench cannot verify token coverage.'],
+    ['guardrail', 'The provider advertises higher limits but does not publish a numeric cap or reset schedule.'],
+    ['unsupported-mix', 'The plan does not publish access to one or more selected models.'],
+  ])('names the published %s coverage condition instead of estimating capacity', async (fixture, expectedCopy) => {
+    const catalog = fixture === 'covered'
+      ? { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] }
+      : fixture === 'insufficient'
+        ? { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ entitlement: { kind: 'fixed_tokens', monthlyTokens: 1_000 } })] }
+        : calculatorFixture(fixture);
+    renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0]?.id ?? '' }));
+
+    const result = await calculatedResult();
+    const coverage = within(result).getByRole('heading', { name: 'Can the plan cover this workload?' }).closest<HTMLElement>('.value-metric');
+    if (!coverage) throw new Error('Expected a coverage metric');
+
+    expect(coverage).toHaveTextContent(expectedCopy);
+    expect(within(result).getByRole('heading', { name: 'Coverage evidence' })).toBeInTheDocument();
   });
 
   it.each<readonly [string, CatalogResponse, string]>([
@@ -486,7 +512,6 @@ describe('responsive calculator app shell', () => {
       catalogPhase="ready"
       error={unavailable}
       language="en"
-      lastSuccessfulRefreshAt={null}
       notice={unavailable}
       onLanguageChange={vi.fn()}
       onRetry={vi.fn()}
@@ -503,7 +528,6 @@ describe('responsive calculator app shell', () => {
     render(<AppShell
       activePage="calculator"
       language="en"
-      lastSuccessfulRefreshAt={null}
       onLanguageChange={vi.fn()}
       onThemeToggle={vi.fn()}
       theme="dark"
@@ -529,7 +553,6 @@ describe('responsive calculator app shell', () => {
       activePage: 'compare',
       children,
       language: 'en',
-      lastSuccessfulRefreshAt: null,
       onLanguageChange: vi.fn(),
       onThemeToggle: vi.fn(),
       theme: 'dark',

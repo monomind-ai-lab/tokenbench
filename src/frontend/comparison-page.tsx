@@ -127,6 +127,22 @@ function routeAvailability(selection: SelectedRouteState): ReactNode {
   return <span className="comparison-unavailable">Unavailable — route selection is ambiguous</span>;
 }
 
+function routeVerificationLabel(status: BenchmarkPriceCheck['verificationStatus']): string {
+  if (status === 'primary') return 'Primary source';
+  if (status === 'corroborating') return 'Corroborating source';
+  return 'Conflicting source evidence';
+}
+
+/**
+ * Verification belongs to the selected route, not to a separate table row. The
+ * badge repeats the state as text so it never depends on colour alone.
+ */
+function RouteVerificationBadge({ selection }: { readonly selection: SelectedRouteState }) {
+  if (selection.status !== 'selected') return null;
+  const status = selection.route.verificationStatus;
+  return <span className="comparison-route-verification" data-verification={status}>{routeVerificationLabel(status)}</span>;
+}
+
 function routeProvenanceLabel(
   models: readonly [BenchmarkModel, BenchmarkModel],
   index: 0 | 1,
@@ -263,7 +279,7 @@ function Summary({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
       ? 'Limited shared-metric coverage'
       : 'Insufficient shared-metric coverage';
   return <section className="comparison-panel comparison-section" aria-labelledby="comparison-summary-heading">
-    <div className="comparison-section-heading"><h2 id="comparison-summary-heading">Key implications</h2><p>{summary.heading} · {coverage}. Each finding is tied to a published metric, price, context, or modality fact.</p></div>
+    <div className="comparison-section-heading"><h2 id="comparison-summary-heading">{summary.heading}</h2><p>{coverage}. Each finding is tied to a published metric, price, context, or modality fact.</p></div>
     {summary.sentences.length === 0
       ? <p className="comparison-empty-copy">No decision-relevant implication can be verified for this pair yet.</p>
       : <ol className="comparison-highlights-list">{summary.sentences.map((sentence) => <li key={sentence}>{sentence}</li>)}</ol>}
@@ -325,6 +341,7 @@ function RoutePicker({
       {!hasSelectedOption ? <option value="">Choose a published route</option> : null}
       {options.map((route) => <option key={route.routeId} value={route.routeId}>{route.routeId} · {route.verificationStatus}</option>)}
     </select>}
+    <RouteVerificationBadge selection={selection} />
   </label>;
 }
 
@@ -344,9 +361,15 @@ function PricingContext({
     selectedRoute(groups[1], selectedRouteIds[1]),
   ] as const;
   const routes = [selections[0].route, selections[1].route] as const;
+  // The cached-input row only exists when at least one side publishes the fact;
+  // an all-empty row would read as evidence that neither side caches.
+  const cachedInputPublished = typeof routes[0]?.cachedInputUsdPerMillion === 'number'
+    || typeof routes[1]?.cachedInputUsdPerMillion === 'number';
   const rows: readonly { readonly label: string; readonly unit: string; readonly left: ReactNode; readonly right: ReactNode }[] = [
     { label: 'Input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.inputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.inputUsdPerMillion ?? null) },
-    { label: 'Cached input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.cachedInputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.cachedInputUsdPerMillion ?? null) },
+    ...(cachedInputPublished
+      ? [{ label: 'Cached input API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.cachedInputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.cachedInputUsdPerMillion ?? null) }]
+      : []),
     { label: 'Output API price', unit: 'USD / 1M tokens', left: routePriceValue(selections[0], routes[0]?.outputUsdPerMillion ?? null), right: routePriceValue(selections[1], routes[1]?.outputUsdPerMillion ?? null) },
     { label: 'Route context', unit: 'tokens', left: routeTokenValue(selections[0], routes[0]?.contextWindowTokens ?? null), right: routeTokenValue(selections[1], routes[1]?.contextWindowTokens ?? null) },
     { label: 'Input modalities', unit: 'published list', left: routeListValue(selections[0], routes[0]?.inputModalities ?? null), right: routeListValue(selections[1], routes[1]?.inputModalities ?? null) },

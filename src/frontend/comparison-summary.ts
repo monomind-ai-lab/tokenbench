@@ -19,6 +19,8 @@ const COMPACT_SCORE_CATEGORY_LABEL_UTF8_BYTES = 32;
  * count fit within this UTF-8 claim budget without dropping either model.
  */
 const COMPACT_SCORE_CLAIM_UTF8_BYTES = 448;
+/** The section presents two to four evidence-backed findings, never a list. */
+const MAXIMUM_KEY_IMPLICATIONS = 4;
 const ELLIPSIS = '…';
 const UTF8_ENCODER = new TextEncoder();
 
@@ -145,12 +147,14 @@ interface ScoreLead {
   readonly winnerIndex: 0 | 1;
   readonly winnerValue: string;
   readonly otherValue: string;
+  /** Absolute published gap; drives "largest meaningful gap first" ordering. */
+  readonly gap: number;
 }
 
 function scoreLeads(
   rows: readonly ComparisonMetricRow[],
 ): readonly ScoreLead[] {
-  return rows.flatMap((row) => {
+  const leads = rows.flatMap((row) => {
     const metricA = row.modelA;
     const metricB = row.modelB;
     if (metricA === null || metricB === null) return [];
@@ -166,8 +170,16 @@ function scoreLeads(
       winnerIndex,
       winnerValue,
       otherValue,
+      gap: Math.abs(metricA.value - metricB.value),
     }];
   });
+  // The first implication must be the capability lead with the largest
+  // meaningful gap. Rows arrive in a deterministic order, so equal gaps keep
+  // that order and the result stays reproducible from shared state.
+  return leads
+    .map((lead, index) => ({ lead, index }))
+    .sort((left, right) => right.lead.gap - left.lead.gap || left.index - right.index)
+    .map(({ lead }) => lead);
 }
 
 function scoreSentences(
@@ -240,12 +252,39 @@ function coverageFor(sharedMetricCount: number): ComparisonSummary['coverage'] {
   return sharedMetricCount > 0 ? 'limited' : 'none';
 }
 
-function coverageSentence(coverage: ComparisonSummary['coverage'], sharedMetricCount: number): string | null {
-  if (coverage === 'strong') return null;
-  if (coverage === 'none') return 'There is not enough shared evidence to make a supported BenchLM score comparison.';
-  const metricLabel = `compatible shared BenchLM metric${sharedMetricCount === 1 ? '' : 's'}`;
-  const verb = sharedMetricCount === 1 ? 'is' : 'are';
-  return `Only ${sharedMetricCount} ${metricLabel} ${verb} available, so the score evidence is limited.`;
+/* Coverage is disclosed through `coverage`; it never becomes a finding. */
+
+function publishedModalities(route: BenchmarkPriceCheck | null, direction: 'inputModalities' | 'outputModalities'): readonly string[] | null {
+  const value = route?.[direction];
+  if (!Array.isArray(value)) return null;
+  const normalized = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  return normalized.length === 0 ? null : normalized;
+}
+
+/**
+ * States a verified directional modality difference on the selected routes. It
+ * never infers a direction that neither route publishes.
+ */
+function modalitySentence(
+  direction: 'inputModalities' | 'outputModalities',
+  routes: readonly [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null],
+  models: readonly [BenchmarkModel, BenchmarkModel],
+): string | null {
+  const left = publishedModalities(routes[0], direction);
+  const right = publishedModalities(routes[1], direction);
+  if (left === null || right === null) return null;
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  const onlyLeft = [...new Set(left.filter((item) => !rightSet.has(item)))];
+  const onlyRight = [...new Set(right.filter((item) => !leftSet.has(item)))];
+  if (onlyLeft.length === 0 && onlyRight.length === 0) return null;
+  const label = direction === 'inputModalities' ? 'Input modalities' : 'Output modalities';
+  const verb = direction === 'inputModalities' ? 'accepts' : 'returns';
+  const claims = [
+    onlyLeft.length === 0 ? null : `${summaryModelLabel(models, 0)} additionally ${verb} ${joinLabels(onlyLeft.map(summaryCategoryLabel))}`,
+    onlyRight.length === 0 ? null : `${summaryModelLabel(models, 1)} additionally ${verb} ${joinLabels(onlyRight.map(summaryCategoryLabel))}`,
+  ].filter((claim): claim is string => claim !== null);
+  return `${label}: ${claims.join('; ')} on the selected route.`;
 }
 
 function scoreRowsAreExactlyTied(rows: readonly ComparisonMetricRow[]): boolean {
@@ -272,6 +311,10 @@ function cappedEvidenceClaims(
 /**
  * Derives bounded, evidence-specific comparison copy from the published view
  * model. No sentence selects a universal winner or fills in an absent fact.
+ *
+ * Findings are ordered as capability lead, selected-route price, context, and
+ * verified modality difference. Shared-metric coverage is reported through the
+ * separate `coverage` field, so no finding is metric-count filler.
  */
 export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSummary {
   const compatibleRows = compatibleScoreRows(viewModel);
@@ -279,24 +322,24 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
   const routes = viewModel.priceChecks.map(selectedComparisonPriceCheck) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
   const supportedScoreLeads = scoreLeads(compatibleRows);
   const scoreClaims = scoreSentences(supportedScoreLeads, viewModel.models);
-  const pricingClaims = [
+  const operationalClaims = [
     rateSentence('inputUsdPerMillion', routes, viewModel.models),
     rateSentence('outputUsdPerMillion', routes, viewModel.models),
     contextSentence(viewModel.models),
+    modalitySentence('inputModalities', routes, viewModel.models),
+    modalitySentence('outputModalities', routes, viewModel.models),
   ].filter((sentence): sentence is string => sentence !== null);
-  const caveat = coverageSentence(coverage, compatibleRows.length);
   const tiedScoreSentence = coverage === 'strong' && scoreRowsAreExactlyTied(compatibleRows)
     ? `The compatible supported BenchLM scores are tied across ${compatibleRows.length} shared metrics.`
     : null;
   const scoreEvidenceClaims = tiedScoreSentence === null ? scoreClaims : [tiedScoreSentence];
-  const claimLimit = caveat === null ? 4 : 3;
   const evidenceClaims = cappedEvidenceClaims(
     scoreEvidenceClaims,
     tiedScoreSentence === null ? compactScoreSentence(supportedScoreLeads, viewModel.models) : null,
-    pricingClaims,
-    claimLimit,
+    operationalClaims,
+    MAXIMUM_KEY_IMPLICATIONS,
   );
-  const sentences = (caveat === null ? evidenceClaims : [...evidenceClaims, caveat]).map(summarySentence);
+  const sentences = evidenceClaims.map(summarySentence);
 
-  return { heading: 'Comparison summary', sentences, coverage };
+  return { heading: 'Key implications', sentences, coverage };
 }

@@ -18,6 +18,6 @@ export default function GuidesApp() {
     <a className="skip-link" href="#guide-content">Skip to guide content</a>
     <SiteHeader theme={theme} language={language} activePage="guides" onThemeToggle={toggleTheme} onLanguageChange={changeLanguage} />
     {guide ? <GuideArticlePage guide={guide} /> : <GuidesHub />}
-    <SiteFooter status="Source-aware decision support." notice="Verify provider evidence before purchasing." />
+    <SiteFooter notice="Verify provider evidence before purchasing." />
   </div>;
 }

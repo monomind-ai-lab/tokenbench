@@ -19,22 +19,59 @@ interface TrendChartProps {
 
 interface ResultRecommendation {
   readonly copy: string;
+  readonly coverageCopy: string;
   readonly unavailableFacts: readonly string[];
   readonly comparisonAvailable: boolean;
+}
+
+/**
+ * Coverage copy names the actual published condition. Verified capacity is the
+ * only state that may drive savings, breakeven, and efficiency; every other
+ * state says what the provider did not publish rather than estimating it.
+ */
+const COVERAGE_COPY = {
+  noPlan: 'No subscription plan is selected, so no published allowance can be checked.',
+  incompleteMix: 'A complete selected-model mix is required before a published allowance can be checked.',
+  unsupportedModel: 'The plan does not publish access to one or more selected models.',
+  verified: 'The published allowance covers this workload under the selected model limits.',
+  insufficient: 'The published allowance is below this workload.',
+  credits: 'The plan includes credits. The provider does not publish a stable token conversion, so TokenBench cannot verify token coverage.',
+  rolling: 'The provider publishes a rolling usage limit without a numeric monthly cap or reset schedule, so TokenBench cannot verify token coverage.',
+  dynamicUnknown: 'The provider advertises higher limits but does not publish a numeric cap or reset schedule.',
+} as const;
+
+function supportsSelectedModels(plan: PlanOffer, snapshot: CalculatorSnapshot): boolean {
+  const selectedModelIds = [...new Set(snapshot.selectedOffers.map((offer) => offer.modelId))];
+  return plan.supportedModelIds?.length
+    ? selectedModelIds.every((modelId) => plan.supportedModelIds?.includes(modelId))
+    : false;
+}
+
+function coverageCopyFor(plan: PlanOffer, snapshot: CalculatorSnapshot): string {
+  if (!supportsSelectedModels(plan, snapshot)) return COVERAGE_COPY.unsupportedModel;
+  const entitlement = plan.entitlement;
+  if (entitlement.kind === 'fixed_tokens') {
+    return entitlement.monthlyTokens >= snapshot.monthlyTokens ? COVERAGE_COPY.verified : COVERAGE_COPY.insufficient;
+  }
+  if (entitlement.kind === 'credits') return COVERAGE_COPY.credits;
+  if (entitlement.kind === 'rolling_limit') return COVERAGE_COPY.rolling;
+  return COVERAGE_COPY.dynamicUnknown;
 }
 
 function resultRecommendation(selectedPlan: PlanOffer | undefined, snapshot: CalculatorSnapshot): ResultRecommendation {
   if (!selectedPlan) {
     return {
       copy: 'Choose a subscription with published capacity before comparing it with pay as you go.',
-      unavailableFacts: ['No subscription plan is selected.'],
+      coverageCopy: COVERAGE_COPY.noPlan,
+      unavailableFacts: [COVERAGE_COPY.noPlan],
       comparisonAvailable: false,
     };
   }
   if (snapshot.selectedOffers.length === 0 || snapshot.estimatedMonthlySavingsMicroDollars === null) {
     return {
       copy: 'Unable to compare this subscription with pay as you go until you select a complete model mix.',
-      unavailableFacts: ['A complete selected-model mix is required to calculate an API-equivalent cost.'],
+      coverageCopy: COVERAGE_COPY.incompleteMix,
+      unavailableFacts: [COVERAGE_COPY.incompleteMix],
       comparisonAvailable: false,
     };
   }
@@ -46,16 +83,19 @@ function resultRecommendation(selectedPlan: PlanOffer | undefined, snapshot: Cal
     [...new Set(snapshot.selectedOffers.map((offer) => offer.modelId))],
   );
   const savings = snapshot.estimatedMonthlySavingsMicroDollars;
+  const coverageCopy = coverageCopyFor(selectedPlan, snapshot);
   if (eligibility.caveats.length > 0) {
     return {
       copy: 'TokenBench can calculate the API-equivalent cost and subscription fee, but the published entitlement cannot verify coverage for this workload.',
-      unavailableFacts: eligibility.caveats,
+      coverageCopy,
+      unavailableFacts: [coverageCopy],
       comparisonAvailable: false,
     };
   }
   if (savings > 0 && eligibility.kind === 'subscription') {
     return {
       copy: `Subscription is cheaper for this workload: ${selectedPlan.displayName} is ${formatCurrencyMicroDollars(savings)} below the API-equivalent cost.`,
+      coverageCopy,
       unavailableFacts: [],
       comparisonAvailable: true,
     };
@@ -63,12 +103,14 @@ function resultRecommendation(selectedPlan: PlanOffer | undefined, snapshot: Cal
   if (savings === 0) {
     return {
       copy: 'Subscription and pay as you go cost the same for this workload.',
+      coverageCopy,
       unavailableFacts: [],
       comparisonAvailable: true,
     };
   }
   return {
     copy: `Pay as you go is cheaper for this workload: it is ${formatCurrencyMicroDollars(Math.abs(savings))} below the subscription price.`,
+    coverageCopy,
     unavailableFacts: [],
     comparisonAvailable: true,
   };
@@ -138,6 +180,7 @@ function ValueSummary({ selectedPlan, snapshot, recommendation }: Pick<ResultsDa
         <div className="value-metric value-savings">
           <h3><WalletCards aria-hidden="true" size={19} />Can the plan cover this workload?</h3>
           <strong data-savings-tone={savingsTone}>{recommendation.comparisonAvailable ? formatCurrencyMicroDollars(savings) : 'Not verified'}</strong>
+          <span>{recommendation.coverageCopy}</span>
           <span>{recommendation.comparisonAvailable && selectedPlan ? `${UI_COPY.estimatedMonthlySavings}: API cost minus ${selectedPlan.displayName}.` : 'Coverage-dependent savings, breakeven, and efficiency are withheld.'}</span>
         </div>
       </div>
@@ -157,8 +200,8 @@ function ValueSummary({ selectedPlan, snapshot, recommendation }: Pick<ResultsDa
           <p>API-equivalent cost uses the selected model mix, your input/output split, and monthly token volume. It does not invent capacity that a provider has not published.</p>
         </section>
         <section>
-          <h3>Unavailable facts</h3>
-          {recommendation.unavailableFacts.length > 0 ? <ul>{recommendation.unavailableFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul> : <p>Published plan capacity and selected-model support are available for this workload.</p>}
+          <h3>Coverage evidence</h3>
+          {recommendation.unavailableFacts.length > 0 ? <ul>{recommendation.unavailableFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul> : <p>{recommendation.coverageCopy}</p>}
         </section>
       </div>
     </article>
