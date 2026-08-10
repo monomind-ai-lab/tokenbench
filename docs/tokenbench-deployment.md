@@ -15,8 +15,9 @@ benchmark refresh then exposed D1's 32 MiB aggregate RPC limit; the follow-up
 hotfix stages inactive rows in 16 MiB-bounded calls and promotes both public
 pointers in one guarded transaction. The Pages build, migrations through 0006,
 and both Worker builds are deployed. Controlled cache publication and final
-production smoke passed on the Pages production hostname. The
-custom-domain cutover remains pending below until observed.
+production smoke passed on the Pages production hostname. The canonical
+custom-domain cutover completed on 2026-08-10; legacy-host removal remains
+pending and is outside this cutover.
 
 Do not replace pending fields with estimates, planned values, screenshots from a
 different build, or copied dashboard data. Record only observed evidence from
@@ -364,8 +365,8 @@ authorized production deployment.
 
 | Check | Expected result | Recorded result |
 | --- | --- | --- |
-| Canonical home, tools, calculator, guides, leaderboards, and compare hub | HTTP 200 for each canonical route. | Pages production hostname: pass. Canonical hostname remains pending DNS cutover. |
-| Canonical indexable comparison | HTTP 200 with server-rendered H1, title, canonical metadata, and substantive body before JavaScript enhancement. | Pass on Pages production: 20/20 HTTP 200, one server-rendered H1, and canonical metadata present. |
+| Canonical home, tools, calculator, guides, leaderboards, and compare hub | HTTP 200 for each canonical route. | Pass on `https://tokenbench.monomind.one` at 2026-08-10 01:34 UTC: home, tools, calculator, guides, leaderboard directory/detail, compare hub/detail, and fixed sitemap returned HTTP 200. |
+| Canonical indexable comparison | HTTP 200 with server-rendered H1, title, canonical metadata, and substantive body before JavaScript enhancement. | Pass on the canonical hostname: HTTP 200 with one server-rendered H1, canonical metadata, and a substantive 42,394-byte response. |
 | Reversed valid comparison pair | HTTP 301 to the canonical lexical pair order. | Pass: HTTP 301 to `/compare/claude-opus-5-vs-gpt-5-6-sol`. |
 | Unknown comparison model or invalid pair | HTTP 404. | Pass: HTTP 404. |
 | Fixed sitemap and comparison sitemap | HTTP 200 with XML; comparison sitemap contains only canonical indexable pairs. | Pass: both fixed and comparison sitemaps return HTTP 200; comparison entries derive from the 32 active indexable pairs. |
@@ -382,17 +383,17 @@ Populate this table only with observed values from the approved release.
 
 | Field | Value |
 | --- | --- |
-| Release commit SHA | `65424e4` (PR #8 merge; Worker hotfix `a857a6a`) |
-| Pages deployment URL | `https://be870e81.tokenbench-27t.pages.dev` immutable preview; `https://tokenbench-27t.pages.dev` production. The Pages inputs are unchanged between deployed commit `59abd9f` and release merge `65424e4`. |
-| Canonical domain verification | Pending |
+| Release commit SHA | `f58d920f250922b000a9d55adf0015443d165b0f` |
+| Pages deployment URL | `https://57e50712.tokenbench-27t.pages.dev` immutable deployment; `https://tokenbench-27t.pages.dev` production. Cloudflare records deployment `57e50712-7bc9-4fff-a570-3da0088a838a` as successful for the release commit. |
+| Canonical domain verification | Active on 2026-08-10: Pages domain, DNS verification, and HTTP certificate validation all report `active`; HTTPS production smoke passed on `https://tokenbench.monomind.one`. |
 | Catalog Worker version | `4b87c50b-286b-41fc-bb2c-7a7ddedaf0a0` |
 | Benchmark Worker version | `5dbf76ae-07a6-4c4c-9094-1c8a1e996874` |
 | Applied D1 migration evidence | Remote history contains 0001-0006 exactly once; 0006 applied at 2026-08-06 05:27:21 UTC. |
 | Active catalog revision | `rev_20260806042720324_60e3d2562f08+manual-bootstrap-2026-08-04`; 55 cache keys, 110 chunks, fresh/stale variants. |
-| Active benchmark revision | `benchmark_f32f64428729b11acbee04155a439e41`; published 2026-08-06T06:20:00.658Z with 23 sources, 4,351 models, 1,829 metrics, 3,539 prices, and 400 comparison pairs. |
+| Active benchmark revision | `benchmark_92e723cb7f6b6e87056d76e017b76eca`, observed from the canonical benchmark API during the 2026-08-10 cutover verification. |
 | Controlled refresh result | Pass: deployed Cron completed in 21.424 s with outcome `ok`; benchmark cache has 75 keys, 150 chunks, two variants, zero invalid chunk groups, and a maximum chunk length of 1,323,595 characters. The normal `15 */12 * * *` schedule was restored and verified. |
 | R2 snapshot verification | Pass: all 23 active source snapshot keys are reachable; active-source refresh state has zero errors and zero revision mismatches. |
-| Production smoke summary | Pages production passed API/UI/cache/comparison/sitemap checks and 20-round error-tailed stress. Canonical DNS and legacy-host removal remain pending Cloudflare dashboard sign-in. |
+| Production smoke summary | Pages production and the canonical hostname passed API/UI/cache/comparison/sitemap checks. The canonical API supplied an ETag and returned HTTP 304 for the matching conditional request; the reversed comparison returned HTTP 301 to the canonical pair and an unknown pair returned HTTP 404. Legacy-host removal remains pending. |
 | Final evidence commit SHA | Pending |
 
 ## Rollback and incident handling
