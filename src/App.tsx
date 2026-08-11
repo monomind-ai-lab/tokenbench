@@ -77,6 +77,12 @@ function selectionForPlan(catalog: NonNullable<CatalogState['catalog']>, provide
   return { selectedModelIds: [], modelMixBasisPoints: {} };
 }
 
+function selectionsMatch(left: InitialSelection, right: InitialSelection): boolean {
+  return left.selectedModelIds.length === right.selectedModelIds.length
+    && left.selectedModelIds.every((id, index) => id === right.selectedModelIds[index]
+      && left.modelMixBasisPoints[id] === right.modelMixBasisPoints[id]);
+}
+
 function CalculatorPage() {
   const catalogState = useCatalog();
   const { catalog, phase } = catalogState;
@@ -153,7 +159,8 @@ function CalculatorPage() {
     }
     const providerModelIds = new Set(catalog.modelOffers.filter((offer) => offer.providerId === nextProvider).map((offer) => offer.id));
     if (!hydratedSharedStateRef.current && !selection.selectedModelIds.some((id) => providerModelIds.has(id))) {
-      setSelection(selectionForPlan(catalog, nextProvider, selectedPlanId));
+      const nextSelection = selectionForPlan(catalog, nextProvider, selectedPlanId);
+      if (!selectionsMatch(selection, nextSelection)) setSelection(nextSelection);
       setMappingMode('default');
     }
   }, [catalog, providerIds, selectedPlanId, selectedProviderId, selection.selectedModelIds]);
