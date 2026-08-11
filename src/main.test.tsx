@@ -7,12 +7,15 @@ const createRootMock = vi.hoisted(() => vi.fn(() => ({ render: rootRenderer })))
 const hydrateRootMock = vi.hoisted(() => vi.fn());
 const parseComparisonViewModelMock = vi.hoisted(() => vi.fn());
 const parseModelProfileViewModelMock = vi.hoisted(() => vi.fn());
+const parseModelDirectoryEnvelopeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-dom/client', () => ({ createRoot: createRootMock, hydrateRoot: hydrateRootMock }));
 vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null, ModelProfileApp: () => null }));
 vi.mock('./GuidesApp.tsx', () => ({ default: () => null }));
+vi.mock('./pages/models-page', () => ({ ModelsApp: () => null }));
 vi.mock('./frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
 vi.mock('./frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
+vi.mock('./frontend/model-directory-contracts', () => ({ parseModelDirectoryEnvelope: parseModelDirectoryEnvelopeMock }));
 
 describe('browser entrypoint', () => {
   beforeEach(() => {
@@ -24,6 +27,8 @@ describe('browser entrypoint', () => {
     parseComparisonViewModelMock.mockReturnValue(null);
     parseModelProfileViewModelMock.mockReset();
     parseModelProfileViewModelMock.mockReturnValue(null);
+    parseModelDirectoryEnvelopeMock.mockReset();
+    parseModelDirectoryEnvelopeMock.mockReturnValue(null);
     document.body.innerHTML = '<div id="root"><div class="static-page-shell">Crawlable fallback</div></div>';
     window.history.replaceState({}, '', '/leaderboards/llm/coding/');
   });
@@ -114,4 +119,32 @@ describe('browser entrypoint', () => {
     expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
     expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
+  it('hydrates the models directory from its validated server payload without refetching', async () => {
+    document.body.innerHTML = '<div id="root"><main data-server-models>Popular models</main></div><script id="models-initial-data" type="application/json">{"revision":"benchlm-r1"}</script>';
+    window.history.replaceState({}, '', '/models/');
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    parseModelDirectoryEnvelopeMock.mockReturnValue({ revision: 'benchlm-r1' });
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root.querySelector('[data-server-models]')).toBeInTheDocument();
+    expect(hydrateRootMock).toHaveBeenCalledWith(root, expect.anything());
+    expect(createRootMock).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('leaves models server HTML intact when hydration data is malformed', async () => {
+    document.body.innerHTML = '<div id="root"><main data-server-models>Popular models</main></div><script id="models-initial-data" type="application/json">not-json</script>';
+    window.history.replaceState({}, '', '/models/');
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root.querySelector('[data-server-models]')).toBeInTheDocument();
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+    expect(createRootMock).not.toHaveBeenCalled();
+  });
+
 });

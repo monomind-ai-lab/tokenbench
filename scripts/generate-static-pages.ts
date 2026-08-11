@@ -18,6 +18,7 @@ function activeNavigation(route: AppRoute): StaticNavigationPage {
     case 'calculator': return 'calculator';
     case 'home': return 'home';
     case 'compareHub': return 'compare';
+    case 'models': return 'models';
     case 'newsletterConfirmed': return undefined;
     case 'leaderboards':
     case 'leaderboard':
@@ -50,6 +51,8 @@ function fixedPageContent(
     case 'newsletterConfirmed':
       // Standalone transactional shell: no site navigation or footer actions.
       return `<main id="page-content" class="page-main newsletter-confirmed" tabindex="-1" aria-labelledby="newsletter-confirmed-heading"><div class="newsletter-confirmed-mark" aria-hidden="true">${SITE_CONFIG.name}</div><p class="eyebrow">Email confirmed</p><h1 id="newsletter-confirmed-heading">Your subscription is confirmed.</h1><p>The current TokenBench test cheatsheet will arrive by email.</p><a class="button" href="/">Start Exploring</a></main>`;
+    case 'models':
+      return pageIntro(metadata, `<p>Browse the current BenchLM-derived weekly top 100 and search retained model profiles with source-linked benchmark, pricing, and evidence facts.</p><section><h2>Decision facts stay visible</h2><p>Each model keeps its weekly rank, overall score, strongest category, representative direct API price, and evidence status in one responsive directory. Search results include models that have left the current weekly list.</p></section>`);
     case 'compareHub':
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`);
     case 'leaderboards':
@@ -64,7 +67,7 @@ function fixedPageContent(
 function structuredDataFor(route: AppRoute, metadata: PageMetadata): unknown[] {
   const type = route.kind === 'home' || route.kind === 'calculator'
     ? 'WebApplication'
-    : route.kind === 'tools' || route.kind === 'compareHub' || route.kind === 'leaderboards'
+    : route.kind === 'tools' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'models'
       ? 'CollectionPage'
       : 'WebPage';
   return [{

@@ -91,6 +91,11 @@ const pageDefinitions = {
     description: `Compare AI models with ${SITE_CONFIG.name} by benchmark context, pricing information, and documented evidence while keeping unavailable measurements visibly unavailable.`,
     h1: 'Compare models side by side',
   },
+  models: {
+    title: `Popular AI Models | ${SITE_CONFIG.name}`,
+    description: `Browse the current weekly top 100 AI models and search retained model profiles with source-linked benchmark, pricing, and evidence facts from ${SITE_CONFIG.name}.`,
+    h1: 'Popular AI models',
+  },
   newsletterConfirmed: {
     title: `Subscription confirmed | ${SITE_CONFIG.name}`,
     description: `Your ${SITE_CONFIG.name} newsletter subscription is confirmed. The current test cheatsheet PDF will arrive by email; start exploring AI cost and benchmark decision tools.`,
@@ -133,6 +138,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'calculator': return makeMetadata('/tools/subscriptions-vs-apis/', pageDefinitions.calculator);
     case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
+    case 'models': return makeMetadata(ROUTE_PATHS.models, pageDefinitions.models);
     case 'newsletterConfirmed': return makeMetadata(ROUTE_PATHS.newsletterConfirmed, pageDefinitions.newsletterConfirmed);
     case 'leaderboards': return makeMetadata('/leaderboards/', pageDefinitions.leaderboards);
     case 'leaderboard': {

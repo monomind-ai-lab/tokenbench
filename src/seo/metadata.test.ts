@@ -36,6 +36,7 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
   { route: { kind: 'newsletterConfirmed' }, canonical: `${origin}/newsletter/confirmed/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
+  { route: { kind: 'models' }, canonical: `${origin}/models/` },
   { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
   { route: { kind: 'leaderboard', key: 'llm-coding' }, canonical: `${origin}/leaderboards/llm/coding/` },

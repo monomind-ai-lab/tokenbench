@@ -21,6 +21,8 @@ import type { ComparisonViewModel } from './frontend/comparison-contracts';
 import type { ModelProfileViewModel } from './frontend/model-profile-contracts';
 import { Skeleton, providerLabel } from './frontend/ui';
 import { useCatalog, type CatalogState } from './frontend/use-catalog';
+import { parseModelDirectoryEnvelope, type ModelDirectoryEnvelope } from './frontend/model-directory-contracts';
+import { ModelsPage } from './pages/models-page';
 import { HomePage } from './pages/home-page';
 import { CompareHubPage } from './pages/compare-hub-page';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
@@ -310,6 +312,28 @@ function LeaderboardsRoute() {
 function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
   return <PageFrame activePage="leaderboards"><LeaderboardPage keyName={keyName} /></PageFrame>;
 }
+function ModelsRoute() {
+  const [envelope, setEnvelope] = useState<ModelDirectoryEnvelope | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/benchmarks/models?limit=100', { headers: { accept: 'application/json' } })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('models unavailable')))
+      .then((payload: unknown) => {
+        const parsed = parseModelDirectoryEnvelope(payload);
+        if (active && parsed) setEnvelope(parsed);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
+
+  return <PageFrame activePage="models">
+    {envelope
+      ? <ModelsPage envelope={envelope} />
+      : <section className="content-stack models-page" data-server-models><section className="models-hero panel" aria-labelledby="models-heading"><span className="eyebrow">Weekly model directory</span><h1 id="models-heading">Popular AI models</h1><p>Loading the latest validated model directory.</p><Skeleton label="Loading popular models" /></section></section>}
+  </PageFrame>;
+}
+
 
 /** Shared by the Pages Function SSR response and browser hydration. */
 export function ComparisonDetailApp({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
@@ -331,6 +355,7 @@ export default function App() {
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
+  if (route.kind === 'models') return <ModelsRoute />;
   if (route.kind === 'redirect') {
     window.location.replace(route.to);
     return null;

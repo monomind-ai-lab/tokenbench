@@ -4,7 +4,9 @@ import App, { ComparisonDetailApp, ModelProfileApp } from './App.tsx';
 import GuidesApp from './GuidesApp.tsx';
 import { parseComparisonViewModel } from './frontend/comparison-contracts';
 import { parseModelProfileViewModel } from './frontend/model-profile-contracts';
+import { parseModelDirectoryEnvelope } from './frontend/model-directory-contracts';
 import { NewsletterConfirmedPage } from './pages/newsletter-confirmed-page';
+import { ModelsApp } from './pages/models-page';
 import { matchRoute } from './routing/routes';
 import './index.css';
 
@@ -17,6 +19,16 @@ function initialComparisonViewModel() {
     return null;
   }
 }
+function initialModelDirectoryEnvelope() {
+  const payload = document.getElementById('models-initial-data');
+  if (!(payload instanceof HTMLScriptElement) || payload.type !== 'application/json' || !payload.textContent) return null;
+  try {
+    return parseModelDirectoryEnvelope(JSON.parse(payload.textContent));
+  } catch {
+    return null;
+  }
+}
+
 
 function initialModelProfileViewModel() {
   const payload = document.getElementById('model-profile-initial-data');
@@ -36,6 +48,17 @@ if (route.kind === 'modelProfile') {
   if (viewModel) {
     const root = document.getElementById('root')!;
     hydrateRoot(root, <StrictMode><ModelProfileApp viewModel={viewModel} /></StrictMode>);
+  }
+} else if (route.kind === 'models') {
+  const envelope = initialModelDirectoryEnvelope();
+  // Keep substantive server HTML when the payload fails validation.
+  if (envelope) {
+    const root = document.getElementById('root')!;
+    hydrateRoot(root,
+      <StrictMode>
+        <ModelsApp initialEnvelope={envelope} />
+      </StrictMode>,
+    );
   }
 } else if (route.kind === 'comparison') {
   const viewModel = initialComparisonViewModel();

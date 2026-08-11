@@ -167,6 +167,7 @@ export type AppRoute =
   | { kind: 'methodologyBenchAlign' }
   | { kind: 'guides'; slug?: string }
   | { kind: 'compareHub' }
+  | { kind: 'models' }
   | { kind: 'comparison'; pair: string }
   | { kind: 'modelProfile'; slug: string }
   | { kind: 'newsletterConfirmed' }
@@ -194,6 +195,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
   { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
+  { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
   { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
   { id: 'leaderboards', pathname: ROUTE_PATHS.leaderboards, route: { kind: 'leaderboards' } },
   { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
@@ -233,6 +235,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'methodologyBenchAlign': return ROUTE_PATHS.methodologyBenchAlign;
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
+    case 'models': return ROUTE_PATHS.models;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
     case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
@@ -252,6 +255,7 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.methodologyBenchAlign) return { kind: 'methodologyBenchAlign' };
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
+  if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
   if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
 
