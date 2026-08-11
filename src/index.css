@@ -1073,3 +1073,106 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .model-ledger-group,
 .model-ledger-scroll { min-width: 0; }
 .model-ledger-scroll { max-width: 100%; }
+
+/* Price-performance decision surface: keep chart, table, and controls bounded
+   so the equivalent evidence survives narrow documents without horizontal page
+   overflow. */
+.price-performance-page,
+.price-performance-page > *,
+.price-performance-chart-panel,
+.price-performance-results,
+.price-performance-evidence { min-width: 0; max-width: 100%; }
+.price-performance-hero { position: relative; overflow: hidden; padding: clamp(30px, 6vw, 64px); border-color: color-mix(in srgb, var(--primary) 42%, var(--outline)); background: radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 38%), var(--surface); box-shadow: none; }
+.price-performance-hero h1 { max-width: 900px; margin: 14px 0 16px; overflow-wrap: anywhere; font-family: var(--font-display); font-size: clamp(2.35rem, 5.4vw, 4.35rem); font-weight: 500; letter-spacing: -0.055em; line-height: 1.04; }
+.price-performance-hero > p { max-width: 780px; margin: 0; color: var(--muted); font-size: clamp(0.98rem, 1.7vw, 1.12rem); line-height: 1.65; }
+.price-performance-facts { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 24px; color: var(--muted); font-family: var(--font-label); font-size: 0.63rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.price-performance-freshness { padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--primary) 50%, var(--outline)); border-radius: 999px; color: var(--primary-strong); background: color-mix(in srgb, var(--primary-soft) 54%, var(--surface)); }
+.price-performance-freshness.stale { border-color: color-mix(in srgb, var(--warning) 56%, var(--outline)); color: var(--warning); background: var(--warning-bg); }
+.price-performance-stale { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px 14px; padding: 12px 15px; border: 1px solid color-mix(in srgb, var(--warning) 46%, var(--outline)); border-radius: 9px; background: var(--warning-bg); color: var(--warning); font-size: 0.78rem; line-height: 1.5; }
+.price-performance-stale strong { font-family: var(--font-label); font-size: 0.68rem; letter-spacing: 0.07em; text-transform: uppercase; }
+.price-performance-filter-panel, .price-performance-chart-panel, .price-performance-results, .price-performance-evidence { overflow: hidden; padding: clamp(20px, 3vw, 28px); }
+.price-performance-filters { min-width: 0; display: grid; gap: 18px; }
+.price-performance-filter-grid { min-width: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 13px; }
+.price-performance-filter-field { min-width: 0; display: grid; gap: 7px; }
+.price-performance-filter-field > span, .price-performance-price-band legend, .price-performance-price-band label { color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.price-performance-filter-field select, .price-performance-price-band input { width: 100%; min-width: 0; min-height: 44px; padding: 9px 11px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-low); color: var(--text); }
+.price-performance-filter-field select { overflow: hidden; text-overflow: ellipsis; }
+.price-performance-price-band { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 13px; border: 1px solid color-mix(in srgb, var(--outline) 78%, transparent); border-radius: 8px; background: var(--surface-low); }
+.price-performance-price-band legend { grid-column: 1 / -1; padding: 0 5px; }
+.price-performance-price-band div { min-width: 0; display: grid; gap: 6px; }
+.price-performance-chart-figure { min-width: 0; max-width: 100%; display: grid; gap: 11px; margin: 0; }
+.price-performance-chart-svg { display: block; width: 100%; max-width: 100%; height: auto; min-width: 0; overflow: visible; border: 1px solid color-mix(in srgb, var(--primary) 32%, var(--outline)); border-radius: 10px; background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--primary-soft) 30%, var(--surface)), var(--surface) 70%); }
+.price-performance-chart-axes line { stroke: color-mix(in srgb, var(--outline) 84%, var(--muted)); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.price-performance-chart-axes text { fill: var(--muted); font-family: var(--font-label); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.price-performance-frontier { fill: none; stroke: var(--primary-strong); stroke-dasharray: 7 5; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.price-performance-scatter-point { overflow: visible; }
+.scatter-point { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 2px solid var(--primary-strong); border-radius: 50%; background: color-mix(in srgb, var(--surface) 72%, var(--primary-soft)); color: var(--primary-strong); font-size: 0.9rem; line-height: 1; cursor: pointer; }
+.scatter-point-frontier { border-radius: 6px; transform: rotate(45deg); }
+.scatter-point-frontier > span:first-child { transform: rotate(-45deg); }
+.scatter-point.evidence-estimated { border-style: dashed; border-color: var(--warning); color: var(--warning); }
+.scatter-point.evidence-source_only { border-style: dotted; border-color: var(--muted); color: var(--muted); }
+.scatter-point:focus-visible { outline: 3px solid var(--tertiary); outline-offset: 3px; }
+.price-performance-chart-caption { color: var(--muted); font-size: 0.7rem; line-height: 1.5; }
+.price-performance-chart-empty, .price-performance-chart-empty-note, .price-performance-chart-failure, .price-performance-category-empty, .price-performance-table-empty { min-width: 0; padding: 15px 16px; border: 1px dashed color-mix(in srgb, var(--outline) 88%, var(--muted)); border-radius: 8px; background: var(--surface-low); color: var(--muted); font-size: 0.78rem; line-height: 1.55; }
+.price-performance-chart-empty strong, .price-performance-chart-failure strong, .price-performance-category-empty strong, .price-performance-table-empty strong { color: var(--text); }
+.price-performance-chart-empty p, .price-performance-chart-failure p, .price-performance-category-empty p, .price-performance-table-empty p { margin: 5px 0 0; }
+.price-performance-point-details { min-width: 0; display: grid; gap: 14px; padding: 18px; border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--outline)); border-radius: 10px; background: var(--surface-low); }
+.price-performance-details-heading { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.price-performance-details-heading h2 { margin: 6px 0 0; overflow-wrap: anywhere; font-family: var(--font-display); font-size: 1.1rem; letter-spacing: -0.025em; }
+.price-performance-details-facts, .price-performance-evidence-facts { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; margin: 0; }
+.price-performance-details-facts > div, .price-performance-evidence-facts > div { min-width: 0; padding: 10px; border-radius: 8px; background: var(--surface); }
+.price-performance-details-facts dt, .price-performance-evidence-facts dt { color: var(--muted); font-family: var(--font-label); font-size: 0.57rem; font-weight: 800; letter-spacing: 0.055em; text-transform: uppercase; }
+.price-performance-details-facts dd, .price-performance-evidence-facts dd { min-width: 0; margin: 5px 0 0; overflow-wrap: anywhere; font-size: 0.7rem; font-weight: 700; line-height: 1.4; }
+.price-performance-point-details .button { width: fit-content; min-height: 44px; display: inline-flex; align-items: center; text-decoration: none; }
+.price-performance-table-section { min-width: 0; max-width: 100%; }
+.price-performance-desktop-table { min-width: 0; max-width: 100%; overflow-x: auto; }
+.price-performance-desktop-table table { width: 100%; min-width: 900px; border-collapse: collapse; font-size: 0.76rem; }
+.price-performance-desktop-table thead { background: var(--surface-container); }
+.price-performance-desktop-table th, .price-performance-desktop-table td { min-width: 0; padding: 13px 14px; border-bottom: 1px solid color-mix(in srgb, var(--outline) 72%, transparent); text-align: left; vertical-align: top; line-height: 1.45; }
+.price-performance-desktop-table thead th { color: var(--muted); font-family: var(--font-label); font-size: 0.59rem; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; }
+.price-performance-desktop-table tbody tr:last-child > * { border-bottom: 0; }
+.price-performance-desktop-table tbody th { min-width: 140px; font-weight: 750; overflow-wrap: anywhere; }
+.price-performance-desktop-table tbody th .price-performance-status { display: block; margin-top: 5px; }
+.price-performance-status { display: inline-flex; width: fit-content; padding: 3px 7px; border: 1px solid var(--outline); border-radius: 999px; color: var(--muted); font-family: var(--font-label); font-size: 0.53rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+.price-performance-status.status-current { border-color: color-mix(in srgb, var(--primary) 48%, var(--outline)); color: var(--primary-strong); background: color-mix(in srgb, var(--primary-soft) 54%, var(--surface)); }
+.price-performance-profile-link { min-height: 32px; display: inline-flex; align-items: center; color: var(--primary-strong); font-size: 0.66rem; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.price-performance-mobile-cards { display: none; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.price-performance-card { min-width: 0; padding: 16px; border-bottom: 1px solid var(--outline); }
+.price-performance-card:last-child { border-bottom: 0; }
+.price-performance-card-heading { min-width: 0; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.price-performance-card-heading h3 { min-width: 0; margin: 0; overflow-wrap: anywhere; font-family: var(--font-display); font-size: 1rem; letter-spacing: -0.02em; }
+.price-performance-card dl { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 15px 0; }
+.price-performance-card dl > div { min-width: 0; padding: 9px; border-radius: 7px; background: var(--surface-low); }
+.price-performance-card dt { color: var(--muted); font-family: var(--font-label); font-size: 0.56rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
+.price-performance-card dd { min-width: 0; margin: 4px 0 0; overflow-wrap: anywhere; font-size: 0.69rem; font-weight: 700; line-height: 1.4; }
+.price-performance-full-table { min-width: 0; margin-top: 16px; border-top: 1px solid var(--outline); }
+.price-performance-full-table > summary { min-height: 44px; display: flex; align-items: center; color: var(--primary-strong); font-size: 0.72rem; font-weight: 800; cursor: pointer; }
+.price-performance-evidence { display: grid; gap: 16px; }
+.price-performance-evidence .panel-heading { margin-bottom: 0; }
+.price-performance-source-list { min-width: 0; display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 0; padding: 0; list-style: none; }
+.price-performance-source-list li { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.68rem; }
+.price-performance-source-list a { min-height: 32px; display: inline-flex; align-items: center; font-weight: 800; overflow-wrap: anywhere; }
+.price-performance-source-list span { color: var(--muted); font-family: var(--font-label); font-size: 0.58rem; }
+.price-performance-load-state { display: grid; gap: 8px; }
+
+@media (max-width: 1023px) {
+  .price-performance-desktop-table { display: none; }
+  .price-performance-mobile-cards { display: grid; }
+}
+
+@media (max-width: 767px) {
+  .price-performance-hero { padding: 30px 22px; }
+  .price-performance-hero h1 { font-size: clamp(2.2rem, 11vw, 3.3rem); }
+  .price-performance-filter-panel, .price-performance-chart-panel, .price-performance-results, .price-performance-evidence { padding: 22px; }
+  .price-performance-filter-grid, .price-performance-price-band { grid-template-columns: minmax(0, 1fr); }
+  .price-performance-price-band legend { grid-column: auto; }
+  .price-performance-details-facts, .price-performance-evidence-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .price-performance-card { padding: 16px 0; }
+}
+
+@media (max-width: 380px) {
+  .price-performance-filter-panel, .price-performance-chart-panel, .price-performance-results, .price-performance-evidence { padding: 17px; }
+  .price-performance-details-heading { display: grid; }
+  .price-performance-details-heading .button { width: 100%; justify-content: center; }
+  .price-performance-details-facts, .price-performance-evidence-facts, .price-performance-card dl { grid-template-columns: minmax(0, 1fr); }
+}

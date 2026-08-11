@@ -1,5 +1,9 @@
+import { parsePricePerformanceEnvelope, type PricePerformanceEnvelope } from '../benchmarks/price-performance-contracts';
+
 const BENCHMARK_CACHE_SCHEMA = 'tokenbench-benchmark-cache/v2' as const;
 const BENCHMARK_CACHE_KEY_PREFIX = 'tokenbench:benchmarks:v2:';
+export const PRICE_PERFORMANCE_CACHE_KEY = 'tokenbench:benchmarks:v2:price-performance:complete';
+
 const BENCHMARK_CACHE_MAX_BYTES = 2_000_000;
 const UTF8_ENCODER = new TextEncoder();
 
@@ -36,16 +40,12 @@ function isCanonicalIsoTimestamp(value: unknown): value is string {
   return value.endsWith('.000Z') ? value === canonical : value === canonical.replace(/\.000Z$/u, 'Z');
 }
 
-function encodedIdentity(value: string): string {
-  return encodeURIComponent(value);
-}
-
 /** Builds an endpoint/query-isolated schema-versioned key from the exact normalized request serializer. */
 export function benchmarkCacheKey(endpoint: string, normalizedQuery?: string): string {
   const separator = endpoint.indexOf('?');
   const path = separator < 0 ? endpoint : endpoint.slice(0, separator);
   const query = normalizedQuery ?? (separator < 0 ? '' : endpoint.slice(separator + 1));
-  return `${BENCHMARK_CACHE_KEY_PREFIX}${encodedIdentity(path)}:${encodedIdentity(query)}`;
+  return `${BENCHMARK_CACHE_KEY_PREFIX}${encodeURIComponent(path)}:${encodeURIComponent(query)}`;
 }
 
 export function readBenchmarkEnvelopeCache<T>(
@@ -80,4 +80,23 @@ export function writeBenchmarkEnvelopeCache<T>(
   } catch {
     // Browser storage can be disabled, full, or unavailable in privacy modes.
   }
+}
+
+/** Stable browser key for the complete, filter-independent projection. */
+export function pricePerformanceCacheKey(): string {
+  return PRICE_PERFORMANCE_CACHE_KEY;
+}
+
+export function readPricePerformanceEnvelopeCache(
+  storage: BenchmarkEnvelopeStorage | undefined = defaultStorage(),
+): CachedBenchmarkEnvelope<PricePerformanceEnvelope> | null {
+  return readBenchmarkEnvelopeCache(PRICE_PERFORMANCE_CACHE_KEY, parsePricePerformanceEnvelope, storage);
+}
+
+export function writePricePerformanceEnvelopeCache(
+  envelope: PricePerformanceEnvelope,
+  storedAt: string = new Date().toISOString(),
+  storage: BenchmarkEnvelopeStorage | undefined = defaultStorage(),
+): void {
+  writeBenchmarkEnvelopeCache(PRICE_PERFORMANCE_CACHE_KEY, envelope, storedAt, storage);
 }

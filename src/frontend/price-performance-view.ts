@@ -1,0 +1,64 @@
+import { modelPath } from '../benchmarks/model-directory';
+import type { PricePerformancePointView } from '../benchmarks/price-performance-contracts';
+
+export interface PricePerformancePointViewFacts {
+  readonly modelName: string;
+  readonly score: string;
+  readonly selectedCost: string;
+  readonly scorePerDollar: string;
+  readonly provider: string;
+  readonly route: string;
+  readonly evidence: string;
+  readonly frontier: string;
+  readonly status: string;
+  readonly profileHref: string;
+  readonly profileLinkLabel: string;
+  readonly accessibleName: string;
+}
+
+function formatNumber(value: number, maximumFractionDigits = 2): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(value);
+}
+
+function costBasisLabel(point: PricePerformancePointView): string {
+  return point.costBasis === 'output' ? 'output price' : '3:1 blended price';
+}
+
+function evidenceLabel(point: PricePerformancePointView): string {
+  if (point.evidenceStatus === 'supported') return 'Supported evidence';
+  if (point.evidenceStatus === 'estimated') return 'Estimated evidence';
+  return 'Source-only evidence';
+}
+
+/** Formats every human-facing fact from one validated point view. */
+export function formatPricePerformancePointView(point: PricePerformancePointView): PricePerformancePointViewFacts {
+  const score = formatNumber(point.score, 2);
+  const selectedCost = `$${formatNumber(point.selectedCost, 4)} / 1M ${costBasisLabel(point)}`;
+  const scorePerDollar = point.scorePerDollar === null
+    ? 'Score per dollar unavailable'
+    : `${formatNumber(point.scorePerDollar, 2)} score / $`;
+  const provider = point.creator;
+  const route = `${point.route.providerId} · ${point.route.routeId}`;
+  const evidence = evidenceLabel(point);
+  const frontier = point.frontier ? 'Pareto frontier' : 'Not on Pareto frontier';
+  const status = point.status === 'current' ? 'Current model' : 'Archived model';
+  const profileHref = modelPath(point.slug);
+  const profileLinkLabel = `View ${point.displayName} model profile`;
+  const accessibleName = `${point.displayName}, score ${score}, ${selectedCost}, ${scorePerDollar}, ${evidence}, ${frontier}`;
+  return {
+    modelName: point.displayName,
+    score,
+    selectedCost,
+    scorePerDollar,
+    provider,
+    route,
+    evidence,
+    frontier,
+    status,
+    profileHref,
+    profileLinkLabel,
+    accessibleName,
+  };
+}
+
+export const pricePerformancePointFacts = formatPricePerformancePointView;

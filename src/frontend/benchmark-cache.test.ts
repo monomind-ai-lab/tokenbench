@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   benchmarkCacheKey,
+  pricePerformanceCacheKey,
   readBenchmarkEnvelopeCache,
+  readPricePerformanceEnvelopeCache,
   writeBenchmarkEnvelopeCache,
   type BenchmarkEnvelopeStorage,
 } from './benchmark-cache';
@@ -75,5 +77,17 @@ describe('validated browser benchmark envelope cache', () => {
     writeBenchmarkEnvelopeCache(key, { revision: 'x'.repeat(2_000_001) }, STORED_AT);
 
     expect(localStorage.getItem(key)).toBe(prior);
+  });
+  it('uses one complete projection key and only accepts a runtime-validated envelope', () => {
+    const key = pricePerformanceCacheKey();
+    expect(key).toBe('tokenbench:benchmarks:v2:price-performance:complete');
+    expect(readPricePerformanceEnvelopeCache()).toBeNull();
+
+    localStorage.setItem(key, JSON.stringify({
+      schema: 'tokenbench-benchmark-cache/v2',
+      storedAt: STORED_AT,
+      value: { revision: 'not-a-complete-envelope' },
+    }));
+    expect(readPricePerformanceEnvelopeCache()).toBeNull();
   });
 });
