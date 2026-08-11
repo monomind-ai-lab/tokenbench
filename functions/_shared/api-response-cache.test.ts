@@ -201,6 +201,26 @@ describe('materialized API response cache', () => {
     expect(await response.text()).toBe('');
   });
 
+  it('accepts the weak validator Cloudflare exposes for the same cached ETag', async () => {
+    const cached = await readApiResponseCache(
+      database({ ...cachedRow, etag: '"fresh"' }).db,
+      'catalog',
+      'catalog',
+      24 * 60 * 60 * 1_000,
+      Date.parse('2026-08-06T00:00:00.001Z'),
+    );
+
+    const weak = cachedApiResponse(new Request('https://example.com/api/catalog', {
+      headers: { 'If-None-Match': 'W/"fresh"' },
+    }), cached!);
+    const other = cachedApiResponse(new Request('https://example.com/api/catalog', {
+      headers: { 'If-None-Match': 'W/"other"' },
+    }), cached!);
+
+    expect(weak.status).toBe(304);
+    expect(other.status).toBe(200);
+  });
+
   it('returns null when no response set has been published', async () => {
     await expect(readApiResponseCache(
       database(undefined).db,

@@ -1,4 +1,5 @@
 import { API_RESPONSE_CHUNK_MAX_BYTES } from '../../src/cache/api-response-chunks';
+import { matchesIfNoneMatch } from './entity-tag';
 
 export type ApiResponseCacheScope = 'catalog' | 'benchmarks';
 
@@ -175,7 +176,7 @@ function responseHeaders(cached: MaterializedApiResponse): Headers {
 
 export function cachedApiResponse(request: Request, cached: MaterializedApiResponse): Response {
   const headers = responseHeaders(cached);
-  if (request.headers.get('If-None-Match') === cached.etag) {
+  if (matchesIfNoneMatch(request, cached.etag)) {
     return new Response(null, { status: 304, headers });
   }
   headers.set('Content-Type', 'application/json; charset=utf-8');

@@ -1088,6 +1088,14 @@ describe('cached benchmark APIs', () => {
     await expect(response.text()).resolves.toBe('');
   });
 
+  it('returns 304 for Cloudflare\'s weak form of the current benchmark ETag', async () => {
+    const first = await summary();
+    const etag = first.headers.get('etag')!;
+    const response = await summary(publishedRows(), { 'If-None-Match': `W/${etag}` });
+
+    expect(response.status).toBe(304);
+  });
+
   it.each([
     ['summary', (headers?: HeadersInit) => summary(publishedRows(), headers)],
     ['leaderboard', (headers?: HeadersInit) => leaderboard('llm-overall', '', publishedRows(), headers)],

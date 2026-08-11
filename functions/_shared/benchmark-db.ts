@@ -16,6 +16,7 @@ import {
   type BenchmarkSourceId,
   type BenchmarkSourceRecord,
 } from '../../src/benchmarks/contracts';
+import { matchesIfNoneMatch } from './entity-tag';
 
 export interface D1Statement {
   bind(...values: unknown[]): { all(): Promise<{ results: unknown[] }> };
@@ -913,7 +914,7 @@ export function etagForBenchmarkResponse(
 }
 
 export function matchesExactEtag(request: Request, etag: string): boolean {
-  return request.headers.get('If-None-Match') === etag;
+  return matchesIfNoneMatch(request, etag);
 }
 
 export function jsonBenchmarkResponse(body: unknown, status = 200, etag?: string): Response {
