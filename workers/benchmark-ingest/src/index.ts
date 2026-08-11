@@ -2434,6 +2434,7 @@ export function buildUnchangedPublicationStatementPlan(
 ): PublicationStatementPlan {
   const responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
   const staging: BoundStatement[] = [];
+  const directoryCommit: BoundStatement[] = [];
   appendMaterializedBenchmarkApiResponseStatements(
     staging,
     db,
@@ -2441,11 +2442,29 @@ export function buildUnchangedPublicationStatementPlan(
     responseRevision,
     snapshot.revision.checkedAt,
   );
+  const publishesModelDirectory = snapshot.sources.some((source) => (
+    source.sourceId === 'benchlm' && source.artifactId === 'public-leaderboard'
+  ));
+  if (publishesModelDirectory) {
+    const modelDirectoryStatements: BoundStatement[] = [];
+    appendModelDirectoryPublicationStatements(
+      modelDirectoryStatements,
+      db,
+      snapshot,
+      publicLeaderboardFromSnapshot(snapshot),
+      snapshot.revision.checkedAt,
+    );
+    for (const statement of modelDirectoryStatements) {
+      if (isModelDirectoryStagingStatement(statement)) staging.push(statement);
+      else directoryCommit.push(statement);
+    }
+  }
   const commit = [
     boundedStatement(db, `UPDATE benchmark_revisions SET checked_at = ? WHERE revision = ?`, [
       snapshot.revision.checkedAt,
       snapshot.revision.revision,
     ]),
+    ...directoryCommit,
     benchmarkApiResponsePointerStatement(db, responseRevision, snapshot.revision.checkedAt),
     ...benchmarkApiResponseRetentionStatements(db),
     ...refreshSuccessStatements(db, snapshot.sources, snapshot.revision.checkedAt, snapshot.revision.revision),

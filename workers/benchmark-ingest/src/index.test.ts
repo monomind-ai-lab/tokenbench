@@ -1230,6 +1230,33 @@ describe('atomic benchmark ingestion', () => {
     expect([...state.apiResponseRevisions]).not.toContainEqual(expect.stringContaining('attempt-unchanged'));
   });
 
+  it('bootstraps durable profiles and the current UTC week when an active revision is unchanged', async () => {
+    const { env, db } = seededEnvironment();
+    const first = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-09T12:00:00.000Z').dependencies,
+    );
+    const statementCountAfterFirst = db.state.publicationStatements.length;
+    const second = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-10T01:00:00.000Z').dependencies,
+    );
+    const statements = db.state.publicationStatements.slice(statementCountAfterFirst);
+    const membership = statements.find((statement) => statement.sql.includes('benchmark_model_revision_membership'));
+    const profile = statements.find((statement) => statement.sql.includes('benchmark_model_profile_snapshots'));
+    const directory = statements.find((statement) => statement.sql.includes('INSERT INTO benchmark_model_directory'));
+    const week = statements.find((statement) => statement.sql.includes('benchmark_popular_model_weeks'));
+    const ranks = statements.find((statement) => statement.sql.includes('benchmark_popular_model_ranks'));
+
+    expect(first.status).toBe('published');
+    expect(second).toMatchObject({ status: 'unchanged', revision: first.revision, error: null });
+    expect(membership).toBeDefined();
+    expect(profile).toBeDefined();
+    expect(directory).toBeDefined();
+    expect(week?.values[0]).toBe('2026-08-10T00:00:00.000Z');
+    expect(ranks).toBeDefined();
+  });
+
   it('keeps the active cache complete when a same-timestamp unchanged commit fails', async () => {
     const { env, db } = seededEnvironment({ failPublicationBatchNumber: 4 });
     const transport = dependencies(healthyFetch(), () => observedAt);
@@ -1246,6 +1273,10 @@ describe('atomic benchmark ingestion', () => {
     expect(db.state.apiResponseEntries.get(activeApiRevision ?? '')).toEqual(activeBodies);
     expect(activeBodies.length).toBeGreaterThan(0);
     expect([...db.state.apiResponseRevisions]).toEqual([activeApiRevision]);
+    expect(db.state.publicationStatements.some((statement) => (
+      statement.sql.startsWith('DELETE FROM benchmark_model_profile_snapshots')
+      || statement.sql.startsWith('DELETE FROM benchmark_model_revision_membership')
+    ))).toBe(false);
   });
 
   it('writes exact projected evidence before staged publication and commits the pointers last', async () => {
