@@ -103,13 +103,15 @@ export async function generateStaticPages(rootDir: string): Promise<void> {
       const metadata = metadataForRoute(route);
       const content = fixedPageContent(route, metadata);
       const outputPath = inputs[id];
-      const chrome = route.kind === 'newsletterConfirmed'
+      const isTransactional = route.kind === 'newsletterConfirmed';
+      const chrome = isTransactional
         ? transactionalChrome(content)
         : staticChrome(content, activeNavigation(route));
       await mkdir(dirname(outputPath), { recursive: true });
       await writeFile(outputPath, documentHtml(
-        headMarkup(metadata, structuredDataFor(route, metadata)),
+        headMarkup(metadata, structuredDataFor(route, metadata), { includeTranslation: !isTransactional }),
         chrome,
+        { includeTranslation: !isTransactional },
       ));
     }));
 

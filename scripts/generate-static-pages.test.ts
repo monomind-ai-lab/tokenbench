@@ -116,6 +116,9 @@ describe('crawlable static-page generator', () => {
     expect(confirmed).not.toContain('class="static-page-shell"');
     expect(confirmed).not.toContain('<header class="top-header">');
     expect(confirmed).not.toContain('<footer class="app-footer">');
+    expect(confirmed).not.toContain('google_translate_element');
+    expect(confirmed).not.toContain('googleTranslateElementInit');
+    expect(confirmed).not.toContain('translate.google.com');
     expect(confirmed).toContain('<a class="button" href="/">Start Exploring</a>');
     expect(confirmed.match(/<a\b/gu)).toHaveLength(1);
     expect(confirmed).toContain('<script type="application/ld+json">');

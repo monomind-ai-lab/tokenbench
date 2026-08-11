@@ -351,6 +351,20 @@ describe('responsive calculator app shell', () => {
     expect(`${window.location.pathname}${window.location.search}`).toBe(pathname);
   });
 
+  it('does not silently select marketplace pricing when no direct provider API offer exists', async () => {
+    const marketplaceOnlyCatalog = {
+      ...FRONTEND_TEST_CATALOG,
+      modelOffers: FRONTEND_TEST_CATALOG.modelOffers.filter((offer) => offer.pricingBasis !== 'direct_provider_api'),
+    };
+    renderCalculator(marketplaceOnlyCatalog, CALCULATOR_PATH);
+
+    expect(await screen.findByText('Select a verified model')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Advanced model mapping'));
+    expect(screen.getByRole('checkbox', { name: /Alpha via OpenRouter/i })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Alpha via OpenCode Zen/i })).not.toBeChecked();
+    expect(screen.queryByText(/token-equivalent costs are equal/i)).not.toBeInTheDocument();
+  });
+
   it('canonicalizes recovered shared state once without selecting a replacement plan', async () => {
     const recoveryPath = `${CALCULATOR_PATH}?${new URLSearchParams({
       provider: 'provider-a',

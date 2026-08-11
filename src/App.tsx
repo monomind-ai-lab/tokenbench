@@ -6,7 +6,6 @@ import { CalculatorControls } from './frontend/calculator-controls';
 import { decodeCalculatorShareState, encodeCalculatorShareState, type CalculatorShareState } from './frontend/calculator-share-state';
 import {
   buildCalculatorSnapshot,
-  createInitialSelection,
   toggleModelSelection,
   type InitialSelection,
 } from './frontend/calculator-state';
@@ -75,7 +74,7 @@ function defaultOfferForProvider(catalog: NonNullable<CatalogState['catalog']>, 
 function selectionForPlan(catalog: NonNullable<CatalogState['catalog']>, providerId: string, planId: string): InitialSelection {
   const defaultOffer = defaultOfferForProvider(catalog, providerId, planId);
   if (defaultOffer) return { selectedModelIds: [defaultOffer.id], modelMixBasisPoints: { [defaultOffer.id]: 10_000 } };
-  return createInitialSelection(catalog.modelOffers.filter((offer) => offer.providerId === providerId).slice(0, 1));
+  return { selectedModelIds: [], modelMixBasisPoints: {} };
 }
 
 function CalculatorPage() {

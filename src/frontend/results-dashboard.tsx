@@ -17,7 +17,7 @@ interface TrendChartProps {
 
 function recommendationForSnapshot(selectedPlan: PlanOffer | undefined, snapshot: CalculatorSnapshot): string {
   const comparison = snapshot.comparison;
-  if (!selectedPlan || !comparison) return 'The token-equivalent costs are equal.';
+  if (!selectedPlan || !comparison) return 'Select a paid individual plan to compare.';
   if (comparison.cheaper === 'subscription') return 'Subscription is cheaper on a token-equivalent basis.';
   if (comparison.cheaper === 'api') return 'API is cheaper on a token-equivalent basis.';
   return 'The token-equivalent costs are equal.';
@@ -101,7 +101,9 @@ function ValueSummary({ selectedPlan, snapshot, catalog }: Pick<ResultsDashboard
         </div>
         <div>
           <dt>Efficiency</dt>
-          <dd>{formatSignedPercentBasisPoints(comparison?.efficiencyBasisPoints ?? null)}</dd>
+          <dd>{comparison?.efficiencyBasisPoints === null || comparison?.efficiencyBasisPoints === undefined
+            ? 'Unavailable'
+            : formatSignedPercentBasisPoints(comparison.efficiencyBasisPoints)}</dd>
         </div>
       </dl>
       <div className="value-summary-notes">

@@ -5,6 +5,10 @@ import type { PageMetadata } from './metadata';
 
 export type StaticNavigationPage = SiteNavigationPage | undefined;
 
+interface StaticDocumentOptions {
+  readonly includeTranslation?: boolean;
+}
+
 export function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;');
 }
@@ -13,7 +17,11 @@ export function jsonLd(value: unknown): string {
   return JSON.stringify(value).replaceAll('<', '\\u003c');
 }
 
-export function headMarkup(metadata: PageMetadata, structuredData: unknown[]): string {
+export function headMarkup(metadata: PageMetadata, structuredData: unknown[], options: StaticDocumentOptions = {}): string {
+  const translationScripts = options.includeTranslation === false
+    ? ''
+    : `<script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,ko,zh-TW,zh-CN,ja,es,fr,de,fi,pl,ru',autoDisplay:false},'google_translate_element')}</script>
+    <script async defer src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>`;
   return `<meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script>(function(){try{var currentFetch=window.fetch;Object.defineProperty(window,'fetch',{get:function(){return currentFetch},set:function(nextFetch){currentFetch=nextFetch},configurable:true,enumerable:true})}catch(e){}})()</script>
@@ -37,8 +45,7 @@ export function headMarkup(metadata: PageMetadata, structuredData: unknown[]): s
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
-    <script>function googleTranslateElementInit(){new google.translate.TranslateElement({pageLanguage:'en',includedLanguages:'en,ko,zh-TW,zh-CN,ja,es,fr,de,fi,pl,ru',autoDisplay:false},'google_translate_element')}</script>
-    <script async defer src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+    ${translationScripts}
     ${structuredData.map((data) => `<script type="application/ld+json">${jsonLd(data)}</script>`).join('\n    ')}`;
 }
 
@@ -68,15 +75,15 @@ export function transactionalChrome(content: string): string {
   return `<div class="transactional-page-shell">${content}</div>`;
 }
 
-export function documentHtml(head: string, content: string): string {
+export function documentHtml(head: string, content: string, options: StaticDocumentOptions = {}): string {
+  const translationMount = options.includeTranslation === false ? '' : '    <div id="google_translate_element"></div>\n';
   return `<!doctype html>
 <html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     ${head}
   </head>
   <body>
-    <div id="google_translate_element"></div>
-    <div id="root">${content}</div>
+${translationMount}    <div id="root">${content}</div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>\n`;
