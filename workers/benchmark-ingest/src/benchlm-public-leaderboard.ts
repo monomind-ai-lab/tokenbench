@@ -1,3 +1,4 @@
+import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
 import type { BenchmarkModel, EvidenceStatus } from '../../../src/benchmarks/contracts';
 
 export interface SafeBenchLmModelIdentity {
@@ -165,12 +166,18 @@ function categoryRanks(rows: readonly BenchLmPublicLeaderboardRow[]): readonly R
   )));
 }
 
-export function joinPublicLeaderboardScores(
+export interface JoinedPublicBenchLmScore {
+  readonly modelKey: string;
+  readonly score: PublicBenchLmScore;
+}
+
+/** Joins each corrected public row to exactly one validated benchmark model. */
+export function joinPublicLeaderboardRows(
   models: readonly SafeBenchLmModelIdentity[],
   leaderboard: BenchLmPublicLeaderboard,
-): ReadonlyMap<string, PublicBenchLmScore> {
+): readonly JoinedPublicBenchLmScore[] {
   const ranks = categoryRanks(leaderboard.models);
-  const result = new Map<string, PublicBenchLmScore>();
+  const result: JoinedPublicBenchLmScore[] = [];
   leaderboard.models.forEach((row, index) => {
     const exact = models.filter((model) => model.name === row.model && model.creator === row.creator);
     const candidates = exact.length > 0 ? exact : models.filter((model) => (
@@ -180,18 +187,95 @@ export function joinPublicLeaderboardScores(
     if (candidates.length !== 1) {
       fail(`BenchLM public leaderboard identity is ambiguous or missing: ${row.creator}/${row.model}`);
     }
-    const model = candidates[0];
-    if (result.has(model.modelKey)) fail(`BenchLM public leaderboard repeats model identity: ${model.modelKey}`);
-    result.set(model.modelKey, Object.freeze({
+    const model = candidates[0]!;
+    if (result.some((entry) => entry.modelKey === model.modelKey)) {
+      fail(`BenchLM public leaderboard repeats model identity: ${model.modelKey}`);
+    }
+    result.push({
       modelKey: model.modelKey,
-      overallScore: row.overallScore,
-      overallRank: row.rank,
-      categoryScores: row.categoryScores,
-      categoryRanks: ranks[index],
-      evidenceStatus: row.evidenceStatus,
-      methodologyVersion: leaderboard.methodologyVersion,
-      sourceSnapshotId: leaderboard.sourceSnapshotId,
-    }));
+      score: Object.freeze({
+        modelKey: model.modelKey,
+        overallScore: row.overallScore,
+        overallRank: row.rank,
+        categoryScores: row.categoryScores,
+        categoryRanks: ranks[index]!,
+        evidenceStatus: row.evidenceStatus,
+        methodologyVersion: leaderboard.methodologyVersion,
+        sourceSnapshotId: leaderboard.sourceSnapshotId,
+      }),
+    });
   });
   return result;
+}
+
+export function joinPublicLeaderboardScores(
+  models: readonly SafeBenchLmModelIdentity[],
+  leaderboard: BenchLmPublicLeaderboard,
+): ReadonlyMap<string, PublicBenchLmScore> {
+  return new Map(joinPublicLeaderboardRows(models, leaderboard).map((entry) => [entry.modelKey, entry.score]));
+}
+
+/** Rebuilds the corrected BenchAlign public order from an immutable snapshot. */
+export function publicLeaderboardFromSnapshot(snapshot: ActiveBenchmarkSnapshot): BenchLmPublicLeaderboard {
+  const source = snapshot.sources.find((candidate) => (
+    candidate.sourceId === 'benchlm' && candidate.artifactId === 'public-leaderboard'
+  ));
+  if (!source) fail('active snapshot is missing the BenchLM public leaderboard source');
+  const methodologyVersion = source.schemaVersion;
+  if (!methodologyVersion) fail('BenchLM public leaderboard source is missing methodologyVersion');
+  const sourceSnapshotId = source.upstreamRevision;
+  if (!sourceSnapshotId) fail('BenchLM public leaderboard source is missing sourceSnapshotId');
+  const generatedAt = snapshot.revision.generatedAt;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(generatedAt)) {
+    fail('active snapshot generatedAt must be a canonical ISO timestamp');
+  }
+  const modelsByKey = new Map(snapshot.models.map((model) => [model.modelKey, model]));
+  const overallMetrics = snapshot.metrics.filter((metric) => (
+    metric.sourceId === 'benchlm'
+    && metric.sourceArtifactId === 'public-leaderboard'
+    && metric.category === 'overall'
+  ));
+  const seen = new Set<string>();
+  const rows = overallMetrics
+    .slice()
+    .sort((left, right) => left.rank === null || right.rank === null
+      ? (left.rank === null ? 1 : -1)
+      : left.rank - right.rank || (left.modelKey < right.modelKey ? -1 : left.modelKey > right.modelKey ? 1 : 0))
+    .map((overall) => {
+      if (overall.rank === null || overall.rank <= 0) fail(`BenchLM public overall rank is invalid for ${overall.modelKey}`);
+      if (seen.has(overall.modelKey)) fail(`BenchLM public leaderboard repeats model identity: ${overall.modelKey}`);
+      seen.add(overall.modelKey);
+      const model = modelsByKey.get(overall.modelKey);
+      if (!model) fail(`BenchLM public leaderboard model is missing from the snapshot: ${overall.modelKey}`);
+      const categoryScores: Record<string, number | null> = {};
+      snapshot.metrics
+        .filter((metric) => (
+          metric.modelKey === overall.modelKey
+          && metric.sourceId === 'benchlm'
+          && metric.sourceArtifactId === 'public-leaderboard'
+          && metric.category !== 'overall'
+        ))
+        .sort((left, right) => left.category < right.category ? -1 : left.category > right.category ? 1 : 0)
+        .forEach((metric) => {
+          categoryScores[metric.category] = metric.value;
+        });
+      return {
+        rank: overall.rank,
+        model: model.name,
+        creator: model.creator,
+        sourceType: model.sourceType,
+        overallScore: overall.value,
+        categoryScores,
+        evidenceStatus: model.evidenceStatus,
+        methodologyVersion,
+      };
+    });
+  return Object.freeze({
+    lastUpdated: generatedAt.slice(0, 10),
+    mode: 'bench-align-v5',
+    methodologyVersion,
+    sourceSnapshotId,
+    approvedSnapshotId: null,
+    models: Object.freeze(rows),
+  });
 }

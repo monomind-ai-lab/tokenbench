@@ -1305,7 +1305,44 @@ describe('atomic benchmark ingestion', () => {
     }
     expect(sourceRows.some((source) => source.contentHash !== source.originalContentHash)).toBe(true);
   });
+  it('persists durable profiles before atomic directory and weekly pointer updates', async () => {
+    const { env, db } = seededEnvironment();
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);
 
+    expect(result).toMatchObject({ status: 'published', revision: expect.any(String), error: null });
+    const statements = db.state.publicationStatements;
+    const indexOf = (fragment: string, start = 0) => statements.findIndex(
+      (statement, index) => index >= start && statement.sql.includes(fragment),
+    );
+    const membership = indexOf('benchmark_model_revision_membership');
+    const profile = indexOf('benchmark_model_profile_snapshots', membership + 1);
+    const slugCheck = indexOf('SELECT CASE WHEN EXISTS', profile + 1);
+    const directory = indexOf('INSERT INTO benchmark_model_directory', slugCheck + 1);
+    const archive = indexOf("status = 'archived'", directory + 1);
+    const week = indexOf('benchmark_popular_model_weeks', archive + 1);
+    const ranks = indexOf('benchmark_popular_model_ranks', week + 1);
+    const pointer = indexOf('benchmark_publication_state', ranks + 1);
+    expect(profile).toBeGreaterThan(membership);
+    expect(slugCheck).toBeGreaterThan(profile);
+    expect(directory).toBeGreaterThan(slugCheck);
+    expect(archive).toBeGreaterThan(directory);
+    expect(week).toBeGreaterThan(archive);
+    expect(ranks).toBeGreaterThan(week);
+    expect(pointer).toBeGreaterThan(ranks);
+  });
+
+  it('cleans revision-scoped directory rows when publication staging fails', async () => {
+    const { env, db } = seededEnvironment({ failPublicationBatch: true });
+    const result = await refreshBenchmarkRevision(env, dependencies(healthyFetch()).dependencies);
+
+    expect(result.status).toBe('failed');
+    const cleanup = db.state.publicationStatements.filter((statement) => (
+      statement.sql.startsWith('DELETE FROM benchmark_model_profile_snapshots')
+      || statement.sql.startsWith('DELETE FROM benchmark_model_revision_membership')
+    ));
+    expect(cleanup).toHaveLength(2);
+    expect(cleanup.every((statement) => statement.values.length > 0)).toBe(true);
+  });
   it('materializes fresh and stale benchmark API responses before moving the response-cache pointer', async () => {
     const { env, db } = seededEnvironment();
 

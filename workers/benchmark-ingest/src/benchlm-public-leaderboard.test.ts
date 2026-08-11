@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
+import type { BenchmarkMetric, BenchmarkModel, BenchmarkSourceRecord } from '../../../src/benchmarks/contracts';
 import {
   joinPublicLeaderboardScores,
   parseBenchLmPublicLeaderboard,
+  publicLeaderboardFromSnapshot,
   type SafeBenchLmModelIdentity,
 } from './benchlm-public-leaderboard';
 
@@ -22,6 +25,103 @@ function identities(): SafeBenchLmModelIdentity[] {
     ['gpt-5-6-sol', 'source:benchlm:gpt-5-6-sol', 'GPT-5.6 Sol', 'OpenAI'],
     ['sakana-fugu-ultra', 'source:benchlm:sakana-fugu-ultra', 'Sakana Fugu-Ultra', 'Sakana AI'],
   ].map(([sourceModelId, modelKey, name, creator]) => ({ sourceModelId, modelKey, name, creator }));
+}
+function snapshotFromFixture(): ActiveBenchmarkSnapshot {
+  const parsed = parseBenchLmPublicLeaderboard(fixture());
+  const models: BenchmarkModel[] = parsed.models.map((row, index) => ({
+    modelKey: `source:benchlm:${index}`,
+    slug: `model-${index}`,
+    name: row.model,
+    creator: row.creator,
+    sourceType: row.sourceType,
+    reasoningType: null,
+    releaseDate: null,
+    contextWindowTokens: null,
+    evidenceStatus: row.evidenceStatus,
+    rankingEligible: row.evidenceStatus === 'supported',
+    confidenceLower: null,
+    confidenceUpper: null,
+    benchmarkCount: 1,
+    sourceId: 'benchlm',
+    sourceModelId: `source-model-${index}`,
+    sourceArtifactId: 'models',
+  }));
+  const metrics: BenchmarkMetric[] = parsed.models.flatMap((row, index) => [
+    {
+      modelKey: models[index]!.modelKey,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+      value: row.overallScore,
+      rawValue: null,
+      rank: row.rank,
+      lower: null,
+      upper: null,
+      voteCount: null,
+      unit: 'score',
+      sourceId: 'benchlm',
+      sourceUpdatedAt: '2026-08-10T00:00:00.000Z',
+      sourceModelId: models[index]!.sourceModelId,
+      sourceArtifactId: 'public-leaderboard',
+      rankingEligible: row.evidenceStatus === 'supported',
+      methodology: 'benchlm_raw_composite',
+      observationCount: null,
+      sessionCount: null,
+    },
+    ...Object.entries(row.categoryScores)
+      .filter((entry): entry is [string, number] => entry[1] !== null)
+      .map(([category, value]) => ({
+        modelKey: models[index]!.modelKey,
+        metricKey: `benchlm:category:${category}`,
+        category,
+        value,
+        rawValue: null,
+        rank: null,
+        lower: null,
+        upper: null,
+        voteCount: null,
+        unit: 'score' as const,
+        sourceId: 'benchlm' as const,
+        sourceUpdatedAt: '2026-08-10T00:00:00.000Z',
+        sourceModelId: models[index]!.sourceModelId,
+        sourceArtifactId: 'public-leaderboard',
+        rankingEligible: false,
+        methodology: 'benchlm_raw_composite' as const,
+        observationCount: null,
+        sessionCount: null,
+      })),
+  ]);
+  const source: BenchmarkSourceRecord = {
+    sourceId: 'benchlm',
+    artifactId: 'public-leaderboard',
+    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
+    observedAt: '2026-08-10T00:00:00.000Z',
+    etag: null,
+    lastModified: null,
+    upstreamRevision: parsed.sourceSnapshotId,
+    schemaVersion: parsed.methodologyVersion,
+    snapshotKey: 'benchlm/public-leaderboard.json',
+    contentHash: `sha256:${'a'.repeat(64)}`,
+    originalContentHash: `sha256:${'b'.repeat(64)}`,
+    licenseId: 'MIT',
+    attributionText: 'Data from BenchLM.ai',
+  };
+  return {
+    revision: {
+      revision: 'revision-1',
+      generatedAt: '2026-08-10T00:00:00.000Z',
+      publishedAt: '2026-08-10T00:00:00.000Z',
+      checkedAt: '2026-08-10T00:00:00.000Z',
+      publicationState: 'published',
+      contentHash: `sha256:${'c'.repeat(64)}`,
+      catalogRevision: 'catalog-1',
+      openrouterContentHash: `sha256:${'d'.repeat(64)}`,
+    },
+    sources: [source],
+    models,
+    metrics,
+    priceChecks: [],
+    comparisonPairs: [],
+  };
 }
 
 describe('BenchLM public leaderboard contract', () => {
@@ -76,5 +176,19 @@ describe('BenchLM public leaderboard contract', () => {
     if (!gpt) throw new Error('fixture is missing GPT-5.6 Sol');
     gpt.overallScore = '81.48';
     expect(() => parseBenchLmPublicLeaderboard(source)).toThrow(/overallScore/i);
+  });
+  it('reconstructs the corrected public ordering from a validated active snapshot', () => {
+    const snapshot = snapshotFromFixture();
+    const derived = publicLeaderboardFromSnapshot(snapshot);
+    expect(derived).toMatchObject({
+      mode: 'bench-align-v5',
+      sourceSnapshotId: '2026-08-10-8c567bd96953b15d',
+      methodologyVersion: 'bench-align-v5.3-2026-07-24',
+    });
+    expect(derived.models.map((row) => row.rank)).toEqual([4, 4, 8, 12, 22]);
+    expect(derived.models.find((row) => row.model === 'GPT-5.6 Sol')).toMatchObject({
+      overallScore: 81.48,
+      categoryScores: { coding: 77.95 },
+    });
   });
 });

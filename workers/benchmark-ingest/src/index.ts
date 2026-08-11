@@ -53,6 +53,13 @@ import {
   type StoredBenchLmProjections,
 } from './benchlm';
 import {
+  appendModelDirectoryPublicationStatements,
+  isModelDirectoryStagingStatement,
+  modelDirectoryRevisionCleanupStatements,
+  modelDirectoryStatementBytes,
+} from './model-directory-publication';
+import { publicLeaderboardFromSnapshot } from './benchlm-public-leaderboard';
+import {
   LMARENA_SUBSETS,
   lmArenaHubParquetPageArtifactId,
   lmArenaHubParquetSourceUrl,
@@ -1826,7 +1833,8 @@ function rpcBoundedStatementBatches(statements: readonly BoundStatement[]): Boun
   let batch: BoundStatement[] = [];
   let batchBytes = 2; // JSON array brackets.
   for (const statement of statements) {
-    const statementBytes = d1StatementSerializedBytes.get(statement as object);
+    const statementBytes = d1StatementSerializedBytes.get(statement as object)
+      ?? modelDirectoryStatementBytes(statement);
     if (statementBytes === undefined) throw new Error('D1 publication statement is missing serialized-size metadata');
     if (statementBytes + 2 > MAX_D1_RPC_BATCH_BYTES) {
       throw new Error('A single D1 publication statement exceeds the RPC safety budget');
@@ -2338,16 +2346,41 @@ export function buildPublicationStatementPlan(
     boundedStatement(db, `UPDATE benchmark_revisions SET publication_state = 'published', published_at = ?
       WHERE revision = ? AND publication_attempt_id = ?`, [checkedAt, revision, publicationAttemptId]),
   ];
+  const directoryCommit: BoundStatement[] = [];
   const cleanup: BoundStatement[] = [
     ...ownedPendingBenchmarkRevisionCleanupStatements(db, revision, publicationAttemptId),
   ];
   let responseRevision: string | null = null;
-  if (materializeApiResponses) {
-    const snapshot = snapshotForApiResponses(revision, generatedAt, checkedAt, checkedAt, contentHash, catalog, batch, pairs);
-    responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
-    appendMaterializedBenchmarkApiResponseStatements(staging, db, snapshot, responseRevision, checkedAt);
-    cleanup.push(inactiveApiResponseRevisionCleanupStatement(db, responseRevision));
+  const publishesModelDirectory = batch.sources.some((source) => (
+    source.sourceId === 'benchlm' && source.artifactId === 'public-leaderboard'
+  ));
+  if (publishesModelDirectory) {
+    cleanup.push(...modelDirectoryRevisionCleanupStatements(db, revision));
   }
+  let snapshot: ActiveBenchmarkSnapshot | null = null;
+  if (materializeApiResponses || publishesModelDirectory) {
+    snapshot = snapshotForApiResponses(revision, generatedAt, checkedAt, checkedAt, contentHash, catalog, batch, pairs);
+    if (publishesModelDirectory) {
+      const modelDirectoryStatements: BoundStatement[] = [];
+      appendModelDirectoryPublicationStatements(
+        modelDirectoryStatements,
+        db,
+        snapshot,
+        publicLeaderboardFromSnapshot(snapshot),
+        checkedAt,
+      );
+      for (const statement of modelDirectoryStatements) {
+        if (isModelDirectoryStagingStatement(statement)) staging.push(statement);
+        else directoryCommit.push(statement);
+      }
+    }
+    if (materializeApiResponses) {
+      responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
+      appendMaterializedBenchmarkApiResponseStatements(staging, db, snapshot, responseRevision, checkedAt);
+      cleanup.push(inactiveApiResponseRevisionCleanupStatement(db, responseRevision));
+    }
+  }
+  commit.push(...directoryCommit);
   commit.push(
     boundedStatement(db, `INSERT INTO benchmark_publication_state (singleton, active_revision, updated_at) VALUES (1, ?, ?)
       ON CONFLICT(singleton) DO UPDATE SET active_revision = excluded.active_revision, updated_at = excluded.updated_at`, [revision, checkedAt]),
