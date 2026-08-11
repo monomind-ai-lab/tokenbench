@@ -47,6 +47,16 @@ function price(modelKey: string, input: number, output: number): BenchmarkPriceC
   };
 }
 
+function primaryContext(modelKey: string, contextWindowTokens: number): BenchmarkPriceCheck {
+  return {
+    ...price(modelKey, 2, 8),
+    sourceId: 'benchlm',
+    providerId: 'source-provider',
+    routeId: `benchlm:${modelKey}`,
+    contextWindowTokens,
+  };
+}
+
 function snapshot(overrides: {
   metrics?: BenchmarkMetric[];
   priceChecks?: BenchmarkPriceCheck[];
@@ -126,6 +136,25 @@ describe('representative home comparisons', () => {
     ];
 
     expect(buildBenchmarkSummaryData(snapshot({ models, priceChecks: [] })).representativeComparisons).toEqual([]);
+  });
+
+  it('uses agreeing exact-primary context evidence without promoting it to hosted price evidence', () => {
+    const models = [
+      { ...model('alpha', 'alpha'), contextWindowTokens: null },
+      { ...model('beta', 'beta'), contextWindowTokens: null },
+    ];
+    const [card] = buildBenchmarkSummaryData(snapshot({
+      models,
+      priceChecks: [primaryContext('alpha', 1_000_000), primaryContext('beta', 1_050_000)],
+    })).representativeComparisons;
+
+    expect(card).toMatchObject({
+      pairSlug: 'alpha-vs-beta',
+      modelAPriceUsdPerMillion: null,
+      modelBPriceUsdPerMillion: null,
+      modelAContextWindowTokens: 1_000_000,
+      modelBContextWindowTokens: 1_050_000,
+    });
   });
 
   it('omits a pair when either model is not supported evidence', () => {

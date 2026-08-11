@@ -316,6 +316,22 @@ function comparableSharedMetrics(
     .sort((left, right) => right.gap - left.gap || compareText(left.metricKey, right.metricKey));
 }
 
+function exactPrimaryContextWindow(
+  model: BenchmarkModel,
+  prices: readonly BenchmarkPriceCheck[],
+): number | null {
+  const values = new Set<number>();
+  const modelContext = validContextWindow(model.contextWindowTokens);
+  if (modelContext !== null) values.add(modelContext);
+  for (const price of prices) {
+    if (price.modelKey !== model.modelKey || price.verificationStatus !== 'primary') continue;
+    const context = validContextWindow(price.contextWindowTokens);
+    if (context !== null) values.add(context);
+  }
+  // Conflicting primary facts are not collapsed into one presentation value.
+  return values.size === 1 ? [...values][0] : null;
+}
+
 /**
  * Builds the reviewed home comparison cards. A pair ships only when it clears
  * every published gate: it is on the editorial allowlist, both models resolve
@@ -342,8 +358,8 @@ export function representativeComparisons(
 
     const priceA = primaryHostedPriceForModel(modelA.modelKey, factIndexes.pricesByModel.get(modelA.modelKey) ?? [], 'outputHeavy');
     const priceB = primaryHostedPriceForModel(modelB.modelKey, factIndexes.pricesByModel.get(modelB.modelKey) ?? [], 'outputHeavy');
-    const contextA = validContextWindow(priceA?.price.contextWindowTokens ?? modelA.contextWindowTokens);
-    const contextB = validContextWindow(priceB?.price.contextWindowTokens ?? modelB.contextWindowTokens);
+    const contextA = exactPrimaryContextWindow(modelA, factIndexes.pricesByModel.get(modelA.modelKey) ?? []);
+    const contextB = exactPrimaryContextWindow(modelB, factIndexes.pricesByModel.get(modelB.modelKey) ?? []);
     const hasPriceEvidence = priceA !== null && priceB !== null;
     const hasContextEvidence = contextA !== null && contextB !== null;
     if (!hasPriceEvidence && !hasContextEvidence) return [];
