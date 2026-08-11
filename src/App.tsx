@@ -136,14 +136,16 @@ function CalculatorPage() {
       skipSharedStateReconciliationRef.current = false;
       return;
     }
-    const providerWithDeterministicDefault = providerIds.find((providerId) => {
-      const firstPlanId = paidIndividualPlans(catalog.plans, providerId)[0]?.id ?? '';
-      return defaultOfferForProvider(catalog, providerId, firstPlanId) !== null;
+    const providerWithPlanDefault = providerIds.find((providerId) => {
+      const firstPlan = paidIndividualPlans(catalog.plans, providerId)[0];
+      return firstPlan !== undefined && defaultOfferForProvider(catalog, providerId, firstPlan.id) !== null;
     });
+    const providerWithApiOnlyDefault = providerIds.find((providerId) => paidIndividualPlans(catalog.plans, providerId).length === 0
+      && defaultOfferForProvider(catalog, providerId, '') !== null);
     const providerWithModels = providerIds.find((providerId) => catalog.modelOffers.some((offer) => offer.providerId === providerId));
     const nextProvider = selectedProviderId && providerIds.includes(selectedProviderId)
       ? selectedProviderId
-      : providerWithDeterministicDefault ?? providerWithModels ?? providerIds[0];
+      : providerWithPlanDefault ?? providerWithApiOnlyDefault ?? providerWithModels ?? providerIds[0];
     if (nextProvider !== selectedProviderId) {
       setSelectedProviderId(nextProvider);
       return;

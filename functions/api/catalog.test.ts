@@ -176,10 +176,10 @@ describe('GET /api/catalog', () => {
       env: { CATALOG_DB: d1({ revision: [freshRevision], sources: [source], plans: [plan], models: [model] }) },
     });
     expect(response.status).toBe(200);
-    expect(response.headers.get('etag')).toBe('"rev-1+manual-bootstrap-2026-08-04"');
+    expect(response.headers.get('etag')).toBe(`"rev-1+manual-${BOOTSTRAP_CATALOG.revision}"`);
     expect(response.headers.get('cache-control')).toContain('public');
     const body = await response.json() as { revision: string; provenance: Array<Record<string, unknown>>; plans: Array<Record<string, unknown>>; modelOffers: Array<Record<string, unknown>> };
-    expect(body.revision).toBe('rev-1+manual-bootstrap-2026-08-04');
+    expect(body.revision).toBe(`rev-1+manual-${BOOTSTRAP_CATALOG.revision}`);
     expect(body.provenance).toEqual(expect.arrayContaining([expect.objectContaining({ contentHash: 'sha256:abc', reviewStatus: 'verified' })]));
     expect(body.plans).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'openai:go', monthlyCostMicroDollars: 8_000_000 }),
@@ -190,7 +190,7 @@ describe('GET /api/catalog', () => {
 
   it('returns 304 when the client has the current revision', async () => {
     const response = await onRequestGet({
-      request: new Request('https://example.com/api/catalog', { headers: { 'If-None-Match': '"rev-1+manual-bootstrap-2026-08-04"' } }),
+      request: new Request('https://example.com/api/catalog', { headers: { 'If-None-Match': `"rev-1+manual-${BOOTSTRAP_CATALOG.revision}"` } }),
       env: { CATALOG_DB: d1({ revision: [freshRevision], sources: [source], plans: [plan], models: [model] }) },
     });
     expect(response.status).toBe(304);
@@ -207,7 +207,7 @@ describe('GET /api/catalog', () => {
     const body = await response.json() as { freshness: { status: string }; provenance: unknown[]; plans: { providerId: string }[] };
     expect(response.status).toBe(200);
     expect(body.freshness.status).toBe('bootstrap');
-    expect(body.provenance).toHaveLength(11);
+    expect(body.provenance).toHaveLength(BOOTSTRAP_CATALOG.provenance.length);
     expect(new Set(body.plans.map((plan) => plan.providerId))).toEqual(new Set(['alibaba', 'anthropic', 'google', 'xai', 'kimi', 'openai', 'zai']));
   });
 
@@ -216,9 +216,9 @@ describe('GET /api/catalog', () => {
       request: new Request('https://example.com/api/catalog'),
       env: { CATALOG_DB: d1({ revision: [{ revision: 'old-rev', published_at: '2020-01-01T00:00:00.000Z', checked_at: '2020-01-01T00:00:00.000Z' }], sources: [source], plans: [plan], models: [model] }) },
     });
-    expect(response.headers.get('etag')).toBe('"old-rev+manual-bootstrap-2026-08-04:stale"');
+    expect(response.headers.get('etag')).toBe(`"old-rev+manual-${BOOTSTRAP_CATALOG.revision}:stale"`);
     await expect(response.json()).resolves.toMatchObject({
-      revision: 'old-rev+manual-bootstrap-2026-08-04',
+      revision: `old-rev+manual-${BOOTSTRAP_CATALOG.revision}`,
       freshness: {
         status: 'stale',
         message: 'Published catalog has not refreshed within 24 hours; showing the last verified revision.',

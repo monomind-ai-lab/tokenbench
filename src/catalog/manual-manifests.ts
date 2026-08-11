@@ -22,6 +22,14 @@ export const MANUAL_ALIBABA_TOKEN_SOURCE: Omit<SourceProvenance, 'observedAt'> =
   parserVersion: 'manual-2026-08-10', evidenceLocator: 'Token Plan Personal Edition monthly pricing', reviewStatus: 'verified',
 };
 
+/** OpenAI publishes API model prices separately from ChatGPT subscriptions. */
+export const MANUAL_OPENAI_API_SOURCE: Omit<SourceProvenance, 'observedAt'> = {
+  id: 'openai-api', providerId: 'openai',
+  sourceUrl: 'https://developers.openai.com/api/docs/models/compare',
+  sourceKind: 'manual_manifest', confidence: 'manual_verified',
+  parserVersion: 'manual-2026-08-12', evidenceLocator: 'GPT-5.6 standard text-token pricing and model limits', reviewStatus: 'verified',
+};
+
 const rolling = (description: string) => ({ kind: 'rolling_limit' as const, description });
 const guardrail = (description: string) => ({ kind: 'guardrail_limited' as const, description });
 const credits = (description: string) => ({ kind: 'credits' as const, description });
@@ -318,7 +326,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
   },
   {
     id: 'openai:go', providerId: 'openai', displayName: 'ChatGPT Go', monthlyCostMicroDollars: 8_000_000,
-    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
+    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-terra'],
     entitlement: guardrail('No numeric allowance is published; US reference price is shown.'),
     entitlementEvidence: {
       status: 'dynamic_unknown',
@@ -330,7 +338,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
   },
   {
     id: 'openai:plus', providerId: 'openai', displayName: 'ChatGPT Plus', monthlyCostMicroDollars: 20_000_000,
-    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
+    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     entitlement: guardrail('Publishes per-model five-hour message bands rather than a token allowance.'),
     entitlementEvidence: openAiMessageCeilings([
       { modelId: 'sol', min: 10, max: 100 },
@@ -341,7 +349,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
   },
   {
     id: 'openai:pro-5x', providerId: 'openai', displayName: 'ChatGPT Pro 5x', monthlyCostMicroDollars: 100_000_000,
-    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
+    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     entitlement: guardrail('Publishes per-model five-hour message bands rather than a token allowance.'),
     entitlementEvidence: openAiMessageCeilings([
       { modelId: 'sol', min: 50, max: 500 },
@@ -352,7 +360,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
   },
   {
     id: 'openai:pro-20x', providerId: 'openai', displayName: 'ChatGPT Pro 20x', monthlyCostMicroDollars: 200_000_000,
-    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
+    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     entitlement: guardrail('Publishes per-model five-hour message bands rather than a token allowance.'),
     entitlementEvidence: openAiMessageCeilings([
       { modelId: 'sol', min: 200, max: 2_000 },
@@ -394,6 +402,9 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
 
 export const MANUAL_BOOTSTRAP_MODEL_OFFERS: ModelOffer[] = [
   { id: 'deepseek:deepseek-v4-flash:direct', providerId: 'deepseek', displayName: 'DeepSeek-V4-Flash', modelId: 'deepseek-v4-flash', pricingBasis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens', inputMicroDollarsPerMillion: 140_000, cachedInputMicroDollarsPerMillion: 2_800, outputMicroDollarsPerMillion: 280_000, contextWindowTokens: 1_000_000, maxOutputTokens: 384_000, availability: 'available', sourceId: 'deepseek-api' },
+  { id: 'openai:gpt-5.6-sol:direct', providerId: 'openai', displayName: 'GPT-5.6 Sol', modelId: 'gpt-5.6-sol', pricingBasis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens', inputMicroDollarsPerMillion: 5_000_000, cachedInputMicroDollarsPerMillion: 500_000, outputMicroDollarsPerMillion: 30_000_000, contextWindowTokens: 1_050_000, maxOutputTokens: 128_000, availability: 'available', sourceId: 'openai-api' },
+  { id: 'openai:gpt-5.6-terra:direct', providerId: 'openai', displayName: 'GPT-5.6 Terra', modelId: 'gpt-5.6-terra', pricingBasis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens', inputMicroDollarsPerMillion: 2_500_000, cachedInputMicroDollarsPerMillion: 250_000, outputMicroDollarsPerMillion: 15_000_000, contextWindowTokens: 1_050_000, maxOutputTokens: 128_000, availability: 'available', sourceId: 'openai-api' },
+  { id: 'openai:gpt-5.6-luna:direct', providerId: 'openai', displayName: 'GPT-5.6 Luna', modelId: 'gpt-5.6-luna', pricingBasis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens', inputMicroDollarsPerMillion: 1_000_000, cachedInputMicroDollarsPerMillion: 100_000, outputMicroDollarsPerMillion: 6_000_000, contextWindowTokens: 1_050_000, maxOutputTokens: 128_000, availability: 'available', sourceId: 'openai-api' },
 ];
 
 export function buildManualSubscriptionSources(providerId: string, observedAt: string): Array<{ source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }> {
@@ -402,17 +413,19 @@ export function buildManualSubscriptionSources(providerId: string, observedAt: s
   const primary = {
     source: { ...source, observedAt },
     plans: MANUAL_SUBSCRIPTION_PLANS.filter((plan) => plan.providerId === providerId && plan.sourceId === source.id),
-    modelOffers: MANUAL_BOOTSTRAP_MODEL_OFFERS.filter((offer) => offer.providerId === providerId),
+    modelOffers: MANUAL_BOOTSTRAP_MODEL_OFFERS.filter((offer) => offer.providerId === providerId && offer.sourceId === source.id),
   };
-  if (providerId !== 'alibaba') return [primary];
-  return [
-    primary,
-    {
-      source: { ...MANUAL_ALIBABA_TOKEN_SOURCE, observedAt },
-      plans: MANUAL_ALIBABA_TOKEN_PLANS,
-      modelOffers: [],
-    },
-  ];
+  if (providerId === 'alibaba') return [primary, {
+    source: { ...MANUAL_ALIBABA_TOKEN_SOURCE, observedAt },
+    plans: MANUAL_ALIBABA_TOKEN_PLANS,
+    modelOffers: [],
+  }];
+  if (providerId === 'openai') return [primary, {
+    source: { ...MANUAL_OPENAI_API_SOURCE, observedAt },
+    plans: [],
+    modelOffers: MANUAL_BOOTSTRAP_MODEL_OFFERS.filter((offer) => offer.sourceId === MANUAL_OPENAI_API_SOURCE.id),
+  }];
+  return [primary];
 }
 
 export function buildManualSubscriptionSource(providerId: string, observedAt: string): { source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] } {

@@ -367,9 +367,23 @@ describe('responsive calculator app shell', () => {
 
   it('starts with a provider that has a deterministic direct API mapping when one is available', async () => {
     const catalog = twoProviderCatalog();
+    const apiOnlySource = {
+      ...catalog.provenance[0],
+      id: 'deepseek-api',
+      providerId: 'deepseek',
+    };
+    const apiOnlyOffer = {
+      ...selectedDirectOffer,
+      id: 'deepseek:flash:direct_provider',
+      providerId: 'deepseek',
+      displayName: 'DeepSeek Flash Direct',
+      modelId: 'deepseek-flash',
+      sourceId: apiOnlySource.id,
+    };
     const marketplaceFirstCatalog = {
       ...catalog,
-      modelOffers: catalog.modelOffers.filter((offer) => offer.id !== selectedDirectOffer.id),
+      provenance: [...catalog.provenance, apiOnlySource],
+      modelOffers: [...catalog.modelOffers.filter((offer) => offer.id !== selectedDirectOffer.id), apiOnlyOffer],
     };
     renderCalculator(marketplaceFirstCatalog, CALCULATOR_PATH);
 

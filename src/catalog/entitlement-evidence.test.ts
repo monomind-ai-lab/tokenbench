@@ -99,6 +99,13 @@ describe('subscription entitlement evidence', () => {
     }
   });
 
+  it('maps reviewed OpenAI plans to the direct GPT-5.6 models they expose', () => {
+    expect(PLANS_BY_ID.get('openai:go')?.supportedModelIds).toEqual(['gpt-5.6-terra']);
+    for (const id of ['openai:plus', 'openai:pro-5x', 'openai:pro-20x']) {
+      expect(PLANS_BY_ID.get(id)?.supportedModelIds).toEqual(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna']);
+    }
+  });
+
   it('keeps providers without a published number as dynamic unknown', () => {
     for (const id of ['xai:supergrok', 'openai:go']) {
       const evidence = evidenceFor(id);

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ModelOffer, PlanOffer } from './contracts';
 import { defaultApiEquivalentForPlan } from './plan-api-equivalent';
 import { FRONTEND_TEST_CATALOG } from '../frontend/test-fixtures';
+import { BOOTSTRAP_CATALOG } from './bootstrap';
 
 function plan(overrides: Partial<PlanOffer> = {}): PlanOffer {
   return {
@@ -44,5 +45,14 @@ describe('deterministic plan API-equivalent mapping', () => {
   it('returns null when the plan provider has no direct API offer', () => {
     const result = defaultApiEquivalentForPlan(plan({ providerId: 'missing-provider' }), [directA, directB]);
     expect(result).toBeNull();
+  });
+
+  it('maps the reviewed OpenAI bootstrap plans to their published direct defaults', () => {
+    const go = BOOTSTRAP_CATALOG.plans.find((candidate) => candidate.id === 'openai:go');
+    const plus = BOOTSTRAP_CATALOG.plans.find((candidate) => candidate.id === 'openai:plus');
+    if (!go || !plus) throw new Error('Expected reviewed OpenAI bootstrap plans');
+
+    expect(defaultApiEquivalentForPlan(go, BOOTSTRAP_CATALOG.modelOffers)?.modelId).toBe('gpt-5.6-terra');
+    expect(defaultApiEquivalentForPlan(plus, BOOTSTRAP_CATALOG.modelOffers)?.modelId).toBe('gpt-5.6-sol');
   });
 });

@@ -439,6 +439,15 @@ describe('catalog ingestion', () => {
         expect.objectContaining({ id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, sourceId: 'openai-subscription' }),
         expect.objectContaining({ id: 'openai:pro-5x', monthlyCostMicroDollars: 100_000_000, sourceId: 'openai-subscription' }),
       ]) });
+
+    expect(buildManualSubscriptionSources('openai', '2026-08-12T00:00:00.000Z'))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ source: expect.objectContaining({ id: 'openai-api', confidence: 'manual_verified' }), plans: [], modelOffers: expect.arrayContaining([
+          expect.objectContaining({ id: 'openai:gpt-5.6-sol:direct', sourceId: 'openai-api' }),
+          expect.objectContaining({ id: 'openai:gpt-5.6-terra:direct', sourceId: 'openai-api' }),
+          expect.objectContaining({ id: 'openai:gpt-5.6-luna:direct', sourceId: 'openai-api' }),
+        ]) }),
+      ]));
   });
 
   it('retains only currently verified manual subscription prices', () => {
