@@ -1318,6 +1318,7 @@ test.describe('leaderboard browser harness', () => {
 
   test('keeps stale, empty, and unavailable leaderboard states explicit', async ({ page }) => {
     const origin = previewOrigin();
+    await page.addInitScript(() => window.localStorage.clear());
     const openCodingState = async (value: unknown, status = 200) => {
       await page.unrouteAll();
       await blockExternalRequests(page, origin);
@@ -1975,7 +1976,14 @@ test.describe('handler-backed compare browser coverage', () => {
     await stubStaticPageThirdPartyAssets(page);
     await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
 
+    const directoryResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/benchmarks' && response.status() === 200);
     await page.goto('/compare/', { waitUntil: 'domcontentloaded' });
+    await directoryResponse;
+    await expect(page.getByRole('heading', { name: 'Choose a model pair' })).toBeVisible();
+    const expectedStrictModeAbort = `${origin}/api/benchmarks (net::ERR_ABORTED)`;
+    expect(errors.failedRequests.every((failure) => failure === expectedStrictModeAbort)).toBe(true);
+    expect(errors.failedRequests.length).toBeLessThanOrEqual(1);
+    errors.failedRequests.length = 0;
     await page.goto(HANDLER_COMPARISON_PATH, { waitUntil: 'networkidle' });
 
     await assertInteractiveHandlerComparison(page);
