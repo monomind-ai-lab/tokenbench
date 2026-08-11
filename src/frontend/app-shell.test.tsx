@@ -57,8 +57,12 @@ function renderCalculator(catalog: CatalogResponse, pathname = calculatorPath())
   return renderAt(pathname);
 }
 
+async function calculatorReadyHeading() {
+  return screen.findByRole('heading', { name: /What does API usage cost?/i }, { timeout: 5_000 });
+}
+
 async function calculatedResult() {
-  await screen.findByRole('heading', { name: /What does API usage cost?/i }, { timeout: 5_000 });
+  await calculatorReadyHeading();
   return screen.getByRole('region', { name: 'Calculated plan value' });
 }
 
@@ -388,7 +392,7 @@ describe('responsive calculator app shell', () => {
   it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
     renderAt('/tools/subscriptions-vs-apis/');
 
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '20000001' } });
 
     const guidance = await screen.findByRole('status', { name: 'High-volume optimization guidance' });
@@ -399,7 +403,7 @@ describe('responsive calculator app shell', () => {
   it('renders derived metrics, evidence links, and separated pricing basis comparisons', async () => {
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: /What does API usage cost?/i })).toBeInTheDocument();
+    expect(await calculatorReadyHeading()).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Direct provider API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenRouter API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
@@ -410,7 +414,7 @@ describe('responsive calculator app shell', () => {
   it('renders the TokenBench shared chrome with its canonical navigation', async () => {
     render(<App />);
 
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
@@ -429,7 +433,7 @@ describe('responsive calculator app shell', () => {
   it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {
     render(<App />);
 
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(localStorage.getItem('tokenbench:theme')).toBeNull();
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
@@ -474,7 +478,7 @@ describe('responsive calculator app shell', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     const providerGroup = screen.getByRole('group', { name: /Provider selection/i });
     expect(within(providerGroup).getByRole('radio', { name: 'Provider A' })).toBeInTheDocument();
     expect(within(providerGroup).queryByRole('radio', { name: 'Provider B' })).not.toBeInTheDocument();
@@ -491,7 +495,7 @@ describe('responsive calculator app shell', () => {
     });
     render(<App />);
 
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     const planGroup = screen.getByRole('group', { name: /Plan Selection/i });
     expect(within(planGroup).getByRole('radio', { name: /Starter/i })).toBeInTheDocument();
     expect(within(planGroup).queryByRole('radio', { name: /Free/i })).not.toBeInTheDocument();
@@ -500,7 +504,7 @@ describe('responsive calculator app shell', () => {
 
   it('redistributes selected model usage and changes derived values when a preset is edited', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
 
     const modelGroup = screen.getByRole('group', { name: /Model selection/i });
     const checkboxes = within(modelGroup).getAllByRole('checkbox');
@@ -527,7 +531,7 @@ describe('responsive calculator app shell', () => {
 
   it('keeps calculator state while switching language and returns to the light theme', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     const usage = screen.getByLabelText(/Expected monthly usage/i);
     fireEvent.change(usage, { target: { value: '4200000' } });
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
@@ -590,7 +594,7 @@ describe('responsive calculator app shell', () => {
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
     expect(document.querySelector('[data-layout="compact"]')).toBeInTheDocument();
     expect(screen.getAllByTestId('offer-card').length).toBeGreaterThan(0);
   });
@@ -629,7 +633,7 @@ describe('responsive calculator app shell', () => {
 
   it('gives every range control a minimum 44px touch target', async () => {
     render(<App />);
-    await screen.findByRole('heading', { name: /What does API usage cost?/i });
+    await calculatorReadyHeading();
 
     const ranges = screen.getAllByRole('slider');
     expect(ranges.length).toBeGreaterThan(0);
