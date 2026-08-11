@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { ModelsApp } from '../../src/pages/models-page';
 import { SITE_CONFIG } from '../../src/brand/site-config';
+import { FRONTEND_ASSETS } from '../../src/routing/frontend-assets';
 import type { ModelDirectoryQueryState } from '../../src/frontend/model-directory-state';
 import { themeBootstrapMarkup } from '../../src/brand/theme-bootstrap';
 import {
@@ -127,14 +128,14 @@ export function renderModelDirectoryDocument(envelope: ModelDirectoryEnvelope, q
     <meta name="twitter:description" content="${escapeHtmlAttribute(metadata.twitter.description)}">
     <meta name="twitter:image" content="${escapeHtmlAttribute(metadata.twitter.image)}">
     ${themeBootstrapMarkup()}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
     ${scripts}
   </head>
   <body>
     <div id="google_translate_element"></div>
     <div id="root">${root}</div>
     <script id="models-initial-data" type="application/json">${serializeJsonForScript(envelope)}</script>
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
   </body>
 </html>\n`;
 }
@@ -151,7 +152,7 @@ function unavailableDocument(): string {
     <meta name="robots" content="noindex,follow">
     <link rel="canonical" href="${escapeHtmlAttribute(metadata.canonical)}">
     ${themeBootstrapMarkup()}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
   </head>
   <body><main class="models-unavailable"><h1>Popular AI models</h1><p>The durable model directory is temporarily unavailable. Please try again shortly.</p></main></body>
 </html>\n`;

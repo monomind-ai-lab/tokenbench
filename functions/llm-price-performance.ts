@@ -3,6 +3,7 @@ import { renderToString } from 'react-dom/server';
 import { PricePerformanceRoute } from '../src/App';
 import { parsePricePerformanceEnvelope, type PricePerformanceEnvelope } from '../src/benchmarks/price-performance-contracts';
 import { SITE_CONFIG } from '../src/brand/site-config';
+import { FRONTEND_ASSETS } from '../src/routing/frontend-assets';
 import { metadataForRoute, type PageMetadata } from '../src/seo/metadata';
 import { headMarkup, staticChrome } from '../src/seo/static-page';
 import { escapeHtmlText, serializeJsonForScript } from './_shared/html';
@@ -68,14 +69,14 @@ export function renderPricePerformanceDocument(envelope: PricePerformanceEnvelop
 <html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     ${headMarkup(metadata, [])}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
     ${scripts}
   </head>
   <body>
     <div id="google_translate_element"></div>
     <div id="root">${root}</div>
     <script id="price-performance-initial-data" type="application/json">${serializeJsonForScript(envelope)}</script>
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
   </body>
 </html>\n`;
 }
@@ -101,7 +102,7 @@ function unavailableDocument(): string {
 <html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
     ${headMarkup(metadata, [])}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
   </head>
   <body>
     <div id="google_translate_element"></div>

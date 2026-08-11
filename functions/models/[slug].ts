@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { ModelProfileApp } from '../../src/App';
 import { SITE_CONFIG } from '../../src/brand/site-config';
+import { FRONTEND_ASSETS } from '../../src/routing/frontend-assets';
 import { themeBootstrapMarkup } from '../../src/brand/theme-bootstrap';
 import { isModelSlugRouteSafe, modelPath } from '../../src/benchmarks/model-directory';
 import type { ModelProfileViewModel } from '../../src/frontend/model-profile-contracts';
@@ -129,7 +130,7 @@ function headMarkup(title: string, description: string, canonical: string, robot
     <meta name="twitter:description" content="${escapeHtmlAttribute(description)}">
     <meta name="twitter:image" content="${image}">
     ${themeBootstrapMarkup()}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
     ${extra}`;
 }
 
@@ -149,7 +150,7 @@ export function renderModelProfileDocument(viewModel: ModelProfileViewModel): st
     <div id="google_translate_element"></div>
     <div id="root">${root}</div>
     <script id="model-profile-initial-data" type="application/json">${serializeJsonForScript(viewModel)}</script>
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
   </body>
 </html>\n`;
 }
@@ -162,7 +163,7 @@ export function renderModelProfileStatusDocument(status: 404 | 503, slug: string
     : `The requested ${SITE_CONFIG.name} model profile is not available. Browse the durable model directory for current and retained benchmark evidence.`;
   const canonical = unavailable && slug ? `${SITE_CONFIG.origin}${modelPath(slug)}` : `${SITE_CONFIG.origin}/models/`;
   const heading = unavailable ? 'Model profile temporarily unavailable' : 'Model profile not found';
-  return `<!doctype html><html lang="en" data-theme="${SITE_CONFIG.defaultTheme}"><head>${headMarkup(title, description, canonical, 'noindex,follow', heading)}</head><body><main class="model-profile-status"><h1>${heading}</h1><p>${escapeHtmlText(description)}</p><p><a href="/models/">Browse popular models</a></p></main><script type="module" src="/assets/main.js"></script></body></html>\n`;
+  return `<!doctype html><html lang="en" data-theme="${SITE_CONFIG.defaultTheme}"><head>${headMarkup(title, description, canonical, 'noindex,follow', heading)}</head><body><main class="model-profile-status"><h1>${heading}</h1><p>${escapeHtmlText(description)}</p><p><a href="/models/">Browse popular models</a></p></main><script type="module" src="${FRONTEND_ASSETS.script}"></script></body></html>\n`;
 }
 
 function statusResponse(status: 404 | 503, slug: string | null): Response {

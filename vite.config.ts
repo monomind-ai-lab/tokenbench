@@ -2,6 +2,7 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
+import { versionFrontendAssetReferences } from './src/routing/frontend-assets';
 import { staticHtmlEntries } from './src/routing/routes';
 
 const generatedHtmlInputs = staticHtmlEntries(__dirname);
@@ -14,7 +15,19 @@ export default defineConfig(async ({ command }) => {
     ? [(await import('./scripts/local-preview-benchmark-api')).localPreviewBenchmarkApi()]
     : [];
   return {
-    plugins: [react(), tailwindcss(), ...localPreviewPlugins],
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...localPreviewPlugins,
+      {
+        name: 'version-stable-frontend-assets',
+        enforce: 'post' as const,
+        transformIndexHtml: {
+          order: 'post' as const,
+          handler: versionFrontendAssetReferences,
+        },
+      },
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

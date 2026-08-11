@@ -1,3 +1,9 @@
+/assets/main.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+/assets/tokenbench.css
+  Cache-Control: public, max-age=0, must-revalidate
+
 /downloads/tokenbench-cheatsheet-test-v1.pdf
   Content-Type: application/pdf
   Cache-Control: public, max-age=31536000, immutable

@@ -1982,14 +1982,14 @@ test.describe('handler-backed compare browser coverage', () => {
     const errors = captureBrowserErrors(page);
     await page.setViewportSize({ width: 320, height: 1000 });
     await blockExternalRequests(page, origin);
-    await page.route(origin + '/assets/main.js', (route) => {
+    await page.route(origin + '/assets/main.js*', (route) => {
       if (new URL(route.request().frame().url()).pathname !== unrelatedDocumentPath) return route.fallback();
       return route.fulfill({
         contentType: 'application/javascript',
         body: 'document.documentElement.dataset.fixtureMainAsset = "passed";',
       });
     });
-    await page.route(origin + '/assets/tokenbench.css', (route) => {
+    await page.route(origin + '/assets/tokenbench.css*', (route) => {
       if (new URL(route.request().frame().url()).pathname !== unrelatedDocumentPath) return route.fallback();
       return route.fulfill({
         contentType: 'text/css',
@@ -2277,7 +2277,7 @@ test.describe('viewport and theme hydration matrix', () => {
     const hydrationEntryReleased = new Promise<void>((resolve) => {
       releaseHydrationEntry = resolve;
     });
-    await page.route(origin + hydrationEntryPath, async (route) => {
+    await page.route(origin + hydrationEntryPath + '*', async (route) => {
       markHydrationEntryRequested?.();
       await hydrationEntryReleased;
       await route.continue();

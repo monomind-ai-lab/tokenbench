@@ -28,6 +28,7 @@ import {
   type RelatedComparison,
 } from '../../src/frontend/comparison-contracts';
 import { SITE_CONFIG } from '../../src/brand/site-config';
+import { FRONTEND_ASSETS } from '../../src/routing/frontend-assets';
 import { themeBootstrapMarkup } from '../../src/brand/theme-bootstrap';
 import { escapeHtmlAttribute, escapeHtmlText, isHttpsUrl, serializeJsonForScript } from '../_shared/html';
 import {
@@ -287,14 +288,14 @@ function shellDocument(viewModel: ComparisonViewModel): string {
     <meta name="twitter:description" content="${escapeHtmlAttribute(description)}">
     <meta name="twitter:image" content="${SITE_CONFIG.origin}/og-guides.png">
     ${themeBootstrapMarkup()}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
     ${scripts}
   </head>
   <body>
     <div id="google_translate_element"></div>
     <div id="root">${root}</div>
     <script id="comparison-initial-data" type="application/json">${serializeJsonForScript(viewModel)}</script>
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
   </body>
 </html>\n`;
 }
@@ -309,11 +310,11 @@ function notFoundDocument(): string {
     <title>${escapeHtmlText(title)}</title>
     <meta name="robots" content="noindex,follow">
     ${themeBootstrapMarkup()}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
   </head>
   <body>
     <main class="comparison-not-found"><h1>Comparison not found</h1><p>This pair is unavailable in the active published benchmark revision.</p><p><a href="/compare/">Browse model comparisons</a></p></main>
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
   </body>
 </html>\n`;
 }
@@ -338,11 +339,11 @@ function unavailableDocument(): string {
     <title>${escapeHtmlText(title)}</title>
     <meta name="robots" content="noindex,follow">
     ${themeBootstrapMarkup()}
-    <link rel="stylesheet" href="/assets/tokenbench.css">
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
   </head>
   <body>
     <main class="comparison-not-found"><h1>Comparison temporarily unavailable</h1><p>This active benchmark comparison cannot be loaded right now. Please try again shortly.</p><p><a href="/compare/">Browse model comparisons</a></p></main>
-    <script type="module" src="/assets/main.js"></script>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
   </body>
 </html>\n`;
 }

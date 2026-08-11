@@ -812,7 +812,7 @@ export async function stubHandlerBackedComparison(
     }
     await route.fallback();
   });
-  await page.route(origin + '/assets/main.js', async (route) => {
+  await page.route(origin + '/assets/main.js*', async (route) => {
     if (activeHandlerComparisonDocumentPath(route, page, activeHandlerDocumentByFrame) === null) {
       await route.fallback();
       return;
@@ -822,7 +822,7 @@ export async function stubHandlerBackedComparison(
       body: VITE_HANDLER_HYDRATION_ENTRY,
     });
   });
-  await page.route(origin + '/assets/tokenbench.css', async (route) => {
+  await page.route(origin + '/assets/tokenbench.css*', async (route) => {
     if (activeHandlerComparisonDocumentPath(route, page, activeHandlerDocumentByFrame) === null) {
       await route.fallback();
       return;
