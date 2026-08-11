@@ -57,6 +57,8 @@ import {
   isModelDirectoryStagingStatement,
   modelDirectoryRevisionCleanupStatements,
   modelDirectoryStatementBytes,
+  prepareModelDirectoryPublicationCandidate,
+  type ModelDirectoryPublicationCandidate,
 } from './model-directory-publication';
 import { publicLeaderboardFromSnapshot } from './benchlm-public-leaderboard';
 import {
@@ -2314,6 +2316,7 @@ export function buildPublicationStatementPlan(
   pairs: readonly BenchmarkComparisonPair[],
   materializeApiResponses = true,
   publicationAttemptId: string = crypto.randomUUID(),
+  preparedModelDirectoryCandidate?: ModelDirectoryPublicationCandidate,
 ): PublicationStatementPlan {
   const resolvePairSlug = createComparisonPairSlugResolver(batch.models);
   for (const value of pairs) {
@@ -2368,6 +2371,7 @@ export function buildPublicationStatementPlan(
         snapshot,
         publicLeaderboardFromSnapshot(snapshot),
         checkedAt,
+        preparedModelDirectoryCandidate,
       );
       for (const statement of modelDirectoryStatements) {
         if (isModelDirectoryStagingStatement(statement)) staging.push(statement);
@@ -2411,6 +2415,7 @@ export function buildPublicationStatements(
   pairs: readonly BenchmarkComparisonPair[],
   materializeApiResponses = true,
   publicationAttemptId: string = crypto.randomUUID(),
+  preparedModelDirectoryCandidate?: ModelDirectoryPublicationCandidate,
 ): BoundStatement[] {
   const plan = buildPublicationStatementPlan(
     db,
@@ -2423,6 +2428,7 @@ export function buildPublicationStatements(
     pairs,
     materializeApiResponses,
     publicationAttemptId,
+    preparedModelDirectoryCandidate,
   );
   return [...plan.staging, ...plan.commit];
 }
@@ -2431,6 +2437,7 @@ export function buildUnchangedPublicationStatementPlan(
   db: D1Database,
   snapshot: ActiveBenchmarkSnapshot,
   publicationAttemptId: string,
+  preparedModelDirectoryCandidate?: ModelDirectoryPublicationCandidate,
 ): PublicationStatementPlan {
   const responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
   const staging: BoundStatement[] = [];
@@ -2453,6 +2460,7 @@ export function buildUnchangedPublicationStatementPlan(
       snapshot,
       publicLeaderboardFromSnapshot(snapshot),
       snapshot.revision.checkedAt,
+      preparedModelDirectoryCandidate,
     );
     for (const statement of modelDirectoryStatements) {
       if (isModelDirectoryStagingStatement(statement)) staging.push(statement);
@@ -2578,14 +2586,47 @@ export async function refreshBenchmarkRevision(
         normalized,
         pairs,
       );
+      const preparedModelDirectoryCandidate = snapshot.sources.some((source) => (
+        source.sourceId === 'benchlm' && source.artifactId === 'public-leaderboard'
+      ))
+        ? await prepareModelDirectoryPublicationCandidate(
+            snapshot,
+            publicLeaderboardFromSnapshot(snapshot),
+            checkedAt,
+          )
+        : undefined;
       await executePublicationStatementPlan(
         env.CATALOG_DB,
-        buildUnchangedPublicationStatementPlan(env.CATALOG_DB, snapshot, publicationAttemptId),
+        buildUnchangedPublicationStatementPlan(
+          env.CATALOG_DB,
+          snapshot,
+          publicationAttemptId,
+          preparedModelDirectoryCandidate,
+        ),
       );
       return { status: 'unchanged', revision: active.revision, checkedAt, error: null };
     }
     const generatedAt = normalized.sources.find((source) => source.sourceId === 'benchlm' && source.artifactId === 'leaderboard')?.upstreamRevision ?? checkedAt;
     await writeEvidence(env.SOURCE_SNAPSHOTS, normalized.sources, evidence);
+    const publicationSnapshot = snapshotForApiResponses(
+      revision,
+      generatedAt,
+      checkedAt,
+      checkedAt,
+      contentHash,
+      catalog,
+      normalized,
+      pairs,
+    );
+    const preparedModelDirectoryCandidate = publicationSnapshot.sources.some((source) => (
+      source.sourceId === 'benchlm' && source.artifactId === 'public-leaderboard'
+    ))
+      ? await prepareModelDirectoryPublicationCandidate(
+          publicationSnapshot,
+          publicLeaderboardFromSnapshot(publicationSnapshot),
+          checkedAt,
+        )
+      : undefined;
     await executePublicationStatementPlan(
       env.CATALOG_DB,
       buildPublicationStatementPlan(
@@ -2599,6 +2640,7 @@ export async function refreshBenchmarkRevision(
         pairs,
         true,
         publicationAttemptId,
+        preparedModelDirectoryCandidate,
       ),
     );
     return { status: 'published', revision, checkedAt, error: null };

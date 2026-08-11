@@ -9,8 +9,10 @@ import type {
 import {
   buildModelProfileSnapshot,
   hashModelProfileSnapshotJson,
+  hashModelProfileSnapshotJsonAsync,
   parseModelProfileSnapshotData,
   serializeModelProfileSnapshot,
+  serializeModelProfileSnapshotAsync,
 } from './model-profile';
 import type { ModelProfileSourceSnapshot } from './model-profile';
 
@@ -198,5 +200,15 @@ describe('model profile contracts', () => {
       ...profile,
       identity: { ...profile.identity, displayName: 'x'.repeat(524_288) },
     })).toBeNull();
+  });
+
+  it('uses native asynchronous SHA-256 without changing persisted profile bytes', async () => {
+    const profile = buildModelProfileSnapshot(activeSnapshot(), 'benchlm:openai:gpt-5-6-sol');
+    const synchronous = serializeModelProfileSnapshot(profile);
+    const asynchronous = await serializeModelProfileSnapshotAsync(profile);
+
+    expect(asynchronous).toEqual(synchronous);
+    await expect(hashModelProfileSnapshotJsonAsync(synchronous.profileJson))
+      .resolves.toBe(synchronous.contentHash);
   });
 });

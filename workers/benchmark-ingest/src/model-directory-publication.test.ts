@@ -8,10 +8,12 @@ import type {
 } from '../../../src/benchmarks/contracts';
 import {
   appendModelDirectoryPublicationStatements,
+  prepareModelDirectoryPublicationCandidate,
   type D1Database,
   type BoundStatement,
 } from './model-directory-publication';
 import type { BenchLmPublicLeaderboard } from './benchlm-public-leaderboard';
+import { hashModelProfileSnapshotJson } from '../../../src/benchmarks/model-profile';
 
 const UPDATED_AT = '2026-08-10T01:00:00.000Z';
 const WEEK_START = '2026-08-10T00:00:00.000Z';
@@ -147,6 +149,31 @@ function statementIndex(records: readonly RecordedStatement[], fragment: string)
 }
 
 describe('atomic model directory publication', () => {
+  it('prepares exact profile hashes through the native asynchronous publication path', async () => {
+    const records: RecordedStatement[] = [];
+    const candidate = snapshot();
+    const prepared = await prepareModelDirectoryPublicationCandidate(
+      candidate,
+      publicLeaderboard(candidate.models),
+      UPDATED_AT,
+    );
+
+    appendModelDirectoryPublicationStatements(
+      [],
+      recordingDatabase(records),
+      candidate,
+      publicLeaderboard(candidate.models),
+      UPDATED_AT,
+      prepared,
+    );
+
+    expect(prepared.profiles).toHaveLength(candidate.models.length);
+    expect(prepared.profiles.every((profile) => (
+      profile.contentHash === hashModelProfileSnapshotJson(profile.profileJson)
+    ))).toBe(true);
+    expect(records.some((statement) => statement.sql.includes('benchmark_model_profile_snapshots'))).toBe(true);
+  });
+
   it('writes membership and immutable profiles before current/archive transitions', () => {
     const records: RecordedStatement[] = [];
     const candidate = snapshot();

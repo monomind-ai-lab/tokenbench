@@ -865,12 +865,30 @@ export function hashModelProfileSnapshotJson(profileJson: string): string {
   return `sha256:${sha256(profileBytes(profileJson))}`;
 }
 
-/** Validates, serializes, bounds, and hashes one profile snapshot atomically. */
-export function serializeModelProfileSnapshot(profile: ModelProfileSnapshotData): SerializedModelProfileSnapshot {
+/** Uses the runtime's native Web Crypto implementation for bulk publication. */
+export async function hashModelProfileSnapshotJsonAsync(profileJson: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', profileBytes(profileJson));
+  const hexadecimal = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `sha256:${hexadecimal}`;
+}
+
+export function serializeModelProfileSnapshotJson(profile: ModelProfileSnapshotData): string {
   const validated = validateProfileSnapshot(profile);
   const profileJson = JSON.stringify(validated);
   profileBytes(profileJson);
+  return profileJson;
+}
+
+/** Validates, serializes, bounds, and hashes one profile snapshot atomically. */
+export function serializeModelProfileSnapshot(profile: ModelProfileSnapshotData): SerializedModelProfileSnapshot {
+  const profileJson = serializeModelProfileSnapshotJson(profile);
   return { profileJson, contentHash: hashModelProfileSnapshotJson(profileJson) };
+}
+
+/** Native-crypto variant used when a complete revision contains thousands of profiles. */
+export async function serializeModelProfileSnapshotAsync(profile: ModelProfileSnapshotData): Promise<SerializedModelProfileSnapshot> {
+  const profileJson = serializeModelProfileSnapshotJson(profile);
+  return { profileJson, contentHash: await hashModelProfileSnapshotJsonAsync(profileJson) };
 }
 
 export { modelPath };

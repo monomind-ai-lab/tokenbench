@@ -6,7 +6,9 @@ import {
 } from '../../../src/benchmarks/model-directory';
 import {
   buildModelProfileSnapshot,
-  serializeModelProfileSnapshot,
+  hashModelProfileSnapshotJson,
+  hashModelProfileSnapshotJsonAsync,
+  serializeModelProfileSnapshotJson,
 } from '../../../src/benchmarks/model-profile';
 import type { ModelDirectoryRecord } from '../../../src/benchmarks/model-directory';
 import {
@@ -234,11 +236,7 @@ function profileSnapshotForModel(
   };
 }
 
-function requireCandidateIntegrity(
-  snapshot: ActiveBenchmarkSnapshot,
-  publicLeaderboard: BenchLmPublicLeaderboard,
-  updatedAt: string,
-): {
+export interface ModelDirectoryPublicationCandidate {
   readonly directoryRows: readonly ModelDirectoryRecord[];
   readonly profiles: readonly {
     readonly modelKey: string;
@@ -248,7 +246,24 @@ function requireCandidateIntegrity(
   }[];
   readonly ranks: readonly { readonly weekStart: string; readonly rank: number; readonly modelKey: string }[];
   readonly weekStart: string;
-} {
+}
+
+interface ModelDirectoryPublicationCandidateInputs {
+  readonly directoryRows: readonly ModelDirectoryRecord[];
+  readonly profiles: readonly {
+    readonly modelKey: string;
+    readonly profileJson: string;
+    readonly generatedAt: string;
+  }[];
+  readonly ranks: readonly { readonly weekStart: string; readonly rank: number; readonly modelKey: string }[];
+  readonly weekStart: string;
+}
+
+function candidateInputs(
+  snapshot: ActiveBenchmarkSnapshot,
+  publicLeaderboard: BenchLmPublicLeaderboard,
+  updatedAt: string,
+): ModelDirectoryPublicationCandidateInputs {
   if (!Number.isSafeInteger(snapshot.models.length) || snapshot.models.length === 0) {
     throw new Error('model directory publication requires at least one candidate model');
   }
@@ -275,7 +290,6 @@ function requireCandidateIntegrity(
   const profiles: {
     modelKey: string;
     profileJson: string;
-    contentHash: string;
     generatedAt: string;
   }[] = [];
   for (const model of snapshot.models) {
@@ -290,11 +304,10 @@ function requireCandidateIntegrity(
       metricsByIdentity,
       rankedMetricsByIdentity,
     );
-    const serialized = serializeModelProfileSnapshot(buildModelProfileSnapshot(profileSnapshot, model.modelKey));
+    const profileJson = serializeModelProfileSnapshotJson(buildModelProfileSnapshot(profileSnapshot, model.modelKey));
     profiles.push({
       modelKey: model.modelKey,
-      profileJson: serialized.profileJson,
-      contentHash: serialized.contentHash,
+      profileJson,
       generatedAt: snapshot.revision.generatedAt,
     });
   }
@@ -316,6 +329,44 @@ function requireCandidateIntegrity(
   return { directoryRows, profiles, ranks, weekStart };
 }
 
+function requireCandidateIntegrity(
+  snapshot: ActiveBenchmarkSnapshot,
+  publicLeaderboard: BenchLmPublicLeaderboard,
+  updatedAt: string,
+): ModelDirectoryPublicationCandidate {
+  const candidate = candidateInputs(snapshot, publicLeaderboard, updatedAt);
+  return {
+    ...candidate,
+    profiles: candidate.profiles.map((profile) => ({
+      ...profile,
+      contentHash: hashModelProfileSnapshotJson(profile.profileJson),
+    })),
+  };
+}
+
+/**
+ * Hashes complete profile sets through native Web Crypto in bounded waves so
+ * scheduled publication does not spend its CPU budget in the pure-JS SHA-256
+ * compatibility path.
+ */
+export async function prepareModelDirectoryPublicationCandidate(
+  snapshot: ActiveBenchmarkSnapshot,
+  publicLeaderboard: BenchLmPublicLeaderboard,
+  updatedAt: string,
+): Promise<ModelDirectoryPublicationCandidate> {
+  const candidate = candidateInputs(snapshot, publicLeaderboard, updatedAt);
+  const profiles: ModelDirectoryPublicationCandidate['profiles'][number][] = [];
+  const HASH_CONCURRENCY = 64;
+  for (let offset = 0; offset < candidate.profiles.length; offset += HASH_CONCURRENCY) {
+    const chunk = candidate.profiles.slice(offset, offset + HASH_CONCURRENCY);
+    profiles.push(...await Promise.all(chunk.map(async (profile) => ({
+      ...profile,
+      contentHash: await hashModelProfileSnapshotJsonAsync(profile.profileJson),
+    }))));
+  }
+  return { ...candidate, profiles };
+}
+
 /**
  * Appends every durable directory/profile/week statement only after the entire
  * candidate has been materialized and validated in memory.
@@ -326,8 +377,9 @@ export function appendModelDirectoryPublicationStatements(
   snapshot: ActiveBenchmarkSnapshot,
   publicLeaderboard: BenchLmPublicLeaderboard,
   updatedAt: string,
+  preparedCandidate?: ModelDirectoryPublicationCandidate,
 ): void {
-  const candidate = requireCandidateIntegrity(snapshot, publicLeaderboard, updatedAt);
+  const candidate = preparedCandidate ?? requireCandidateIntegrity(snapshot, publicLeaderboard, updatedAt);
   const next: BoundStatement[] = [];
   const membershipRows = snapshot.models.map((model) => ({ modelKey: model.modelKey }));
   const profileRows = candidate.profiles.map((profile) => ({

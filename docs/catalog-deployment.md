@@ -99,13 +99,14 @@ exactly once in remote migration history. Do not attempt a destructive schema
 rollback. If a later correction is necessary, use an approved additive
 migration and preserve the original migration record.
 
-Both ingestion Workers require Workers Paid for their scheduled publication
-query budget. Benchmark ingestion explicitly opts into the supported five-minute
-CPU ceiling because one atomic release materializes every retained profile; the
-default 30-second ceiling is not sufficient for the complete directory. This is
-separate from Pages request-time CPU: Pages APIs use raw materialized responses
-or bounded targeted readers so normal requests do not rebuild the full fact
-graph.
+Verify the active Workers plan before every release; do not add a paid CPU limit
+or change billing without separate authorization. Durable profile publication
+uses native Web Crypto in bounded waves so exact SHA-256 profile hashes do not
+consume the pure-JavaScript compatibility path's CPU budget. The controlled
+post-deploy ingestion must still complete on the approved plan before Pages is
+released. This is separate from Pages request-time CPU: Pages APIs use raw
+materialized responses or bounded targeted readers so normal requests do not
+rebuild the full fact graph.
 
 ## Scheduled ingestion
 
