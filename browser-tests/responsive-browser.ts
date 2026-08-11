@@ -3,6 +3,7 @@ import type { CatalogResponse } from '../src/catalog/contracts';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
 import { themeBootstrapMarkup } from '../src/brand/theme-bootstrap';
+import { buildBlankTestCheatsheetPdf } from '../src/newsletter/test-cheatsheet';
 import {
   HANDLER_COMPARISON_PATH,
   HANDLER_SPARSE_COMPARISON_PATH,
@@ -1873,6 +1874,55 @@ async function comparisonInitialPayload(page: Page): Promise<unknown> {
   if (!payload) throw new Error('Comparison fixture did not expose its SSR hydration payload.');
   return JSON.parse(payload) as unknown;
 }
+
+test.describe('release 2 confirmation and test cheatsheet delivery', () => {
+  const confirmationPath = '/newsletter/confirmed/';
+  const confirmationCanonicalUrl = 'https://tokenbench.monomind.one/newsletter/confirmed/';
+
+  test('renders the confirmation page with exactly one Start Exploring action and no shell chrome', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubStaticPageThirdPartyAssets(page);
+
+    for (const width of [320, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto(confirmationPath);
+
+      await expect(page.getByRole('heading', { name: 'Your subscription is confirmed.', level: 1 })).toBeVisible();
+      const links = page.getByRole('link');
+      await expect(links).toHaveCount(1);
+      await expect(links.first()).toHaveAccessibleName('Start Exploring');
+      await expect(links.first()).toHaveAttribute('href', '/');
+      await expect(page.getByRole('button')).toHaveCount(0);
+      await expect(page.getByRole('navigation')).toHaveCount(0);
+      await expect(page.locator('.top-header')).toHaveCount(0);
+      await expect(page.locator('.app-footer')).toHaveCount(0);
+      await expect(page.locator('main')).toHaveCount(1);
+      await assertNoHorizontalOverflow(page);
+      await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex,follow/);
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', confirmationCanonicalUrl);
+    }
+  });
+
+  test('serves the versioned blank test cheatsheet as a deterministic application/pdf asset', async ({ page }) => {
+    const origin = previewOrigin();
+    const response = await page.request.get(`${origin}/downloads/tokenbench-cheatsheet-test-v1.pdf`);
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type'] ?? '').toContain('application/pdf');
+    const bytes = await response.body();
+    expect(Array.from(bytes)).toEqual(Array.from(buildBlankTestCheatsheetPdf()));
+  });
+
+  test('keeps the confirmation route from exposing a second main or navigation after hydration', async ({ page }) => {
+    await blockExternalRequests(page);
+    await page.goto(confirmationPath);
+
+    await expect(page.getByRole('heading', { name: 'Your subscription is confirmed.', level: 1 })).toBeVisible();
+    await expect(page.locator('main')).toHaveCount(1);
+    await expect(page.getByRole('link')).toHaveCount(1);
+    await expect(page.locator('.static-page-shell')).toHaveCount(0);
+  });
+});
 
 test.describe('handler-backed compare browser coverage', () => {
   test('runs the shared migration bootstrap in a non-hydrated comparison error shell', async ({ page }) => {

@@ -236,6 +236,90 @@ send action as part of this blueprint. Record authorizations and observed
 outcomes in the deployment evidence rather than treating a local command as
 approval.
 
+### Release 2: post-confirmation test-cheatsheet delivery
+
+Release 2 replaces the monthly-capaign gate for the confirmation path with a
+deterministic blank test PDF and a reviewed post-confirmation automation. The
+repository work is complete; the Brevo automation must still be configured and
+verified by an operator. No subscriber identity, names, companies, API keys, or
+browser form data ever enter logs, browser bundles, this document, or any
+committed artifact, and no test mail is sent by the repository.
+
+#### Confirmation destination
+
+The canonical DOI redirect target is `https://tokenbench.monomind.one/newsletter/confirmed/`.
+It is a standalone transactional page with no header, primary navigation, or
+footer chrome. It publishes `robots: noindex,follow`, a unique canonical/Open
+Graph/Twitter set, server-generated WebPage JSON-LD, and exactly one action: a
+`Start Exploring` link to `/`. No welcome email is sent before the user
+completes double opt-in; the redirect is the only arrival path.
+
+#### Deterministic blank test PDF
+
+`npm run generate:test-cheatsheet` writes the versioned public asset
+
+`public/downloads/tokenbench-cheatsheet-test-v1.pdf`
+
+which is served at
+
+`https://tokenbench.monomind.one/downloads/tokenbench-cheatsheet-test-v1.pdf`
+
+with `Content-Type: application/pdf` and
+`Cache-Control: public, max-age=31536000, immutable` (see
+`public/_headers`). The bytes are deterministic and valid: a one-page PDF whose
+object table and xref offsets are built from ASCII, with `/Count 1`, one
+`/Type /Page`, and an empty `/Length 0` content stream (no text operators). The
+committed asset, the `prebuild` regeneration, and the module
+`buildBlankTestCheatsheetPdf` output are byte-identical. The recorded SHA-256
+of the committed asset is:
+
+```text
+e7e96ab239c8f1d9590bc2f562e23ff55bb032ba0ba40ca97102933328b534b7  public/downloads/tokenbench-cheatsheet-test-v1.pdf
+```
+
+The cheatsheet is intentionally a blank test artifact. A future factual
+cheatsheet remains the separately authorized monthly-artifact boundary above;
+do not repoint this versioned blank asset at mutable or factual content.
+
+#### Post-confirmation automation runbook
+
+An operator with separate authorization configures one Brevo automation with
+exactly these properties and records the resulting identifiers only in the
+deployment-evidence area configured for that operator (never here):
+
+1. Trigger: `Contact added to list` for the cheatsheet list only
+   (`BREVO_CHEATSHEET_LIST_ID`). There is intentionally no pre-confirmation
+   trigger: double opt-in must complete before any automation step runs.
+2. Exactly one send-email step using the reviewed copy below. No other send,
+   attachment, or follow-up step; no subscriber-identity field is inserted.
+3. The send-email step uses the verified TokenBench sender and the approved
+   unsubscribe/preference-management destination already required by this
+   runbook's signup boundary.
+
+Reviewed welcome copy (from `src/newsletter/test-cheatsheet.ts`):
+
+- Subject: `Your TokenBench test cheatsheet`
+- Link object: `https://tokenbench.monomind.one/downloads/tokenbench-cheatsheet-test-v1.pdf`
+- Text:
+  `Thanks for confirming. This is the current TokenBench test delivery: <pdf url>`
+- HTML:
+  `<p>Thanks for confirming.</p><p>This is the current TokenBench test delivery.</p><p><a href="<pdf url>">Download the test cheatsheet PDF</a></p>`
+
+Verification (one authorized test address, no recorded identity):
+
+1. Submit the test address, complete no DOI, and confirm no welcome arrives.
+2. Complete DOI once and confirm exactly one welcome arrives.
+3. Download the PDF from the canonical URL and compare its SHA-256 with the
+   value recorded above.
+4. Rerun `npm run generate:test-cheatsheet` and diff the output against the
+   committed asset; any byte difference is a stop condition.
+
+Rollback switch: delete or remove from production only the `_headers` entry and
+the committed public asset (or disable the automation's send step) to stop new
+deliveries; the versioned URL serves 404 instead of a mutable file, so no stale
+or wrong asset is ever delivered. Record the site-side change only after the
+operator-verified evidence above is captured.
+
 ## UX/UI audit matrix
 
 The two implementation passes used the installed Impeccable skill, source
