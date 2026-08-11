@@ -66,6 +66,9 @@ export interface BenchmarkModel {
   slug: string;
   name: string;
   creator: string;
+  /** Optional source-declared identity used by durable directory records. */
+  familyId?: string | null;
+  variantId?: string | null;
   sourceType: 'Proprietary' | 'Open Weight' | 'Unknown';
   reasoningType: string | null;
   releaseDate: string | null;
@@ -491,6 +494,13 @@ function validateModel(
   for (const key of ['name', 'creator'] as const) {
     requireString(model[key], `${name}.${key}`);
     assertNoProhibitedText(model[key], `${name}.${key}`);
+  }
+  for (const key of ['familyId', 'variantId'] as const) {
+    const identity = model[key];
+    if (identity !== undefined) {
+      requireNullableString(identity, `${name}.${key}`);
+      if (identity !== null) assertNoProhibitedText(identity, `${name}.${key}`);
+    }
   }
   if (!['Proprietary', 'Open Weight', 'Unknown'].includes(model.sourceType)) fail(`${name}.sourceType is invalid`);
   requireNullableString(model.reasoningType, `${name}.reasoningType`);

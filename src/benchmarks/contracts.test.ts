@@ -568,7 +568,22 @@ describe('benchmark contracts', () => {
     expect(constructions).toBe(1);
     expect(resolutions).toBe(pairs.length);
   });
+  it('validates optional family and variant identities without allowing prohibited source text', () => {
+    const withFamily = {
+      ...validBatch,
+      models: [{ ...validBatch.models[0], familyId: 'gpt-5', variantId: 'sol' }],
+    };
+    expect(validateNormalizedSourceBatch(withFamily).models[0]).toMatchObject({
+      familyId: 'gpt-5',
+      variantId: 'sol',
+    });
+    expect(() => validateNormalizedSourceBatch({
+      ...withFamily,
+      models: [{ ...withFamily.models[0], familyId: 'Artificial Analysis' }],
+    })).toThrow(/prohibited/i);
+  });
 });
+
 
 describe('exact-review model policy', () => {
   it('does not fuzzy-match an unreviewed source identifier and creates a stable source-specific key', () => {
