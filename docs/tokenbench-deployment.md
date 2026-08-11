@@ -586,6 +586,55 @@ model publication.
   431 bytes, and SHA-256
   `e7e96ab239c8f1d9590bc2f562e23ff55bb032ba0ba40ca97102933328b534b7`.
 
+### Release 3 durable model directory and profile receipt — 2026-08-11
+
+- Git commit: `81c28fb1028a722969799dbadb6c1a4acce61369` on pushed `main`.
+  The release contains the additive durable-model schema, atomic profile and
+  weekly-directory publication, model APIs, SSR profile and directory routes,
+  cross-surface links, dynamic sitemap, responsive coverage, and the corrected
+  unchanged-revision weekly publication path.
+- Verification from the committed tree: 105 Vitest files and 1,259 tests
+  passed; `tsc --noEmit`, the production build, 7 local-preview browser tests,
+  and 72 responsive browser tests passed. The build emitted 28 crawlable pages.
+- Pre-migration backup: `/tmp/tokenbench-release3-backup.WKZ4NW/ai-plan-catalog-pre-0009.sql`
+  outside Git, 150.4 MB, SHA-256
+  `f4e6296a100bbf442a7000387b3c45a3926033d327f85c3e7b222dc1220f31a6`.
+  The pre-migration active revision was
+  `benchmark_941db0b535f7a160d95de6606689f6b4` with 4,417 models.
+- D1 migration: `0009_model_directory.sql` was applied once to production;
+  `wrangler d1 migrations list` now reports no pending migrations.
+- Benchmark Worker: `tokenbench-benchmark-ingest` version
+  `ebf5bbc3-dd07-43fa-be61-f22ce3228517`. The authorized production publication
+  ran the exact Worker scheduled handler in the local Workers runtime with
+  official remote D1 and R2 bindings after the account's Free-plan CPU ceiling
+  rejected the complete production invocation.
+- Controlled publication: active revision
+  `benchmark_3efc47868bcf9f8d4b17d35cb33ce0e7`, checked and published at
+  `2026-08-11T20:48:20.302Z`, with 4,420 current directory rows, 4,420 profile
+  snapshots, 4,420 active-membership rows, zero archived rows on this first
+  durable publication, and zero current profiles missing their selected
+  snapshot. The current week is `2026-08-10T00:00:00.000Z`; all 50 eligible
+  public rows have unique contiguous ranks 1 through 50.
+- Pages: production deployment
+  `0d29f72d-1f5c-4386-b914-e26e2f91659a` at
+  `https://0d29f72d.tokenbench-27t.pages.dev`, source `81c28fb`.
+- Canonical smoke: `/models/`, GPT-5.6 Sol, and the non-top
+  `1-bit Bonsai 1.7B` profile returned HTTP 200 with unique titles and exact
+  canonicals. GPT-5.6 Sol rendered overall `81.48`, coding `78.0` from `77.95`,
+  coding rank `#3 of 26`, and seven ledger rows. The dynamic model sitemap
+  returned 4,420 profile URLs, no query URLs, and a true unknown slug returned
+  HTTP 404 with `noindex`. Desktop and 390px checks had no document overflow,
+  console error, or failed request.
+- Automated-ingestion follow-up: the normal `15 */12 * * *` schedule is
+  restored after a fully propagated delayed production scheduler check. At
+  `2026-08-11T21:25:22.866Z`, Worker version
+  `ebf5bbc3-dd07-43fa-be61-f22ce3228517` exited with outcome `exceededCpu`
+  after 883 ms wall time and exactly 10 ms CPU. That is the documented Workers
+  Free Cron ceiling and is below this complete multi-source ingestion workload;
+  automated full refresh therefore requires Workers Paid or an approved
+  external production runner. The failed event changed no active revision or
+  model-profile counts; the last good revision remains published.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
