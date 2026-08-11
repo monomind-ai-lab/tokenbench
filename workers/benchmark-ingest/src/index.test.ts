@@ -153,8 +153,11 @@ function requiredExport<T>(name: string): T {
   return value as T;
 }
 
-function previousBenchLmSources(observedAt: string): Map<string, { observedAt: string }> {
-  return new Map(benchLmArtifacts.map((artifact) => [`benchlm\u0000${artifact}`, { observedAt }]));
+function previousBenchLmSources(observedAt: string): Map<string, { observedAt: string; snapshotKey: string }> {
+  return new Map(benchLmArtifacts.map((artifact) => [`benchlm\u0000${artifact}`, {
+    observedAt,
+    snapshotKey: `benchmarks/benchlm/${artifact}/projected/v2/test/original/test.json`,
+  }]));
 }
 
 function healthyFetch(options: {
@@ -341,7 +344,7 @@ function createDatabase(options: {
       return active ? structuredClone(active) as T : null;
     }
     if (sql.includes('FROM benchmark_refresh_state')) {
-      const row = state.refreshRows.get('benchlm:daily-network-check');
+      const row = state.refreshRows.get('benchlm:daily-network-check-v2');
       return row ? structuredClone(row) as T : null;
     }
     return null;
@@ -369,12 +372,12 @@ function createDatabase(options: {
       },
       async run() {
         state.queryCount += 1;
-        const key = 'benchlm:daily-network-check';
+        const key = 'benchlm:daily-network-check-v2';
         if (sql.includes('benchlm daily-check claim')) {
           const lease = String(values[0]);
           const checkedAt = String(values[1]);
           const existing = state.refreshRows.get(key);
-          const leaseExpiry = existing?.lastError?.match(/^benchlm-daily-lease:([^|]+)\|/)?.[1] ?? null;
+          const leaseExpiry = existing?.lastError?.match(/^benchlm-daily-lease-v2:([^|]+)\|/)?.[1] ?? null;
           const checkedAtMs = Date.parse(checkedAt);
           const activeLease = leaseExpiry !== null
             && Number.isFinite(checkedAtMs)
@@ -1458,7 +1461,7 @@ describe('atomic benchmark ingestion', () => {
     const secondEvents = events.slice(eventCountAfterFirst);
     expect(secondEvents.filter((event) => event.startsWith('r2:benchmarks/benchlm/daily-check/'))).toHaveLength(1);
     expect(secondEvents.slice(-2)).toEqual(['d1:publication', 'd1:publication']);
-    expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
+    expect(db.state.refreshRows.get('benchlm:daily-network-check-v2')).toEqual({
       lastSuccessAt: '2026-08-06T13:00:00.000Z',
       lastRevision: null,
       lastError: null,
@@ -1487,20 +1490,69 @@ describe('atomic benchmark ingestion', () => {
     expect(fetchImpl.mock.calls.some(([url]) => String(url).includes('litellm'))).toBe(true);
   });
 
+  it('refetches legacy same-day BenchLM projections after a projection schema upgrade', async () => {
+    const { env, db } = seededEnvironment();
+    const first = await refreshBenchmarkRevision(
+      env,
+      dependencies(healthyFetch(), () => '2026-08-06T00:15:00.000Z').dependencies,
+    );
+    if (!first.revision) throw new Error('expected the initial benchmark revision');
+    const firstSources = db.state.sourceRows.get(first.revision) ?? [];
+    for (const source of firstSources.filter((value) => value.sourceId === 'benchlm')) {
+      source.snapshotKey = source.snapshotKey.replace('/projected/v2/', '/projected/');
+    }
+    db.state.refreshRows.delete('benchlm:daily-network-check');
+    db.state.refreshRows.delete('benchlm:daily-network-check-v2');
+    db.state.refreshRows.set('benchlm:daily-network-check', {
+      lastSuccessAt: '2026-08-06T00:15:00.000Z',
+      lastRevision: null,
+      lastError: null,
+    });
+
+    const changedModels = JSON.parse(fixture('models')) as {
+      items: Array<{ scores: { displayScore: number | null } }>;
+    };
+    changedModels.items[0].scores.displayScore = 82.48;
+    const fetchImpl = vi.fn(healthyFetch({
+      onRequest(url) {
+        return url.hostname === 'benchlm.ai' && url.pathname.endsWith('/models.json')
+          ? new Response(JSON.stringify(changedModels), { headers: { etag: '"models-v2-etag"' } })
+          : undefined;
+      },
+    }));
+
+    const second = await refreshBenchmarkRevision(
+      env,
+      dependencies(fetchImpl, () => '2026-08-06T12:15:00.000Z').dependencies,
+    );
+
+    expect(second).toMatchObject({ status: 'published', revision: expect.any(String), error: null });
+    expect(second.revision).not.toBe(first.revision);
+    expect(fetchImpl.mock.calls.filter(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toHaveLength(5);
+    const secondSources = db.state.sourceRows.get(second.revision as string) ?? [];
+    expect(secondSources.filter((source) => source.sourceId === 'benchlm')
+      .every((source) => source.snapshotKey.includes('/projected/v2/'))).toBe(true);
+    expect(db.state.refreshRows.get('benchlm:daily-network-check-v2')).toEqual({
+      lastSuccessAt: '2026-08-06T12:15:00.000Z',
+      lastRevision: null,
+      lastError: null,
+    });
+  });
+
   it('does not fetch BenchLM again when complete stored projections were observed on the same UTC day', () => {
-    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
+    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string; snapshotKey: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
 
     expect(benchLmFetchDue(previousBenchLmSources('2026-08-06T00:15:00.000Z'), '2026-08-06T12:15:00.000Z')).toBe(false);
   });
 
   it('checks BenchLM again on the next UTC day', () => {
-    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
+    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string; snapshotKey: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
 
     expect(benchLmFetchDue(previousBenchLmSources('2026-08-06T00:15:00.000Z'), '2026-08-07T00:15:00.000Z')).toBe(true);
   });
 
   it('checks BenchLM when a required stored projection is missing', () => {
-    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
+    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string; snapshotKey: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
     const previous = previousBenchLmSources('2026-08-06T00:15:00.000Z');
     previous.delete('benchlm\u0000models');
 
@@ -1508,9 +1560,12 @@ describe('atomic benchmark ingestion', () => {
   });
 
   it('checks BenchLM when a required stored observation timestamp is invalid', () => {
-    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
+    const benchLmFetchDue = requiredExport<(previous: ReadonlyMap<string, { observedAt: string; snapshotKey: string }>, checkedAt: string) => boolean>('benchLmFetchDue');
     const previous = previousBenchLmSources('2026-08-06T00:15:00.000Z');
-    previous.set('benchlm\u0000models', { observedAt: 'not-a-timestamp' });
+    previous.set('benchlm\u0000models', {
+      observedAt: 'not-a-timestamp',
+      snapshotKey: 'benchmarks/benchlm/models/projected/v2/test/original/test.json',
+    });
 
     expect(benchLmFetchDue(previous, '2026-08-06T12:15:00.000Z')).toBe(true);
   });
@@ -1549,10 +1604,10 @@ describe('atomic benchmark ingestion', () => {
       status: 'failed',
       error: 'BenchLM daily network check did not complete within 10000ms',
     });
-    expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
+    expect(db.state.refreshRows.get('benchlm:daily-network-check-v2')).toEqual({
       lastSuccessAt: null,
       lastRevision: null,
-      lastError: 'benchlm-daily-lease:2026-08-06T00:30:00.000Z|winner',
+      lastError: 'benchlm-daily-lease-v2:2026-08-06T00:30:00.000Z|winner',
     });
   });
 
@@ -1626,12 +1681,12 @@ describe('atomic benchmark ingestion', () => {
     );
 
     expect(failed.status).toBe('failed');
-    expect(db.state.refreshRows.get('benchlm:daily-network-check')).toEqual({
+    expect(db.state.refreshRows.get('benchlm:daily-network-check-v2')).toEqual({
       lastSuccessAt: '2026-08-06T00:15:00.000Z',
       lastRevision: null,
       lastError: null,
     });
-    expect(r2.objects.has('benchmarks/benchlm/daily-check/2026-08-06T00:15:00.000Z.json')).toBe(true);
+    expect(r2.objects.has('benchmarks/benchlm/daily-check/v2/2026-08-06T00:15:00.000Z.json')).toBe(true);
 
     const retryFetch = vi.fn(healthyFetch());
 

@@ -179,8 +179,9 @@ const MAX_RETRY_DELAY_MS = 10_000;
 const MAX_ERROR_LENGTH = 1_000;
 const MAX_BENCHLM_BYTES = 8 * 1024 * 1024;
 const MAX_BENCHLM_DAILY_MANIFEST_BYTES = 64 * 1024;
-const BENCHLM_DAILY_CHECK_ARTIFACT = 'daily-network-check';
-const BENCHLM_DAILY_LEASE_PREFIX = 'benchlm-daily-lease:';
+const BENCHLM_PROJECTION_SCHEMA_VERSION = 'v2';
+const BENCHLM_DAILY_CHECK_ARTIFACT = `daily-network-check-${BENCHLM_PROJECTION_SCHEMA_VERSION}`;
+const BENCHLM_DAILY_LEASE_PREFIX = `benchlm-daily-lease-${BENCHLM_PROJECTION_SCHEMA_VERSION}:`;
 const BENCHLM_DAILY_LEASE_MS = 15 * 60 * 1000;
 // A loser performs at most 45 pre-publication D1 queries: three active-state
 // reads, the initial claim/state pair, and twenty claim/state polling pairs.
@@ -530,9 +531,20 @@ function parseUtcTimestamp(value: unknown): { milliseconds: number; date: string
   return { milliseconds, date: iso.slice(0, 10) };
 }
 
+function benchLmProjectionPrefix(artifact: BenchLmArtifact): string {
+  return `benchmarks/benchlm/${artifact}/projected/${BENCHLM_PROJECTION_SCHEMA_VERSION}/`;
+}
+
+function isCurrentBenchLmProjection(
+  artifact: BenchLmArtifact,
+  source: Pick<BenchmarkSourceRecord, 'snapshotKey'>,
+): boolean {
+  return source.snapshotKey.startsWith(benchLmProjectionPrefix(artifact));
+}
+
 /** Returns whether immutable active BenchLM projections need a UTC-day refresh. */
 export function benchLmFetchDue(
-  previous: ReadonlyMap<string, Pick<BenchmarkSourceRecord, 'observedAt'>>,
+  previous: ReadonlyMap<string, Pick<BenchmarkSourceRecord, 'observedAt' | 'snapshotKey'>>,
   checkedAt: string,
 ): boolean {
   const checked = parseUtcTimestamp(checkedAt);
@@ -541,6 +553,7 @@ export function benchLmFetchDue(
   for (const artifact of BENCHLM_ARTIFACTS) {
     const source = previous.get(sourceKey('benchlm', artifact));
     if (!source) return true;
+    if (!isCurrentBenchLmProjection(artifact, source)) return true;
     const observed = parseUtcTimestamp(source.observedAt);
     if (!observed) return true;
     if (!latest || observed.milliseconds > latest.milliseconds) latest = observed;
@@ -829,7 +842,7 @@ function sourceFromPreparedBenchLm(
 }
 
 function benchLmSnapshotKey(artifact: BenchLmArtifact, prepared: PreparedBenchLmPayloads): string {
-  return `benchmarks/benchlm/${artifact}/projected/${prepared[artifact].projectedSha256}/original/${prepared[artifact].originalSha256}.json`;
+  return `${benchLmProjectionPrefix(artifact)}${prepared[artifact].projectedSha256}/original/${prepared[artifact].originalSha256}.json`;
 }
 
 async function prepareBenchLmSource(
@@ -839,7 +852,8 @@ async function prepareBenchLmSource(
   dependencies: RefreshDependencies,
 ): Promise<PreparedSource> {
   const responses = await Promise.all(BENCHLM_ARTIFACTS.map(async (artifact) => {
-    const existing = previous.get(sourceKey('benchlm', artifact));
+    const candidate = previous.get(sourceKey('benchlm', artifact));
+    const existing = candidate && isCurrentBenchLmProjection(artifact, candidate) ? candidate : undefined;
     const fetched = await fetchWithRetry(
       BENCHLM_URLS[artifact],
       'benchlm',
@@ -970,7 +984,7 @@ export async function prepareStoredBenchLmSource(
 function benchLmDailyManifestKey(checkedAt: string): string {
   const checked = parseUtcTimestamp(checkedAt);
   if (!checked) throw new Error('BenchLM daily manifest checkedAt must be a finite UTC timestamp');
-  return `benchmarks/benchlm/daily-check/${new Date(checked.milliseconds).toISOString()}.json`;
+  return `benchmarks/benchlm/daily-check/${BENCHLM_PROJECTION_SCHEMA_VERSION}/${new Date(checked.milliseconds).toISOString()}.json`;
 }
 
 async function persistBenchLmDailySource(
@@ -988,7 +1002,7 @@ async function persistBenchLmDailySource(
     throw new Error('BenchLM daily manifest requires all five verified artifacts');
   }
   await writeEvidence(bucket, sources, prepared.evidence);
-  const bytes = jsonBytes({ schemaVersion: '1', checkedAt, sources });
+  const bytes = jsonBytes({ schemaVersion: BENCHLM_PROJECTION_SCHEMA_VERSION, checkedAt, sources });
   if (bytes.byteLength > MAX_BENCHLM_DAILY_MANIFEST_BYTES) {
     throw new Error(`BenchLM daily manifest exceeds ${MAX_BENCHLM_DAILY_MANIFEST_BYTES} byte limit`);
   }
@@ -1031,7 +1045,9 @@ async function prepareCompletedBenchLmDailySource(
       throw new Error('BenchLM completed daily manifest content hash does not match exact bytes');
     }
     const manifest = requireRecord(decodeJson(bytes, 'BenchLM completed daily manifest'), 'BenchLM completed daily manifest');
-    if (manifest.schemaVersion !== '1') throw new Error('BenchLM completed daily manifest schemaVersion must be 1');
+    if (manifest.schemaVersion !== BENCHLM_PROJECTION_SCHEMA_VERSION) {
+      throw new Error(`BenchLM completed daily manifest schemaVersion must be ${BENCHLM_PROJECTION_SCHEMA_VERSION}`);
+    }
     const manifestCheckedAt = requireString(manifest.checkedAt, 'BenchLM completed daily manifest checkedAt');
     if (benchLmDailyManifestKey(manifestCheckedAt) !== benchLmDailyManifestKey(completedAt)) {
       throw new Error('BenchLM completed daily manifest timestamp does not match refresh state');
