@@ -113,6 +113,11 @@ const pageDefinitions = {
     h1: 'AI model comparison',
     robots: 'noindex,follow' as const,
   },
+  modelProfile: {
+    title: `AI Model Evidence Profile | ${SITE_CONFIG.name}`,
+    description: `Review a retained AI model profile on ${SITE_CONFIG.name} with source-backed benchmark scores, relative field ranks, route pricing, specifications, and an auditable evidence ledger.`,
+    h1: 'AI model evidence profile',
+  },
   notFound: {
     title: `Page Not Found | ${SITE_CONFIG.name}`,
     description: `The requested ${SITE_CONFIG.name} page is not available. Browse AI cost tools, model leaderboards, comparisons, or optimization guides instead.`,
@@ -150,6 +155,11 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
       title: `${route.pair.replaceAll('-', ' ')} comparison | ${SITE_CONFIG.name}`,
       h1: `${route.pair.replaceAll('-', ' ')} comparison`,
     }, false);
+    case 'modelProfile': return makeMetadata(pathnameForRoute(route) ?? ROUTE_PATHS.models, {
+      ...pageDefinitions.modelProfile,
+      title: `${route.slug.replaceAll('-', ' ')} model evidence | ${SITE_CONFIG.name}`,
+      h1: `${route.slug.replaceAll('-', ' ')} model evidence`,
+    });
     case 'redirect': return makeMetadata(route.to, pageDefinitions.notFound);
     case 'notFound': return makeMetadata('/', pageDefinitions.notFound);
   }

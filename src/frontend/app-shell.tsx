@@ -46,6 +46,7 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
       <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
         <a href={ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Home</a>
         <a href={ROUTE_PATHS.calculator} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Subscribe vs API</a>
+        <a href={ROUTE_PATHS.models} aria-current={activePage === 'models' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Models</a>
         <a href={ROUTE_PATHS.compareHub} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Compare</a>
         <a href={ROUTE_PATHS.leaderboards} aria-current={activePage === 'leaderboards' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Leaderboards</a>
         <a href={ROUTE_PATHS.guides} aria-current={activePage === 'guides' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Guides</a>
@@ -73,6 +74,7 @@ export function SiteFooter({ notice }: SiteFooterProps) {
       <nav className="footer-links" aria-label="Explore">
         <strong>Explore</strong>
         <a href={ROUTE_PATHS.calculator}>Subscribe vs API</a>
+        <a href={ROUTE_PATHS.models}>Popular models</a>
         <a href={ROUTE_PATHS.compareHub}>Compare models</a>
         <a href={ROUTE_PATHS.leaderboards}>Leaderboards</a>
         <a href={ROUTE_PATHS.guides}>Guides</a>

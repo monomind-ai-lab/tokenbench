@@ -491,15 +491,15 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APICompareLeaderboardsGuides');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APIModelsCompareLeaderboardsGuides');
   });
 
-  it('renders the five approved primary navigation destinations', () => {
+  it('renders the six approved primary navigation destinations', () => {
     render(<SiteHeader theme="dark" language="en" activePage="home" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
 
     expect(within(screen.getByRole('navigation', { name: 'Primary navigation' }))
       .getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Home', 'Subscribe vs API', 'Compare', 'Leaderboards', 'Guides']);
+      .toEqual(['Home', 'Subscribe vs API', 'Models', 'Compare', 'Leaderboards', 'Guides']);
   });
 
   it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {

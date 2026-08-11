@@ -132,6 +132,16 @@ describe('route metadata registry', () => {
     expect(page.openGraph.url).toBe(`${origin}/compare/a-vs-b`);
   });
 
+  it('gives dynamic model profiles a unique canonical and complete social metadata', () => {
+    const page = metadataForRoute({ kind: 'modelProfile', slug: 'gpt-5-6-sol' });
+    expect(page.canonical).toBe(`${origin}/models/gpt-5-6-sol/`);
+    expect(page.title).toContain('gpt 5 6 sol');
+    expect(page.description.length).toBeGreaterThan(70);
+    expect(page.robots).toBe('index,follow');
+    expect(page.openGraph.url).toBe(page.canonical);
+    expect(page.twitter.title).toBe(page.title);
+  });
+
   it.each([
     ['llm-reasoning', 'Reasoning'],
     ['llm-knowledge', 'Knowledge'],

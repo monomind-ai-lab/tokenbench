@@ -1,8 +1,9 @@
 import {StrictMode} from 'react';
 import {createRoot, hydrateRoot} from 'react-dom/client';
-import App, { ComparisonDetailApp } from './App.tsx';
+import App, { ComparisonDetailApp, ModelProfileApp } from './App.tsx';
 import GuidesApp from './GuidesApp.tsx';
 import { parseComparisonViewModel } from './frontend/comparison-contracts';
+import { parseModelProfileViewModel } from './frontend/model-profile-contracts';
 import { NewsletterConfirmedPage } from './pages/newsletter-confirmed-page';
 import { matchRoute } from './routing/routes';
 import './index.css';
@@ -17,6 +18,12 @@ function initialComparisonViewModel() {
   }
 }
 
+function initialModelProfileViewModel() {
+  const payload = document.getElementById('model-profile-initial-data');
+  if (!(payload instanceof HTMLScriptElement) || payload.type !== 'application/json' || !payload.textContent) return null;
+  try { return parseModelProfileViewModel(JSON.parse(payload.textContent)); } catch { return null; }
+}
+
 const route = matchRoute(window.location.pathname);
 const RootApp = route.kind === 'guides'
   ? GuidesApp
@@ -24,7 +31,13 @@ const RootApp = route.kind === 'guides'
     ? App
     : null;
 
-if (route.kind === 'comparison') {
+if (route.kind === 'modelProfile') {
+  const viewModel = initialModelProfileViewModel();
+  if (viewModel) {
+    const root = document.getElementById('root')!;
+    hydrateRoot(root, <StrictMode><ModelProfileApp viewModel={viewModel} /></StrictMode>);
+  }
+} else if (route.kind === 'comparison') {
   const viewModel = initialComparisonViewModel();
   // A malformed payload must never erase the crawlable server response or
   // prompt a replacement request; the browser can simply leave it intact.

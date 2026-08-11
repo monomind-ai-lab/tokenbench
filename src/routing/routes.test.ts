@@ -68,6 +68,12 @@ describe('TokenBench route registry', () => {
     expect(matchRoute('/compare/')).toEqual({ kind: 'compareHub' });
   });
 
+  it('matches durable model profiles as one decoded route segment', () => {
+    expect(matchRoute('/models/gpt-5-6-sol')).toEqual({ kind: 'modelProfile', slug: 'gpt-5-6-sol' });
+    expect(matchRoute('/models/gpt-5-6-sol/')).toEqual({ kind: 'modelProfile', slug: 'gpt-5-6-sol' });
+    expect(matchRoute('/models/encoded%20model/')).toEqual({ kind: 'modelProfile', slug: 'encoded model' });
+  });
+
   it('publishes the approved decision hierarchy and canonical redirects', () => {
     expect(ROUTE_PATHS.methodologyBenchAlign).toBe('/methodology/benchalign/');
     expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'methodologyBenchAlign' });

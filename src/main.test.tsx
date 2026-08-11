@@ -6,11 +6,13 @@ const rootRenderer = vi.hoisted(() => vi.fn());
 const createRootMock = vi.hoisted(() => vi.fn(() => ({ render: rootRenderer })));
 const hydrateRootMock = vi.hoisted(() => vi.fn());
 const parseComparisonViewModelMock = vi.hoisted(() => vi.fn());
+const parseModelProfileViewModelMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-dom/client', () => ({ createRoot: createRootMock, hydrateRoot: hydrateRootMock }));
-vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null }));
+vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null, ModelProfileApp: () => null }));
 vi.mock('./GuidesApp.tsx', () => ({ default: () => null }));
 vi.mock('./frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
+vi.mock('./frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
 
 describe('browser entrypoint', () => {
   beforeEach(() => {
@@ -20,6 +22,8 @@ describe('browser entrypoint', () => {
     hydrateRootMock.mockClear();
     parseComparisonViewModelMock.mockReset();
     parseComparisonViewModelMock.mockReturnValue(null);
+    parseModelProfileViewModelMock.mockReset();
+    parseModelProfileViewModelMock.mockReturnValue(null);
     document.body.innerHTML = '<div id="root"><div class="static-page-shell">Crawlable fallback</div></div>';
     window.history.replaceState({}, '', '/leaderboards/llm/coding/');
   });
@@ -47,6 +51,19 @@ describe('browser entrypoint', () => {
     expect(hydrateRootMock).toHaveBeenCalledWith(root, expect.anything());
     expect(createRootMock).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('hydrates a durable model profile from validated server data without clearing the SSR evidence', async () => {
+    document.body.innerHTML = '<div id="root"><article data-server-profile>Server profile</article></div><script id="model-profile-initial-data" type="application/json">{"revision":"rev-2"}</script>';
+    window.history.replaceState({}, '', '/models/gpt-5-6-sol/');
+    parseModelProfileViewModelMock.mockReturnValue({ revision: 'rev-2' });
+
+    await import('./main.tsx');
+
+    expect(parseModelProfileViewModelMock).toHaveBeenCalledWith({ revision: 'rev-2' });
+    expect(hydrateRootMock).toHaveBeenCalledWith(document.getElementById('root'), expect.anything());
+    expect(document.querySelector('[data-server-profile]')).toBeInTheDocument();
+    expect(createRootMock).not.toHaveBeenCalled();
   });
 
   it('leaves comparison server HTML intact when the embedded data is malformed or invalid', async () => {

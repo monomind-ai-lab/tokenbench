@@ -18,6 +18,7 @@ import { ShareAction } from './frontend/share-action';
 import { useSitePreferences } from './frontend/site-preferences';
 import { ComparisonPage } from './frontend/comparison-page';
 import type { ComparisonViewModel } from './frontend/comparison-contracts';
+import type { ModelProfileViewModel } from './frontend/model-profile-contracts';
 import { Skeleton, providerLabel } from './frontend/ui';
 import { useCatalog, type CatalogState } from './frontend/use-catalog';
 import { HomePage } from './pages/home-page';
@@ -25,6 +26,7 @@ import { CompareHubPage } from './pages/compare-hub-page';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
 import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
+import { ModelProfilePage } from './pages/model-profile-page';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
 interface PageFrameProps {
@@ -312,6 +314,11 @@ function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
 /** Shared by the Pages Function SSR response and browser hydration. */
 export function ComparisonDetailApp({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
   return <PageFrame activePage="compare"><ComparisonPage viewModel={viewModel} /></PageFrame>;
+}
+
+/** Shared by each durable model Pages Function response and browser hydration. */
+export function ModelProfileApp({ viewModel }: { readonly viewModel: ModelProfileViewModel }) {
+  return <PageFrame activePage="models"><ModelProfilePage viewModel={viewModel} /></PageFrame>;
 }
 
 export default function App() {

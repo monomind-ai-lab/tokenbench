@@ -7,12 +7,13 @@ export const ROUTE_PATHS = {
   tools: '/tools/',
   calculator: '/tools/subscriptions-vs-apis/',
   compareHub: '/compare/',
+  models: '/models/',
   leaderboards: '/leaderboards/',
   methodologyBenchAlign: '/methodology/benchalign/',
   newsletterConfirmed: '/newsletter/confirmed/',
 } as const;
 
-export type SiteNavigationPage = 'home' | 'calculator' | 'compare' | 'leaderboards' | 'guides';
+export type SiteNavigationPage = 'home' | 'calculator' | 'models' | 'compare' | 'leaderboards' | 'guides';
 
 export const LEADERBOARD_ROUTES = {
   'llm-overall': {
@@ -167,13 +168,14 @@ export type AppRoute =
   | { kind: 'guides'; slug?: string }
   | { kind: 'compareHub' }
   | { kind: 'comparison'; pair: string }
+  | { kind: 'modelProfile'; slug: string }
   | { kind: 'newsletterConfirmed' }
   | { kind: 'leaderboards' }
   | { kind: 'leaderboard'; key: LeaderboardKey }
   | { kind: 'redirect'; to: string }
   | { kind: 'notFound' };
 
-export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'redirect' } | { kind: 'notFound' }>;
+export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'modelProfile' } | { kind: 'redirect' } | { kind: 'notFound' }>;
 
 export interface FixedRouteDefinition {
   readonly id: string;
@@ -232,6 +234,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
+    case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
     case 'leaderboards': return ROUTE_PATHS.leaderboards;
     case 'leaderboard': return LEADERBOARD_ROUTES[route.key].pathname;
@@ -270,6 +273,11 @@ export function matchRoute(pathname: string): AppRoute {
 
   const comparisonMatch = normalizedPathname.match(/^\/compare\/([^/]+)\/$/);
   if (comparisonMatch) return { kind: 'comparison', pair: comparisonMatch[1] };
+
+  const modelMatch = normalizedPathname.match(/^\/models\/([^/]+)\/$/);
+  if (modelMatch) {
+    try { return { kind: 'modelProfile', slug: decodeURIComponent(modelMatch[1]) }; } catch { return { kind: 'notFound' }; }
+  }
 
   return { kind: 'notFound' };
 }
