@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { compareUtf8Binary } from '../benchmarks/contracts';
 import type { PricePerformanceAttribution, PricePerformancePointView, PricePerformanceScoreLane } from '../benchmarks/price-performance-contracts';
 import { formatPricePerformancePointView } from './price-performance-view';
 import type { PricePerformanceScale } from './price-performance-state';
@@ -7,6 +8,8 @@ const WIDTH = 760;
 const HEIGHT = 420;
 const PLOT = { left: 64, right: 22, top: 24, bottom: 52 } as const;
 const TICK_COUNT = 5;
+const MARKER_SIZE = 44;
+const TIE_MARKER_STEP = 48;
 const AXIS_FORMATTER = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export interface PricePerformanceChartProps {
@@ -44,34 +47,93 @@ function formatAxisNumber(value: number): string {
   return AXIS_FORMATTER.format(value);
 }
 
-function xCoordinate(cost: number, costs: readonly number[], scale: PricePerformanceScale): number {
+function xCoordinate(cost: number, range: { min: number; max: number }, scale: PricePerformanceScale): number {
   const transformed = transformedCost(cost, scale);
-  const transformedCosts = costs.map((value) => transformedCost(value, scale));
-  const range = numericRange(transformedCosts);
   return PLOT.left + ((transformed - range.min) / (range.max - range.min)) * (WIDTH - PLOT.left - PLOT.right);
 }
 
-function yCoordinate(score: number, scores: readonly number[]): number {
-  const range = numericRange(scores);
+function yCoordinate(score: number, range: { min: number; max: number }): number {
   return HEIGHT - PLOT.bottom - ((score - range.min) / (range.max - range.min)) * (HEIGHT - PLOT.top - PLOT.bottom);
 }
 
-function plotPoint(
-  point: PricePerformancePointView,
-  points: readonly PricePerformancePointView[],
-  scale: PricePerformanceScale,
-): { x: number; y: number } {
-  return {
-    x: xCoordinate(point.selectedCost, points.map((candidate) => candidate.selectedCost), scale),
-    y: yCoordinate(point.score, points.map((candidate) => candidate.score)),
-  };
+interface ChartCoordinate {
+  readonly x: number;
+  readonly y: number;
 }
 
-function frontierPath(points: readonly PricePerformancePointView[], scale: PricePerformanceScale): string {
+interface ChartLayout {
+  readonly costRange: { readonly min: number; readonly max: number };
+  readonly scoreRange: { readonly min: number; readonly max: number };
+  readonly base: ReadonlyMap<string, ChartCoordinate>;
+  readonly scatter: ReadonlyMap<string, ChartCoordinate>;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+/** Computes chart ranges once and separates exact ties into touch-safe clusters. */
+export function pricePerformanceChartLayout(
+  points: readonly PricePerformancePointView[],
+  scale: PricePerformanceScale,
+): ChartLayout | null {
+  if (points.length === 0) return null;
+  const costRange = numericRange(points.map((point) => transformedCost(point.selectedCost, scale)));
+  const scoreRange = numericRange(points.map((point) => point.score));
+  const base = new Map<string, ChartCoordinate>();
+  const groups = new Map<string, PricePerformancePointView[]>();
+  for (const point of points) {
+    base.set(point.modelKey, {
+      x: xCoordinate(point.selectedCost, costRange, scale),
+      y: yCoordinate(point.score, scoreRange),
+    });
+    const key = `${point.selectedCost}\u0000${point.score}`;
+    const group = groups.get(key);
+    if (group) group.push(point);
+    else groups.set(key, [point]);
+  }
+
+  const scatter = new Map<string, ChartCoordinate>();
+  const plotLeft = PLOT.left + MARKER_SIZE / 2;
+  const plotRight = WIDTH - PLOT.right - MARKER_SIZE / 2;
+  const plotTop = PLOT.top + MARKER_SIZE / 2;
+  const plotBottom = HEIGHT - PLOT.bottom - MARKER_SIZE / 2;
+  const maximumColumns = Math.max(1, Math.floor((plotRight - plotLeft) / TIE_MARKER_STEP) + 1);
+  for (const group of groups.values()) {
+    const ordered = group.slice().sort((left, right) => compareUtf8Binary(left.modelKey, right.modelKey));
+    if (ordered.length === 1) {
+      scatter.set(ordered[0]!.modelKey, base.get(ordered[0]!.modelKey)!);
+      continue;
+    }
+    const columns = Math.min(ordered.length, maximumColumns);
+    const rows = Math.ceil(ordered.length / columns);
+    const offsets = ordered.map((_, index) => ({
+      x: (index % columns - (columns - 1) / 2) * TIE_MARKER_STEP,
+      y: (Math.floor(index / columns) - (rows - 1) / 2) * TIE_MARKER_STEP,
+    }));
+    const minimumX = Math.min(...offsets.map((offset) => offset.x));
+    const maximumX = Math.max(...offsets.map((offset) => offset.x));
+    const minimumY = Math.min(...offsets.map((offset) => offset.y));
+    const maximumY = Math.max(...offsets.map((offset) => offset.y));
+    const origin = base.get(ordered[0]!.modelKey)!;
+    const clusterX = clamp(origin.x, plotLeft - minimumX, plotRight - maximumX);
+    const clusterY = clamp(origin.y, plotTop - minimumY, plotBottom - maximumY);
+    ordered.forEach((point, index) => {
+      const offset = offsets[index]!;
+      scatter.set(point.modelKey, { x: clusterX + offset.x, y: clusterY + offset.y });
+    });
+  }
+  return { costRange, scoreRange, base, scatter };
+}
+
+function frontierPath(
+  points: readonly PricePerformancePointView[],
+  coordinates: ReadonlyMap<string, ChartCoordinate>,
+): string {
   const frontier = points.filter((point) => point.frontier).sort((left, right) => left.selectedCost - right.selectedCost || right.score - left.score);
   return frontier.map((point, index) => {
-    const coordinates = plotPoint(point, points, scale);
-    return `${index === 0 ? 'M' : 'L'} ${coordinates.x.toFixed(2)} ${coordinates.y.toFixed(2)}`;
+    const coordinate = coordinates.get(point.modelKey)!;
+    return `${index === 0 ? 'M' : 'L'} ${coordinate.x.toFixed(2)} ${coordinate.y.toFixed(2)}`;
   }).join(' ');
 }
 
@@ -89,11 +151,32 @@ function PointDetails({
   readonly onClose: () => void;
 }) {
   const facts = formatPricePerformancePointView(point, attribution);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     closeButtonRef.current?.focus();
   }, []);
-  return <div className="price-performance-point-details" role="dialog" aria-modal="true" aria-labelledby="price-performance-details-heading">
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+      const focusable = [...dialog.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], select:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    dialog.addEventListener('keydown', onKeyDown);
+    return () => dialog.removeEventListener('keydown', onKeyDown);
+  }, []);
+  return <div ref={dialogRef} className="price-performance-point-details" role="dialog" aria-modal="true" aria-labelledby="price-performance-details-heading">
     <div className="price-performance-details-heading">
       <div><span className="eyebrow">Selected point</span><h2 id="price-performance-details-heading">{point.displayName} details</h2></div>
       <button ref={closeButtonRef} className="button button-secondary" type="button" onClick={onClose} aria-label="Close model details">Close</button>
@@ -124,6 +207,7 @@ export function PricePerformanceChart({
   const costs = useMemo(() => points.map((point) => point.selectedCost), [points]);
   const scores = useMemo(() => points.map((point) => point.score), [points]);
   const safeScale = scale === 'log' && costs.every((cost) => Number.isFinite(cost) && cost > 0) ? 'log' : 'linear';
+  const layout = useMemo(() => pricePerformanceChartLayout(points, safeScale), [points, safeScale]);
   const label = `${humanize(lane)} score by ${basis === 'output' ? 'output price' : '3:1 blended price'}`;
   const costTicks = useMemo(() => costs.length === 0 ? [] : axisTickValues(costs, safeScale), [costs, safeScale]);
   const scoreTicks = useMemo(() => scores.length === 0 ? [] : axisTickValues(scores, 'linear'), [scores]);
@@ -168,21 +252,30 @@ export function PricePerformanceChart({
         <line x1={PLOT.left} y1={PLOT.top} x2={PLOT.left} y2={HEIGHT - PLOT.bottom} />
         <line x1={PLOT.left} y1={HEIGHT - PLOT.bottom} x2={WIDTH - PLOT.right} y2={HEIGHT - PLOT.bottom} />
         {scoreTicks.map((value) => {
-          const y = yCoordinate(value, scores);
+          const y = yCoordinate(value, layout!.scoreRange);
           return <g key={`score-${value}`}><line className="price-performance-chart-gridline" x1={PLOT.left} y1={y} x2={WIDTH - PLOT.right} y2={y} /><text x={PLOT.left - 10} y={y + 4} textAnchor="end">{formatAxisNumber(value)}</text></g>;
         })}
         {costTicks.map((value) => {
-          const x = xCoordinate(value, costs, safeScale);
+          const x = xCoordinate(value, layout!.costRange, safeScale);
           return <g key={`cost-${value}`}><line className="price-performance-chart-gridline" x1={x} y1={PLOT.top} x2={x} y2={HEIGHT - PLOT.bottom} /><text x={x} y={HEIGHT - 34} textAnchor="middle">{formatAxisNumber(value)}</text></g>;
         })}
         <text x={(PLOT.left + WIDTH - PLOT.right) / 2} y={HEIGHT - 12} textAnchor="middle">Cost</text>
         <text x={PLOT.left - 10} y={PLOT.top - 8} textAnchor="end">Score</text>
       </g>
-      <path className="price-performance-frontier" d={frontierPath(points, safeScale)} aria-hidden="true" />
+      <path className="price-performance-frontier" d={frontierPath(points, layout!.base)} aria-hidden="true" />
       {points.map((point) => {
-        const coordinates = plotPoint(point, points, safeScale);
+        const base = layout!.base.get(point.modelKey)!;
+        const scatter = layout!.scatter.get(point.modelKey)!;
+        return base.x === scatter.x && base.y === scatter.y
+          ? null
+          : <line key={`tie-${point.modelKey}`} className="price-performance-tie-connector" x1={base.x} y1={base.y} x2={scatter.x} y2={scatter.y} aria-hidden="true" />;
+      })}
+      {points.map((point) => {
+        const coordinates = layout!.scatter.get(point.modelKey)!;
         const facts = formatPricePerformancePointView(point, attribution);
-        return <foreignObject key={point.modelKey} className="price-performance-scatter-point" data-frontier={point.frontier ? 'true' : 'false'} data-evidence={point.evidenceStatus} x={coordinates.x - 24} y={coordinates.y - 24} width="48" height="48">
+        const base = layout!.base.get(point.modelKey)!;
+        const tieSeparated = base.x !== coordinates.x || base.y !== coordinates.y;
+        return <foreignObject key={point.modelKey} className="price-performance-scatter-point" data-frontier={point.frontier ? 'true' : 'false'} data-evidence={point.evidenceStatus} data-tie-separated={tieSeparated ? 'true' : 'false'} x={coordinates.x - 24} y={coordinates.y - 24} width="48" height="48">
           <button
             className={`scatter-point evidence-${point.evidenceStatus}${point.frontier ? ' scatter-point-frontier' : ''}`}
             type="button"
@@ -210,7 +303,7 @@ export function PricePerformanceChart({
       <span><span className="price-performance-legend-marker estimated" aria-hidden="true">●</span>Estimated evidence</span>
       <span><span className="price-performance-legend-marker source-only" aria-hidden="true">●</span>Source-only evidence</span>
     </div>
-    <figcaption className="price-performance-chart-caption">Each point is keyboard and touch accessible. Shape and text identify frontier and evidence state; details include the durable model profile link.</figcaption>
+    <figcaption className="price-performance-chart-caption">Each point is keyboard and touch accessible. Exact score/cost ties are separated with connector lines so every model keeps a full touch target. Shape and text identify frontier and evidence state; details include the durable model profile link.</figcaption>
     {selected ? <PointDetails point={selected} attribution={attribution} onClose={closeSelected} /> : null}
   </figure>;
 }

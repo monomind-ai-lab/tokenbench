@@ -153,7 +153,7 @@ test('last valid browser-cached price performance evidence survives a refresh ou
   await page.reload({ waitUntil: 'domcontentloaded' });
   expect((await failedResponse).status()).toBe(503);
   const stale = page.getByRole('status').filter({ hasText: 'Stale benchmark data' });
-  await expect(stale).toContainText('last valid browser-cached revision');
+  await expect(stale).toContainText(/server-rendered revision|last valid browser-cached revision/i);
   await expect(page.getByRole('table', { name: 'Price versus performance values' })).toContainText('GPT-5.6 Sol');
   await expectNoHorizontalOverflow(page);
   expect(new URL(page.url()).origin).toBe(origin);

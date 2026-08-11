@@ -148,7 +148,6 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
   const [state, setState] = useState<PricePerformanceState>(() => initialState
     ?? (deferLocationState ? DEFAULT_PRICE_PERFORMANCE_STATE : initialPageState(envelope)));
   const [locationStateReady, setLocationStateReady] = useState(!deferLocationState);
-  const [selectedPoint, setSelectedPoint] = useState<PricePerformancePointView | null>(null);
   const filtered = useMemo(() => filterPricePerformancePoints(envelope.data.points, pricePerformanceFilters(state)), [envelope.data.points, state]);
   const views = useMemo(() => markParetoFrontier(filtered, { lane: state.lane, costBasis: state.costBasis }), [filtered, state.costBasis, state.lane]);
   const displayedCosts = useMemo(() => views.map((point) => point.selectedCost), [views]);
@@ -214,9 +213,8 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
       {chartAvailable
         ? noMatches
           ? <p className="price-performance-chart-empty-note">No chart points are available for this category.</p>
-          : <PricePerformanceChart points={views} attribution={envelope.attribution} lane={state.lane} basis={state.costBasis} scale={state.scale} onSelect={setSelectedPoint} />
+          : <PricePerformanceChart points={views} attribution={envelope.attribution} lane={state.lane} basis={state.costBasis} scale={state.scale} />
         : <div className="price-performance-chart-failure" role="alert"><strong>Chart unavailable</strong><p>The analytical SVG could not render. The equivalent values table remains available below.</p></div>}
-      {selectedPoint ? <span className="sr-only" role="status">Selected {selectedPoint.displayName}</span> : null}
     </section>
 
     <section className="panel price-performance-results" aria-labelledby="price-performance-results-heading">
@@ -248,6 +246,24 @@ function browserFallbackEnvelope(
       ...cached.value.freshness,
       status: 'stale',
       message: `Showing the last valid browser-cached revision from ${cached.storedAt}.`,
+    },
+  };
+}
+
+function refreshFailureEnvelope(
+  current: PricePerformanceEnvelope,
+  cached: { readonly value: PricePerformanceEnvelope; readonly storedAt: string } | null,
+): PricePerformanceEnvelope {
+  const currentCheckedAt = Date.parse(current.freshness.checkedAt);
+  const cachedCheckedAt = cached ? Date.parse(cached.value.freshness.checkedAt) : Number.NEGATIVE_INFINITY;
+  if (cached && cachedCheckedAt > currentCheckedAt) return browserFallbackEnvelope(cached);
+  if (current.freshness.status === 'stale') return current;
+  return {
+    ...current,
+    freshness: {
+      ...current.freshness,
+      status: 'stale',
+      message: 'Showing the server-rendered revision because the browser refresh is unavailable.',
     },
   };
 }
@@ -285,11 +301,16 @@ export function PricePerformanceApp({ initialEnvelope, chartAvailable = true }: 
       .catch(() => {
         if (!active || archivedRequestWon.current) return;
         const cached = readPricePerformanceEnvelopeCache();
-        if (cached) setEnvelope(browserFallbackEnvelope(cached));
-        else setError('No valid published price-performance revision is available.');
+        if (initialEnvelope) {
+          setEnvelope((current) => refreshFailureEnvelope(current ?? initialEnvelope, cached));
+        } else if (cached) {
+          setEnvelope(browserFallbackEnvelope(cached));
+        } else {
+          setError('No valid published price-performance revision is available.');
+        }
       });
     return () => { active = false; };
-  }, []);
+  }, [initialEnvelope]);
 
   if (envelope) {
     return <PricePerformancePage

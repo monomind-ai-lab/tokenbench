@@ -66,13 +66,49 @@ describe('PricePerformanceChart', () => {
     const dialog = screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' });
     expect(dialog).toHaveTextContent('78.0');
     expect(within(dialog).getByRole('link', { name: /openai.*openai:gpt-5-6-sol/i })).toHaveAttribute('href', 'https://openrouter.ai/models');
-    expect(dialog.querySelector('a[href="/models/gpt-5-6-sol/"]')).toBeInTheDocument();
+    const profileLink = dialog.querySelector('a[href="/models/gpt-5-6-sol/"]') as HTMLAnchorElement;
+    const closeButton = within(dialog).getByRole('button', { name: 'Close model details' });
+    expect(profileLink).toBeInTheDocument();
+    profileLink.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(closeButton).toHaveFocus();
+    closeButton.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(profileLink).toHaveFocus();
 
     fireEvent.touchEnd(pointButton);
     expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(document.activeElement).toBe(pointButton);
+  });
+
+  it('separates exact score-cost ties so every model keeps a full touch target', () => {
+    const tied = point({
+      modelKey: 'gpt-5-6-sol-tie',
+      slug: 'gpt-5-6-sol-tie',
+      displayName: 'GPT-5.6 Sol Tie',
+      route: {
+        ...point().route,
+        routeId: 'openai:gpt-5-6-sol-tie',
+        sourceModelId: 'openai/gpt-5-6-sol-tie',
+        canonicalSlug: 'gpt-5-6-sol-tie',
+      },
+    });
+    const { container } = render(<PricePerformanceChart points={[point(), tied]} />);
+
+    const markers = [...container.querySelectorAll<SVGForeignObjectElement>('foreignObject[data-tie-separated="true"]')];
+    expect(markers).toHaveLength(2);
+    const coordinates = markers.map((marker) => `${marker.getAttribute('x')},${marker.getAttribute('y')}`);
+    expect(new Set(coordinates).size).toBe(2);
+
+    const first = screen.getByRole('button', { name: /^GPT-5\.6 Sol,/i });
+    const second = screen.getByRole('button', { name: /^GPT-5\.6 Sol Tie,/i });
+    fireEvent.touchEnd(first);
+    expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close model details' }));
+    fireEvent.touchEnd(second);
+    expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol Tie details' })).toBeInTheDocument();
   });
 
   it('renders an explicit empty category state without inventing chart points', () => {

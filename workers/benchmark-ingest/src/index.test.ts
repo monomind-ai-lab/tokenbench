@@ -2570,9 +2570,11 @@ describe('atomic benchmark ingestion', () => {
       revision: result.revision,
       data: { compareDirectory: { models: expect.any(Array) } },
     });
-    // 200 sequential pages of ingestion legitimately runs 8-12s; the previous
-    // 10s budget made this flaky under full-suite parallelism.
-  }, 30_000);
+    // This intentionally exercises 200 sequential pages plus complete response
+    // materialization. It runs near 30s on the release machine, so retain a
+    // bounded 60s budget for full-suite worker contention without weakening
+    // any production assertion.
+  }, 60_000);
 
   it('preserves the active revision when a declared LMArena total has a missing required page', async () => {
     const previous: RevisionRow = {

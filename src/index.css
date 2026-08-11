@@ -1118,6 +1118,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .price-performance-chart-axes line { stroke: color-mix(in srgb, var(--outline) 84%, var(--muted)); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .price-performance-chart-axes text { fill: var(--muted); font-family: var(--font-label); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .price-performance-frontier { fill: none; stroke: var(--primary-strong); stroke-dasharray: 7 5; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.price-performance-tie-connector { opacity: .72; stroke: var(--muted); stroke-dasharray: 2 3; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
 .price-performance-chart-gridline { opacity: .34; stroke-dasharray: 2 5; }
 .price-performance-chart-legend { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--muted); font-family: var(--font-label); font-size: .61rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .price-performance-chart-legend > span { min-width: 0; display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }

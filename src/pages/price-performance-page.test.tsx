@@ -86,6 +86,8 @@ describe('PricePerformancePage', () => {
     expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' })).toHaveTextContent('$8');
     expect(screen.getByRole('row', { name: /GPT-5\.6 Sol/ })).toHaveTextContent('81.5');
     expect(screen.getByRole('dialog').querySelector('a[href="/models/gpt-5-6-sol/"]')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Close model details' }));
+    expect(screen.queryByText('Selected GPT-5.6 Sol')).not.toBeInTheDocument();
   });
 
   it('keeps the accessible table visible when chart rendering is unavailable', () => {
@@ -190,5 +192,24 @@ describe('PricePerformancePage', () => {
     expect(staleStatus).toHaveTextContent('Stale benchmark data');
     expect(staleStatus).toHaveTextContent(/last valid browser/i);
     expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol');
+  });
+
+  it('never replaces newer server-rendered evidence with an older browser cache', async () => {
+    const current = envelope();
+    const older = {
+      ...envelope(),
+      revision: 'price-performance-rev-older',
+      publishedAt: '2026-08-10T00:00:00.000Z',
+      freshness: { status: 'fresh' as const, checkedAt: '2026-08-10T01:00:00.000Z' },
+    };
+    writePricePerformanceEnvelopeCache(older, '2026-08-10T02:00:00.000Z');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
+
+    render(<PricePerformanceApp initialEnvelope={current} />);
+
+    const staleStatus = await screen.findByRole('status');
+    expect(staleStatus).toHaveTextContent('server-rendered revision');
+    expect(screen.getByText('Revision price-performance-rev-1')).toBeInTheDocument();
+    expect(screen.queryByText('Revision price-performance-rev-older')).not.toBeInTheDocument();
   });
 });
