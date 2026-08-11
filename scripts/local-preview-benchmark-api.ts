@@ -35,6 +35,7 @@ import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../src/routing/routes';
 
 const SAMPLE_TIMESTAMP = '2000-01-01T00:00:00.000Z';
 const SAMPLE_REVISION_ID = 'local-sample-preview-r1';
+const LOCAL_PREVIEW_STATE_HEADER = 'x-tokenbench-preview-state';
 
 /** Visible on every local response and in the existing stale-data UI state. */
 export const LOCAL_SAMPLE_NOTICE = 'LOCAL SAMPLE PREVIEW — synthetic rows for local UI review only. They are not current TokenBench rankings or a published D1 revision; live data requires Cloudflare Pages with CATALOG_DB.';
@@ -91,12 +92,12 @@ const SAMPLE_SOURCES: readonly BenchmarkSourceRecord[] = [
   },
 ];
 
-function benchLmModel(modelKey: string, slug: string, name: string, scoreCount: number): BenchmarkModel {
+function benchLmModel(modelKey: string, slug: string, name: string, scoreCount: number, creator = 'LOCAL SAMPLE Labs'): BenchmarkModel {
   return {
     modelKey,
     slug,
     name,
-    creator: 'LOCAL SAMPLE Labs',
+    creator,
     sourceType: 'Proprietary',
     reasoningType: null,
     releaseDate: null,
@@ -114,6 +115,7 @@ function benchLmModel(modelKey: string, slug: string, name: string, scoreCount: 
 
 const SAMPLE_ATLAS = benchLmModel('local-sample:atlas', 'sample-atlas', 'Sample Atlas', 6);
 const SAMPLE_ORBIT = benchLmModel('local-sample:orbit', 'sample-orbit', 'Sample Orbit', 6);
+const SAMPLE_GPT_56_SOL = benchLmModel('openai:gpt-5-6-sol', 'gpt-5-6-sol', 'GPT-5.6 Sol', 2, 'OpenAI');
 const SAMPLE_CANVAS: BenchmarkModel = {
   modelKey: 'local-sample:canvas',
   slug: 'sample-canvas',
@@ -133,14 +135,20 @@ const SAMPLE_CANVAS: BenchmarkModel = {
   sourceArtifactId: 'local-sample-lmarena',
 };
 
-function benchLmMetric(model: BenchmarkModel, metricKey: string, category: string, value: number): BenchmarkMetric {
+function benchLmMetric(
+  model: BenchmarkModel,
+  metricKey: string,
+  category: string,
+  value: number,
+  rank: number | null = null,
+): BenchmarkMetric {
   return {
     modelKey: model.modelKey,
     metricKey,
     category,
     value,
     rawValue: null,
-    rank: null,
+    rank,
     lower: null,
     upper: null,
     voteCount: null,
@@ -203,20 +211,22 @@ function samplePrice(model: BenchmarkModel, input: number, output: number): Benc
 
 const SAMPLE_BATCH = validateNormalizedSourceBatch({
   sources: SAMPLE_SOURCES,
-  models: [SAMPLE_ATLAS, SAMPLE_ORBIT, SAMPLE_CANVAS],
+  models: [SAMPLE_ATLAS, SAMPLE_ORBIT, SAMPLE_GPT_56_SOL, SAMPLE_CANVAS],
   metrics: [
-    benchLmMetric(SAMPLE_ATLAS, 'benchlm:overall:raw', 'overall', 94),
-    benchLmMetric(SAMPLE_ATLAS, 'benchlm:category:coding', 'coding', 97),
+    benchLmMetric(SAMPLE_ATLAS, 'benchlm:overall:raw', 'overall', 94, 1),
+    benchLmMetric(SAMPLE_ATLAS, 'benchlm:category:coding', 'coding', 97, 1),
     benchLmMetric(SAMPLE_ATLAS, 'benchlm:category:agentic', 'agentic', 95),
     benchLmMetric(SAMPLE_ATLAS, 'benchlm:category:reasoning', 'reasoning', 93),
     benchLmMetric(SAMPLE_ATLAS, 'benchlm:category:knowledge', 'knowledge', 92),
     benchLmMetric(SAMPLE_ATLAS, 'benchlm:category:multimodalGrounded', 'multimodalGrounded', 90),
-    benchLmMetric(SAMPLE_ORBIT, 'benchlm:overall:raw', 'overall', 91),
-    benchLmMetric(SAMPLE_ORBIT, 'benchlm:category:coding', 'coding', 89),
+    benchLmMetric(SAMPLE_ORBIT, 'benchlm:overall:raw', 'overall', 91, 2),
+    benchLmMetric(SAMPLE_ORBIT, 'benchlm:category:coding', 'coding', 89, 2),
     benchLmMetric(SAMPLE_ORBIT, 'benchlm:category:agentic', 'agentic', 90),
     benchLmMetric(SAMPLE_ORBIT, 'benchlm:category:reasoning', 'reasoning', 88),
     benchLmMetric(SAMPLE_ORBIT, 'benchlm:category:knowledge', 'knowledge', 87),
     benchLmMetric(SAMPLE_ORBIT, 'benchlm:category:multimodalGrounded', 'multimodalGrounded', 86),
+    benchLmMetric(SAMPLE_GPT_56_SOL, 'benchlm:overall:raw', 'overall', 81.48, 3),
+    benchLmMetric(SAMPLE_GPT_56_SOL, 'benchlm:category:coding', 'coding', 77.95, 3),
     lmArenaMetric('lmarena:text_style_control:overall', 'text-style-control', 1_000),
     lmArenaMetric('lmarena:vision_style_control:overall', 'vision-style-control', 999),
     lmArenaMetric('lmarena:document_style_control:overall', 'document-style-control', 998),
@@ -254,7 +264,7 @@ const SAMPLE_SNAPSHOT: ActiveBenchmarkSnapshot = {
 };
 
 const SAMPLE_FRESHNESS = {
-  status: 'stale' as const,
+  status: 'fresh' as const,
   checkedAt: SAMPLE_TIMESTAMP,
   message: LOCAL_SAMPLE_NOTICE,
 };
@@ -513,6 +523,15 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
     return;
   }
   const headOnly = method === 'HEAD';
+  const previewState = request.headers[LOCAL_PREVIEW_STATE_HEADER];
+  if (previewState === '503') {
+    writeJson(response, 503, { error: 'Local preview benchmark refresh unavailable.' }, headOnly);
+    return;
+  }
+  if (previewState === 'corrupt-cache') {
+    writeJson(response, 200, { revision: 'local-corrupt-cache-row', data: null }, headOnly);
+    return;
+  }
   if (url.pathname === '/api/benchmarks') {
     writeJson(response, 200, sampleSummaryResponse(), headOnly);
     return;

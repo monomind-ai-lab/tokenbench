@@ -792,13 +792,13 @@ describe('LeaderboardPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Share Leaderboard' }));
     expect(screen.getByRole('textbox', { name: 'Share URL' })).toHaveValue(
-      'https://tokenbench.monomind.one/leaderboards/llm/coding/?profile=balanced&sort=score-desc&q=Alpha',
+      'https://tokenbench.monomind.one/leaderboards/llm/coding/?q=Alpha',
     );
     expect(writeText).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Link copied.');
     expect(writeText).toHaveBeenCalledWith(
-      'https://tokenbench.monomind.one/leaderboards/llm/coding/?profile=balanced&sort=score-desc&q=Alpha',
+      'https://tokenbench.monomind.one/leaderboards/llm/coding/?q=Alpha',
     );
   });
 });

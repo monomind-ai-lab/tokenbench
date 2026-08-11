@@ -5,6 +5,7 @@ import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { useBenchmarkLeaderboard } from '../src/frontend/use-benchmarks';
 import {
   HANDLER_SPARSE_COMPARISON_PATH,
+  correctedPublicScoreLeaderboard,
   handlerBackedComparisonDatabase,
   readyFilterControlsLeaderboard,
 } from './tokenbench-fixtures';
@@ -45,6 +46,21 @@ describe('handler-backed comparison fixture', () => {
 });
 
 describe('leaderboard browser fixtures', () => {
+  it('pins the reviewed GPT-5.6 Sol public scores and category rank in both decision lanes', () => {
+    const coding = correctedPublicScoreLeaderboard('llm-coding');
+    const overall = correctedPublicScoreLeaderboard('llm-overall');
+    const codingRow = coding.data.entries.find((entry) => entry.model.slug === 'gpt-5-6-sol');
+    const overallRow = overall.data.entries.find((entry) => entry.model.slug === 'gpt-5-6-sol');
+
+    expect(codingRow).toMatchObject({
+      metric: { value: 77.95, rank: 3 },
+      sourceRank: 3,
+    });
+    expect(overallRow).toMatchObject({
+      metric: { value: 81.48 },
+    });
+  });
+
   it('keeps the rich filter-controls response valid across every published provider and price', async () => {
     const fixture = readyFilterControlsLeaderboard();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(fixture), {

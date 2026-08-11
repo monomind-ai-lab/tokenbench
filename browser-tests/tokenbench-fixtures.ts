@@ -147,6 +147,7 @@ function primaryPrice(modelKey: string, input: number, output: number): Benchmar
 
 const alpha = benchmarkModel('provider:alpha', 'alpha', 'Alpha', 'benchlm', 'models', 'OpenAI');
 const beta = benchmarkModel('provider:beta', 'beta', 'Beta', 'benchlm', 'models', 'Anthropic');
+const gpt56Sol = benchmarkModel('openai:gpt-5-6-sol', 'gpt-5-6-sol', 'GPT-5.6 Sol', 'benchlm', 'public-leaderboard', 'OpenAI');
 const canvas = benchmarkModel('lmarena:canvas', 'canvas', 'Canvas', 'lmarena', 'text-to-image', 'Canvas Labs');
 const prism = benchmarkModel('lmarena:prism', 'prism', 'Prism', 'lmarena', 'text-to-image', 'Prism Labs');
 
@@ -660,7 +661,7 @@ export async function stubBenchmarkDirectory(page: Page, origin: string, value: 
   await page.route(origin + '/api/benchmarks', (route) => fulfillJson(route, value, status));
 }
 
-export async function stubLeaderboard(page: Page, origin: string, key: 'llm-coding' | 'media-text-to-image', value: unknown, status = 200): Promise<void> {
+export async function stubLeaderboard(page: Page, origin: string, key: 'llm-coding' | 'llm-overall' | 'media-text-to-image', value: unknown, status = 200): Promise<void> {
   const endpoint = origin + '/api/benchmarks/leaderboards/' + key;
   await page.route((url) => url.origin === origin && url.pathname === new URL(endpoint).pathname, (route) => fulfillJson(route, value, status));
 }
@@ -825,6 +826,69 @@ export async function stubHandlerBackedComparison(
 
 export function readyCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {
   return clone(CODING_LEADERBOARD_ENVELOPE) as BenchmarkApiEnvelope<LeaderboardPageResult>;
+}
+
+export function correctedPublicScoreLeaderboard(
+  key: 'llm-coding' | 'llm-overall',
+): BenchmarkApiEnvelope<LeaderboardPageResult> {
+  const coding = key === 'llm-coding';
+  const metricKey = coding ? 'benchlm:category:coding' : 'benchlm:overall:raw';
+  const category = coding ? 'coding' : 'overall';
+  const values = coding ? [91, 84, 77.95] : [90, 82, 81.48];
+  const models = [alpha, beta, gpt56Sol] as const;
+  const entries = models.map((model, index) => {
+    const rank = index + 1;
+    const metric = {
+      ...benchlmMetric(model.modelKey, metricKey, category, values[index]!),
+      rank,
+      sourceArtifactId: model === gpt56Sol ? 'public-leaderboard' : 'models',
+    };
+    return {
+      model,
+      metric,
+      metrics: [metric],
+      primaryPrice: null,
+      blendedCostPerMillion: null,
+      contextWindowTokens: null,
+      sourceRank: rank,
+      onValueFrontier: false,
+    };
+  });
+
+  return {
+    revision: REVISION,
+    publishedAt: TIMESTAMP,
+    freshness: { status: 'fresh', checkedAt: TIMESTAMP },
+    attribution: [attribution[0]],
+    data: {
+      key,
+      profile: 'balanced',
+      definition: {
+        kind: 'benchlm',
+        sourceId: 'benchlm',
+        metricKeys: [metricKey],
+        defaultSort: 'score-desc',
+      },
+      entries,
+      pagination: { limit: 50, total: entries.length, nextCursor: null },
+      capabilities: {
+        dataReady: true,
+        defaultProfile: 'balanced',
+        defaultSort: 'score-desc',
+        supportsProfile: false,
+        supportsEstimated: true,
+        supportsLifecycle: false,
+        priceMode: 'representative',
+        supportsPrice: false,
+        priceValues: [],
+        metricKeys: [metricKey],
+        sorts: ['score-desc'],
+        providers: ['Anthropic', 'OpenAI'],
+        sourceTypes: ['Proprietary'],
+        evidenceStatuses: ['supported'],
+      },
+    },
+  };
 }
 
 export function readyMediaLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageResult> {

@@ -39,6 +39,12 @@ function formatNumber(value: number, maximumFractionDigits = 2): string {
   return new Intl.NumberFormat(undefined, { maximumFractionDigits }).format(value);
 }
 
+function formatMetricValue(value: number, unit: string): string {
+  return unit === 'score'
+    ? new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)
+    : formatNumber(value);
+}
+
 function formatPrice(value: number | null): string {
   return value === null ? 'Unavailable' : `$${formatNumber(value, 4)} / 1M`;
 }
@@ -106,7 +112,7 @@ function LensList({ entry }: { readonly entry: LeaderboardEntry }) {
   return <ul className="leaderboard-lenses" aria-label={`${entry.model.name} source lenses`}>
     {lenses.map((metric) => <li key={`${metric.sourceId}-${metric.metricKey}-${metric.sourceArtifactId}`}>
       <span>{metricLabel(metric.metricKey)}</span>
-      <strong>{formatNumber(metric.value)}</strong>
+      <strong>{formatMetricValue(metric.value, metric.unit)}</strong>
       {metric.rank !== null ? <small>Source rank {metric.rank}</small> : null}
     </li>)}
   </ul>;

@@ -243,7 +243,11 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const rankOffset = pagination ? activePage.previousCursors.length * pagination.limit : 0;
   const csvQuery = filterQuery;
   const csvHref = `/api/benchmarks/leaderboards/${encodeURIComponent(keyName)}/csv?${csvQuery}`;
-  const shareUrl = `${SITE_CONFIG.origin}${route.pathname}?${csvQuery}`;
+  const shareParameters = new URLSearchParams(filterQuery);
+  if (shareParameters.get('profile') === capabilities.defaultProfile) shareParameters.delete('profile');
+  if (shareParameters.get('sort') === capabilities.defaultSort) shareParameters.delete('sort');
+  const shareQuery = shareParameters.toString();
+  const shareUrl = `${SITE_CONFIG.origin}${route.pathname}${shareQuery ? `?${shareQuery}` : ''}`;
   const goToNextPage = () => {
     const nextCursor = pagination?.nextCursor;
     if (!nextCursor) return;

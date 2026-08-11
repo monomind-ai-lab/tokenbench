@@ -7,6 +7,7 @@ import {
   HANDLER_COMPARISON_PATH,
   HANDLER_SPARSE_COMPARISON_PATH,
   comparisonDirectoryEnvelope,
+  correctedPublicScoreLeaderboard,
   decisionSummaryEnvelope,
   emptyCodingLeaderboard,
   fulfillJson,
@@ -811,6 +812,32 @@ test.describe('responsive calculator browser harness', () => {
 });
 
 test.describe('leaderboard browser harness', () => {
+  test('renders corrected public coding and overall scores with canonical share metadata', async ({ page }) => {
+    const origin = previewOrigin();
+    await blockExternalRequests(page, origin);
+    await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
+    await stubLeaderboard(page, origin, 'llm-coding', correctedPublicScoreLeaderboard('llm-coding'));
+    await stubLeaderboard(page, origin, 'llm-overall', correctedPublicScoreLeaderboard('llm-overall'));
+
+    for (const [path, tableName, cardsLabel, score] of [
+      ['/leaderboards/llm/coding/', 'Coding benchmark', 'Coding benchmark cards', '78.0'],
+      ['/leaderboards/llm/overall/', 'Overall benchmarks', 'Overall benchmark cards', '81.5'],
+    ] as const) {
+      await page.setViewportSize({ width: 390, height: 1000 });
+      await page.goto(path);
+      const resultCards = page.getByRole('list', { name: cardsLabel });
+      await expect(resultCards).toBeVisible();
+      await expect(resultCards.getByRole('heading', { name: 'GPT-5.6 Sol' })).toBeVisible();
+      await expect(resultCards.getByText(score, { exact: true })).toBeVisible();
+      await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://tokenbench.monomind.one${path}`);
+      await page.getByRole('button', { name: 'Share Leaderboard' }).click();
+      await expect(page.getByRole('textbox', { name: 'Share URL' })).toHaveValue(`https://tokenbench.monomind.one${path}`);
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('button', { name: 'Share Leaderboard' })).toBeFocused();
+      await assertNoHorizontalOverflow(page);
+    }
+  });
+
   test('keeps decision-pick facts readable and full links touch-sized at directory breakpoints', async ({ page }) => {
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
@@ -1402,7 +1429,7 @@ test.describe('guides browser harness', () => {
       await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
       await expect(page.getByRole('link', { name: 'Sources', exact: true })).toHaveCount(0);
-      await expect(page.getByRole('link', { name: 'Data sources', exact: true })).toHaveAttribute('href', '/leaderboards/');
+      await expect(page.getByRole('link', { name: 'Data sources', exact: true })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);

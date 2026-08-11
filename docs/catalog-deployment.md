@@ -178,6 +178,34 @@ The browser reads published data through Pages APIs:
 | /compare/:pair/ | A Pages Function target for canonical, server-rendered comparison pages. Valid non-indexable pairs remain useful with noindex,follow; reverse pairs redirect and invalid pairs return 404. |
 | /sitemaps/comparisons.xml | A dynamic sitemap target containing only canonical, indexable comparison pairs. |
 
+### Last-good response recovery and safe logs
+
+Summary and leaderboard requests use the same bounded recovery order: the
+complete active materialized response, a reconstruction from the active
+published revision, then the newest complete historical response for that exact
+endpoint and normalized query. A response with missing chunks, conflicting
+metadata, an invalid body length, or an invalid ETag is never selected. Filtered
+or cursor leaderboard requests are rebuilt from the validated historical
+projection; an unfiltered cached body is never substituted for a filtered view.
+If all three stages fail, the endpoint returns the explicit unavailable response.
+
+The fallback controller emits only these event names:
+
+| Event | Meaning |
+| --- | --- |
+| `benchmark_fresh_cache_failed` | The active materialized response could not be read or validated; active-revision reconstruction will be attempted. |
+| `benchmark_active_revision_failed` | The active published revision could not be reconstructed; historical recovery will be attempted. |
+| `benchmark_stale_fallback_selected` | A complete historical response was selected for the exact endpoint/query identity. |
+| `benchmark_unavailable` | No complete active or historical response was available. |
+
+The exact allowed structured fields are `event`, `endpoint`, `queryId`,
+`cacheScope`, `cacheKey`, `stage`, `errorClass`, optional `activeRevision`,
+optional `fallbackRevision`, `fallbackSelected`, and `correlationId`.
+`correlationId` accepts only a bounded safe identifier; `queryId` is a safe
+normalized identity, not a raw query string. Never add response bodies, request
+bodies, email addresses, cookies, authorization values, full URLs, D1 error
+messages, or other personal/provider data to these events.
+
 Catalog, summary, and leaderboard cache hits do not parse or validate the full
 published fact graph. Model, comparison, and sitemap requests use indexed,
 targeted D1 reads. The comparison route and dynamic sitemap are release dependencies, not evidence
@@ -273,6 +301,35 @@ is outside this command and requires a separately authorized publication job.
    DNS record while retaining the legacy Pages project.
 7. Run the production smoke checks and record real results, deployment
    identifiers, and any rollback decision in the runbook.
+
+For a benchmark score or reliability release, keep the Worker/refresh/Pages
+order strict and record this additional evidence before advancing:
+
+1. Deploy the verified benchmark-ingest Worker commit.
+2. Trigger exactly one existing authorized controlled refresh and record the
+   resulting active revision. The Worker has no public refresh endpoint.
+3. Read `/api/benchmarks` and
+   `/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50`;
+   require HTTP 200 and the same revision in both envelopes.
+4. Require the coding JSON row for `gpt-5-6-sol` to contain value `77.95`,
+   metric rank `3`, and source rank `3`. The UI rounds that reviewed score to
+   `78.0` for display.
+5. Before production deployment, run the local preview's supported
+   `x-tokenbench-preview-state: 503` and `corrupt-cache` fixtures and verify the
+   last valid browser envelope remains visible. Do not inject failures into D1,
+   delete cache rows, or use the local-only header as a production mechanism.
+6. Deploy Pages only after steps 1–5 pass from the same committed tree.
+7. At desktop and compact widths, validate Home, coding and overall
+   leaderboards, the last-good banner, canonical/title/description metadata,
+   canonical share dialog, Trust footer, and absence of horizontal overflow.
+8. Inspect the four structured event names above by correlation ID and confirm
+   that every record contains only the allowed fields.
+
+The strict public-score join intentionally rejects a BenchLM public row that
+has no unique catalog match. If a controlled refresh fails at that boundary,
+first compare the public leaderboard identities with `models.json`; do not
+weaken ambiguity checks or publish a partial mixed-source bundle during an
+incident.
 
 The canonical production origin is https://tokenbench.monomind.one. The legacy
 ai-plans.monomind.one custom domain and its exact DNS record must be absent after

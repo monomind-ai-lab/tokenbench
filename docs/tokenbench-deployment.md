@@ -357,6 +357,48 @@ check fails; do not continue to a domain change or hostname removal.
 8. Execute and record the production smoke checklist. Push final evidence only
    after all reported values are observed.
 
+### Release 1 benchmark reliability gate
+
+For the evidence/scores reliability release, the generic sequence above is not
+sufficient by itself. Record each result below from one committed tree and stop
+at the first failure:
+
+1. Deploy `workers/benchmark-ingest` first and record its version plus commit.
+2. Trigger one authorized controlled refresh using the existing Cloudflare
+   scheduler/dashboard mechanism. Record the trigger time and active revision;
+   do not send a fetch request to the Worker.
+3. Fetch the production summary and coding leaderboard JSON. Confirm HTTP 200,
+   non-empty attribution, and the same `revision` value in both responses.
+4. In the coding response, locate model slug `gpt-5-6-sol` and record metric
+   value `77.95`, metric rank `3`, and source rank `3`. Confirm the rendered
+   coding route shows `78.0` and position `#3`; confirm the overall route shows
+   the reviewed overall value `81.5` (source value `81.48`).
+5. Run `npm run test:browser:local-preview` before production deployment. Its
+   local-only `x-tokenbench-preview-state` fixtures must prove both 503 and
+   corrupt-envelope recovery without mutating production D1 or cache rows.
+6. Deploy Pages from the same commit only after the Worker refresh/API checks
+   pass. Record the Pages deployment URL and commit.
+7. Validate Home, `/leaderboards/llm/coding/`, and
+   `/leaderboards/llm/overall/` at compact and desktop widths. Require visible
+   published evidence, no unavailable placeholder while a last-good revision
+   exists, the exact browser-fallback banner, canonical/title/description meta
+   tags, a secondary Share Leaderboard dialog containing the canonical URL,
+   Methodology and Privacy (but no Data sources) in the footer, and no document
+   overflow.
+8. Inspect fallback records by bounded correlation ID. The only event names are
+   `benchmark_fresh_cache_failed`, `benchmark_active_revision_failed`,
+   `benchmark_stale_fallback_selected`, and `benchmark_unavailable`. Allowed
+   fields are `event`, `endpoint`, `queryId`, `cacheScope`, `cacheKey`, `stage`,
+   `errorClass`, optional `activeRevision`, optional `fallbackRevision`,
+   `fallbackSelected`, and `correlationId`. Reject evidence containing response
+   bodies, request bodies, raw query strings, credentials, cookies, email
+   addresses, full URLs, or raw D1/provider errors.
+
+If the refresh fails because a BenchLM public row has no unique `models.json`
+match, retain the prior active revision and reconcile source identities. The
+strict one-to-one join is intentional; do not skip ambiguous rows or publish a
+partial bundle as an incident workaround.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant

@@ -72,6 +72,7 @@ describe('benchmark response fallback controller', () => {
     await expect(response.json()).resolves.toEqual({ revision: 'active' });
     expect(reconstruct).toHaveBeenCalledOnce();
     expect(logs).toContainEqual(expect.objectContaining({
+      event: 'benchmark_fresh_cache_failed',
       stage: 'active-cache',
       errorClass: 'Error',
       fallbackSelected: false,
@@ -100,6 +101,11 @@ describe('benchmark response fallback controller', () => {
       freshness: { status: 'stale' },
     });
     expect(logs).toContainEqual(expect.objectContaining({
+      event: 'benchmark_active_revision_failed',
+      stage: 'active-revision',
+    }));
+    expect(logs).toContainEqual(expect.objectContaining({
+      event: 'benchmark_stale_fallback_selected',
       stage: 'historical-cache',
       fallbackRevision: 'benchmark-rev-41',
       fallbackSelected: true,
@@ -108,6 +114,7 @@ describe('benchmark response fallback controller', () => {
   });
 
   it('returns unavailable only after active cache, reconstruction, and historical cache are exhausted', async () => {
+    const logs: BenchmarkFallbackLog[] = [];
     const response = await serveBenchmarkWithFallback({
       request: request(),
       endpoint: 'summary',
@@ -117,10 +124,17 @@ describe('benchmark response fallback controller', () => {
       db: database(),
       reconstruct: async () => null,
       unavailable,
+      log: (entry) => logs.push(entry),
     });
 
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
+    expect(logs).toContainEqual(expect.objectContaining({
+      event: 'benchmark_unavailable',
+      stage: 'historical-cache',
+      fallbackSelected: false,
+      correlationId: 'request-3',
+    }));
   });
 
   it('preserves exact stale ETag 304 behavior', async () => {

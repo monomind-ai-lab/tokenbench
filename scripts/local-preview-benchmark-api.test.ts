@@ -22,14 +22,14 @@ async function startLocalPreviewServer(): Promise<{ readonly server: ViteDevServ
   return { server, origin: `http://127.0.0.1:${(address as AddressInfo).port}` };
 }
 
-async function getLocalResponse(origin: string, pathname: string): Promise<{
+async function getLocalResponse(origin: string, pathname: string, headers: Record<string, string> = {}): Promise<{
   readonly status: number;
   readonly contentType: string | undefined;
   readonly headers: IncomingHttpHeaders;
   readonly body: string;
 }> {
   return new Promise((resolve, reject) => {
-    const request = get(new URL(pathname, origin), (response) => {
+    const request = get(new URL(pathname, origin), { headers }, (response) => {
       const chunks: Uint8Array[] = [];
       response.on('data', (chunk: Uint8Array) => chunks.push(chunk));
       response.on('error', reject);
@@ -85,25 +85,59 @@ describe('local Vite benchmark preview API', () => {
         ]),
       });
       expect(summaryBody.freshness).toMatchObject({
-        status: 'stale',
+        status: 'fresh',
         message: expect.stringContaining('LOCAL SAMPLE'),
       });
       expect(summaryBody.data.decisionPicks.length).toBeGreaterThan(0);
       expect(leaderboardBody.revision).toBe(summaryBody.revision);
       expect(leaderboardBody.freshness).toMatchObject({
-        status: 'stale',
+        status: 'fresh',
         message: expect.stringContaining('LOCAL SAMPLE'),
       });
       expect(leaderboardBody.data).toMatchObject({
         key: 'llm-coding',
         pagination: { limit: 5, nextCursor: null },
       });
-      expect(leaderboardBody.data.entries).toHaveLength(2);
+      expect(leaderboardBody.data.entries).toHaveLength(3);
       expect(leaderboardBody.data.entries.map((entry) => entry.model.name)).toEqual([
         'Sample Atlas',
         'Sample Orbit',
+        'GPT-5.6 Sol',
       ]);
-      expect(leaderboardBody.data.pagination.total).toBe(2);
+      expect(leaderboardBody.data.pagination.total).toBe(3);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('selects deterministic fresh, 503, and corrupt-cache responses with a local-only header', async () => {
+    const { server, origin } = await startLocalPreviewServer();
+    try {
+      const pathname = '/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=50';
+      const fresh = await getLocalResponse(origin, pathname);
+      const unavailable = await getLocalResponse(origin, pathname, { 'x-tokenbench-preview-state': '503' });
+      const corrupt = await getLocalResponse(origin, pathname, { 'x-tokenbench-preview-state': 'corrupt-cache' });
+
+      expect(fresh.status).toBe(200);
+      expect(JSON.parse(fresh.body)).toMatchObject({
+        freshness: { status: 'fresh' },
+        data: {
+          entries: expect.arrayContaining([
+            expect.objectContaining({
+              model: expect.objectContaining({ name: 'GPT-5.6 Sol' }),
+              metric: expect.objectContaining({ value: 77.95, rank: 3 }),
+              sourceRank: 3,
+            }),
+          ]),
+        },
+      });
+      expect(unavailable.status).toBe(503);
+      expect(JSON.parse(unavailable.body)).toEqual({ error: 'Local preview benchmark refresh unavailable.' });
+      expect(corrupt.status).toBe(200);
+      expect(JSON.parse(corrupt.body)).toMatchObject({
+        revision: 'local-corrupt-cache-row',
+        data: null,
+      });
     } finally {
       await server.close();
     }
@@ -131,7 +165,18 @@ describe('local Vite benchmark preview API', () => {
         data: { entries: Array<{ model: { name: string } }>; pagination: { nextCursor: string | null } };
       };
       expect(secondBody.data.entries.map((entry) => entry.model.name)).toEqual(['Sample Orbit']);
-      expect(secondBody.data.pagination.nextCursor).toBeNull();
+      expect(secondBody.data.pagination.nextCursor).toMatch(/^[A-Za-z0-9_-]+$/);
+
+      const third = await getLocalResponse(
+        origin,
+        `/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=1&cursor=${encodeURIComponent(secondBody.data.pagination.nextCursor!)}`,
+      );
+      expect(third.status).toBe(200);
+      const thirdBody = JSON.parse(third.body) as {
+        data: { entries: Array<{ model: { name: string } }>; pagination: { nextCursor: string | null } };
+      };
+      expect(thirdBody.data.entries.map((entry) => entry.model.name)).toEqual(['GPT-5.6 Sol']);
+      expect(thirdBody.data.pagination.nextCursor).toBeNull();
 
       const unmatched = await getLocalResponse(origin, '/api/benchmarks/leaderboards');
       expect(unmatched.status).toBe(404);

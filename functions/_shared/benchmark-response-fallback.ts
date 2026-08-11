@@ -9,9 +9,14 @@ const BENCHMARK_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1_000;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]{1,128}$/u;
 
 export type BenchmarkFallbackStage = 'active-cache' | 'active-revision' | 'historical-cache';
+export type BenchmarkFallbackEvent =
+  | 'benchmark_fresh_cache_failed'
+  | 'benchmark_active_revision_failed'
+  | 'benchmark_stale_fallback_selected'
+  | 'benchmark_unavailable';
 
 export interface BenchmarkFallbackLog {
-  readonly event: 'benchmark-response-fallback';
+  readonly event: BenchmarkFallbackEvent;
   readonly endpoint: string;
   readonly queryId: string;
   readonly cacheScope: 'benchmarks';
@@ -44,13 +49,14 @@ function safeErrorClass(error: unknown): string {
 
 function emit(
   options: BenchmarkFallbackOptions,
+  event: BenchmarkFallbackEvent,
   stage: BenchmarkFallbackStage,
   errorClass: string | null,
   fallbackSelected: boolean,
   fallbackRevision?: string,
 ): void {
   const entry: BenchmarkFallbackLog = {
-    event: 'benchmark-response-fallback',
+    event,
     endpoint: options.endpoint,
     queryId: options.queryId,
     cacheScope: 'benchmarks',
@@ -88,25 +94,27 @@ export async function serveBenchmarkWithFallback(options: BenchmarkFallbackOptio
     );
     if (cached) return cachedApiResponse(options.request, cached);
   } catch (error) {
-    emit(options, 'active-cache', safeErrorClass(error), false);
+    emit(options, 'benchmark_fresh_cache_failed', 'active-cache', safeErrorClass(error), false);
   }
 
   try {
     const reconstructed = await options.reconstruct(now);
     if (reconstructed) return reconstructed;
   } catch (error) {
-    emit(options, 'active-revision', safeErrorClass(error), false);
+    emit(options, 'benchmark_active_revision_failed', 'active-revision', safeErrorClass(error), false);
   }
 
+  let historicalErrorClass: string | null = null;
   try {
     const cached = await readNewestCompleteApiResponseCache(options.db, 'benchmarks', options.cacheKey);
     if (cached) {
-      emit(options, 'historical-cache', null, true, cached.revision);
+      emit(options, 'benchmark_stale_fallback_selected', 'historical-cache', null, true, cached.revision);
       return cachedApiResponse(options.request, cached);
     }
   } catch (error) {
-    emit(options, 'historical-cache', safeErrorClass(error), false);
+    historicalErrorClass = safeErrorClass(error);
   }
 
+  emit(options, 'benchmark_unavailable', 'historical-cache', historicalErrorClass, false);
   return options.unavailable();
 }
