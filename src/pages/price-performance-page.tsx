@@ -2,13 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   filterPricePerformancePoints,
   markParetoFrontier,
-  priceForBasis,
   type PricePerformancePointView,
 } from '../benchmarks/price-performance';
 import {
   parsePricePerformanceEnvelope,
   type PricePerformanceEnvelope,
-  type PricePerformancePoint,
 } from '../benchmarks/price-performance-contracts';
 import { PricePerformanceChart } from '../frontend/price-performance-chart';
 import {
@@ -31,6 +29,7 @@ export interface PricePerformancePageProps {
   readonly envelope: PricePerformanceEnvelope;
   readonly chartAvailable?: boolean;
   readonly initialState?: PricePerformanceState;
+  readonly deferLocationState?: boolean;
   readonly onRequestArchived?: () => void;
 }
 
@@ -51,19 +50,24 @@ function compareModelKeys(left: string, right: string): number {
 }
 
 
-function selectedCosts(points: readonly PricePerformancePoint[], basis: PricePerformanceState['costBasis']): readonly (number | null)[] {
-  return points.map((point) => priceForBasis(point.route, basis));
+function decodedPageState(envelope: PricePerformanceEnvelope, search: string): PricePerformanceState {
+  const capabilities = envelope.data.capabilities;
+  // Preserve a requested log scale for the filter pass, then validate it
+  // against only the points that the decoded filters actually display.
+  const firstPass = decodePricePerformanceState(search, capabilities, [1]).state;
+  const filtered = filterPricePerformancePoints(envelope.data.points, pricePerformanceFilters(firstPass));
+  const views = markParetoFrontier(filtered, { lane: firstPass.lane, costBasis: firstPass.costBasis });
+  return decodePricePerformanceState(
+    search,
+    capabilities,
+    views.map((point) => point.selectedCost),
+  ).state;
 }
 
 function initialPageState(envelope: PricePerformanceEnvelope): PricePerformanceState {
-  if (typeof window === 'undefined') return DEFAULT_PRICE_PERFORMANCE_STATE;
-  const capabilities = envelope.data.capabilities;
-  const firstPass = decodePricePerformanceState(window.location.search, capabilities).state;
-  return decodePricePerformanceState(
-    window.location.search,
-    capabilities,
-    selectedCosts(envelope.data.points, firstPass.costBasis),
-  ).state;
+  return typeof window === 'undefined'
+    ? DEFAULT_PRICE_PERFORMANCE_STATE
+    : decodedPageState(envelope, window.location.search);
 }
 
 function samePriceBand(left: PricePerformanceState['priceBand'], right: PricePerformanceState['priceBand']): boolean {
@@ -139,11 +143,12 @@ function Evidence({ envelope }: { readonly envelope: PricePerformanceEnvelope })
   </section>;
 }
 
-export function PricePerformancePage({ envelope, chartAvailable = true, initialState, onRequestArchived }: PricePerformancePageProps) {
+export function PricePerformancePage({ envelope, chartAvailable = true, initialState, deferLocationState = false, onRequestArchived }: PricePerformancePageProps) {
   const capabilities = envelope.data.capabilities;
-  const [state, setState] = useState<PricePerformanceState>(() => initialState ?? initialPageState(envelope));
+  const [state, setState] = useState<PricePerformanceState>(() => initialState
+    ?? (deferLocationState ? DEFAULT_PRICE_PERFORMANCE_STATE : initialPageState(envelope)));
+  const [locationStateReady, setLocationStateReady] = useState(!deferLocationState);
   const [selectedPoint, setSelectedPoint] = useState<PricePerformancePointView | null>(null);
-  const allCosts = useMemo(() => selectedCosts(envelope.data.points, state.costBasis), [envelope.data.points, state.costBasis]);
   const filtered = useMemo(() => filterPricePerformancePoints(envelope.data.points, pricePerformanceFilters(state)), [envelope.data.points, state]);
   const views = useMemo(() => markParetoFrontier(filtered, { lane: state.lane, costBasis: state.costBasis }), [filtered, state.costBasis, state.lane]);
   const displayedCosts = useMemo(() => views.map((point) => point.selectedCost), [views]);
@@ -163,22 +168,27 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
   }, [normalized, state]);
 
   useEffect(() => {
+    if (locationStateReady || typeof window === 'undefined') return;
+    setState(decodedPageState(envelope, window.location.search));
+    setLocationStateReady(true);
+  }, [envelope, locationStateReady]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPopState = () => {
-      const decoded = decodePricePerformanceState(window.location.search, capabilities, allCosts);
-      setState(decoded.state);
+      setState(decodedPageState(envelope, window.location.search));
     };
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, [allCosts, capabilities]);
+  }, [envelope]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || window.location.pathname !== '/llm-price-performance/') return;
+    if (!locationStateReady || typeof window === 'undefined' || window.location.pathname !== '/llm-price-performance/') return;
     const canonical = encodePricePerformanceState(state, displayedCosts).toString();
     const current = window.location.search.replace(/^\?/, '');
     if (current === canonical) return;
     window.history.replaceState(window.history.state, '', `${pricePerformanceUrl(state, displayedCosts)}${window.location.hash}`);
-  }, [displayedCosts, state]);
+  }, [displayedCosts, locationStateReady, state]);
 
   const stale = envelope.freshness.status === 'stale';
   const noMatches = views.length === 0;
@@ -282,7 +292,12 @@ export function PricePerformanceApp({ initialEnvelope, chartAvailable = true }: 
   }, []);
 
   if (envelope) {
-    return <PricePerformancePage envelope={envelope} chartAvailable={chartAvailable} onRequestArchived={requestArchived} />;
+    return <PricePerformancePage
+      envelope={envelope}
+      chartAvailable={chartAvailable}
+      deferLocationState={initialEnvelope !== undefined}
+      onRequestArchived={requestArchived}
+    />;
   }
   if (error) return <div className="empty-state price-performance-load-state" role="alert"><strong>Unable to load benchmark data</strong><p>{error}</p></div>;
   return <div className="skeleton-stack" aria-busy="true" aria-label="Loading price-performance data"><span className="skeleton skeleton-lg" /><span className="skeleton" /><span className="skeleton skeleton-short" /></div>;

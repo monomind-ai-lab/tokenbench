@@ -1,10 +1,11 @@
 import {StrictMode} from 'react';
 import {createRoot, hydrateRoot} from 'react-dom/client';
-import App, { ComparisonDetailApp, ModelProfileApp } from './App.tsx';
+import App, { ComparisonDetailApp, ModelProfileApp, PricePerformanceRoute } from './App.tsx';
 import GuidesApp from './GuidesApp.tsx';
 import { parseComparisonViewModel } from './frontend/comparison-contracts';
 import { parseModelProfileViewModel } from './frontend/model-profile-contracts';
 import { parseModelDirectoryEnvelope } from './frontend/model-directory-contracts';
+import { parsePricePerformanceEnvelope } from './benchmarks/price-performance-contracts';
 import { NewsletterConfirmedPage } from './pages/newsletter-confirmed-page';
 import { ModelsApp } from './pages/models-page';
 import { matchRoute } from './routing/routes';
@@ -29,6 +30,16 @@ function initialModelDirectoryEnvelope() {
   }
 }
 
+function initialPricePerformanceEnvelope() {
+  const payload = document.getElementById('price-performance-initial-data');
+  if (!(payload instanceof HTMLScriptElement) || payload.type !== 'application/json' || !payload.textContent) return null;
+  try {
+    return parsePricePerformanceEnvelope(JSON.parse(payload.textContent));
+  } catch {
+    return null;
+  }
+}
+
 
 function initialModelProfileViewModel() {
   const payload = document.getElementById('model-profile-initial-data');
@@ -48,6 +59,17 @@ if (route.kind === 'modelProfile') {
   if (viewModel) {
     const root = document.getElementById('root')!;
     hydrateRoot(root, <StrictMode><ModelProfileApp viewModel={viewModel} /></StrictMode>);
+  }
+} else if (route.kind === 'pricePerformance') {
+  const envelope = initialPricePerformanceEnvelope();
+  const root = document.getElementById('root')!;
+  if (envelope) {
+    hydrateRoot(root, <StrictMode><PricePerformanceRoute initialEnvelope={envelope} /></StrictMode>);
+  } else if (!document.getElementById('price-performance-initial-data')) {
+    // A Vite/static shell has no embedded payload and may mount client-side.
+    // A malformed SSR payload is left untouched so server evidence is never erased.
+    root.replaceChildren();
+    createRoot(root).render(<StrictMode><PricePerformanceRoute /></StrictMode>);
   }
 } else if (route.kind === 'models') {
   const envelope = initialModelDirectoryEnvelope();

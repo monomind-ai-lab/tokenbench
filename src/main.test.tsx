@@ -8,14 +8,16 @@ const hydrateRootMock = vi.hoisted(() => vi.fn());
 const parseComparisonViewModelMock = vi.hoisted(() => vi.fn());
 const parseModelProfileViewModelMock = vi.hoisted(() => vi.fn());
 const parseModelDirectoryEnvelopeMock = vi.hoisted(() => vi.fn());
+const parsePricePerformanceEnvelopeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-dom/client', () => ({ createRoot: createRootMock, hydrateRoot: hydrateRootMock }));
-vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null, ModelProfileApp: () => null }));
+vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null, ModelProfileApp: () => null, PricePerformanceRoute: () => null }));
 vi.mock('./GuidesApp.tsx', () => ({ default: () => null }));
 vi.mock('./pages/models-page', () => ({ ModelsApp: () => null }));
 vi.mock('./frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
 vi.mock('./frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
 vi.mock('./frontend/model-directory-contracts', () => ({ parseModelDirectoryEnvelope: parseModelDirectoryEnvelopeMock }));
+vi.mock('./benchmarks/price-performance-contracts', () => ({ parsePricePerformanceEnvelope: parsePricePerformanceEnvelopeMock }));
 
 describe('browser entrypoint', () => {
   beforeEach(() => {
@@ -29,6 +31,8 @@ describe('browser entrypoint', () => {
     parseModelProfileViewModelMock.mockReturnValue(null);
     parseModelDirectoryEnvelopeMock.mockReset();
     parseModelDirectoryEnvelopeMock.mockReturnValue(null);
+    parsePricePerformanceEnvelopeMock.mockReset();
+    parsePricePerformanceEnvelopeMock.mockReturnValue(null);
     document.body.innerHTML = '<div id="root"><div class="static-page-shell">Crawlable fallback</div></div>';
     window.history.replaceState({}, '', '/leaderboards/llm/coding/');
   });
@@ -145,6 +149,43 @@ describe('browser entrypoint', () => {
     expect(root.querySelector('[data-server-models]')).toBeInTheDocument();
     expect(hydrateRootMock).not.toHaveBeenCalled();
     expect(createRootMock).not.toHaveBeenCalled();
+  });
+
+  it('hydrates price-performance evidence only after strict payload validation', async () => {
+    document.body.innerHTML = '<div id="root"><main data-server-price-performance>LLM price vs performance</main></div><script id="price-performance-initial-data" type="application/json">{"revision":"price-r1"}</script>';
+    window.history.replaceState({}, '', '/llm-price-performance/?lane=coding');
+    parsePricePerformanceEnvelopeMock.mockReturnValue({ revision: 'price-r1' });
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(parsePricePerformanceEnvelopeMock).toHaveBeenCalledWith({ revision: 'price-r1' });
+    expect(root.querySelector('[data-server-price-performance]')).toBeInTheDocument();
+    expect(hydrateRootMock).toHaveBeenCalledWith(root, expect.anything());
+    expect(createRootMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves price-performance server HTML when the embedded payload is malformed', async () => {
+    document.body.innerHTML = '<div id="root"><main data-server-price-performance>Last valid projection</main></div><script id="price-performance-initial-data" type="application/json">not-json</script>';
+    window.history.replaceState({}, '', '/llm-price-performance/');
+
+    await import('./main.tsx');
+
+    expect(document.querySelector('[data-server-price-performance]')).toBeInTheDocument();
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+    expect(createRootMock).not.toHaveBeenCalled();
+  });
+
+  it('client-mounts the explorer when a static shell has no hydration payload', async () => {
+    document.body.innerHTML = '<div id="root"><main>Static fallback</main></div>';
+    window.history.replaceState({}, '', '/llm-price-performance/');
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
 
 });

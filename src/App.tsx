@@ -19,6 +19,7 @@ import { useSitePreferences } from './frontend/site-preferences';
 import { ComparisonPage } from './frontend/comparison-page';
 import type { ComparisonViewModel } from './frontend/comparison-contracts';
 import type { ModelProfileViewModel } from './frontend/model-profile-contracts';
+import type { PricePerformanceEnvelope } from './benchmarks/price-performance-contracts';
 import { Skeleton, providerLabel } from './frontend/ui';
 import { useCatalog, type CatalogState } from './frontend/use-catalog';
 import { parseModelDirectoryEnvelope, type ModelDirectoryEnvelope } from './frontend/model-directory-contracts';
@@ -29,6 +30,7 @@ import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-
 import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
 import { ModelProfilePage } from './pages/model-profile-page';
+import { PricePerformanceApp } from './pages/price-performance-page';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
 interface PageFrameProps {
@@ -334,6 +336,13 @@ function ModelsRoute() {
   </PageFrame>;
 }
 
+/** Shared by the price-performance Pages Function response and browser hydration. */
+export function PricePerformanceRoute({ initialEnvelope }: { readonly initialEnvelope?: PricePerformanceEnvelope }) {
+  return <PageFrame activePage="pricePerformance">
+    <PricePerformanceApp initialEnvelope={initialEnvelope} />
+  </PageFrame>;
+}
+
 
 /** Shared by the Pages Function SSR response and browser hydration. */
 export function ComparisonDetailApp({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
@@ -351,6 +360,7 @@ export default function App() {
   if (route.kind === 'home') return <HomeRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
+  if (route.kind === 'pricePerformance') return <PricePerformanceRoute />;
   if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
