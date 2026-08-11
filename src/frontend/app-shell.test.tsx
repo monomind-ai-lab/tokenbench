@@ -365,6 +365,21 @@ describe('responsive calculator app shell', () => {
     expect(screen.queryByText(/token-equivalent costs are equal/i)).not.toBeInTheDocument();
   });
 
+  it('starts with a provider that has a deterministic direct API mapping when one is available', async () => {
+    const catalog = twoProviderCatalog();
+    const marketplaceFirstCatalog = {
+      ...catalog,
+      modelOffers: catalog.modelOffers.filter((offer) => offer.id !== selectedDirectOffer.id),
+    };
+    renderCalculator(marketplaceFirstCatalog, CALCULATOR_PATH);
+
+    const result = await calculatedResult();
+    expect(screen.getByRole('radio', { name: 'Provider B' })).toBeChecked();
+    expect(result).toHaveTextContent(/token-equivalent basis/i);
+    fireEvent.click(screen.getByText('Advanced model mapping'));
+    expect(screen.getByRole('checkbox', { name: /Beta Direct/i })).toBeChecked();
+  });
+
   it('canonicalizes recovered shared state once without selecting a replacement plan', async () => {
     const recoveryPath = `${CALCULATOR_PATH}?${new URLSearchParams({
       provider: 'provider-a',
