@@ -7,6 +7,12 @@ compatibility_date = "2026-08-05"
 [observability]
 enabled = true
 
+# Durable profile publication materializes every retained model in one atomic
+# scheduled invocation. Workers Paid permits up to five minutes of CPU time;
+# opt in explicitly instead of relying on the 30-second default.
+[limits]
+cpu_ms = 300_000
+
 [[d1_databases]]
 binding = "CATALOG_DB"
 database_name = "ai-plan-catalog"

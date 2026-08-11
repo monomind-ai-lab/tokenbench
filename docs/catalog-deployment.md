@@ -100,9 +100,12 @@ rollback. If a later correction is necessary, use an approved additive
 migration and preserve the original migration record.
 
 Both ingestion Workers require Workers Paid for their scheduled publication
-query budget. This is separate from Pages request-time CPU: Pages APIs use raw
-materialized responses or bounded targeted readers so normal requests do not
-rebuild the full fact graph.
+query budget. Benchmark ingestion explicitly opts into the supported five-minute
+CPU ceiling because one atomic release materializes every retained profile; the
+default 30-second ceiling is not sufficient for the complete directory. This is
+separate from Pages request-time CPU: Pages APIs use raw materialized responses
+or bounded targeted readers so normal requests do not rebuild the full fact
+graph.
 
 ## Scheduled ingestion
 
