@@ -132,3 +132,12 @@ describe('route metadata registry', () => {
     expect(page.canonical).toBe(`${origin}/leaderboards/llm/${label.toLowerCase()}/`);
   });
 });
+
+  it('describes the calculator with message-level workload and directional pricing facts', () => {
+    const page = metadataForRoute({ kind: 'calculator' });
+    expect(page.description).toContain('conversations');
+    expect(page.description).toContain('messages');
+    expect(page.description).toContain('input and output tokens');
+    expect(page.description).toContain('API-equivalent pricing');
+    expect(page.canonical).toBe(`${origin}/tools/subscriptions-vs-apis/`);
+  });

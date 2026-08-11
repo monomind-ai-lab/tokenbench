@@ -47,7 +47,7 @@ describe('frontend calculator state', () => {
     expect(snapshot.apiMapping.defaultOffer?.id).toBe(directOffer.id);
     expect(snapshot.apiMapping.mode).toBe('default');
     expect(snapshot.capacityEvidence.status).toBe('not-verified');
-    expect(snapshot.capacityEvidence.explanation).toMatch(/not independently verified/i);
+    expect(snapshot.capacityEvidence.explanation).toBe('The plan does not publish access to one or more selected models.');
   });
 
   it('does not suppress arithmetic when verified capacity is unavailable', () => {

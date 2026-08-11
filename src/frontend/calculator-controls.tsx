@@ -1,8 +1,8 @@
 import { Boxes, CircleCheck, CreditCard, GitBranch, SlidersHorizontal } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
 import { UI_COPY } from '../data/mockData';
-import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints, WORKLOAD_PRESETS } from './calculator-state';
-import type { WorkloadPreset } from './calculator-state';
+import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints } from './calculator-state';
+import type { ConversationWorkload } from '../catalog/subscription-api-calculator';
 import { isApiOnlyProvider, paidIndividualPlans } from './plan-filter';
 import type { CalculatorControlsProps } from './types';
 import { EmptyState, providerLabel } from './ui';
@@ -10,18 +10,6 @@ import { ModelMark, ProviderMark } from './provider-mark';
 
 function inputId(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-');
-}
-
-// Keep the range useful for the common workload band while the number field
-// remains available for larger, exact token budgets.
-const MONTHLY_TOKENS_RANGE_MAX = 100_000_000;
-const MONTHLY_TOKENS_RANGE_STEP = 100_000;
-
-function parseFormattedTokens(value: string): number | null {
-  const normalized = value.replaceAll(',', '').trim();
-  if (!/^\d+$/.test(normalized)) return normalized === '' ? 0 : null;
-  const parsed = Number(normalized);
-  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 interface ProviderChoiceProps {
@@ -46,6 +34,37 @@ interface ModelChoiceProps {
   readonly onChange: () => void;
 }
 
+interface NumberFieldProps {
+  readonly id: string;
+  readonly label: string;
+  readonly value: number;
+  readonly min: number;
+  readonly max: number;
+  readonly onChange: (value: number) => void;
+}
+
+function NumberField({ id, label, value, min, max, onChange }: NumberFieldProps) {
+  return (
+    <div className="workload-field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        className="number-input"
+        type="number"
+        min={min}
+        max={max}
+        step="1"
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => {
+          const parsed = Number(event.target.value);
+          if (Number.isSafeInteger(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+        }}
+      />
+    </div>
+  );
+}
+
 function ProviderChoice({ providerId, selected, apiOnly, onChange }: ProviderChoiceProps) {
   const providerName = providerLabel(providerId);
   return (
@@ -62,18 +81,14 @@ function planEntitlementFlag(plan: PlanOffer): string {
   if (plan.entitlementEvidence.status === 'stale') {
     return `Stale evidence · ${plan.entitlementEvidence.staleReason ?? 'refresh required before comparison.'}`;
   }
-  if (plan.entitlementEvidence.status === 'projected') {
-    return 'Projected outer ceiling · scenario only, not a guaranteed allowance.';
-  }
-  if (plan.entitlementEvidence.status === 'dynamic_unknown') {
-    return 'Dynamic or unpublished capacity · this plan cannot be compared automatically.';
-  }
+  if (plan.entitlementEvidence.status === 'projected') return 'Projected outer ceiling · scenario only, not a guaranteed allowance.';
+  if (plan.entitlementEvidence.status === 'dynamic_unknown') return 'Dynamic or unpublished capacity · arithmetic remains available, capacity does not.';
   switch (plan.entitlement.kind) {
     case 'fixed_tokens': return 'Published fixed token allowance.';
     case 'rolling_limit': return 'Variable rolling entitlement · exact token capacity is not published.';
     case 'guardrail_limited': return 'Variable guardrail entitlement · exact token capacity is not published.';
     case 'credits': return 'Credit-based entitlement · exact token capacity is not published.';
-    case 'unknown': return 'Unpublished entitlement · this plan cannot be compared automatically.';
+    case 'unknown': return 'Unpublished entitlement · capacity is not independently verified.';
   }
 }
 
@@ -99,6 +114,10 @@ function ModelChoice({ model, selected, onChange }: ModelChoiceProps) {
   );
 }
 
+function updateWorkload(workload: ConversationWorkload, key: keyof ConversationWorkload, value: number): ConversationWorkload {
+  return { ...workload, [key]: value };
+}
+
 export function CalculatorControls({
   catalog,
   providerIds,
@@ -106,26 +125,27 @@ export function CalculatorControls({
   selectedPlanId,
   selectedModelIds,
   modelMixBasisPoints,
-  inputShareBasisPoints,
-  monthlyTokens,
-  selectedPreset,
+  workload,
+  mappingMode,
+  defaultApiEquivalentOffer,
   onProviderChange,
   onPlanChange,
   onModelToggle,
   onModelShareChange,
-  onInputShareChange,
-  onMonthlyTokensChange,
-  onPresetChange,
+  onWorkloadChange,
+  onMappingModeChange,
 }: CalculatorControlsProps) {
   const plans = paidIndividualPlans(catalog.plans, selectedProviderId);
   const models = catalog.modelOffers.filter((model) => model.providerId === selectedProviderId);
   const selectedModels = models.filter((model) => selectedModelIds.includes(model.id));
 
+  const changeWorkload = (key: keyof ConversationWorkload, value: number) => onWorkloadChange(updateWorkload(workload, key, value));
+
   return (
     <section className="controls-panel" aria-label="Calculator controls">
       <section id="calculator-provider-plan" className="calculator-control-step" aria-labelledby="provider-plan-heading">
         <header className="calculator-step-heading"><span>Step 1</span><h2 id="provider-plan-heading">Choose a provider and plan</h2></header>
-        <p className="step-description">Plan price is a monthly fee. A plan is only directly comparable when it publishes a fixed token allowance for the models you selected.</p>
+        <p className="step-description">Plan fee and API-equivalent arithmetic stay visible even when the provider has not independently verified a fixed capacity.</p>
         <div className="control-grid guided-provider-plan-grid">
           <fieldset className="control-block">
             <legend><span className="control-legend"><GitBranch size={18} aria-hidden="true" />{UI_COPY.providerSelection}</span></legend>
@@ -138,7 +158,7 @@ export function CalculatorControls({
 
           <fieldset className="control-block">
             <legend><span className="control-legend"><CreditCard size={18} aria-hidden="true" />{UI_COPY.planSelection}</span></legend>
-            <p className="field-help">Variable, rolling, credit-based, and unpublished entitlements remain visible instead of being treated as a fixed token allowance.</p>
+            <p className="field-help">Capacity evidence is a separate result; it never hides valid cost arithmetic.</p>
             <div className="choice-list plan-list">
               {plans.map((plan) => <PlanChoice key={plan.id} plan={plan} selected={plan.id === selectedPlanId} onChange={() => onPlanChange(plan.id)} />)}
             </div>
@@ -149,16 +169,21 @@ export function CalculatorControls({
 
       <section id="calculator-models" className="calculator-control-step" aria-labelledby="models-heading">
         <header className="calculator-step-heading"><span>Step 2</span><h2 id="models-heading">Choose the models you actually use</h2></header>
-        <p className="step-description">Start with the sensible verified selection, then keep only the API offers that match your real workload.</p>
+        <p className="step-description">The visible default mapping is deterministic. Open Advanced only when your workload uses an explicit model mix or a non-direct route.</p>
+        <div className="default-api-mapping" role="status" aria-label="Default API mapping">
+          <strong>Default API mapping</strong>
+          {defaultApiEquivalentOffer ? <span>{defaultApiEquivalentOffer.displayName} · {basisLabel(defaultApiEquivalentOffer.pricingBasis)} · {defaultApiEquivalentOffer.modelId}</span> : <span>No direct provider API offer is published for this plan.</span>}
+          <small>{mappingMode === 'default' ? 'Used for the current calculation.' : 'Advanced override is active.'}</small>
+        </div>
         <fieldset className="control-block model-block">
           <legend><span className="control-legend"><Boxes size={18} aria-hidden="true" />{UI_COPY.modelSelection}</span></legend>
-          <p className="field-help">Select one or more offers. Direct, OpenRouter, and OpenCode Zen identities stay separate.</p>
-          <div className="model-list">
-            {models.map((model) => <ModelChoice key={model.id} model={model} selected={selectedModelIds.includes(model.id)} onChange={() => onModelToggle(model.id)} />)}
-          </div>
-          {models.length === 0 ? <EmptyState title="No verified models for this provider" description="This provider has no published model offers in the current revision. Try another provider or retry." /> : null}
-          <details className="model-mix-details">
-            <summary>Adjust model usage mix</summary>
+          <p className="field-help">Advanced model mapping keeps direct, OpenRouter, and OpenCode Zen pricing identities explicit.</p>
+          <details className="model-mix-details" onToggle={(event) => { if (event.currentTarget.open) onMappingModeChange('override'); }}>
+            <summary>Advanced model mapping</summary>
+            <div className="model-list">
+              {models.map((model) => <ModelChoice key={model.id} model={model} selected={selectedModelIds.includes(model.id)} onChange={() => { onMappingModeChange('override'); onModelToggle(model.id); }} />)}
+            </div>
+            {models.length === 0 ? <EmptyState title="No verified models for this provider" description="This provider has no published model offers in the current revision." /> : null}
             <div className="usage-mix" role="group" aria-label="Model usage mix">
               <div className="mix-heading"><span>Model usage mix</span><strong>{selectedModels.length ? '100% total' : 'Select a model first'}</strong></div>
               {selectedModels.map((model) => {
@@ -167,7 +192,7 @@ export function CalculatorControls({
                 return (
                   <div className="mix-row" key={model.id}>
                     <div className="mix-label"><label htmlFor={id}>{model.displayName}</label><output>{formatPercentBasisPoints(share)}</output></div>
-                    <input id={id} type="range" min="0" max="100" step="1" value={share / 100} aria-valuenow={share / 100} aria-valuetext={`${formatPercentBasisPoints(share)} of workload`} onChange={(event) => onModelShareChange(model.id, Math.round(Number(event.target.value) * 100))} />
+                    <input id={id} type="range" min="0" max="100" step="1" value={share / 100} aria-valuenow={share / 100} aria-valuetext={`${formatPercentBasisPoints(share)} of workload`} onChange={(event) => { onMappingModeChange('override'); onModelShareChange(model.id, Math.round(Number(event.target.value) * 100)); }} />
                   </div>
                 );
               })}
@@ -178,42 +203,18 @@ export function CalculatorControls({
       </section>
 
       <section id="calculator-workload" className="calculator-control-step" aria-labelledby="workload-heading">
-        <header className="calculator-step-heading"><span>Step 3</span><h2 id="workload-heading">Describe your monthly workload</h2></header>
-        <p className="step-description">For example, 10M tokens at a 50/50 input/output mix describes a balanced monthly workload.</p>
+        <header className="calculator-step-heading"><span>Step 3</span><h2 id="workload-heading">Describe your message-level workload</h2></header>
+        <p className="step-description">Use the five inputs that describe how people actually use the model. Monthly messages and directional token totals are derived exactly.</p>
         <fieldset className="control-block usage-block" aria-describedby="usage-help">
           <legend><span className="control-legend"><SlidersHorizontal size={18} aria-hidden="true" />{UI_COPY.workloadUsage}</span></legend>
-          <div className="field-label"><label htmlFor="monthly-tokens">Expected monthly usage</label><output id="monthly-tokens-output">{monthlyTokens.toLocaleString()} tokens</output></div>
-          <input
-            id="monthly-tokens-range"
-            className="usage-range"
-            type="range"
-            min="0"
-            max={MONTHLY_TOKENS_RANGE_MAX}
-            step={MONTHLY_TOKENS_RANGE_STEP}
-            value={Math.min(monthlyTokens, MONTHLY_TOKENS_RANGE_MAX)}
-            aria-label="Monthly usage range"
-            aria-describedby="monthly-tokens-output"
-            aria-valuetext={`${monthlyTokens.toLocaleString()} tokens`}
-            onChange={(event) => onMonthlyTokensChange(Number(event.target.value))}
-          />
-          <div className="range-caption"><span>0 tokens</span><span>100M tokens</span></div>
-          <input id="monthly-tokens" className="number-input" type="text" inputMode="numeric" pattern="[0-9,]*" autoComplete="off" value={monthlyTokens.toLocaleString('en-US')} aria-describedby="monthly-tokens-output" onChange={(event) => {
-            const parsed = parseFormattedTokens(event.target.value);
-            if (parsed !== null) onMonthlyTokensChange(parsed);
-          }} />
-
-          <p id="usage-help" className="field-help">Presets are starting points; every value remains editable.</p>
-          <div className="preset-row" aria-label="Workload presets">
-            <span className="preset-label">Presets</span>
-            {(Object.entries(WORKLOAD_PRESETS) as [WorkloadPreset, (typeof WORKLOAD_PRESETS)[WorkloadPreset]][]).map(([preset, values]) => {
-              const selected = selectedPreset === preset;
-              return <button key={preset} type="button" className={`button button-small preset-button ${selected ? 'preset-selected' : ''}`} aria-pressed={selected} onClick={() => onPresetChange(preset)}>{values.label}</button>;
-            })}
+          <div className="workload-input-grid">
+            <NumberField id="conversations-per-day" label="Conversations per day" value={workload.conversationsPerDay} min={0} max={10_000} onChange={(value) => changeWorkload('conversationsPerDay', value)} />
+            <NumberField id="messages-per-conversation" label="Messages per conversation" value={workload.messagesPerConversation} min={0} max={1_000} onChange={(value) => changeWorkload('messagesPerConversation', value)} />
+            <NumberField id="input-tokens-per-message" label="Average input tokens per message" value={workload.inputTokensPerMessage} min={0} max={1_000_000} onChange={(value) => changeWorkload('inputTokensPerMessage', value)} />
+            <NumberField id="output-tokens-per-message" label="Average output tokens per message" value={workload.outputTokensPerMessage} min={0} max={1_000_000} onChange={(value) => changeWorkload('outputTokensPerMessage', value)} />
+            <NumberField id="active-days-per-month" label="Active days per month" value={workload.activeDaysPerMonth} min={0} max={31} onChange={(value) => changeWorkload('activeDaysPerMonth', value)} />
           </div>
-
-          <div className="field-label"><label htmlFor="input-share">Input share</label><output id="input-share-output">{formatPercentBasisPoints(inputShareBasisPoints)} input / {formatPercentBasisPoints(10_000 - inputShareBasisPoints)} output</output></div>
-          <input id="input-share" type="range" min="0" max="100" step="1" value={inputShareBasisPoints / 100} aria-label="Input share" aria-valuenow={inputShareBasisPoints / 100} aria-valuetext={`${formatPercentBasisPoints(inputShareBasisPoints)} input`} onChange={(event) => onInputShareChange(Math.round(Number(event.target.value) * 100))} />
-          <div className="range-caption"><span>More output</span><span>More input</span></div>
+          <p id="usage-help" className="field-help">Zero usage and zero active days are valid. Efficiency and breakeven are shown only when their arithmetic denominator is positive.</p>
         </fieldset>
       </section>
     </section>

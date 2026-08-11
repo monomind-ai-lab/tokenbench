@@ -83,7 +83,7 @@ const pageDefinitions = {
   },
   calculator: {
     title: `Subscription vs API Cost Calculator | ${SITE_CONFIG.name}`,
-    description: `Estimate how a paid AI subscription compares with direct API pricing using your monthly token usage, model mix, and ${SITE_CONFIG.name}'s verified provider evidence.`,
+    description: `Compare subscription plan fees with API-equivalent pricing from conversations, messages, directional input and output tokens, active days, and ${SITE_CONFIG.name}'s verified provider evidence.`,
     h1: 'Subscription vs API cost calculator',
   },
   compareHub: {

@@ -29,8 +29,11 @@ interface CalculatorPathOptions {
   readonly planId?: string;
   readonly modelIds?: string;
   readonly weights?: string;
-  readonly inputShareBasisPoints?: number;
-  readonly monthlyTokens?: number;
+  readonly conversationsPerDay?: number;
+  readonly messagesPerConversation?: number;
+  readonly inputTokensPerMessage?: number;
+  readonly outputTokensPerMessage?: number;
+  readonly activeDaysPerMonth?: number;
 }
 
 function calculatorPath({
@@ -38,16 +41,22 @@ function calculatorPath({
   planId = 'provider-a:starter',
   modelIds = selectedDirectOffer.id,
   weights = '10000',
-  inputShareBasisPoints = 5_000,
-  monthlyTokens = 10_000_000,
+  conversationsPerDay = 10,
+  messagesPerConversation = 8,
+  inputTokensPerMessage = 750,
+  outputTokensPerMessage = 250,
+  activeDaysPerMonth = 25,
 }: CalculatorPathOptions = {}) {
   const params = new URLSearchParams({
-    provider: providerId,
-    plan: planId,
+    c: String(conversationsPerDay),
+    m: String(messagesPerConversation),
+    i: String(inputTokensPerMessage),
+    o: String(outputTokensPerMessage),
+    d: String(activeDaysPerMonth),
     models: modelIds,
     weights,
-    input: String(inputShareBasisPoints),
-    tokens: String(monthlyTokens),
+    provider: providerId,
+    plan: planId,
   });
   return `${CALCULATOR_PATH}?${params}`;
 }
@@ -58,11 +67,12 @@ function renderCalculator(catalog: CatalogResponse, pathname = calculatorPath())
 }
 
 async function calculatorReadyHeading() {
-  return screen.findByRole('heading', { name: /What does API usage cost?/i }, { timeout: 5_000 });
+  await screen.findByRole('heading', { name: 'API-equivalent monthly cost' }, { timeout: 5_000 });
+  return screen.getByRole('heading', { name: 'Review the recommendation' });
 }
 
 async function calculatedResult() {
-  await calculatorReadyHeading();
+  await screen.findByRole('heading', { name: 'API-equivalent monthly cost' }, { timeout: 5_000 });
   return screen.getByRole('region', { name: 'Calculated plan value' });
 }
 
@@ -182,8 +192,11 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 1 })).toBeInTheDocument();
     expect(await screen.findByRole('group', { name: /Provider selection/i })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /Plan selection/i })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: /Model selection/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Expected monthly usage/i)).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Conversations per day' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Messages per conversation' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Average input tokens per message' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Average output tokens per message' })).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: 'Active days per month' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: /Calculated plan value/i })).toBeInTheDocument();
   });
 
@@ -191,17 +204,19 @@ describe('responsive calculator app shell', () => {
     renderAt(calculatorPath());
 
     expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 1 })).toBeInTheDocument();
-    expect(screen.getByText('Estimate the API-equivalent value of an AI subscription using the models, token volume, and input/output mix that match your workload.')).toBeInTheDocument();
+    expect(screen.getByText('Estimate the API-equivalent value of an AI subscription from conversations, messages, directional tokens, and active days that match your workload.')).toBeInTheDocument();
     expect(screen.getAllByText(/^Step [1-4]$/)).toHaveLength(4);
     expect(screen.getByRole('heading', { name: 'Choose a provider and plan' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Choose the models you actually use' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Describe your monthly workload' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Describe your message-level workload' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Review the recommendation' })).toBeInTheDocument();
     const result = await calculatedResult();
-    expect(screen.getByText('Dynamic or unpublished capacity · this plan cannot be compared automatically.')).toBeInTheDocument();
-    expect(screen.getByText('Adjust model usage mix')).toBeInTheDocument();
-    expect(screen.getByText('For example, 10M tokens at a 50/50 input/output mix describes a balanced monthly workload.')).toBeInTheDocument();
-    expect(result).toHaveTextContent(/subscription|pay as you go/i);
+    expect(screen.getByRole('status', { name: 'Default API mapping' })).toHaveTextContent('Alpha Direct');
+    expect(screen.getByText('Advanced model mapping').closest('details')).not.toHaveAttribute('open');
+    expect(result).toHaveTextContent('API is cheaper on a token-equivalent basis.');
+    expect(result).toHaveTextContent('Not independently verified');
+    expect(result).toHaveTextContent('Breakeven messages per day');
+    expect(result).toHaveTextContent('Efficiency');
     expect(screen.getByRole('button', { name: 'Share result' })).toBeInTheDocument();
   });
 
@@ -219,22 +234,19 @@ describe('responsive calculator app shell', () => {
       .not.toHaveTextContent('Subscription is cheaper');
   });
 
-  it('does not present savings or breakeven metrics for an ineligible plan', async () => {
+  it('keeps savings and breakeven arithmetic available for a plan without verified capacity', async () => {
     const catalog = calculatorFixture('rolling');
     renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0].id }));
 
     const result = await calculatedResult();
-    const differenceHeading = within(result).getByRole('heading', { name: 'Can the plan cover this workload?' });
-    const differenceMetric = differenceHeading.closest<HTMLElement>('.value-metric');
-    if (!differenceMetric) throw new Error('Expected an estimated-difference metric');
-
-    expect(within(differenceMetric).getByText('Not verified')).toHaveAttribute('data-savings-tone', 'neutral');
-    expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
-    expect(within(result).getByText('Efficiency').parentElement).toHaveTextContent('Unavailable');
-    expect(within(result).queryByText(/^Breakeven:/)).not.toBeInTheDocument();
+    expect(result).toHaveTextContent('API is cheaper on a token-equivalent basis.');
+    expect(within(result).getByText('Monthly difference').parentElement).toHaveTextContent('$13.00');
+    expect(within(result).getByText('Breakeven messages per day').parentElement).toHaveTextContent(/messages\/day/);
+    expect(within(result).getByText('Efficiency').parentElement).toHaveTextContent('%');
+    expect(within(result).getByText('Capacity evidence').parentElement).toHaveTextContent('Not independently verified');
   });
 
-  it('renders projected entitlement derivation as a scenario and never as guaranteed savings', async () => {
+  it('renders projected entitlement derivation as a scenario without suppressing cost arithmetic', async () => {
     const plan = comparablePlan({
       entitlementEvidence: {
         status: 'projected',
@@ -255,9 +267,9 @@ describe('responsive calculator app shell', () => {
     expect(result).toHaveTextContent('5 x 144 = 720');
     expect(result).toHaveTextContent('The five-hour window repeats for 30 days.');
     expect(result).toHaveTextContent('A weekly cap may bind first.');
-    expect(result).not.toHaveTextContent('Subscription is cheaper');
+    expect(result).toHaveTextContent('API is cheaper on a token-equivalent basis.');
     expect(within(result).getByRole('link', { name: 'Open entitlement source' })).toHaveAttribute('href', 'https://example.test/projected-plan');
-    expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
+    expect(within(result).getByText('Breakeven messages per day').parentElement).toHaveTextContent(/messages\/day/);
   });
 
   it('blocks stale entitlement evidence and renders the reason distinctly', async () => {
@@ -275,8 +287,8 @@ describe('responsive calculator app shell', () => {
     const result = await calculatedResult();
     expect(result).toHaveTextContent('Stale evidence');
     expect(result).toHaveTextContent('The published plan price drifted from the stored value.');
-    expect(result).not.toHaveTextContent('Subscription is cheaper');
-    expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
+    expect(result).toHaveTextContent('API is cheaper on a token-equivalent basis.');
+    expect(within(result).getByText('Breakeven messages per day').parentElement).toHaveTextContent(/messages\/day/);
   });
 
   it.each<readonly [IneligibleCalculatorFixture | 'covered' | 'insufficient', string]>([
@@ -295,18 +307,17 @@ describe('responsive calculator app shell', () => {
     renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0]?.id ?? '' }));
 
     const result = await calculatedResult();
-    const coverage = within(result).getByRole('heading', { name: 'Can the plan cover this workload?' }).closest<HTMLElement>('.value-metric');
-    if (!coverage) throw new Error('Expected a coverage metric');
+    const coverage = within(result).getByRole('heading', { name: 'Capacity evidence' }).closest<HTMLElement>('section');
+    if (!coverage) throw new Error('Expected a capacity evidence card');
 
     expect(coverage).toHaveTextContent(expectedCopy);
-    expect(within(result).getByRole('heading', { name: 'Coverage evidence' })).toBeInTheDocument();
   });
 
   it.each<readonly [string, CatalogResponse, string]>([
-    ['a lower fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] }, 'Subscription is cheaper'],
-    ['an equal fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 50_000_000 })] }, 'Subscription and pay as you go cost the same'],
-    ['a more expensive fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 80_000_000 })] }, 'Pay as you go is cheaper'],
-    ['an entitlement without published capacity', calculatorFixture('rolling'), 'Not verified'],
+    ['a lower fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 5_000_000 })] }, 'Subscription is cheaper on a token-equivalent basis.'],
+    ['an equal fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 7_000_000 })] }, 'The token-equivalent costs are equal.'],
+    ['a more expensive fixed subscription', { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan({ monthlyCostMicroDollars: 8_000_000 })] }, 'API is cheaper on a token-equivalent basis.'],
+    ['an entitlement without published capacity', calculatorFixture('rolling'), 'API is cheaper on a token-equivalent basis.'],
   ])('uses eligibility and savings to explain %s', async (_name, catalog, expectedRecommendation) => {
     renderCalculator(catalog, calculatorPath({ planId: catalog.plans[0]?.id ?? '' }));
 
@@ -315,13 +326,21 @@ describe('responsive calculator app shell', () => {
   });
 
   it('hydrates shared state once, preserves the URL, and lets the visitor change provider afterward', async () => {
-    const pathname = calculatorPath({ planId: 'provider-a:fixed', inputShareBasisPoints: 8_000, monthlyTokens: 2_500_000 });
+    const pathname = calculatorPath({
+      planId: 'provider-a:fixed',
+      conversationsPerDay: 12,
+      messagesPerConversation: 6,
+      inputTokensPerMessage: 900,
+      outputTokensPerMessage: 300,
+      activeDaysPerMonth: 22,
+    });
     renderCalculator(twoProviderCatalog(), pathname);
 
     await calculatedResult();
     expect(screen.getByRole('radio', { name: /Fixed 10M/i })).toBeChecked();
-    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue('2,500,000');
-    expect(screen.getByLabelText(/Input share/i)).toHaveAttribute('aria-valuenow', '80');
+    expect(screen.getByRole('spinbutton', { name: 'Conversations per day' })).toHaveValue(12);
+    expect(screen.getByRole('spinbutton', { name: 'Messages per conversation' })).toHaveValue(6);
+    fireEvent.click(screen.getByText('Advanced model mapping'));
     expect(screen.getByRole('checkbox', { name: /Alpha Direct/i })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Alpha via OpenRouter/i })).not.toBeChecked();
 
@@ -336,19 +355,29 @@ describe('responsive calculator app shell', () => {
     const recoveryPath = `${CALCULATOR_PATH}?${new URLSearchParams({
       provider: 'provider-a',
       plan: 'removed-plan',
+      c: '1',
+      m: '1',
+      i: '1000',
+      o: '1000',
+      d: '30',
       models: `${selectedDirectOffer.id},removed-model`,
       weights: '7000,3000',
-      input: '5000',
-      tokens: '1000000',
       utm_source: 'test',
     })}`;
     renderCalculator(FRONTEND_TEST_CATALOG, recoveryPath);
 
     await calculatedResult();
     await waitFor(() => expect(`${window.location.pathname}${window.location.search}`)
-      .toBe(calculatorPath({ planId: '', monthlyTokens: 1_000_000 })));
+      .toBe(calculatorPath({
+        planId: '',
+        conversationsPerDay: 1,
+        messagesPerConversation: 1,
+        inputTokensPerMessage: 1_000,
+        outputTokensPerMessage: 1_000,
+        activeDaysPerMonth: 30,
+      })));
     expect(screen.getByRole('radio', { name: /Starter/i })).not.toBeChecked();
-    expect(screen.getByRole('region', { name: 'Calculated plan value' })).toHaveTextContent('Choose a subscription with published capacity');
+    expect(screen.getByRole('region', { name: 'Calculated plan value' })).toHaveTextContent('No plan selected');
   });
 
   it.each(['free', 'team'] as const)('canonicalizes a shared %s plan as no selected individual plan', async (kind) => {
@@ -361,13 +390,13 @@ describe('responsive calculator app shell', () => {
       .toBe(calculatorPath({ planId: '' })));
     within(screen.getByRole('group', { name: /Plan selection/i })).getAllByRole('radio')
       .forEach((plan) => expect(plan).not.toBeChecked());
-    expect(result).toHaveTextContent('Choose a subscription with published capacity');
+    expect(result).toHaveTextContent('No plan selected');
   });
 
   it('shares the hydrated state without replacing the current address', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
-    const pathname = calculatorPath({ planId: 'provider-a:fixed', monthlyTokens: 2_500_000 });
+    const pathname = calculatorPath({ planId: 'provider-a:fixed', conversationsPerDay: 15 });
     renderCalculator(FRONTEND_TEST_CATALOG, pathname);
 
     await calculatedResult();
@@ -393,7 +422,7 @@ describe('responsive calculator app shell', () => {
     renderAt('/tools/subscriptions-vs-apis/');
 
     await calculatorReadyHeading();
-    fireEvent.change(screen.getByLabelText(/Expected monthly usage/i), { target: { value: '20000001' } });
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Conversations per day' }), { target: { value: '101' } });
 
     const guidance = await screen.findByRole('status', { name: 'High-volume optimization guidance' });
     expect(guidance).toHaveTextContent('At this volume, custom model routing, prompt caching, and agent pipelines may materially reduce spend.');
@@ -502,43 +531,34 @@ describe('responsive calculator app shell', () => {
     expect(within(planGroup).queryByRole('radio', { name: /Team/i })).not.toBeInTheDocument();
   });
 
-  it('redistributes selected model usage and changes derived values when a preset is edited', async () => {
+  it('redistributes selected model usage through Advanced while keeping primary message inputs editable', async () => {
     render(<App />);
     await calculatorReadyHeading();
 
+    const advanced = screen.getByText('Advanced model mapping');
+    expect(advanced.closest('details')).not.toHaveAttribute('open');
+    fireEvent.click(advanced);
     const modelGroup = screen.getByRole('group', { name: /Model selection/i });
     const checkboxes = within(modelGroup).getAllByRole('checkbox');
     fireEvent.click(checkboxes[1]);
     const usageMix = screen.getByRole('group', { name: /Model usage mix/i });
     expect(within(usageMix).getByLabelText(/Alpha Direct/)).toHaveAttribute('aria-valuenow', '50');
-
-    expect(screen.getByRole('button', { name: /Balanced/i })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(screen.getByRole('button', { name: /Input-heavy/i }));
-    expect(screen.getByRole('button', { name: /Balanced/i })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getByRole('button', { name: /Input-heavy/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByLabelText(/Input share/i)).toHaveAttribute('aria-valuenow', '80');
-    const monthlyUsage = screen.getByLabelText(/Expected monthly usage/i);
-    expect(monthlyUsage.compareDocumentPosition(screen.getByText('Presets')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    fireEvent.change(monthlyUsage, { target: { value: '3000000' } });
-    expect(monthlyUsage).toHaveValue('3,000,000');
-    expect(screen.getByRole('button', { name: /Input-heavy/i })).toHaveAttribute('aria-pressed', 'false');
-
-    const usageRange = screen.getByRole('slider', { name: /Monthly usage range/i });
-    fireEvent.change(usageRange, { target: { value: '50000000' } });
-    expect(screen.getByLabelText(/Expected monthly usage/i)).toHaveValue('50,000,000');
-    expect(usageRange).toHaveAttribute('aria-valuetext', '50,000,000 tokens');
+    const conversations = screen.getByRole('spinbutton', { name: 'Conversations per day' });
+    fireEvent.change(conversations, { target: { value: '30' } });
+    expect(conversations).toHaveValue(30);
+    expect(screen.getByRole('status', { name: 'Default API mapping' })).toHaveTextContent('Advanced override is active.');
   });
 
   it('keeps calculator state while switching language and returns to the light theme', async () => {
     render(<App />);
     await calculatorReadyHeading();
-    const usage = screen.getByLabelText(/Expected monthly usage/i);
-    fireEvent.change(usage, { target: { value: '4200000' } });
+    const usage = screen.getByRole('spinbutton', { name: 'Conversations per day' });
+    fireEvent.change(usage, { target: { value: '42' } });
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 
-    expect(usage).toHaveValue('4,200,000');
+    expect(usage).toHaveValue(42);
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(localStorage.getItem('tokenbench:theme')).toBe('light');
     expect(screen.getByRole('button', { name: /Toggle dark theme/i })).toHaveAttribute('aria-pressed', 'false');
@@ -553,7 +573,8 @@ describe('responsive calculator app shell', () => {
     const retry = screen.getByRole('button', { name: /Retry loading catalog/i });
     respondWithCatalog();
     fireEvent.click(retry);
-    await waitFor(() => expect(screen.getByRole('heading', { name: /What does API usage cost?/i })).toBeInTheDocument());
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('heading', { name: 'API-equivalent monthly cost' })).toBeInTheDocument();
   });
 
   it('announces one recovery banner when the fallback notice duplicates the catalog error', () => {
@@ -634,6 +655,7 @@ describe('responsive calculator app shell', () => {
   it('gives every range control a minimum 44px touch target', async () => {
     render(<App />);
     await calculatorReadyHeading();
+    fireEvent.click(screen.getByText('Advanced model mapping'));
 
     const ranges = screen.getAllByRole('slider');
     expect(ranges.length).toBeGreaterThan(0);
@@ -646,8 +668,9 @@ describe('responsive calculator app shell', () => {
       { ...FRONTEND_TEST_CATALOG, plans: [comparablePlan()] },
       calculatorPath({ planId: 'provider-a:comparable', modelIds: selectedModelIds.join(','), weights: '3334,3333,3333' }),
     );
-    const savingsHeading = await screen.findByRole('heading', { name: /Can the plan cover this workload?/i });
-    expect(savingsHeading).toBeInTheDocument();
+    const result = await calculatedResult();
+    expect(within(result).getByRole('heading', { name: 'Capacity evidence' })).toBeInTheDocument();
+    expect(result).toHaveTextContent(/token-equivalent basis/);
     expect(screen.queryByRole('heading', { name: /Cost-first recommendation/i })).not.toBeInTheDocument();
 
     const planHeading = screen.getByRole('heading', { name: /Individual Subscription Plans/i });

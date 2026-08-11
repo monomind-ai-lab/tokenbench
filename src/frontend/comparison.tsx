@@ -1,8 +1,11 @@
 import { BadgeDollarSign, Layers3 } from 'lucide-react';
-import type { CatalogResponse, ModelOffer } from '../catalog/contracts';
+import type { CatalogResponse, ModelOffer, PlanOffer } from '../catalog/contracts';
+import { defaultApiEquivalentForPlan } from '../catalog/plan-api-equivalent';
 import { UI_COPY } from '../data/mockData';
-import { basisKeys, basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatTokens, groupOffersByBasis } from './calculator-state';
+import type { ConversationWorkload } from '../catalog/subscription-api-calculator';
+import { basisKeys, basisLabel, buildCalculatorSnapshot, entitlementLabel, formatCurrencyMicroDollars, formatTokens, groupOffersByBasis, type CalculatorSnapshot } from './calculator-state';
 import { paidIndividualPlans } from './plan-filter';
+import { recommendationForResult } from './results-dashboard';
 import { ConfidenceLabel, EmptyState, EvidenceLink, SectionCard, providerLabel } from './ui';
 
 interface ComparisonProps {
@@ -10,6 +13,8 @@ interface ComparisonProps {
   readonly selectedProviderId: string;
   readonly selectedModelIds: string[];
   readonly selectedPlanId: string;
+  readonly workload: ConversationWorkload;
+  readonly modelMixBasisPoints: Record<string, number>;
 }
 
 interface OfferProps {
@@ -95,10 +100,61 @@ function ModelOfferComparison({ catalog, providerId, selectedModelIds }: {
   return <div className="comparison-sections">{basisKeys().map((basis) => <BasisComparison key={basis} basis={basis} offers={grouped[basis]} catalog={catalog} selectedModelIds={selectedIds} />)}</div>;
 }
 
-function PlanComparison({ catalog, providerId, selectedPlanId }: {
+function planCapacityLabel(snapshot: CalculatorSnapshot): string {
+  switch (snapshot.capacityEvidence.status) {
+    case 'verified-covered': return 'Verified covered';
+    case 'verified-not-covered': return 'Verified not covered';
+    case 'projected': return 'Projected';
+    case 'not-verified': return 'Not independently verified';
+  }
+}
+
+function SameWorkloadPlanComparison({ plans, catalog, workload }: {
+  readonly plans: readonly PlanOffer[];
+  readonly catalog: CatalogResponse;
+  readonly workload: ConversationWorkload;
+}) {
+  return (
+    <div className="same-workload-comparison">
+      <h3>Same-workload plan comparison</h3>
+      <div className="comparison-table-wrap">
+        <table className="comparison-table same-workload-table">
+          <caption>Same-workload plan comparison</caption>
+          <thead><tr><th scope="col">Plan</th><th scope="col">API-equivalent monthly cost</th><th scope="col">Plan fee</th><th scope="col">Recommendation</th><th scope="col">Capacity evidence</th></tr></thead>
+          <tbody>{plans.map((plan) => {
+            const defaultOffer = defaultApiEquivalentForPlan(plan, catalog.modelOffers);
+            const snapshot = defaultOffer
+              ? buildCalculatorSnapshot({
+                modelOffers: [defaultOffer],
+                selectedModelIds: [defaultOffer.id],
+                modelMixBasisPoints: { [defaultOffer.id]: 10_000 },
+                workload,
+                mappingMode: 'default',
+                selectedPlan: plan,
+              })
+              : null;
+            return (
+              <tr className={plan.id === plans[0]?.id ? 'offer-selected' : undefined} key={plan.id}>
+                <th scope="row">{plan.displayName}</th>
+                <td>{snapshot?.apiEquivalentCost ? formatCurrencyMicroDollars(snapshot.apiEquivalentCost.apiCostMicroDollars) : 'Unavailable'}</td>
+                <td>{formatCurrencyMicroDollars(plan.monthlyCostMicroDollars)}</td>
+                <td>{snapshot ? recommendationForResult(plan, snapshot) : 'Unavailable'}</td>
+                <td>{snapshot ? planCapacityLabel(snapshot) : 'Not independently verified'}</td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PlanComparison({ catalog, providerId, selectedPlanId, workload, modelMixBasisPoints }: {
   readonly catalog: CatalogResponse;
   readonly providerId: string;
   readonly selectedPlanId: string;
+  readonly workload: ConversationWorkload;
+  readonly modelMixBasisPoints: Record<string, number>;
 }) {
   const plans = paidIndividualPlans(catalog.plans, providerId);
   return (
@@ -115,6 +171,7 @@ function PlanComparison({ catalog, providerId, selectedPlanId }: {
               })}</tbody>
             </table>
           </div>
+          <SameWorkloadPlanComparison plans={plans} catalog={catalog} workload={workload} />
           <div className="comparison-cards">
             {plans.map((plan) => {
               const selected = plan.id === selectedPlanId;
@@ -127,12 +184,12 @@ function PlanComparison({ catalog, providerId, selectedPlanId }: {
   );
 }
 
-export function Comparison({ catalog, selectedProviderId, selectedModelIds, selectedPlanId }: ComparisonProps) {
+export function Comparison({ catalog, selectedProviderId, selectedModelIds, selectedPlanId, workload, modelMixBasisPoints }: ComparisonProps) {
   return (
     <div className="pricing-stack" id="comparison">
       <SectionCard className="pricing-panel plan-pricing-panel" title={UI_COPY.planPrices} description={`${providerLabel(selectedProviderId)} · paid monthly plans for one person`}>
         <div className="pricing-panel-icon" aria-hidden="true"><Layers3 size={22} /></div>
-        <PlanComparison catalog={catalog} providerId={selectedProviderId} selectedPlanId={selectedPlanId} />
+        <PlanComparison catalog={catalog} providerId={selectedProviderId} selectedPlanId={selectedPlanId} workload={workload} modelMixBasisPoints={modelMixBasisPoints} />
       </SectionCard>
       <SectionCard className="pricing-panel api-pricing-panel" title={UI_COPY.apiPrices} description="Selected calculator models are highlighted across each verified API route.">
         <div className="pricing-panel-icon" aria-hidden="true"><BadgeDollarSign size={22} /></div>

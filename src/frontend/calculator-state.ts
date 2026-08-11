@@ -8,7 +8,7 @@ import {
   type SubscriptionApiComparison,
 } from '../catalog/subscription-api-calculator';
 import { defaultApiEquivalentForPlan } from '../catalog/plan-api-equivalent';
-import type { ModelMixEntry, ModelOffer, PlanEntitlement, PlanOffer, PricingBasis } from '../catalog/contracts';
+import type { CatalogFreshness, ModelMixEntry, ModelOffer, PlanEntitlement, PlanOffer, PricingBasis } from '../catalog/contracts';
 
 export type WorkloadPreset = 'balanced' | 'input-heavy' | 'output-heavy';
 
@@ -64,6 +64,8 @@ export interface CalculatorSnapshot {
   readonly comparison: SubscriptionApiComparison | null;
   readonly apiMapping: ApiMappingDisclosure;
   readonly capacityEvidence: CapacityEvidenceResult;
+  readonly catalogFreshness: CatalogFreshness | null;
+  readonly calculationTimestamp: string;
   readonly costPerMillionMicroDollars: number;
   readonly apiEquivalentValueMicroDollars: number;
   readonly monthlyApiCostMicroDollars: number;
@@ -163,18 +165,30 @@ function capacityEvidenceFor(
   selectedOffers: readonly ModelOffer[],
   hasCompleteMix: boolean,
 ): CapacityEvidenceResult {
-  if (!selectedPlan || !hasCompleteMix) {
-    return { status: 'not-verified', explanation: 'Capacity evidence is not independently verified for this selection.' };
-  }
+  if (!selectedPlan) return { status: 'not-verified', explanation: 'No subscription plan is selected, so no published allowance can be checked.' };
+  if (!hasCompleteMix) return { status: 'not-verified', explanation: 'A complete selected-model mix is required before a published allowance can be checked.' };
   const selectedModelIds = [...new Set(selectedOffers.map((offer) => offer.modelId))];
   if (!selectedPlan.supportedModelIds?.length || !selectedModelIds.every((id) => selectedPlan.supportedModelIds?.includes(id))) {
-    return { status: 'not-verified', explanation: 'Capacity evidence is not independently verified because model access is not published for the complete selection.' };
+    return { status: 'not-verified', explanation: 'The plan does not publish access to one or more selected models.' };
+  }
+  if (selectedPlan.entitlementEvidence.status === 'stale') {
+    const reason = selectedPlan.entitlementEvidence.staleReason ? ` ${selectedPlan.entitlementEvidence.staleReason}` : '';
+    return { status: 'not-verified', explanation: `Stale evidence: the published allowance must be refreshed before capacity can be verified.${reason}` };
   }
   if (selectedPlan.entitlementEvidence.status === 'projected') {
-    return { status: 'projected', explanation: 'Capacity is projected from published limits and is not a guaranteed allowance.' };
+    return { status: 'projected', explanation: 'Projected outer ceiling: this is a scenario derived from published limits, not a guaranteed allowance.' };
   }
-  if (selectedPlan.entitlementEvidence.status !== 'verified' || selectedPlan.entitlement.kind !== 'fixed_tokens') {
-    return { status: 'not-verified', explanation: 'Capacity evidence is not independently verified for this plan.' };
+  if (selectedPlan.entitlementEvidence.status === 'dynamic_unknown') {
+    return { status: 'not-verified', explanation: 'The provider advertises higher limits but does not publish a numeric cap or reset schedule.' };
+  }
+  if (selectedPlan.entitlement.kind === 'credits') {
+    return { status: 'not-verified', explanation: 'The plan includes credits. The provider does not publish a stable token conversion, so TokenBench cannot verify token coverage.' };
+  }
+  if (selectedPlan.entitlement.kind === 'rolling_limit') {
+    return { status: 'not-verified', explanation: 'The provider publishes a rolling usage limit without a numeric monthly cap or reset schedule, so TokenBench cannot verify token coverage.' };
+  }
+  if (selectedPlan.entitlement.kind !== 'fixed_tokens') {
+    return { status: 'not-verified', explanation: 'The provider advertises higher limits but does not publish a numeric cap or reset schedule.' };
   }
   const monthlyTokens = safeAdd(snapshotWorkload.monthlyInputTokens, snapshotWorkload.monthlyOutputTokens, 'Monthly workload');
   return selectedPlan.entitlement.monthlyTokens >= monthlyTokens
@@ -190,7 +204,9 @@ export function buildCalculatorSnapshot({
   selectedPlan,
   mappingMode,
   inputShareBasisPoints,
-  monthlyTokens: legacyMonthlyTokens,
+  monthlyTokens,
+  catalogFreshness,
+  calculationTimestamp,
 }: {
   modelOffers: ModelOffer[];
   selectedModelIds: string[];
@@ -199,9 +215,11 @@ export function buildCalculatorSnapshot({
   selectedPlan?: PlanOffer;
   mappingMode?: 'default' | 'override';
   inputShareBasisPoints?: number;
-  legacyMonthlyTokens?: number;
+  monthlyTokens?: number;
+  catalogFreshness?: CatalogFreshness;
+  calculationTimestamp?: string;
 }): CalculatorSnapshot {
-  const snapshotWorkload = workload ?? legacyWorkload(inputShareBasisPoints ?? 5_000, legacyMonthlyTokens ?? 10_000_000);
+  const snapshotWorkload = workload ?? legacyWorkload(inputShareBasisPoints ?? 5_000, monthlyTokens ?? 10_000_000);
   const derivedWorkload = deriveConversationWorkload(snapshotWorkload);
   const selectedOffers = selectedModelIds
     .map((id) => modelOffers.find((offer) => offer.id === id))
@@ -226,14 +244,14 @@ export function buildCalculatorSnapshot({
   const comparison = apiEquivalentCost && selectedPlan
     ? compareSubscriptionWithApi(selectedPlan.monthlyCostMicroDollars, derivedWorkload, apiEquivalentCost, snapshotWorkload.activeDaysPerMonth)
     : null;
-  const monthlyTokens = safeAdd(derivedWorkload.monthlyInputTokens, derivedWorkload.monthlyOutputTokens, 'Monthly workload');
+  const totalMonthlyTokens = safeAdd(derivedWorkload.monthlyInputTokens, derivedWorkload.monthlyOutputTokens, 'Monthly workload');
   const blendedCostPerMillion = hasCompleteMix
-    ? Math.round((weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion') * (derivedWorkload.monthlyInputTokens / Math.max(1, monthlyTokens)))
-      + (weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion') * (derivedWorkload.monthlyOutputTokens / Math.max(1, monthlyTokens))))
+    ? Math.round((weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion') * (derivedWorkload.monthlyInputTokens / Math.max(1, totalMonthlyTokens)))
+      + (weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion') * (derivedWorkload.monthlyOutputTokens / Math.max(1, totalMonthlyTokens))))
     : 0;
   const apiEquivalentValueMicroDollars = apiEquivalentCost?.apiCostMicroDollars ?? 0;
   const chartPoints = [0.25, 0.5, 0.75, 1, 1.25].map((multiplier) => ({
-    tokens: Math.round(monthlyTokens * multiplier),
+    tokens: Math.round(totalMonthlyTokens * multiplier),
     valueMicroDollars: Math.round(apiEquivalentValueMicroDollars * multiplier),
   }));
 
@@ -246,6 +264,8 @@ export function buildCalculatorSnapshot({
     comparison,
     apiMapping: { mode: inferredMode, defaultOffer, selectedOffers: arithmeticEntries.map((entry) => entry.model) },
     capacityEvidence: capacityEvidenceFor(selectedPlan, derivedWorkload, arithmeticEntries.map((entry) => entry.model), hasCompleteMix),
+    catalogFreshness: catalogFreshness ?? null,
+    calculationTimestamp: calculationTimestamp ?? new Date().toISOString(),
     costPerMillionMicroDollars: blendedCostPerMillion,
     apiEquivalentValueMicroDollars,
     monthlyApiCostMicroDollars: apiEquivalentValueMicroDollars,
@@ -254,7 +274,7 @@ export function buildCalculatorSnapshot({
     breakEvenMessagesPerDay: comparison?.breakEvenMessagesPerDay ?? null,
     breakEvenTokens: null,
     maximumPlanValueMicroDollars: null,
-    monthlyTokens,
+    monthlyTokens: totalMonthlyTokens,
     chartPoints,
   };
 }
