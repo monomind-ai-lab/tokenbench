@@ -1236,7 +1236,7 @@ test.describe('leaderboard browser harness', () => {
     await expect(page.getByRole('combobox', { name: 'Sort leaderboard' })).toHaveCount(0);
     expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['none', 'descending', 'none', 'none']);
     await expect(page.getByRole('button', { name: 'Sort by metric' })).toBeVisible();
-    const codingNames = await codingTable.locator('tbody th[scope="row"] .leaderboard-model > span:first-child').allTextContents();
+    const codingNames = await codingTable.locator('tbody th[scope="row"] .leaderboard-model > a:first-child').allTextContents();
     expect(codingNames).toEqual(['Alpha', 'Beta']);
 
     for (const width of [320, 375, 768]) {
@@ -1254,7 +1254,7 @@ test.describe('leaderboard browser harness', () => {
     const mediaTable = page.getByRole('table', { name: 'Text to image' });
     await expect(mediaTable).toBeVisible();
     expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['ascending', 'none', 'none', 'none']);
-    const mediaNames = await mediaTable.locator('tbody th[scope="row"] .leaderboard-model > span:first-child').allTextContents();
+    const mediaNames = await mediaTable.locator('tbody th[scope="row"] .leaderboard-model > a:first-child').allTextContents();
     expect(mediaNames).toEqual(['Canvas', 'Prism']);
 
     await page.setViewportSize({ width: 375, height: 1000 });
@@ -1647,7 +1647,7 @@ test.describe('home and tools route runtime', () => {
     await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
   });
 
-  test('navigation exposes the five approved destinations on compact Home', async ({ page }) => {
+  test('navigation exposes the six approved destinations on compact Home', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/');
@@ -1659,6 +1659,7 @@ test.describe('home and tools route runtime', () => {
     expect(await navigation.getByRole('link').allTextContents()).toEqual([
       'Home',
       'Subscribe vs API',
+      'Models',
       'Compare',
       'Leaderboards',
       'Guides',
