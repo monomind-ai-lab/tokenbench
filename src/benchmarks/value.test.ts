@@ -4,6 +4,7 @@ import {
   BUDGET_BANDS,
   LONG_CONTEXT_SCENARIOS,
   blendedCostPerMillion,
+  isNonNegativeFinite,
   isWithinBudget,
   longContextExamples,
   paretoFrontier,
@@ -75,6 +76,13 @@ describe('workload costs', () => {
 
     expect(primaryHostedPriceForModel('model-a', input, 'balanced')).toMatchObject({ routeId: 'openrouter:a-route' });
     expect(input.map((entry) => entry.routeId)).toEqual(['openrouter:z-route', 'openrouter:a-route']);
+  });
+
+  it('exposes the shared non-negative finite money predicate', () => {
+    expect(isNonNegativeFinite(0)).toBe(true);
+    expect(isNonNegativeFinite(1.5)).toBe(true);
+    expect(isNonNegativeFinite(Number.NaN)).toBe(false);
+    expect(isNonNegativeFinite(-1)).toBe(false);
   });
 });
 
