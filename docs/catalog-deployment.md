@@ -58,7 +58,7 @@ preview database and run the deterministic directory/profile gate:
 
 ~~~sh
 npx wrangler d1 migrations apply ai-plan-catalog --local
-npm test -- migrations/0009_model_directory.test.ts workers/benchmark-ingest/src/model-directory-publication.test.ts
+npm test -- src/benchmarks/model-directory.test.ts src/benchmarks/model-profile.test.ts workers/benchmark-ingest/src/model-directory-publication.test.ts
 npm run test:browser:local-preview -- --grep "Popular Models|model profile|retained model"
 ~~~
 
