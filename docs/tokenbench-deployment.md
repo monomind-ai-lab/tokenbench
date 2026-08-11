@@ -510,6 +510,44 @@ partial bundle as an incident workaround.
   canonical Share Leaderboard dialog, and exposed Methodology and Privacy but
   no Data sources footer link.
 
+### Release 2 calculator and newsletter receipt — 2026-08-11
+
+- Git content commit: `10c296a` on pushed `main`. The merged release contains
+  the message-level Subscribe vs API calculator, deterministic direct-model
+  mapping, the standalone confirmation route, and the versioned test PDF.
+- Verification: 90 Vitest files and 1,199 tests passed; `tsc --noEmit`, the
+  production build, 72 responsive browser tests, and 4 local-preview fallback
+  tests all passed from the committed tree.
+- Catalog Worker: `tokenbench-catalog-ingest` version
+  `f16a5ea6-32e7-4d57-bb37-e145f6b50d31`, with the approved D1/R2 bindings and
+  the existing three schedules preserved.
+- Controlled publication: the normal `0 */3 * * *` rotation published active
+  catalog revision `rev_20260811180054093_ac1822b67cac` at
+  `2026-08-11T18:00:54.093Z`. Both `openai-subscription` and `openai-api`
+  refresh-state rows have `last_error = NULL`.
+- Direct API evidence: the published OpenAI source is manually verified against
+  `https://developers.openai.com/api/docs/models/compare`. Its immutable R2
+  snapshot is
+  `openai-api/2026-08-11/ac1822b67cacd83ef9694ee4b70ff7e5d25e45448dd9a20c0ee9f1a346e09d6b.json`;
+  the downloaded object SHA-256 is the same
+  `ac1822b67cacd83ef9694ee4b70ff7e5d25e45448dd9a20c0ee9f1a346e09d6b`.
+- Pages: production deployment
+  `d77302dd-3c14-4b41-8fc3-c5ee4139477a` at
+  `https://d77302dd.tokenbench-27t.pages.dev`, source `10c296a`.
+- Canonical calculator smoke at 320px: OpenAI / ChatGPT Go defaults to the
+  direct GPT-5.6 Terra mapping; the API-equivalent cost is `$11.25`, breakeven
+  is `57 messages/day`, efficiency is `+28.9%`, and the recommendation is
+  `Subscription is cheaper on a token-equivalent basis.` Capacity remains a
+  separate `Not independently verified` result. There was no document overflow
+  or browser runtime error.
+- Confirmation smoke: `/newsletter/confirmed/` returned its canonical URL,
+  `noindex,follow,max-image-preview:large`, one `Start Exploring` link to `/`,
+  zero buttons, zero translation mounts, and no overflow or browser error.
+- PDF smoke: the live immutable asset returned HTTP 200,
+  `Content-Type: application/pdf`, `Cache-Control: public, max-age=31536000, immutable`,
+  431 bytes, and SHA-256
+  `e7e96ab239c8f1d9590bc2f562e23ff55bb032ba0ba40ca97102933328b534b7`.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
