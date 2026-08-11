@@ -2525,17 +2525,17 @@ describe('atomic benchmark ingestion', () => {
     expect(db.state.activeRevision).toBeNull();
   });
 
-  it('exposes only scheduled ingestion and does not expose a public refresh route', async () => {
+  it('awaits scheduled ingestion and does not expose a public refresh route', async () => {
     const { env, db } = seededEnvironment();
-    let scheduled: Promise<unknown> | undefined;
+    const waitUntil = vi.fn();
     vi.stubGlobal('fetch', healthyFetch());
     try {
       await worker.scheduled(
         { cron: '15 */12 * * *', scheduledTime: Date.now(), noRetry: () => undefined },
         env,
-        { waitUntil(promise: Promise<unknown>) { scheduled = promise; } },
+        { waitUntil },
       );
-      await scheduled;
+      expect(waitUntil).not.toHaveBeenCalled();
       expect(db.state.activeRevision).not.toBeNull();
 
       const response = await worker.fetch(new Request('https://worker.example/refresh', { method: 'POST' }), env, {

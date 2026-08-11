@@ -2585,12 +2585,10 @@ export default {
   async scheduled(
     controller: { cron: string; scheduledTime?: number; noRetry(): void },
     env: BenchmarkIngestEnv,
-    ctx: { waitUntil(promise: Promise<unknown>): void },
+    _ctx: { waitUntil(promise: Promise<unknown>): void },
   ): Promise<void> {
-    ctx.waitUntil((async () => {
-      const result = await refreshBenchmarkRevision(env);
-      if (result.status === 'failed') controller.noRetry();
-      console.log(JSON.stringify({ message: 'benchmark refresh finished', status: result.status, revision: result.revision, checkedAt: result.checkedAt }));
-    })());
+    const result = await refreshBenchmarkRevision(env);
+    if (result.status === 'failed') controller.noRetry();
+    console.log(JSON.stringify({ message: 'benchmark refresh finished', status: result.status, revision: result.revision, checkedAt: result.checkedAt }));
   },
 };
