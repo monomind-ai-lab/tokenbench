@@ -673,6 +673,52 @@ Pages. Use one verified commit and preserve this order:
    browser gate fails. Preserve the active revision and all immutable evidence;
    do not delete cache or D1 rows as rollback.
 
+### Release 4 production receipt — 2026-08-11 UTC
+
+- Deployment source commit: `297705bea69c7c2f450ccc13a909b6d5f9118459`.
+  The release includes the price-performance implementation, Cloudflare weak
+  ETag revalidation, and release-wide versioning for the stable frontend CSS
+  and JavaScript URLs.
+- Benchmark Worker version:
+  `9d6a20b4-590a-4bf6-8523-9f1b1c10501f`, with the normal
+  `15 */12 * * *` schedule preserved. The first deprecated remote-preview
+  attempt returned Cloudflare 1102 after exceeding the Free Worker CPU limit;
+  read-only D1 checks confirmed that it moved no benchmark or cache pointer.
+  The authorized controlled publication then completed with HTTP 200 through a
+  local Workers runtime using official remote D1/R2 bindings.
+- Published benchmark revision:
+  `benchmark_178962c49298646d1c7ff155a87f2074`, checked and published at
+  `2026-08-11T23:24:51.463Z`. Its active cache revision is
+  `benchmark_178962c49298646d1c7ff155a87f2074+cache-20260811232451463-f67f019c-f2d6-4305-9e49-d25f2b099b3a`.
+- Materialized `price-performance:complete:v1` evidence contains exactly one
+  fresh chunk (31,516 characters) and one stale chunk (31,592 characters),
+  each with one revision-bound ETag. The default current projection contains
+  30 valid score/price points. The retained model directory remains 4,420 of
+  4,420 profiled models, with the current week exposing ranks 1–50.
+- Pages deployment:
+  `93557ca2-77af-4f1a-9434-e3ffda1c84f1`, immutable URL
+  `https://93557ca2.tokenbench-27t.pages.dev`, promoted to
+  `https://tokenbench.monomind.one`.
+- Canonical smoke at `2026-08-11T23:51:12.225Z`: API and page HTTP 200;
+  browser-visible weak ETag returned HTTP 304 on exact revalidation; GPT-5.6
+  Sol coding is `77.95` internally and `78.0` publicly, with $5 input and $30
+  output per million tokens. Home, Models, Coding leaderboard, and the 431-byte
+  test PDF all returned HTTP 200.
+- SEO smoke passed with one H1, unique title/description, base canonical for
+  filtered URLs, `index,follow,max-image-preview:large`, Open Graph, Twitter,
+  WebPage and Dataset JSON-LD, and exactly one query-free static sitemap entry.
+  The raw server response is substantive and includes source/profile links.
+- Live visual smoke passed at 390px and 1280px with no horizontal overflow,
+  the correct mobile-card/desktop-table switch, 30 accessible chart points,
+  visible ticks and legend, and no console warnings or errors. The canonical
+  zone applies a four-hour cache policy to stable asset paths, so every static
+  and server-rendered document now uses asset revision
+  `20260812-release4-2`; future asset changes must bump
+  `FRONTEND_ASSET_REVISION` before deployment.
+- Verification on the deployment source: 117 Vitest files and 1,324 tests,
+  9/9 local-production-preview browser tests, 72/72 responsive browser tests,
+  clean `tsc --noEmit`, clean build, and 29 generated crawlable fixed pages.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
