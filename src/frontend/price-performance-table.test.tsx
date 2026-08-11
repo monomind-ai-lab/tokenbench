@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { PricePerformanceTable } from './price-performance-table';
-import { PRICE_PERFORMANCE_SCORE_LANES, type PricePerformancePointView } from '../benchmarks/price-performance-contracts';
+import { PRICE_PERFORMANCE_SCORE_LANES, type PricePerformanceAttribution, type PricePerformancePointView } from '../benchmarks/price-performance-contracts';
 
 function point(modelKey: string, displayName: string, score: number, selectedCost: number): PricePerformancePointView {
   return {
@@ -43,12 +43,14 @@ function point(modelKey: string, displayName: string, score: number, selectedCos
 
 describe('PricePerformanceTable', () => {
   it('keeps desktop rows and mobile cards fact-equivalent from one formatter', () => {
-    render(<PricePerformanceTable points={[point('alpha', 'Alpha', 81.48, 8), point('beta', 'Beta', 77.95, 0)]} />);
+    render(<PricePerformanceTable points={[point('alpha', 'Alpha', 81.48, 8), point('beta', 'Beta', 77.95, 0)]} attribution={[{ sourceId: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/models', updatedAt: '2026-08-11T00:00:00.000Z' } satisfies PricePerformanceAttribution]} />);
 
     const table = screen.getByRole('table', { name: 'Price versus performance values' });
-    expect(within(table).getByRole('row', { name: /Alpha/ })).toHaveTextContent('81.48');
+    expect(within(table).getByRole('row', { name: /Alpha/ })).toHaveTextContent('81.5');
+    expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('78.0');
     expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('Score per dollar unavailable');
     expect(screen.getAllByRole('link', { name: 'View Alpha model profile' })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: /openai.*openai:alpha/i })).toHaveLength(2);
     expect(screen.getAllByText('Pareto frontier')).toHaveLength(2);
     expect(screen.getAllByText('Score per dollar unavailable')).toHaveLength(2);
   });

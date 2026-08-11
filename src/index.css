@@ -1105,6 +1105,12 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .price-performance-chart-axes line { stroke: color-mix(in srgb, var(--outline) 84%, var(--muted)); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .price-performance-chart-axes text { fill: var(--muted); font-family: var(--font-label); font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .price-performance-frontier { fill: none; stroke: var(--primary-strong); stroke-dasharray: 7 5; stroke-width: 3; vector-effect: non-scaling-stroke; }
+.price-performance-chart-gridline { opacity: .34; stroke-dasharray: 2 5; }
+.price-performance-chart-legend { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--muted); font-family: var(--font-label); font-size: .61rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.price-performance-chart-legend > span { min-width: 0; display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+.price-performance-legend-marker { color: var(--primary-strong); font-size: .82rem; line-height: 1; }
+.price-performance-legend-marker.estimated { color: var(--warning); }
+.price-performance-legend-marker.source-only { color: var(--muted); }
 .price-performance-scatter-point { overflow: visible; }
 .scatter-point { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 2px solid var(--primary-strong); border-radius: 50%; background: color-mix(in srgb, var(--surface) 72%, var(--primary-soft)); color: var(--primary-strong); font-size: 0.9rem; line-height: 1; cursor: pointer; }
 .scatter-point-frontier { border-radius: 6px; transform: rotate(45deg); }

@@ -1,5 +1,5 @@
 import { modelPath } from '../benchmarks/model-directory';
-import type { PricePerformancePointView } from '../benchmarks/price-performance-contracts';
+import type { PricePerformanceAttribution, PricePerformancePointView } from '../benchmarks/price-performance-contracts';
 
 export interface PricePerformancePointViewFacts {
   readonly modelName: string;
@@ -11,6 +11,8 @@ export interface PricePerformancePointViewFacts {
   readonly evidence: string;
   readonly frontier: string;
   readonly status: string;
+  readonly sourceHref: string | null;
+  readonly sourceLinkLabel: string;
   readonly profileHref: string;
   readonly profileLinkLabel: string;
   readonly accessibleName: string;
@@ -18,6 +20,10 @@ export interface PricePerformancePointViewFacts {
 
 function formatNumber(value: number, maximumFractionDigits = 2): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits }).format(value);
+}
+
+function formatScore(value: number): string {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value);
 }
 
 function costBasisLabel(point: PricePerformancePointView): string {
@@ -31,14 +37,19 @@ function evidenceLabel(point: PricePerformancePointView): string {
 }
 
 /** Formats every human-facing fact from one validated point view. */
-export function formatPricePerformancePointView(point: PricePerformancePointView): PricePerformancePointViewFacts {
-  const score = formatNumber(point.score, 2);
+export function formatPricePerformancePointView(
+  point: PricePerformancePointView,
+  attribution: readonly PricePerformanceAttribution[] = [],
+): PricePerformancePointViewFacts {
+  const score = formatScore(point.score);
   const selectedCost = `$${formatNumber(point.selectedCost, 4)} / 1M ${costBasisLabel(point)}`;
   const scorePerDollar = point.scorePerDollar === null
     ? 'Score per dollar unavailable'
     : `${formatNumber(point.scorePerDollar, 2)} score / $`;
   const provider = point.creator;
   const route = `${point.route.providerId} · ${point.route.routeId}`;
+  const sourceLinkLabel = `${provider} · ${route}`;
+  const sourceHref = attribution.find((source) => source.sourceId === point.route.sourceId)?.url ?? null;
   const evidence = evidenceLabel(point);
   const frontier = point.frontier ? 'Pareto frontier' : 'Not on Pareto frontier';
   const status = point.status === 'current' ? 'Current model' : 'Archived model';
@@ -55,6 +66,8 @@ export function formatPricePerformancePointView(point: PricePerformancePointView
     evidence,
     frontier,
     status,
+    sourceHref,
+    sourceLinkLabel,
     profileHref,
     profileLinkLabel,
     accessibleName,

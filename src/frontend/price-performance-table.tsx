@@ -1,10 +1,17 @@
-import type { PricePerformancePointView } from '../benchmarks/price-performance-contracts';
+import type { PricePerformanceAttribution, PricePerformancePointView } from '../benchmarks/price-performance-contracts';
 import { formatPricePerformancePointView, type PricePerformancePointViewFacts } from './price-performance-view';
 
 export interface PricePerformanceTableProps {
   readonly points: readonly PricePerformancePointView[];
+  readonly attribution?: readonly PricePerformanceAttribution[];
   readonly label?: string;
   readonly showEmptyState?: boolean;
+}
+
+function ProviderRouteEvidence({ facts }: { readonly facts: PricePerformancePointViewFacts }) {
+  return facts.sourceHref
+    ? <a href={facts.sourceHref} target="_blank" rel="noreferrer">{facts.sourceLinkLabel}</a>
+    : facts.sourceLinkLabel;
 }
 
 function PointFacts({ facts }: { readonly facts: PricePerformancePointViewFacts }) {
@@ -12,7 +19,7 @@ function PointFacts({ facts }: { readonly facts: PricePerformancePointViewFacts 
     <div><dt>Score</dt><dd>{facts.score}</dd></div>
     <div><dt>Selected cost</dt><dd>{facts.selectedCost}</dd></div>
     <div><dt>Score per dollar</dt><dd>{facts.scorePerDollar}</dd></div>
-    <div><dt>Provider / route</dt><dd>{facts.provider} · {facts.route}</dd></div>
+    <div><dt>Provider / route</dt><dd><ProviderRouteEvidence facts={facts} /></dd></div>
     <div><dt>Evidence</dt><dd>{facts.evidence}</dd></div>
     <div><dt>Frontier</dt><dd>{facts.frontier}</dd></div>
   </>;
@@ -25,8 +32,13 @@ function MobileCard({ point, facts }: { readonly point: PricePerformancePointVie
     <a className="price-performance-profile-link" href={facts.profileHref}>{facts.profileLinkLabel}</a>
   </li>;
 }
-export function PricePerformanceTable({ points, label = 'Price versus performance values', showEmptyState = true }: PricePerformanceTableProps) {
-  const rows = points.map((point) => ({ point, facts: formatPricePerformancePointView(point) }));
+export function PricePerformanceTable({
+  points,
+  attribution = [],
+  label = 'Price versus performance values',
+  showEmptyState = true,
+}: PricePerformanceTableProps) {
+  const rows = points.map((point) => ({ point, facts: formatPricePerformancePointView(point, attribution) }));
   return <section className="price-performance-table-section" aria-label={label}>
     {showEmptyState && rows.length === 0 ? <div className="price-performance-table-empty" role="status" aria-label="No eligible models match these filters"><strong>No eligible models match these filters</strong><p>Unavailable values are excluded rather than treated as zero.</p></div> : null}
     <div className="price-performance-desktop-table">
@@ -47,7 +59,7 @@ export function PricePerformanceTable({ points, label = 'Price versus performanc
           <td>{facts.score}</td>
           <td>{facts.selectedCost}</td>
           <td>{facts.scorePerDollar}</td>
-          <td>{facts.provider} · {facts.route}</td>
+          <td><ProviderRouteEvidence facts={facts} /></td>
           <td>{facts.evidence}</td>
           <td>{facts.frontier}</td>
           <td><a className="price-performance-profile-link" href={facts.profileHref}>{facts.profileLinkLabel}</a></td>

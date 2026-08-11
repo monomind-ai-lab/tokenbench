@@ -81,4 +81,17 @@ describe('price-performance URL/filter state', () => {
     expect(normalizePricePerformanceState(state({ scale: 'log' }), capabilities, [0, 2])).toEqual(DEFAULT_PRICE_PERFORMANCE_STATE);
     expect(normalizePricePerformanceState(state({ scale: 'log' }), capabilities, [1, 2]).scale).toBe('log');
   });
+
+  it('preserves an eligible log scale and canonicalizes unknown, duplicate, and obsolete keys', () => {
+    const selected = state({ costBasis: 'blended-3-1', scale: 'log' });
+    expect(encodePricePerformanceState(selected, [1, 2]).toString()).toBe('basis=blended-3-1&scale=log');
+
+    const decoded = decodePricePerformanceState(
+      new URLSearchParams('unknown=1&scale=log&scale=linear&costBasis=blended-3-1'),
+      capabilities,
+      [1, 2],
+    );
+    expect(decoded.state).toEqual(selected);
+    expect(decoded.wasNormalized).toBe(true);
+  });
 });

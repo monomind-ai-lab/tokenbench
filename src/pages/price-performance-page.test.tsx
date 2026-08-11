@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRICE_PERFORMANCE_SCORE_LANES, type PricePerformanceEnvelope, type PricePerformancePoint } from '../benchmarks/price-performance-contracts';
 import { writePricePerformanceEnvelopeCache } from '../frontend/benchmark-cache';
+import { DEFAULT_PRICE_PERFORMANCE_STATE } from '../frontend/price-performance-state';
 import { PricePerformanceApp, PricePerformancePage } from './price-performance-page';
 
 function point(overrides: Partial<PricePerformancePoint> = {}): PricePerformancePoint {
@@ -77,12 +78,13 @@ describe('PricePerformancePage', () => {
     window.history.replaceState({}, '', '/llm-price-performance/');
     render(<PricePerformancePage envelope={envelope()} />);
 
-    const pointButton = screen.getByRole('button', { name: /GPT-5\.6 Sol.*81\.48.*output price/i });
+    expect(screen.getByRole('heading', { level: 1, name: 'LLM price vs performance' })).toBeInTheDocument();
+    const pointButton = screen.getByRole('button', { name: /GPT-5\.6 Sol.*81\.5.*output price/i });
     pointButton.focus();
     fireEvent.keyDown(pointButton, { key: 'Enter' });
 
     expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' })).toHaveTextContent('$8');
-    expect(screen.getByRole('row', { name: /GPT-5\.6 Sol/ })).toHaveTextContent('81.48');
+    expect(screen.getByRole('row', { name: /GPT-5\.6 Sol/ })).toHaveTextContent('81.5');
     expect(screen.getByRole('dialog').querySelector('a[href="/models/gpt-5-6-sol/"]')).toBeInTheDocument();
   });
 
@@ -102,6 +104,74 @@ describe('PricePerformancePage', () => {
     expect(within(screen.getByRole('table', { name: 'Price versus performance values' })).queryAllByRole('row')).toHaveLength(1);
   });
 
+  it('keeps the default summary deterministic under binary model-key ordering', () => {
+    const modelKeys = ['model-A', 'model-a', 'model-B', 'model-b', 'model-C', 'model-c', 'model-D', 'model-d', 'model-E', 'model-e', 'model-F'];
+    window.history.replaceState({}, '', '/llm-price-performance/?variants=all-variants');
+    render(<PricePerformancePage envelope={envelope(modelKeys.map((modelKey, index) => point({
+      modelKey,
+      slug: `model-${index}`,
+      displayName: modelKey,
+      familyId: `family-${index}`,
+    })))} />);
+
+    const rows = within(screen.getByRole('table', { name: 'Price versus performance values' })).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(6);
+    expect(rows[0]).toHaveTextContent('model-A');
+    expect(rows[5]).toHaveTextContent('model-F');
+  });
+
+  it('bases log-scale eligibility on the displayed filtered costs', () => {
+    const baseRoute = point().route;
+    const zeroCost = point({
+      modelKey: 'zero-cost',
+      slug: 'zero-cost',
+      displayName: 'Zero Cost',
+      familyId: 'zero-cost',
+      route: { ...baseRoute, routeId: 'openai:zero-cost', canonicalSlug: 'zero-cost', outputUsdPerMillion: 0 },
+    });
+    const positiveCost = point({
+      modelKey: 'positive-cost',
+      slug: 'positive-cost',
+      displayName: 'Positive Cost',
+      familyId: 'positive-cost',
+      route: { ...baseRoute, routeId: 'openai:positive-cost', canonicalSlug: 'positive-cost' },
+    });
+    window.history.replaceState({}, '', '/llm-price-performance/');
+    render(<PricePerformancePage
+      envelope={envelope([zeroCost, positiveCost])}
+      initialState={{ ...DEFAULT_PRICE_PERFORMANCE_STATE, priceBand: [1, null] }}
+    />);
+
+    const scale = screen.getByLabelText('Scale');
+    fireEvent.change(scale, { target: { value: 'log' } });
+    expect(scale).toHaveValue('log');
+    expect(window.location.search).toContain('scale=log');
+  });
+
+  it('lazily fetches archived rows when the archived status is selected', async () => {
+    const archivedPoint = point({
+      modelKey: 'gpt-5-6-sol-archived',
+      slug: 'gpt-5-6-sol-archived',
+      displayName: 'GPT-5.6 Sol archived',
+      familyId: 'gpt-5-archive',
+      status: 'archived',
+      route: { ...point().route, routeId: 'openai:gpt-5-6-sol-archived', canonicalSlug: 'gpt-5-6-sol-archived' },
+    });
+    const currentEnvelope = envelope([point()]);
+    const archivedEnvelope = envelope([point(), archivedPoint]);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(currentEnvelope), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(archivedEnvelope), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<PricePerformanceApp />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/benchmarks/price-performance'));
+
+    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'archived' } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/benchmarks/price-performance?includeArchived=1'));
+    await waitFor(() => expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol archived'));
+  });
+
   it('keeps stale evidence visibly labelled without removing values', () => {
     render(<PricePerformancePage envelope={envelope([point()], true)} />);
 
@@ -110,13 +180,15 @@ describe('PricePerformancePage', () => {
   });
 
   it('uses the last valid browser envelope when the refresh request fails', async () => {
-    writePricePerformanceEnvelopeCache(envelope([point()], true));
+    writePricePerformanceEnvelopeCache(envelope([point()], false));
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
 
     render(<PricePerformanceApp />);
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'Price versus performance' })).toBeVisible());
-    expect(screen.getByRole('status')).toHaveTextContent('Stale benchmark data');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'LLM price vs performance' })).toBeVisible());
+    const staleStatus = screen.getByRole('status');
+    expect(staleStatus).toHaveTextContent('Stale benchmark data');
+    expect(staleStatus).toHaveTextContent(/last valid browser/i);
     expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol');
   });
 });

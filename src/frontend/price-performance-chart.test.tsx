@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { PricePerformanceChart } from './price-performance-chart';
-import { PRICE_PERFORMANCE_SCORE_LANES, type PricePerformancePointView } from '../benchmarks/price-performance-contracts';
+import { PRICE_PERFORMANCE_SCORE_LANES, type PricePerformanceAttribution, type PricePerformancePointView } from '../benchmarks/price-performance-contracts';
 
 function point(overrides: Partial<PricePerformancePointView> = {}): PricePerformancePointView {
   return {
@@ -43,20 +43,36 @@ function point(overrides: Partial<PricePerformancePointView> = {}): PricePerform
 }
 
 describe('PricePerformanceChart', () => {
-  it('exposes every point by keyboard and touch with a profile link in details', () => {
-    render(<PricePerformanceChart points={[point()]} />);
+  it('exposes every point by keyboard and touch with linked source evidence and focus return', () => {
+    const attribution: PricePerformanceAttribution[] = [{
+      sourceId: 'openrouter',
+      label: 'OpenRouter',
+      url: 'https://openrouter.ai/models',
+      updatedAt: '2026-08-11T00:00:00.000Z',
+    }];
+    render(<PricePerformanceChart points={[point({ score: 77.95 })]} attribution={attribution} />);
 
     const chart = screen.getByRole('group', { name: 'Overall score by output price' });
     expect(chart).toBeInTheDocument();
-    const pointButton = screen.getByRole('button', { name: /GPT-5\.6 Sol.*81\.48.*output price/i });
+    expect(screen.getByText(/scatter plot with 1 model/i)).toBeInTheDocument();
+    expect(screen.getByText('Pareto frontier')).toBeInTheDocument();
+    expect(screen.getByText('Supported evidence')).toBeInTheDocument();
+    expect(screen.getAllByText(/^\d+\.\d$/u).length).toBeGreaterThan(0);
+
+    const pointButton = screen.getByRole('button', { name: /GPT-5\.6 Sol.*78\.0.*output price/i });
     pointButton.focus();
     fireEvent.keyDown(pointButton, { key: 'Enter' });
 
-    expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' })).toHaveTextContent('Pareto frontier');
-    expect(screen.getByRole('dialog').querySelector('a[href="/models/gpt-5-6-sol/"]')).toBeInTheDocument();
+    const dialog = screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' });
+    expect(dialog).toHaveTextContent('78.0');
+    expect(within(dialog).getByRole('link', { name: /openai.*openai:gpt-5-6-sol/i })).toHaveAttribute('href', 'https://openrouter.ai/models');
+    expect(dialog.querySelector('a[href="/models/gpt-5-6-sol/"]')).toBeInTheDocument();
 
     fireEvent.touchEnd(pointButton);
     expect(screen.getByRole('dialog', { name: 'GPT-5.6 Sol details' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(document.activeElement).toBe(pointButton);
   });
 
   it('renders an explicit empty category state without inventing chart points', () => {

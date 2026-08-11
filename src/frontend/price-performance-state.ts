@@ -47,6 +47,7 @@ export const DEFAULT_PRICE_PERFORMANCE_STATE: PricePerformanceState = {
 const SOURCE_TYPES = ['Proprietary', 'Open Weight', 'Unknown'] as const;
 const EVIDENCE_STATUSES: readonly EvidenceStatus[] = ['supported', 'estimated', 'source_only'];
 const QUERY_KEYS = ['basis', 'creator', 'evidenceStatus', 'lane', 'maxPrice', 'minPrice', 'scale', 'sourceType', 'status', 'variants'] as const;
+const OBSOLETE_QUERY_KEYS: Record<string, true> = { costBasis: true, evidence: true };
 const MAX_CREATOR_LENGTH = 120;
 const MAX_PRICE = Number.MAX_SAFE_INTEGER;
 
@@ -148,6 +149,13 @@ export function decodePricePerformanceState(
   const available = capabilitiesOrDefaults(capabilities);
   const params = queryInput(search);
   let wasNormalized = false;
+  const seenKeys = new Set<string>();
+  for (const key of params.keys()) {
+    if (!QUERY_KEYS.includes(key as typeof QUERY_KEYS[number]) || OBSOLETE_QUERY_KEYS[key] === true || seenKeys.has(key)) {
+      wasNormalized = true;
+    }
+    seenKeys.add(key);
+  }
 
   const laneValue = params.get('lane');
   const lane = hasValue(available.scoreLanes, laneValue)
@@ -220,8 +228,11 @@ export function decodePricePerformanceState(
 }
 
 /** Serializes one canonical query shape; defaults remain at the base route. */
-export function encodePricePerformanceState(state: PricePerformanceState): URLSearchParams {
-  const normalized = normalizePricePerformanceState(state);
+export function encodePricePerformanceState(
+  state: PricePerformanceState,
+  displayedCosts?: ReadonlyArray<number | null | undefined>,
+): URLSearchParams {
+  const normalized = normalizePricePerformanceState(state, undefined, displayedCosts);
   const values: Record<string, string> = {};
   if (normalized.costBasis !== DEFAULT_PRICE_PERFORMANCE_STATE.costBasis) values.basis = normalized.costBasis;
   if (normalized.creator) values.creator = normalized.creator;
@@ -240,12 +251,18 @@ export function encodePricePerformanceState(state: PricePerformanceState): URLSe
   return serialized;
 }
 
-export function serializePricePerformanceState(state: PricePerformanceState): string {
-  return encodePricePerformanceState(state).toString();
+export function serializePricePerformanceState(
+  state: PricePerformanceState,
+  displayedCosts?: ReadonlyArray<number | null | undefined>,
+): string {
+  return encodePricePerformanceState(state, displayedCosts).toString();
 }
 
-export function pricePerformanceUrl(state: PricePerformanceState): string {
-  const query = serializePricePerformanceState(state);
+export function pricePerformanceUrl(
+  state: PricePerformanceState,
+  displayedCosts?: ReadonlyArray<number | null | undefined>,
+): string {
+  const query = serializePricePerformanceState(state, displayedCosts);
   return query.length === 0 ? '/llm-price-performance/' : `/llm-price-performance/?${query}`;
 }
 
