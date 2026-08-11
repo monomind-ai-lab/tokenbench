@@ -420,6 +420,7 @@ function d1(rows: D1Rows, options: FakeD1Options = {}) {
           return { all: async () => {
             if (sql.includes('api_response_entries')) {
               const [scope, cacheKey, cutoff] = values;
+              const historical = sql.includes('complete_revisions');
               const checkedAt = rows.revisions.find((candidate) => {
                 if (!candidate || typeof candidate !== 'object') return false;
                 const record = candidate as Record<string, unknown>;
@@ -429,11 +430,29 @@ function d1(rows: D1Rows, options: FakeD1Options = {}) {
                 && checkedAt.checked_at >= cutoff
                 ? 'fresh'
                 : 'stale';
-              const entries = scope === 'benchmarks'
-                ? rows.apiCacheEntries?.filter((candidate) => candidate.cacheKey === cacheKey && candidate.variant === variant)
+              let entries: readonly ApiCacheEntry[] | undefined;
+              if (scope === 'benchmarks' && historical) {
+                const revisionsByNewest = rows.revisions
+                  .filter((candidate): candidate is Record<string, unknown> => (
+                    candidate !== null && typeof candidate === 'object'
+                  ))
                   .slice()
-                  .sort((left, right) => left.chunkIndex - right.chunkIndex)
-                : undefined;
+                  .sort((left, right) => String(right.checked_at).localeCompare(String(left.checked_at))
+                    || String(right.revision).localeCompare(String(left.revision)));
+                const newestRevision = revisionsByNewest.find((candidate) => rows.apiCacheEntries?.some((entry) => (
+                  entry.revision === candidate.revision
+                    && entry.cacheKey === cacheKey
+                    && entry.variant === 'stale'
+                )))?.revision;
+                entries = rows.apiCacheEntries?.filter((candidate) => candidate.revision === newestRevision
+                  && candidate.cacheKey === cacheKey
+                  && candidate.variant === 'stale');
+              } else if (scope === 'benchmarks' && checkedAt) {
+                entries = rows.apiCacheEntries?.filter((candidate) => candidate.revision === rows.activeRevision
+                  && candidate.cacheKey === cacheKey
+                  && candidate.variant === variant);
+              }
+              entries = entries?.slice().sort((left, right) => left.chunkIndex - right.chunkIndex);
               return {
                 results: entries?.map((entry) => ({
                   revision: entry.revision,
@@ -574,6 +593,105 @@ describe('cached benchmark APIs', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('etag')).toBe('"materialized-summary-fresh"');
     await expect(response.text()).resolves.toBe(cachedBody);
+  });
+
+  it('reconstructs the active summary when the active materialized response is corrupt', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-05T12:00:01.000Z');
+    const response = await summary(publishedRows({
+      apiCacheEntries: [{
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'summary',
+        variant: 'fresh',
+        chunkIndex: 1,
+        etag: '"corrupt-summary"',
+        body: '{"private":"must not escape"}',
+      }],
+    }));
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      revision: REVISION,
+      data: { homeDecisionSnapshot: { benchAlignLeader: { status: 'ready' } } },
+    });
+  });
+
+  it('serves the last complete stale summary when the active revision is unpublished', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T01:00:00.000Z');
+    const pendingRevision = {
+      ...revision,
+      revision: 'benchmark-revision-pending',
+      published_at: null,
+      checked_at: '2026-08-06T00:30:00.000Z',
+      publication_state: 'pending',
+    };
+    const staleBody = '{"revision":"benchmark-revision-1","publishedAt":"2026-08-05T00:00:00.000Z","freshness":{"status":"stale","checkedAt":"2026-08-05T12:00:00.000Z"},"attribution":[],"data":{"cache":"last-good"}}';
+    const response = await summary(publishedRows({
+      activeRevision: pendingRevision.revision,
+      revisions: [revision, pendingRevision],
+      apiCacheEntries: [{
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: 'summary',
+        variant: 'stale',
+        chunkIndex: 0,
+        etag: '"last-good-summary"',
+        body: staleBody,
+      }],
+    }));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('etag')).toBe('"last-good-summary"');
+    await expect(response.text()).resolves.toBe(staleBody);
+  });
+
+  it('rebuilds a filtered leaderboard from the last complete stale projection without serving base-page bytes', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-07T01:00:00.000Z');
+    const baseRows = publishedRows();
+    const snapshot = await readActiveBenchmarkSnapshot(d1(baseRows));
+    if (!snapshot) throw new Error('expected published fixture snapshot');
+    const routeKey = 'llm-overall' as const;
+    const projection = cachedLeaderboardPaginationProjection(
+      snapshot,
+      materializeLeaderboard(snapshot, routeKey, 'balanced', false),
+    );
+    const projectionCacheKey = benchmarkLeaderboardProjectionCacheKey({
+      key: routeKey,
+      profile: 'balanced',
+      includeEstimated: false,
+    });
+    const pendingRevision = {
+      ...revision,
+      revision: 'benchmark-revision-pending',
+      published_at: null,
+      checked_at: '2026-08-07T00:30:00.000Z',
+      publication_state: 'pending',
+    };
+
+    const response = await leaderboard(routeKey, '?q=Beta&sort=context-desc', publishedRows({
+      activeRevision: pendingRevision.revision,
+      revisions: [revision, pendingRevision],
+      apiCacheEntries: [{
+        scope: 'benchmarks',
+        revision: REVISION,
+        cacheKey: projectionCacheKey,
+        variant: 'stale',
+        chunkIndex: 0,
+        etag: '"last-good-overall-projection"',
+        body: JSON.stringify(projection),
+      }],
+    }), undefined, { failOnBenchmarkFactRead: true });
+    const body = await response.json() as {
+      freshness: { status: string };
+      data: { entries: Array<{ model: { slug: string } }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.freshness.status).toBe('stale');
+    expect(body.data.entries.map((entry) => entry.model.slug)).toEqual(['beta']);
   });
 
   it('serves a materialized normalized leaderboard without rebuilding the full fact snapshot', async () => {
@@ -1061,7 +1179,7 @@ describe('cached benchmark APIs', () => {
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark data unavailable' });
   });
 
-  it('does not fall back to an older published revision when the active pointer targets an unpublished revision', async () => {
+  it('returns unavailable for an unpublished active pointer when no last-good response exists', async () => {
     const pendingRevision = {
       ...revision,
       revision: 'benchmark-revision-pending',

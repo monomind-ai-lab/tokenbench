@@ -1,5 +1,8 @@
 import { buildBenchmarkSummaryData } from '../../src/benchmarks/api-projections';
-import { cachedApiResponse, readApiResponseCache } from '../_shared/api-response-cache';
+import {
+  benchmarkCorrelationId,
+  serveBenchmarkWithFallback,
+} from '../_shared/benchmark-response-fallback';
 import {
   attributionForAllSources,
   benchmarkEnvelope,
@@ -17,32 +20,30 @@ import {
 export { buildBenchmarkSummaryData };
 
 export async function onRequestGet({ request, env }: { request: Request; env: BenchmarkApiEnv }): Promise<Response> {
-  if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
+  const db = env.CATALOG_DB;
+  if (!db) return unavailableBenchmarkResponse();
 
-  try {
-    const now = Date.now();
-    const cached = await readApiResponseCache(
-      env.CATALOG_DB,
-      'benchmarks',
-      'summary',
-      36 * 60 * 60 * 1000,
-      now,
-    );
-    if (cached) return cachedApiResponse(request, cached);
+  return serveBenchmarkWithFallback({
+    request,
+    endpoint: 'summary',
+    queryId: 'summary',
+    cacheKey: 'summary',
+    correlationId: benchmarkCorrelationId(request),
+    db,
+    reconstruct: async (now) => {
+      const snapshot = await readActiveBenchmarkSnapshot(db);
+      if (!snapshot) return null;
 
-    const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
-    if (!snapshot) return unavailableBenchmarkResponse();
+      const freshness = freshnessFor(snapshot.revision, now);
+      const etag = etagForBenchmarkResponse(snapshot.revision, freshness, { endpoint: 'benchmarks' });
+      if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
 
-    const freshness = freshnessFor(snapshot.revision, now);
-    const etag = etagForBenchmarkResponse(snapshot.revision, freshness, { endpoint: 'benchmarks' });
-    if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
-
-    return jsonBenchmarkResponse(
-      benchmarkEnvelope(snapshot, freshness, attributionForAllSources(snapshot), buildBenchmarkSummaryData(snapshot)),
-      200,
-      etag,
-    );
-  } catch {
-    return unavailableBenchmarkResponse();
-  }
+      return jsonBenchmarkResponse(
+        benchmarkEnvelope(snapshot, freshness, attributionForAllSources(snapshot), buildBenchmarkSummaryData(snapshot)),
+        200,
+        etag,
+      );
+    },
+    unavailable: unavailableBenchmarkResponse,
+  });
 }

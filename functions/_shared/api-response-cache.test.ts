@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { cachedApiResponse, readApiResponseCache } from './api-response-cache';
+import {
+  cachedApiResponse,
+  readApiResponseCache,
+  readNewestCompleteApiResponseCache,
+} from './api-response-cache';
 
 function database(rows: Record<string, unknown>[] | Record<string, unknown> | undefined) {
   const calls: Array<{ sql: string; values: unknown[] }> = [];
@@ -205,5 +209,46 @@ describe('materialized API response cache', () => {
       1,
       Date.now(),
     )).resolves.toBeNull();
+  });
+
+  it('selects the newest structurally complete stale response and reuses bounded materialization', async () => {
+    const fake = database([
+      { ...cachedRow, revision: 'rev-41', variant: 'stale', etag: '"stale-41"', body: '{"freshness":' },
+      {
+        ...cachedRow,
+        revision: 'rev-41',
+        variant: 'stale',
+        chunk_index: 1,
+        etag: '"stale-41"',
+        body: '{"status":"stale"}}',
+      },
+    ]);
+
+    const cached = await readNewestCompleteApiResponseCache(fake.db, 'benchmarks', 'summary');
+
+    expect(fake.calls[0]?.sql).toContain('complete_revisions');
+    expect(fake.calls[0]?.sql).toContain('revisions.checked_at DESC');
+    expect(fake.calls[0]?.sql).toContain('revisions.revision DESC');
+    expect(fake.calls[0]?.values).toEqual([
+      'benchmarks',
+      'summary',
+      16,
+      1_400_000,
+      16_777_216,
+      17,
+    ]);
+    expect(cached).toEqual({
+      revision: 'rev-41',
+      freshness: 'stale',
+      etag: '"stale-41"',
+      body: '{"freshness":{"status":"stale"}}',
+    });
+  });
+
+  it('rejects inconsistent historical chunks through the shared materializer', async () => {
+    await expect(readNewestCompleteApiResponseCache(database([
+      { ...cachedRow, revision: 'rev-41', variant: 'stale' },
+      { ...cachedRow, revision: 'rev-41', variant: 'stale', chunk_index: 1, etag: '"other"' },
+    ]).db, 'benchmarks', 'summary')).rejects.toThrow(/inconsistent/i);
   });
 });

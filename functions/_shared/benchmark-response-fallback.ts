@@ -1,0 +1,112 @@
+import {
+  cachedApiResponse,
+  readApiResponseCache,
+  readNewestCompleteApiResponseCache,
+  type ApiResponseCacheDatabase,
+} from './api-response-cache';
+
+const BENCHMARK_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1_000;
+const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]{1,128}$/u;
+
+export type BenchmarkFallbackStage = 'active-cache' | 'active-revision' | 'historical-cache';
+
+export interface BenchmarkFallbackLog {
+  readonly event: 'benchmark-response-fallback';
+  readonly endpoint: string;
+  readonly queryId: string;
+  readonly cacheScope: 'benchmarks';
+  readonly cacheKey: string;
+  readonly stage: BenchmarkFallbackStage;
+  readonly errorClass: string | null;
+  readonly activeRevision?: string;
+  readonly fallbackRevision?: string;
+  readonly fallbackSelected: boolean;
+  readonly correlationId: string;
+}
+
+export interface BenchmarkFallbackOptions {
+  readonly request: Request;
+  readonly endpoint: string;
+  readonly queryId: string;
+  readonly cacheKey: string;
+  readonly correlationId: string;
+  readonly db: ApiResponseCacheDatabase;
+  readonly reconstruct: (now: number) => Promise<Response | null>;
+  readonly unavailable: () => Response;
+  readonly log?: (entry: BenchmarkFallbackLog) => void;
+  readonly now?: number;
+}
+
+function safeErrorClass(error: unknown): string {
+  if (error instanceof Error && SAFE_CORRELATION_ID.test(error.name)) return error.name;
+  return 'UnknownError';
+}
+
+function emit(
+  options: BenchmarkFallbackOptions,
+  stage: BenchmarkFallbackStage,
+  errorClass: string | null,
+  fallbackSelected: boolean,
+  fallbackRevision?: string,
+): void {
+  const entry: BenchmarkFallbackLog = {
+    event: 'benchmark-response-fallback',
+    endpoint: options.endpoint,
+    queryId: options.queryId,
+    cacheScope: 'benchmarks',
+    cacheKey: options.cacheKey,
+    stage,
+    errorClass,
+    ...(fallbackRevision ? { fallbackRevision } : {}),
+    fallbackSelected,
+    correlationId: options.correlationId,
+  };
+  if (options.log) options.log(entry);
+  else console.error(JSON.stringify(entry));
+}
+
+export function benchmarkCorrelationId(
+  request: Request,
+  randomUuid: () => string = () => crypto.randomUUID(),
+): string {
+  for (const inbound of [request.headers.get('cf-ray'), request.headers.get('x-request-id')]) {
+    if (inbound && SAFE_CORRELATION_ID.test(inbound)) return inbound;
+  }
+  return randomUuid();
+}
+
+/** Executes the shared active-cache, active-revision, historical-cache recovery sequence. */
+export async function serveBenchmarkWithFallback(options: BenchmarkFallbackOptions): Promise<Response> {
+  const now = options.now ?? Date.now();
+  try {
+    const cached = await readApiResponseCache(
+      options.db,
+      'benchmarks',
+      options.cacheKey,
+      BENCHMARK_FRESHNESS_WINDOW_MS,
+      now,
+    );
+    if (cached) return cachedApiResponse(options.request, cached);
+  } catch (error) {
+    emit(options, 'active-cache', safeErrorClass(error), false);
+  }
+
+  try {
+    const reconstructed = await options.reconstruct(now);
+    if (reconstructed) return reconstructed;
+  } catch (error) {
+    emit(options, 'active-revision', safeErrorClass(error), false);
+  }
+
+  try {
+    const cached = await readNewestCompleteApiResponseCache(options.db, 'benchmarks', options.cacheKey);
+    if (cached) {
+      emit(options, 'historical-cache', null, true, cached.revision);
+      return cachedApiResponse(options.request, cached);
+    }
+  } catch (error) {
+    emit(options, 'historical-cache', safeErrorClass(error), false);
+  }
+
+  return options.unavailable();
+}

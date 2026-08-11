@@ -23,7 +23,12 @@ import {
   isPrimaryHostedRoute,
   type WorkloadProfile,
 } from '../../src/benchmarks/value';
-import { readApiResponseCache, type ApiResponseCacheDatabase } from './api-response-cache';
+import {
+  readApiResponseCache,
+  readNewestCompleteApiResponseCache,
+  type ApiResponseCacheDatabase,
+  type MaterializedApiResponse,
+} from './api-response-cache';
 import {
   attributionForEvidence,
   benchmarkEnvelope,
@@ -39,6 +44,8 @@ const COMPLETE_PROJECTION_SNAPSHOT = Symbol('complete leaderboard projection sna
 export type CompleteLeaderboardProjectionEnvelope = BenchmarkApiEnvelope<LeaderboardResult> & {
   readonly [COMPLETE_PROJECTION_SNAPSHOT]: ActiveBenchmarkSnapshot;
 };
+
+const STALE_FRESHNESS_MESSAGE = 'Published benchmark revision has not refreshed within 36 hours.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -390,19 +397,44 @@ export async function readCompleteLeaderboardProjection(
   now: number = Date.now(),
 ): Promise<CompleteLeaderboardProjectionEnvelope | null> {
   const effectiveProfile = effectiveLeaderboardProfile(key, profile);
-  const cached = await readApiResponseCache(
-    db,
-    'benchmarks',
-    benchmarkLeaderboardProjectionCacheKey({
-      key,
-      profile: effectiveProfile,
-      includeEstimated,
-    }),
-    BENCHMARK_LEADERBOARD_PROJECTION_FRESHNESS_WINDOW_MS,
-    now,
-  );
-  if (!cached) return null;
+  const cacheKey = benchmarkLeaderboardProjectionCacheKey({
+    key,
+    profile: effectiveProfile,
+    includeEstimated,
+  });
+  let activeError: unknown;
+  try {
+    const active = await readApiResponseCache(
+      db,
+      'benchmarks',
+      cacheKey,
+      BENCHMARK_LEADERBOARD_PROJECTION_FRESHNESS_WINDOW_MS,
+      now,
+    );
+    if (active) return materializeCompleteLeaderboardProjection(active, key, effectiveProfile, includeEstimated, now);
+  } catch (error) {
+    activeError = error;
+  }
 
+  try {
+    const historical = await readNewestCompleteApiResponseCache(db, 'benchmarks', cacheKey);
+    if (historical) {
+      return materializeCompleteLeaderboardProjection(historical, key, effectiveProfile, includeEstimated, now);
+    }
+  } catch (error) {
+    throw error;
+  }
+  if (activeError) throw activeError;
+  return null;
+}
+
+function materializeCompleteLeaderboardProjection(
+  cached: MaterializedApiResponse,
+  key: LeaderboardKey,
+  effectiveProfile: WorkloadProfile,
+  includeEstimated: boolean,
+  now: number,
+): CompleteLeaderboardProjectionEnvelope {
   const projection = parseCompleteLeaderboardProjection(cached.body, key, effectiveProfile, includeEstimated);
   if (!cacheRevisionMatchesProjection(
     cached.revision,
@@ -419,10 +451,13 @@ export async function readCompleteLeaderboardProjection(
     priceChecks: [],
     comparisonPairs: [],
   };
-  const freshness = freshnessFor(snapshot.revision, now);
-  if (freshness.status !== cached.freshness) {
+  const evaluatedFreshness = freshnessFor(snapshot.revision, now);
+  if (cached.freshness === 'fresh' && evaluatedFreshness.status !== 'fresh') {
     throw new Error('cached leaderboard projection freshness does not match cache');
   }
+  const freshness = cached.freshness === 'stale' && evaluatedFreshness.status === 'fresh'
+    ? { status: 'stale' as const, checkedAt: evaluatedFreshness.checkedAt, message: STALE_FRESHNESS_MESSAGE }
+    : evaluatedFreshness;
   const leaderboard: LeaderboardResult = {
     key,
     profile: effectiveProfile,

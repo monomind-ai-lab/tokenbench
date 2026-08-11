@@ -192,6 +192,7 @@ function estimatedEntry(modelKey: string): LeaderboardEntry {
 interface CacheFixture {
   readonly fresh?: string;
   readonly stale?: string;
+  readonly historicalStale?: string;
   readonly cacheRevision?: string;
 }
 
@@ -206,6 +207,17 @@ function cacheDatabase(bodies: CacheFixture) {
             calls.push({ sql, values });
             return {
               all: async () => {
+                if (sql.includes('complete_revisions')) {
+                  return {
+                    results: bodies.historicalStale === undefined ? [] : [{
+                      revision: bodies.cacheRevision ?? REVISION,
+                      variant: 'stale',
+                      chunk_index: 0,
+                      etag: '"historical-stale-projection"',
+                      body: bodies.historicalStale,
+                    }],
+                  };
+                }
                 const cutoff = values[2];
                 const useFresh = typeof cutoff === 'string' && cutoff <= CHECKED_AT;
                 const variant = useFresh ? 'fresh' : 'stale';
@@ -288,6 +300,26 @@ describe('complete leaderboard projection cache reader', () => {
       message: 'Published benchmark revision has not refreshed within 36 hours.',
     });
     expect(result?.publishedAt).toBe(PUBLISHED_AT);
+  });
+
+  it('uses the newest complete stale projection when no active projection is available', async () => {
+    const fixture = cacheDatabase({ historicalStale: JSON.stringify(projection()) });
+
+    const result = await readCompleteLeaderboardProjection(
+      fixture.db,
+      'llm-coding',
+      'balanced',
+      false,
+      Date.parse('2026-08-08T00:00:01.000Z'),
+    );
+
+    expect(fixture.calls).toHaveLength(2);
+    expect(fixture.calls[1]?.sql).toContain('complete_revisions');
+    expect(result).toMatchObject({
+      revision: REVISION,
+      freshness: { status: 'stale', checkedAt: CHECKED_AT },
+      data: { entries: [{ model: { name: 'Alpha' } }] },
+    });
   });
 
   it('accepts the publisher storage-revision suffix while preserving the benchmark revision', async () => {

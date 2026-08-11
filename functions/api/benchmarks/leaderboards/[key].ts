@@ -20,7 +20,10 @@ import {
 } from '../../../../src/benchmarks/leaderboard-cursor';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../src/benchmarks/value';
-import { cachedApiResponse, readApiResponseCache } from '../../../_shared/api-response-cache';
+import {
+  benchmarkCorrelationId,
+  serveBenchmarkWithFallback,
+} from '../../../_shared/benchmark-response-fallback';
 import {
   completeLeaderboardAttributionForEntries,
   readCompleteLeaderboardProjection,
@@ -229,117 +232,127 @@ export async function onRequestGet({
   } catch {
     return invalidBenchmarkRequestResponse();
   }
-  if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
+  const db = env.CATALOG_DB;
+  if (!db) return unavailableBenchmarkResponse();
 
-  try {
-    const now = Date.now();
-    // The interactive UI always asks for the first, normalized page. Serve its
-    // published raw response before reading or deriving the full fact graph.
-    if (normalized.cursor === null && !normalized.hasSharedFilters) {
-      const cached = await readApiResponseCache(
-        env.CATALOG_DB,
-        'benchmarks',
-        benchmarkLeaderboardCacheKey(normalized),
-        36 * 60 * 60 * 1000,
+  const materializedRequest = normalized.cursor === null && !normalized.hasSharedFilters;
+  const queryId = [
+    normalized.key,
+    normalized.profile,
+    normalized.limit,
+    normalized.includeEstimated ? 'estimated' : 'supported',
+    normalized.cursor ? 'cursor' : 'first',
+    normalized.hasSharedFilters ? 'filtered' : 'base',
+  ].join(':');
+  // Only normalized first pages have exact response-cache entries. A distinct,
+  // non-published key prevents a filtered request from receiving base-page bytes;
+  // filtered/cursor recovery instead rebuilds from the validated stale projection.
+  const cacheKey = materializedRequest
+    ? benchmarkLeaderboardCacheKey(normalized)
+    : `leaderboard-request:${queryId}`;
+
+  return serveBenchmarkWithFallback({
+    request,
+    endpoint: 'leaderboard',
+    queryId,
+    cacheKey,
+    correlationId: benchmarkCorrelationId(request),
+    db,
+    reconstruct: async (now) => {
+      const complete = await readCompleteLeaderboardProjection(
+        db,
+        normalized.key,
+        normalized.profile,
+        normalized.includeEstimated,
         now,
       );
-      if (cached) return cachedApiResponse(request, cached);
-    }
-
-    const complete = await readCompleteLeaderboardProjection(
-      env.CATALOG_DB,
-      normalized.key,
-      normalized.profile,
-      normalized.includeEstimated,
-      now,
-    );
-    if (!complete) return unavailableBenchmarkResponse();
-    const projection = complete.data;
-    const capabilities = createLeaderboardQueryCapabilities(projection.definition, projection.entries);
-    const parsedFilters = parseLeaderboardQuery(
-      normalized.filterParameters.toString(),
-      projection.definition,
-      capabilities,
-      'api',
-    );
-    if (!parsedFilters.ok) return invalidBenchmarkRequestResponse();
-    const filterState: LeaderboardQueryState = {
-      ...parsedFilters.state,
-      preserveSourceLensOrder: normalized.key === 'multimodal-vision-documents'
-        && parsedFilters.state.sort === projection.definition.defaultSort,
-    };
-    const canonicalFilterParameters = leaderboardQueryToSearchParams(filterState);
-    // Profile and estimated inclusion are dedicated cursor fields, and the
-    // route definition fixes the default sort. Omitting them retains
-    // compatibility with materialized first-page cursors. Every other shared
-    // filter contributes to a bounded public query identity; this is not a
-    // signature or an access-control boundary.
-    canonicalFilterParameters.delete('profile');
-    canonicalFilterParameters.delete('estimated');
-    if (filterState.sort === projection.definition.defaultSort) {
-      canonicalFilterParameters.delete('sort');
-    }
-    const canonicalFilter = canonicalFilterParameters.toString();
-    const filterIdentity = canonicalFilter === ''
-      ? ''
-      : await leaderboardFilterIdentity(canonicalFilter);
-
-    const cursorParameters = {
-      key: normalized.key,
-      profile: normalized.profile,
-      limit: normalized.limit,
-      includeEstimated: normalized.includeEstimated,
-      filterIdentity,
-    } as const;
-    let offset = 0;
-    if (normalized.cursor) {
-      try {
-        offset = offsetFromCursor(normalized.cursor, complete.revision, cursorParameters);
-      } catch {
-        return invalidBenchmarkRequestResponse();
-      }
-    }
-
-    const leaderboard: LeaderboardResult = {
-      ...projection,
-      profile: normalized.profile,
-      entries: projection.entries,
-    };
-    const entries = normalized.hasSharedFilters
-      ? filterLeaderboardEntries(projection.entries, filterState)
-      : projection.entries;
-    if (offset >= entries.length && normalized.cursor !== null) return invalidBenchmarkRequestResponse();
-    const pagedEntries = entries.slice(offset, offset + normalized.limit);
-    const nextOffset = offset + pagedEntries.length;
-    const nextCursor = nextOffset < entries.length
-      ? cursorFor(complete.revision, cursorParameters, nextOffset)
-      : null;
-    const etag = etagForCompleteProjection(complete.revision, complete.freshness, {
-      endpoint: 'leaderboard',
-      key: normalized.key,
-      profile: normalized.profile,
-      limit: normalized.limit,
-      cursor: normalized.cursor ?? '',
-      includeEstimated: normalized.includeEstimated,
-      filter: canonicalFilter,
-    });
-    if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
-
-    return jsonBenchmarkResponse({
-      ...complete,
-      attribution: completeLeaderboardAttributionForEntries(complete, pagedEntries),
-      data: {
-        ...leaderboard,
-        entries: pagedEntries,
+      if (!complete) return null;
+      const projection = complete.data;
+      const capabilities = createLeaderboardQueryCapabilities(projection.definition, projection.entries);
+      const parsedFilters = parseLeaderboardQuery(
+        normalized.filterParameters.toString(),
+        projection.definition,
         capabilities,
-        pagination: {
-          limit: normalized.limit,
-          total: entries.length,
-          nextCursor,
+        'api',
+      );
+      if (!parsedFilters.ok) return invalidBenchmarkRequestResponse();
+      const filterState: LeaderboardQueryState = {
+        ...parsedFilters.state,
+        preserveSourceLensOrder: normalized.key === 'multimodal-vision-documents'
+          && parsedFilters.state.sort === projection.definition.defaultSort,
+      };
+      const canonicalFilterParameters = leaderboardQueryToSearchParams(filterState);
+      // Profile and estimated inclusion are dedicated cursor fields, and the
+      // route definition fixes the default sort. Omitting them retains
+      // compatibility with materialized first-page cursors. Every other shared
+      // filter contributes to a bounded public query identity; this is not a
+      // signature or an access-control boundary.
+      canonicalFilterParameters.delete('profile');
+      canonicalFilterParameters.delete('estimated');
+      if (filterState.sort === projection.definition.defaultSort) {
+        canonicalFilterParameters.delete('sort');
+      }
+      const canonicalFilter = canonicalFilterParameters.toString();
+      const filterIdentity = canonicalFilter === ''
+        ? ''
+        : await leaderboardFilterIdentity(canonicalFilter);
+
+      const cursorParameters = {
+        key: normalized.key,
+        profile: normalized.profile,
+        limit: normalized.limit,
+        includeEstimated: normalized.includeEstimated,
+        filterIdentity,
+      } as const;
+      let offset = 0;
+      if (normalized.cursor) {
+        try {
+          offset = offsetFromCursor(normalized.cursor, complete.revision, cursorParameters);
+        } catch {
+          return invalidBenchmarkRequestResponse();
+        }
+      }
+
+      const leaderboard: LeaderboardResult = {
+        ...projection,
+        profile: normalized.profile,
+        entries: projection.entries,
+      };
+      const entries = normalized.hasSharedFilters
+        ? filterLeaderboardEntries(projection.entries, filterState)
+        : projection.entries;
+      if (offset >= entries.length && normalized.cursor !== null) return invalidBenchmarkRequestResponse();
+      const pagedEntries = entries.slice(offset, offset + normalized.limit);
+      const nextOffset = offset + pagedEntries.length;
+      const nextCursor = nextOffset < entries.length
+        ? cursorFor(complete.revision, cursorParameters, nextOffset)
+        : null;
+      const etag = etagForCompleteProjection(complete.revision, complete.freshness, {
+        endpoint: 'leaderboard',
+        key: normalized.key,
+        profile: normalized.profile,
+        limit: normalized.limit,
+        cursor: normalized.cursor ?? '',
+        includeEstimated: normalized.includeEstimated,
+        filter: canonicalFilter,
+      });
+      if (matchesExactEtag(request, etag)) return notModifiedBenchmarkResponse(etag);
+
+      return jsonBenchmarkResponse({
+        ...complete,
+        attribution: completeLeaderboardAttributionForEntries(complete, pagedEntries),
+        data: {
+          ...leaderboard,
+          entries: pagedEntries,
+          capabilities,
+          pagination: {
+            limit: normalized.limit,
+            total: entries.length,
+            nextCursor,
+          },
         },
-      },
-    }, 200, etag);
-  } catch {
-    return unavailableBenchmarkResponse();
-  }
+      }, 200, etag);
+    },
+    unavailable: unavailableBenchmarkResponse,
+  });
 }
