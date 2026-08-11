@@ -1,6 +1,6 @@
 export const BENCHMARK_SOURCE_IDS = ['benchlm', 'lmarena', 'litellm', 'openrouter'] as const;
 /** Bump when derived benchmark records or their public route semantics change. */
-export const BENCHMARK_DERIVATION_SCHEMA_VERSION = '1';
+export const BENCHMARK_DERIVATION_SCHEMA_VERSION = '2';
 export const BENCHMARK_SOURCE_TEXT_MAX_BYTES = 64 * 1024;
 
 export type BenchmarkSourceId = typeof BENCHMARK_SOURCE_IDS[number];

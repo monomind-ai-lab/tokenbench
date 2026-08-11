@@ -6,7 +6,7 @@
   "name": "BenchLM Models",
   "description": "Reduced allowlist projection for parser tests.",
   "sourceFiles": ["models.json"],
-  "counts": { "items": 4 },
+  "counts": { "items": 5 },
   "items": [
     {
       "canonicalModelKey": "model-a",
@@ -114,6 +114,60 @@
         "rawOverallScore": 80,
         "displayCategoryScores": { "coding": 76.4, "reasoning": 91.2, "multimodalGrounded": 86.5 },
         "verifiedDisplayCategoryScores": { "coding": 76.4, "reasoning": 91.2, "multimodalGrounded": 86.5 }
+      }
+    },
+    {
+      "canonicalModelKey": "gpt-5-6-sol",
+      "slug": "gpt-5-6-sol",
+      "model": "GPT-5.6 Sol",
+      "creator": "OpenAI",
+      "sourceType": "Proprietary",
+      "reasoningType": "Reasoning",
+      "releaseDate": "2026-08-06",
+      "contextWindowTokens": 1050000,
+      "evidenceStatus": "supported",
+      "rankingEligible": true,
+      "ranking": {
+        "overallRank": 99,
+        "categoryRanks": { "coding": 99 },
+        "categoryRankingEligible": {
+          "agentic": true,
+          "coding": true,
+          "reasoning": true,
+          "multimodalGrounded": true,
+          "knowledge": true,
+          "multilingual": false,
+          "instructionFollowing": false,
+          "math": true
+        }
+      },
+      "coverage": {
+        "trustedBenchmarkCount": 31,
+        "verifiedBenchmarkCount": 31
+      },
+      "scores": {
+        "displayScore": 50,
+        "rawOverallScore": 81.1,
+        "displayCategoryScores": {
+          "agentic": 50,
+          "coding": 54.6,
+          "reasoning": 50,
+          "multimodalGrounded": 50,
+          "knowledge": 50,
+          "multilingual": null,
+          "instructionFollowing": null,
+          "math": 50
+        },
+        "verifiedDisplayCategoryScores": {
+          "agentic": 50,
+          "coding": 54.6,
+          "reasoning": 50,
+          "multimodalGrounded": 50,
+          "knowledge": 50,
+          "multilingual": null,
+          "instructionFollowing": null,
+          "math": 50
+        }
       }
     }
   ]

@@ -158,7 +158,7 @@ interface LmArenaPage {
   sourceModelIds: string[];
 }
 
-const BENCHLM_ARTIFACTS = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
+const BENCHLM_ARTIFACTS = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks', 'public-leaderboard'] as const;
 type BenchLmArtifact = typeof BENCHLM_ARTIFACTS[number];
 
 const BENCHLM_URLS: Record<BenchLmArtifact, string> = {
@@ -167,6 +167,7 @@ const BENCHLM_URLS: Record<BenchLmArtifact, string> = {
   pricing: 'https://benchlm.ai/data/pricing.json',
   comparisons: 'https://benchlm.ai/data/comparisons.json',
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
+  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
 };
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const OPENROUTER_SOURCE_ID = 'openrouter-models';
@@ -999,7 +1000,7 @@ async function persistBenchLmDailySource(
   const artifactIds = new Set(sources.map((source) => source.artifactId));
   if (sources.length !== BENCHLM_ARTIFACTS.length
     || BENCHLM_ARTIFACTS.some((artifact) => !artifactIds.has(artifact))) {
-    throw new Error('BenchLM daily manifest requires all five verified artifacts');
+    throw new Error('BenchLM daily manifest requires all six verified artifacts');
   }
   await writeEvidence(bucket, sources, prepared.evidence);
   const bytes = jsonBytes({ schemaVersion: BENCHLM_PROJECTION_SCHEMA_VERSION, checkedAt, sources });

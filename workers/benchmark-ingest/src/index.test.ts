@@ -12,7 +12,7 @@ import worker, {
 } from './index';
 
 const observedAt = '2026-08-05T12:00:00.000Z';
-const benchLmArtifacts = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
+const benchLmArtifacts = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks', 'public-leaderboard'] as const;
 type BenchLmArtifact = typeof benchLmArtifacts[number];
 
 interface Statement {
@@ -168,7 +168,9 @@ function healthyFetch(options: {
     const intercepted = await options.onRequest?.(url, init);
     if (intercepted) return intercepted;
     if (url.hostname === 'benchlm.ai') {
-      const artifact = url.pathname.match(/\/([^/]+)\.json$/)?.[1] as BenchLmArtifact | undefined;
+      const artifact = url.pathname === '/api/data/leaderboard' && url.searchParams.get('mode') === 'bench-align-v5'
+        ? 'public-leaderboard'
+        : url.pathname.match(/\/([^/]+)\.json$/)?.[1] as BenchLmArtifact | undefined;
       if (!artifact || !benchLmArtifacts.includes(artifact)) throw new Error(`Unexpected BenchLM URL ${url}`);
       return new Response(fixture(artifact), {
         headers: { 'content-type': 'application/json', etag: `"${artifact}-etag"` },
@@ -1485,7 +1487,7 @@ describe('atomic benchmark ingestion', () => {
     );
 
     expect(second.error).toBeNull();
-    expect(fetchImpl.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    expect(fetchImpl.mock.calls.some(([url]) => new URL(String(url)).hostname === 'benchlm.ai')).toBe(false);
     expect(fetchImpl.mock.calls.some(([url]) => String(url).includes('lmarena'))).toBe(true);
     expect(fetchImpl.mock.calls.some(([url]) => String(url).includes('litellm'))).toBe(true);
   });
@@ -1528,7 +1530,7 @@ describe('atomic benchmark ingestion', () => {
 
     expect(second).toMatchObject({ status: 'published', revision: expect.any(String), error: null });
     expect(second.revision).not.toBe(first.revision);
-    expect(fetchImpl.mock.calls.filter(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toHaveLength(5);
+    expect(fetchImpl.mock.calls.filter(([url]) => new URL(String(url)).hostname === 'benchlm.ai')).toHaveLength(6);
     const secondSources = db.state.sourceRows.get(second.revision as string) ?? [];
     expect(secondSources.filter((source) => source.sourceId === 'benchlm')
       .every((source) => source.snapshotKey.includes('/projected/v2/'))).toBe(true);
@@ -1697,7 +1699,7 @@ describe('atomic benchmark ingestion', () => {
 
     expect(initial.status).toBe('published');
     expect(retried).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
-    expect(retryFetch.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    expect(retryFetch.mock.calls.some(([url]) => new URL(String(url)).hostname === 'benchlm.ai')).toBe(false);
     const retriedPricing = (db.state.sourceRows.get(retried.revision as string) ?? [])
       .find((source) => source.sourceId === 'benchlm' && source.artifactId === 'pricing');
     expect(retriedPricing?.etag).toBe('"pricing-new-etag"');
@@ -1775,7 +1777,7 @@ describe('atomic benchmark ingestion', () => {
     expect(loserPhase).toBe('waiting');
     expect(winner).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
     expect(loser).toMatchObject({ status: 'published', error: null, revision: expect.any(String) });
-    expect(loserFetch.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    expect(loserFetch.mock.calls.some(([url]) => new URL(String(url)).hostname === 'benchlm.ai')).toBe(false);
     const winnerPricing = (db.state.sourceRows.get(winner.revision as string) ?? [])
       .find((source) => source.sourceId === 'benchlm' && source.artifactId === 'pricing');
     const finalSources = db.state.sourceRows.get(db.state.activeRevision as string) ?? [];
@@ -1809,7 +1811,7 @@ describe('atomic benchmark ingestion', () => {
 
     expect(second).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/immutable snapshot is missing/i) });
     expect(db.state.activeRevision).toBe(first.revision);
-    expect(fetchImpl.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    expect(fetchImpl.mock.calls.some(([url]) => new URL(String(url)).hostname === 'benchlm.ai')).toBe(false);
   });
 
   it('fails safely without a BenchLM request when a same-day stored projection is corrupt', async () => {
@@ -1834,7 +1836,7 @@ describe('atomic benchmark ingestion', () => {
 
     expect(second).toMatchObject({ status: 'failed', revision: null, error: expect.stringMatching(/content hash/i) });
     expect(db.state.activeRevision).toBe(first.revision);
-    expect(fetchImpl.mock.calls.some(([url]) => String(url).startsWith('https://benchlm.ai/data/'))).toBe(false);
+    expect(fetchImpl.mock.calls.some(([url]) => new URL(String(url)).hostname === 'benchlm.ai')).toBe(false);
   });
 
   it('publishes a new immutable revision when unchanged source artifacts were hashed before the derivation schema version', async () => {
@@ -1910,8 +1912,11 @@ describe('atomic benchmark ingestion', () => {
     const firstSources = db.state.sourceRows.get(first.revision as string) ?? [];
     const secondSources = db.state.sourceRows.get(second.revision as string) ?? [];
     const secondBenchLm = secondSources.filter((source) => source.sourceId === 'benchlm');
-    expect(secondBenchLm).toHaveLength(5);
-    expect(secondBenchLm.every((source) => source.upstreamRevision === '2026-08-05T06:25:54.198Z')).toBe(true);
+    expect(secondBenchLm).toHaveLength(6);
+    expect(secondBenchLm.find((source) => source.artifactId === 'public-leaderboard')?.upstreamRevision)
+      .toBe('2026-08-10-8c567bd96953b15d');
+    expect(secondBenchLm.filter((source) => source.artifactId !== 'public-leaderboard')
+      .every((source) => source.upstreamRevision === '2026-08-05T06:25:54.198Z')).toBe(true);
     for (const artifact of benchLmArtifacts.filter((artifact) => artifact !== 'pricing')) {
       expect(secondBenchLm.find((source) => source.artifactId === artifact)?.snapshotKey)
         .toBe(firstSources.find((source) => source.sourceId === 'benchlm' && source.artifactId === artifact)?.snapshotKey);
@@ -2069,7 +2074,7 @@ describe('atomic benchmark ingestion', () => {
     expect(result.status).toBe('failed');
     expect(leaderboardAttempts).toBe(3);
     expect(timeoutAborts).toBe(3);
-    expect(timeoutHandlers).toHaveLength(7); // five first-pass BenchLM requests plus two leaderboard retries.
+    expect(timeoutHandlers).toHaveLength(8); // six first-pass BenchLM requests plus two leaderboard retries.
     expect(retries).toEqual([250, 500]);
     expect(result.error).toContain('timed out after 20000ms');
     const error = [...db.state.refreshRows.values()].find((row) => row.lastError !== null)?.lastError;

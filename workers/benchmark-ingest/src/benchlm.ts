@@ -10,8 +10,14 @@ import {
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { resolvedModelKey } from '../../../src/benchmarks/model-aliases';
+import {
+  joinPublicLeaderboardScores,
+  parseBenchLmPublicLeaderboard,
+  type BenchLmPublicLeaderboard,
+  type PublicBenchLmScore,
+} from './benchlm-public-leaderboard';
 
-const ARTIFACTS = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
+const ARTIFACTS = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks', 'public-leaderboard'] as const;
 
 type ArtifactName = typeof ARTIFACTS[number];
 
@@ -21,6 +27,7 @@ const ARTIFACT_URLS: Record<ArtifactName, string> = {
   pricing: 'https://benchlm.ai/data/pricing.json',
   comparisons: 'https://benchlm.ai/data/comparisons.json',
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
+  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
 };
 
 export interface BenchLmTransportHeaders {
@@ -39,6 +46,9 @@ export interface BenchLmProjectedPayload {
   schemaVersion: string;
   generatedAt: string;
   items: unknown[];
+  upstreamRevision?: string;
+  methodologyVersion?: string;
+  approvedSnapshotId?: string | null;
 }
 
 export interface PreparedBenchLmArtifact {
@@ -158,6 +168,7 @@ function requireBoolean(value: unknown, label: string): boolean {
 }
 
 function parseArtifact(value: unknown, artifact: ArtifactName): BenchLmProjectedPayload {
+  if (artifact === 'public-leaderboard') return parsePublicLeaderboardProjection(value);
   const payload = requireRecord(value, `BenchLM ${artifact}`);
   if (payload.schemaVersion !== '1.0') fail(`BenchLM ${artifact} schemaVersion must be 1.0`);
   const generatedAt = requireIsoTimestamp(payload.generatedAt, `BenchLM ${artifact}.generatedAt`);
@@ -166,6 +177,39 @@ function parseArtifact(value: unknown, artifact: ArtifactName): BenchLmProjected
     schemaVersion: '1.0',
     generatedAt,
     items: payload.items,
+  };
+}
+
+function publicLeaderboardFromProjection(payload: BenchLmProjectedPayload): BenchLmPublicLeaderboard {
+  return parseBenchLmPublicLeaderboard({
+    lastUpdated: payload.generatedAt.slice(0, 10),
+    mode: 'bench-align-v5',
+    methodologyVersion: payload.methodologyVersion,
+    sourceSnapshotId: payload.upstreamRevision,
+    approvedSnapshotId: payload.approvedSnapshotId ?? null,
+    models: payload.items,
+  });
+}
+
+function parsePublicLeaderboardProjection(value: unknown): BenchLmProjectedPayload {
+  const payload = requireRecord(value, 'BenchLM public-leaderboard');
+  const parsed = payload.schemaVersion === 'bench-align-v5'
+    ? parseBenchLmPublicLeaderboard({
+      lastUpdated: requireIsoTimestamp(payload.generatedAt, 'BenchLM public-leaderboard.generatedAt').slice(0, 10),
+      mode: 'bench-align-v5',
+      methodologyVersion: payload.methodologyVersion,
+      sourceSnapshotId: payload.upstreamRevision,
+      approvedSnapshotId: payload.approvedSnapshotId ?? null,
+      models: payload.items,
+    })
+    : parseBenchLmPublicLeaderboard(value);
+  return {
+    schemaVersion: 'bench-align-v5',
+    generatedAt: `${parsed.lastUpdated}T00:00:00.000Z`,
+    upstreamRevision: parsed.sourceSnapshotId,
+    methodologyVersion: parsed.methodologyVersion,
+    approvedSnapshotId: parsed.approvedSnapshotId,
+    items: [...parsed.models],
   };
 }
 
@@ -181,8 +225,8 @@ function sourceRecord(
     observedAt,
     etag: prepared.headers.etag,
     lastModified: prepared.headers.lastModified,
-    upstreamRevision: prepared.payload.generatedAt,
-    schemaVersion: prepared.payload.schemaVersion,
+    upstreamRevision: prepared.payload.upstreamRevision ?? prepared.payload.generatedAt,
+    schemaVersion: prepared.payload.methodologyVersion ?? prepared.payload.schemaVersion,
     snapshotKey: `benchmarks/benchlm/${artifact}/projected/${prepared.projectedSha256}.json`,
     contentHash: `sha256:${prepared.projectedSha256}`,
     originalContentHash: `sha256:${prepared.originalSha256}`,
@@ -447,10 +491,27 @@ function projectArtifact(payload: BenchLmProjectedPayload, artifact: ArtifactNam
         .map(projectBenchmarkItem)
         .filter((item): item is Record<string, unknown> => item !== null);
       break;
+    case 'public-leaderboard':
+      items = publicLeaderboardFromProjection(payload).models.map((row) => ({
+        rank: row.rank,
+        model: row.model,
+        creator: row.creator,
+        sourceType: row.sourceType,
+        overallScore: row.overallScore,
+        categoryScores: row.categoryScores,
+        evidenceStatus: row.evidenceStatus,
+        methodologyVersion: row.methodologyVersion,
+      }));
+      break;
   }
   return {
     schemaVersion: payload.schemaVersion,
     generatedAt: payload.generatedAt,
+    ...(payload.upstreamRevision ? { upstreamRevision: payload.upstreamRevision } : {}),
+    ...(payload.methodologyVersion ? { methodologyVersion: payload.methodologyVersion } : {}),
+    ...(Object.prototype.hasOwnProperty.call(payload, 'approvedSnapshotId')
+      ? { approvedSnapshotId: payload.approvedSnapshotId ?? null }
+      : {}),
     items,
   };
 }
@@ -685,7 +746,10 @@ function safeBenchmarkCategories(items: unknown[]): Set<string> {
   return categories;
 }
 
-function toBenchmarkModels(models: SafeModelInput[]): BenchmarkModel[] {
+function toBenchmarkModels(
+  models: SafeModelInput[],
+  publicScores: ReadonlyMap<string, PublicBenchLmScore>,
+): BenchmarkModel[] {
   return models.map((model) => ({
     modelKey: model.modelKey,
     slug: model.slug,
@@ -696,7 +760,9 @@ function toBenchmarkModels(models: SafeModelInput[]): BenchmarkModel[] {
     releaseDate: model.releaseDate,
     contextWindowTokens: model.contextWindowTokens,
     evidenceStatus: model.evidenceStatus,
-    rankingEligible: model.evidenceStatus === 'supported' && model.rankingEligible && model.displayScore !== null,
+    rankingEligible: model.evidenceStatus === 'supported'
+      && model.rankingEligible
+      && publicScores.get(model.modelKey)?.evidenceStatus === 'supported',
     confidenceLower: null,
     confidenceUpper: null,
     benchmarkCount: model.trustedBenchmarkCount,
@@ -706,15 +772,24 @@ function toBenchmarkModels(models: SafeModelInput[]): BenchmarkModel[] {
   }));
 }
 
-function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, generatedAt: string): BenchmarkMetric[] {
+function toMetrics(
+  models: SafeModelInput[],
+  publicScores: ReadonlyMap<string, PublicBenchLmScore>,
+  safeCategories: Set<string>,
+  generatedAt: string,
+): BenchmarkMetric[] {
   const metrics: BenchmarkMetric[] = [];
   models.forEach((model) => {
-    const modelRankingEligible = model.evidenceStatus === 'supported' && model.rankingEligible && model.displayScore !== null;
+    const publicScore = publicScores.get(model.modelKey);
+    if (!publicScore) return;
+    const modelRankingEligible = model.evidenceStatus === 'supported'
+      && model.rankingEligible
+      && publicScore.evidenceStatus === 'supported';
     // Public overall value is the BenchAlign display score; the raw composite
     // remains available only as a disclosed diagnostic (rawValue). The overall
     // raw diagnostics must never become the public value when upstream does
     // not publish a display score.
-    const overallValue = model.displayScore;
+    const overallValue = publicScore.overallScore;
     if (overallValue !== null) {
       metrics.push({
         modelKey: model.modelKey,
@@ -722,7 +797,7 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
         category: 'overall',
         value: overallValue,
         rawValue: model.rawOverallScore,
-        rank: model.overallRank,
+        rank: publicScore.overallRank,
         lower: null,
         upper: null,
         voteCount: null,
@@ -730,7 +805,7 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
         sourceId: 'benchlm',
         sourceUpdatedAt: generatedAt,
         sourceModelId: model.sourceModelId,
-        sourceArtifactId: 'models',
+        sourceArtifactId: 'public-leaderboard',
         rankingEligible: modelRankingEligible,
         methodology: 'benchlm_raw_composite',
         observationCount: null,
@@ -739,14 +814,13 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
     }
 
     const categories = new Set([
-      ...Object.keys(model.displayCategoryScores),
-      ...Object.keys(model.verifiedDisplayCategoryScores),
+      ...Object.keys(publicScore.categoryScores),
     ]);
     categories.forEach((category) => {
       if (!safeCategories.has(category)) return;
       // The public category value is the display score. verifiedDisplayCategoryScores
       // did not replace it, and category ranks are preserved exactly when published.
-      const value = model.displayCategoryScores[category] ?? null;
+      const value = publicScore.categoryScores[category] ?? null;
       if (value === null) return;
       metrics.push({
         modelKey: model.modelKey,
@@ -754,7 +828,7 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
         category,
         value,
         rawValue: null,
-        rank: model.categoryRanks[category] ?? null,
+        rank: publicScore.categoryRanks[category] ?? null,
         lower: null,
         upper: null,
         voteCount: null,
@@ -762,8 +836,10 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
         sourceId: 'benchlm',
         sourceUpdatedAt: generatedAt,
         sourceModelId: model.sourceModelId,
-        sourceArtifactId: 'models',
-        rankingEligible: model.evidenceStatus === 'supported' && model.categoryRankingEligible[category] === true,
+        sourceArtifactId: 'public-leaderboard',
+        rankingEligible: model.evidenceStatus === 'supported'
+          && publicScore.evidenceStatus === 'supported'
+          && model.categoryRankingEligible[category] === true,
         methodology: 'benchlm_raw_composite',
         observationCount: null,
         sessionCount: null,
@@ -905,7 +981,7 @@ export async function parseBenchLm(
   requireIsoTimestamp(observedAt, 'BenchLM observedAt');
   const { artifacts, prepared } = await verifyPreparedBundle(payloads);
   const generatedAt = artifacts.leaderboard.generatedAt;
-  ARTIFACTS.forEach((artifact) => {
+  ARTIFACTS.filter((artifact) => artifact !== 'public-leaderboard').forEach((artifact) => {
     if (artifacts[artifact].generatedAt !== generatedAt) {
       fail('BenchLM artifact generatedAt values must match');
     }
@@ -914,11 +990,23 @@ export async function parseBenchLm(
   const safeModels = artifacts.models.items.map((model, index) => parseSafeModel(model, index));
   const modelsBySourceId = new Map(safeModels.map((model) => [model.sourceModelId, model]));
   if (modelsBySourceId.size !== safeModels.length) fail('BenchLM models must not duplicate canonicalModelKey');
+  const publicLeaderboard = publicLeaderboardFromProjection(artifacts['public-leaderboard']);
+  const publicScores = joinPublicLeaderboardScores(safeModels.map((model) => ({
+    sourceModelId: model.sourceModelId,
+    modelKey: model.modelKey,
+    name: model.name,
+    creator: model.creator,
+  })), publicLeaderboard);
 
   const batch: NormalizedSourceBatch = {
     sources: ARTIFACTS.map((artifact) => sourceRecord(artifact, prepared[artifact], observedAt)),
-    models: toBenchmarkModels(safeModels),
-    metrics: toMetrics(safeModels, safeBenchmarkCategories(artifacts.benchmarks.items), generatedAt),
+    models: toBenchmarkModels(safeModels, publicScores),
+    metrics: toMetrics(
+      safeModels,
+      publicScores,
+      safeBenchmarkCategories(artifacts.benchmarks.items),
+      artifacts['public-leaderboard'].generatedAt,
+    ),
     priceChecks: toPriceChecks(artifacts.pricing.items, modelsBySourceId),
     comparisonSeeds: toComparisonSeeds(artifacts.comparisons.items, modelsBySourceId),
   };

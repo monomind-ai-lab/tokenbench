@@ -1,0 +1,92 @@
+{
+  "lastUpdated": "2026-08-10",
+  "mode": "bench-align-v5",
+  "methodologyVersion": "bench-align-v5.3-2026-07-24",
+  "sourceSnapshotId": "2026-08-10-8c567bd96953b15d",
+  "approvedSnapshotId": null,
+  "models": [
+    {
+      "rank": 4,
+      "model": "Model A",
+      "creator": "Acme",
+      "sourceType": "Proprietary",
+      "overallScore": 81.48,
+      "categoryScores": {
+        "coding": 79.5,
+        "reasoning": null,
+        "multimodalGrounded": 84.7
+      },
+      "inputPrice": 2.5,
+      "outputPrice": 10,
+      "evidenceStatus": "supported",
+      "methodologyVersion": "bench-align-v5.3-2026-07-24"
+    },
+    {
+      "rank": 12,
+      "model": "Model B",
+      "creator": "Acme",
+      "sourceType": "Open Weight",
+      "overallScore": 72.28,
+      "categoryScores": {
+        "coding": 68,
+        "reasoning": null
+      },
+      "inputPrice": null,
+      "outputPrice": null,
+      "evidenceStatus": "estimated",
+      "methodologyVersion": "bench-align-v5.3-2026-07-24"
+    },
+    {
+      "rank": 22,
+      "model": "Kimi K3",
+      "creator": "Moonshot AI",
+      "sourceType": "Pending",
+      "overallScore": 66.86,
+      "categoryScores": {
+        "coding": 85,
+        "reasoning": null
+      },
+      "inputPrice": null,
+      "outputPrice": null,
+      "evidenceStatus": "supported",
+      "methodologyVersion": "bench-align-v5.3-2026-07-24"
+    },
+    {
+      "rank": 4,
+      "model": "GPT-5.6 Sol",
+      "creator": "OpenAI",
+      "sourceType": "Proprietary",
+      "overallScore": 81.48,
+      "categoryScores": {
+        "agentic": 68.03,
+        "coding": 77.95,
+        "reasoning": 93,
+        "multimodalGrounded": 84.7,
+        "knowledge": 83.3,
+        "multilingual": null,
+        "instructionFollowing": null,
+        "math": 96.9
+      },
+      "inputPrice": 5,
+      "outputPrice": 30,
+      "evidenceStatus": "supported",
+      "methodologyVersion": "bench-align-v5.3-2026-07-24"
+    },
+    {
+      "rank": 8,
+      "model": "Sakana Fugu-Ultra",
+      "creator": "Sakana AI",
+      "sourceType": "Proprietary",
+      "overallScore": 76.1,
+      "categoryScores": {
+        "coding": 76.4,
+        "reasoning": 91.2,
+        "multimodalGrounded": 86.5
+      },
+      "inputPrice": null,
+      "outputPrice": null,
+      "evidenceStatus": null,
+      "methodologyVersion": "bench-align-v5.3-2026-07-24"
+    }
+  ]
+}

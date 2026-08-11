@@ -12,7 +12,7 @@ import {
 } from './benchlm';
 
 const observedAt = '2026-08-05T12:00:00.000Z';
-const artifactNames = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks'] as const;
+const artifactNames = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks', 'public-leaderboard'] as const;
 type ArtifactName = typeof artifactNames[number];
 
 const fixtureHeaders = {
@@ -21,6 +21,7 @@ const fixtureHeaders = {
   pricing: { etag: 'W/"9b3ed2fff10ed67eb64fa9f20d76b555"', lastModified: null },
   comparisons: { etag: 'W/"21d8cd43230a3ff98a46c6df85018303"', lastModified: null },
   benchmarks: { etag: 'W/"66c477d29bffa6d3e88cd79c8b07a002"', lastModified: null },
+  'public-leaderboard': { etag: 'W/"public-bench-align-v5"', lastModified: 'Mon, 10 Aug 2026 00:00:00 GMT' },
 } as const;
 
 function fixturePath(artifact: ArtifactName): string {
@@ -38,6 +39,7 @@ function payloads() {
     pricing: fixture('pricing'),
     comparisons: fixture('comparisons'),
     benchmarks: fixture('benchmarks'),
+    'public-leaderboard': fixture('public-leaderboard'),
   };
 }
 
@@ -96,13 +98,14 @@ describe('parseBenchLm', () => {
       rankingEligible: true,
       lower: null,
       upper: null,
-      sourceArtifactId: 'models',
+      sourceArtifactId: 'public-leaderboard',
     });
     expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')).toMatchObject({
       value: 79.5,
       rawValue: null,
-      rank: 3,
+      rank: 2,
       rankingEligible: true,
+      sourceArtifactId: 'public-leaderboard',
     });
     expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a' && metric.metricKey.includes('reasoning')))
       .toBe(false);
@@ -130,9 +133,28 @@ describe('parseBenchLm', () => {
       outputUsdPerMillion: 10,
       sourceArtifactId: 'pricing',
     })]);
+    expect(batch.sources.find((source) => source.artifactId === 'public-leaderboard')).toMatchObject({
+      sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
+      upstreamRevision: '2026-08-10-8c567bd96953b15d',
+      schemaVersion: 'bench-align-v5.3-2026-07-24',
+    });
+    expect(batch.metrics.find((metric) => metric.sourceModelId === 'gpt-5-6-sol'
+      && metric.metricKey === 'benchlm:overall:raw')).toMatchObject({
+      value: 81.48,
+      rank: 4,
+      rawValue: 81.1,
+      sourceArtifactId: 'public-leaderboard',
+    });
+    expect(batch.metrics.find((metric) => metric.sourceModelId === 'gpt-5-6-sol'
+      && metric.metricKey === 'benchlm:category:coding')).toMatchObject({
+      value: 77.95,
+      rank: 3,
+      rawValue: null,
+      sourceArtifactId: 'public-leaderboard',
+    });
   });
 
-  it('maps published display/rank evidence while never deriving from prohibited proxy fields', async () => {
+  it('keeps public API values authoritative over conflicting models.json aggregates', async () => {
     const source = payloads();
     // Legitimate published fields that DO map: scores.displayScore,
     // ranking.overallRank, and ranking.categoryRanks. They must survive the
@@ -160,24 +182,25 @@ describe('parseBenchLm', () => {
 
     const overall = batch.metrics.find((metric) => metric.metricKey === 'benchlm:overall:raw');
     const coding = batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding');
-    expect(overall).toMatchObject({ value: 84.2, rank: 9, rawValue: 81 });
-    expect(coding).toMatchObject({ value: 79.5, rank: 7 });
+    expect(overall).toMatchObject({ value: 81.48, rank: 4, rawValue: 81, sourceArtifactId: 'public-leaderboard' });
+    expect(coding).toMatchObject({ value: 79.5, rank: 2, sourceArtifactId: 'public-leaderboard' });
     // Prohibited proxy values and interval fields never appear in metrics or
     // bytes; the published overallRank/categoryRanks are now legitimately kept.
     expect(`${serialized}\n${projected}`).not.toMatch(/99999[5-9]|scoreInterval90/);
     expect(serialized).not.toContain('forbidden-external-group');
   });
 
-  it('never substitutes the diagnostic raw composite for a missing public display score', async () => {
+  it('does not fill missing public membership from a models.json aggregate', async () => {
     const source = payloads();
-    const sourceModel = (source.models as { items: Array<Record<string, unknown>> }).items[0];
-    (sourceModel.scores as Record<string, unknown>).displayScore = null;
-    (sourceModel.scores as Record<string, unknown>).rawOverallScore = 81;
+    const publicLeaderboard = source['public-leaderboard'] as { models: Array<Record<string, unknown>> };
+    publicLeaderboard.models = publicLeaderboard.models.filter((row) => row.model !== 'Model A');
 
     const batch = await parsePayloads(source);
 
     expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a'
       && metric.metricKey === 'benchlm:overall:raw')).toBe(false);
+    expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a'
+      && metric.metricKey === 'benchlm:category:coding')).toBe(false);
   });
 
   it('omits a category until its safe definitions are present', async () => {
@@ -204,6 +227,8 @@ describe('parseBenchLm', () => {
     scores.verifiedDisplayCategoryScores.reasoning = 87.25;
     scores.displayCategoryScores.knowledge = 99.5;
     scores.verifiedDisplayCategoryScores.knowledge = 99.75;
+    const publicModel = (source['public-leaderboard'] as { models: Array<Record<string, unknown>> }).models[0];
+    (publicModel.categoryScores as Record<string, number | null>).reasoning = 86.5;
 
     const batch = await parsePayloads(source);
 
@@ -283,7 +308,7 @@ describe('parseBenchLm', () => {
     await expect(prepareBenchLm(rawBundleFromPayloads(unknownEvidence))).rejects.toThrow(/evidenceStatus/i);
   });
 
-  it('keeps a safe category rankable when overall evidence is unavailable', async () => {
+  it('keeps a safe public category rankable when aggregate overall eligibility is false', async () => {
     const source = payloads();
     const sourceModel = (source.models as { items: Array<Record<string, unknown>> }).items[0];
     sourceModel.rankingEligible = false;
@@ -297,8 +322,8 @@ describe('parseBenchLm', () => {
     const coding = batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === 'coding');
 
     expect(model?.rankingEligible).toBe(false);
-    expect(overall).toBeUndefined();
-    expect(coding).toMatchObject({ value: 79.5, rankingEligible: true });
+    expect(overall).toMatchObject({ value: 81.48, rankingEligible: false, sourceArtifactId: 'public-leaderboard' });
+    expect(coding).toMatchObject({ value: 79.5, rank: 2, rankingEligible: true, sourceArtifactId: 'public-leaderboard' });
   });
 });
 
@@ -333,6 +358,8 @@ describe('prepareBenchLm', () => {
     });
     const definitions = source.benchmarks as { items: Array<Record<string, unknown>> };
     definitions.items.push({ category: safeCategory, benchmarkKey: 'safe-zero-width-identity', weight: 1 });
+    const publicModel = (source['public-leaderboard'] as { models: Array<Record<string, unknown>> }).models[0];
+    (publicModel.categoryScores as Record<string, number | null>)[safeCategory] = 9501;
     [0, 2, 4, 6, 8].forEach((index) => definitions.items.push({
       category: externalVariants[index],
       benchmarkKey: `unicode-obfuscated-${index}`,
@@ -407,6 +434,8 @@ describe('prepareBenchLm', () => {
       { category: ' external ', benchmarkKey: 'whitespace-group', weight: 1 },
       { category: ' Mixed Safe ', benchmarkKey: 'mixed-safe', weight: 1 },
     );
+    const publicModel = (source['public-leaderboard'] as { models: Array<Record<string, unknown>> }).models[0];
+    (publicModel.categoryScores as Record<string, number | null>)[' Mixed Safe '] = 9301;
 
     const prepared = await prepareBenchLm(rawBundleFromPayloads(source));
     const batch = await parseBenchLm(prepared, observedAt);
@@ -662,7 +691,7 @@ describe('rehydrateBenchLmProjections', () => {
     const rehydrated = await rehydrateBenchLmProjections(storedFromPrepared(prepared));
     const batch = await parseBenchLm(rehydrated, observedAt);
 
-    expect(batch.models).toHaveLength(4);
+    expect(batch.models).toHaveLength(5);
     expect(batch.sources.find((source) => source.artifactId === 'models')).toMatchObject({
       contentHash: `sha256:${prepared.models.projectedSha256}`,
       originalContentHash: `sha256:${prepared.models.originalSha256}`,
