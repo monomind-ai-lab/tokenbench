@@ -34,6 +34,7 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'tools' }, canonical: `${origin}/tools/` },
   { route: { kind: 'calculator' }, canonical: `${origin}/tools/subscriptions-vs-apis/` },
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
+  { route: { kind: 'pricePerformance' }, canonical: `${origin}/llm-price-performance/` },
   { route: { kind: 'newsletterConfirmed' }, canonical: `${origin}/newsletter/confirmed/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
   { route: { kind: 'models' }, canonical: `${origin}/models/` },
@@ -102,6 +103,19 @@ describe('route metadata registry', () => {
 
     expect(page.h1).toBe('Model leaderboards');
     expect(page.canonical).toBe(`${origin}/leaderboards/`);
+  });
+
+  it('publishes unique crawlable metadata for the price-performance decision surface', () => {
+    const page = metadataForRoute({ kind: 'pricePerformance' });
+
+    expect(page.title).toBe('LLM Price vs Performance | TokenBench');
+    expect(page.h1).toBe('LLM price vs performance');
+    expect(page.description).toContain('API price');
+    expect(page.description).toContain('Pareto');
+    expect(page.canonical).toBe(`${origin}/llm-price-performance/`);
+    expect(page.robots).toBe('index,follow');
+    expect(page.openGraph.url).toBe(page.canonical);
+    expect(page.twitter.title).toBe(page.title);
   });
 
   it('uses every approved succinct leaderboard title for document and social metadata', () => {

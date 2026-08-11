@@ -6,6 +6,7 @@ export const ROUTE_PATHS = {
   guides: '/guides/',
   tools: '/tools/',
   calculator: '/tools/subscriptions-vs-apis/',
+  pricePerformance: '/llm-price-performance/',
   compareHub: '/compare/',
   models: '/models/',
   leaderboards: '/leaderboards/',
@@ -13,7 +14,7 @@ export const ROUTE_PATHS = {
   newsletterConfirmed: '/newsletter/confirmed/',
 } as const;
 
-export type SiteNavigationPage = 'home' | 'calculator' | 'models' | 'compare' | 'leaderboards' | 'guides';
+export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'compare' | 'leaderboards' | 'guides';
 
 export const LEADERBOARD_ROUTES = {
   'llm-overall': {
@@ -164,6 +165,7 @@ export type AppRoute =
   | { kind: 'home' }
   | { kind: 'tools' }
   | { kind: 'calculator' }
+  | { kind: 'pricePerformance' }
   | { kind: 'methodologyBenchAlign' }
   | { kind: 'guides'; slug?: string }
   | { kind: 'compareHub' }
@@ -194,6 +196,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   })),
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
   { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
+  { id: 'price-performance', pathname: ROUTE_PATHS.pricePerformance, route: { kind: 'pricePerformance' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
   { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
@@ -232,6 +235,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'home': return ROUTE_PATHS.home;
     case 'tools': return ROUTE_PATHS.tools;
     case 'calculator': return ROUTE_PATHS.calculator;
+    case 'pricePerformance': return ROUTE_PATHS.pricePerformance;
     case 'methodologyBenchAlign': return ROUTE_PATHS.methodologyBenchAlign;
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
@@ -252,6 +256,7 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.home) return { kind: 'home' };
   if (normalizedPathname === ROUTE_PATHS.tools) return { kind: 'tools' };
   if (normalizedPathname === ROUTE_PATHS.calculator) return { kind: 'calculator' };
+  if (normalizedPathname === ROUTE_PATHS.pricePerformance) return { kind: 'pricePerformance' };
   if (normalizedPathname === ROUTE_PATHS.methodologyBenchAlign) return { kind: 'methodologyBenchAlign' };
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };

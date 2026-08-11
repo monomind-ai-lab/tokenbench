@@ -86,6 +86,11 @@ const pageDefinitions = {
     description: `Compare subscription plan fees with API-equivalent pricing from conversations, messages, directional input and output tokens, active days, and ${SITE_CONFIG.name}'s verified provider evidence.`,
     h1: 'Subscription vs API cost calculator',
   },
+  pricePerformance: {
+    title: `LLM Price vs Performance | ${SITE_CONFIG.name}`,
+    description: `Compare current public AI benchmark scores with direct API price on ${SITE_CONFIG.name}, inspect the Pareto efficiency frontier, and review every plotted model in an accessible evidence table.`,
+    h1: 'LLM price vs performance',
+  },
   compareHub: {
     title: `Compare AI Models and Costs | ${SITE_CONFIG.name}`,
     description: `Compare AI models with ${SITE_CONFIG.name} by benchmark context, pricing information, and documented evidence while keeping unavailable measurements visibly unavailable.`,
@@ -136,6 +141,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'home': return makeMetadata('/', pageDefinitions.home);
     case 'tools': return makeMetadata('/tools/', pageDefinitions.tools);
     case 'calculator': return makeMetadata('/tools/subscriptions-vs-apis/', pageDefinitions.calculator);
+    case 'pricePerformance': return makeMetadata(ROUTE_PATHS.pricePerformance, pageDefinitions.pricePerformance);
     case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
     case 'models': return makeMetadata(ROUTE_PATHS.models, pageDefinitions.models);

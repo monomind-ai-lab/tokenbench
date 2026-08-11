@@ -199,7 +199,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(28);
+    expect(FIXED_ROUTES).toHaveLength(29);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES
