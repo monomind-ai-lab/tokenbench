@@ -399,6 +399,33 @@ match, retain the prior active revision and reconcile source identities. The
 strict one-to-one join is intentional; do not skip ambiguous rows or publish a
 partial bundle as an incident workaround.
 
+### Release 1 production receipt — 2026-08-11
+
+- Git commit: `d83dd57f281edc32908b8798e115a3feb00ec3ae` on pushed `main`.
+- Benchmark Worker: `tokenbench-benchmark-ingest` version
+  `66edd590-ba89-41c3-b57e-3a9b213098b9`; normal schedule restored to
+  `15 */12 * * *` before publication validation.
+- Controlled refresh: the first one-shot safely retained the prior revision
+  because the same-day `daily-network-check-v2` marker referenced a legacy
+  five-artifact manifest. A compare-and-set reset changed only that synthetic
+  marker (one D1 row; no benchmark rows or R2 snapshots were deleted), and the
+  next authorized scheduled invocation published
+  `benchmark_941db0b535f7a160d95de6606689f6b4` at
+  `2026-08-11T14:46:00.675Z`.
+- API evidence: summary and coding responses returned HTTP 200 with the same
+  revision and four available source groups. GPT-5.6 Sol coding returned
+  `77.95`, metric rank `3`, source rank `3`, and source artifact
+  `public-leaderboard`; overall returned `81.48`.
+- Pages: production deployment
+  `b1e050b3-bf1b-4a9a-af24-f65211032040` at
+  `https://b1e050b3.tokenbench-27t.pages.dev`, source `d83dd57`.
+- Canonical smoke: Home, calculator, leaderboard directory, coding, overall,
+  and Compare returned HTTP 200. Coding rendered `78.0` and `#3`; overall
+  rendered `81.5`. At 320px and 1440px the coding page had no horizontal
+  overflow, retained title/description/canonical metadata, opened the
+  canonical Share Leaderboard dialog, and exposed Methodology and Privacy but
+  no Data sources footer link.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
