@@ -3,6 +3,7 @@ import {createRoot, hydrateRoot} from 'react-dom/client';
 import App, { ComparisonDetailApp } from './App.tsx';
 import GuidesApp from './GuidesApp.tsx';
 import { parseComparisonViewModel } from './frontend/comparison-contracts';
+import { NewsletterConfirmedPage } from './pages/newsletter-confirmed-page';
 import { matchRoute } from './routing/routes';
 import './index.css';
 
@@ -43,6 +44,15 @@ if (route.kind === 'comparison') {
   createRoot(root).render(
     <StrictMode>
       <RootApp />
+    </StrictMode>,
+  );
+} else if (route.kind === 'newsletterConfirmed') {
+  // The transactional confirmation page mounts directly without AppShell so
+  // no navigation or footer actions are ever exposed here.
+  const root = document.getElementById('root')!;
+  createRoot(root).render(
+    <StrictMode>
+      <NewsletterConfirmedPage />
     </StrictMode>,
   );
 } else if (route.kind === 'redirect') {

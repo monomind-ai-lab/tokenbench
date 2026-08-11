@@ -9,7 +9,7 @@ import {
   type AppRoute,
 } from '../src/routing/routes';
 import { metadataForRoute, type PageMetadata } from '../src/seo/metadata';
-import { documentHtml, escapeHtml, headMarkup, staticChrome, type StaticNavigationPage } from '../src/seo/static-page';
+import { documentHtml, escapeHtml, headMarkup, staticChrome, transactionalChrome, type StaticNavigationPage } from '../src/seo/static-page';
 import { generateGuidePages } from './generate-guide-pages';
 
 function activeNavigation(route: AppRoute): StaticNavigationPage {
@@ -18,6 +18,7 @@ function activeNavigation(route: AppRoute): StaticNavigationPage {
     case 'calculator': return 'calculator';
     case 'home': return 'home';
     case 'compareHub': return 'compare';
+    case 'newsletterConfirmed': return undefined;
     case 'leaderboards':
     case 'leaderboard':
     case 'methodologyBenchAlign': return 'leaderboards';
@@ -46,6 +47,9 @@ function fixedPageContent(
       // source version can be proven here. The hydrated page reads the active
       // same-origin summary and replaces this truthful fallback when available.
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} republishes BenchLM&#039;s BenchAlign results without recalculating them. <a href="https://benchlm.ai/methodology">Read BenchLM&#039;s methodology</a> for the source method.</p><section><h2>What each view represents</h2><p>Overall, Agentic, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge are BenchLM-published category evidence lenses, not additional TokenBench rankings.</p><p>Supported rows are source-published results eligible for their exact view. Reviewed estimated rows stay visibly estimated and appear after supported evidence where a route allows them; they are never silently promoted into a validated ranking. Missing measurements remain Unavailable, never zero.</p></section><section><h2>Metrics and runtime</h2><p>Weighted metrics affect the relevant BenchAlign method only. Display-only metrics add context without changing the published order. Runtime is a separate signal, not a substitute for capability evidence or a hidden ranking weight.</p></section><section><h2>Method and refresh status</h2><p>Published method version: <strong>Unavailable</strong>.</p><p>BenchLM refreshes its source output on its own schedule. TokenBench checks that source once daily within its broader Worker, which runs twice daily; a successful TokenBench check does not claim that BenchLM published a new method or result.</p></section>`);
+    case 'newsletterConfirmed':
+      // Standalone transactional shell: no site navigation or footer actions.
+      return `<main id="page-content" class="page-main newsletter-confirmed" tabindex="-1" aria-labelledby="newsletter-confirmed-heading"><div class="newsletter-confirmed-mark" aria-hidden="true">${SITE_CONFIG.name}</div><p class="eyebrow">Email confirmed</p><h1 id="newsletter-confirmed-heading">Your subscription is confirmed.</h1><p>The current TokenBench test cheatsheet will arrive by email.</p><a class="button" href="/">Start Exploring</a></main>`;
     case 'compareHub':
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`);
     case 'leaderboards':
@@ -78,7 +82,12 @@ function structuredDataFor(route: AppRoute, metadata: PageMetadata): unknown[] {
 }
 
 function staticSitemap(): string {
-  const urls = FIXED_ROUTES.map(({ route }) => metadataForRoute(route).canonical);
+  // Indexable canonical pages only; noindex,follow transactional routes such
+  // as the confirmation page are generated but never advertised in the sitemap.
+  const urls = FIXED_ROUTES
+    .map(({ route }) => metadataForRoute(route))
+    .filter((metadata) => metadata.robots !== 'noindex,follow')
+    .map((metadata) => metadata.canonical);
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.map((url) => `  <url><loc>${escapeHtml(url)}</loc></url>`).join('\n')}
@@ -94,10 +103,13 @@ export async function generateStaticPages(rootDir: string): Promise<void> {
       const metadata = metadataForRoute(route);
       const content = fixedPageContent(route, metadata);
       const outputPath = inputs[id];
+      const chrome = route.kind === 'newsletterConfirmed'
+        ? transactionalChrome(content)
+        : staticChrome(content, activeNavigation(route));
       await mkdir(dirname(outputPath), { recursive: true });
       await writeFile(outputPath, documentHtml(
         headMarkup(metadata, structuredDataFor(route, metadata)),
-        staticChrome(content, activeNavigation(route)),
+        chrome,
       ));
     }));
 

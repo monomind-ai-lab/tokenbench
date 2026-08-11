@@ -1,6 +1,6 @@
 import { HOME_PAGE_COPY, SITE_CONFIG } from '../brand/site-config';
 import { GUIDE_BY_SLUG } from '../guides/content';
-import { LEADERBOARD_ROUTES, pathnameForRoute, type AppRoute } from '../routing/routes';
+import { LEADERBOARD_ROUTES, ROUTE_PATHS, pathnameForRoute, type AppRoute } from '../routing/routes';
 
 export interface PageMetadata {
   readonly title: string;
@@ -91,6 +91,12 @@ const pageDefinitions = {
     description: `Compare AI models with ${SITE_CONFIG.name} by benchmark context, pricing information, and documented evidence while keeping unavailable measurements visibly unavailable.`,
     h1: 'Compare models side by side',
   },
+  newsletterConfirmed: {
+    title: `Subscription confirmed | ${SITE_CONFIG.name}`,
+    description: `Your ${SITE_CONFIG.name} newsletter subscription is confirmed. The current test cheatsheet PDF will arrive by email; start exploring AI cost and benchmark decision tools.`,
+    h1: 'Your subscription is confirmed.',
+    robots: 'noindex,follow' as const,
+  },
   leaderboards: {
     title: `AI Model Leaderboards | ${SITE_CONFIG.name}`,
     description: `Browse ${SITE_CONFIG.name}'s source-aware AI model leaderboards for capability, coding, agentic work, human preference, multimodal tasks, and media generation.`,
@@ -122,6 +128,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'calculator': return makeMetadata('/tools/subscriptions-vs-apis/', pageDefinitions.calculator);
     case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
+    case 'newsletterConfirmed': return makeMetadata(ROUTE_PATHS.newsletterConfirmed, pageDefinitions.newsletterConfirmed);
     case 'leaderboards': return makeMetadata('/leaderboards/', pageDefinitions.leaderboards);
     case 'leaderboard': {
       const definition = LEADERBOARD_ROUTES[route.key];

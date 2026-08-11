@@ -58,6 +58,16 @@ export function staticChrome(content: string, activePage: StaticNavigationPage):
     </div>`;
 }
 
+/**
+ * Wraps a standalone transactional route (for example the newsletter
+ * confirmation page) without the site header, primary navigation, or footer.
+ * The served markup contains the same substantive copy before JavaScript so
+ * crawlers and no-JS visitors see the actionable confirmation.
+ */
+export function transactionalChrome(content: string): string {
+  return `<div class="transactional-page-shell">${content}</div>`;
+}
+
 export function documentHtml(head: string, content: string): string {
   return `<!doctype html>
 <html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">

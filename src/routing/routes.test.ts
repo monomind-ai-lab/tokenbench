@@ -29,6 +29,7 @@ const fixedRouteCases = [
   ['/tools', { kind: 'tools' }],
   ['/tools/subscriptions-vs-apis', { kind: 'calculator' }],
   ['/compare', { kind: 'compareHub' }],
+  ['/newsletter/confirmed', { kind: 'newsletterConfirmed' }],
   ['/leaderboards', { kind: 'leaderboards' }],
   ['/leaderboards/llm/overall', { kind: 'leaderboard', key: 'llm-overall' }],
   ['/leaderboards/llm/coding', { kind: 'leaderboard', key: 'llm-coding' }],
@@ -113,6 +114,7 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/leaderboards/media/video-editing/index.html',
       '/generated-tokenbench/leaderboards/multimodal/vision-documents/index.html',
       '/generated-tokenbench/methodology/benchalign/index.html',
+      '/generated-tokenbench/newsletter/confirmed/index.html',
       '/generated-tokenbench/tools/index.html',
       '/generated-tokenbench/tools/subscriptions-vs-apis/index.html',
     ]);

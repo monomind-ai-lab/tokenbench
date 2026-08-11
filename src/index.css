@@ -410,6 +410,15 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .newsletter-signup form > [role='status'], .newsletter-signup form > [role='alert'] { padding: 9px 10px; border: 1px solid var(--outline); border-radius: 7px; background: var(--surface-low); }
 .newsletter-signup form > [role='status'] { border-color: color-mix(in srgb, var(--primary) 46%, var(--outline)); color: var(--primary-strong); }
 .newsletter-signup form > [role='alert'] { border-color: color-mix(in srgb, var(--danger) 62%, var(--outline)); color: var(--danger); }
+
+/* Standalone transactional confirmation route: no header/footer navigation. */
+.transactional-page-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.page-main.newsletter-confirmed { width: min(100% - 64px, 560px); margin: 0 auto; display: grid; justify-items: center; align-content: center; gap: 12px; padding: 56px 24px; text-align: center; }
+.newsletter-confirmed-mark { min-height: 44px; width: fit-content; display: inline-flex; align-items: center; justify-content: center; padding: 7px 16px; border-radius: 999px; background: var(--primary-card); color: var(--primary-contrast); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.newsletter-confirmed h1 { margin: 6px 0 0; font-family: var(--font-display); font-size: clamp(2rem, 6vw, 3.25rem); font-weight: 500; letter-spacing: -0.05em; line-height: 1.05; }
+.newsletter-confirmed > p:not(.eyebrow) { max-width: 480px; margin: 0; color: var(--muted); font-size: 1rem; line-height: 1.65; }
+.newsletter-confirmed .button { margin-top: 14px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+@media (max-width: 480px) { .page-main.newsletter-confirmed { width: 100%; } }
 .comparison-newsletter-signup { min-width: 0; }
 .comparison-newsletter-signup .newsletter-signup { padding: 14px 16px; background: color-mix(in srgb, var(--primary-soft) 22%, var(--surface)); box-shadow: none; }
 .comparison-newsletter-signup .newsletter-signup[data-compact='true'] { gap: 9px; }

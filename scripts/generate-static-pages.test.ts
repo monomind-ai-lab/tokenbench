@@ -101,6 +101,30 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
   });
 
+  it('publishes the standalone confirmation entry with transactional chrome and noindex metadata', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
+    outputRoots.push(root);
+
+    await generateStaticPages(root);
+
+    const confirmed = await readFile(join(root, 'newsletter', 'confirmed', 'index.html'), 'utf8');
+    expect(confirmed).toContain('<h1 id="newsletter-confirmed-heading">Your subscription is confirmed.</h1>');
+    expect(confirmed).toContain('The current TokenBench test cheatsheet will arrive by email.');
+    expect(confirmed).toContain('<meta name="robots" content="noindex,follow,max-image-preview:large">');
+    expect(confirmed).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/newsletter/confirmed/">');
+    expect(confirmed).toContain('class="transactional-page-shell"');
+    expect(confirmed).not.toContain('class="static-page-shell"');
+    expect(confirmed).not.toContain('<header class="top-header">');
+    expect(confirmed).not.toContain('<footer class="app-footer">');
+    expect(confirmed).toContain('<a class="button" href="/">Start Exploring</a>');
+    expect(confirmed.match(/<a\b/gu)).toHaveLength(1);
+    expect(confirmed).toContain('<script type="application/ld+json">');
+    expect(confirmed).toContain('"@type":"WebPage"');
+
+    const sitemap = await readFile(join(root, 'public', 'sitemaps', 'static.xml'), 'utf8');
+    expect(sitemap).not.toContain('/newsletter/confirmed/');
+  });
+
   it.each([
     {
       label: 'malicious markup',
@@ -172,7 +196,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(26);
+    expect(FIXED_ROUTES).toHaveLength(27);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

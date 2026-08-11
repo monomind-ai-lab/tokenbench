@@ -34,6 +34,7 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'tools' }, canonical: `${origin}/tools/` },
   { route: { kind: 'calculator' }, canonical: `${origin}/tools/subscriptions-vs-apis/` },
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
+  { route: { kind: 'newsletterConfirmed' }, canonical: `${origin}/newsletter/confirmed/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
   { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
@@ -111,6 +112,17 @@ describe('route metadata registry', () => {
       expect(page.openGraph.title).toBe(title);
       expect(page.twitter.title).toBe(title);
     }
+  });
+
+  it('publishes noindex confirmation metadata on the canonical confirmation path', () => {
+    const page = metadataForRoute({ kind: 'newsletterConfirmed' });
+
+    expect(page.canonical).toBe(`${origin}/newsletter/confirmed/`);
+    expect(page.openGraph.url).toBe(`${origin}/newsletter/confirmed/`);
+    expect(page.robots).toBe('noindex,follow');
+    expect(page.title).toContain('TokenBench');
+    expect(page.openGraph.title).toBe(page.title);
+    expect(page.twitter.title).toBe(page.title);
   });
 
   it('keeps dynamic comparison canonical and Open Graph URLs slashless', () => {

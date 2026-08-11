@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rootRenderer = vi.hoisted(() => vi.fn());
@@ -67,6 +69,24 @@ describe('browser entrypoint', () => {
     const root = document.getElementById('root')!;
     expect(root).toBeEmptyDOMElement();
     expect(createRootMock).toHaveBeenCalledWith(root);
+  });
+
+  it('mounts the standalone confirmation page without an application shell', async () => {
+    window.history.replaceState({}, '', '/newsletter/confirmed/');
+    document.body.innerHTML = '<div id="root"><div class="transactional-page-shell">Crawlable confirmation</div></div>';
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).not.toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    expect(createRootMock).toHaveBeenCalledTimes(1);
+
+    const rendered = (rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode; // mock captures the element main.tsx renders
+    const markup = renderToStaticMarkup(rendered);
+    expect(markup).toContain('Your subscription is confirmed.');
+    expect(markup).toContain('Start Exploring');
+    expect(markup).not.toMatch(/app-shell|top-header|app-footer/);
   });
 
   it('mounts the interactive BenchAlign methodology page from its fixed route', async () => {

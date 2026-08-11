@@ -9,6 +9,7 @@ export const ROUTE_PATHS = {
   compareHub: '/compare/',
   leaderboards: '/leaderboards/',
   methodologyBenchAlign: '/methodology/benchalign/',
+  newsletterConfirmed: '/newsletter/confirmed/',
 } as const;
 
 export type SiteNavigationPage = 'home' | 'calculator' | 'compare' | 'leaderboards' | 'guides';
@@ -166,6 +167,7 @@ export type AppRoute =
   | { kind: 'guides'; slug?: string }
   | { kind: 'compareHub' }
   | { kind: 'comparison'; pair: string }
+  | { kind: 'newsletterConfirmed' }
   | { kind: 'leaderboards' }
   | { kind: 'leaderboard'; key: LeaderboardKey }
   | { kind: 'redirect'; to: string }
@@ -190,6 +192,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
   { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
+  { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
   { id: 'leaderboards', pathname: ROUTE_PATHS.leaderboards, route: { kind: 'leaderboards' } },
   { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
 ];
@@ -229,6 +232,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
+    case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
     case 'leaderboards': return ROUTE_PATHS.leaderboards;
     case 'leaderboard': return LEADERBOARD_ROUTES[route.key].pathname;
     case 'redirect': return route.to;
@@ -245,6 +249,7 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.methodologyBenchAlign) return { kind: 'methodologyBenchAlign' };
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
+  if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
 
   if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };
