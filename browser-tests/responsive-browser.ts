@@ -317,7 +317,7 @@ async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, statu
   const catalogDelivery = catalogFixture.expectNextDelivery();
   await page.goto(CALCULATOR_PATH);
   await catalogDelivery;
-  if (expectCalculator) await expect(page.getByRole('heading', { name: /What does API usage cost/i })).toBeVisible({ timeout: 15_000 });
+  if (expectCalculator) await expect(page.getByRole('heading', { name: 'API-equivalent monthly cost' })).toBeVisible({ timeout: 15_000 });
 }
 
 async function openCodingLeaderboard(page: Page) {
@@ -429,9 +429,8 @@ test.describe('responsive calculator browser harness', () => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, modelOffers: [] }, 200, false);
 
-    await expect(page.getByText('No verified models for this provider')).toBeVisible({ timeout: 15_000 });
     const result = page.getByRole('region', { name: 'Calculated plan value' });
-    await expect(result.getByText('No verified models are available for this provider')).toBeVisible();
+    await expect(result.getByText('No verified models are available for this provider')).toBeVisible({ timeout: 15_000 });
     await expect(result).toContainText('Choose another provider or retry catalog refresh.');
   });
 
@@ -479,7 +478,7 @@ test.describe('responsive calculator browser harness', () => {
         for (const heading of [
           'Choose a provider and plan',
           'Choose the models you actually use',
-          'Describe your monthly workload',
+          'Describe your message-level workload',
           'Review the recommendation',
         ]) {
           await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
@@ -515,6 +514,8 @@ test.describe('responsive calculator browser harness', () => {
     test(`${viewport.width}px renders the expected mode without document overflow`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: 1000 });
       await openCalculator(page);
+      await page.getByText('Advanced model mapping', { exact: true }).click();
+      await expect(page.locator('.model-mix-details')).toHaveAttribute('open', '');
 
       await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', viewport.layout);
       const dimensions = await page.evaluate(() => ({
@@ -552,8 +553,9 @@ test.describe('responsive calculator browser harness', () => {
     test(`${viewport.width}px keyboard Tab reaches provider, plan, model, and workload controls with visible focus`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: 1000 });
       await openCalculator(page);
+      await page.getByText('Advanced model mapping', { exact: true }).click();
       await page.locator('body').click({ position: { x: 2, y: 2 } });
-      for (const selector of ['input[name="provider"]', 'input[name="plan"]', 'input[type="checkbox"]', '#monthly-tokens', 'input[type="range"]']) {
+      for (const selector of ['input[name="provider"]', 'input[name="plan"]', 'input[type="checkbox"]', '#conversations-per-day', 'input[type="range"]']) {
         expect(await tabTo(page, selector)).toEqual(expect.objectContaining({ outlineWidth: '3px', outlineStyle: 'solid' }));
       }
     });
@@ -615,7 +617,7 @@ test.describe('responsive calculator browser harness', () => {
 
       return {
         primaryBackground: getComputedStyle(document.querySelector('.value-summary-card') as Element).backgroundColor,
-        samples: [sample('a.evidence-link'), sample('.control-block legend'), sample('.choice-check'), sample('.field-label output')],
+        samples: [sample('a.evidence-link'), sample('.control-block legend'), sample('.choice-check'), sample('.workload-field label')],
       };
     });
 
@@ -719,7 +721,7 @@ test.describe('responsive calculator browser harness', () => {
     }))).toEqual({ marginTop: '0px', priority: 'important' });
   });
 
-  test('uses reference-matched outlined choices and selected preset states', async ({ page }) => {
+  test('uses reference-matched outlined choices and editable message-level workload controls', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 1000 });
     const providerBSourceId = 'provider-b-subscription';
     await openCalculator(page, {
@@ -769,17 +771,17 @@ test.describe('responsive calculator browser harness', () => {
 
     expect(choiceStyles.selectedRadius).toBe('4px');
     expect(choiceStyles.selectedShadow).toBe('none');
-    const monthlyUsage = page.getByLabel('Expected monthly usage');
-    const usagePosition = await page.getByText('Expected monthly usage').boundingBox();
-    const presetsPosition = await page.getByText('Presets', { exact: true }).boundingBox();
-    expect(usagePosition?.y).toBeLessThan(presetsPosition?.y ?? 0);
-    await expect(monthlyUsage).toHaveValue('10,000,000');
-    await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'true');
-    await page.getByRole('button', { name: 'Output-heavy' }).click();
-    await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByRole('button', { name: 'Output-heavy' })).toHaveAttribute('aria-pressed', 'true');
-    await monthlyUsage.fill('12345678');
-    await expect(monthlyUsage).toHaveValue('12,345,678');
+    await expect(page.getByRole('spinbutton', { name: 'Conversations per day' })).toHaveValue('10');
+    await expect(page.getByRole('spinbutton', { name: 'Messages per conversation' })).toHaveValue('8');
+    const outputTokens = page.getByRole('spinbutton', { name: 'Average output tokens per message' });
+    await expect(outputTokens).toHaveValue('250');
+    await outputTokens.fill('400');
+    await expect(outputTokens).toHaveValue('400');
+    const advanced = page.locator('.model-mix-details');
+    await expect(advanced).not.toHaveAttribute('open', '');
+    await page.getByText('Advanced model mapping', { exact: true }).click();
+    await expect(advanced).toHaveAttribute('open', '');
+    await expect(page.getByRole('status', { name: 'Default API mapping' })).toContainText('Advanced override is active.');
   });
 
   test('renders loading, empty, error, bootstrap, and stale catalog states', async ({ page }) => {
@@ -792,7 +794,7 @@ test.describe('responsive calculator browser harness', () => {
     });
     await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /What does API usage cost/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'API-equivalent monthly cost' })).toBeVisible({ timeout: 15_000 });
 
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, plans: [], modelOffers: [] }, 200, false);
@@ -2440,18 +2442,17 @@ test.describe('keyboard and chart accessibility regressions', () => {
     const chart = page.getByRole('img', { name: /API-equivalent value trend/i });
     await expect(chart).toBeVisible();
 
-    // The default browser fixture selects all three Provider A routes at a
-    // 10M-token, 50/50 workload. Assert the rendered current bar and the
-    // matching API-equivalent card before reading the accessible description;
-    // the subscription-price card is intentionally not the chart value.
+    // The default message-level workload derives 2M directional tokens and a
+    // $7 direct-provider API-equivalent cost. Assert the rendered current bar
+    // and matching result card before reading the accessible description.
     const currentColumn = page.locator('.chart-column-current');
     const apiEquivalentMetric = page.locator('.value-metric').filter({
-      has: page.getByRole('heading', { name: 'What does API usage cost?', exact: true }),
+      has: page.getByRole('heading', { name: 'API-equivalent monthly cost', exact: true }),
     });
-    await expect(currentColumn.locator('.chart-bar')).toHaveAttribute('title', '10.0M: $44.16');
-    await expect(currentColumn.locator(':scope > span').last()).toHaveText('10.0M');
+    await expect(currentColumn.locator('.chart-bar')).toHaveAttribute('title', '2.0M: $7.00');
+    await expect(currentColumn.locator(':scope > span').last()).toHaveText('2.0M');
     await expect(apiEquivalentMetric).toHaveCount(1);
-    await expect(apiEquivalentMetric.locator('strong')).toHaveText('$44.16');
-    await expect(chart).toHaveAttribute('aria-label', 'API-equivalent value trend by expected monthly tokens. Current mix: 10.0M tokens and $44.16 API-equivalent value.');
+    await expect(apiEquivalentMetric.locator('strong')).toHaveText('$7.00');
+    await expect(chart).toHaveAttribute('aria-label', 'API-equivalent value trend by monthly tokens. Current workload: 2.0M tokens and $7.00 API-equivalent value.');
   });
 });
