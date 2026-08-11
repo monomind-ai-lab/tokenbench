@@ -47,6 +47,78 @@ async function getLocalResponse(origin: string, pathname: string, headers: Recor
 }
 
 describe('local Vite benchmark preview API', () => {
+  it('serves a bounded weekly top 100 while retaining searchable current and archived models', async () => {
+    const { server, origin } = await startLocalPreviewServer();
+    try {
+      const [weekly, overflow, retained] = await Promise.all([
+        getLocalResponse(origin, '/api/benchmarks/models?limit=100'),
+        getLocalResponse(origin, '/api/benchmarks/models?q=Sample%20Model%20101&limit=100'),
+        getLocalResponse(origin, '/api/benchmarks/models?q=Retained%20Fixture&limit=100'),
+      ]);
+
+      expect(weekly.status).toBe(200);
+      expect(weekly.contentType).toContain('application/json');
+      const weeklyBody = JSON.parse(weekly.body) as {
+        data: { models: Array<{ displayName: string; weeklyRank: number | null; status: string }> };
+      };
+      expect(weeklyBody.data.models).toHaveLength(100);
+      expect(weeklyBody.data.models[0]).toMatchObject({ displayName: 'GPT-5.6 Sol', weeklyRank: 1, status: 'current' });
+      expect(weeklyBody.data.models.map((model) => model.weeklyRank)).toEqual(Array.from({ length: 100 }, (_, index) => index + 1));
+
+      expect(JSON.parse(overflow.body)).toMatchObject({
+        data: { models: [{ displayName: 'Sample Model 101', weeklyRank: null, status: 'current' }] },
+      });
+      expect(JSON.parse(retained.body)).toMatchObject({
+        data: { models: [{ displayName: 'Retained Fixture', weeklyRank: null, status: 'archived' }] },
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('serves crawlable directory and profile documents with canonical SEO and durable edge states', async () => {
+    const { server, origin } = await startLocalPreviewServer();
+    try {
+      const [directory, current, retained, alias, missing] = await Promise.all([
+        getLocalResponse(origin, '/models/'),
+        getLocalResponse(origin, '/models/gpt-5-6-sol/'),
+        getLocalResponse(origin, '/models/retained-fixture/'),
+        getLocalResponse(origin, '/models/legacy-sol/'),
+        getLocalResponse(origin, '/models/unknown-fixture/'),
+      ]);
+
+      expect(directory.status).toBe(200);
+      expect(directory.contentType).toContain('text/html');
+      expect(directory.body).toContain('<h1>Popular AI models</h1>');
+      expect(directory.body).toContain('GPT-5.6 Sol');
+      expect(directory.body).toContain('id="models-initial-data"');
+      expect(directory.body).toContain('"@type":"CollectionPage"');
+      expect(directory.body).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/models/">');
+
+      expect(current.status).toBe(200);
+      expect(current.body).toContain('GPT-5.6 Sol');
+      expect(current.body).toContain('77.95');
+      expect(current.body).toContain('id="model-profile-initial-data"');
+      expect(current.body).toContain('"@type":"Dataset"');
+      expect(current.body).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/models/gpt-5-6-sol/">');
+
+      expect(retained.status).toBe(200);
+      expect(retained.body).toContain('Retained Fixture');
+      expect(retained.body).toContain('Historical profile');
+      expect(retained.body).toContain('prior valid revision');
+
+      expect(alias.status).toBe(308);
+      expect(alias.headers.location).toBe('/models/gpt-5-6-sol/');
+
+      expect(missing.status).toBe(404);
+      expect(missing.headers['x-robots-tag']).toBe('noindex, follow');
+      expect(missing.body).toContain('Model profile not found');
+      expect(missing.body).not.toContain('model-profile-initial-data');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('serves clearly labeled sample summary and coding rows through the public JSON contracts', async () => {
     const { server, origin } = await startLocalPreviewServer();
     try {

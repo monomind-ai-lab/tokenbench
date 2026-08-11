@@ -483,6 +483,44 @@ match, retain the prior active revision and reconcile source identities. The
 strict one-to-one join is intentional; do not skip ambiguous rows or publish a
 partial bundle as an incident workaround.
 
+### Release 3 durable model directory and profile gate
+
+Release 3 must use this order from one committed, locally verified tree. Stop
+at the first failure; do not deploy Pages around a failed migration or partial
+model publication.
+
+1. Run `npm test`, `npm run lint`, `npm run build`, and
+   `npm run test:browser:local-preview`. The browser gate must cover the weekly
+   top 100, a searchable 101st current model, one retained archived model,
+   alias redirect, missing radar/category facts, a conflicting price route,
+   prior-valid profile fallback, true 404, initial server HTML, canonical and
+   social metadata, JSON-LD, keyboard semantics, console errors, and compact
+   horizontal overflow.
+2. Export the production D1 database to a new timestamped path outside Git and
+   record the pre-migration active revision and model count using the exact
+   commands in [catalog-deployment.md](catalog-deployment.md).
+3. Apply `0009_model_directory.sql` to the isolated preview database first,
+   then apply the additive migration to production. Confirm the migration is
+   listed exactly once before deploying the benchmark Worker.
+4. Deploy `workers/benchmark-ingest` from the same commit and trigger exactly
+   one authorized scheduled/dashboard ingestion. The Worker intentionally has
+   no public refresh endpoint.
+5. Require zero current directory rows without their selected profile, one
+   latest current UTC-week header, unique contiguous ranks
+   `1..min(100, eligible public rows)`, and recorded current, archived, profile,
+   week, and rank counts. Preserve the prior active revision and stop if any
+   invariant fails.
+6. Deploy Pages only after those checks pass. Verify `/models/`, at least two
+   current profiles, one retained archived profile, alias canonicalization, a
+   true unknown-slug 404, `/sitemaps/models.xml`, directory/profile canonical,
+   Open Graph, Twitter, WebPage/CollectionPage/ItemList/Dataset metadata, model
+   links from Home/leaderboards/comparisons, desktop and compact layout, and no
+   browser console or request errors.
+7. Record the backup path reference (never its contents), migration output,
+   Worker version, controlled-ingestion time/revision/counts, Pages deployment
+   URL/version, production HTTP/browser observations, released commit, and
+   rollback decision in the Release 3 receipt before the final evidence push.
+
 ### Release 1 production receipt — 2026-08-11
 
 - Git commit: `d83dd57f281edc32908b8798e115a3feb00ec3ae` on pushed `main`.

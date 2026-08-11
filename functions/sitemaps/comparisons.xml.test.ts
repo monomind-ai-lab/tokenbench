@@ -292,7 +292,7 @@ describe('comparison sitemap', () => {
       readFile(resolve(process.cwd(), 'public/robots.txt'), 'utf8'),
     ]);
 
-    expect(index).toBe(`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <sitemap><loc>${ORIGIN}/sitemaps/static.xml</loc></sitemap>\n  <sitemap><loc>${ORIGIN}/sitemaps/comparisons.xml</loc></sitemap>\n</sitemapindex>\n`);
+    expect(index).toBe(`<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <sitemap><loc>${ORIGIN}/sitemaps/static.xml</loc></sitemap>\n  <sitemap><loc>${ORIGIN}/sitemaps/comparisons.xml</loc></sitemap>\n  <sitemap><loc>${ORIGIN}/sitemaps/models.xml</loc></sitemap>\n</sitemapindex>\n`);
     expect(robots).toBe(`User-agent: *\nAllow: /\n\nSitemap: ${ORIGIN}/sitemap.xml\n`);
   });
 });

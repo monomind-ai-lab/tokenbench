@@ -45,6 +45,54 @@ comparison indexes. Response bodies are split on Unicode boundaries below D1's
 row limit. Fresh and stale variants are written completely before the pointer
 moves; only the active and immediately previous cache revisions are retained.
 
+Migration [../migrations/0009_model_directory.sql](../migrations/0009_model_directory.sql)
+adds the durable model directory, immutable validated profile snapshots,
+revision membership, slug aliases, and immutable weekly top-100 ownership. It
+is additive and must be applied before deploying benchmark-ingest code that
+publishes these records. Never deploy the publishing Worker first: an otherwise
+valid benchmark publication must not fail after staging because its durable
+tables are absent.
+
+For Release 3, first apply the full migration sequence to the isolated local
+preview database and run the deterministic directory/profile gate:
+
+~~~sh
+npx wrangler d1 migrations apply ai-plan-catalog --local
+npm test -- migrations/0009_model_directory.test.ts workers/benchmark-ingest/src/model-directory-publication.test.ts
+npm run test:browser:local-preview -- --grep "Popular Models|model profile|retained model"
+~~~
+
+Before the authorized remote migration, export D1 to a timestamped path outside
+the repository and record the active revision/model baseline. Do not overwrite
+an earlier backup:
+
+~~~sh
+: "${TOKENBENCH_D1_BACKUP_PATH:?set a new backup path outside the repository}"
+npx wrangler d1 export ai-plan-catalog --remote --output "$TOKENBENCH_D1_BACKUP_PATH"
+npx wrangler d1 execute ai-plan-catalog --remote --command "SELECT active_revision, updated_at FROM benchmark_publication_state WHERE singleton = 1"
+npx wrangler d1 execute ai-plan-catalog --remote --command "SELECT COUNT(*) AS active_model_count FROM benchmark_models WHERE revision = (SELECT active_revision FROM benchmark_publication_state WHERE singleton = 1)"
+npx wrangler d1 migrations list ai-plan-catalog --remote
+npx wrangler d1 migrations apply ai-plan-catalog --remote
+~~~
+
+Stop unless migration history shows `0009_model_directory.sql` exactly once.
+After the changed Worker is deployed and one authorized scheduled ingestion
+finishes, record these bounded integrity checks:
+
+~~~sh
+npx wrangler d1 execute ai-plan-catalog --remote --command "SELECT status, COUNT(*) AS models FROM benchmark_model_directory GROUP BY status ORDER BY status"
+npx wrangler d1 execute ai-plan-catalog --remote --command "SELECT COUNT(*) AS profiles FROM benchmark_model_profile_snapshots"
+npx wrangler d1 execute ai-plan-catalog --remote --command "SELECT COUNT(*) AS missing_current_profiles FROM benchmark_model_directory AS d LEFT JOIN benchmark_model_profile_snapshots AS p ON p.model_key = d.model_key AND p.revision = d.latest_profile_revision WHERE d.status = 'current' AND p.model_key IS NULL"
+npx wrangler d1 execute ai-plan-catalog --remote --command "SELECT week_start, benchmark_revision, methodology_version FROM benchmark_popular_model_weeks ORDER BY week_start DESC LIMIT 2"
+npx wrangler d1 execute ai-plan-catalog --remote --command "WITH latest AS (SELECT week_start FROM benchmark_popular_model_weeks ORDER BY week_start DESC LIMIT 1) SELECT COUNT(*) AS ranked_models, MIN(rank) AS first_rank, MAX(rank) AS last_rank, COUNT(DISTINCT model_key) AS distinct_models FROM benchmark_popular_model_ranks WHERE week_start = (SELECT week_start FROM latest)"
+~~~
+
+`missing_current_profiles` must be zero. The newest week must be the one current
+UTC week header, its ranks must be contiguous from 1 through
+`min(100, eligible public rows)`, and `ranked_models` must equal
+`distinct_models`. A mismatch leaves the prior Pages release in service while
+the last good published benchmark revision remains active.
+
 Before deploying changed Pages or ingestion code, record operator-approved
 evidence that both 0004_benchmarks.sql and 0005_api_response_cache.sql appear
 exactly once in remote migration history. Do not attempt a destructive schema
@@ -175,8 +223,12 @@ The browser reads published data through Pages APIs:
 | GET /api/benchmarks | Benchmark summary, source availability, leaderboard availability, and compare-directory data for the active benchmark revision. |
 | GET /api/benchmarks/leaderboards/:key | Raw materialized default page plus bounded materialized pagination for every valid limit and cursor, with source attribution and ETag support. |
 | GET /api/benchmarks/models/:slug | Targeted evidence, metrics, route pricing facts, and related comparison pairs for one known model. |
+| GET /api/benchmarks/models | Bounded durable directory query for the current weekly top 100 plus retained-model search and filters. |
+| /models/ | Canonical server-rendered weekly directory with validated browser hydration and retained-model search. |
+| /models/:slug/ | Canonical server-rendered current or archived model profile; aliases redirect and unknown slugs return a true noindex 404. |
 | /compare/:pair/ | A Pages Function target for canonical, server-rendered comparison pages. Valid non-indexable pairs remain useful with noindex,follow; reverse pairs redirect and invalid pairs return 404. |
 | /sitemaps/comparisons.xml | A dynamic sitemap target containing only canonical, indexable comparison pairs. |
+| /sitemaps/models.xml | A dynamic sitemap of current and archived models whose latest valid durable profile is readable. |
 
 ### Last-good response recovery and safe logs
 

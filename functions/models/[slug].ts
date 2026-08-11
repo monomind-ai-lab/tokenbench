@@ -133,7 +133,8 @@ function headMarkup(title: string, description: string, canonical: string, robot
     ${extra}`;
 }
 
-function shellDocument(viewModel: ModelProfileViewModel): string {
+/** Shared with the local preview harness so browser tests exercise production SSR markup. */
+export function renderModelProfileDocument(viewModel: ModelProfileViewModel): string {
   const page = metadata(viewModel);
   const root = renderToString(createElement(ModelProfileApp, { viewModel }));
   const scripts = structuredData(viewModel, page.title, page.description, page.canonical)
@@ -153,7 +154,7 @@ function shellDocument(viewModel: ModelProfileViewModel): string {
 </html>\n`;
 }
 
-function statusDocument(status: 404 | 503, slug: string | null): string {
+export function renderModelProfileStatusDocument(status: 404 | 503, slug: string | null): string {
   const unavailable = status === 503;
   const title = `${unavailable ? 'Model profile temporarily unavailable' : 'Model profile not found'} | ${SITE_CONFIG.name}`;
   const description = unavailable
@@ -165,7 +166,7 @@ function statusDocument(status: 404 | 503, slug: string | null): string {
 }
 
 function statusResponse(status: 404 | 503, slug: string | null): Response {
-  return new Response(statusDocument(status, slug), {
+  return new Response(renderModelProfileStatusDocument(status, slug), {
     status,
     headers: {
       'Cache-Control': status === 503 ? 'no-store' : 'public, max-age=300',
@@ -190,7 +191,7 @@ export async function onRequestGet({ request, env, params }: {
       return new Response(null, { status: 308, headers: { Location: modelPath(result.directory.canonicalSlug) } });
     }
     const viewModel = viewModelFor(result, Date.now());
-    return new Response(shellDocument(viewModel), {
+    return new Response(renderModelProfileDocument(viewModel), {
       headers: {
         'Cache-Control': 'public, max-age=0, must-revalidate',
         'Content-Type': 'text/html; charset=utf-8',

@@ -13,6 +13,13 @@ import { DECISION_PICK_CATEGORIES, type DecisionPickEntry } from '../src/benchma
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult } from '../src/frontend/use-benchmarks';
 import { LEADERBOARD_ROUTES } from '../src/routing/routes';
 
+export {
+  LOCAL_MODEL_DIRECTORY_ENTRIES,
+  LOCAL_MODEL_SLUG_ALIASES,
+  localModelDirectoryEnvelope,
+  localModelProfile,
+} from './model-directory-fixtures';
+
 export const HANDLER_COMPARISON_PATH = '/compare/alpha-vs-beta';
 export const HANDLER_SPARSE_COMPARISON_PATH = '/compare/canvas-vs-alpha';
 

@@ -2,6 +2,11 @@ import { createHash } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import {
+  LOCAL_MODEL_SLUG_ALIASES,
+  localModelDirectoryEnvelope,
+  localModelProfile,
+} from '../browser-tests/model-directory-fixtures';
+import {
   attributionForAllSources,
   benchmarkEnvelope,
   decodeOpaqueValue,
@@ -30,12 +35,23 @@ import {
 } from '../src/benchmarks/leaderboard-query';
 import { isValidLeaderboardCursor } from '../src/benchmarks/leaderboard-cursor';
 import { leaderboardCsv } from '../src/benchmarks/leaderboard-csv';
+import {
+  DEFAULT_MODEL_DIRECTORY_QUERY,
+  modelDirectoryQueryFromSearch,
+  type ModelDirectoryQueryState,
+} from '../src/frontend/model-directory-state';
 import { buildLeaderboard, LEADERBOARD_DEFINITIONS, type LeaderboardResult } from '../src/benchmarks/leaderboards';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../src/routing/routes';
+import { renderModelDirectoryDocument } from '../functions/models/index';
+import {
+  renderModelProfileDocument,
+  renderModelProfileStatusDocument,
+} from '../functions/models/[slug]';
 
 const SAMPLE_TIMESTAMP = '2000-01-01T00:00:00.000Z';
 const SAMPLE_REVISION_ID = 'local-sample-preview-r1';
 const LOCAL_PREVIEW_STATE_HEADER = 'x-tokenbench-preview-state';
+const MODEL_DIRECTORY_PARAMETERS = new Set(['q', 'creator', 'sourceType', 'evidenceStatus', 'status', 'limit', 'cursor']);
 
 /** Visible on every local response and in the existing stale-data UI state. */
 export const LOCAL_SAMPLE_NOTICE = 'LOCAL SAMPLE PREVIEW — synthetic rows for local UI review only. They are not current TokenBench rankings or a published D1 revision; live data requires Cloudflare Pages with CATALOG_DB.';
@@ -482,6 +498,95 @@ function writeJson(response: ServerResponse, status: number, body: unknown, head
   response.end(headOnly ? undefined : payload);
 }
 
+function localizeSsrAssets(document: string): string {
+  return document
+    .replaceAll('/assets/tokenbench.css', '/src/index.css')
+    .replaceAll('/assets/main.js', '/src/main.tsx');
+}
+
+function writeHtml(
+  response: ServerResponse,
+  status: number,
+  body: string,
+  headOnly: boolean,
+  headers: Readonly<Record<string, string>> = {},
+): void {
+  response.statusCode = status;
+  response.setHeader('Cache-Control', status >= 500 ? 'no-store' : 'public, max-age=0, must-revalidate');
+  response.setHeader('Content-Type', 'text/html; charset=utf-8');
+  response.setHeader('X-TokenBench-Preview-Data', 'local-sample');
+  for (const [name, value] of Object.entries(headers)) response.setHeader(name, value);
+  response.end(headOnly ? undefined : localizeSsrAssets(body));
+}
+
+function writeRedirect(response: ServerResponse, status: 301 | 308, location: string): void {
+  response.statusCode = status;
+  response.setHeader('Cache-Control', 'public, max-age=3600');
+  response.setHeader('Location', location);
+  response.end();
+}
+
+function localModelDirectoryRequest(url: URL): {
+  readonly query: ModelDirectoryQueryState;
+  readonly limit: number;
+} | null {
+  for (const [key] of url.searchParams) {
+    if (!MODEL_DIRECTORY_PARAMETERS.has(key) || url.searchParams.getAll(key).length !== 1) return null;
+  }
+  const limitValue = url.searchParams.get('limit');
+  const limit = limitValue === null ? 100 : Number(limitValue);
+  if (!/^[1-9]\d{0,2}$/.test(limitValue ?? '100') || !Number.isSafeInteger(limit) || limit > 100) return null;
+  if (url.searchParams.has('cursor')) return null;
+  const query = modelDirectoryQueryFromSearch(url.searchParams);
+  const canonicalSearch = url.searchParams.get('q');
+  if (canonicalSearch !== null && canonicalSearch.trim().length > 80) return null;
+  return { query, limit };
+}
+
+function serveLocalModelDocument(
+  url: URL,
+  response: ServerResponse,
+  headOnly: boolean,
+): boolean {
+  if (url.pathname === '/models') {
+    writeRedirect(response, 301, '/models/');
+    return true;
+  }
+  if (url.pathname === '/models/') {
+    const parsed = localModelDirectoryRequest(url) ?? { query: DEFAULT_MODEL_DIRECTORY_QUERY, limit: 100 };
+    const envelope = localModelDirectoryEnvelope(parsed.query, parsed.limit);
+    writeHtml(response, 200, renderModelDirectoryDocument(envelope, { ...parsed.query, limit: parsed.limit, cursor: null }), headOnly, {
+      'X-Robots-Tag': 'index, follow',
+    });
+    return true;
+  }
+  const match = /^\/models\/([^/]+)\/?$/u.exec(url.pathname);
+  if (!match) return false;
+  let slug: string;
+  try {
+    slug = decodeURIComponent(match[1]!);
+  } catch {
+    writeHtml(response, 404, renderModelProfileStatusDocument(404, null), headOnly, { 'X-Robots-Tag': 'noindex, follow' });
+    return true;
+  }
+  const canonicalAlias = LOCAL_MODEL_SLUG_ALIASES.get(slug);
+  if (canonicalAlias) {
+    writeRedirect(response, 308, `/models/${canonicalAlias}/`);
+    return true;
+  }
+  const profile = localModelProfile(slug);
+  if (!profile) {
+    writeHtml(response, 404, renderModelProfileStatusDocument(404, slug), headOnly, { 'X-Robots-Tag': 'noindex, follow' });
+    return true;
+  }
+  if (!url.pathname.endsWith('/')) {
+    writeRedirect(response, 308, `/models/${profile.directory.canonicalSlug}/`);
+    return true;
+  }
+  writeHtml(response, 200, renderModelProfileDocument(profile), headOnly, { 'X-Robots-Tag': 'index, follow' });
+  return true;
+}
+
 function methodologyHeader(key: LeaderboardKey): string {
   switch (LEADERBOARD_DEFINITIONS[key].kind) {
     case 'benchlm':
@@ -514,7 +619,8 @@ function writeCsv(response: ServerResponse, key: LeaderboardKey, body: string, h
 function localPreviewMiddleware(request: IncomingMessage, response: ServerResponse, next: () => void): void {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
-  if (url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
+  const isModelDocument = url.pathname === '/models' || url.pathname === '/models/' || /^\/models\/[^/]+\/?$/u.test(url.pathname);
+  if (!isModelDocument && url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
     next();
     return;
   }
@@ -523,6 +629,7 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
     return;
   }
   const headOnly = method === 'HEAD';
+  if (isModelDocument && serveLocalModelDocument(url, response, headOnly)) return;
   const previewState = request.headers[LOCAL_PREVIEW_STATE_HEADER];
   if (previewState === '503') {
     writeJson(response, 503, { error: 'Local preview benchmark refresh unavailable.' }, headOnly);
@@ -534,6 +641,16 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
   }
   if (url.pathname === '/api/benchmarks') {
     writeJson(response, 200, sampleSummaryResponse(), headOnly);
+    return;
+  }
+  if (url.pathname === '/api/benchmarks/models') {
+    const parsed = localModelDirectoryRequest(url);
+    writeJson(
+      response,
+      parsed === null ? 400 : 200,
+      parsed === null ? { error: 'Invalid sample model directory request' } : localModelDirectoryEnvelope(parsed.query, parsed.limit),
+      headOnly,
+    );
     return;
   }
   const csvMatch = /^\/api\/benchmarks\/leaderboards\/([^/]+)\/csv$/u.exec(url.pathname);

@@ -98,7 +98,8 @@ function browserQuery(query: ModelDirectoryQuery): ModelDirectoryQueryState {
   return { q: query.q, creator: query.creator, sourceType: query.sourceType, evidenceStatus: query.evidenceStatus, status: query.status };
 }
 
-function shellDocument(envelope: ModelDirectoryEnvelope, query: ModelDirectoryQuery): string {
+/** Shared with the local preview harness so browser tests exercise production SSR markup. */
+export function renderModelDirectoryDocument(envelope: ModelDirectoryEnvelope, query: ModelDirectoryQuery): string {
   const metadata = metadataForRoute({ kind: 'models' });
   const root = renderToString(createElement(ModelsApp, { initialEnvelope: envelope, initialQuery: browserQuery(query) }));
   const scripts = structuredData(envelope, metadata.canonical, metadata.title, metadata.description)
@@ -175,7 +176,7 @@ export async function onRequestGet({ request, env }: { request: Request; env: Be
   }
   try {
     const envelope = await readModelDirectory(env.CATALOG_DB, query);
-    return new Response(shellDocument(envelope, query), {
+    return new Response(renderModelDirectoryDocument(envelope, query), {
       headers: { 'Cache-Control': 'public, max-age=0, must-revalidate', 'Content-Type': 'text/html; charset=utf-8', 'X-Robots-Tag': 'index, follow' },
     });
   } catch {
