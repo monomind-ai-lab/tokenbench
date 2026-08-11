@@ -40,6 +40,13 @@ export interface BenchmarkFallbackOptions {
   readonly unavailable: () => Response;
   readonly log?: (entry: BenchmarkFallbackLog) => void;
   readonly now?: number;
+  /**
+   * Additional cache keys probed after the primary `cacheKey` when the active
+   * revision reconstruction fails. Lets a non-materialized request fall back to
+   * a sibling materialized stale projection (e.g. archived reads falling back to
+   * the current complete projection) instead of 503.
+   */
+  readonly historicalCacheKeys?: readonly string[];
 }
 
 function safeErrorClass(error: unknown): string {
@@ -105,14 +112,21 @@ export async function serveBenchmarkWithFallback(options: BenchmarkFallbackOptio
   }
 
   let historicalErrorClass: string | null = null;
-  try {
-    const cached = await readNewestCompleteApiResponseCache(options.db, 'benchmarks', options.cacheKey);
-    if (cached) {
-      emit(options, 'benchmark_stale_fallback_selected', 'historical-cache', null, true, cached.revision);
-      return cachedApiResponse(options.request, cached);
+  const historicalKeys = [options.cacheKey, ...(options.historicalCacheKeys ?? [])];
+  for (const historicalKey of historicalKeys) {
+    try {
+      const cached = await readNewestCompleteApiResponseCache(
+        options.db,
+        'benchmarks',
+        historicalKey,
+      );
+      if (cached) {
+        emit(options, 'benchmark_stale_fallback_selected', 'historical-cache', null, true, cached.revision);
+        return cachedApiResponse(options.request, cached);
+      }
+    } catch (error) {
+      historicalErrorClass = safeErrorClass(error);
     }
-  } catch (error) {
-    historicalErrorClass = safeErrorClass(error);
   }
 
   emit(options, 'benchmark_unavailable', 'historical-cache', historicalErrorClass, false);

@@ -137,6 +137,41 @@ describe('benchmark response fallback controller', () => {
     }));
   });
 
+  it('serves the stale complete price-performance projection when active reconstruction fails', async () => {
+    const completeProjectionRow = {
+      revision: 'benchmark-rev-41',
+      variant: 'stale',
+      chunk_index: 0,
+      etag: '"benchmark-price-performance-stale"',
+      body: '{"revision":"benchmark-rev-41","freshness":{"status":"stale"},"data":{"scoreMethodology":{"overall":"Overall"},"costDefinitions":{"output":"Published output USD per one million tokens","blended3To1":"(3 × input USD/M + output USD/M) / 4"},"capabilities":{"scoreLanes":["overall"],"costBases":["output","blended-3-1"],"creators":[],"sourceTypes":[],"evidenceStatuses":[],"statuses":[]},"points":[]}}',
+    };
+    const logs: BenchmarkFallbackLog[] = [];
+    const response = await serveBenchmarkWithFallback({
+      request: request(),
+      endpoint: 'price-performance',
+      queryId: 'price-performance:current',
+      cacheKey: 'price-performance:complete:v1',
+      correlationId: 'request-pp-1',
+      db: database({ historicalRows: [completeProjectionRow] }),
+      reconstruct: async () => { throw new TypeError('private archived details'); },
+      unavailable,
+      log: (entry) => logs.push(entry),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      revision: 'benchmark-rev-41',
+      freshness: { status: 'stale' },
+    });
+    expect(logs).toContainEqual(expect.objectContaining({
+      event: 'benchmark_stale_fallback_selected',
+      stage: 'historical-cache',
+      fallbackRevision: 'benchmark-rev-41',
+      fallbackSelected: true,
+    }));
+    expect(JSON.stringify(logs)).not.toContain('private archived details');
+  });
+
   it('preserves exact stale ETag 304 behavior', async () => {
     const response = await serveBenchmarkWithFallback({
       request: request({ 'If-None-Match': staleRow.etag }),

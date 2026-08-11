@@ -32,3 +32,8 @@ export function benchmarkLeaderboardProjectionCacheKey(
 ): string {
   return `leaderboard-projection:${parameters.key}:${parameters.profile}:${parameters.includeEstimated ? '1' : '0'}`;
 }
+
+/** The materialized complete current price-performance projection. */
+export function benchmarkPricePerformanceProjectionCacheKey(): string {
+  return 'price-performance:complete:v1';
+}

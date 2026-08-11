@@ -1442,6 +1442,22 @@ describe('atomic benchmark ingestion', () => {
       leaderboard: { profile: 'balanced' },
       entries: expect.any(Array),
     });
+    const pricePerformanceFresh = joinedCachedResponse(chunks, 'price-performance:complete:v1', 'fresh');
+    const pricePerformanceStale = joinedCachedResponse(chunks, 'price-performance:complete:v1', 'stale');
+    expect(pricePerformanceFresh).toBeDefined();
+    expect(pricePerformanceFresh?.body).toBeDefined();
+    const pricePerformanceBody = JSON.parse(pricePerformanceFresh?.body ?? '') as {
+      freshness: { status: string };
+      data: { scoreMethodology: unknown; costDefinitions: unknown; capabilities: unknown; points: unknown[] };
+    };
+    expect(pricePerformanceBody.freshness.status).toBe('fresh');
+    expect(pricePerformanceBody.data.scoreMethodology).toBeDefined();
+    expect(pricePerformanceBody.data.capabilities).toBeDefined();
+    expect(Array.isArray(pricePerformanceBody.data.points)).toBe(true);
+    expect(JSON.parse(pricePerformanceStale?.body ?? '')).toMatchObject({
+      revision: result.revision,
+      freshness: { status: 'stale' },
+    });
     expect(summaryFresh.etag).not.toBe(summaryStale.etag);
     expect(db.state.publicationStatements
       .filter((statement) => statement.sql.includes('INSERT INTO api_response_entries'))

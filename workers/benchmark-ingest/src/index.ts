@@ -27,14 +27,20 @@ import {
   BENCHMARK_SUMMARY_CACHE_KEY,
   benchmarkLeaderboardCacheKey,
   benchmarkLeaderboardProjectionCacheKey,
+  benchmarkPricePerformanceProjectionCacheKey,
 } from '../../../src/benchmarks/api-response-cache-keys';
 import { splitApiResponseBody } from '../../../src/cache/api-response-chunks';
 import { COMPARISON_ALLOWLIST } from '../../../src/benchmarks/comparison-allowlist';
 import { createLeaderboardQueryCapabilities } from '../../../src/benchmarks/leaderboard-query';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
 import { LEADERBOARD_DEFINITIONS } from '../../../src/benchmarks/leaderboards';
+import { buildPricePerformanceProjection } from '../../../src/benchmarks/price-performance';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/routes';
 import { WORKLOAD_PROFILES, type WorkloadProfile } from '../../../src/benchmarks/value';
+import {
+  PRICE_PERFORMANCE_CACHE_PARAMETERS,
+  pricePerformanceEnvelopeData,
+} from '../../../functions/_shared/price-performance-db';
 import {
   attributionForAllSources,
   attributionForEvidence,
@@ -2077,6 +2083,20 @@ function materializedBenchmarkApiResponses(snapshot: ActiveBenchmarkSnapshot): r
     summaryParameters,
     benchmarkEnvelope(snapshot, fresh, attributionForAllSources(snapshot), summary),
     benchmarkEnvelope(snapshot, stale, attributionForAllSources(snapshot), summary),
+  );
+
+  const pricePerformanceProjection = buildPricePerformanceProjection({
+    models: snapshot.models,
+    metrics: snapshot.metrics,
+    priceChecks: snapshot.priceChecks,
+  });
+  const pricePerformanceData = pricePerformanceEnvelopeData(pricePerformanceProjection.points);
+  const pricePerformanceAttribution = attributionForAllSources(snapshot);
+  response(
+    benchmarkPricePerformanceProjectionCacheKey(),
+    PRICE_PERFORMANCE_CACHE_PARAMETERS,
+    benchmarkEnvelope(snapshot, fresh, pricePerformanceAttribution, pricePerformanceData),
+    benchmarkEnvelope(snapshot, stale, pricePerformanceAttribution, pricePerformanceData),
   );
 
   const derived = new Map<string, ReturnType<typeof materializeLeaderboard>>();
