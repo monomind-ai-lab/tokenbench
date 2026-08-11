@@ -33,6 +33,12 @@ const beta = {
 };
 
 describe('catalog calculator', () => {
+  const verifiedEvidence = {
+    status: 'verified' as const,
+    boundType: 'hard_max' as const,
+    dimensions: [{ metric: 'credits' as const, max: 10_000_000, unit: 'tokens', window: 'monthly' as const }],
+    source: { url: 'https://example.test/plan', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'high' as const },
+  };
   it('calculates a weighted input/output model cost using integer micro-dollars', () => {
     expect(weightedModelCost([
       { model: alpha, shareBasisPoints: 7_500 },
@@ -77,19 +83,19 @@ describe('catalog calculator', () => {
 
   it('recommends the lowest eligible workload cost instead of the cheapest variable subscription', () => {
     expect(recommendCostFirst([
-      { id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'rolling_limit', description: 'Rolling limit' }, supportedModelIds: ['gpt-alpha'] },
-      { id: 'anthropic:pro', monthlyCostMicroDollars: 25_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 }, supportedModelIds: ['gpt-alpha'] },
+      { id: 'openai:plus', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'rolling_limit', description: 'Rolling limit' }, entitlementEvidence: { ...verifiedEvidence, status: 'dynamic_unknown' }, supportedModelIds: ['gpt-alpha'] },
+      { id: 'anthropic:pro', monthlyCostMicroDollars: 25_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 }, entitlementEvidence: verifiedEvidence, supportedModelIds: ['gpt-alpha'] },
     ], 30_000_000, 5_000_000, ['gpt-alpha'])).toEqual({
       kind: 'subscription',
       recommendedPlanId: 'anthropic:pro',
       expectedMonthlyCostMicroDollars: 25_000_000,
-      caveats: ['openai:plus has a variable usage limit and is not comparable to this workload.'],
+      caveats: ['openai:plus does not have verified comparable capacity for this workload.'],
     });
   });
 
   it('keeps API billing as the recommendation when no subscription entitlement is eligible', () => {
     expect(recommendCostFirst([
-      { id: 'openai:pro', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'guardrail_limited', description: 'Guardrails' }, supportedModelIds: ['gpt-alpha'] },
+      { id: 'openai:pro', monthlyCostMicroDollars: 20_000_000, entitlement: { kind: 'guardrail_limited', description: 'Guardrails' }, entitlementEvidence: { ...verifiedEvidence, status: 'dynamic_unknown' }, supportedModelIds: ['gpt-alpha'] },
     ], 12_000_000, 5_000_000, ['gpt-alpha'])).toMatchObject({
       kind: 'api', recommendedPlanId: null, expectedMonthlyCostMicroDollars: 12_000_000,
     });
@@ -97,14 +103,31 @@ describe('catalog calculator', () => {
 
   it('identifies a fixed but unsupported subscription separately from a variable entitlement', () => {
     expect(recommendCostFirst([
-      { id: 'openai:fixed-but-unsupported', monthlyCostMicroDollars: 1_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 }, supportedModelIds: ['different-model'] },
-      { id: 'openai:variable', monthlyCostMicroDollars: 1_000_000, entitlement: { kind: 'rolling_limit', description: 'Usage limits apply.' }, supportedModelIds: ['gpt-alpha'] },
+      { id: 'openai:fixed-but-unsupported', monthlyCostMicroDollars: 1_000_000, entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 }, entitlementEvidence: verifiedEvidence, supportedModelIds: ['different-model'] },
+      { id: 'openai:variable', monthlyCostMicroDollars: 1_000_000, entitlement: { kind: 'rolling_limit', description: 'Usage limits apply.' }, entitlementEvidence: { ...verifiedEvidence, status: 'dynamic_unknown' }, supportedModelIds: ['gpt-alpha'] },
     ], 12_000_000, 5_000_000, ['gpt-alpha'])).toMatchObject({
       kind: 'api',
       caveats: [
         'openai:fixed-but-unsupported does not publish support for the selected model mix and is not comparable to this workload.',
-        'openai:variable has a variable usage limit and is not comparable to this workload.',
+        'openai:variable does not have verified comparable capacity for this workload.',
       ],
+    });
+  });
+
+  it.each(['projected', 'stale'] as const)('never recommends a fixed allowance backed by %s evidence', (status) => {
+    expect(recommendCostFirst([{
+      id: `provider:${status}`,
+      monthlyCostMicroDollars: 1_000_000,
+      entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 },
+      entitlementEvidence: {
+        ...verifiedEvidence,
+        status,
+        ...(status === 'stale' ? { staleReason: 'Price drifted.' } : {}),
+      },
+      supportedModelIds: ['gpt-alpha'],
+    }], 12_000_000, 5_000_000, ['gpt-alpha'])).toMatchObject({
+      kind: 'api',
+      recommendedPlanId: null,
     });
   });
 });

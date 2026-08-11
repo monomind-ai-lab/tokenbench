@@ -35,6 +35,7 @@ function entry({
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value: score,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -115,10 +116,12 @@ describe('leaderboard CSV', () => {
       entry({ modelKey: 'alpha', name: 'Alpha', provider: 'Provider A', score: 90 }),
     ]), FILTERS);
 
+    // BenchLM rows now carry the published source_rank column, and the leading
+    // rank column is that same source rank rather than a filtered row index.
     expect(csv).toBe([
-      'rank,model,provider,evidence_status,score,unit,metric_key,methodology,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
-      '1,Alpha,Provider A,supported,90,score,benchlm:category:coding,benchlm_raw_composite,3,128000,alpha,alpha,Proprietary',
-      ',Estimated model,Provider B,estimated,99,score,benchlm:category:coding,benchlm_raw_composite,,128000,estimate,estimate,Proprietary',
+      'rank,model,provider,evidence_status,score,unit,metric_key,methodology,source_rank,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
+      ',Alpha,Provider A,supported,90,score,benchlm:category:coding,benchlm_raw_composite,,3,128000,alpha,alpha,Proprietary',
+      ',Estimated model,Provider B,estimated,99,score,benchlm:category:coding,benchlm_raw_composite,,,128000,estimate,estimate,Proprietary',
       '',
     ].join('\r\n'));
   });
@@ -137,7 +140,7 @@ describe('leaderboard CSV', () => {
       'rank,model,provider,evidence_status,workload_profile,route_id,input_usd_per_million,cached_input_usd_per_million,output_usd_per_million,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
     );
     expect(header('multimodal-vision-documents')).toBe(
-      'rank,model,provider,evidence_status,score,unit,metric_key,methodology,source_rank,benchlm_category_multimodal_score,benchlm_category_multimodal_unit,benchlm_category_multimodal_methodology,benchlm_category_multimodal_source_rank,lmarena_vision_style_control_overall_score,lmarena_vision_style_control_overall_unit,lmarena_vision_style_control_overall_methodology,lmarena_vision_style_control_overall_source_rank,lmarena_document_style_control_overall_score,lmarena_document_style_control_overall_unit,lmarena_document_style_control_overall_methodology,lmarena_document_style_control_overall_source_rank,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
+      'rank,model,provider,evidence_status,score,unit,metric_key,methodology,source_rank,benchlm_category_multimodalgrounded_score,benchlm_category_multimodalgrounded_unit,benchlm_category_multimodalgrounded_methodology,benchlm_category_multimodalgrounded_source_rank,lmarena_vision_style_control_overall_score,lmarena_vision_style_control_overall_unit,lmarena_vision_style_control_overall_methodology,lmarena_vision_style_control_overall_source_rank,lmarena_document_style_control_overall_score,lmarena_document_style_control_overall_unit,lmarena_document_style_control_overall_methodology,lmarena_document_style_control_overall_source_rank,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
     );
   });
 
@@ -182,11 +185,13 @@ describe('leaderboard CSV', () => {
   });
 
   it('accepts total output at the byte cap and rejects the next byte', () => {
-    const header = 'rank,model,provider,evidence_status,score,unit,metric_key,methodology,price_usd_per_million,context_window_tokens,model_key,slug,source_type';
+    const header = 'rank,model,provider,evidence_status,score,unit,metric_key,methodology,source_rank,price_usd_per_million,context_window_tokens,model_key,slug,source_type';
     const targetBytes = 8 * 1024 * 1024;
     const rowAtBytes = (rank: number, bytes: number): LeaderboardEntry => {
       const fixture = entry({ modelKey: `model-${rank}`, name: 'Model', provider: 'Provider', score: 90 });
-      let remaining = bytes - 89 - String(rank).length;
+      // 90 = fixed non-padded cells and commas, including the empty rank and
+      // source_rank cells that BenchLM rows now emit for unranked sources.
+      let remaining = bytes - 90;
       const lengths = [0, 0, 0, 0].map(() => {
         const length = Math.min(65_536, remaining);
         remaining -= length;

@@ -89,7 +89,14 @@ interface SafeModelInput {
   rankingEligible: boolean;
   categoryRankingEligible: Record<string, boolean>;
   trustedBenchmarkCount: number;
+  /** Public BenchAlign overall value (`scores.displayScore`). */
+  displayScore: number | null;
+  /** Diagnostic raw composite (`scores.rawOverallScore`); never the public value. */
   rawOverallScore: number | null;
+  /** Published overall rank (`ranking.overallRank`) or null. */
+  overallRank: number | null;
+  /** Published category ranks (`ranking.categoryRanks`), sparse; absent = null. */
+  categoryRanks: Record<string, number | null>;
   displayCategoryScores: Record<string, number | null>;
   verifiedDisplayCategoryScores: Record<string, number | null>;
 }
@@ -236,7 +243,13 @@ function parseSafeModel(value: unknown, index: number): SafeModelInput {
       coverage.trustedBenchmarkCount,
       `BenchLM models.items[${index}].coverage.trustedBenchmarkCount`,
     ),
+    displayScore: requireNullableScore(scores.displayScore, `BenchLM models.items[${index}].scores.displayScore`),
     rawOverallScore: requireNullableScore(scores.rawOverallScore, `BenchLM models.items[${index}].scores.rawOverallScore`),
+    overallRank: nullablePositiveInteger(ranking.overallRank, `BenchLM models.items[${index}].ranking.overallRank`),
+    categoryRanks: parseScoreMap(
+      ranking.categoryRanks,
+      `BenchLM models.items[${index}].ranking.categoryRanks`,
+    ),
     displayCategoryScores: parseScoreMap(
       scores.displayCategoryScores,
       `BenchLM models.items[${index}].scores.displayCategoryScores`,
@@ -326,6 +339,8 @@ function projectModelItem(value: unknown, index: number): Record<string, unknown
     evidenceStatus: model.evidenceStatus,
     rankingEligible: requireBoolean(model.rankingEligible, `${label}.rankingEligible`),
     ranking: {
+      overallRank: nullablePositiveInteger(ranking.overallRank, `${label}.ranking.overallRank`),
+      categoryRanks: sortedScoreMap(ranking.categoryRanks, `${label}.ranking.categoryRanks`),
       categoryRankingEligible: sortedBooleanMap(
         ranking.categoryRankingEligible,
         `${label}.ranking.categoryRankingEligible`,
@@ -338,6 +353,7 @@ function projectModelItem(value: unknown, index: number): Record<string, unknown
       ),
     },
     scores: {
+      displayScore: requireNullableScore(scores.displayScore, `${label}.scores.displayScore`),
       rawOverallScore: requireNullableScore(scores.rawOverallScore, `${label}.scores.rawOverallScore`),
       displayCategoryScores: sortedScoreMap(
         scores.displayCategoryScores,
@@ -680,7 +696,7 @@ function toBenchmarkModels(models: SafeModelInput[]): BenchmarkModel[] {
     releaseDate: model.releaseDate,
     contextWindowTokens: model.contextWindowTokens,
     evidenceStatus: model.evidenceStatus,
-    rankingEligible: model.evidenceStatus === 'supported' && model.rankingEligible && model.rawOverallScore !== null,
+    rankingEligible: model.evidenceStatus === 'supported' && model.rankingEligible && model.displayScore !== null,
     confidenceLower: null,
     confidenceUpper: null,
     benchmarkCount: model.trustedBenchmarkCount,
@@ -693,14 +709,20 @@ function toBenchmarkModels(models: SafeModelInput[]): BenchmarkModel[] {
 function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, generatedAt: string): BenchmarkMetric[] {
   const metrics: BenchmarkMetric[] = [];
   models.forEach((model) => {
-    const modelRankingEligible = model.evidenceStatus === 'supported' && model.rankingEligible && model.rawOverallScore !== null;
-    if (model.rawOverallScore !== null) {
+    const modelRankingEligible = model.evidenceStatus === 'supported' && model.rankingEligible && model.displayScore !== null;
+    // Public overall value is the BenchAlign display score; the raw composite
+    // remains available only as a disclosed diagnostic (rawValue). The overall
+    // raw diagnostics must never become the public value when upstream does
+    // not publish a display score.
+    const overallValue = model.displayScore;
+    if (overallValue !== null) {
       metrics.push({
         modelKey: model.modelKey,
         metricKey: 'benchlm:overall:raw',
         category: 'overall',
-        value: model.rawOverallScore,
-        rank: null,
+        value: overallValue,
+        rawValue: model.rawOverallScore,
+        rank: model.overallRank,
         lower: null,
         upper: null,
         voteCount: null,
@@ -722,14 +744,17 @@ function toMetrics(models: SafeModelInput[], safeCategories: Set<string>, genera
     ]);
     categories.forEach((category) => {
       if (!safeCategories.has(category)) return;
-      const value = model.verifiedDisplayCategoryScores[category] ?? model.displayCategoryScores[category] ?? null;
+      // The public category value is the display score. verifiedDisplayCategoryScores
+      // did not replace it, and category ranks are preserved exactly when published.
+      const value = model.displayCategoryScores[category] ?? null;
       if (value === null) return;
       metrics.push({
         modelKey: model.modelKey,
         metricKey: `benchlm:category:${category}`,
         category,
         value,
-        rank: null,
+        rawValue: null,
+        rank: model.categoryRanks[category] ?? null,
         lower: null,
         upper: null,
         voteCount: null,

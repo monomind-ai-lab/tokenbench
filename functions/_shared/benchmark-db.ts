@@ -198,6 +198,9 @@ function mapMetric(value: unknown): BenchmarkMetric {
     metricKey: row.metric_key as string,
     category: row.category as string,
     value: row.value as number,
+    // Revisions written before the raw_value migration have no column value;
+    // absent diagnostics read as null rather than an invalid undefined.
+    rawValue: (row.raw_value ?? null) as number | null,
     rank: row.rank as number | null,
     lower: row.lower_bound as number | null,
     upper: row.upper_bound as number | null,

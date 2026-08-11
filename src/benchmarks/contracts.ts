@@ -84,7 +84,19 @@ export interface BenchmarkMetric {
   modelKey: string;
   metricKey: string;
   category: string;
+  /**
+   * Public display value. For BenchLM this is the authoritative BenchAlign
+   * value (overall `displayScore` / public category value); for LMArena it is
+   * the arena score. It is what leaderboards, CSV, and home decision picks
+   * surface and sort on.
+   */
   value: number;
+  /**
+   * Diagnostic raw composite, kept only as disclosed internals and never as
+   * the public value. Non-null only for BenchLM overall (`rawOverallScore`).
+   */
+  rawValue: number | null;
+  /** Published overall/category source rank (BenchLM + LMArena) or null. */
   rank: number | null;
   lower: number | null;
   upper: number | null;
@@ -520,6 +532,7 @@ function validateMetric(
   if (!allowsSignedScores && metric.value < 0) {
     fail(`${name}.value must be a non-negative finite number`);
   }
+  requireNullableNonNegativeFiniteNumber(metric.rawValue, `${name}.rawValue`);
   requireNullablePositiveInteger(metric.rank, `${name}.rank`);
   requireNullableInterval(
     metric.lower,

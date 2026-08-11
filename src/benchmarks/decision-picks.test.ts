@@ -16,7 +16,7 @@ const approvedMetricKeys = [
   'benchlm:category:agentic',
   'benchlm:category:coding',
   'benchlm:category:reasoning',
-  'benchlm:category:multimodal',
+  'benchlm:category:multimodalGrounded',
   'benchlm:category:knowledge',
 ] as const;
 
@@ -57,6 +57,7 @@ function metric(
     metricKey,
     category: metricKey.split(':').at(-1)!,
     value,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -184,14 +185,16 @@ describe('decisionPicks', () => {
       status: 'benchalign',
       entries: [
         {
-          rank: 1,
+          // Source rank, not a synthesized 1/2/3 row position: these fixture
+          // metrics publish no rank, so the pick stays "not ranked by source".
+          rank: null,
           slug: 'alpha',
           representativePriceUsdPerMillion: 4,
           contextWindowTokens: 128_000,
           updatedAt: BENCHLM_OBSERVED_AT,
         },
-        { rank: 2, slug: 'beta', representativePriceUsdPerMillion: 2 },
-        { rank: 3, slug: 'gamma', representativePriceUsdPerMillion: null },
+        { rank: null, slug: 'beta', representativePriceUsdPerMillion: 2 },
+        { rank: null, slug: 'gamma', representativePriceUsdPerMillion: null },
       ],
     });
     expect(groups.find((group) => group.key === 'llm-reasoning')?.status).toBe('evidence-lens');

@@ -295,7 +295,7 @@ function multimodalEnvelope(
   const currentEntry = value.data.entries[0];
   const metric = {
     ...currentEntry.metric,
-    metricKey: 'benchlm:category:multimodal',
+    metricKey: 'benchlm:category:multimodalGrounded',
     category: 'multimodal',
   };
   return {
@@ -307,7 +307,7 @@ function multimodalEnvelope(
       definition: {
         kind: 'multimodal',
         metricKeys: [
-          'benchlm:category:multimodal',
+          'benchlm:category:multimodalGrounded',
           'lmarena:vision_style_control:overall',
           'lmarena:document_style_control:overall',
         ],
@@ -476,6 +476,7 @@ function decisionSummaryEnvelope(overrides: Record<string, unknown> = {}) {
     freshness: { status: 'fresh', checkedAt: ISO_TIME },
     attribution: [BENCHLM_ATTRIBUTION, OPENROUTER_ATTRIBUTION],
     data: {
+      representativeComparisons: [],
       decisionPicks: [
         { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [overall] },
         { key: 'llm-agentic', label: 'Agentic BenchAlign leaders', status: 'benchalign', entries: [] },
@@ -941,6 +942,22 @@ describe('useBenchmarkLeaderboard', () => {
     });
   });
 
+  it('accepts a published BenchLM source rank when it matches the primary metric', async () => {
+    const payload = codingEnvelope();
+    const current = payload.data.entries[0];
+    const metric = { ...current.metric, rank: 23 };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(codingEnvelope({
+      metric,
+      metrics: [{ ...metric }],
+      sourceRank: 23,
+    }))));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-coding'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.entries[0]).toMatchObject({ sourceRank: 23, metric: { rank: 23 } });
+  });
+
   it.each([
     ['has no primary price', pricingEnvelope({ primaryPrice: null })],
     ['has a price for a different model', pricingEnvelope({
@@ -974,7 +991,11 @@ describe('useBenchmarkLeaderboard', () => {
       primaryPrice: primaryOpenRouterPrice(),
       blendedCostPerMillion: 2,
     })],
-    ['carries a source rank', codingEnvelope({ sourceRank: 1 })],
+    ['has a source rank that disagrees with its primary metric', (() => {
+      const payload = codingEnvelope();
+      const metric = { ...payload.data.entries[0].metric, rank: 23 };
+      return codingEnvelope({ metric, metrics: [{ ...metric }], sourceRank: 22 });
+    })()],
   ])('rejects a BenchLM capability row that %s', async (_label, payload) => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
 
@@ -1028,9 +1049,11 @@ describe('useBenchmarkLeaderboard', () => {
     ['a LMArena source rank disagrees with its primary metric', 'llm-human-preference', lmArenaEnvelope({
       entryOverrides: { sourceRank: 2 },
     })],
-    ['a BenchLM-primary multimodal row carries a source rank', 'multimodal-vision-documents', multimodalEnvelope({}, {
-      sourceRank: 1,
-    })],
+    ['a BenchLM-primary multimodal source rank disagrees with its primary metric', 'multimodal-vision-documents', (() => {
+      const payload = multimodalEnvelope();
+      const metric = { ...payload.data.entries[0].metric, rank: 4 };
+      return multimodalEnvelope({}, { metric, metrics: [{ ...metric }], sourceRank: 3 });
+    })()],
     ['a pricing row uses a LMArena source-only model', 'llm-pricing-context', pricingEnvelope({
       model: {
         ...supportedValueEntry().model,
@@ -1352,6 +1375,31 @@ describe('decision summary hooks', () => {
       key: 'llm-overall',
       entries: [{ evidenceStatus: 'supported', routePath: '/leaderboards/llm/overall/' }],
     });
+  });
+
+  it('accepts two strictly bounded representative comparison cards', async () => {
+    const payload = decisionSummaryEnvelope();
+    const comparison = {
+      pairSlug: 'model-a-vs-model-b', modelASlug: 'model-a', modelBSlug: 'model-b',
+      modelAName: 'Model A', modelBName: 'Model B', sharedMetricCount: 4,
+      sharedMetrics: [
+        { metricKey: 'benchlm:category:coding', category: 'coding', unit: 'score', modelAValue: 90, modelBValue: 80, gap: 10, leaderSlug: 'model-a' },
+        { metricKey: 'benchlm:category:agentic', category: 'agentic', unit: 'score', modelAValue: 88, modelBValue: 84, gap: 4, leaderSlug: 'model-a' },
+        { metricKey: 'benchlm:category:reasoning', category: 'reasoning', unit: 'score', modelAValue: 87, modelBValue: 85, gap: 2, leaderSlug: 'model-a' },
+        { metricKey: 'benchlm:category:knowledge', category: 'knowledge', unit: 'score', modelAValue: 86, modelBValue: 86, gap: 0, leaderSlug: null },
+      ],
+      modelAPriceUsdPerMillion: 3, modelBPriceUsdPerMillion: 2,
+      modelAContextWindowTokens: 128_000, modelBContextWindowTokens: 200_000,
+    };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({
+      ...payload,
+      data: { ...payload.data, representativeComparisons: [comparison, { ...comparison, pairSlug: 'model-a-vs-model-c', modelBSlug: 'model-c', modelBName: 'Model C' }] },
+    })));
+
+    const { result } = renderHook(() => useDecisionPicks());
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    expect(result.current.envelope?.data.representativeComparisons).toHaveLength(2);
   });
 
   it('keeps a materialized source record readable when it predates method-version fields', async () => {

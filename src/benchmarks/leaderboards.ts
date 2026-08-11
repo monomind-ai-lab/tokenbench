@@ -29,7 +29,9 @@ const BENCHLM_CODING = 'benchlm:category:coding';
 const BENCHLM_AGENTIC = 'benchlm:category:agentic';
 const BENCHLM_REASONING = 'benchlm:category:reasoning';
 const BENCHLM_KNOWLEDGE = 'benchlm:category:knowledge';
-const BENCHLM_MULTIMODAL = 'benchlm:category:multimodal';
+// BenchLM publishes the multimodal category as `multimodalGrounded`; this is
+// the exact upstream key it is mapped to, never an invented `multimodal`.
+const BENCHLM_MULTIMODAL = 'benchlm:category:multimodalGrounded';
 const LMARENA_HUMAN_PREFERENCE = 'lmarena:text_style_control:overall';
 const LMARENA_VISION = 'lmarena:vision_style_control:overall';
 const LMARENA_DOCUMENT = 'lmarena:document_style_control:overall';
@@ -161,6 +163,7 @@ function isPositiveRank(rank: number | null): rank is number {
 }
 
 function isSupportedBenchLmMetric(model: BenchmarkModel, metric: BenchmarkMetric, metricKey: string): boolean {
+  const isEvidenceLens = metricKey === BENCHLM_REASONING || metricKey === BENCHLM_KNOWLEDGE;
   return model.sourceId === 'benchlm'
     && model.evidenceStatus === 'supported'
     // Overall and value views use the model-level overall eligibility. Safe
@@ -171,7 +174,7 @@ function isSupportedBenchLmMetric(model: BenchmarkModel, metric: BenchmarkMetric
     && metric.metricKey === metricKey
     && metric.methodology === 'benchlm_raw_composite'
     && metric.unit === 'score'
-    && metric.rankingEligible
+    && (metric.rankingEligible || (isEvidenceLens && metric.rank === null))
     && isFiniteMetric(metric);
 }
 
@@ -256,7 +259,10 @@ function makeEntry(
     contextWindowTokens: validContextWindow(primaryPrice === null
       ? model.contextWindowTokens
       : primaryPrice.contextWindowTokens),
-    sourceRank: metric?.sourceId === 'lmarena' ? sourceRank(metric) : null,
+    // Published source rank (BenchLM overall/category rank or LMArena rank) is
+    // kept distinct from the rendered row position; it is never synthesized
+    // from a filtered index.
+    sourceRank: sourceRank(metric),
     onValueFrontier,
   };
 }

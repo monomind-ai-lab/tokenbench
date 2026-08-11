@@ -43,6 +43,7 @@ function decisionSummaryEnvelope(): BenchmarkApiEnvelope<BenchmarkSummaryData> {
       { sourceId: 'openrouter', label: 'Catalog and pricing data from OpenRouter', url: 'https://openrouter.ai/models', updatedAt: UPDATED_AT },
     ],
     data: {
+      representativeComparisons: [],
       decisionPicks: decisionCategories.map((category) => ({
         key: category.key,
         label: category.label,
@@ -112,6 +113,7 @@ function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardPageResult
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value: 91,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -364,6 +366,7 @@ describe('LeaderboardPage', () => {
         ...baseEntry.metric!,
         modelKey,
         value: 1_000 - index,
+        rank: index + 1,
         sourceModelId: modelKey,
       };
       return {
@@ -377,6 +380,7 @@ describe('LeaderboardPage', () => {
         },
         metric,
         metrics: [metric],
+        sourceRank: index + 1,
       };
     };
     const capabilities = {

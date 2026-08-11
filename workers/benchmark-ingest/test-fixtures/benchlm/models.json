@@ -20,16 +20,19 @@
       "evidenceStatus": "supported",
       "rankingEligible": true,
       "ranking": {
-        "categoryRankingEligible": { "coding": true, "reasoning": false }
+        "overallRank": 4,
+        "categoryRanks": { "coding": 3, "multimodalGrounded": 5 },
+        "categoryRankingEligible": { "coding": true, "reasoning": false, "multimodalGrounded": true }
       },
       "coverage": {
         "trustedBenchmarkCount": 4,
         "verifiedBenchmarkCount": 3
       },
       "scores": {
-        "rawOverallScore": 82.25,
-        "displayCategoryScores": { "coding": 79.5, "reasoning": null },
-        "verifiedDisplayCategoryScores": { "coding": 80.25, "reasoning": null }
+        "displayScore": 81.48,
+        "rawOverallScore": 81.0,
+        "displayCategoryScores": { "coding": 79.5, "reasoning": null, "multimodalGrounded": 84.7 },
+        "verifiedDisplayCategoryScores": { "coding": 80.25, "reasoning": null, "multimodalGrounded": 84.7 }
       }
     },
     {
@@ -44,6 +47,8 @@
       "evidenceStatus": "estimated",
       "rankingEligible": true,
       "ranking": {
+        "overallRank": 12,
+        "categoryRanks": { "coding": 8 },
         "categoryRankingEligible": { "coding": true, "reasoning": false }
       },
       "coverage": {
@@ -51,6 +56,7 @@
         "verifiedBenchmarkCount": 1
       },
       "scores": {
+        "displayScore": 72.28,
         "rawOverallScore": 71,
         "displayCategoryScores": { "coding": 68, "reasoning": null },
         "verifiedDisplayCategoryScores": { "coding": 69, "reasoning": null }
@@ -68,6 +74,8 @@
       "evidenceStatus": "supported",
       "rankingEligible": true,
       "ranking": {
+        "overallRank": 22,
+        "categoryRanks": {},
         "categoryRankingEligible": { "coding": true, "reasoning": false }
       },
       "coverage": {
@@ -75,8 +83,9 @@
         "verifiedBenchmarkCount": 28
       },
       "scores": {
+        "displayScore": 66.86,
         "rawOverallScore": 83,
-        "displayCategoryScores": { "coding": 65.4, "reasoning": null },
+        "displayCategoryScores": { "coding": 70, "reasoning": null },
         "verifiedDisplayCategoryScores": { "coding": null, "reasoning": null }
       }
     },
@@ -92,16 +101,19 @@
       "evidenceStatus": null,
       "rankingEligible": false,
       "ranking": {
-        "categoryRankingEligible": { "coding": false, "reasoning": false }
+        "overallRank": null,
+        "categoryRanks": { "coding": 2, "reasoning": 1, "multimodalGrounded": 1 },
+        "categoryRankingEligible": { "coding": false, "reasoning": false, "multimodalGrounded": false }
       },
       "coverage": {
         "trustedBenchmarkCount": 10,
         "verifiedBenchmarkCount": 10
       },
       "scores": {
+        "displayScore": 76.1,
         "rawOverallScore": 80,
-        "displayCategoryScores": { "coding": 76.4, "reasoning": 91.2 },
-        "verifiedDisplayCategoryScores": { "coding": 76.4, "reasoning": 91.2 }
+        "displayCategoryScores": { "coding": 76.4, "reasoning": 91.2, "multimodalGrounded": 86.5 },
+        "verifiedDisplayCategoryScores": { "coding": 76.4, "reasoning": 91.2, "multimodalGrounded": 86.5 }
       }
     }
   ]

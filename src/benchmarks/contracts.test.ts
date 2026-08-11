@@ -83,6 +83,7 @@ const validBatch = {
       metricKey: 'benchlm:overall:raw',
       category: 'overall',
       value: 75.5,
+      rawValue: 75.0,
       rank: 1,
       lower: null,
       upper: null,
@@ -145,6 +146,7 @@ function lmArenaMetric(methodology: 'bradley_terry' | 'ips') {
       ? 'lmarena:text_style_control:overall'
       : 'lmarena:agent:overall:ips',
     unit: methodology === 'bradley_terry' ? 'arena_score' : 'score',
+    rawValue: null,
     sourceId: 'lmarena',
     sourceArtifactId: 'text-style-control-r1',
     methodology,

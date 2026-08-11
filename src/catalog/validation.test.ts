@@ -12,7 +12,14 @@ const validCatalog = {
   plans: [{
     id: 'openai:plus', providerId: 'openai', displayName: 'Plus', monthlyCostMicroDollars: 20_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription',
-    entitlement: { kind: 'rolling_limit', description: 'Usage limits apply.' }, sourceId: 'openai-api',
+    entitlement: { kind: 'rolling_limit', description: 'Usage limits apply.' },
+    entitlementEvidence: {
+      status: 'dynamic_unknown',
+      boundType: 'unknown',
+      dimensions: [],
+      source: { url: 'https://example.test/pricing', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'high' },
+    },
+    sourceId: 'openai-api',
   }],
   modelOffers: [{
     id: 'openai:gpt-4o:direct', providerId: 'openai', displayName: 'GPT-4o', modelId: 'gpt-4o',

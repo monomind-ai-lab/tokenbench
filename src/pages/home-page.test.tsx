@@ -5,10 +5,40 @@ import type {
   DecisionPickGroup,
   HomeDecisionSnapshot,
 } from '../benchmarks/decision-picks';
+import type { RepresentativeComparison } from '../benchmarks/api-projections';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
 import { HomePage } from './home-page';
 
 const UPDATED_AT = '2026-08-06T12:00:00.000Z';
+
+const REPRESENTATIVE_COMPARISONS: readonly RepresentativeComparison[] = [
+  {
+    pairSlug: 'claude-opus-5-vs-gpt-5-6-sol',
+    modelASlug: 'claude-opus-5', modelBSlug: 'gpt-5-6-sol',
+    modelAName: 'Claude Opus 5', modelBName: 'GPT-5.6 Sol', sharedMetricCount: 4,
+    sharedMetrics: [
+      { metricKey: 'benchlm:category:coding', category: 'coding', unit: 'score', modelAValue: 88, modelBValue: 92, gap: 4, leaderSlug: 'gpt-5-6-sol' },
+      { metricKey: 'benchlm:category:agentic', category: 'agentic', unit: 'score', modelAValue: 89, modelBValue: 91, gap: 2, leaderSlug: 'gpt-5-6-sol' },
+      { metricKey: 'benchlm:category:reasoning', category: 'reasoning', unit: 'score', modelAValue: 90, modelBValue: 89, gap: 1, leaderSlug: 'claude-opus-5' },
+      { metricKey: 'benchlm:category:knowledge', category: 'knowledge', unit: 'score', modelAValue: 88, modelBValue: 88, gap: 0, leaderSlug: null },
+    ],
+    modelAPriceUsdPerMillion: 15, modelBPriceUsdPerMillion: 10,
+    modelAContextWindowTokens: 200_000, modelBContextWindowTokens: 400_000,
+  },
+  {
+    pairSlug: 'gpt-5-6-sol-vs-kimi-3',
+    modelASlug: 'gpt-5-6-sol', modelBSlug: 'kimi-3',
+    modelAName: 'GPT-5.6 Sol', modelBName: 'Kimi 3', sharedMetricCount: 4,
+    sharedMetrics: [
+      { metricKey: 'benchlm:category:agentic', category: 'agentic', unit: 'score', modelAValue: 90, modelBValue: 90, gap: 0, leaderSlug: null },
+      { metricKey: 'benchlm:category:coding', category: 'coding', unit: 'score', modelAValue: 91, modelBValue: 89, gap: 2, leaderSlug: 'gpt-5-6-sol' },
+      { metricKey: 'benchlm:category:reasoning', category: 'reasoning', unit: 'score', modelAValue: 88, modelBValue: 87, gap: 1, leaderSlug: 'gpt-5-6-sol' },
+      { metricKey: 'benchlm:category:knowledge', category: 'knowledge', unit: 'score', modelAValue: 86, modelBValue: 86, gap: 0, leaderSlug: null },
+    ],
+    modelAPriceUsdPerMillion: null, modelBPriceUsdPerMillion: null,
+    modelAContextWindowTokens: 400_000, modelBContextWindowTokens: 256_000,
+  },
+];
 
 const EMPTY_DECISION_PICK_GROUPS: readonly DecisionPickGroup[] = [
   { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [] },
@@ -100,6 +130,7 @@ function homeSummaryFixture(
       { sourceId: 'openrouter', label: 'Catalog and pricing data from OpenRouter', url: 'https://openrouter.ai/models', updatedAt: UPDATED_AT },
     ],
     data: {
+      representativeComparisons: REPRESENTATIVE_COMPARISONS,
       decisionPicks,
       homeDecisionSnapshot: snapshot,
     },
@@ -163,7 +194,7 @@ describe('HomePage', () => {
     expect(within(snapshot).getByRole('heading', { name: 'Reasoning', level: 3 })).toBeInTheDocument();
     expect(within(snapshot).getByRole('heading', { name: 'Multimodal', level: 3 })).toBeInTheDocument();
     expect(within(snapshot).queryByRole('heading', { name: 'Knowledge', level: 3 })).not.toBeInTheDocument();
-    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(5);
+    expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
     expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/leaderboards/llm/overall/');
     expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
     expect(within(snapshot).getAllByText('Source rank #1')).toHaveLength(3);
@@ -172,6 +203,18 @@ describe('HomePage', () => {
     expect(within(snapshot).getByRole('link', { name: 'Compare two models' })).toHaveAttribute('href', '/compare/');
     expect(within(snapshot).getByRole('link', { name: 'How rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(5);
+  });
+
+  it('renders exactly two representative comparison cards from the published summary', async () => {
+    renderWithHomeSummary();
+
+    const comparisons = await screen.findByRole('list', { name: 'Representative comparisons' });
+    expect(within(comparisons).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(comparisons).getByRole('heading', { name: 'Claude Opus 5 vs GPT-5.6 Sol' })).toBeInTheDocument();
+    expect(within(comparisons).getByText('GPT-5.6 Sol leads on coding')).toBeInTheDocument();
+    expect(within(comparisons).getByRole('heading', { name: 'GPT-5.6 Sol vs Kimi 3' })).toBeInTheDocument();
+    expect(within(comparisons).getByText('Tied on agentic')).toBeInTheDocument();
+    expect(within(comparisons).getByRole('link', { name: 'Compare Claude Opus 5 and GPT-5.6 Sol' })).toHaveAttribute('href', '/compare/claude-opus-5-vs-gpt-5-6-sol');
   });
 
   it('labels provenance without repeating a source-artifact update ledger', async () => {
@@ -224,7 +267,7 @@ describe('HomePage', () => {
     expect(error).toHaveTextContent('Published decision snapshot could not be loaded.');
     expect(error).toHaveTextContent('Benchmark request failed (500).');
     expect(within(snapshot).queryByText('Unavailable')).not.toBeInTheDocument();
-    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(0);
+    expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(0);
 
     fireEvent.click(within(error).getByRole('button', { name: 'Retry' }));
 
@@ -237,7 +280,7 @@ describe('HomePage', () => {
     const snapshot = await screen.findByRole('region', { name: 'Market at a glance' });
 
     expect(within(snapshot).queryByText('Unavailable')).not.toBeInTheDocument();
-    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(0);
+    expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(0);
     expect(within(snapshot).getByText('No decision route has a supported leader in the active revision.')).toBeInTheDocument();
     expect(within(snapshot).queryByText(/sample|example model/i)).not.toBeInTheDocument();
     expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(0);
@@ -255,6 +298,6 @@ describe('HomePage', () => {
     expect(staleNotice).toHaveTextContent('Refresh overdue.');
     const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
     expect(snapshot).toHaveTextContent('Model Alpha');
-    expect(snapshot.querySelectorAll('.home-snapshot-card')).toHaveLength(5);
+    expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
   });
 });

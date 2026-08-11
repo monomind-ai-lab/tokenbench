@@ -5,7 +5,8 @@ import type {
   BenchmarkPriceCheck,
   BenchmarkSourceRecord,
 } from './contracts';
-import { buildBenchmarkSummaryData, type BenchmarkProjectionSnapshot } from './api-projections';
+import { buildBenchmarkSummaryData, leaderboardEvidenceReferences, type BenchmarkProjectionSnapshot } from './api-projections';
+import { buildLeaderboard } from './leaderboards';
 
 const OBSERVED_AT = '2026-08-05T11:00:00.000Z';
 
@@ -36,6 +37,7 @@ function metric(modelKey: string, metricKey: string, value: number, rankingEligi
     metricKey,
     category: metricKey.split(':').at(-1)!,
     value,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -82,7 +84,7 @@ function snapshot(): BenchmarkProjectionSnapshot {
     'benchlm:category:agentic',
     'benchlm:category:coding',
     'benchlm:category:reasoning',
-    'benchlm:category:multimodal',
+    'benchlm:category:multimodalGrounded',
     'benchlm:category:knowledge',
   ];
   const sources: readonly BenchmarkSourceRecord[] = [
@@ -140,5 +142,25 @@ describe('buildBenchmarkSummaryData', () => {
         expect.objectContaining({ modelKey: 'provider:supported', representativePriceUsdPerMillion: 2 }),
       ],
     });
+  });
+
+  it('attributes a populated route only to artifacts that contribute displayed facts', () => {
+    const source = snapshot();
+    const unrelated: BenchmarkSourceRecord = {
+      ...source.sources[0]!,
+      artifactId: 'benchmarks',
+      sourceUrl: 'https://benchlm.ai/data/benchmarks.json',
+      snapshotKey: 'benchmarks.json',
+      contentHash: 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+    };
+    const withUnrelated = { ...source, sources: [...source.sources, unrelated] };
+    const leaderboard = buildLeaderboard('llm-coding', withUnrelated.models, withUnrelated.metrics, withUnrelated.priceChecks);
+
+    expect(leaderboardEvidenceReferences(withUnrelated, leaderboard.definition, leaderboard.entries)).toEqual([
+      { sourceId: 'benchlm', sourceArtifactId: 'benchlm-models' },
+      { sourceId: 'benchlm', sourceArtifactId: 'benchlm-models' },
+      { sourceId: 'benchlm', sourceArtifactId: 'benchlm-models' },
+      { sourceId: 'openrouter', sourceArtifactId: 'openrouter-models' },
+    ]);
   });
 });

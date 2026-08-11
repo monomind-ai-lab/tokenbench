@@ -438,6 +438,7 @@ export function parseLmArenaSubset(
         : `lmarena:${subset}:${categoryKey}`,
       category: row.category,
       value: row.value,
+      rawValue: null,
       rank: row.rank,
       lower: row.lower,
       upper: row.upper,

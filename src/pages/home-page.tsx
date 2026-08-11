@@ -1,5 +1,6 @@
 import { ArrowRight, BadgeDollarSign, Download, Layers3, TrendingUp, Workflow } from 'lucide-react';
 import type { DecisionPickEntry, DecisionPickGroup } from '../benchmarks/decision-picks';
+import type { RepresentativeComparison } from '../benchmarks/api-projections';
 import { ProviderMark } from '../frontend/provider-mark';
 import { useDecisionPicks } from '../frontend/use-benchmarks';
 import { HOME_PAGE_COPY } from '../brand/site-config';
@@ -110,10 +111,35 @@ function MarketLeaderArticle({ card }: { readonly card: MarketLeaderCard; readon
   </article>;
 }
 
+function RepresentativeComparisonArticle({ comparison }: { readonly comparison: RepresentativeComparison; readonly key?: string }) {
+  const strongest = comparison.sharedMetrics[0];
+  const leaderName = strongest?.leaderSlug === comparison.modelASlug
+    ? comparison.modelAName
+    : strongest?.leaderSlug === comparison.modelBSlug ? comparison.modelBName : null;
+  const finding = strongest
+    ? leaderName ? `${leaderName} leads on ${strongest.category}` : `Tied on ${strongest.category}`
+    : 'No comparable metric finding';
+  const implication = comparison.modelAPriceUsdPerMillion !== null && comparison.modelBPriceUsdPerMillion !== null
+    ? `${comparison.modelAName} ${formatRate(comparison.modelAPriceUsdPerMillion)} · ${comparison.modelBName} ${formatRate(comparison.modelBPriceUsdPerMillion)}`
+    : comparison.modelAContextWindowTokens !== null && comparison.modelBContextWindowTokens !== null
+      ? `Context: ${formatScore(comparison.modelAContextWindowTokens, 'tokens')} · ${formatScore(comparison.modelBContextWindowTokens, 'tokens')}`
+      : null;
+  return <li>
+    <article className="panel home-snapshot-card home-comparison-card">
+      <h3>{comparison.modelAName} vs {comparison.modelBName}</h3>
+      <p><strong>{finding}</strong></p>
+      {strongest ? <p className="muted">{formatScore(strongest.modelAValue, strongest.unit)} vs {formatScore(strongest.modelBValue, strongest.unit)}</p> : null}
+      {implication ? <p className="muted">{implication}</p> : null}
+      <a className="home-snapshot-model" href={`/compare/${encodeURIComponent(comparison.pairSlug)}`} aria-label={`Compare ${comparison.modelAName} and ${comparison.modelBName}`}>Open comparison <ArrowRight aria-hidden="true" size={14} /></a>
+    </article>
+  </li>;
+}
+
 function MarketAtAGlance() {
   const state = useDecisionPicks();
   const envelope = state.envelope;
   const cards = marketLeaderCards(state.decisionPicks);
+  const comparisons = envelope?.data.representativeComparisons ?? [];
 
   return <section className="panel home-snapshot-section" aria-label="Market at a glance">
     <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>Leaders for each decision route, republished from the active source revision without recalculation.</p></div></div>
@@ -129,6 +155,9 @@ function MarketAtAGlance() {
           {cards.length === 0
             ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
             : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}
+          {comparisons.length > 0 ? <ul className="home-snapshot-grid home-comparison-grid" aria-label="Representative comparisons">
+            {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
+          </ul> : null}
           {envelope === null ? null : <p className="home-snapshot-provenance">
             <span>Source published {formatCheckedAt(envelope.publishedAt)}</span>
             <span aria-hidden="true">·</span>

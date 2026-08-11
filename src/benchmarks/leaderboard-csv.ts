@@ -75,7 +75,7 @@ function csvHeaders(result: LeaderboardResult): readonly string[] {
   const price = ['price_usd_per_million', 'context_window_tokens'];
   switch (result.definition.kind) {
     case 'benchlm':
-      return [...common, ...metric, ...price, ...identity];
+      return [...common, ...metric, 'source_rank', ...price, ...identity];
     case 'lmarena':
       return [...common, ...metric, 'source_rank', ...price, ...identity];
     case 'value':
@@ -135,7 +135,7 @@ function csvRow(
   const primaryPrice = entry.primaryPrice;
   switch (result.definition.kind) {
     case 'benchlm':
-      return [...common, ...metric, ...price, ...identity];
+      return [...common, ...metric, entry.sourceRank, ...price, ...identity];
     case 'lmarena':
       return [...common, ...metric, entry.sourceRank, ...price, ...identity];
     case 'value':
@@ -202,7 +202,12 @@ export function leaderboardCsv(result: LeaderboardResult, filters: LeaderboardQu
   };
   appendRow(serializedCsvRow(csvHeaders(result)));
   for (const entry of entries) {
-    const rank = isEstimated(entry) ? null : ++rankedPosition;
+    // BenchLM rows carry their published source rank; a filtered row position
+    // is never exported as a rank. Other kinds keep their existing position
+    // column, which LMArena must not change.
+    const rank = result.definition.kind === 'benchlm'
+      ? entry.sourceRank
+      : (isEstimated(entry) ? null : ++rankedPosition);
     appendRow(serializedCsvRow(csvRow(result, entry, rank)));
   }
   return rows.join('\r\n').concat('\r\n');

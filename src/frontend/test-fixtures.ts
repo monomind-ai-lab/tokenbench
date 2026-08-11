@@ -48,6 +48,12 @@ export const FRONTEND_TEST_CATALOG: CatalogResponse = {
       pricingBasis: 'subscription',
       route: 'subscription',
       entitlement: { kind: 'rolling_limit', description: 'Usage varies with demand.' },
+      entitlementEvidence: {
+        status: 'dynamic_unknown',
+        boundType: 'unknown',
+        dimensions: [],
+        source: { url: 'https://example.test/plans', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'high' },
+      },
       sourceId: 'provider-a-subscription',
     },
     {
@@ -59,6 +65,12 @@ export const FRONTEND_TEST_CATALOG: CatalogResponse = {
       pricingBasis: 'subscription',
       route: 'subscription',
       entitlement: { kind: 'fixed_tokens', monthlyTokens: 10_000_000 },
+      entitlementEvidence: {
+        status: 'verified',
+        boundType: 'hard_max',
+        dimensions: [{ metric: 'credits', max: 10_000_000, unit: 'tokens', window: 'monthly' }],
+        source: { url: 'https://example.test/plans', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'high' },
+      },
       sourceId: 'provider-a-subscription',
     },
   ],

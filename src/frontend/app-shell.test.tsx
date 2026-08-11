@@ -192,7 +192,7 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'Describe your monthly workload' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Review the recommendation' })).toBeInTheDocument();
     const result = await calculatedResult();
-    expect(screen.getByText('Variable rolling entitlement · exact token capacity is not published.')).toBeInTheDocument();
+    expect(screen.getByText('Dynamic or unpublished capacity · this plan cannot be compared automatically.')).toBeInTheDocument();
     expect(screen.getByText('Adjust model usage mix')).toBeInTheDocument();
     expect(screen.getByText('For example, 10M tokens at a 50/50 input/output mix describes a balanced monthly workload.')).toBeInTheDocument();
     expect(result).toHaveTextContent(/subscription|pay as you go/i);
@@ -226,6 +226,51 @@ describe('responsive calculator app shell', () => {
     expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
     expect(within(result).getByText('Efficiency').parentElement).toHaveTextContent('Unavailable');
     expect(within(result).queryByText(/^Breakeven:/)).not.toBeInTheDocument();
+  });
+
+  it('renders projected entitlement derivation as a scenario and never as guaranteed savings', async () => {
+    const plan = comparablePlan({
+      entitlementEvidence: {
+        status: 'projected',
+        boundType: 'outer_ceiling',
+        dimensions: [{ metric: 'model_calls', max: 720, unit: 'messages', window: 'monthly' }],
+        projection: {
+          formula: '5 x 144 = 720',
+          assumptions: ['The five-hour window repeats for 30 days.'],
+          caveats: ['A weekly cap may bind first.'],
+        },
+        source: { url: 'https://example.test/projected-plan', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'medium' },
+      },
+    });
+    renderCalculator({ ...FRONTEND_TEST_CATALOG, plans: [plan] }, calculatorPath({ planId: plan.id }));
+
+    const result = await calculatedResult();
+    expect(result).toHaveTextContent('Projected outer ceiling');
+    expect(result).toHaveTextContent('5 x 144 = 720');
+    expect(result).toHaveTextContent('The five-hour window repeats for 30 days.');
+    expect(result).toHaveTextContent('A weekly cap may bind first.');
+    expect(result).not.toHaveTextContent('Subscription is cheaper');
+    expect(within(result).getByRole('link', { name: 'Open entitlement source' })).toHaveAttribute('href', 'https://example.test/projected-plan');
+    expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
+  });
+
+  it('blocks stale entitlement evidence and renders the reason distinctly', async () => {
+    const plan = comparablePlan({
+      entitlementEvidence: {
+        status: 'stale',
+        boundType: 'hard_max',
+        dimensions: [{ metric: 'credits', max: 10_000_000, unit: 'tokens', window: 'monthly' }],
+        staleReason: 'The published plan price drifted from the stored value.',
+        source: { url: 'https://example.test/stale-plan', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'low' },
+      },
+    });
+    renderCalculator({ ...FRONTEND_TEST_CATALOG, plans: [plan] }, calculatorPath({ planId: plan.id }));
+
+    const result = await calculatedResult();
+    expect(result).toHaveTextContent('Stale evidence');
+    expect(result).toHaveTextContent('The published plan price drifted from the stored value.');
+    expect(result).not.toHaveTextContent('Subscription is cheaper');
+    expect(within(result).getByText('Breakeven point').parentElement).toHaveTextContent('Unavailable');
   });
 
   it.each<readonly [IneligibleCalculatorFixture | 'covered' | 'insufficient', string]>([

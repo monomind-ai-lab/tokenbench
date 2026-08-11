@@ -1,4 +1,4 @@
-import type { LeaderboardEntry, LeaderboardSort } from '../benchmarks/leaderboards';
+import { LEADERBOARD_DEFINITIONS, type LeaderboardEntry, type LeaderboardSort } from '../benchmarks/leaderboards';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 import { formatDateTime } from './ui';
 import type { BenchmarkAttribution, BenchmarkFreshness } from './use-benchmarks';
@@ -54,7 +54,7 @@ function metricLabel(metricKey: string): string {
     'benchlm:category:agentic': 'BenchLM agentic',
     'benchlm:category:reasoning': 'BenchLM reasoning',
     'benchlm:category:knowledge': 'BenchLM knowledge',
-    'benchlm:category:multimodal': 'BenchLM multimodal',
+    'benchlm:category:multimodalGrounded': 'BenchLM multimodal',
     'lmarena:text_style_control:overall': 'LMArena human preference',
     'lmarena:vision_style_control:overall': 'LMArena vision',
     'lmarena:document_style_control:overall': 'LMArena documents',
@@ -94,6 +94,11 @@ function badgeFor(keyName: LeaderboardKey, entry: LeaderboardEntry, position: nu
   return 'Top Capability';
 }
 
+function usesPublishedSourceRank(keyName: LeaderboardKey): boolean {
+  const kind = LEADERBOARD_DEFINITIONS[keyName].kind;
+  return kind === 'benchlm' || kind === 'lmarena' || kind === 'multimodal';
+}
+
 function LensList({ entry }: { readonly entry: LeaderboardEntry }) {
   if (isEstimated(entry)) return <span>Unavailable</span>;
   const lenses = sourceLenses(entry);
@@ -118,7 +123,7 @@ export function LeaderboardEvidence({
     <p><strong>Published</strong> {formatDateTime(publishedAt)} <span aria-hidden="true">·</span> <strong>Checked</strong> {formatDateTime(freshness.checkedAt)} <span className={`leaderboard-freshness freshness-${freshness.status}`}>{freshness.status === 'fresh' ? 'Fresh' : 'Stale'}</span></p>
     {freshness.message ? <p className="muted">{freshness.message}</p> : null}
     <ul aria-label="Source attribution">
-      {attribution.map((source) => <li key={`${source.sourceId}-${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a><span>Updated {formatDateTime(source.updatedAt)}</span></li>)}
+      {attribution.map((source) => <li key={`${source.sourceId}-${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a><span>Observed {formatDateTime(source.updatedAt)}</span></li>)}
     </ul>
   </footer>;
 }
@@ -156,8 +161,12 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
     : sort === 'pareto-score-desc'
       ? 'Current order: value-frontier entries first, then metric score descending, blended cost ascending, and canonical model slug.'
       : null;
+  const sourceRanked = usesPublishedSourceRank(keyName);
   let rankedPosition = Number.isSafeInteger(rankOffset) && rankOffset >= 0 ? rankOffset : 0;
-  const rows = entries.map((entry) => ({ entry, position: isEstimated(entry) ? null : ++rankedPosition }));
+  const rows = entries.map((entry) => ({
+    entry,
+    position: isEstimated(entry) ? null : sourceRanked ? entry.sourceRank : ++rankedPosition,
+  }));
   return <section className="leaderboard-results" aria-label={label}>
     <div className="leaderboard-desktop-table">
       <table aria-label={label} aria-describedby={orderDescription ? orderDescriptionId : undefined}>

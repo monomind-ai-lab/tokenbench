@@ -789,7 +789,7 @@ describe('cached benchmark APIs', () => {
       ...metrics.filter((candidate) => candidate.model_key !== 'provider:wrong-lens'),
       { ...metrics[0], metric_key: 'benchlm:category:coding', category: 'coding', value: 88 },
       { ...metrics[0], metric_key: 'benchlm:category:coding:secondary', category: 'coding', value: 86 },
-      { ...metrics[0], metric_key: 'benchlm:category:multimodal', category: 'multimodal', value: 87 },
+      { ...metrics[0], metric_key: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded', value: 87 },
       { ...metrics[3], metric_key: 'benchlm:category:agentic', category: 'agentic' },
       { ...metrics[4], metric_key: 'lmarena:text_to_image:overall', value: 1_100, rank: 2 },
     ];
@@ -846,7 +846,7 @@ describe('cached benchmark APIs', () => {
       'multimodal-vision-documents': true,
     });
     expect(result.compareDirectory.models.find((model) => model.slug === 'alpha')?.metricCategories)
-      .toEqual(['coding', 'multimodal', 'overall']);
+      .toEqual(['coding', 'multimodalGrounded', 'overall']);
     expect(result.compareDirectory.models.find((model) => model.slug === 'wrong-lens')?.metricCategories)
       .toEqual(['agentic']);
   });

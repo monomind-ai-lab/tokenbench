@@ -630,7 +630,7 @@ function liveScaleBatch(): { batch: NormalizedSourceBatch; pairs: BenchmarkCompa
   }));
   const metrics = Array.from({ length: 859 }, (_, index) => ({
     modelKey: modelKey(index % benchLmModels.length), metricKey: `benchlm:live:${String(index).padStart(4, '0')}`,
-    category: 'coding', value: index + 1, rank: null, lower: null, upper: null, voteCount: null,
+    category: 'coding', value: index + 1, rawValue: null, rank: null, lower: null, upper: null, voteCount: null,
     unit: 'score' as const, sourceId: 'benchlm' as const, sourceUpdatedAt: observedAt,
     sourceModelId: modelKey(index % benchLmModels.length), sourceArtifactId: 'live-scale', rankingEligible: true,
     methodology: 'benchlm_raw_composite' as const, observationCount: null, sessionCount: null,
@@ -1282,7 +1282,9 @@ describe('atomic benchmark ingestion', () => {
     const modelsSnapshot = [...r2.objects.entries()].find(([key]) => key.includes('/benchlm/models/projected/'));
     expect(modelsSnapshot).toBeDefined();
     const storedModels = new TextDecoder().decode(modelsSnapshot?.[1].bytes);
-    expect(storedModels).not.toMatch(/artificial[ _-]?analysis|benchmarks\.external|displayScore/i);
+    // displayScore is now a published, projected field; contaminated sources
+    // and external benchmark groups must still never reach the snapshot.
+    expect(storedModels).not.toMatch(/artificial[ _-]?analysis|benchmarks\.external/i);
     const modelSource = jsonRowsFor(db.state.publicationStatements, 'benchmark_source_records')
       .find((source) => source.sourceId === 'benchlm' && source.artifactId === 'models');
     expect(modelSource?.contentHash).toBe(sha256(modelsSnapshot?.[1].bytes ?? new Uint8Array()));
@@ -2424,7 +2426,9 @@ describe('atomic benchmark ingestion', () => {
       revision: result.revision,
       data: { compareDirectory: { models: expect.any(Array) } },
     });
-  }, 10_000);
+    // 200 sequential pages of ingestion legitimately runs 8-12s; the previous
+    // 10s budget made this flaky under full-suite parallelism.
+  }, 30_000);
 
   it('preserves the active revision when a declared LMArena total has a missing required page', async () => {
     const previous: RevisionRow = {

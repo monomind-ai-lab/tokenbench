@@ -17,6 +17,7 @@ function entry(overrides: Partial<LeaderboardEntry> = {}): LeaderboardEntry {
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value: 80,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,

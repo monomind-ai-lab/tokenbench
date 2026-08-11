@@ -5,7 +5,8 @@ import { primaryHostedPriceForModel, type PrimaryHostedPrice } from './value';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 
 export interface DecisionPickEntry {
-  readonly rank: number;
+  /** Published source rank; null when the source does not rank the row. */
+  readonly rank: number | null;
   readonly modelKey: string;
   readonly slug: string;
   readonly name: string;
@@ -166,9 +167,11 @@ function projectableEntries(
 function decisionPickEntry(
   key: LeaderboardKey,
   candidate: ProjectableEntry,
-  rank: number,
 ): DecisionPickEntry {
   const { entry, updatedAt, representativeRate } = candidate;
+  // The home decision pick keeps the published source rank (absolute, so ties
+  // stay ties and filtering never fabricates a leader position).
+  const rank = entry.sourceRank;
   return {
     rank,
     modelKey: entry.model.modelKey,
@@ -267,7 +270,7 @@ export function materializeDecisionPicks(snapshot: BenchmarkProjectionSnapshot):
     ...category,
     entries: (candidatesByKey.get(category.key) ?? [])
       .slice(0, 3)
-      .map((candidate, index) => decisionPickEntry(category.key, candidate, index + 1)),
+      .map((candidate) => decisionPickEntry(category.key, candidate)),
   }));
   const overallCandidates = candidatesByKey.get('llm-overall') ?? [];
   const benchAlignLeader = overallCandidates[0];
@@ -289,17 +292,17 @@ export function materializeDecisionPicks(snapshot: BenchmarkProjectionSnapshot):
     decisionPicks: groups,
     homeDecisionSnapshot: {
       benchAlignLeader: benchAlignLeader
-        ? ready(decisionPickEntry('llm-overall', benchAlignLeader, 1), benchAlignLeader.updatedAt)
+        ? ready(decisionPickEntry('llm-overall', benchAlignLeader), benchAlignLeader.updatedAt)
         : unavailable(),
       valueFrontierLeader: valueLeader
-        ? ready(decisionPickEntry('llm-value', valueLeader, 1), valueLeader.updatedAt)
+        ? ready(decisionPickEntry('llm-value', valueLeader), valueLeader.updatedAt)
         : unavailable(),
       lowestVerifiedRepresentativeRate: lowestRate
         ? ready(homeRateValue(lowestRate), lowestRate.updatedAt)
         : unavailable(),
       pricePerformancePoints: overallCandidates.flatMap((candidate) => {
         if (candidate.representativeRate === null) return [];
-        const { rank: _rank, ...point } = decisionPickEntry('llm-overall', candidate, 1);
+        const { rank: _rank, ...point } = decisionPickEntry('llm-overall', candidate);
         return [{
           ...point,
           representativePriceUsdPerMillion: candidate.representativeRate.blendedCostPerMillion,

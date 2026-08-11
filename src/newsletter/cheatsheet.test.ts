@@ -70,6 +70,7 @@ function metric(overrides: Partial<BenchmarkMetric> = {}): BenchmarkMetric {
     metricKey: 'benchlm:overall:raw',
     category: 'overall',
     value: 91.5,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -175,7 +176,7 @@ function benchmarkFixture(overrides: Partial<FrozenSnapshot> = {}): FrozenSnapsh
       metric({ metricKey: 'benchlm:category:coding', category: 'coding', value: 87 }),
       metric({ metricKey: 'benchlm:category:reasoning', category: 'reasoning', value: 86 }),
       metric({ metricKey: 'benchlm:category:knowledge', category: 'knowledge', value: 85 }),
-      metric({ metricKey: 'benchlm:category:multimodal', category: 'multimodal', value: 84 }),
+      metric({ metricKey: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded', value: 84 }),
       metric({
         metricKey: 'lmarena:vision_style_control:overall', category: 'multimodal', value: 1234, rank: 7,
         unit: 'arena_score', sourceId: 'lmarena', sourceModelId: 'alpha-lmarena',
@@ -306,7 +307,7 @@ describe('monthly cheatsheet facts', () => {
     expect(multimodal).toMatchObject({ status: 'evidence-lens', positionLabel: 'Evidence position' });
     expect(alpha?.lenses).toEqual([
       expect.objectContaining({
-        metricKey: 'benchlm:category:multimodal', score: 84, methodologyLabel: 'BenchLM raw composite', sourceRank: null,
+        metricKey: 'benchlm:category:multimodalGrounded', score: 84, methodologyLabel: 'BenchLM raw composite', sourceRank: null,
       }),
       expect.objectContaining({
         metricKey: 'lmarena:vision_style_control:overall', score: 1234,

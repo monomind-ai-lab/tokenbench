@@ -1,4 +1,4 @@
-import type { CatalogResponse, ModelOffer, PlanEntitlement } from './contracts';
+import type { CatalogResponse, EntitlementEvidence, ModelOffer, PlanEntitlement } from './contracts';
 
 function fail(message: string): never {
   throw new Error(message);
@@ -48,6 +48,62 @@ function validateEntitlement(value: unknown, name: string): asserts value is Pla
   if (entitlement.kind === 'credits' && entitlement.creditsMicroDollars !== undefined) {
     requireNonNegativeInteger(entitlement.creditsMicroDollars, `${name}.creditsMicroDollars`);
   }
+}
+
+const ENTITLEMENT_METRICS = ['messages', 'model_calls', 'credits', 'tasks', 'feature_uses'];
+const ENTITLEMENT_WINDOWS = ['rolling_5h', 'weekly', 'monthly', 'billing_cycle'];
+
+/**
+ * Entitlement evidence must stay separable from copy: a projected bound always
+ * carries its formula, assumptions, and caveats so nothing can present a
+ * hypothesis as a guarantee, and a stale row always explains why it is blocked.
+ */
+function validateEntitlementEvidence(value: unknown, name: string): asserts value is EntitlementEvidence {
+  if (!value || typeof value !== 'object') fail(`${name} must be an object`);
+  const evidence = value as EntitlementEvidence;
+  if (!['verified', 'projected', 'dynamic_unknown', 'stale'].includes(evidence.status)) fail(`${name}.status is invalid`);
+  if (!['hard_max', 'practical_upper', 'outer_ceiling', 'unknown'].includes(evidence.boundType)) fail(`${name}.boundType is invalid`);
+  if (!Array.isArray(evidence.dimensions)) fail(`${name}.dimensions must be an array`);
+  evidence.dimensions.forEach((dimension, index) => {
+    const dimensionName = `${name}.dimensions[${index}]`;
+    if (!dimension || typeof dimension !== 'object') fail(`${dimensionName} must be an object`);
+    if (!ENTITLEMENT_METRICS.includes(dimension.metric)) fail(`${dimensionName}.metric is invalid`);
+    if (!ENTITLEMENT_WINDOWS.includes(dimension.window)) fail(`${dimensionName}.window is invalid`);
+    requireString(dimension.unit, `${dimensionName}.unit`);
+    for (const bound of ['min', 'max'] as const) {
+      if (dimension[bound] === undefined) continue;
+      if (typeof dimension[bound] !== 'number' || !Number.isFinite(dimension[bound]) || (dimension[bound] as number) < 0) {
+        fail(`${dimensionName}.${bound} must be a non-negative finite number`);
+      }
+    }
+    if (dimension.min !== undefined && dimension.max !== undefined && dimension.min > dimension.max) {
+      fail(`${dimensionName}.min must not exceed ${dimensionName}.max`);
+    }
+  });
+
+  // A projected bound is a scenario, so it may never ship without its derivation.
+  if (evidence.status === 'projected' && evidence.projection === undefined) {
+    fail(`${name}.projection is required when status is projected`);
+  }
+  if (evidence.projection !== undefined) {
+    requireString(evidence.projection.formula, `${name}.projection.formula`);
+    for (const key of ['assumptions', 'caveats'] as const) {
+      if (!Array.isArray(evidence.projection[key]) || evidence.projection[key].length === 0) {
+        fail(`${name}.projection.${key} must be a non-empty array`);
+      }
+      evidence.projection[key].forEach((entry, index) => requireString(entry, `${name}.projection.${key}[${index}]`));
+    }
+  }
+  // Dynamic-unknown rows must not manufacture a number.
+  if (evidence.status === 'dynamic_unknown' && evidence.dimensions.some((dimension) => dimension.min !== undefined || dimension.max !== undefined)) {
+    fail(`${name} must not publish a numeric bound when status is dynamic_unknown`);
+  }
+  if (evidence.status === 'stale') requireString(evidence.staleReason, `${name}.staleReason`);
+
+  if (!evidence.source || typeof evidence.source !== 'object') fail(`${name}.source must be an object`);
+  requireUrl(evidence.source.url, `${name}.source.url`);
+  requireString(evidence.source.accessedAt, `${name}.source.accessedAt`);
+  if (!['high', 'medium', 'low'].includes(evidence.source.confidence)) fail(`${name}.source.confidence is invalid`);
 }
 
 function validateModelOffer(value: unknown, index: number, sourceIds: Set<string>): asserts value is ModelOffer {
@@ -112,6 +168,7 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     validateOptionalStringArray(plan.supportedModelIds, `${name}.supportedModelIds`);
     if (plan.currency !== 'USD' || plan.pricingBasis !== 'subscription' || plan.route !== 'subscription') fail(`${name} has invalid pricing metadata`);
     validateEntitlement(plan.entitlement, `${name}.entitlement`);
+    validateEntitlementEvidence(plan.entitlementEvidence, `${name}.entitlementEvidence`);
     const sourceProvider = sourceProviders.get(plan.sourceId);
     if (!sourceProvider) fail(`${name}.sourceId must refer to provenance`);
     if (sourceProvider !== plan.providerId) fail(`${name}.sourceId must belong to provider ${plan.providerId}`);

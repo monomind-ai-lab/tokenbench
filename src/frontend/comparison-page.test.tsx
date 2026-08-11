@@ -18,7 +18,7 @@ function viewModel(): ComparisonViewModel {
     modelKey: 'provider:model-b', slug: 'model-b', name: 'Model B', creator: 'Provider B', sourceModelId: 'model-b',
   };
   const metric = (modelKey: string, value: number) => ({
-    modelKey, metricKey: 'benchlm:category:coding', category: 'coding', value, rank: null, lower: null, upper: null,
+    modelKey, metricKey: 'benchlm:category:coding', category: 'coding', value, rawValue: null, rank: null, lower: null, upper: null,
     voteCount: null, unit: 'score' as const, sourceId: 'benchlm' as const, sourceUpdatedAt: UPDATED_AT,
     sourceModelId: modelKey, sourceArtifactId: 'benchlm-models', rankingEligible: true,
     methodology: 'benchlm_raw_composite' as const, observationCount: null, sessionCount: null,

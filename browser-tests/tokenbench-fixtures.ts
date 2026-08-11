@@ -75,6 +75,7 @@ function benchlmMetric(modelKey: string, metricKey: string, category: string, va
     metricKey,
     category,
     value,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -97,6 +98,7 @@ function lmarenaMetric(modelKey: string, rank: number): BenchmarkMetric {
     metricKey: 'lmarena:text_to_image:overall',
     category: 'text-to-image',
     value: 1_200 - rank,
+    rawValue: null,
     rank,
     lower: null,
     upper: null,
@@ -373,6 +375,7 @@ export function decisionSummaryEnvelope(): BenchmarkApiEnvelope<BenchmarkSummary
       },
     ],
     data: {
+      representativeComparisons: [],
       decisionPicks: DECISION_PICK_CATEGORIES.map((category) => ({
         ...category,
         entries: [1, 2, 3].map((rank) => entry(category.key, rank)),

@@ -26,6 +26,7 @@ function entry(overrides: Partial<LeaderboardEntry> = {}): LeaderboardEntry {
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value: 83.2,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -229,7 +230,7 @@ describe('LeaderboardTable', () => {
     const multiLens = entry({
       model: { ...entry().model, modelKey: 'vision-model', slug: 'vision-model', name: 'Vision Model', sourceId: 'benchlm' },
       metrics: [
-        { ...entry().metric!, metricKey: 'benchlm:category:multimodal', category: 'multimodal', value: 72, sourceId: 'benchlm' },
+        { ...entry().metric!, metricKey: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded', value: 72, sourceId: 'benchlm' },
         {
           ...entry().metric!,
           metricKey: 'lmarena:vision_style_control:overall',
@@ -289,12 +290,33 @@ describe('LeaderboardTable', () => {
         },
         sourceRank: 1,
       })
-      : entry({ onValueFrontier: key === 'llm-value' });
+      : key === 'llm-value'
+        ? entry({ onValueFrontier: true })
+        : entry({
+          metric: { ...entry().metric!, rank: 1 },
+          metrics: [{ ...entry().metric!, rank: 1 }],
+          sourceRank: 1,
+        });
 
     renderTable(key, sort, [ranked]);
 
     expect(screen.getAllByText(badge).length).toBeGreaterThan(0);
     expect(screen.queryByText(/^Best$/i)).not.toBeInTheDocument();
+  });
+
+  it('preserves an absolute BenchLM source rank after filtering and does not synthesize a leader badge', () => {
+    const metric = { ...entry().metric!, rank: 23 };
+    renderTable('llm-coding', 'score-desc', [entry({
+      metric,
+      metrics: [{ ...metric }],
+      sourceRank: 23,
+    })]);
+
+    const table = screen.getByRole('table', { name: 'Coding benchmark' });
+    expect(within(table).getByRole('cell', { name: '#23' })).toBeInTheDocument();
+    expect(screen.getAllByText('23').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Top Coding')).not.toBeInTheDocument();
+    expect(screen.queryByText('#1')).not.toBeInTheDocument();
   });
 
   it.each([
@@ -305,9 +327,10 @@ describe('LeaderboardTable', () => {
       ...entry().metric!,
       metricKey,
       category,
+      rank: 1,
     };
 
-    renderTable(key, 'score-desc', [entry({ metric, metrics: [metric] })]);
+    renderTable(key, 'score-desc', [entry({ metric, metrics: [metric], sourceRank: 1 })]);
 
     expect(screen.getAllByText(label).length).toBeGreaterThan(1);
     expect(screen.getAllByText(badge).length).toBeGreaterThan(0);
@@ -647,7 +670,7 @@ describe('LeaderboardFilters', () => {
         ...entry().metric!,
         modelKey: 'benchlm-model',
         sourceModelId: 'benchlm-model',
-        metricKey: 'benchlm:category:multimodal',
+        metricKey: 'benchlm:category:multimodalGrounded',
         category: 'multimodal',
         value: 70,
       },
@@ -710,7 +733,7 @@ describe('LeaderboardFilters', () => {
       capabilities={{
         ...RICH_FILTER_CAPABILITIES,
         metricKeys: [
-          'benchlm:category:multimodal',
+          'benchlm:category:multimodalGrounded',
           'lmarena:vision_style_control:overall',
           'lmarena:document_style_control:overall',
         ],

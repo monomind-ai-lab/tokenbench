@@ -16,6 +16,7 @@ function entry(): LeaderboardEntry {
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value: 90,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -256,6 +257,18 @@ describe('complete leaderboard projection cache reader', () => {
         entries: [{ model: { name: 'Alpha' }, metric: { value: 90 } }],
       },
     });
+  });
+
+  it('accepts a published BenchLM source rank when it matches the primary metric', () => {
+    const fixture = entry();
+    const metric = { ...fixture.metric!, rank: 23 };
+    const ranked = { ...fixture, metric, metrics: [metric], sourceRank: 23 };
+
+    expect(parseCompleteLeaderboardProjection(
+      JSON.stringify(projectionWithEntries([ranked])),
+      'llm-coding',
+      'balanced',
+    ).entries[0]).toMatchObject({ sourceRank: 23, metric: { rank: 23 } });
   });
 
   it('preserves the selected stale envelope metadata', async () => {
@@ -601,7 +614,7 @@ describe('complete leaderboard projection cache reader', () => {
       rank: 1,
     };
     const overallMetric = { ...fixture.metric!, metricKey: 'benchlm:overall:raw', category: 'overall' };
-    const multimodalMetric = { ...fixture.metric!, metricKey: 'benchlm:category:multimodal', category: 'multimodal' };
+    const multimodalMetric = { ...fixture.metric!, metricKey: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded' };
     const cases = [
       ['llm-human-preference', { ...fixture, metric: lmarenaMetric, metrics: [lmarenaMetric], sourceRank: 1 }],
       ['llm-value', { ...fixture, metric: overallMetric, metrics: [overallMetric], blendedCostPerMillion: 2, onValueFrontier: true }],

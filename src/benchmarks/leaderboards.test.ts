@@ -35,6 +35,7 @@ function metric(overrides: Partial<BenchmarkMetric> = {}): BenchmarkMetric {
     metricKey: 'benchlm:overall:raw',
     category: 'overall',
     value: 80,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -89,7 +90,7 @@ describe('frozen v1 leaderboard definitions', () => {
       'llm-pricing-context': { sourceId: 'openrouter', defaultSort: 'price-asc', userSortable: true },
       'multimodal-vision-documents': {
         metricKeys: [
-          'benchlm:category:multimodal',
+          'benchlm:category:multimodalGrounded',
           'lmarena:vision_style_control:overall',
           'lmarena:document_style_control:overall',
         ],
@@ -132,6 +133,21 @@ describe('Reasoning and Knowledge evidence lenses', () => {
     ], [], 'balanced');
 
     expect(result.entries).toEqual([]);
+  });
+
+  it('keeps published non-rankable Reasoning evidence visible without inventing a source rank', () => {
+    const reasoning = metric({
+      metricKey: 'benchlm:category:reasoning',
+      category: 'reasoning',
+      value: 86.5,
+      rankingEligible: false,
+      rank: null,
+    });
+
+    const result = buildLeaderboard('llm-reasoning', [model()], [reasoning], [], 'balanced');
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0]).toMatchObject({ metric: reasoning, sourceRank: null, onValueFrontier: false });
   });
 });
 
@@ -203,7 +219,8 @@ describe('buildLeaderboard', () => {
     ], [], 'balanced');
 
     expect(result.entries.map((entry) => entry.model.slug)).toEqual(['category-only']);
-    expect(result.entries[0]).toMatchObject({ blendedCostPerMillion: null, sourceRank: null });
+    // The published BenchLM category rank is preserved, not synthesized.
+    expect(result.entries[0]).toMatchObject({ blendedCostPerMillion: null, sourceRank: 1 });
   });
 
   it('rejects non-score units from BenchLM routes and the BenchLM multimodal lens', () => {
@@ -212,8 +229,8 @@ describe('buildLeaderboard', () => {
     const wrongUnitMultimodal = metric({
       modelKey: 'bench',
       sourceModelId: 'bench',
-      metricKey: 'benchlm:category:multimodal',
-      category: 'multimodal',
+      metricKey: 'benchlm:category:multimodalGrounded',
+      category: 'multimodalGrounded',
       unit: 'arena_score',
     });
 
@@ -373,7 +390,7 @@ describe('buildLeaderboard', () => {
     const vision = model({ modelKey: 'source:lmarena:vision', slug: 'vision', sourceId: 'lmarena', evidenceStatus: 'source_only' });
     const agent = model({ modelKey: 'source:lmarena:agent', slug: 'agent', sourceId: 'lmarena', evidenceStatus: 'source_only' });
     const result = buildLeaderboard('multimodal-vision-documents', [agent, vision, bench], [
-      metric({ modelKey: 'bench', sourceModelId: 'bench', metricKey: 'benchlm:category:multimodal', category: 'multimodal', value: 90 }),
+      metric({ modelKey: 'bench', sourceModelId: 'bench', metricKey: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded', value: 90 }),
       metric({ modelKey: 'source:lmarena:vision', sourceModelId: 'vision', metricKey: 'lmarena:vision_style_control:overall', category: 'overall', sourceId: 'lmarena', methodology: 'bradley_terry', unit: 'arena_score', rank: 2, value: 1_150 }),
       metric({ modelKey: 'source:lmarena:agent', sourceModelId: 'agent', metricKey: 'lmarena:agent:overall:ips', category: 'overall', sourceId: 'lmarena', methodology: 'ips', unit: 'score', rank: 1, value: 0.9 }),
     ], [], 'balanced');

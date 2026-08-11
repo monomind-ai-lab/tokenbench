@@ -44,7 +44,7 @@ const METRIC_LENS_LABELS: Readonly<Record<string, string>> = {
   'benchlm:category:agentic': 'Agentic',
   'benchlm:category:reasoning': 'Reasoning',
   'benchlm:category:knowledge': 'Knowledge',
-  'benchlm:category:multimodal': 'Multimodal',
+  'benchlm:category:multimodalGrounded': 'Multimodal',
   'lmarena:text_style_control:overall': 'Human preference',
   'lmarena:vision_style_control:overall': 'Vision',
   'lmarena:document_style_control:overall': 'Documents',

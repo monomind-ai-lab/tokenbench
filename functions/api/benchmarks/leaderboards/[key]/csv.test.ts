@@ -28,6 +28,7 @@ function entry({
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value: score,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -315,8 +316,8 @@ describe('leaderboard CSV endpoint', () => {
     );
     expect(response.headers.get('x-tokenbench-freshness')).toBe('fresh');
     expect(await response.text()).toBe([
-      'rank,model,provider,evidence_status,score,unit,metric_key,methodology,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
-      '1,Alpha,Provider A,supported,90,score,benchlm:category:coding,benchlm_raw_composite,3,128000,alpha,alpha,Proprietary',
+      'rank,model,provider,evidence_status,score,unit,metric_key,methodology,source_rank,price_usd_per_million,context_window_tokens,model_key,slug,source_type',
+      ',Alpha,Provider A,supported,90,score,benchlm:category:coding,benchlm_raw_composite,,3,128000,alpha,alpha,Proprietary',
       '',
     ].join('\r\n'));
     expect(fixture.calls).toHaveLength(1);

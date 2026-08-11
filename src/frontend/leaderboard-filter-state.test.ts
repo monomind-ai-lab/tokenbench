@@ -48,6 +48,7 @@ function entry(): LeaderboardEntry {
       metricKey: 'benchlm:category:coding',
       category: 'coding',
       value: 90,
+      rawValue: null,
       rank: null,
       lower: null,
       upper: null,

@@ -20,7 +20,8 @@ import {
 } from './leaderboards';
 import { materializeDecisionPicks } from './decision-picks';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
-import type { WorkloadProfile } from './value';
+import { primaryHostedPriceForModel, type WorkloadProfile } from './value';
+import { COMPARISON_ALLOWLIST } from './comparison-allowlist';
 
 /** The immutable facts needed to materialize cache-safe Pages responses. */
 export interface BenchmarkProjectionSnapshot {
@@ -258,6 +259,111 @@ function compareDirectory(snapshot: BenchmarkProjectionSnapshot, factIndexes: Be
   return { models, indexablePairs };
 }
 
+/** One home "representative comparison" card, regenerated from the active revision. */
+export interface RepresentativeComparisonMetric {
+  readonly metricKey: string;
+  readonly category: string;
+  readonly unit: BenchmarkMetric['unit'];
+  readonly modelAValue: number;
+  readonly modelBValue: number;
+  /** Absolute published-value gap; ties are reported as 0 and never broken. */
+  readonly gap: number;
+  readonly leaderSlug: string | null;
+}
+
+export interface RepresentativeComparison {
+  readonly pairSlug: string;
+  readonly modelASlug: string;
+  readonly modelBSlug: string;
+  readonly modelAName: string;
+  readonly modelBName: string;
+  readonly sharedMetricCount: number;
+  /** Ordered strongest-first; the first entry is the capability lead finding. */
+  readonly sharedMetrics: readonly RepresentativeComparisonMetric[];
+  readonly modelAPriceUsdPerMillion: number | null;
+  readonly modelBPriceUsdPerMillion: number | null;
+  readonly modelAContextWindowTokens: number | null;
+  readonly modelBContextWindowTokens: number | null;
+}
+
+/** The specification's editorial gate for a representative home comparison. */
+const MINIMUM_SHARED_COMPARISON_METRICS = 4;
+
+function comparableSharedMetrics(
+  modelA: BenchmarkModel,
+  modelB: BenchmarkModel,
+  factIndexes: BenchmarkFactIndexes,
+): readonly RepresentativeComparisonMetric[] {
+  const byKeyForB = new Map((factIndexes.metricsByModel.get(modelB.modelKey) ?? []).map((metric) => [metric.metricKey, metric]));
+  return (factIndexes.metricsByModel.get(modelA.modelKey) ?? [])
+    .flatMap((left) => {
+      const right = byKeyForB.get(left.metricKey);
+      // Only identical lenses compare: same key, unit, and methodology.
+      if (!right || right.unit !== left.unit || right.methodology !== left.methodology) return [];
+      if (!Number.isFinite(left.value) || !Number.isFinite(right.value)) return [];
+      if (!left.rankingEligible || !right.rankingEligible) return [];
+      const gap = Math.abs(left.value - right.value);
+      return [{
+        metricKey: left.metricKey,
+        category: left.category,
+        unit: left.unit,
+        modelAValue: left.value,
+        modelBValue: right.value,
+        gap,
+        leaderSlug: gap === 0 ? null : (left.value > right.value ? modelA.slug : modelB.slug),
+      }];
+    })
+    .sort((left, right) => right.gap - left.gap || compareText(left.metricKey, right.metricKey));
+}
+
+/**
+ * Builds the reviewed home comparison cards. A pair ships only when it clears
+ * every published gate: it is on the editorial allowlist, both models resolve
+ * in the active revision, it has at least four compatible shared metrics, at
+ * least one decision-relevant difference, and price or context evidence for a
+ * factual implication. Nothing is described as a universal winner.
+ */
+export function representativeComparisons(
+  snapshot: BenchmarkProjectionSnapshot,
+  factIndexes: BenchmarkFactIndexes,
+): readonly RepresentativeComparison[] {
+  const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
+  return COMPARISON_ALLOWLIST.flatMap((pairSlug) => {
+    if (!isComparisonPairRouteSafe(pairSlug)) return [];
+    const resolved = resolvePairSlug(pairSlug);
+    if (!resolved) return [];
+    const { modelA, modelB } = resolved;
+    if (modelA.evidenceStatus !== 'supported' || modelB.evidenceStatus !== 'supported') return [];
+
+    const sharedMetrics = comparableSharedMetrics(modelA, modelB, factIndexes);
+    if (sharedMetrics.length < MINIMUM_SHARED_COMPARISON_METRICS) return [];
+    // At least one decision-relevant difference; an all-tie pair says nothing.
+    if (!sharedMetrics.some((metric) => metric.gap > 0)) return [];
+
+    const priceA = primaryHostedPriceForModel(modelA.modelKey, factIndexes.pricesByModel.get(modelA.modelKey) ?? [], 'outputHeavy');
+    const priceB = primaryHostedPriceForModel(modelB.modelKey, factIndexes.pricesByModel.get(modelB.modelKey) ?? [], 'outputHeavy');
+    const contextA = validContextWindow(priceA?.price.contextWindowTokens ?? modelA.contextWindowTokens);
+    const contextB = validContextWindow(priceB?.price.contextWindowTokens ?? modelB.contextWindowTokens);
+    const hasPriceEvidence = priceA !== null && priceB !== null;
+    const hasContextEvidence = contextA !== null && contextB !== null;
+    if (!hasPriceEvidence && !hasContextEvidence) return [];
+
+    return [{
+      pairSlug: resolved.canonicalPairSlug,
+      modelASlug: modelA.slug,
+      modelBSlug: modelB.slug,
+      modelAName: modelA.name,
+      modelBName: modelB.name,
+      sharedMetricCount: sharedMetrics.length,
+      sharedMetrics,
+      modelAPriceUsdPerMillion: hasPriceEvidence ? priceA.blendedCostPerMillion : null,
+      modelBPriceUsdPerMillion: hasPriceEvidence ? priceB.blendedCostPerMillion : null,
+      modelAContextWindowTokens: contextA,
+      modelBContextWindowTokens: contextB,
+    }];
+  });
+}
+
 export function buildBenchmarkSummaryData(snapshot: BenchmarkProjectionSnapshot) {
   const factIndexes = indexBenchmarkFacts(snapshot.metrics, snapshot.priceChecks);
   const decisions = materializeDecisionPicks({
@@ -269,6 +375,7 @@ export function buildBenchmarkSummaryData(snapshot: BenchmarkProjectionSnapshot)
     sources: sourceAvailability(snapshot),
     routes: routeAvailability(snapshot, factIndexes),
     compareDirectory: compareDirectory(snapshot, factIndexes),
+    representativeComparisons: representativeComparisons(snapshot, factIndexes),
     decisionPicks: decisions.decisionPicks,
     homeDecisionSnapshot: decisions.homeDecisionSnapshot,
   };
@@ -285,6 +392,8 @@ function hasExactEstimatedBenchLmMetric(
     && metric.modelKey === model.modelKey
     && metric.sourceId === 'benchlm'
     && metric.rankingEligible === false
+    // A source-ranked row belongs to the ranked flow, never the estimate
+    // extension appended after supported rows.
     && metric.rank === null
     && definition.metricKeys.includes(metric.metricKey)
     && metric.methodology === 'benchlm_raw_composite'
@@ -314,6 +423,7 @@ export function estimatedLeaderboardEntries(
         primaryPrice: null,
         blendedCostPerMillion: null,
         contextWindowTokens: validContextWindow(model.contextWindowTokens),
+        // Guarded above: estimate-extension metrics never carry a source rank.
         sourceRank: null,
         onValueFrontier: false,
       } satisfies LeaderboardEntry];
@@ -395,5 +505,10 @@ export function leaderboardEvidenceReferences(
   definition: LeaderboardDefinition,
   entries: readonly LeaderboardEntry[],
 ): readonly BenchmarkEvidenceReference[] {
-  return [...routeEvidence(snapshot, definition), ...displayedEvidence(entries)];
+  const displayed = displayedEvidence(entries);
+  // A populated page attributes only the model, metric, and selected price
+  // artifacts that actually contribute rendered facts. The route fallback is
+  // retained solely for an empty state, where no displayed fact can identify
+  // the source whose checked availability explains the empty result.
+  return displayed.length > 0 ? displayed : routeEvidence(snapshot, definition);
 }

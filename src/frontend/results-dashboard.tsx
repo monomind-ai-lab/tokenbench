@@ -38,6 +38,8 @@ const COVERAGE_COPY = {
   credits: 'The plan includes credits. The provider does not publish a stable token conversion, so TokenBench cannot verify token coverage.',
   rolling: 'The provider publishes a rolling usage limit without a numeric monthly cap or reset schedule, so TokenBench cannot verify token coverage.',
   dynamicUnknown: 'The provider advertises higher limits but does not publish a numeric cap or reset schedule.',
+  projected: 'Projected outer ceiling: this is a scenario derived from published limits, not a guaranteed allowance.',
+  stale: 'Stale evidence: this plan cannot back a recommendation until its source facts are refreshed.',
 } as const;
 
 function supportsSelectedModels(plan: PlanOffer, snapshot: CalculatorSnapshot): boolean {
@@ -49,6 +51,11 @@ function supportsSelectedModels(plan: PlanOffer, snapshot: CalculatorSnapshot): 
 
 function coverageCopyFor(plan: PlanOffer, snapshot: CalculatorSnapshot): string {
   if (!supportsSelectedModels(plan, snapshot)) return COVERAGE_COPY.unsupportedModel;
+  if (plan.entitlementEvidence.status === 'stale') {
+    return `${COVERAGE_COPY.stale}${plan.entitlementEvidence.staleReason ? ` ${plan.entitlementEvidence.staleReason}` : ''}`;
+  }
+  if (plan.entitlementEvidence.status === 'projected') return COVERAGE_COPY.projected;
+  if (plan.entitlementEvidence.status === 'dynamic_unknown') return COVERAGE_COPY.dynamicUnknown;
   const entitlement = plan.entitlement;
   if (entitlement.kind === 'fixed_tokens') {
     return entitlement.monthlyTokens >= snapshot.monthlyTokens ? COVERAGE_COPY.verified : COVERAGE_COPY.insufficient;
@@ -56,6 +63,15 @@ function coverageCopyFor(plan: PlanOffer, snapshot: CalculatorSnapshot): string 
   if (entitlement.kind === 'credits') return COVERAGE_COPY.credits;
   if (entitlement.kind === 'rolling_limit') return COVERAGE_COPY.rolling;
   return COVERAGE_COPY.dynamicUnknown;
+}
+
+function evidenceStatusLabel(plan: PlanOffer): string {
+  if (plan.entitlementEvidence.status === 'stale') return 'Stale evidence';
+  if (plan.entitlementEvidence.status === 'projected') {
+    return `Projected ${plan.entitlementEvidence.boundType.replace('_', ' ')}`;
+  }
+  if (plan.entitlementEvidence.status === 'dynamic_unknown') return 'Dynamic or unknown evidence';
+  return 'Verified evidence';
 }
 
 function resultRecommendation(selectedPlan: PlanOffer | undefined, snapshot: CalculatorSnapshot): ResultRecommendation {
@@ -201,7 +217,18 @@ function ValueSummary({ selectedPlan, snapshot, recommendation }: Pick<ResultsDa
         </section>
         <section>
           <h3>Coverage evidence</h3>
-          {recommendation.unavailableFacts.length > 0 ? <ul>{recommendation.unavailableFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul> : <p>{recommendation.coverageCopy}</p>}
+          {selectedPlan ? <>
+            <p><strong>{evidenceStatusLabel(selectedPlan)}</strong></p>
+            {recommendation.unavailableFacts.length > 0 ? <ul>{recommendation.unavailableFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul> : <p>{recommendation.coverageCopy}</p>}
+            {selectedPlan.entitlementEvidence.projection ? <>
+              <p><strong>Formula:</strong> {selectedPlan.entitlementEvidence.projection.formula}</p>
+              <h4>Projection assumptions</h4>
+              <ul>{selectedPlan.entitlementEvidence.projection.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul>
+              <h4>Projection caveats</h4>
+              <ul>{selectedPlan.entitlementEvidence.projection.caveats.map((caveat) => <li key={caveat}>{caveat}</li>)}</ul>
+            </> : null}
+            <p><a href={selectedPlan.entitlementEvidence.source.url} target="_blank" rel="noreferrer">Open entitlement source</a></p>
+          </> : <p>{recommendation.coverageCopy}</p>}
         </section>
       </div>
     </article>

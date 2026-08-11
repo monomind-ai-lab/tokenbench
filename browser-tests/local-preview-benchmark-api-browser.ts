@@ -28,7 +28,7 @@ test('local preview renders clearly labeled sample coding rows from its own API'
     message: expect.stringContaining('LOCAL SAMPLE'),
   });
 
-  await expect(page.getByRole('status')).toContainText('LOCAL SAMPLE');
+  await expect(page.locator('.leaderboard-state')).toContainText('LOCAL SAMPLE');
   await expect(page.getByRole('table', { name: 'Coding benchmark' })).toContainText('Sample Atlas');
   await expect(page.getByRole('table', { name: 'Coding benchmark' })).toContainText('Sample Orbit');
 });
@@ -47,6 +47,7 @@ test('local preview accepts the summary through the frontend runtime contract', 
 
   expect(response.status()).toBe(200);
   expect(response.headers()['content-type']).toContain('application/json');
-  await expect(page.getByLabel('Live decision snapshot')).toContainText('Sample Atlas');
-  await expect(page.getByLabel('Decision snapshot evidence')).toContainText('LOCAL SAMPLE');
+  const market = page.getByRole('region', { name: 'Market at a glance' });
+  await expect(market).toContainText('Sample Atlas');
+  await expect(market.locator('.home-snapshot-state')).toContainText('LOCAL SAMPLE');
 });

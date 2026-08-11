@@ -56,6 +56,7 @@ function metric(
     metricKey,
     category,
     value,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,
@@ -674,6 +675,16 @@ describe('comparisonSummary', () => {
     const summary = comparisonSummary(comparisonWith(models, [], [
       [price(models[0], 1, 1, { inputModalities: ['text', 'image'] })],
       [price(models[1], 1, 1, { inputModalities: null })],
+    ]));
+
+    expect(summary.sentences).toEqual([]);
+  });
+
+  it.each(['corroborating', 'conflict'] as const)('withholds verified price and modality claims from a %s selected route', (verificationStatus) => {
+    const models = pair();
+    const summary = comparisonSummary(comparisonWith(models, [], [
+      [price(models[0], 1, 1, { verificationStatus, inputModalities: ['text', 'image'] })],
+      [price(models[1], 2, 2, { inputModalities: ['text'] })],
     ]));
 
     expect(summary.sentences).toEqual([]);

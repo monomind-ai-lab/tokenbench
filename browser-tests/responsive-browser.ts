@@ -315,7 +315,7 @@ async function openCalculator(page: Page, catalog = FRONTEND_TEST_CATALOG, statu
   const catalogDelivery = catalogFixture.expectNextDelivery();
   await page.goto(CALCULATOR_PATH);
   await catalogDelivery;
-  if (expectCalculator) await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
+  if (expectCalculator) await expect(page.getByRole('heading', { name: /What does API usage cost/i })).toBeVisible({ timeout: 15_000 });
 }
 
 async function openCodingLeaderboard(page: Page) {
@@ -790,7 +790,7 @@ test.describe('responsive calculator browser harness', () => {
     });
     await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
-    await expect(page.getByRole('heading', { name: /API[- ]equivalent value/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: /What does API usage cost/i })).toBeVisible({ timeout: 15_000 });
 
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, plans: [], modelOffers: [] }, 200, false);
@@ -1354,7 +1354,9 @@ test.describe('motion and named call-to-action coverage', () => {
         ['/leaderboards/llm/coding/', 'Talk to MonoMind'],
       ] as const) {
         await page.goto(path);
-        const cta = page.getByRole('link', { name, exact: true });
+        const cta = path === '/'
+          ? page.locator('.home-hero-actions').getByRole('link', { name, exact: true })
+          : page.getByRole('link', { name, exact: true });
         await expect(cta).toBeVisible();
         const presentation = await cta.evaluate((element) => {
           const style = getComputedStyle(element);
@@ -1397,9 +1399,10 @@ test.describe('guides browser harness', () => {
         await page.keyboard.press('Enter');
         await expect(page.getByRole('button', { name: 'Close navigation' })).toHaveAttribute('aria-expanded', 'true');
       }
-      await expect(page.getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
-      await expect(page.getByRole('link', { name: 'Sources' })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Sources', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Data sources', exact: true })).toHaveAttribute('href', '/leaderboards/');
       await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
@@ -1600,7 +1603,7 @@ test.describe('home and tools route runtime', () => {
     try {
       await blockExternalRequests(staticPage, origin);
       await staticPage.goto('/tools/');
-      await expect(staticPage.getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
+      await expect(staticPage.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
     } finally {
       await staticContext.close();
     }
@@ -1610,7 +1613,7 @@ test.describe('home and tools route runtime', () => {
     await page.goto('/tools/');
 
     await expect(page.locator('.tools-page')).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
   });
 
   test('navigation exposes the five approved destinations on compact Home', async ({ page }) => {
@@ -1639,9 +1642,9 @@ test.describe('home and tools route runtime', () => {
     await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
 
     for (const viewport of [
-      { width: 1440, height: 1000, columns: { decisions: 3, snapshot: 3, capabilities: 5 } },
-      { width: 375, height: 1000, columns: { decisions: 1, snapshot: 1, capabilities: 1 } },
-      { width: 320, height: 1000, columns: { decisions: 1, snapshot: 1, capabilities: 1 } },
+      { width: 1440, height: 1000, columns: { snapshot: 3, capabilities: 5 } },
+      { width: 375, height: 1000, columns: { snapshot: 1, capabilities: 1 } },
+      { width: 320, height: 1000, columns: { snapshot: 1, capabilities: 1 } },
     ] as const) {
       await page.setViewportSize(viewport);
       for (const theme of ['dark', 'light'] as const) {
@@ -1650,16 +1653,16 @@ test.describe('home and tools route runtime', () => {
 
         await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
         await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
-        await expect(page.getByRole('link', { name: 'Compare models', exact: true })).toHaveAttribute('href', '/compare/');
-        await expect(page.getByRole('link', { name: 'Calculate subscription vs API', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
-        await expect(page.getByRole('link', { name: 'Browse leaderboards', exact: true })).toHaveAttribute('href', '/leaderboards/');
+        const heroActions = page.locator('.home-hero-actions');
+        await expect(heroActions.getByRole('link', { name: 'Compare models', exact: true })).toHaveAttribute('href', '/compare/');
+        await expect(heroActions.getByRole('link', { name: 'Calculate subscription vs API', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+        await expect(heroActions.getByRole('link', { name: 'Browse leaderboards', exact: true })).toHaveAttribute('href', '/leaderboards/');
         await expect(page.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeVisible();
 
-        const snapshot = page.getByRole('region', { name: 'Live decision snapshot' });
-        await expect(snapshot.getByText('Browser Alpha', { exact: true })).toHaveCount(2);
-        await expect(snapshot.getByText('Browser Beta', { exact: true })).toHaveCount(3);
-        await expect(snapshot.getByRole('img', { name: 'Price versus performance' })).toBeVisible();
-        await expect(snapshot.getByLabel('Decision snapshot evidence')).toContainText('Fresh');
+        const snapshot = page.getByRole('region', { name: 'Market at a glance' });
+        await expect(snapshot.getByText('Browser Model 1', { exact: true })).toHaveCount(5);
+        await expect(snapshot.getByText('Source published')).toBeVisible();
+        await expect(snapshot.getByText('Checked')).toBeVisible();
         await expect(snapshot.getByRole('link', { name: 'Data from BenchLM.ai' })).toBeVisible();
         await expect(snapshot.getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toBeVisible();
 
@@ -1672,7 +1675,6 @@ test.describe('home and tools route runtime', () => {
             return getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).filter(Boolean).length;
           };
           return {
-            decisions: countColumns('[aria-label="Three primary TokenBench decisions"]'),
             snapshot: countColumns('.home-snapshot-grid'),
             capabilities: countColumns('[aria-label="TokenBench product capabilities"]'),
           };
@@ -1743,10 +1745,14 @@ test.describe('newsletter and alerts browser coverage', () => {
       await footer.scrollIntoViewIfNeeded();
       const alerts = footer.getByRole('checkbox', { name: /new models or price drops/i });
       const form = footer.getByRole('form', { name: 'Newsletter signup' });
+      const firstName = footer.getByLabel('First name');
+      const company = footer.getByLabel('Company');
       const email = footer.getByLabel('Email address');
       const submit = footer.getByRole('button', { name: 'Get the cheatsheet' });
 
       await expect(alerts).not.toBeChecked();
+      await firstName.fill('Ada');
+      await company.fill('Analytical Engines');
       await email.fill('builder@example.com');
       await email.press('Enter');
       await expect(form).toHaveAttribute('aria-busy', 'true');
@@ -1781,13 +1787,19 @@ test.describe('newsletter and alerts browser coverage', () => {
       await page.keyboard.press('Space');
 
       const form = alertsPanel.getByRole('form', { name: 'Newsletter signup' });
+      const firstName = alertsPanel.getByLabel('First name');
+      const company = alertsPanel.getByLabel('Company');
       const email = alertsPanel.getByLabel('Email address');
       const submit = alertsPanel.getByRole('button', { name: 'Notify me' });
       await expect(form).toBeVisible();
+      await firstName.fill('Ada');
+      await company.fill('Analytical Engines');
       await email.fill('builder@example.com');
       await email.press('Enter');
       await expect(form.getByRole('status')).toHaveText('Check your email to confirm your subscription.');
 
+      await firstName.fill('Ada');
+      await company.fill('Analytical Engines');
       await email.fill('builder@example.com');
       await email.press('Enter');
       await expect(form.getByRole('alert')).toHaveText('We couldn’t complete that signup. Please try again.');
@@ -1976,7 +1988,7 @@ test.describe('handler-backed compare browser coverage', () => {
       await expect(page.locator('h1')).toHaveCount(1);
       await expect(page.locator('#comparison-initial-data')).toHaveCount(1);
       await expect(page.getByRole('heading', { name: 'Source metrics', level: 2 })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Comparison summary', level: 2 })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Evidence highlights', level: 2 })).toHaveCount(0);
       await expect(page.getByRole('img', { name: 'Alpha and Beta shared metric radar' })).toBeVisible();
       const radarTable = page.getByRole('table', { name: 'Radar chart data' });
       await expect(radarTable).toBeVisible();
@@ -1987,7 +1999,7 @@ test.describe('handler-backed compare browser coverage', () => {
         'Reasoning',
       ]);
       await expect(page.getByRole('table', { name: 'Source metric comparison' }).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
-      await expect(page.getByRole('table', { name: 'Route pricing and context comparison' }).getByRole('row', { name: /Verification status/ })).toBeVisible();
+      await expect(page.getByRole('table', { name: 'Route pricing and context comparison' }).getByRole('row', { name: /Verification status/ })).toHaveCount(0);
       await expect(page.locator('.comparison-provenance')).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Share result', exact: true })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Workload view' })).toHaveCount(0);
@@ -2088,11 +2100,11 @@ test.describe('handler-backed compare browser coverage', () => {
     await expect(page.getByRole('img', { name: 'Alpha and Beta shared metric radar' })).toBeVisible();
     const pricingTable = page.getByRole('table', { name: 'Route pricing and context comparison' });
     const inputPrice = pricingTable.getByRole('row', { name: /Input API price/ });
-    const verification = pricingTable.getByRole('row', { name: /Verification status/ });
-    const highlights = page.getByRole('heading', { name: 'Evidence highlights', level: 2 }).locator('xpath=ancestor::section[1]');
+    const alphaRouteVerification = page.locator('.comparison-route-picker').filter({ has: page.getByLabel('Alpha pricing route') }).locator('.comparison-route-verification');
+    const highlights = page.getByRole('heading', { name: 'Key implications', level: 2 }).locator('xpath=ancestor::section[1]');
     const inputPriceHighlight = highlights.getByText(/^Input API price:/);
     await expect(inputPrice).toContainText('$0.5');
-    await expect(verification).toContainText('Primary');
+    await expect(alphaRouteVerification).toContainText('Primary source');
     await expect(inputPriceHighlight).toContainText('Alpha has the lower verified rate');
 
     await page.getByLabel('Alpha pricing route').selectOption('openrouter:provider:alpha');
@@ -2349,7 +2361,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
     // the subscription-price card is intentionally not the chart value.
     const currentColumn = page.locator('.chart-column-current');
     const apiEquivalentMetric = page.locator('.value-metric').filter({
-      has: page.getByRole('heading', { name: 'API Equivalent Value', exact: true }),
+      has: page.getByRole('heading', { name: 'What does API usage cost?', exact: true }),
     });
     await expect(currentColumn.locator('.chart-bar')).toHaveAttribute('title', '10.0M: $44.16');
     await expect(currentColumn.locator(':scope > span').last()).toHaveText('10.0M');

@@ -54,6 +54,7 @@ function metric(
     metricKey,
     category,
     value,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,

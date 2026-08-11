@@ -68,7 +68,7 @@ function benchmarkFixture() {
       sourceArtifactId: 'benchlm-fixture',
     }],
     metrics: [{
-      modelKey: 'fixture:alpha', metricKey: 'benchlm:overall:raw', category: 'overall', value: 90, rank: null,
+      modelKey: 'fixture:alpha', metricKey: 'benchlm:overall:raw', category: 'overall', value: 90, rawValue: null, rank: null,
       lower: null, upper: null, voteCount: null, unit: 'score', sourceId: 'benchlm',
       sourceUpdatedAt: '2026-08-01T00:00:00.000Z', sourceModelId: 'alpha', sourceArtifactId: 'benchlm-fixture',
       rankingEligible: true, methodology: 'benchlm_raw_composite', observationCount: null, sessionCount: null,

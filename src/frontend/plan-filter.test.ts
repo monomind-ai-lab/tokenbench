@@ -12,6 +12,12 @@ const individualPlan: PlanOffer = {
   route: 'subscription',
   billingCycle: 'monthly',
   entitlement: { kind: 'rolling_limit', description: 'Published rolling limit.' },
+  entitlementEvidence: {
+    status: 'dynamic_unknown',
+    boundType: 'unknown',
+    dimensions: [],
+    source: { url: 'https://example.test/plans', accessedAt: '2026-08-10T00:00:00.000Z', confidence: 'high' },
+  },
   sourceId: 'provider-subscription',
 };
 

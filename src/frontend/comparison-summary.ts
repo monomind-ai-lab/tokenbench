@@ -138,6 +138,7 @@ function compatibleScoreRows(viewModel: ComparisonViewModel): readonly Compariso
 }
 
 function publishedRate(route: BenchmarkPriceCheck | null, dimension: 'inputUsdPerMillion' | 'outputUsdPerMillion'): number | null {
+  if (route?.verificationStatus !== 'primary') return null;
   const value = route?.[dimension];
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
@@ -255,6 +256,7 @@ function coverageFor(sharedMetricCount: number): ComparisonSummary['coverage'] {
 /* Coverage is disclosed through `coverage`; it never becomes a finding. */
 
 function publishedModalities(route: BenchmarkPriceCheck | null, direction: 'inputModalities' | 'outputModalities'): readonly string[] | null {
+  if (route?.verificationStatus !== 'primary') return null;
   const value = route?.[direction];
   if (!Array.isArray(value)) return null;
   const normalized = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);

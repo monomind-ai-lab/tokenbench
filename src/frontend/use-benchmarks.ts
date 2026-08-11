@@ -10,7 +10,8 @@ import {
   type LeaderboardQueryCapabilities,
   type LeaderboardQueryState,
 } from '../benchmarks/leaderboard-query';
-import { BENCHMARK_SOURCE_IDS, type BenchmarkSourceId } from '../benchmarks/contracts';
+import { BENCHMARK_SOURCE_IDS, isComparisonPairRouteSafe, type BenchmarkSourceId } from '../benchmarks/contracts';
+import type { RepresentativeComparison, RepresentativeComparisonMetric } from '../benchmarks/api-projections';
 import {
   DECISION_PICK_CATEGORIES,
   type DecisionPickEntry,
@@ -303,8 +304,10 @@ function isMetricForEntryDefinition(
   if (metric.sourceId === 'benchlm') {
     if (entry.model.sourceId !== 'benchlm') return false;
     if (entry.model.evidenceStatus === 'estimated') return true;
+    const isEvidenceLens = metric.metricKey === 'benchlm:category:reasoning'
+      || metric.metricKey === 'benchlm:category:knowledge';
     return entry.model.evidenceStatus === 'supported'
-      && metric.rankingEligible === true
+      && (metric.rankingEligible === true || (isEvidenceLens && metric.rank === null))
       && (metric.metricKey !== 'benchlm:overall:raw' || entry.model.rankingEligible === true);
   }
   return metric.sourceId === 'lmarena'
@@ -407,7 +410,6 @@ function hasRouteKindEntryInvariants(
         && entry.sourceRank === null;
     case 'benchlm':
       return hasOptionalRepresentativePrice(entry)
-        && entry.sourceRank === null
         && !entry.onValueFrontier;
     case 'lmarena':
     case 'multimodal':
@@ -415,9 +417,11 @@ function hasRouteKindEntryInvariants(
   }
 }
 
-function hasConsistentSourceRank(entry: LeaderboardEntry): boolean {
-  if (entry.metric?.sourceId !== 'lmarena') return entry.sourceRank === null;
-  return entry.metric.rank !== null && entry.sourceRank === entry.metric.rank;
+function hasConsistentSourceRank(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
+  if (definition.kind === 'value' || definition.kind === 'pricing-context' || entry.model.evidenceStatus === 'estimated') {
+    return entry.sourceRank === null;
+  }
+  return entry.metric !== null && entry.sourceRank === entry.metric.rank;
 }
 
 function isEntryForDefinition(
@@ -428,7 +432,7 @@ function isEntryForDefinition(
   if (!hasRouteKindEntryInvariants(entry, definition, profile)) return false;
   if (definition.kind === 'pricing-context') return true;
   if (entry.metric === null || entry.metric.modelKey !== entry.model.modelKey || !isMetricForEntryDefinition(entry, entry.metric, definition)) return false;
-  if (!hasConsistentSourceRank(entry)) return false;
+  if (!hasConsistentSourceRank(entry, definition)) return false;
   if (entry.metrics.length === 0 || !isSameMetric(entry.metric, entry.metrics[0])) return false;
   const metricKeys = new Set<string>();
   return entry.metrics.every((metric) => {
@@ -709,6 +713,7 @@ export function useBenchmarkLeaderboard(
 
 export interface BenchmarkSummaryData {
   readonly sources?: readonly BenchmarkSourceAvailability[];
+  readonly representativeComparisons: readonly RepresentativeComparison[];
   readonly decisionPicks: readonly DecisionPickGroup[];
   readonly homeDecisionSnapshot: HomeDecisionSnapshot;
 }
@@ -730,9 +735,10 @@ export interface HomeDecisionSnapshotState extends BenchmarkSummaryState {
 
 function isDecisionPickEntry(value: unknown, key: LeaderboardKey): value is DecisionPickEntry {
   if (!isRecord(value)) return false;
-  return Number.isSafeInteger(value.rank)
-    && (value.rank as number) > 0
-    && ['modelKey', 'slug', 'name', 'provider', 'unit', 'updatedAt', 'routePath'].every((field) => isNonEmptyString(value[field]))
+  // rank is the published source rank (or null when the source does not rank
+  // the row); it is never a synthesized filtered position.
+  if (value.rank !== null && !(Number.isSafeInteger(value.rank) && (value.rank as number) > 0)) return false;
+  return ['modelKey', 'slug', 'name', 'provider', 'unit', 'updatedAt', 'routePath'].every((field) => isNonEmptyString(value[field]))
     && typeof value.score === 'number'
     && Number.isFinite(value.score)
     && value.evidenceStatus === 'supported'
@@ -750,8 +756,8 @@ function isDecisionPickGroup(value: unknown, expected: typeof DECISION_PICK_CATE
     || !Array.isArray(value.entries)
     || value.entries.length > 3) return false;
   const modelKeys = new Set<string>();
-  return value.entries.every((entry, index) => {
-    if (!isDecisionPickEntry(entry, expected.key) || entry.rank !== index + 1 || modelKeys.has(entry.modelKey)) return false;
+  return value.entries.every((entry) => {
+    if (!isDecisionPickEntry(entry, expected.key) || modelKeys.has(entry.modelKey)) return false;
     modelKeys.add(entry.modelKey);
     return true;
   });
@@ -804,6 +810,50 @@ function isHomeDecisionSnapshot(value: unknown): value is HomeDecisionSnapshot {
   });
 }
 
+function isRepresentativeComparisonMetric(
+  value: unknown,
+  modelASlug: string,
+  modelBSlug: string,
+): value is RepresentativeComparisonMetric {
+  if (!isRecord(value)
+    || !isNonEmptyString(value.metricKey)
+    || !isNonEmptyString(value.category)
+    || !['score', 'arena_score', 'rank', 'usd_per_million_tokens', 'tokens'].includes(String(value.unit))
+    || !isNonNegativeFiniteNumber(value.gap)
+    || typeof value.modelAValue !== 'number' || !Number.isFinite(value.modelAValue)
+    || typeof value.modelBValue !== 'number' || !Number.isFinite(value.modelBValue)
+    || (value.leaderSlug !== null && value.leaderSlug !== modelASlug && value.leaderSlug !== modelBSlug)) return false;
+  const expectedGap = Math.abs(value.modelAValue - value.modelBValue);
+  const expectedLeader = expectedGap === 0 ? null : value.modelAValue > value.modelBValue ? modelASlug : modelBSlug;
+  return value.gap === expectedGap && value.leaderSlug === expectedLeader;
+}
+
+function isRepresentativeComparison(value: unknown): value is RepresentativeComparison {
+  if (!isRecord(value)
+    || !['pairSlug', 'modelASlug', 'modelBSlug', 'modelAName', 'modelBName'].every((field) => isNonEmptyString(value[field]))
+    || !isComparisonPairRouteSafe(value.pairSlug as string)
+    || value.pairSlug !== `${value.modelASlug}-vs-${value.modelBSlug}`
+    || !Number.isSafeInteger(value.sharedMetricCount) || (value.sharedMetricCount as number) < 4
+    || !Array.isArray(value.sharedMetrics)
+    || value.sharedMetrics.length !== value.sharedMetricCount
+    || !isNullableNonNegativeFiniteNumber(value.modelAPriceUsdPerMillion)
+    || !isNullableNonNegativeFiniteNumber(value.modelBPriceUsdPerMillion)
+    || !isNullablePositiveInteger(value.modelAContextWindowTokens)
+    || !isNullablePositiveInteger(value.modelBContextWindowTokens)) return false;
+  const modelASlug = value.modelASlug as string;
+  const modelBSlug = value.modelBSlug as string;
+  if (!value.sharedMetrics.every((metric) => isRepresentativeComparisonMetric(metric, modelASlug, modelBSlug))) return false;
+  const metricKeys = value.sharedMetrics.map((metric) => (metric as RepresentativeComparisonMetric).metricKey);
+  const hasPriceEvidence = value.modelAPriceUsdPerMillion !== null && value.modelBPriceUsdPerMillion !== null;
+  const hasContextEvidence = value.modelAContextWindowTokens !== null && value.modelBContextWindowTokens !== null;
+  return new Set(metricKeys).size === metricKeys.length && (hasPriceEvidence || hasContextEvidence);
+}
+
+function isRepresentativeComparisonCollection(value: unknown): value is readonly RepresentativeComparison[] {
+  if (!Array.isArray(value) || value.length > 2 || !value.every(isRepresentativeComparison)) return false;
+  return new Set(value.map((comparison) => comparison.pairSlug)).size === value.length;
+}
+
 function isBenchmarkSummaryEnvelope(value: unknown): value is BenchmarkApiEnvelope<BenchmarkSummaryData> {
   if (!isRecord(value)
     || !isNonEmptyString(value.revision)
@@ -816,6 +866,7 @@ function isBenchmarkSummaryEnvelope(value: unknown): value is BenchmarkApiEnvelo
 
   const data = value.data;
   return (data.sources === undefined || isSourceAvailabilityCollection(data.sources))
+    && isRepresentativeComparisonCollection(data.representativeComparisons)
     && Array.isArray(data.decisionPicks)
     && data.decisionPicks.length === DECISION_PICK_CATEGORIES.length
     && data.decisionPicks.every((group, index) => isDecisionPickGroup(group, DECISION_PICK_CATEGORIES[index]))

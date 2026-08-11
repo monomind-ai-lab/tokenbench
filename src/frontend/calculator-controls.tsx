@@ -59,6 +59,15 @@ function ProviderChoice({ providerId, selected, apiOnly, onChange }: ProviderCho
 }
 
 function planEntitlementFlag(plan: PlanOffer): string {
+  if (plan.entitlementEvidence.status === 'stale') {
+    return `Stale evidence · ${plan.entitlementEvidence.staleReason ?? 'refresh required before comparison.'}`;
+  }
+  if (plan.entitlementEvidence.status === 'projected') {
+    return 'Projected outer ceiling · scenario only, not a guaranteed allowance.';
+  }
+  if (plan.entitlementEvidence.status === 'dynamic_unknown') {
+    return 'Dynamic or unpublished capacity · this plan cannot be compared automatically.';
+  }
   switch (plan.entitlement.kind) {
     case 'fixed_tokens': return 'Published fixed token allowance.';
     case 'rolling_limit': return 'Variable rolling entitlement · exact token capacity is not published.';

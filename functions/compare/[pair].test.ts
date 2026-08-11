@@ -48,6 +48,7 @@ function metric(modelKey: string, value: number): BenchmarkMetric {
     metricKey: 'benchlm:category:coding',
     category: 'coding',
     value,
+    rawValue: null,
     rank: null,
     lower: null,
     upper: null,

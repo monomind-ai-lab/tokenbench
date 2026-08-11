@@ -6,7 +6,7 @@
   "name": "BenchLM Benchmarks",
   "description": "Reduced allowlist projection for parser tests.",
   "sourceFiles": ["benchmarks.json"],
-  "counts": { "items": 2 },
+  "counts": { "items": 3 },
   "items": [
     {
       "category": "coding",
@@ -22,6 +22,14 @@
       "benchmarkKey": "safe-reasoning",
       "name": "Safe Reasoning Benchmark",
       "paperUrl": "https://example.org/safe-reasoning",
+      "weight": 1
+    },
+    {
+      "category": "multimodalGrounded",
+      "categoryLabel": "Multimodal Grounded",
+      "benchmarkKey": "safe-multimodal-grounded",
+      "name": "Safe Multimodal Grounded Benchmark",
+      "paperUrl": "https://example.org/safe-multimodal-grounded",
       "weight": 1
     }
   ]

@@ -14,6 +14,7 @@ function benchmarkSummaryWithBenchAlignSource(sourceMetadata: {
     freshness: { status: 'fresh', checkedAt: ISO_TIME },
     attribution: [{ sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data/leaderboard.json', updatedAt: ISO_TIME }],
     data: {
+      representativeComparisons: [],
       sources: [
         {
           sourceId: 'benchlm',

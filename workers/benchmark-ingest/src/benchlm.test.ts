@@ -88,7 +88,9 @@ describe('parseBenchLm', () => {
     });
     expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:overall:raw')).toMatchObject({
       category: 'overall',
-      value: 82.25,
+      value: 81.48,
+      rawValue: 81,
+      rank: 4,
       unit: 'score',
       methodology: 'benchlm_raw_composite',
       rankingEligible: true,
@@ -97,7 +99,9 @@ describe('parseBenchLm', () => {
       sourceArtifactId: 'models',
     });
     expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')).toMatchObject({
-      value: 80.25,
+      value: 79.5,
+      rawValue: null,
+      rank: 3,
       rankingEligible: true,
     });
     expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a' && metric.metricKey.includes('reasoning')))
@@ -128,27 +132,52 @@ describe('parseBenchLm', () => {
     })]);
   });
 
-  it('never derives a metric from prohibited display, rank, interval, or external fields', async () => {
+  it('maps published display/rank evidence while never deriving from prohibited proxy fields', async () => {
     const source = payloads();
+    // Legitimate published fields that DO map: scores.displayScore,
+    // ranking.overallRank, and ranking.categoryRanks. They must survive the
+    // projection and drive the public metric values and ranks.
     const models = source.models as { items: Array<Record<string, unknown>> };
+    (models.items[0].scores as Record<string, unknown>).displayScore = 84.2;
+    (models.items[0].ranking as Record<string, unknown>).overallRank = 9;
+    (models.items[0].ranking as Record<string, unknown>).categoryRanks = { coding: 7, multimodalGrounded: 6 };
+
+    // Prohibited proxy fields must never leak: top-level displayScore /
+    // overallRank, provisionalDisplayScore, scoreInterval90, benchmarks.external,
+    // and the non-public scores.overallScore / verifiedDisplayScore.
     models.items[0].displayScore = 999999;
     models.items[0].provisionalDisplayScore = 999998;
-    models.items[0].overallRank = 1;
+    models.items[0].overallRank = 999997;
     models.items[0].scoreInterval90 = { lower: 1, upper: 999999 };
     models.items[0].benchmarks = { external: { marker: 'forbidden-external-group' } };
-    (models.items[0].ranking as Record<string, unknown>).categoryRanks = { coding: 1 };
-    (models.items[0].scores as Record<string, unknown>).displayScore = 999999;
-    (models.items[0].scores as Record<string, unknown>).overallScore = 999999;
-    (models.items[0].scores as Record<string, unknown>).verifiedDisplayScore = 999999;
+    (models.items[0].scores as Record<string, unknown>).overallScore = 999996;
+    (models.items[0].scores as Record<string, unknown>).verifiedDisplayScore = 999995;
 
     const prepared = await prepareBenchLm(rawBundleFromPayloads(source));
     const batch = await parseBenchLm(prepared, observedAt);
     const serialized = JSON.stringify(batch);
     const projected = new TextDecoder().decode(prepared.models.projectedBytes);
 
-    expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:overall:raw')?.value).toBe(82.25);
-    expect(`${serialized}\n${projected}`).not.toMatch(/999999|999998|scoreInterval90|overallRank|categoryRanks/);
-    expect(`${serialized}\n${projected}`).not.toContain('forbidden-external-group');
+    const overall = batch.metrics.find((metric) => metric.metricKey === 'benchlm:overall:raw');
+    const coding = batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding');
+    expect(overall).toMatchObject({ value: 84.2, rank: 9, rawValue: 81 });
+    expect(coding).toMatchObject({ value: 79.5, rank: 7 });
+    // Prohibited proxy values and interval fields never appear in metrics or
+    // bytes; the published overallRank/categoryRanks are now legitimately kept.
+    expect(`${serialized}\n${projected}`).not.toMatch(/99999[5-9]|scoreInterval90/);
+    expect(serialized).not.toContain('forbidden-external-group');
+  });
+
+  it('never substitutes the diagnostic raw composite for a missing public display score', async () => {
+    const source = payloads();
+    const sourceModel = (source.models as { items: Array<Record<string, unknown>> }).items[0];
+    (sourceModel.scores as Record<string, unknown>).displayScore = null;
+    (sourceModel.scores as Record<string, unknown>).rawOverallScore = 81;
+
+    const batch = await parsePayloads(source);
+
+    expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a'
+      && metric.metricKey === 'benchlm:overall:raw')).toBe(false);
   });
 
   it('omits a category until its safe definitions are present', async () => {
@@ -179,7 +208,7 @@ describe('parseBenchLm', () => {
     const batch = await parsePayloads(source);
 
     expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.metricKey === 'benchlm:category:reasoning'))
-      .toMatchObject({ category: 'reasoning', value: 87.25, rankingEligible: true });
+      .toMatchObject({ category: 'reasoning', value: 86.5, rankingEligible: true });
     expect(batch.metrics.some((metric) => metric.metricKey === 'benchlm:category:knowledge')).toBe(false);
   });
 
@@ -259,6 +288,7 @@ describe('parseBenchLm', () => {
     const sourceModel = (source.models as { items: Array<Record<string, unknown>> }).items[0];
     sourceModel.rankingEligible = false;
     (sourceModel.scores as Record<string, unknown>).rawOverallScore = null;
+    (sourceModel.scores as Record<string, unknown>).displayScore = null;
     (sourceModel.ranking as { categoryRankingEligible: Record<string, boolean> }).categoryRankingEligible.coding = true;
 
     const batch = await parsePayloads(source);
@@ -268,7 +298,7 @@ describe('parseBenchLm', () => {
 
     expect(model?.rankingEligible).toBe(false);
     expect(overall).toBeUndefined();
-    expect(coding).toMatchObject({ value: 80.25, rankingEligible: true });
+    expect(coding).toMatchObject({ value: 79.5, rankingEligible: true });
   });
 });
 
@@ -323,21 +353,24 @@ describe('prepareBenchLm', () => {
     expect(projectedModel.ranking.categoryRankingEligible).toEqual({
       [safeCategory]: true,
       coding: true,
+      multimodalGrounded: true,
       reasoning: false,
     });
     expect(projectedModel.scores.displayCategoryScores).toEqual({
       [safeCategory]: 9501,
       coding: 79.5,
+      multimodalGrounded: 84.7,
       reasoning: null,
     });
     expect(projectedModel.scores.verifiedDisplayCategoryScores).toEqual({
       [safeCategory]: 9502,
       coding: 80.25,
+      multimodalGrounded: 84.7,
       reasoning: null,
     });
     for (const variant of externalVariants) expect(projectedText).not.toContain(variant);
     expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === safeCategory))
-      .toMatchObject({ value: 9502, rankingEligible: true });
+      .toMatchObject({ value: 9501, rankingEligible: true });
     expect(batch.metrics.some((metric) => externalVariants.includes(metric.category))).toBe(false);
     expect(batch.metrics.some((metric) => metric.value >= 9600 && metric.value < 9800)).toBe(false);
   });
@@ -403,12 +436,12 @@ describe('prepareBenchLm', () => {
       coding: 80.25,
       reasoning: null,
     });
-    expect(projectedBenchmarkCategories).toEqual(['coding', 'reasoning', ' Mixed Safe ']);
+    expect(projectedBenchmarkCategories).toEqual(['coding', 'reasoning', 'multimodalGrounded', ' Mixed Safe ']);
     expect(projectedText).not.toMatch(/external/i);
     expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === 'coding'))
-      .toMatchObject({ value: 80.25, rankingEligible: true });
+      .toMatchObject({ value: 79.5, rankingEligible: true });
     expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a' && metric.category === ' Mixed Safe '))
-      .toMatchObject({ value: 9302, rankingEligible: true });
+      .toMatchObject({ value: 9301, rankingEligible: true });
     expect(batch.metrics.some((metric) => metric.category.trim().toLowerCase() === 'external')).toBe(false);
     expect(batch.metrics.some((metric) => [9101, 9102, 9103, 9201, 9202, 9203].includes(metric.value)))
       .toBe(false);
@@ -433,15 +466,22 @@ describe('prepareBenchLm', () => {
     const reversedModel = (reversed.models as { items: Array<Record<string, unknown>> }).items[0];
     (reversedModel.ranking as Record<string, unknown>).categoryRankingEligible = {
       reasoning: false,
+      multimodalGrounded: true,
       coding: true,
     };
     (reversedModel.scores as Record<string, unknown>).displayCategoryScores = {
       reasoning: null,
+      multimodalGrounded: 84.7,
       coding: 79.5,
     };
     (reversedModel.scores as Record<string, unknown>).verifiedDisplayCategoryScores = {
       reasoning: null,
+      multimodalGrounded: 84.7,
       coding: 80.25,
+    };
+    (reversedModel.ranking as Record<string, unknown>).categoryRanks = {
+      multimodalGrounded: 5,
+      coding: 3,
     };
 
     const forwardPrepared = await prepareBenchLm(rawBundleFromPayloads(forward));
@@ -468,10 +508,13 @@ describe('prepareBenchLm', () => {
     };
     const models = (source.models as { items: Array<Record<string, unknown>> }).items;
     models[0].displayScore = 999999;
+    models[0].provisionalDisplayScore = 999998;
+    models[0].overallRank = 999997;
     models[0].unknownField = 'must-not-persist';
     models[0].benchmarks = { external: { marker: 'must-not-persist' } };
-    (models[0].scores as Record<string, unknown>).displayScore = 999999;
     (models[0].scores as Record<string, unknown>).overallScore = 999999;
+    (models[0].scores as Record<string, unknown>).verifiedDisplayScore = 999999;
+    (models[0].scores as Record<string, unknown>).scoreInterval90 = { lower: 1, upper: 999999 };
     const benchmarks = (source.benchmarks as { items: Array<Record<string, unknown>> }).items;
     benchmarks.push({
       category: 'coding',
@@ -500,7 +543,7 @@ describe('prepareBenchLm', () => {
         originalContentHash: `sha256:${prepared[artifact].originalSha256}`,
       });
     }
-    expect(allProjectedText).not.toMatch(/displayScore|overallRank|scoreInterval90|unknownField|tokenbenchFixtureMetadata/);
+    expect(allProjectedText).not.toMatch(/99999[5-9]|scoreInterval90|unknownField|tokenbenchFixtureMetadata/);
     expect(allProjectedText).not.toContain('must-not-persist');
     expect(allProjectedText.toLowerCase()).not.toContain('artificial analysis');
     expect(allProjectedText).not.toContain('"external"');
@@ -648,9 +691,9 @@ describe('rehydrateBenchLmProjections', () => {
     const prepared = await prepareBenchLm(rawBundleFromPayloads(payloads()));
     const stored = storedFromPrepared(prepared);
     const unsafeProjection = JSON.parse(new TextDecoder().decode(stored.models.projectedBytes)) as {
-      items: Array<Record<string, unknown>>;
+      items: Array<{ scores: Record<string, unknown> }>;
     };
-    unsafeProjection.items[0].displayScore = 999999;
+    unsafeProjection.items[0].scores.overallScore = 999999;
     const unsafeBytes = new TextEncoder().encode(JSON.stringify(unsafeProjection));
     const mutated = {
       ...stored,

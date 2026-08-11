@@ -82,14 +82,15 @@ export function recommendCostFirst(candidates: RecommendationCandidate[], apiMon
     const supportsSelection = candidate.supportedModelIds?.length
       ? selectedModelIds.every((modelId) => candidate.supportedModelIds?.includes(modelId))
       : false;
-    const hasPublishedCapacity = candidate.entitlement.kind === 'fixed_tokens'
+    const hasPublishedCapacity = candidate.entitlementEvidence.status === 'verified'
+      && candidate.entitlement.kind === 'fixed_tokens'
       && candidate.entitlement.monthlyTokens >= monthlyTokens;
     if (!supportsSelection) {
       caveats.push(`${candidate.id} does not publish support for the selected model mix and is not comparable to this workload.`);
       return false;
     }
     if (!hasPublishedCapacity) {
-      caveats.push(`${candidate.id} has a variable usage limit and is not comparable to this workload.`);
+      caveats.push(`${candidate.id} does not have verified comparable capacity for this workload.`);
       return false;
     }
     return true;

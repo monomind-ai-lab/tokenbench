@@ -174,10 +174,14 @@ function metricMatchesRoute(
 ): boolean {
   if (metric.modelKey !== entry.model.modelKey || !definition.metricKeys.includes(metric.metricKey)) return false;
   if (metric.metricKey.startsWith('benchlm:')) {
+    const isEvidenceLens = metric.metricKey === 'benchlm:category:reasoning'
+      || metric.metricKey === 'benchlm:category:knowledge';
     return metric.sourceId === 'benchlm'
       && metric.methodology === 'benchlm_raw_composite'
       && metric.unit === 'score'
-      && metric.rankingEligible === !estimated
+      && (estimated
+        ? metric.rankingEligible === false && metric.rank === null
+        : metric.rankingEligible === true || (isEvidenceLens && metric.rank === null))
       && (estimated ? metric.rank === null : true)
       && entry.model.sourceId === 'benchlm'
       && entry.model.evidenceStatus === (estimated ? 'estimated' : 'supported');
@@ -252,11 +256,16 @@ function hasRouteEntryInvariants(
       && entry.onValueFrontier === false;
   }
   if (entry.metric === null || entry.metrics.length === 0 || !sameJsonValue(entry.metric, entry.metrics[0])) return false;
-  if (definition.kind === 'benchlm' || definition.kind === 'value') {
+  if (definition.kind === 'benchlm') {
     return entry.metrics.length === 1
       && metricMatchesRoute(entry, entry.metric, definition, false)
-      && entry.sourceRank === null
-      && (definition.kind === 'value' || entry.onValueFrontier === false);
+      && entry.sourceRank === entry.metric.rank
+      && entry.onValueFrontier === false;
+  }
+  if (definition.kind === 'value') {
+    return entry.metrics.length === 1
+      && metricMatchesRoute(entry, entry.metric, definition, false)
+      && entry.sourceRank === null;
   }
   if (definition.kind === 'lmarena') {
     return entry.metrics.length === 1
@@ -264,7 +273,7 @@ function hasRouteEntryInvariants(
       && entry.sourceRank === entry.metric.rank
       && entry.onValueFrontier === false;
   }
-  return entry.sourceRank === (entry.metric.sourceId === 'lmarena' ? entry.metric.rank : null)
+  return entry.sourceRank === entry.metric.rank
     && entry.onValueFrontier === false;
 }
 
