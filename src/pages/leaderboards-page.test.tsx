@@ -740,7 +740,7 @@ describe('LeaderboardPage', () => {
 
     const heading = await screen.findByRole('heading', { name: 'Coding benchmark', level: 1 });
     const actions = screen.getByRole('group', { name: 'Leaderboard actions' });
-    expect(within(actions).getByRole('button', { name: 'Share leaderboard' })).toBeInTheDocument();
+    expect(within(actions).getByRole('button', { name: 'Share Leaderboard' })).toHaveClass('button-secondary');
     expect(within(actions).getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
       'href',
       '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha',
@@ -773,10 +773,10 @@ describe('LeaderboardPage', () => {
     );
   });
 
-  it('shares the canonical leaderboard path with the current serialized filters', async () => {
+  it('opens the metadata-canonical leaderboard URL and copies only after explicit activation', async () => {
     window.history.replaceState(null, '', '/leaderboards/llm/coding/?q=Alpha&sort=score-desc');
-    const share = vi.fn().mockResolvedValue(undefined);
-    vi.stubGlobal('navigator', { share });
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
     vi.stubGlobal('fetch', vi.fn((input: string) => {
       if (input === '/api/benchmarks') return Promise.resolve(new Response(JSON.stringify(decisionSummaryEnvelope()), {
         status: 200,
@@ -790,12 +790,15 @@ describe('LeaderboardPage', () => {
 
     render(<LeaderboardPage keyName="llm-coding" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Share leaderboard' }));
-    await screen.findByRole('status');
-    expect(share).toHaveBeenCalledWith({
-      url: `${window.location.origin}/leaderboards/llm/coding/?profile=balanced&sort=score-desc&q=Alpha`,
-      title: 'Coding benchmark | TokenBench',
-      text: 'Review Coding benchmark on TokenBench.',
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Share Leaderboard' }));
+    expect(screen.getByRole('textbox', { name: 'Share URL' })).toHaveValue(
+      'https://tokenbench.monomind.one/leaderboards/llm/coding/?profile=balanced&sort=score-desc&q=Alpha',
+    );
+    expect(writeText).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Link copied.');
+    expect(writeText).toHaveBeenCalledWith(
+      'https://tokenbench.monomind.one/leaderboards/llm/coding/?profile=balanced&sort=score-desc&q=Alpha',
+    );
   });
 });

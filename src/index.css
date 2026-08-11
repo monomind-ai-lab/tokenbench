@@ -249,6 +249,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .share-action { display: grid; justify-items: start; gap: 6px; }
 .share-action-feedback { margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
 .share-action-feedback-error { color: var(--danger); }
+.share-dialog-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+.share-dialog-backdrop { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; overflow-y: auto; padding: 24px; background: color-mix(in srgb, #06111f 64%, transparent); backdrop-filter: blur(5px); }
+.share-dialog { position: relative; width: min(100%, 620px); display: grid; gap: 20px; padding: 28px; border: 1px solid var(--outline); border-radius: 14px; background: var(--surface); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32); }
+.share-dialog-close { position: absolute; top: 14px; right: 14px; }
+.share-dialog-copy { min-width: 0; padding-right: 42px; }
+.share-dialog-copy h2 { margin: 8px 0; font-family: var(--font-display); font-size: 1.65rem; letter-spacing: -0.035em; }
+.share-dialog-copy p { margin: 0; color: var(--muted); line-height: 1.55; }
+.share-dialog-url-field { min-width: 0; display: grid; gap: 8px; color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.share-dialog-url-field input { width: 100%; min-width: 0; min-height: 46px; padding: 10px 12px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface-low); color: var(--text); font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0; text-transform: none; }
+.share-dialog-actions { display: flex; justify-content: flex-end; }
+.share-dialog-actions .button { min-width: 112px; }
 .preset-button { border-color: var(--outline); background: var(--surface-low); color: var(--muted); filter: none; transition: border-color 150ms ease, background 150ms ease, color 150ms ease; }
 .preset-button:hover { border-color: var(--primary); background: var(--surface-highest); color: var(--primary-strong); filter: none; }
 .preset-button.preset-selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 58%, var(--surface-low)); color: var(--primary-strong); }
@@ -694,6 +705,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .leaderboard-methodology { margin-top: 20px; padding: 13px 14px; }
   .leaderboard-actions { display: grid; grid-template-columns: minmax(0, 1fr); }
   .leaderboard-actions .share-action, .leaderboard-actions .button { width: 100%; }
+  .share-dialog-backdrop { align-items: end; padding: 12px; }
+  .share-dialog { max-height: calc(100dvh - 24px); overflow-y: auto; padding: 24px 20px; }
+  .share-dialog-actions .button { width: 100%; }
   .leaderboard-decision-picks, .leaderboard-evidence-panel { padding: 22px; }
   .leaderboard-decision-picks .decision-pick-list { grid-template-columns: minmax(0, 1fr); }
   .leaderboard-filter-panel { padding: 22px; }

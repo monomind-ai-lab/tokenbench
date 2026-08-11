@@ -80,7 +80,6 @@ export function SiteFooter({ notice }: SiteFooterProps) {
       <nav className="footer-links" aria-label="Trust">
         <strong>Trust</strong>
         <a href={ROUTE_PATHS.methodologyBenchAlign}>Methodology</a>
-        <a href={ROUTE_PATHS.leaderboards}>Data sources</a>
         <a href="/privacy/">Privacy</a>
         <span>{notice}</span>
       </nav>

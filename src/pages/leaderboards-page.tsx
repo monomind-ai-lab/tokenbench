@@ -20,6 +20,7 @@ import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-t
 import { ProviderMark } from '../frontend/provider-mark';
 import { ShareAction } from '../frontend/share-action';
 import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
+import { SITE_CONFIG } from '../brand/site-config';
 
 function methodologySummary(keyName: LeaderboardKey): string {
   if (keyName === 'llm-value') {
@@ -242,9 +243,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const rankOffset = pagination ? activePage.previousCursors.length * pagination.limit : 0;
   const csvQuery = filterQuery;
   const csvHref = `/api/benchmarks/leaderboards/${encodeURIComponent(keyName)}/csv?${csvQuery}`;
-  const shareUrl = typeof window === 'undefined'
-    ? `${route.pathname}?${csvQuery}`
-    : `${window.location.origin}${route.pathname}?${csvQuery}`;
+  const shareUrl = `${SITE_CONFIG.origin}${route.pathname}?${csvQuery}`;
   const goToNextPage = () => {
     const nextCursor = pagination?.nextCursor;
     if (!nextCursor) return;
@@ -278,7 +277,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       <h1 id="leaderboard-heading">{route.seo.h1}</h1>
       <p>{route.seo.summary}</p>
       <div className="leaderboard-actions" role="group" aria-label="Leaderboard actions">
-        <ShareAction label="Share leaderboard" text={`Review ${route.seo.h1} on TokenBench.`} title={`${route.seo.h1} | TokenBench`} url={shareUrl} />
+        <ShareAction label="Share Leaderboard" canonicalUrl={shareUrl} variant="secondary" />
         <a className="button button-secondary" href={csvHref}>Download CSV</a>
       </div>
     </section>
