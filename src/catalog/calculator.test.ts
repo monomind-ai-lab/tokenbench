@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   breakEvenTokens,
+  calculateSubscriptionApiResult,
   maximumPlanValueMicroDollars,
   monthlyApiCostMicroDollars,
   redistributeModelMix,
@@ -131,3 +132,16 @@ describe('catalog calculator', () => {
     });
   });
 });
+
+  it('keeps legacy token helpers available beside the message-level calculator', () => {
+    expect(calculateSubscriptionApiResult({
+      conversationsPerDay: 1,
+      messagesPerConversation: 1,
+      inputTokensPerMessage: 1_000,
+      outputTokensPerMessage: 1_000,
+      activeDaysPerMonth: 1,
+      planCostMicroDollars: 1_000,
+      inputMicroDollarsPerMillion: 1_000_000,
+      outputMicroDollarsPerMillion: 1_000_000,
+    }).apiCostMicroDollars).toBe(2_000);
+  });

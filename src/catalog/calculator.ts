@@ -1,3 +1,18 @@
+export {
+  calculateApiEquivalentCost,
+  calculateSubscriptionApiResult,
+  compareSubscriptionWithApi,
+  deriveConversationWorkload,
+  normalizeConversationWorkload,
+  type ApiEquivalentCost,
+  type ApiRates,
+  type ConversationWorkload,
+  type DerivedConversationWorkload,
+  type SubscriptionApiCalculationInput,
+  type SubscriptionApiComparison,
+  type SubscriptionApiResult,
+} from './subscription-api-calculator';
+
 import type { ModelMixEntry, PlanEntitlement, RecommendationCandidate } from './contracts';
 
 const BASIS_POINTS = 10_000;
