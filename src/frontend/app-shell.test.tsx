@@ -170,6 +170,7 @@ describe('responsive calculator app shell', () => {
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
     expect(within(footer).getByRole('checkbox', { name: /Notify me when new models or price drops/i })).toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
+    expect(within(footer).getByRole('link', { name: 'Price vs performance' })).toHaveAttribute('href', '/llm-price-performance/');
     expect(within(footer).queryByRole('link', { name: 'Data sources' })).not.toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy/');
     expect(within(footer).queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
@@ -491,15 +492,15 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APIModelsCompareLeaderboardsGuides');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APIPrice vs PerformanceModelsCompareLeaderboardsGuides');
   });
 
-  it('renders the six approved primary navigation destinations', () => {
+  it('renders the seven approved primary navigation destinations', () => {
     render(<SiteHeader theme="dark" language="en" activePage="home" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
 
     expect(within(screen.getByRole('navigation', { name: 'Primary navigation' }))
       .getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Home', 'Subscribe vs API', 'Models', 'Compare', 'Leaderboards', 'Guides']);
+      .toEqual(['Home', 'Subscribe vs API', 'Price vs Performance', 'Models', 'Compare', 'Leaderboards', 'Guides']);
   });
 
   it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {
