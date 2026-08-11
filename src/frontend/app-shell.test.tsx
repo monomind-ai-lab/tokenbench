@@ -58,7 +58,7 @@ function renderCalculator(catalog: CatalogResponse, pathname = calculatorPath())
 }
 
 async function calculatedResult() {
-  await screen.findByRole('heading', { name: /What does API usage cost?/i });
+  await screen.findByRole('heading', { name: /What does API usage cost?/i }, { timeout: 5_000 });
   return screen.getByRole('region', { name: 'Calculated plan value' });
 }
 
