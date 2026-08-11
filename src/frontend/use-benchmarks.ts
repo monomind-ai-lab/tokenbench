@@ -23,6 +23,11 @@ import {
 } from '../benchmarks/decision-picks';
 import { blendedCostPerMillion, type WorkloadProfile } from '../benchmarks/value';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
+import {
+  benchmarkCacheKey,
+  readBenchmarkEnvelopeCache,
+  writeBenchmarkEnvelopeCache,
+} from './benchmark-cache';
 
 export interface BenchmarkFreshness {
   readonly status: 'fresh' | 'stale';
@@ -62,12 +67,16 @@ export interface BenchmarkApiEnvelope<T> {
 }
 
 export type BenchmarkPhase = 'loading' | 'ready' | 'stale' | 'unavailable' | 'error';
+export type BenchmarkFallback = 'none' | 'browser-cache';
+
+const BROWSER_FALLBACK_MESSAGE = 'Showing the last published revision while refresh is unavailable.';
 
 export interface BenchmarkLeaderboardState {
   readonly phase: BenchmarkPhase;
   readonly envelope: BenchmarkApiEnvelope<LeaderboardPageResult> | null;
   readonly error: string | null;
   readonly statusCode: number | null;
+  readonly fallback: BenchmarkFallback;
   readonly retry: () => void;
 }
 
@@ -602,7 +611,7 @@ export function leaderboardEndpoint(
 }
 
 function unavailableState(message: string, statusCode: number | null = null): Omit<BenchmarkLeaderboardState, 'retry'> {
-  return { phase: 'unavailable', envelope: null, error: message, statusCode };
+  return { phase: 'unavailable', envelope: null, error: message, statusCode, fallback: 'none' };
 }
 
 /**
@@ -622,6 +631,7 @@ export function useBenchmarkLeaderboard(
     envelope: null,
     error: null,
     statusCode: null,
+    fallback: 'none',
   });
   const [retryVersion, setRetryVersion] = useState(0);
   const requestVersion = useRef(0);
@@ -636,16 +646,52 @@ export function useBenchmarkLeaderboard(
     requestIncludesEstimated,
     filters,
   );
+  const cacheKey = benchmarkCacheKey(endpoint);
   const requireCompletePage = filters !== undefined;
+  const lastValidEnvelope = useRef<{
+    readonly cacheKey: string;
+    readonly envelope: BenchmarkApiEnvelope<LeaderboardPageResult>;
+  } | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     const version = ++requestVersion.current;
     let active = true;
-    setState({ phase: 'loading', envelope: null, error: null, statusCode: null });
+    setState({ phase: 'loading', envelope: null, error: null, statusCode: null, fallback: 'none' });
 
     const load = async () => {
       let statusCode: number | null = null;
+      const recover = (terminal: Omit<BenchmarkLeaderboardState, 'retry'>) => {
+        if (terminal.statusCode === 400) {
+          setState(terminal);
+          return;
+        }
+        const inMemory = lastValidEnvelope.current?.cacheKey === cacheKey
+          ? lastValidEnvelope.current.envelope
+          : null;
+        const stored = inMemory ? null : readBenchmarkEnvelopeCache(cacheKey, (value) => (
+          isLeaderboardEnvelope(
+            value,
+            key,
+            profile,
+            requestIncludesEstimated,
+            normalizedLimit,
+            requireCompletePage,
+          ) ? value : null
+        ));
+        const envelope = inMemory ?? stored?.value ?? null;
+        if (envelope) {
+          setState({
+            phase: 'stale',
+            envelope,
+            error: BROWSER_FALLBACK_MESSAGE,
+            statusCode,
+            fallback: 'browser-cache',
+          });
+          return;
+        }
+        setState(terminal);
+      };
       try {
         const response = await fetch(endpoint, {
           headers: { accept: 'application/json' },
@@ -655,7 +701,7 @@ export function useBenchmarkLeaderboard(
         statusCode = response.status;
 
         if (response.status === 404 || response.status === 503) {
-          setState(unavailableState('Published benchmark data is unavailable.', response.status));
+          recover(unavailableState('Published benchmark data is unavailable.', response.status));
           return;
         }
         if (!response.ok) {
@@ -666,7 +712,7 @@ export function useBenchmarkLeaderboard(
         try {
           payload = await response.json();
         } catch {
-          setState(unavailableState('Published benchmark data is unavailable.'));
+          recover(unavailableState('Published benchmark data is unavailable.'));
           return;
         }
         if (!active || controller.signal.aborted || requestVersion.current !== version) return;
@@ -678,10 +724,12 @@ export function useBenchmarkLeaderboard(
           normalizedLimit,
           requireCompletePage,
         )) {
-          setState(unavailableState('Published benchmark data is unavailable.'));
+          recover(unavailableState('Published benchmark data is unavailable.'));
           return;
         }
 
+        lastValidEnvelope.current = { cacheKey, envelope: payload };
+        writeBenchmarkEnvelopeCache(cacheKey, payload);
         setState({
           phase: payload.freshness.status === 'fresh' ? 'ready' : 'stale',
           envelope: payload,
@@ -689,14 +737,16 @@ export function useBenchmarkLeaderboard(
             ? payload.freshness.message ?? 'Published benchmark data is stale.'
             : null,
           statusCode: null,
+          fallback: 'none',
         });
       } catch (error: unknown) {
         if (!active || controller.signal.aborted || requestVersion.current !== version) return;
-        setState({
+        recover({
           phase: 'error',
           envelope: null,
           error: error instanceof Error ? error.message : 'Benchmark request failed.',
           statusCode,
+          fallback: 'none',
         });
       }
     };
@@ -706,7 +756,7 @@ export function useBenchmarkLeaderboard(
       active = false;
       controller.abort();
     };
-  }, [endpoint, key, normalizedLimit, profile, requestIncludesEstimated, requireCompletePage, retryVersion]);
+  }, [cacheKey, endpoint, key, normalizedLimit, profile, requestIncludesEstimated, requireCompletePage, retryVersion]);
 
   return { ...state, retry };
 }
@@ -722,6 +772,7 @@ interface BenchmarkSummaryState {
   readonly phase: BenchmarkPhase;
   readonly envelope: BenchmarkApiEnvelope<BenchmarkSummaryData> | null;
   readonly error: string | null;
+  readonly fallback: BenchmarkFallback;
   readonly retry: () => void;
 }
 
@@ -874,7 +925,7 @@ function isBenchmarkSummaryEnvelope(value: unknown): value is BenchmarkApiEnvelo
 }
 
 function unavailableSummaryState(message: string): Omit<BenchmarkSummaryState, 'retry'> {
-  return { phase: 'unavailable', envelope: null, error: message };
+  return { phase: 'unavailable', envelope: null, error: message, fallback: 'none' };
 }
 
 /** The only summary request used for Home and leaderboard discovery data. */
@@ -908,6 +959,7 @@ async function requestBenchmarkSummary(): Promise<SummaryRequestOutcome> {
     if (!isBenchmarkSummaryEnvelope(payload)) {
       return { kind: 'unavailable', message: 'Published benchmark data is unavailable.' };
     }
+    writeBenchmarkEnvelopeCache(benchmarkCacheKey(benchmarkSummaryEndpoint()), payload);
     return { kind: 'ready', payload };
   } catch (error: unknown) {
     return {
@@ -932,34 +984,54 @@ function useBenchmarkSummary(): BenchmarkSummaryState {
     phase: 'loading',
     envelope: null,
     error: null,
+    fallback: 'none',
   });
   const [retryVersion, setRetryVersion] = useState(0);
   const requestVersion = useRef(0);
+  const lastValidEnvelope = useRef<BenchmarkApiEnvelope<BenchmarkSummaryData> | null>(null);
   const retry = useCallback(() => setRetryVersion((version) => version + 1), []);
 
   useEffect(() => {
     const version = ++requestVersion.current;
     let active = true;
-    setState({ phase: 'loading', envelope: null, error: null });
+    setState({ phase: 'loading', envelope: null, error: null, fallback: 'none' });
 
     const load = async () => {
       const outcome = await sharedBenchmarkSummaryRequest();
       if (!active || requestVersion.current !== version) return;
+      const recover = (terminal: Omit<BenchmarkSummaryState, 'retry'>) => {
+        const cached = lastValidEnvelope.current ?? readBenchmarkEnvelopeCache(
+          benchmarkCacheKey(benchmarkSummaryEndpoint()),
+          (value) => isBenchmarkSummaryEnvelope(value) ? value : null,
+        )?.value ?? null;
+        if (cached) {
+          setState({
+            phase: 'stale',
+            envelope: cached,
+            error: BROWSER_FALLBACK_MESSAGE,
+            fallback: 'browser-cache',
+          });
+          return;
+        }
+        setState(terminal);
+      };
       if (outcome.kind === 'unavailable') {
-        setState(unavailableSummaryState(outcome.message));
+        recover(unavailableSummaryState(outcome.message));
         return;
       }
       if (outcome.kind === 'error') {
-        setState({ phase: 'error', envelope: null, error: outcome.message });
+        recover({ phase: 'error', envelope: null, error: outcome.message, fallback: 'none' });
         return;
       }
       const payload = outcome.payload;
+      lastValidEnvelope.current = payload;
       setState({
         phase: payload.freshness.status === 'fresh' ? 'ready' : 'stale',
         envelope: payload,
         error: payload.freshness.status === 'stale'
           ? payload.freshness.message ?? 'Published benchmark data is stale.'
           : null,
+        fallback: 'none',
       });
     };
 

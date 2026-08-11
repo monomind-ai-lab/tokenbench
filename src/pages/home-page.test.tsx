@@ -7,6 +7,7 @@ import type {
 } from '../benchmarks/decision-picks';
 import type { RepresentativeComparison } from '../benchmarks/api-projections';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
+import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
 import { HomePage } from './home-page';
 
 const UPDATED_AT = '2026-08-06T12:00:00.000Z';
@@ -146,7 +147,10 @@ function renderWithHomeSummary(payload = homeSummaryFixture()) {
   return { fetchMock, ...render(<HomePage />) };
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+});
 
 describe('HomePage', () => {
   it('explains the product and exposes the three primary decisions', () => {
@@ -299,5 +303,25 @@ describe('HomePage', () => {
     const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
     expect(snapshot).toHaveTextContent('Model Alpha');
     expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
+  });
+
+  it('keeps the last validated decision snapshot visible through a 503 refresh failure', async () => {
+    writeBenchmarkEnvelopeCache(
+      benchmarkCacheKey('/api/benchmarks'),
+      homeSummaryFixture(),
+      UPDATED_AT,
+    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ error: 'Benchmark data unavailable' }),
+      { status: 503, headers: { 'content-type': 'application/json' } },
+    )));
+
+    render(<HomePage />);
+
+    const notice = await screen.findByText('Showing the last published revision while refresh is unavailable.');
+    expect(notice).toHaveAttribute('role', 'status');
+    const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
+    expect(within(snapshot).getByText('Model Alpha')).toBeInTheDocument();
+    expect(within(snapshot).getByText(/Source published/)).toBeInTheDocument();
   });
 });

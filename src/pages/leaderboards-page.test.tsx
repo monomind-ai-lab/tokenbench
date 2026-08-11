@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DecisionPickEntry } from '../benchmarks/decision-picks';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult } from '../frontend/use-benchmarks';
+import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './leaderboards-page';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
@@ -175,6 +176,7 @@ function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardPageResult
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  localStorage.clear();
   window.history.replaceState(null, '', '/');
 });
 
@@ -239,6 +241,25 @@ describe('LeaderboardDirectoryPage', () => {
     const updateTimes = Array.from(codingCard.querySelectorAll('time'));
     expect(updateTimes).toHaveLength(3);
     expect(updateTimes.every((time) => time.getAttribute('datetime') === UPDATED_AT)).toBe(true);
+  });
+
+  it('keeps the last validated leaderboard and evidence visible through a 503 refresh failure', async () => {
+    const endpoint = '/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&limit=50';
+    writeBenchmarkEnvelopeCache(benchmarkCacheKey(endpoint), codingLeaderboardEnvelope(), UPDATED_AT);
+    vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(new Response(JSON.stringify(
+      input === '/api/benchmarks' ? decisionSummaryEnvelope() : { error: 'Benchmark data unavailable' },
+    ), {
+      status: input === '/api/benchmarks' ? 200 : 503,
+      headers: { 'content-type': 'application/json' },
+    }))));
+
+    render(<LeaderboardPage keyName="llm-coding" />);
+
+    expect(await screen.findByRole('status'))
+      .toHaveTextContent('Showing the last published revision while refresh is unavailable.');
+    expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
+    const evidence = screen.getByRole('region', { name: 'Evidence and methodology' });
+    expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toBeInTheDocument();
   });
 
   it('makes a category with no supported entries explicitly empty', async () => {

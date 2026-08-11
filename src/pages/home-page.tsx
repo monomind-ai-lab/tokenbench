@@ -151,7 +151,9 @@ function MarketAtAGlance() {
           <button className="button button-secondary" onClick={state.retry} type="button">Retry</button>
         </div>
         : <>
-          {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</p> : null}
+          {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">{state.fallback === 'browser-cache'
+            ? state.error
+            : <>Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</>}</p> : null}
           {cards.length === 0
             ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
             : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}

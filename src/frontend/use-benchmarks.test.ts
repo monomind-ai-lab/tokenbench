@@ -10,6 +10,7 @@ import {
   useDecisionPicks,
   useHomeDecisionSnapshot,
 } from './use-benchmarks';
+import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from './benchmark-cache';
 
 const ISO_TIME = '2026-08-05T12:00:00.000Z';
 
@@ -528,6 +529,7 @@ function decisionSummaryEnvelope(overrides: Record<string, unknown> = {}) {
 describe('useBenchmarkLeaderboard', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    localStorage.clear();
   });
 
   it('encodes only the cached leaderboard route, profile, limit, cursor, and reviewed estimated flag', async () => {
@@ -552,7 +554,7 @@ describe('useBenchmarkLeaderboard', () => {
       .toBe('/api/benchmarks/leaderboards/llm-pricing-context?profile=balanced&limit=50');
   });
 
-  it('accepts the maximum bounded leaderboard cursor and rejects an oversized page cursor', async () => {
+  it('accepts the maximum bounded cursor and retains the last valid page when a later cursor is oversized', async () => {
     const payload = codingEnvelope();
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({
@@ -569,8 +571,9 @@ describe('useBenchmarkLeaderboard', () => {
 
     await waitFor(() => expect(result.current.phase).toBe('ready'));
     act(() => result.current.retry());
-    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
-    expect(result.current.envelope).toBeNull();
+    await waitFor(() => expect(result.current.phase).toBe('stale'));
+    expect(result.current.fallback).toBe('browser-cache');
+    expect(result.current.envelope?.data.pagination?.nextCursor).toBe('a'.repeat(LEADERBOARD_CURSOR_MAX_LENGTH));
   });
 
   it('fails closed when a filter-aware page response omits complete-projection capabilities or pagination', async () => {
@@ -787,6 +790,39 @@ describe('useBenchmarkLeaderboard', () => {
 
     await waitFor(() => expect(result.current.phase).toBe('unavailable'));
     expect(result.current.envelope).toBeNull();
+    expect(result.current.fallback).toBe('none');
+  });
+
+  it('returns a prior validated envelope after a 503 without overwriting it', async () => {
+    const endpoint = leaderboardEndpoint('llm-value');
+    const payload = leaderboardEnvelope();
+    const key = benchmarkCacheKey(endpoint);
+    writeBenchmarkEnvelopeCache(key, payload, ISO_TIME);
+    const stored = localStorage.getItem(key);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'Benchmark data unavailable' }, 503)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.fallback).toBe('browser-cache'));
+    expect(result.current.phase).toBe('stale');
+    expect(result.current.envelope?.revision).toBe(payload.revision);
+    expect(result.current.error).toBe('Showing the last published revision while refresh is unavailable.');
+    expect(localStorage.getItem(key)).toBe(stored);
+  });
+
+  it('keeps the in-memory valid envelope when a retry fails', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(leaderboardEnvelope()))
+      .mockResolvedValueOnce(jsonResponse({ error: 'Benchmark data unavailable' }, 503));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.fallback).toBe('browser-cache'));
+
+    expect(result.current.envelope?.revision).toBe('benchmark-revision-1');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('preserves the generic API error while exposing a 400 status for page-level cursor recovery', async () => {
@@ -838,6 +874,7 @@ describe('useBenchmarkLeaderboard', () => {
     const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
 
     await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(localStorage.length).toBe(0);
     expect(result.current.envelope).toBeNull();
   });
 
@@ -1359,6 +1396,7 @@ describe('useBenchmarkLeaderboard', () => {
 describe('decision summary hooks', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    localStorage.clear();
   });
 
   it('reads supported picks from one bounded summary request', async () => {
@@ -1446,6 +1484,22 @@ describe('decision summary hooks', () => {
     });
     expect(result.current.homeDecisionSnapshot?.pricePerformancePoints).toHaveLength(1);
     expect(result.current.error).toBe('Refresh overdue.');
+    expect(result.current.fallback).toBe('none');
+  });
+
+  it('returns a validated prior summary after a 503 without overwriting it', async () => {
+    const payload = decisionSummaryEnvelope();
+    const key = benchmarkCacheKey(benchmarkSummaryEndpoint());
+    writeBenchmarkEnvelopeCache(key, payload, ISO_TIME);
+    const stored = localStorage.getItem(key);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ error: 'Benchmark data unavailable' }, 503)));
+
+    const { result } = renderHook(() => useDecisionPicks());
+
+    await waitFor(() => expect(result.current.fallback).toBe('browser-cache'));
+    expect(result.current.phase).toBe('stale');
+    expect(result.current.decisionPicks?.[0]?.entries[0]?.modelKey).toBe('model-a');
+    expect(localStorage.getItem(key)).toBe(stored);
   });
 
   it('shares one in-flight summary request between the picks and Home hooks', async () => {
