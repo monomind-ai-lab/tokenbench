@@ -1,17 +1,37 @@
 import {
-  breakEvenTokens,
-  maximumPlanValueMicroDollars,
-  monthlyApiCostMicroDollars,
-  weightedModelCost,
-} from '../catalog/calculator';
+  calculateApiEquivalentCost,
+  compareSubscriptionWithApi,
+  deriveConversationWorkload,
+  type ApiEquivalentCost,
+  type ConversationWorkload,
+  type DerivedConversationWorkload,
+  type SubscriptionApiComparison,
+} from '../catalog/subscription-api-calculator';
+import { defaultApiEquivalentForPlan } from '../catalog/plan-api-equivalent';
 import type { ModelMixEntry, ModelOffer, PlanEntitlement, PlanOffer, PricingBasis } from '../catalog/contracts';
 
 export type WorkloadPreset = 'balanced' | 'input-heavy' | 'output-heavy';
 
-export const WORKLOAD_PRESETS: Record<WorkloadPreset, { label: string; inputShareBasisPoints: number; monthlyTokens: number }> = {
-  balanced: { label: 'Balanced', inputShareBasisPoints: 5_000, monthlyTokens: 10_000_000 },
-  'input-heavy': { label: 'Input-heavy', inputShareBasisPoints: 8_000, monthlyTokens: 10_000_000 },
-  'output-heavy': { label: 'Output-heavy', inputShareBasisPoints: 3_000, monthlyTokens: 10_000_000 },
+/** Kept as a small convenience for callers that still render preset buttons. */
+export const WORKLOAD_PRESETS: Record<WorkloadPreset, { label: string; inputShareBasisPoints: number; monthlyTokens: number; workload: ConversationWorkload }> = {
+  balanced: {
+    label: 'Balanced',
+    inputShareBasisPoints: 5_000,
+    monthlyTokens: 10_000_000,
+    workload: { conversationsPerDay: 10, messagesPerConversation: 1, inputTokensPerMessage: 16_667, outputTokensPerMessage: 16_666, activeDaysPerMonth: 30 },
+  },
+  'input-heavy': {
+    label: 'Input-heavy',
+    inputShareBasisPoints: 8_000,
+    monthlyTokens: 10_000_000,
+    workload: { conversationsPerDay: 10, messagesPerConversation: 1, inputTokensPerMessage: 26_667, outputTokensPerMessage: 6_666, activeDaysPerMonth: 30 },
+  },
+  'output-heavy': {
+    label: 'Output-heavy',
+    inputShareBasisPoints: 3_000,
+    monthlyTokens: 10_000_000,
+    workload: { conversationsPerDay: 10, messagesPerConversation: 1, inputTokensPerMessage: 10_000, outputTokensPerMessage: 23_333, activeDaysPerMonth: 30 },
+  },
 };
 
 export interface InitialSelection {
@@ -24,14 +44,32 @@ export interface ChartPoint {
   readonly valueMicroDollars: number;
 }
 
+export interface CapacityEvidenceResult {
+  readonly status: 'verified-covered' | 'verified-not-covered' | 'projected' | 'not-verified';
+  readonly explanation: string;
+}
+
+export interface ApiMappingDisclosure {
+  readonly mode: 'default' | 'override';
+  readonly defaultOffer: ModelOffer | null;
+  readonly selectedOffers: ModelOffer[];
+}
+
 export interface CalculatorSnapshot {
+  readonly workload: ConversationWorkload;
+  readonly derivedWorkload: DerivedConversationWorkload;
   readonly selectedOffers: ModelOffer[];
   readonly mixEntries: ModelMixEntry[];
+  readonly apiEquivalentCost: ApiEquivalentCost | null;
+  readonly comparison: SubscriptionApiComparison | null;
+  readonly apiMapping: ApiMappingDisclosure;
+  readonly capacityEvidence: CapacityEvidenceResult;
   readonly costPerMillionMicroDollars: number;
   readonly apiEquivalentValueMicroDollars: number;
   readonly monthlyApiCostMicroDollars: number;
   readonly estimatedMonthlySavingsMicroDollars: number | null;
   readonly efficiencyBasisPoints: number | null;
+  readonly breakEvenMessagesPerDay: number | null;
   readonly breakEvenTokens: number | null;
   readonly maximumPlanValueMicroDollars: number | null;
   readonly monthlyTokens: number;
@@ -40,6 +78,8 @@ export interface CalculatorSnapshot {
 
 type ModelPricingBasis = ModelOffer['pricingBasis'];
 const BASIS_KEYS: ModelPricingBasis[] = ['direct_provider_api', 'openrouter', 'opencode_zen'];
+const SAFE_INTEGER_MAX = BigInt(Number.MAX_SAFE_INTEGER);
+const BILLION = 1_000_000_000;
 
 export function createInitialSelection(offers: ModelOffer[], maxModels = 3): InitialSelection {
   const selectedModelIds = offers.slice(0, maxModels).map((offer) => offer.id);
@@ -81,59 +121,140 @@ export function groupOffersByBasis(offers: ModelOffer[]): Record<ModelPricingBas
   return grouped;
 }
 
+function weightedRate(entries: readonly ModelMixEntry[], direction: 'inputMicroDollarsPerMillion' | 'outputMicroDollarsPerMillion'): number {
+  const numerator = entries.reduce(
+    (total, entry) => total + BigInt(entry.model[direction]) * BigInt(entry.shareBasisPoints),
+    0n,
+  );
+  const value = (numerator + 5_000n) / 10_000n;
+  if (value > SAFE_INTEGER_MAX) throw new Error(`${direction} weighted rate exceeds the safe integer range`);
+  return Number(value);
+}
+
+function safeAdd(left: number, right: number, label: string): number {
+  const sum = BigInt(left) + BigInt(right);
+  if (sum > SAFE_INTEGER_MAX) throw new Error(`${label} exceeds the safe integer range`);
+  return Number(sum);
+}
+
+function legacyWorkload(inputShareBasisPoints: number, monthlyTokens: number): ConversationWorkload {
+  const safeTokens = Number.isSafeInteger(monthlyTokens) ? Math.max(0, monthlyTokens) : 0;
+  const activeDaysPerMonth = 30;
+  const totalTokensPerMessage = Math.min(1_000_000, Math.floor(safeTokens / activeDaysPerMonth));
+  const inputTokensPerMessage = Math.floor(totalTokensPerMessage * inputShareBasisPoints / 10_000);
+  return {
+    conversationsPerDay: safeTokens === 0 ? 0 : 1,
+    messagesPerConversation: safeTokens === 0 ? 0 : 1,
+    inputTokensPerMessage,
+    outputTokensPerMessage: totalTokensPerMessage - inputTokensPerMessage,
+    activeDaysPerMonth,
+  };
+}
+
+function isCompleteMix(entries: readonly ModelMixEntry[]): boolean {
+  return entries.length > 0
+    && entries.every((entry) => Number.isSafeInteger(entry.shareBasisPoints) && entry.shareBasisPoints >= 0 && entry.shareBasisPoints <= 10_000)
+    && entries.reduce((sum, entry) => sum + entry.shareBasisPoints, 0) === 10_000;
+}
+
+function capacityEvidenceFor(
+  selectedPlan: PlanOffer | undefined,
+  snapshotWorkload: DerivedConversationWorkload,
+  selectedOffers: readonly ModelOffer[],
+  hasCompleteMix: boolean,
+): CapacityEvidenceResult {
+  if (!selectedPlan || !hasCompleteMix) {
+    return { status: 'not-verified', explanation: 'Capacity evidence is not independently verified for this selection.' };
+  }
+  const selectedModelIds = [...new Set(selectedOffers.map((offer) => offer.modelId))];
+  if (!selectedPlan.supportedModelIds?.length || !selectedModelIds.every((id) => selectedPlan.supportedModelIds?.includes(id))) {
+    return { status: 'not-verified', explanation: 'Capacity evidence is not independently verified because model access is not published for the complete selection.' };
+  }
+  if (selectedPlan.entitlementEvidence.status === 'projected') {
+    return { status: 'projected', explanation: 'Capacity is projected from published limits and is not a guaranteed allowance.' };
+  }
+  if (selectedPlan.entitlementEvidence.status !== 'verified' || selectedPlan.entitlement.kind !== 'fixed_tokens') {
+    return { status: 'not-verified', explanation: 'Capacity evidence is not independently verified for this plan.' };
+  }
+  const monthlyTokens = safeAdd(snapshotWorkload.monthlyInputTokens, snapshotWorkload.monthlyOutputTokens, 'Monthly workload');
+  return selectedPlan.entitlement.monthlyTokens >= monthlyTokens
+    ? { status: 'verified-covered', explanation: 'The published allowance covers this workload under the selected model limits.' }
+    : { status: 'verified-not-covered', explanation: 'The published allowance is below this workload.' };
+}
+
 export function buildCalculatorSnapshot({
   modelOffers,
   selectedModelIds,
   modelMixBasisPoints,
-  inputShareBasisPoints,
-  monthlyTokens,
+  workload,
   selectedPlan,
+  mappingMode,
+  inputShareBasisPoints,
+  monthlyTokens: legacyMonthlyTokens,
 }: {
   modelOffers: ModelOffer[];
   selectedModelIds: string[];
   modelMixBasisPoints: Record<string, number>;
-  inputShareBasisPoints: number;
-  monthlyTokens: number;
+  workload?: ConversationWorkload;
   selectedPlan?: PlanOffer;
+  mappingMode?: 'default' | 'override';
+  inputShareBasisPoints?: number;
+  legacyMonthlyTokens?: number;
 }): CalculatorSnapshot {
+  const snapshotWorkload = workload ?? legacyWorkload(inputShareBasisPoints ?? 5_000, legacyMonthlyTokens ?? 10_000_000);
+  const derivedWorkload = deriveConversationWorkload(snapshotWorkload);
   const selectedOffers = selectedModelIds
     .map((id) => modelOffers.find((offer) => offer.id === id))
     .filter((offer): offer is ModelOffer => Boolean(offer));
-  const mixEntries = selectedOffers.map((model) => ({ model, shareBasisPoints: modelMixBasisPoints[model.id] ?? 0 }));
-  const hasCompleteMix = mixEntries.length > 0 && mixEntries.reduce((sum, entry) => sum + entry.shareBasisPoints, 0) === 10_000;
-  const costPerMillionMicroDollars = hasCompleteMix
-    ? weightedModelCost(mixEntries, inputShareBasisPoints)
+  const selectedMixEntries = selectedOffers.map((model) => ({ model, shareBasisPoints: modelMixBasisPoints[model.id] ?? 0 }));
+  const defaultOffer = selectedPlan ? defaultApiEquivalentForPlan(selectedPlan, modelOffers) : null;
+  const inferredMode = mappingMode ?? (
+    defaultOffer && selectedMixEntries.length === 1 && selectedMixEntries[0].model.id === defaultOffer.id && selectedMixEntries[0].shareBasisPoints === 10_000
+      ? 'default'
+      : 'override'
+  );
+  const arithmeticEntries = inferredMode === 'default' && defaultOffer
+    ? [{ model: defaultOffer, shareBasisPoints: 10_000 }]
+    : selectedMixEntries;
+  const hasCompleteMix = isCompleteMix(arithmeticEntries);
+  const apiEquivalentCost = hasCompleteMix
+    ? calculateApiEquivalentCost(derivedWorkload, {
+      inputMicroDollarsPerMillion: weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion'),
+      outputMicroDollarsPerMillion: weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion'),
+    })
+    : null;
+  const comparison = apiEquivalentCost && selectedPlan
+    ? compareSubscriptionWithApi(selectedPlan.monthlyCostMicroDollars, derivedWorkload, apiEquivalentCost, snapshotWorkload.activeDaysPerMonth)
+    : null;
+  const monthlyTokens = safeAdd(derivedWorkload.monthlyInputTokens, derivedWorkload.monthlyOutputTokens, 'Monthly workload');
+  const blendedCostPerMillion = hasCompleteMix
+    ? Math.round((weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion') * (derivedWorkload.monthlyInputTokens / Math.max(1, monthlyTokens)))
+      + (weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion') * (derivedWorkload.monthlyOutputTokens / Math.max(1, monthlyTokens))))
     : 0;
-  const safeMonthlyTokens = Math.max(0, Math.round(monthlyTokens));
-  const apiEquivalentValueMicroDollars = monthlyApiCostMicroDollars(costPerMillionMicroDollars, safeMonthlyTokens);
-  const selectedPlanCost = selectedPlan?.monthlyCostMicroDollars ?? 0;
-  const estimatedMonthlySavings = hasCompleteMix && selectedPlan
-    ? apiEquivalentValueMicroDollars - selectedPlanCost
-    : null;
-  const efficiencyBasisPoints = estimatedMonthlySavings !== null && apiEquivalentValueMicroDollars > 0
-    ? Math.round((estimatedMonthlySavings / apiEquivalentValueMicroDollars) * 10_000)
-    : null;
-  const breakEven = hasCompleteMix && selectedPlan ? breakEvenTokens(selectedPlanCost, costPerMillionMicroDollars) : null;
-  const maximum = hasCompleteMix && selectedPlan
-    ? maximumPlanValueMicroDollars(selectedPlan.entitlement, costPerMillionMicroDollars)
-    : null;
-  const chartMultipliers = [0.25, 0.5, 0.75, 1, 1.25];
-  const chartPoints = chartMultipliers.map((multiplier) => {
-    const tokens = Math.round(safeMonthlyTokens * multiplier);
-    return { tokens, valueMicroDollars: monthlyApiCostMicroDollars(costPerMillionMicroDollars, tokens) };
-  });
+  const apiEquivalentValueMicroDollars = apiEquivalentCost?.apiCostMicroDollars ?? 0;
+  const chartPoints = [0.25, 0.5, 0.75, 1, 1.25].map((multiplier) => ({
+    tokens: Math.round(monthlyTokens * multiplier),
+    valueMicroDollars: Math.round(apiEquivalentValueMicroDollars * multiplier),
+  }));
 
   return {
+    workload: snapshotWorkload,
+    derivedWorkload,
     selectedOffers,
-    mixEntries,
-    costPerMillionMicroDollars,
+    mixEntries: selectedMixEntries,
+    apiEquivalentCost,
+    comparison,
+    apiMapping: { mode: inferredMode, defaultOffer, selectedOffers: arithmeticEntries.map((entry) => entry.model) },
+    capacityEvidence: capacityEvidenceFor(selectedPlan, derivedWorkload, arithmeticEntries.map((entry) => entry.model), hasCompleteMix),
+    costPerMillionMicroDollars: blendedCostPerMillion,
     apiEquivalentValueMicroDollars,
     monthlyApiCostMicroDollars: apiEquivalentValueMicroDollars,
-    estimatedMonthlySavingsMicroDollars: estimatedMonthlySavings,
-    efficiencyBasisPoints,
-    breakEvenTokens: breakEven,
-    maximumPlanValueMicroDollars: maximum,
-    monthlyTokens: safeMonthlyTokens,
+    estimatedMonthlySavingsMicroDollars: comparison?.differenceMicroDollars ?? null,
+    efficiencyBasisPoints: comparison?.efficiencyBasisPoints ?? null,
+    breakEvenMessagesPerDay: comparison?.breakEvenMessagesPerDay ?? null,
+    breakEvenTokens: null,
+    maximumPlanValueMicroDollars: null,
+    monthlyTokens,
     chartPoints,
   };
 }
@@ -145,7 +266,7 @@ export function formatCurrencyMicroDollars(value: number | null | undefined): st
 
 export function formatTokens(tokens: number | null | undefined): string {
   if (tokens === null || tokens === undefined) return 'Not calculated';
-  if (tokens >= 1_000_000_000) return `${(tokens / 1_000_000_000).toFixed(1)}B`;
+  if (tokens >= BILLION) return `${(tokens / BILLION).toFixed(1)}B`;
   if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
   if (tokens >= 1_000) return `${(tokens / 1_000).toFixed(1)}K`;
   return `${tokens}`;

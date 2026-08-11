@@ -1,52 +1,68 @@
 import { describe, expect, it } from 'vitest';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import {
-  applyWorkloadPreset,
   buildCalculatorSnapshot,
+  createEvenMix,
   createInitialSelection,
   groupOffersByBasis,
-  selectedWorkloadPreset,
 } from './calculator-state';
 
+const workload = {
+  conversationsPerDay: 10,
+  messagesPerConversation: 8,
+  inputTokensPerMessage: 750,
+  outputTokensPerMessage: 250,
+  activeDaysPerMonth: 25,
+};
+
 describe('frontend calculator state', () => {
-  it('initializes a proportional multi-model selection from verified offers', () => {
-    const offers = FRONTEND_TEST_CATALOG.modelOffers;
+  it('initializes an explicit model selection with a complete mix', () => {
+    const offers = [FRONTEND_TEST_CATALOG.modelOffers[0]];
     const selection = createInitialSelection(offers);
-    expect(selection.selectedModelIds).toEqual(offers.map((offer) => offer.id));
-    expect(selection.modelMixBasisPoints).toEqual({
-      [offers[0].id]: 3333,
-      [offers[1].id]: 3333,
-      [offers[2].id]: 3334,
-    });
+    expect(selection.selectedModelIds).toEqual([offers[0].id]);
+    expect(selection.modelMixBasisPoints).toEqual({ [offers[0].id]: 10_000 });
   });
 
-  it('applies editable balanced, input-heavy, and output-heavy presets', () => {
-    expect(applyWorkloadPreset('balanced')).toMatchObject({ inputShareBasisPoints: 5000 });
-    expect(applyWorkloadPreset('input-heavy')).toMatchObject({ inputShareBasisPoints: 8000 });
-    expect(applyWorkloadPreset('output-heavy')).toMatchObject({ inputShareBasisPoints: 3000 });
-    expect(selectedWorkloadPreset(5000, 10_000_000)).toBe('balanced');
-    expect(selectedWorkloadPreset(8000, 10_000_000)).toBe('input-heavy');
-    expect(selectedWorkloadPreset(8000, 3_000_000)).toBeNull();
+  it('keeps model mix normalization deterministic', () => {
+    expect(createEvenMix(['a', 'b', 'c'])).toEqual({ a: 3_333, b: 3_333, c: 3_334 });
   });
 
-  it('derives the current API value, break-even, and fixed-plan maximum from state', () => {
-    const selection = createInitialSelection(FRONTEND_TEST_CATALOG.modelOffers);
+  it('builds arithmetic and capacity evidence as independent snapshot results', () => {
+    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
     const snapshot = buildCalculatorSnapshot({
-      modelOffers: FRONTEND_TEST_CATALOG.modelOffers,
-      selectedModelIds: selection.selectedModelIds,
-      modelMixBasisPoints: selection.modelMixBasisPoints,
-      inputShareBasisPoints: 5000,
-      monthlyTokens: 2_000_000,
-      selectedPlan: FRONTEND_TEST_CATALOG.plans[1],
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: FRONTEND_TEST_CATALOG.plans[0],
     });
 
-    expect(snapshot.costPerMillionMicroDollars).toBe(4_416_475);
-    expect(snapshot.apiEquivalentValueMicroDollars).toBe(8_832_950);
-    expect(snapshot.estimatedMonthlySavingsMicroDollars).toBe(-31_167_050);
-    expect(snapshot.efficiencyBasisPoints).toBe(-35_285);
-    expect(snapshot.breakEvenTokens).toBe(9_056_997);
-    expect(snapshot.maximumPlanValueMicroDollars).toBe(44_164_750);
-    expect(snapshot.chartPoints).toHaveLength(5);
+    expect(snapshot.derivedWorkload).toEqual({
+      monthlyMessages: 2_000,
+      monthlyInputTokens: 1_500_000,
+      monthlyOutputTokens: 500_000,
+    });
+    expect(snapshot.apiEquivalentCost?.apiCostMicroDollars).toBe(7_000_000);
+    expect(snapshot.comparison?.differenceMicroDollars).toBe(-13_000_000);
+    expect(snapshot.apiMapping.defaultOffer?.id).toBe(directOffer.id);
+    expect(snapshot.apiMapping.mode).toBe('default');
+    expect(snapshot.capacityEvidence.status).toBe('not-verified');
+    expect(snapshot.capacityEvidence.explanation).toMatch(/not independently verified/i);
+  });
+
+  it('does not suppress arithmetic when verified capacity is unavailable', () => {
+    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: { ...FRONTEND_TEST_CATALOG.plans[1], monthlyCostMicroDollars: 20_000_000, supportedModelIds: [directOffer.modelId] },
+    });
+
+    expect(snapshot.apiEquivalentCost?.apiCostMicroDollars).toBe(7_000_000);
+    expect(snapshot.comparison?.efficiencyBasisPoints).toBe(-18_571);
+    expect(snapshot.capacityEvidence.status).toBe('verified-covered');
   });
 
   it('keeps direct, OpenRouter, and OpenCode Zen pricing identities separate', () => {

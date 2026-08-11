@@ -1,15 +1,20 @@
+import { compareUtf8Binary } from '../benchmarks/contracts';
 import type { CatalogResponse } from '../catalog/contracts';
+import { defaultApiEquivalentForPlan } from '../catalog/plan-api-equivalent';
+import type { ConversationWorkload } from '../catalog/subscription-api-calculator';
 import { isPaidIndividualPlan } from './plan-filter';
 
-const STATE_KEYS = ['provider', 'plan', 'models', 'weights', 'input', 'tokens'] as const;
+const SHARE_KEYS = ['c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan'] as const;
+const LEGACY_KEYS = ['input', 'tokens'] as const;
+type ShareKey = (typeof SHARE_KEYS)[number];
 
 export interface CalculatorShareState {
   readonly providerId: string;
   readonly planId: string;
+  readonly workload: ConversationWorkload;
   readonly selectedModelIds: readonly string[];
   readonly modelMixBasisPoints: Readonly<Record<string, number>>;
-  readonly inputShareBasisPoints: number;
-  readonly monthlyTokens: number;
+  readonly mappingMode: 'default' | 'override';
 }
 
 export interface DecodedCalculatorShareState {
@@ -17,7 +22,7 @@ export interface DecodedCalculatorShareState {
   readonly wasNormalized: boolean;
 }
 
-function readSingleStateValue(params: URLSearchParams, key: (typeof STATE_KEYS)[number]): string | null {
+function readSingleStateValue(params: URLSearchParams, key: string): string | null {
   const values = params.getAll(key);
   return values.length === 1 ? values[0] : null;
 }
@@ -49,26 +54,89 @@ function normalizeWeights(entries: readonly { readonly id: string; readonly weig
   return Object.fromEntries(normalized.map(({ id, value }) => [id, value]));
 }
 
+function legacyWorkload(inputShareBasisPoints: number, monthlyTokens: number): ConversationWorkload {
+  const safeTokens = Math.max(0, monthlyTokens);
+  const activeDaysPerMonth = 30;
+  const totalTokensPerMessage = Math.min(1_000_000, Math.floor(safeTokens / activeDaysPerMonth));
+  const inputTokensPerMessage = Math.floor(totalTokensPerMessage * inputShareBasisPoints / 10_000);
+  return {
+    conversationsPerDay: safeTokens === 0 ? 0 : 1,
+    messagesPerConversation: safeTokens === 0 ? 0 : 1,
+    inputTokensPerMessage,
+    outputTokensPerMessage: totalTokensPerMessage - inputTokensPerMessage,
+    activeDaysPerMonth,
+  };
+}
+
+function defaultOfferForState(providerId: string, planId: string, catalog: CatalogResponse) {
+  const plan = catalog.plans.find((candidate) => candidate.id === planId && candidate.providerId === providerId && isPaidIndividualPlan(candidate));
+  if (plan) return defaultApiEquivalentForPlan(plan, catalog.modelOffers);
+  return catalog.modelOffers
+    .filter((offer) => offer.providerId === providerId && offer.pricingBasis === 'direct_provider_api' && offer.route === 'direct_provider')
+    .sort((left, right) => compareUtf8Binary(left.modelId, right.modelId) || compareUtf8Binary(left.id, right.id))[0] ?? null;
+}
+
+function inferredMappingMode(
+  providerId: string,
+  planId: string,
+  selectedModelIds: readonly string[],
+  modelMixBasisPoints: Readonly<Record<string, number>>,
+  catalog: CatalogResponse,
+): 'default' | 'override' {
+  const defaultOffer = defaultOfferForState(providerId, planId, catalog);
+  return defaultOffer
+    && selectedModelIds.length === 1
+    && selectedModelIds[0] === defaultOffer.id
+    && modelMixBasisPoints[defaultOffer.id] === 10_000
+    ? 'default'
+    : 'override';
+}
+
 export function encodeCalculatorShareState(state: CalculatorShareState): URLSearchParams {
   const params = new URLSearchParams();
-  params.set('provider', state.providerId);
-  params.set('plan', state.planId);
+  params.set('c', String(state.workload.conversationsPerDay));
+  params.set('m', String(state.workload.messagesPerConversation));
+  params.set('i', String(state.workload.inputTokensPerMessage));
+  params.set('o', String(state.workload.outputTokensPerMessage));
+  params.set('d', String(state.workload.activeDaysPerMonth));
   params.set('models', state.selectedModelIds.join(','));
   params.set('weights', state.selectedModelIds.map((id) => state.modelMixBasisPoints[id]).join(','));
-  params.set('input', String(state.inputShareBasisPoints));
-  params.set('tokens', String(state.monthlyTokens));
+  params.set('provider', state.providerId);
+  params.set('plan', state.planId);
   return params;
 }
 
 export function decodeCalculatorShareState(params: URLSearchParams, catalog: CatalogResponse): DecodedCalculatorShareState | null {
-  const [providerId, planId, encodedModelIds, encodedWeights, encodedInputShare, encodedMonthlyTokens] = STATE_KEYS.map((key) => readSingleStateValue(params, key));
-  if (providerId === null || planId === null || encodedModelIds === null || encodedWeights === null || encodedInputShare === null || encodedMonthlyTokens === null) return null;
+  const values = SHARE_KEYS.map((key) => readSingleStateValue(params, key));
+  const [encodedConversations, encodedMessages, encodedInputTokens, encodedOutputTokens, encodedDays, encodedModelIds, encodedWeights, providerId, planId] = values;
+  if (providerId === null || planId === null || encodedModelIds === null || encodedWeights === null) return null;
+
+  const hasLegacy = LEGACY_KEYS.some((key) => params.has(key));
+  const hasNewWorkload = values.slice(0, 5).every((value) => value !== null);
+  const hasAnyNewWorkload = SHARE_KEYS.slice(0, 5).some((key) => params.has(key));
+  if (hasAnyNewWorkload && !hasNewWorkload) return null;
+  let workload: ConversationWorkload;
+  if (hasNewWorkload) {
+    const conversationsPerDay = parseInteger(encodedConversations!, 0, 10_000);
+    const messagesPerConversation = parseInteger(encodedMessages!, 0, 1_000);
+    const inputTokensPerMessage = parseInteger(encodedInputTokens!, 0, 1_000_000);
+    const outputTokensPerMessage = parseInteger(encodedOutputTokens!, 0, 1_000_000);
+    const activeDaysPerMonth = parseInteger(encodedDays!, 0, 31);
+    if ([conversationsPerDay, messagesPerConversation, inputTokensPerMessage, outputTokensPerMessage, activeDaysPerMonth].some((value) => value === null)) return null;
+    workload = { conversationsPerDay, messagesPerConversation, inputTokensPerMessage, outputTokensPerMessage, activeDaysPerMonth };
+  } else {
+    const encodedInputShare = readSingleStateValue(params, 'input');
+    const encodedMonthlyTokens = readSingleStateValue(params, 'tokens');
+    if (!encodedInputShare || !encodedMonthlyTokens) return null;
+    const inputShareBasisPoints = parseInteger(encodedInputShare, 0, 10_000);
+    const monthlyTokens = parseInteger(encodedMonthlyTokens, 0, Number.MAX_SAFE_INTEGER);
+    if (inputShareBasisPoints === null || monthlyTokens === null) return null;
+    workload = legacyWorkload(inputShareBasisPoints, monthlyTokens);
+  }
 
   const selectedModelIds = parseList(encodedModelIds);
   const encodedWeightValues = parseList(encodedWeights);
-  const inputShareBasisPoints = parseInteger(encodedInputShare, 0, 10_000);
-  const monthlyTokens = parseInteger(encodedMonthlyTokens, 1, Number.MAX_SAFE_INTEGER);
-  if (!selectedModelIds || !encodedWeightValues || selectedModelIds.length !== encodedWeightValues.length || inputShareBasisPoints === null || monthlyTokens === null) return null;
+  if (!selectedModelIds || !encodedWeightValues || selectedModelIds.length !== encodedWeightValues.length) return null;
   if (new Set(selectedModelIds).size !== selectedModelIds.length) return null;
 
   const weights: number[] = [];
@@ -98,16 +166,17 @@ export function decodeCalculatorShareState(params: URLSearchParams, catalog: Cat
   const modelsChanged = normalizedModelIds.length !== selectedModelIds.length
     || normalizedModelIds.some((id, index) => id !== selectedModelIds[index])
     || normalizedModelIds.some((id, index) => modelMixBasisPoints[id] !== weights[index]);
+  const mappingMode = inferredMappingMode(providerId, normalizedPlanId, normalizedModelIds, modelMixBasisPoints, catalog);
 
   return {
     state: {
       providerId,
       planId: normalizedPlanId,
+      workload,
       selectedModelIds: normalizedModelIds,
       modelMixBasisPoints,
-      inputShareBasisPoints,
-      monthlyTokens,
+      mappingMode,
     },
-    wasNormalized: normalizedPlanId !== planId || modelsChanged,
+    wasNormalized: hasLegacy || normalizedPlanId !== planId || modelsChanged,
   };
 }
