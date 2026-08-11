@@ -219,6 +219,7 @@ describe('LeaderboardTable', () => {
     expect(within(table).getByRole('columnheader', { name: 'Blended cost' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Metric' })).toHaveAttribute('aria-sort', 'descending');
     expect(within(table).getAllByText('Unavailable').length).toBeGreaterThan(1);
+    expect(within(table).getByRole('link', { name: 'Model A' })).toHaveAttribute('href', '/models/model-a/');
     expect(screen.queryByRole('link', { name: 'Data from BenchLM.ai' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Leaderboard evidence')).not.toBeInTheDocument();
 

@@ -1,4 +1,5 @@
 import { LEADERBOARD_DEFINITIONS, type LeaderboardEntry, type LeaderboardSort } from '../benchmarks/leaderboards';
+import { modelPath } from '../benchmarks/model-directory';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 import { formatDateTime } from './ui';
 import type { BenchmarkAttribution, BenchmarkFreshness } from './use-benchmarks';
@@ -146,7 +147,7 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
   const estimated = isEstimated(entry);
   return <li className={`leaderboard-card${estimated ? ' leaderboard-card-estimated' : ''}`}>
     <div className="leaderboard-card-heading"><span className="leaderboard-position">{position === null ? 'Unranked' : `#${position}`}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div>
-    <h3>{entry.model.name}</h3>
+    <h3><a href={modelPath(entry.model.slug)}>{entry.model.name}</a></h3>
     <p className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span></p>
     <dl>
       <div><dt>Metric</dt><dd><LensList entry={entry} /></dd></div>
@@ -189,7 +190,7 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
         <tbody>
           {rows.map(({ entry, position }) => <tr key={entry.model.modelKey} className={isEstimated(entry) ? 'leaderboard-row-estimated' : undefined}>
             <td>{position === null ? 'Unranked' : `#${position}`}</td>
-            <th scope="row"><div className="leaderboard-model"><span>{entry.model.name}</span><ProviderIdentity entry={entry} /><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
+            <th scope="row"><div className="leaderboard-model"><a href={modelPath(entry.model.slug)}>{entry.model.name}</a><ProviderIdentity entry={entry} /><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
             <td><LensList entry={entry} /></td>
             <td>{isEstimated(entry) ? 'Unavailable' : formatPrice(entry.blendedCostPerMillion)}</td>
             <td>{isEstimated(entry) ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</td>

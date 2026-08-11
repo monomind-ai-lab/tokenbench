@@ -187,6 +187,8 @@ describe('comparison detail page', () => {
     expect(screen.queryByRole('heading', { name: 'Workload view' })).not.toBeInTheDocument();
     expect(screen.getAllByText('Not verified').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('heading', { name: 'Evidence provenance' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Model A' }).every((link) => link.getAttribute('href') === '/models/model-a/')).toBe(true);
+    expect(screen.getAllByRole('link', { name: 'Model B' }).every((link) => link.getAttribute('href') === '/models/model-b/')).toBe(true);
     expect(headings.indexOf('Key implications')).toBeLessThan(headings.indexOf('Shared metric view'));
     expect(headings.indexOf('Shared metric view')).toBeLessThan(headings.indexOf('Source metrics'));
     expect(headings.indexOf('Source metrics')).toBeLessThan(headings.indexOf('Pricing and context'));

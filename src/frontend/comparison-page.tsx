@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck, BenchmarkSourceRecord } from '../benchmarks/contracts';
+import { modelPath } from '../benchmarks/model-directory';
 import { SITE_CONFIG } from '../brand/site-config';
 import { ComparisonRadar, radarAxes } from './comparison-radar';
 import { comparisonSummary, friendlyMetricLabel } from './comparison-summary';
@@ -217,7 +218,7 @@ function ModelIdentity({ models, index }: { readonly models: readonly [Benchmark
   return <article className="comparison-model-identity" aria-labelledby={headingId}>
     <div className="comparison-model-heading">
       <ProviderMark loading="eager" providerId={model.creator} providerName={model.creator} size={32} />
-      <div><p>{model.creator}</p><h3 id={headingId}>{modelDisplayLabel(models, index)}</h3></div>
+      <div><p>{model.creator}</p><h3 id={headingId}><a href={modelPath(model.slug)}>{modelDisplayLabel(models, index)}</a></h3></div>
     </div>
     <dl>
       <div><dt>Model type</dt><dd>{model.sourceType}</dd></div>

@@ -1,6 +1,7 @@
 import { ArrowRight, BadgeDollarSign, Download, Layers3, TrendingUp, Workflow } from 'lucide-react';
 import type { DecisionPickEntry, DecisionPickGroup } from '../benchmarks/decision-picks';
 import type { RepresentativeComparison } from '../benchmarks/api-projections';
+import { modelPath } from '../benchmarks/model-directory';
 import { ProviderMark } from '../frontend/provider-mark';
 import { useDecisionPicks } from '../frontend/use-benchmarks';
 import { HOME_PAGE_COPY } from '../brand/site-config';
@@ -97,7 +98,7 @@ function MarketLeaderArticle({ card }: { readonly card: MarketLeaderCard; readon
       <h3>{card.title}</h3>
       <span className="home-snapshot-rank">{card.status === 'benchalign' && Number.isSafeInteger(leader.rank) && leader.rank > 0 ? `Source rank #${leader.rank}` : 'Not ranked by source'}</span>
     </div>
-    <a className="home-snapshot-model" href={leader.routePath}>
+    <a className="home-snapshot-model" href={modelPath(leader.slug)}>
       <ProviderMark providerId={leader.provider} providerName={leader.provider} decorative size={20} />
       <span>{leader.name}</span>
       <ArrowRight aria-hidden="true" size={14} />
@@ -126,7 +127,7 @@ function RepresentativeComparisonArticle({ comparison }: { readonly comparison: 
       : null;
   return <li>
     <article className="panel home-snapshot-card home-comparison-card">
-      <h3>{comparison.modelAName} vs {comparison.modelBName}</h3>
+      <h3><a href={modelPath(comparison.modelASlug)}>{comparison.modelAName}</a> vs <a href={modelPath(comparison.modelBSlug)}>{comparison.modelBName}</a></h3>
       <p><strong>{finding}</strong></p>
       {strongest ? <p className="muted">{formatScore(strongest.modelAValue, strongest.unit)} vs {formatScore(strongest.modelBValue, strongest.unit)}</p> : null}
       {implication ? <p className="muted">{implication}</p> : null}

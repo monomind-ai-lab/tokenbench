@@ -199,7 +199,7 @@ describe('HomePage', () => {
     expect(within(snapshot).getByRole('heading', { name: 'Multimodal', level: 3 })).toBeInTheDocument();
     expect(within(snapshot).queryByRole('heading', { name: 'Knowledge', level: 3 })).not.toBeInTheDocument();
     expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
-    expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/leaderboards/llm/overall/');
+    expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/models/Model%20Alpha/');
     expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
     expect(within(snapshot).getAllByText('Source rank #1')).toHaveLength(3);
     expect(within(snapshot).getAllByText('Not ranked by source')).toHaveLength(2);
@@ -219,6 +219,8 @@ describe('HomePage', () => {
     expect(within(comparisons).getByRole('heading', { name: 'GPT-5.6 Sol vs Kimi 3' })).toBeInTheDocument();
     expect(within(comparisons).getByText('Tied on agentic')).toBeInTheDocument();
     expect(within(comparisons).getByRole('link', { name: 'Compare Claude Opus 5 and GPT-5.6 Sol' })).toHaveAttribute('href', '/compare/claude-opus-5-vs-gpt-5-6-sol');
+    expect(within(comparisons).getByRole('link', { name: 'Claude Opus 5' })).toHaveAttribute('href', '/models/claude-opus-5/');
+    expect(within(comparisons).getAllByRole('link', { name: 'GPT-5.6 Sol' }).every((link) => link.getAttribute('href') === '/models/gpt-5-6-sol/')).toBe(true);
   });
 
   it('labels provenance without repeating a source-artifact update ledger', async () => {
