@@ -17,6 +17,8 @@ import {
   buildBenchmarkSummaryData,
   type BenchmarkProjectionSnapshot,
 } from '../src/benchmarks/api-projections';
+import { buildPricePerformanceProjection } from '../src/benchmarks/price-performance';
+import type { PricePerformanceEnvelope } from '../src/benchmarks/price-performance-contracts';
 import {
   validateNormalizedSourceBatch,
   type BenchmarkMetric,
@@ -47,6 +49,11 @@ import {
   renderModelProfileDocument,
   renderModelProfileStatusDocument,
 } from '../functions/models/[slug]';
+import {
+  PRICE_PERFORMANCE_ARCHIVED_LIMIT,
+  pricePerformanceEnvelopeData,
+} from '../functions/_shared/price-performance-db';
+import { renderPricePerformanceDocument } from '../functions/llm-price-performance';
 
 const SAMPLE_TIMESTAMP = '2000-01-01T00:00:00.000Z';
 const SAMPLE_REVISION_ID = 'local-sample-preview-r1';
@@ -255,6 +262,7 @@ const SAMPLE_BATCH = validateNormalizedSourceBatch({
   priceChecks: [
     samplePrice(SAMPLE_ATLAS, 2, 8),
     samplePrice(SAMPLE_ORBIT, 1, 4),
+    samplePrice(SAMPLE_GPT_56_SOL, 1.5, 10),
   ],
   comparisonSeeds: [],
 });
@@ -489,6 +497,61 @@ function sampleSummaryResponse(): unknown {
   );
 }
 
+function samplePricePerformanceResponse(includeArchived: boolean): PricePerformanceEnvelope {
+  const projection = buildPricePerformanceProjection({
+    models: SAMPLE_SNAPSHOT.models,
+    metrics: SAMPLE_SNAPSHOT.metrics,
+    priceChecks: SAMPLE_SNAPSHOT.priceChecks,
+  });
+  const familyPoints = projection.points.map((point) => point.modelKey === SAMPLE_ATLAS.modelKey || point.modelKey === SAMPLE_ORBIT.modelKey
+    ? { ...point, familyId: 'local-sample:shared-family' }
+    : point);
+  const orbit = familyPoints.find((point) => point.modelKey === SAMPLE_ORBIT.modelKey);
+  const gpt = familyPoints.find((point) => point.modelKey === SAMPLE_GPT_56_SOL.modelKey);
+  if (!orbit || !gpt) throw new Error('local price-performance fixtures are incomplete');
+  const zeroPrice = {
+    ...orbit,
+    modelKey: 'local-sample:zero-price',
+    slug: 'sample-zero-price',
+    displayName: 'Sample Zero Price',
+    familyId: 'local-sample:zero-price',
+    route: {
+      ...orbit.route,
+      routeId: 'local-sample:zero-price',
+      sourceModelId: 'local-sample:zero-price',
+      canonicalSlug: 'sample-zero-price',
+      inputUsdPerMillion: 0,
+      outputUsdPerMillion: 0,
+    },
+  };
+  const archived = {
+    ...gpt,
+    modelKey: 'local-sample:archived-sol',
+    slug: 'sample-archived-sol',
+    displayName: 'Sample Archived Sol',
+    familyId: 'local-sample:archived-sol',
+    status: 'archived' as const,
+    route: {
+      ...gpt.route,
+      routeId: 'local-sample:archived-sol',
+      sourceModelId: 'local-sample:archived-sol',
+      canonicalSlug: 'sample-archived-sol',
+    },
+  };
+  const points = includeArchived
+    ? [...familyPoints, zeroPrice, archived]
+    : [...familyPoints, zeroPrice];
+  return benchmarkEnvelope(
+    SAMPLE_SNAPSHOT,
+    SAMPLE_FRESHNESS,
+    attributionForAllSources(SAMPLE_SNAPSHOT),
+    pricePerformanceEnvelopeData(
+      points,
+      includeArchived ? { hasMore: false, limit: PRICE_PERFORMANCE_ARCHIVED_LIMIT } : undefined,
+    ),
+  );
+}
+
 function writeJson(response: ServerResponse, status: number, body: unknown, headOnly: boolean): void {
   const payload = JSON.stringify(body);
   response.statusCode = status;
@@ -587,6 +650,23 @@ function serveLocalModelDocument(
   return true;
 }
 
+function serveLocalPricePerformanceDocument(
+  url: URL,
+  response: ServerResponse,
+  headOnly: boolean,
+): boolean {
+  if (url.pathname === '/llm-price-performance') {
+    writeRedirect(response, 301, '/llm-price-performance/');
+    return true;
+  }
+  if (url.pathname !== '/llm-price-performance/') return false;
+  const envelope = samplePricePerformanceResponse(false);
+  writeHtml(response, 200, renderPricePerformanceDocument(envelope), headOnly, {
+    'X-Robots-Tag': 'index, follow',
+  });
+  return true;
+}
+
 function methodologyHeader(key: LeaderboardKey): string {
   switch (LEADERBOARD_DEFINITIONS[key].kind) {
     case 'benchlm':
@@ -620,7 +700,8 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
   const isModelDocument = url.pathname === '/models' || url.pathname === '/models/' || /^\/models\/[^/]+\/?$/u.test(url.pathname);
-  if (!isModelDocument && url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
+  const isPricePerformanceDocument = url.pathname === '/llm-price-performance' || url.pathname === '/llm-price-performance/';
+  if (!isModelDocument && !isPricePerformanceDocument && url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
     next();
     return;
   }
@@ -630,6 +711,7 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
   }
   const headOnly = method === 'HEAD';
   if (isModelDocument && serveLocalModelDocument(url, response, headOnly)) return;
+  if (isPricePerformanceDocument && serveLocalPricePerformanceDocument(url, response, headOnly)) return;
   const previewState = request.headers[LOCAL_PREVIEW_STATE_HEADER];
   if (previewState === '503') {
     writeJson(response, 503, { error: 'Local preview benchmark refresh unavailable.' }, headOnly);
@@ -649,6 +731,20 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
       response,
       parsed === null ? 400 : 200,
       parsed === null ? { error: 'Invalid sample model directory request' } : localModelDirectoryEnvelope(parsed.query, parsed.limit),
+      headOnly,
+    );
+    return;
+  }
+  if (url.pathname === '/api/benchmarks/price-performance') {
+    const keys = [...url.searchParams.keys()];
+    const includeArchivedValues = url.searchParams.getAll('includeArchived');
+    const valid = keys.every((key) => key === 'includeArchived')
+      && includeArchivedValues.length <= 1
+      && (includeArchivedValues.length === 0 || includeArchivedValues[0] === '1');
+    writeJson(
+      response,
+      valid ? 200 : 400,
+      valid ? samplePricePerformanceResponse(includeArchivedValues[0] === '1') : { error: 'Invalid sample price-performance request' },
       headOnly,
     );
     return;

@@ -406,6 +406,34 @@ first compare the public leaderboard identities with `models.json`; do not
 weaken ambiguity checks or publish a partial mixed-source bundle during an
 incident.
 
+### Price-performance projection contract (Release 4)
+
+`GET /api/benchmarks/price-performance` serves one validated complete
+projection under materialized cache key `price-performance:complete:v1`.
+The default body contains every eligible current variant, all nine corrected
+public score lanes, output price, the exact 3:1 blended definition, capability
+options, revision/freshness facts, and source attribution. Browser filters do
+not create server cache variants. `includeArchived=1` adds only parsed
+latest-valid durable profiles, is bounded to 500 archived records, and returns
+`data.archived.hasMore` plus the applied limit when that extension succeeds.
+
+Publication writes both fresh and stale complete-projection cache variants
+before advancing the benchmark publication pointer. A default read follows
+active cache, active-revision reconstruction, then newest complete historical
+cache. An archived request additionally probes the current complete cache so a
+failed archived extension returns the last valid current stale projection, not
+503. Matching ETags must continue to return 304. Invalid candidate-row logs are
+hard-bounded and contain only event name, model key, source ID, and reason
+class; no row content or provider payload is permitted.
+
+The browser last-good key is
+`tokenbench:benchmarks:v2:price-performance:complete`. A network failure may
+use only a runtime-validated cached envelope and must relabel it stale with the
+stored time. It must never relabel an unvalidated payload or replace unavailable
+facts with zero. During release verification record the default current point
+count from the deployed API and require the same count in the materialized
+fresh and stale bodies for the active revision.
+
 The canonical production origin is https://tokenbench.monomind.one. The legacy
 ai-plans.monomind.one custom domain and its exact DNS record must be absent after
 cutover; the underlying legacy Pages project remains available at its pages.dev

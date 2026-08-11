@@ -1424,8 +1424,8 @@ test.describe('guides browser harness', () => {
 
       await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
       await expect(page.locator('.guide-card')).toHaveCount(5);
-      if (width < 768) {
-        const menu = page.getByRole('button', { name: 'Open navigation' });
+      const menu = page.getByRole('button', { name: 'Open navigation' });
+      if (await menu.isVisible()) {
         await menu.focus();
         await page.keyboard.press('Enter');
         await expect(page.getByRole('button', { name: 'Close navigation' })).toHaveAttribute('aria-expanded', 'true');
@@ -1647,7 +1647,7 @@ test.describe('home and tools route runtime', () => {
     await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
   });
 
-  test('navigation exposes the six approved destinations on compact Home', async ({ page }) => {
+  test('navigation exposes the seven approved destinations on compact Home', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/');
@@ -1659,6 +1659,7 @@ test.describe('home and tools route runtime', () => {
     expect(await navigation.getByRole('link').allTextContents()).toEqual([
       'Home',
       'Subscribe vs API',
+      'Price vs Performance',
       'Models',
       'Compare',
       'Leaderboards',

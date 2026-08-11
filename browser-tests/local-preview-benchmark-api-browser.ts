@@ -14,6 +14,11 @@ async function blockExternalRequests(page: import('@playwright/test').Page): Pro
   );
 }
 
+async function stubStaticPageThirdPartyAssets(page: import('@playwright/test').Page): Promise<void> {
+  await page.route('https://fonts.googleapis.com/**', (route) => route.fulfill({ contentType: 'text/css', body: '' }));
+  await page.route('https://translate.google.com/**', (route) => route.fulfill({ contentType: 'application/javascript', body: '' }));
+}
+
 async function expectNoHorizontalOverflow(page: import('@playwright/test').Page): Promise<void> {
   const dimensions = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
@@ -69,6 +74,89 @@ test('local preview accepts the summary through the frontend runtime contract', 
   const market = page.getByRole('region', { name: 'Market at a glance' });
   await expect(market).toContainText('Sample Atlas');
   await expect(market.locator('.home-snapshot-provenance')).toContainText('LOCAL SAMPLE');
+});
+
+test('price performance SSR, filters, chart, table, and SEO stay fact-equivalent', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('pageerror', (error) => errors.push(error.message));
+  await blockExternalRequests(page);
+  await stubStaticPageThirdPartyAssets(page);
+
+  for (const width of [390, 1280]) {
+    await page.setViewportSize({ width, height: 1_000 });
+    await page.goto('/llm-price-performance/', { waitUntil: 'networkidle' });
+
+    await expect(page.getByRole('heading', { name: 'LLM price vs performance', level: 1 })).toBeVisible();
+    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://tokenbench.monomind.one/llm-price-performance/');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /API price.*Pareto/i);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /index,follow/);
+    await expect(page.locator('meta[property="og:title"]')).toHaveAttribute('content', /Price vs Performance/i);
+    await expect(page.locator('meta[name="twitter:card"]')).toHaveAttribute('content', 'summary_large_image');
+    const jsonLd = await page.locator('script[type="application/ld+json"]').allTextContents();
+    expect(jsonLd.some((value) => value.includes('"@type":"WebPage"'))).toBe(true);
+    expect(jsonLd.some((value) => value.includes('"@type":"Dataset"'))).toBe(true);
+
+    const values = width < 600
+      ? page.getByRole('list', { name: 'Price versus performance model cards' }).first()
+      : page.getByRole('table', { name: 'Price versus performance values' });
+    await expect(values).toContainText('Sample Atlas');
+    await expect(page.getByRole('group', { name: 'Overall score by output price' })).toBeVisible();
+    await expect(page.getByLabel('Chart legend')).toContainText('Pareto frontier');
+    await expectNoHorizontalOverflow(page);
+
+    await page.getByLabel('Score lane').selectOption('coding');
+    const gptPoint = page.getByRole('button', { name: /GPT-5\.6 Sol.*78\.0.*output price/i });
+    await expect(gptPoint).toBeVisible();
+    const gptValues = width < 600
+      ? values.getByRole('listitem').filter({ hasText: 'GPT-5.6 Sol' })
+      : values.getByRole('row', { name: /GPT-5\.6 Sol/ });
+    await expect(gptValues).toContainText('78.0');
+    await gptPoint.focus();
+    await page.keyboard.press('Enter');
+    const details = page.getByRole('dialog', { name: 'GPT-5.6 Sol details' });
+    await expect(details).toContainText('78.0');
+    await expect(details.getByRole('link', { name: /OpenAI.*local-sample:gpt-5-6-sol/i })).toHaveAttribute('href', 'https://tokenbench.local/local-sample/openrouter');
+    await page.keyboard.press('Escape');
+    await expect(details).toHaveCount(0);
+    await expect(gptPoint).toBeFocused();
+
+    await page.getByLabel('Cost basis').selectOption('blended-3-1');
+    await expect(page).toHaveURL(/basis=blended-3-1/);
+    await page.getByLabel('Variants').selectOption('all-variants');
+    await expect(values).toContainText('Sample Orbit');
+
+    await page.getByLabel('Status').selectOption('archived');
+    await expect(values).toContainText('Sample Archived Sol');
+    await expect(page).toHaveURL(/status=archived/);
+
+    await page.getByLabel('Status').selectOption('current');
+    await page.getByLabel('Score lane').selectOption('mathematics');
+    await expect(page.getByText('No chart points are available for this category.')).toBeVisible();
+    await expect(page.getByRole('status', { name: 'No eligible models match these filters' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('last valid browser-cached price performance evidence survives a refresh outage', async ({ page }) => {
+  const origin = previewOrigin();
+  await blockExternalRequests(page);
+  await stubStaticPageThirdPartyAssets(page);
+  const freshResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/benchmarks/price-performance');
+  await page.goto('/llm-price-performance/', { waitUntil: 'domcontentloaded' });
+  expect((await freshResponse).status()).toBe(200);
+  await expect(page.getByRole('table', { name: 'Price versus performance values' })).toContainText('GPT-5.6 Sol');
+
+  await page.setExtraHTTPHeaders({ 'x-tokenbench-preview-state': '503' });
+  const failedResponse = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/benchmarks/price-performance');
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  expect((await failedResponse).status()).toBe(503);
+  const stale = page.getByRole('status').filter({ hasText: 'Stale benchmark data' });
+  await expect(stale).toContainText('last valid browser-cached revision');
+  await expect(page.getByRole('table', { name: 'Price versus performance values' })).toContainText('GPT-5.6 Sol');
+  await expectNoHorizontalOverflow(page);
+  expect(new URL(page.url()).origin).toBe(origin);
 });
 
 test('correct score and last-good evidence survive a refresh outage', async ({ page }) => {

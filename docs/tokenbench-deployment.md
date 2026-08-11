@@ -635,6 +635,44 @@ model publication.
   external production runner. The failed event changed no active revision or
   model-profile counts; the last good revision remains published.
 
+### Release 4 price-performance release gate
+
+Release 4 is additive but changes both the benchmark Worker materializer and
+Pages. Use one verified commit and preserve this order:
+
+1. Run `npm test`, `npm run lint`, `npm run build`,
+   `npm run test:browser:local-preview`, and `npm run test:browser`. Require the
+   overall/coding/category-empty lanes, output and 3:1 costs, one/all variants,
+   archived lazy loading, zero-price handling, chart/table parity, source and
+   model links, stale browser fallback, desktop/mobile overflow, and SEO checks
+   to pass.
+2. Deploy `workers/benchmark-ingest` from that commit. Because the production
+   account's Workers Free Cron ceiling is already proven insufficient, perform
+   the separately authorized controlled publication through the documented
+   local Workers runtime with official remote D1/R2 bindings; do not spend on a
+   plan upgrade or claim the normal Cron invocation succeeded.
+3. Before Pages, verify cache key `price-performance:complete:v1` has exactly
+   one complete fresh and one complete stale body for the active revision and
+   was written before the publication pointer. Record the active revision,
+   default current point count, cache chunks/ETags, and conditional 304 result.
+4. Deploy Pages from the same commit. Verify canonical
+   `/llm-price-performance/` and API HTTP 200, overall and coding values
+   (GPT-5.6 Sol internal coding `77.95`, public `78.0`), both cost bases,
+   family variants, archived extension, Pareto state, chart/table equality,
+   source/profile links, and stale current fallback.
+5. At 390px and 1280px require one H1, no horizontal overflow, keyboard/touch
+   point details, Escape focus return, visible ticks and legend, no console or
+   request errors, and usable equivalent cards/table. Repeat once with
+   JavaScript disabled to confirm substantive SSR evidence remains.
+6. Verify unique title/description, base canonical for filter URLs,
+   `index,follow`, Open Graph, Twitter, WebPage and Dataset JSON-LD, and exactly
+   one `/llm-price-performance/` entry in the static sitemap with no query URL.
+7. Roll back Pages to deployment `0d29f72d-1f5c-4386-b914-e26e2f91659a`
+   and the benchmark Worker to version
+   `ebf5bbc3-dd07-43fa-be61-f22ce3228517` if the new endpoint, cache, SSR, or
+   browser gate fails. Preserve the active revision and all immutable evidence;
+   do not delete cache or D1 rows as rollback.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
