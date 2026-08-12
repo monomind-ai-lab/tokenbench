@@ -8,24 +8,19 @@ export interface PricePerformanceTableProps {
   readonly showEmptyState?: boolean;
 }
 
-function ProviderRouteEvidence({ facts }: { readonly facts: PricePerformancePointViewFacts }) {
-  return facts.sourceLinkLabel;
-}
-
 function PointFacts({ facts }: { readonly facts: PricePerformancePointViewFacts }) {
   return <>
     <div><dt>Score</dt><dd>{facts.score}</dd></div>
     <div><dt>Selected cost</dt><dd>{facts.selectedCost}</dd></div>
     <div><dt>Score per dollar</dt><dd>{facts.scorePerDollar}</dd></div>
-    <div><dt>Provider / route</dt><dd><ProviderRouteEvidence facts={facts} /></dd></div>
     <div><dt>Evidence</dt><dd>{facts.evidence}</dd></div>
     <div><dt>Frontier</dt><dd>{facts.frontier}</dd></div>
   </>;
 }
 
-function MobileCard({ point, facts }: { readonly point: PricePerformancePointView; readonly facts: PricePerformancePointViewFacts; readonly key?: string }) {
+function MobileCard({ facts }: { readonly facts: PricePerformancePointViewFacts; readonly key?: string }) {
   return <li className="price-performance-card">
-    <div className="price-performance-card-heading"><h3>{facts.modelName}</h3><span className={`price-performance-status status-${point.status}`}>{facts.status}</span></div>
+    <div className="price-performance-card-heading"><h3>{facts.modelName}</h3></div>
     <dl><PointFacts facts={facts} /></dl>
     <a className="price-performance-profile-link" href={facts.profileHref}>{facts.profileLinkLabel}</a>
   </li>;
@@ -47,23 +42,21 @@ export function PricePerformanceTable({
           <th scope="col">Score</th>
           <th scope="col">Selected cost</th>
           <th scope="col">Score / dollar</th>
-          <th scope="col">Provider / route</th>
           <th scope="col">Evidence</th>
           <th scope="col">Frontier</th>
         </tr></thead>
         <tbody>{rows.map(({ point, facts }) => <tr key={point.modelKey}>
-          <th scope="row"><a className="price-performance-model-link" href={facts.profileHref}>{facts.modelName}</a><span className={`price-performance-status status-${point.status}`}>{facts.status}</span></th>
+          <th scope="row"><a className="price-performance-model-link" href={facts.profileHref}>{facts.modelName}</a></th>
           <td>{facts.score}</td>
           <td>{facts.selectedCost}</td>
           <td>{facts.scorePerDollar}</td>
-          <td><ProviderRouteEvidence facts={facts} /></td>
           <td>{facts.evidence}</td>
           <td>{facts.frontier}</td>
         </tr>)}</tbody>
       </table>
     </div>
     <ol className="price-performance-mobile-cards" aria-label="Price versus performance model cards">
-      {rows.map(({ point, facts }) => <MobileCard key={point.modelKey} point={point} facts={facts} />)}
+      {rows.map(({ point, facts }) => <MobileCard key={point.modelKey} facts={facts} />)}
     </ol>
   </section>;
 }

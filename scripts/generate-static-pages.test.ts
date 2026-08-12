@@ -143,6 +143,9 @@ describe('crawlable static-page generator', () => {
     expect(welcome).toContain('class="app-shell static-page-shell"');
     expect(welcome).toContain('class="static-page-links"');
     expect(welcome).toContain('Review Your Subscriptions');
+    expect(welcome).toContain('<img src="/brand/welcome-cover.jpg"');
+    expect(welcome).toContain('Nikita Kachanovsky');
+    expect(welcome).toContain('welcome-cover');
     expect(welcome).not.toContain('class="transactional-page-shell"');
 
     const privacy = await readFile(join(root, 'privacy', 'index.html'), 'utf8');
