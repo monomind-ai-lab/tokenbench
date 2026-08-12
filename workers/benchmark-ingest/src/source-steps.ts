@@ -115,6 +115,7 @@ export interface CandidateArtifact {
 
 /** Structural description of one bounded candidate partition object. */
 export interface CandidatePartition {
+  readonly partitionId: string;
   readonly kind: 'benchlm-bundle' | 'normalized';
   readonly index: number;
   readonly key: string;
@@ -631,6 +632,7 @@ export async function assembleBenchLmStep(input: AssembleBenchLmInput): Promise<
   const key = `${candidatePrefix(cycleId)}benchlm/bundle/${digestHex(contentHash)}.json`;
   await putCandidateObject(store, cycleId, key, bundleBytes, contentHash, contentHash);
   return {
+    partitionId: 'benchlm-bundle:0',
     kind: 'benchlm-bundle',
     index: 0,
     key,
@@ -1279,6 +1281,7 @@ export async function normalizeSourceStep(input: NormalizeSourceStepInput): Prom
   const key = normalizedPartitionKey(cycleId, index, contentHash);
   await putCandidateObject(store, cycleId, key, bytes, contentHash, contentHash);
   return {
+    partitionId: `${input.source}:${index}`,
     kind: 'normalized',
     index,
     key,

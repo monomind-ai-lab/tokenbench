@@ -87,9 +87,12 @@ function partition(cycleId: string, id: string, seed: string): MutablePartition 
   const bytes = new TextEncoder().encode(seed);
   return {
     partitionId: id,
+    kind: id === 'leaderboard' ? 'derived' : 'normalized',
+    index: 0,
     key: `${candidateKeyPrefix(cycleId)}partitions/${id}.json`,
     contentHash: sha256(bytes),
     byteLength: bytes.byteLength,
+    rowCount: 1,
   };
 }
 

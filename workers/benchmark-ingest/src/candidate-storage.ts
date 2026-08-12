@@ -42,9 +42,12 @@ export interface CandidateArtifact {
 /** One normalized or derived partition staged for later publication. */
 export interface CandidatePartition {
   readonly partitionId: string;
+  readonly kind: string;
+  readonly index: number;
   readonly key: string;
   readonly contentHash: string;
   readonly byteLength: number;
+  readonly rowCount: number;
 }
 
 /** Minimum durable shape of a weekly benchmark candidate manifest. */
@@ -103,7 +106,9 @@ const ARTIFACT_KEYS = [
   'artifactId', 'key', 'contentHash', 'originalContentHash', 'byteLength',
   'sourceUrl', 'etag', 'lastModified', 'upstreamRevision', 'schemaVersion',
 ] as const;
-const PARTITION_KEYS = ['partitionId', 'key', 'contentHash', 'byteLength'] as const;
+const PARTITION_KEYS = [
+  'partitionId', 'kind', 'index', 'key', 'contentHash', 'byteLength', 'rowCount',
+] as const;
 
 function fail(message: string): never {
   throw new Error(message);
@@ -208,10 +213,20 @@ function readCandidatePartition(value: unknown, prefix: string, label: string): 
   assertNoUnknownKeys(record, PARTITION_KEYS, label);
   return {
     partitionId: requireString(record.partitionId, `${label}.partitionId`),
+    kind: requireString(record.kind, `${label}.kind`),
+    index: requireNonNegativeInteger(record.index, `${label}.index`),
     key: requireSafeKey(record.key, prefix, label),
     contentHash: requireContentHash(record.contentHash, `${label}.contentHash`),
     byteLength: requireByteLength(record.byteLength, `${label}.byteLength`),
+    rowCount: requireNonNegativeInteger(record.rowCount, `${label}.rowCount`),
   };
+}
+
+function requireNonNegativeInteger(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+    fail(`${label} must be a non-negative safe integer`);
+  }
+  return value;
 }
 
 function readBenchLmSet(value: unknown, prefix: string): CandidateArtifact[] {
