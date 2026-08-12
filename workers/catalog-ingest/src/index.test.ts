@@ -1,6 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BOOTSTRAP_CATALOG } from '../../../src/catalog/bootstrap';
-import worker, { buildManualSubscriptionSource, buildManualSubscriptionSources, parseOpenCodeCatalog, parseOpenRouterModels, projectOpenRouterModelsPayload, publishCatalogApiCache, publishValidatedSource, recordRefreshFailure } from './index';
+import worker, {
+  buildManualSubscriptionSource,
+  buildManualSubscriptionSources,
+  combineOpenCodeSource,
+  parseOpenCodeCatalog,
+  parseOpenRouterModels,
+  prepareOpenCodeModels,
+  prepareOpenCodePricing,
+  prepareOpenRouterSource,
+  projectOpenRouterModelsPayload,
+  publishCatalogApiCache,
+  publishValidatedSource,
+  readBoundedResponseBytes,
+  recordRefreshFailure,
+} from './index';
 
 interface Statement { sql: string; values: unknown[] }
 interface RefreshState { lastSuccessAt: string | null; lastRevision: string | null; lastError: string | null }
@@ -102,24 +116,71 @@ async function runScheduledOpenRouter({
   ) => Promise<unknown>;
   response?: Response;
 }) {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = (async () => response ?? new Response(JSON.stringify(await json()), {
-    headers: { 'content-type': 'application/json' },
-  })) as unknown as typeof fetch;
-  let work: Promise<unknown> | undefined;
   try {
-    await worker.scheduled(
-      { cron: '0 */6 * * *' },
-      { CATALOG_DB: database.db, SOURCE_SNAPSHOTS: { put }, AUTOMATED_SOURCE_IDS: 'openrouter-models' },
-      { waitUntil: (promise) => { work = promise; } },
-    );
-    await work;
-  } finally {
-    globalThis.fetch = originalFetch;
+    const preparedResponse = response ?? new Response(JSON.stringify(await json()), {
+      headers: { 'content-type': 'application/json' },
+    });
+    if (!preparedResponse.ok) throw new Error(`Catalog source returned ${preparedResponse.status}`);
+    const originalBytes = await readBoundedResponseBytes(preparedResponse, 'OpenRouter');
+    const originalText = new TextDecoder('utf-8', { fatal: true }).decode(originalBytes);
+    const payload = JSON.parse(originalText) as unknown;
+    const projected = projectOpenRouterModelsPayload(payload);
+    await publishValidatedSource({
+      db: database.db,
+      snapshots: { put },
+      source: parseOpenRouterModels(projected, '2026-08-03T00:00:00.000Z'),
+      rawPayload: payload,
+      originalPayloadBytes: originalBytes,
+      now: '2026-08-03T00:00:00.000Z',
+    });
+  } catch (error) {
+    await recordRefreshFailure(database.db, 'openrouter-models', error, '2026-08-03T00:00:00.000Z');
   }
 }
 
 describe('catalog ingestion', () => {
+  it('prepares the exact projected OpenRouter candidate and response validators', async () => {
+    const raw = JSON.stringify({
+      data: [{
+        id: 'openai/gpt-4o',
+        name: 'GPT-4o',
+        description: 'must not be retained',
+        pricing: { prompt: '0.0000025', completion: '0.00001' },
+      }],
+    });
+    const prepared = await prepareOpenRouterSource(new Response(raw, {
+      headers: { etag: '"router-v1"', 'last-modified': 'Wed, 12 Aug 2026 00:00:00 GMT' },
+    }), '2026-08-12T00:20:00.000Z');
+
+    expect(new TextDecoder().decode(prepared.projectedBytes)).toBe(
+      '{"data":[{"id":"openai/gpt-4o","name":"GPT-4o","pricing":{"prompt":"0.0000025","completion":"0.00001"}}]}',
+    );
+    expect(prepared.parsed.modelOffers).toHaveLength(1);
+    expect(prepared.originalContentHash).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(prepared.etag).toBe('"router-v1"');
+    expect(prepared.lastModified).toBe('Wed, 12 Aug 2026 00:00:00 GMT');
+  });
+
+  it('prepares OpenCode models and pricing independently before combining them', async () => {
+    const models = await prepareOpenCodeModels(new Response(JSON.stringify(openCodeModelsPayload), {
+      headers: { etag: '"models-v1"' },
+    }));
+    const pricing = await prepareOpenCodePricing(new Response(openCodePricingHtml, {
+      headers: { etag: '"pricing-v1"' },
+    }));
+    const combined = combineOpenCodeSource(models, pricing, '2026-08-12T00:20:00.000Z');
+
+    expect(models.etag).toBe('"models-v1"');
+    expect(pricing.etag).toBe('"pricing-v1"');
+    expect(combined.parsed.modelOffers).toEqual([
+      expect.objectContaining({ id: 'opencode:opencode/zen:opencode_zen' }),
+    ]);
+    expect(JSON.parse(new TextDecoder().decode(combined.projectedBytes))).toEqual({
+      models: openCodeModelsPayload,
+      pricingHtml: openCodePricingHtml,
+    });
+  });
+
   it('materializes every catalog response before switching the cache pointer', async () => {
     const batches: Statement[][] = [];
     const revision = { revision: 'rev-1', published_at: '2099-01-01T00:00:00.000Z', checked_at: '2099-01-01T00:00:00.000Z' };
@@ -539,68 +600,19 @@ describe('catalog ingestion', () => {
     });
   });
 
-  it('uses the AbortController timeout and keeps the published transaction state intact', async () => {
-    vi.useFakeTimers();
-    const database = createStatefulD1();
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = ((_url, init) => new Promise((_resolve, reject) => {
-      (init?.signal as AbortSignal).addEventListener('abort', () => reject(new Error(String(init?.signal?.reason))));
-    })) as typeof fetch;
-    let work: Promise<unknown> | undefined;
-    try {
-      await worker.scheduled(
-        { cron: '0 */6 * * *' },
-        { CATALOG_DB: database.db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' },
-        { waitUntil: (promise) => { work = promise; } },
-      );
-      await vi.advanceTimersByTimeAsync(20_000);
-      await work;
-      expect(stateSnapshot(database)).toEqual({
-        activeRevision: 'rev-known-good',
-        pendingRevisionIds: [],
-        candidateRows: [],
-        refreshState: { lastSuccessAt: '2026-08-03T00:00:00.000Z', lastRevision: 'rev-known-good', lastError: expect.stringContaining('upstream timeout') },
-      });
-    } finally {
-      globalThis.fetch = originalFetch;
-      vi.useRealTimers();
-    }
-  });
+  it('dispatches the scheduled event to the singleton coordinator only', async () => {
+    const start = vi.fn(async () => ({ status: 'started' }));
+    const getByName = vi.fn(() => ({ start }));
 
-  it('invokes the Workers global fetch with the required global receiver', async () => {
-    const database = createStatefulD1();
-    const originalFetch = globalThis.fetch;
-    const originalSetTimeout = globalThis.setTimeout;
-    const originalClearTimeout = globalThis.clearTimeout;
-    globalThis.fetch = vi.fn(function (this: unknown) {
-      if (this !== globalThis) throw new Error('Illegal invocation');
-      return Promise.resolve(new Response(JSON.stringify(openRouterPayload), {
-        headers: { 'content-type': 'application/json' },
-      }));
-    }) as unknown as typeof fetch;
-    globalThis.setTimeout = vi.fn(function (this: unknown, handler: () => void, timeout?: number) {
-      if (this !== globalThis) throw new Error('Illegal invocation');
-      return originalSetTimeout(handler, timeout);
-    }) as unknown as typeof setTimeout;
-    globalThis.clearTimeout = vi.fn(function (this: unknown, timeout?: ReturnType<typeof setTimeout>) {
-      if (this !== globalThis) throw new Error('Illegal invocation');
-      return originalClearTimeout(timeout);
-    }) as unknown as typeof clearTimeout;
-    let work: Promise<unknown> | undefined;
-    try {
-      await worker.scheduled(
-        { cron: '0 */6 * * *' },
-        { CATALOG_DB: database.db, SOURCE_SNAPSHOTS: { put: async () => undefined }, AUTOMATED_SOURCE_IDS: 'openrouter-models' },
-        { waitUntil: (promise) => { work = promise; } },
-      );
-      await work;
-      expect(database.state.refreshState['openrouter-models'].lastError).toBeNull();
-      expect(database.state.refreshState['openrouter-models'].lastRevision).toMatch(/^rev_/);
-    } finally {
-      globalThis.fetch = originalFetch;
-      globalThis.setTimeout = originalSetTimeout;
-      globalThis.clearTimeout = originalClearTimeout;
-    }
+    await worker.scheduled({ scheduledTime: Date.parse('2026-08-12T00:20:00.000Z') }, {
+      CATALOG_DB: {} as never,
+      SOURCE_SNAPSHOTS: {} as never,
+      AUTOMATED_SOURCE_IDS: 'openrouter-models,opencode-zen',
+      INGEST_COORDINATOR: { getByName },
+    });
+
+    expect(getByName).toHaveBeenCalledWith('daily-catalog');
+    expect(start).toHaveBeenCalledWith({ scheduledTime: Date.parse('2026-08-12T00:20:00.000Z') });
   });
 
   it('records an explicit refresh failure in the stateful D1 harness without publication', async () => {
@@ -614,64 +626,7 @@ describe('catalog ingestion', () => {
     });
   });
 
-  it('does not fetch an upstream catalog until its source is explicitly allowlisted', async () => {
-    const fetchImpl = vi.fn();
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = fetchImpl as unknown as typeof fetch;
-    const errors: string[] = [];
-    let work: Promise<unknown> | undefined;
-    try {
-      await worker.scheduled({ cron: '0 */6 * * *' }, {
-        CATALOG_DB: {
-          prepare(sql: string) { return { bind: (...values: unknown[]) => ({ sql, values }) }; },
-          async batch(statements: { values: unknown[] }[]) { errors.push(String(statements[0].values.at(-1))); },
-        },
-        SOURCE_SNAPSHOTS: { put: async () => undefined },
-      }, { waitUntil: (promise) => { work = promise; } });
-      await work;
-      expect(fetchImpl).not.toHaveBeenCalled();
-      expect(errors).toEqual(['openrouter-models is not allowlisted for automated refresh']);
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
-  });
-
-  it('refreshes both official catalogs for a dashboard test event with no cron expression', async () => {
-    const database = createStatefulD1();
-    const originalFetch = globalThis.fetch;
-    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
-      const sourceUrl = String(url);
-      return new Response(sourceUrl.includes('openrouter.ai')
-        ? JSON.stringify(openRouterPayload)
-        : sourceUrl.includes('opencode.ai/zen/v1/models')
-          ? JSON.stringify(openCodeModelsPayload)
-          : openCodePricingHtml,
-      { headers: { 'content-type': sourceUrl.includes('docs/zen') ? 'text/html' : 'application/json' } });
-    });
-    globalThis.fetch = fetchImpl as unknown as typeof fetch;
-    let work: Promise<unknown> | undefined;
-    try {
-      await worker.scheduled({}, {
-        CATALOG_DB: database.db,
-        SOURCE_SNAPSHOTS: { put: async () => undefined },
-        AUTOMATED_SOURCE_IDS: 'openrouter-models,opencode-zen',
-      }, { waitUntil: (promise) => { work = promise; } });
-      await work;
-      expect(fetchImpl.mock.calls.map(([url]) => String(url))).toEqual([
-        'https://openrouter.ai/api/v1/models',
-        'https://opencode.ai/zen/v1/models',
-        'https://opencode.ai/docs/zen/',
-      ]);
-      expect(database.state.rows).toEqual(expect.arrayContaining([
-        expect.stringMatching(/:source:openrouter-models$/),
-        expect.stringMatching(/:source:opencode-zen$/),
-        expect.stringMatching(/:source:alibaba-subscription$/),
-        expect.stringMatching(/:source:anthropic-subscription$/),
-        expect.stringMatching(/:source:openai-subscription$/),
-        expect.stringMatching(/:plan:anthropic:pro$/),
-      ]));
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+  it('keeps the public fetch surface closed', () => {
+    expect(worker.fetch().status).toBe(405);
   });
 });

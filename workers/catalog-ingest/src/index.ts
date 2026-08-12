@@ -9,7 +9,10 @@ import {
 import { splitApiResponseBody } from '../../../src/cache/api-response-chunks';
 
 type BoundStatement = unknown;
-interface D1Database { prepare(sql: string): { bind(...values: unknown[]): BoundStatement }; batch(statements: BoundStatement[]): Promise<unknown> }
+export interface D1Database {
+  prepare(sql: string): { bind(...values: unknown[]): BoundStatement };
+  batch(statements: BoundStatement[]): Promise<unknown>;
+}
 interface R2Bucket {
   put(
     key: string,
@@ -18,14 +21,35 @@ interface R2Bucket {
   ): Promise<unknown>
 }
 
-export interface IngestEnv { CATALOG_DB: D1Database; SOURCE_SNAPSHOTS: R2Bucket; AUTOMATED_SOURCE_IDS?: string }
+export interface IngestEnv {
+  CATALOG_DB: D1Database;
+  SOURCE_SNAPSHOTS: R2Bucket;
+  AUTOMATED_SOURCE_IDS?: string;
+  INGEST_COORDINATOR?: {
+    getByName(name: string): {
+      start(input: { scheduledTime: number; force?: boolean }): Promise<unknown>;
+    };
+  };
+}
 export interface ParsedSource { source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }
-export interface RefreshDependencies {
-  fetchImpl: typeof fetch;
-  now: () => string;
-  createAbortController: () => AbortController;
-  setTimeoutImpl: (handler: () => void, timeout: number) => ReturnType<typeof setTimeout>;
-  clearTimeoutImpl: (timeout: ReturnType<typeof setTimeout>) => void;
+export interface PreparedCatalogSource {
+  readonly parsed: ParsedSource;
+  readonly projectedBytes: Uint8Array;
+  readonly originalContentHash: string | null;
+  readonly etag: string | null;
+  readonly lastModified: string | null;
+}
+export interface PreparedOpenCodeModels {
+  readonly payload: unknown;
+  readonly projectedBytes: Uint8Array;
+  readonly etag: string | null;
+  readonly lastModified: string | null;
+}
+export interface PreparedOpenCodePricing {
+  readonly pricingHtml: string;
+  readonly projectedBytes: Uint8Array;
+  readonly etag: string | null;
+  readonly lastModified: string | null;
 }
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/models';
@@ -106,10 +130,6 @@ export function projectOpenRouterModelsPayload(payload: unknown): { data: Record
   }).sort((left, right) => binaryCompare(String(left.id), String(right.id)));
 
   return { data };
-}
-
-function isAutomatedSourceAllowlisted(env: IngestEnv, sourceId: string): boolean {
-  return env.AUTOMATED_SOURCE_IDS?.split(',').map((id) => id.trim()).includes(sourceId) ?? false;
 }
 
 function microDollarsPerMillion(value: unknown, label: string): number {
@@ -242,7 +262,7 @@ async function sha256(bytes: Uint8Array): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-async function readBoundedResponseBytes(response: Response, label: string): Promise<Uint8Array> {
+export async function readBoundedResponseBytes(response: Response, label: string): Promise<Uint8Array> {
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && /^\d+$/.test(contentLength) && Number(contentLength) > MAX_CATALOG_RESPONSE_BYTES) {
     throw new Error(`${label} response exceeds ${MAX_CATALOG_RESPONSE_BYTES} byte limit`);
@@ -287,6 +307,64 @@ async function parseBoundedJsonResponse(response: Response, label: string): Prom
   } catch {
     throw new Error(`${label} response is not valid JSON`);
   }
+}
+
+function responseValidators(response: Response): Pick<PreparedCatalogSource, 'etag' | 'lastModified'> {
+  return {
+    etag: response.headers.get('etag'),
+    lastModified: response.headers.get('last-modified'),
+  };
+}
+
+export async function prepareOpenRouterSource(
+  response: Response,
+  observedAt: string,
+): Promise<PreparedCatalogSource> {
+  if (!response.ok) throw new Error(`Catalog source ${OPENROUTER_URL} returned ${response.status}`);
+  const { bytes, payload } = await parseBoundedJsonResponse(response, 'OpenRouter');
+  const projectedPayload = projectOpenRouterModelsPayload(payload);
+  const projectedBytes = new TextEncoder().encode(JSON.stringify(projectedPayload));
+  return {
+    parsed: parseOpenRouterModels(projectedPayload, observedAt),
+    projectedBytes,
+    originalContentHash: `sha256:${await sha256(bytes)}`,
+    ...responseValidators(response),
+  };
+}
+
+export async function prepareOpenCodeModels(response: Response): Promise<PreparedOpenCodeModels> {
+  if (!response.ok) throw new Error(`Catalog source ${OPENCODE_URL} returned ${response.status}`);
+  const { bytes, payload } = await parseBoundedJsonResponse(response, 'OpenCode models');
+  return { payload, projectedBytes: bytes, ...responseValidators(response) };
+}
+
+export async function prepareOpenCodePricing(response: Response): Promise<PreparedOpenCodePricing> {
+  if (!response.ok) throw new Error(`Catalog source ${OPENCODE_PRICING_URL} returned ${response.status}`);
+  const projectedBytes = await readBoundedResponseBytes(response, 'OpenCode pricing');
+  let pricingHtml: string;
+  try {
+    pricingHtml = new TextDecoder('utf-8', { fatal: true }).decode(projectedBytes);
+  } catch {
+    throw new Error('OpenCode pricing response is not valid UTF-8');
+  }
+  return { pricingHtml, projectedBytes, ...responseValidators(response) };
+}
+
+export function combineOpenCodeSource(
+  models: PreparedOpenCodeModels,
+  pricing: PreparedOpenCodePricing,
+  observedAt: string,
+): PreparedCatalogSource {
+  return {
+    parsed: parseOpenCodeCatalog(models.payload, pricing.pricingHtml, observedAt),
+    projectedBytes: new TextEncoder().encode(JSON.stringify({
+      models: models.payload,
+      pricingHtml: pricing.pricingHtml,
+    })),
+    originalContentHash: null,
+    etag: models.etag ?? pricing.etag,
+    lastModified: models.lastModified ?? pricing.lastModified,
+  };
 }
 
 function hasAll(statement: BoundStatement): statement is { all(): Promise<{ results: unknown[] }> } {
@@ -433,68 +511,6 @@ export async function recordRefreshFailure(db: D1Database, sourceId: string, err
   await db.batch([db.prepare('INSERT INTO source_refresh_state (source_id, last_success_at, last_revision, last_error) VALUES (?, NULL, NULL, ?) ON CONFLICT(source_id) DO UPDATE SET last_error = excluded.last_error').bind(sourceId, message.slice(0, 1_000))]);
 }
 
-export async function refreshSource(
-  url: string,
-  sourceId: string,
-  parse: (payload: unknown, observedAt: string) => ParsedSource,
-  env: IngestEnv,
-  dependencies: RefreshDependencies = {
-    fetchImpl: (input, init) => globalThis.fetch(input, init),
-    now: () => new Date().toISOString(),
-    createAbortController: () => new AbortController(),
-    setTimeoutImpl: (handler, timeout) => globalThis.setTimeout(handler, timeout),
-    clearTimeoutImpl: (timeout) => globalThis.clearTimeout(timeout),
-  },
-): Promise<void> {
-  const abort = dependencies.createAbortController();
-  const timeout = dependencies.setTimeoutImpl(() => abort.abort('upstream timeout'), 20_000);
-  try {
-    const response = await dependencies.fetchImpl(url, { signal: abort.signal });
-    if (!response.ok) throw new Error(`Catalog source ${url} returned ${response.status}`);
-    const now = dependencies.now();
-    const { bytes, payload } = await parseBoundedJsonResponse(response, `Catalog source ${url}`);
-    await publishValidatedSource({
-      db: env.CATALOG_DB,
-      snapshots: env.SOURCE_SNAPSHOTS,
-      source: parse(payload, now),
-      rawPayload: payload,
-      ...(sourceId === 'openrouter-models' ? { originalPayloadBytes: bytes } : {}),
-      now,
-    });
-  } finally {
-    dependencies.clearTimeoutImpl(timeout);
-  }
-}
-
-async function refreshOpenCode(env: IngestEnv, dependencies: RefreshDependencies = {
-  fetchImpl: (input, init) => globalThis.fetch(input, init),
-  now: () => new Date().toISOString(),
-  createAbortController: () => new AbortController(),
-  setTimeoutImpl: (handler, timeout) => globalThis.setTimeout(handler, timeout),
-  clearTimeoutImpl: (timeout) => globalThis.clearTimeout(timeout),
-}): Promise<void> {
-  const abort = dependencies.createAbortController();
-  const timeout = dependencies.setTimeoutImpl(() => abort.abort('upstream timeout'), 20_000);
-  try {
-    const [modelsResponse, pricingResponse] = await Promise.all([
-      dependencies.fetchImpl(OPENCODE_URL, { signal: abort.signal }),
-      dependencies.fetchImpl(OPENCODE_PRICING_URL, { signal: abort.signal }),
-    ]);
-    if (!modelsResponse.ok) throw new Error(`Catalog source ${OPENCODE_URL} returned ${modelsResponse.status}`);
-    if (!pricingResponse.ok) throw new Error(`Catalog source ${OPENCODE_PRICING_URL} returned ${pricingResponse.status}`);
-    const now = dependencies.now();
-    const modelsPayload = await modelsResponse.json();
-    const pricingHtml = await pricingResponse.text();
-    await publishValidatedSource({
-      db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS,
-      source: parseOpenCodeCatalog(modelsPayload, pricingHtml, now),
-      rawPayload: { models: modelsPayload, pricingHtml }, now,
-    });
-  } finally {
-    dependencies.clearTimeoutImpl(timeout);
-  }
-}
-
 export function buildManualSubscriptionSource(providerId: string, observedAt: string): ParsedSource {
   return buildManifest(providerId, observedAt);
 }
@@ -503,43 +519,18 @@ export function buildManualSubscriptionSources(providerId: string, observedAt: s
   return buildManifests(providerId, observedAt);
 }
 
-async function refreshManual(providerId: string, env: IngestEnv): Promise<void> {
-  const now = new Date().toISOString();
-  for (const source of buildManifests(providerId, now)) {
-    await publishValidatedSource({ db: env.CATALOG_DB, snapshots: env.SOURCE_SNAPSHOTS, source, rawPayload: { providerId, plans: source.plans, modelOffers: source.modelOffers }, now });
-  }
-}
-
+export { CatalogIngestCoordinator } from './coordinator';
 export default {
-  async scheduled(controller: { cron?: string }, env: IngestEnv, ctx: { waitUntil(promise: Promise<unknown>): void }) {
-    const guarded = (sourceId: string, operation: Promise<void>) => operation.catch(async (error) => recordRefreshFailure(env.CATALOG_DB, sourceId, error, new Date().toISOString()));
-    const guardedAutomatedRefresh = (sourceId: string, url: string, parse: (payload: unknown, observedAt: string) => ParsedSource): Promise<void> => {
-      if (!isAutomatedSourceAllowlisted(env, sourceId)) {
-        return recordRefreshFailure(env.CATALOG_DB, sourceId, new Error(`${sourceId} is not allowlisted for automated refresh`), new Date().toISOString());
-      }
-      return guarded(sourceId, refreshSource(url, sourceId, parse, env));
-    };
-    const refreshRotatingManualSource = () => {
-      const hour = new Date().getUTCHours();
-      const providerId = MANUAL_SUBSCRIPTION_PROVIDER_IDS[Math.floor(hour / 3) % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length];
-      const sourceId = buildManualSubscriptionSource(providerId, new Date().toISOString()).source.id;
-      return guarded(sourceId, refreshManual(providerId, env));
-    };
-    if (controller.cron === '0 */6 * * *') ctx.waitUntil(guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels));
-    else if (controller.cron === '30 */6 * * *') ctx.waitUntil(isAutomatedSourceAllowlisted(env, 'opencode-zen') ? guarded('opencode-zen', refreshOpenCode(env)) : recordRefreshFailure(env.CATALOG_DB, 'opencode-zen', new Error('opencode-zen is not allowlisted for automated refresh'), new Date().toISOString()));
-    else if (controller.cron === '0 */3 * * *') ctx.waitUntil(refreshRotatingManualSource());
-    else {
-      // Cloudflare's dashboard test event omits the configured cron expression.
-      // Run sources serially so every revision copies the one published immediately before it.
-      ctx.waitUntil((async () => {
-        await guardedAutomatedRefresh('openrouter-models', OPENROUTER_URL, parseOpenRouterModels);
-        await (isAutomatedSourceAllowlisted(env, 'opencode-zen') ? guarded('opencode-zen', refreshOpenCode(env)) : recordRefreshFailure(env.CATALOG_DB, 'opencode-zen', new Error('opencode-zen is not allowlisted for automated refresh'), new Date().toISOString()));
-        for (const providerId of MANUAL_SUBSCRIPTION_PROVIDER_IDS) {
-          const sources = buildManifests(providerId, new Date().toISOString());
-          if (sources.every((source) => source.plans.length === 0 && source.modelOffers.length === 0)) continue;
-          await guarded(sources[0].source.id, refreshManual(providerId, env));
-        }
-      })());
-    }
+  async scheduled(
+    controller: { scheduledTime?: number },
+    env: IngestEnv,
+    _ctx?: { waitUntil(promise: Promise<unknown>): void },
+  ): Promise<void> {
+    if (!env.INGEST_COORDINATOR) throw new Error('Catalog ingest coordinator binding is required');
+    const coordinator = env.INGEST_COORDINATOR.getByName('daily-catalog');
+    await coordinator.start({ scheduledTime: controller.scheduledTime ?? Date.now() });
+  },
+  fetch(): Response {
+    return new Response('Method Not Allowed', { status: 405 });
   },
 };

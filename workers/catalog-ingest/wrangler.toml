@@ -1,10 +1,10 @@
 name = "tokenbench-catalog-ingest"
 main = "src/index.ts"
-compatibility_date = "2026-08-03"
+compatibility_date = "2026-08-12"
 
-# Catalog publication can write hundreds of model rows plus immutable API
-# response projections. Deploy this ingestion Worker on Workers Paid; Pages
-# request handlers remain optimized for the request-time CPU ceiling.
+# The standard scheduled handler only starts the singleton coordinator. Each
+# SQLite Durable Object alarm runs one bounded step so normal ingestion remains
+# within Cloudflare Workers Free limits.
 
 [vars]
 AUTOMATED_SOURCE_IDS = "openrouter-models,opencode-zen"
@@ -19,5 +19,13 @@ migrations_dir = "../../migrations"
 binding = "SOURCE_SNAPSHOTS"
 bucket_name = "ai-plan-catalog-snapshots"
 
+[[durable_objects.bindings]]
+name = "INGEST_COORDINATOR"
+class_name = "CatalogIngestCoordinator"
+
+[exports.CatalogIngestCoordinator]
+type = "durable-object"
+storage = "sqlite"
+
 [triggers]
-crons = ["0 */6 * * *", "30 */6 * * *", "0 */3 * * *"]
+crons = ["20 0 * * *"]

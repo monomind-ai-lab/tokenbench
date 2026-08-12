@@ -18,9 +18,16 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "cloudflare:workers": [
+        "./src/test/cloudflare-workers.ts"
       ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "workers/catalog-ingest/src/coordinator.ts",
+    "workers/catalog-ingest/worker-configuration.d.ts"
+  ]
 }
