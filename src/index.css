@@ -163,10 +163,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .home-snapshot-card dl > div { padding-top: 10px; border-top: 1px solid color-mix(in srgb, var(--outline) 82%, transparent); }
 .home-snapshot-card dt { color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .home-snapshot-card dd { margin: 4px 0 0; color: var(--primary-strong); font-family: var(--font-label); font-size: 0.82rem; font-weight: 800; }
-/* Home carries source attribution and the two provenance times only. It never
-   repeats a per-artifact update ledger. */
-.home-snapshot-provenance { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 0; color: var(--muted); font-family: var(--font-label); font-size: 0.66rem; line-height: 1.5; }
-.home-snapshot-provenance a { min-height: 44px; display: inline-flex; align-items: center; color: var(--primary-strong); font-weight: 800; text-decoration: none; }
 .home-snapshot-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
 .home-snapshot-actions .button { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 .home-snapshot-method { width: fit-content; min-height: 44px; display: inline-flex; align-items: center; gap: 6px; color: var(--primary-strong); font-size: 0.74rem; font-weight: 800; text-decoration: none; }

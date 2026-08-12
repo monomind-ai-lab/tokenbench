@@ -225,6 +225,25 @@ describe('LeaderboardDirectoryPage', () => {
     expect(document.querySelector('.leaderboard-cover-image')).toBeNull();
   });
 
+  it('labels decision-pick entries without a published source rank as Unranked', async () => {
+    const payload = decisionSummaryEnvelope();
+    respondWithSummary({
+      ...payload,
+      data: {
+        ...payload.data,
+        decisionPicks: payload.data.decisionPicks.map((group) => group.key === 'llm-coding'
+          ? { ...group, entries: group.entries.map((entry) => ({ ...entry, rank: null })) }
+          : group),
+      },
+    });
+
+    render(<LeaderboardDirectoryPage />);
+
+    const codingCard = await screen.findByRole('region', { name: 'Coding leaders' });
+    expect(within(codingCard).getAllByText('Unranked')).toHaveLength(3);
+    expect(within(codingCard).queryByText(/Rank [1-3]/)).not.toBeInTheDocument();
+  });
+
   it('keeps stale supported picks visible beside a clear freshness warning', async () => {
     const payload = decisionSummaryEnvelope();
     respondWithSummary({

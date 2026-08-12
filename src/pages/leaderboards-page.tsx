@@ -386,7 +386,7 @@ function decisionTitle(group: DecisionPickGroup): string {
 function DecisionEntry({ entry }: { readonly entry: DecisionPickEntry; readonly key?: string }) {
   return <li className="decision-pick-entry">
     <div className="decision-pick-entry-heading">
-      <span className="decision-pick-rank">Rank {entry.rank}</span>
+      <span className="decision-pick-rank">{entry.rank === null ? 'Unranked' : `Rank ${entry.rank}`}</span>
       <span className="leaderboard-evidence-status evidence-supported">Supported evidence</span>
     </div>
     <h4>{entry.name}</h4>

@@ -70,12 +70,6 @@ function formatRate(rate: number): string {
   return `$${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(rate)} / 1M`;
 }
 
-function formatCheckedAt(value: string): string {
-  const timestamp = Date.parse(value);
-  if (!Number.isFinite(timestamp)) return 'Unavailable';
-  return new Intl.DateTimeFormat('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC', year: 'numeric' }).format(new Date(timestamp));
-}
-
 /**
  * Reads the published leader for each decision route without sorting or
  * re-ranking a filtered subset. `evidence-lens` routes publish evidence the
@@ -164,10 +158,6 @@ function MarketAtAGlance() {
               {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
             </ul>
           </> : null}
-          {envelope === null ? null : <p className="home-snapshot-provenance">
-            <span>Checked {formatCheckedAt(envelope.freshness.checkedAt)}</span>
-            {envelope.attribution.map((source) => <a href={source.url} key={source.sourceId} rel="noreferrer" target="_blank">{source.label}</a>)}
-          </p>}
         </>}
     <div className="home-snapshot-actions">
       <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Open all leaderboards <ArrowRight aria-hidden="true" size={14} /></a>

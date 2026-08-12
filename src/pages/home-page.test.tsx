@@ -224,18 +224,16 @@ describe('HomePage', () => {
     expect(within(comparisons).getAllByRole('link', { name: 'GPT-5.6 Sol' }).every((link) => link.getAttribute('href') === '/models/gpt-5-6-sol/')).toBe(true);
   });
 
-  it('labels provenance without repeating a source-artifact update ledger', async () => {
+  it('omits the recent data retrievals ledger after the representative comparisons', async () => {
     renderWithHomeSummary();
 
     const snapshot = await screen.findByRole('region', { name: 'Market at a glance' });
     const provenance = snapshot.querySelector('.home-snapshot-provenance');
 
-    expect(provenance).not.toBeNull();
-    expect(provenance!).not.toHaveTextContent('Source published');
-    expect(provenance!).toHaveTextContent('Checked');
-    expect(provenance!).not.toHaveTextContent('Updated');
-    expect(within(provenance as HTMLElement).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
-    expect(within(provenance as HTMLElement).getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toHaveAttribute('href', 'https://openrouter.ai/models');
+    expect(provenance).toBeNull();
+    expect(snapshot).not.toHaveTextContent('Checked');
+    expect(snapshot).not.toHaveTextContent('Data from BenchLM.ai');
+    expect(snapshot).not.toHaveTextContent('Catalog and pricing data from OpenRouter');
     expect(within(snapshot).queryByLabelText('Decision snapshot evidence')).not.toBeInTheDocument();
   });
 
@@ -325,7 +323,7 @@ describe('HomePage', () => {
     expect(notice).toHaveAttribute('role', 'status');
     const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
     expect(within(snapshot).getByText('Model Alpha')).toBeInTheDocument();
-    expect(within(snapshot).getByText(/Checked Aug 6, 2026/)).toBeInTheDocument();
+    expect(within(snapshot).queryByText(/Checked Aug 6, 2026/)).not.toBeInTheDocument();
     expect(within(snapshot).queryByText(/Source published/)).not.toBeInTheDocument();
   });
 });

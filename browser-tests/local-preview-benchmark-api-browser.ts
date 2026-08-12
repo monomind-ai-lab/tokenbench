@@ -73,7 +73,7 @@ test('local preview accepts the summary through the frontend runtime contract', 
   expect(response.headers()['content-type']).toContain('application/json');
   const market = page.getByRole('region', { name: 'Market at a glance' });
   await expect(market).toContainText('Sample Atlas');
-  await expect(market.locator('.home-snapshot-provenance')).toContainText('LOCAL SAMPLE');
+  await expect(market.locator('.home-snapshot-provenance')).toHaveCount(0);
 });
 
 test('price performance SSR, filters, chart, table, and SEO stay fact-equivalent', async ({ page }) => {
