@@ -9,6 +9,7 @@ import {
 } from '../../_shared/checkpointed-ingestion';
 import {
   candidateManifestKey,
+  readCandidateManifest,
   writeCandidateManifest,
   BENCHLM_ARTIFACT_IDS,
   type BenchmarkCandidateManifestV1,
@@ -35,6 +36,31 @@ import {
   normalizeOpenRouterCatalogStep,
   type FrozenOpenRouterCatalog,
 } from './openrouter-normalization';
+import {
+  deriveCandidatePartitions,
+  derivedPartitionToCandidate,
+  readDerivedCandidateSnapshot,
+  type DerivedCandidate,
+} from './candidate-derivation';
+import {
+  ensurePendingBenchmarkRevision,
+  stageBenchmarkFactPartition,
+  validateStagedBenchmarkFacts,
+} from './partitioned-publication';
+import {
+  prepareModelProfilePartition,
+  stageModelProfilePartition,
+} from './model-directory-publication';
+import { publicLeaderboardFromSnapshot } from './benchlm-public-leaderboard';
+import {
+  listRequiredBenchmarkCachePartitions,
+  stageBenchmarkCachePartition,
+} from './cache-partitions';
+import {
+  benchmarkCandidateCacheRevision,
+  publishBenchmarkCandidate,
+  validateCompleteBenchmarkCandidate,
+} from './final-publication';
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -186,6 +212,8 @@ export interface BenchmarkCheckpoint {
   readonly lmArenaProgress: LmArenaProgress;
   readonly normalizedPartitions: readonly CandidatePartition[];
   readonly manifestContentHash: string | null;
+  readonly derived: DerivedCandidate | null;
+  readonly cacheRevision: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,8 +244,6 @@ interface AdvancedResult {
   checkpoint: BenchmarkCheckpoint;
   alarmAt: number;
   outputCount: number;
-  /** True when the advance hands off to `derive` (Task 4) and sets no alarm. */
-  handoff?: boolean;
 }
 
 interface RetryResult {
@@ -234,7 +260,7 @@ interface RetryResult {
 interface TerminalResult {
   kind: 'terminal';
   cycle: IngestionCycle;
-  status: 'failed' | 'expired';
+  status: 'published' | 'failed' | 'expired';
   errorCode: string;
   stepAttempt: number;
 }
@@ -558,6 +584,8 @@ async function acquireStep(
     lmArenaProgress: { subsetIndex: 0, offset: 0, declaredTotal: null, transport: 'dataset-viewer', download: null, pageCount: 0 },
     normalizedPartitions: [],
     manifestContentHash: null,
+    derived: null,
+    cacheRevision: null,
   };
   const next = copyCycle(cycle, {
     state: 'running',
@@ -787,7 +815,7 @@ async function normalizeSourcesStep(
 ): Promise<BenchmarkStepResult> {
   const worklist = normalizationWorklist(checkpoint);
   if (cycle.cursor >= worklist.length) {
-    return { kind: 'advanced', cycle: advancePhase(cycle, 'derive', 0, nowMs), checkpoint, alarmAt: nowMs, outputCount: 0, handoff: true };
+    return { kind: 'advanced', cycle: advancePhase(cycle, 'derive', 0, nowMs), checkpoint, alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 0 };
   }
   const item = worklist[cycle.cursor];
   let partition: CandidatePartition;
@@ -835,7 +863,7 @@ async function normalizeSourcesStep(
   const nextCheckpoint: BenchmarkCheckpoint = { ...withPartition, manifestContentHash: await writeManifestIfReady(env, withPartition) };
   const nextCursor = cycle.cursor + 1;
   if (nextCursor >= worklist.length) {
-    return { kind: 'advanced', cycle: advancePhase(cycle, 'derive', 0, nowMs), checkpoint: nextCheckpoint, alarmAt: nowMs, outputCount: 1, handoff: true };
+    return { kind: 'advanced', cycle: advancePhase(cycle, 'derive', 0, nowMs), checkpoint: nextCheckpoint, alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 1 };
   }
   return {
     kind: 'advanced',
@@ -844,6 +872,246 @@ async function normalizeSourcesStep(
     alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS,
     outputCount: 1,
   };
+}
+
+async function requireManifest(env: BenchmarkIngestEnv, checkpoint: BenchmarkCheckpoint): Promise<BenchmarkCandidateManifestV1> {
+  if (!checkpoint.manifestContentHash) throw new Error('benchmark candidate manifest hash is missing');
+  return await readCandidateManifest(
+    env.SOURCE_SNAPSHOTS,
+    checkpoint.cycleId,
+    checkpoint.manifestContentHash,
+  );
+}
+
+async function deriveStep(
+  cycle: IngestionCycle,
+  checkpoint: BenchmarkCheckpoint,
+  nowMs: number,
+  env: BenchmarkIngestEnv,
+): Promise<BenchmarkStepResult> {
+  const manifest = await requireManifest(env, checkpoint);
+  const derived = await deriveCandidatePartitions(manifest, { SOURCE_SNAPSHOTS: env.SOURCE_SNAPSHOTS });
+  const withDerived: BenchmarkCheckpoint = { ...checkpoint, derived };
+  const manifestWithDerived = {
+    ...buildManifest(withDerived),
+    derivedPartitions: derived.partitions.map(derivedPartitionToCandidate),
+  };
+  const written = await writeCandidateManifest(env.SOURCE_SNAPSHOTS, checkpoint.cycleId, manifestWithDerived);
+  const nextCheckpoint: BenchmarkCheckpoint = { ...withDerived, manifestContentHash: written.contentHash };
+  if (checkpoint.frozenBenchmarkRevision === derived.revision) {
+    const snapshot = await readDerivedCandidateSnapshot({
+      manifest: manifestWithDerived,
+      bucket: env.SOURCE_SNAPSHOTS,
+      revision: derived.revision,
+      contentHash: derived.contentHash,
+      generatedAt: checkpoint.observedAt,
+    });
+    return {
+      kind: 'advanced',
+      cycle: advancePhase(cycle, 'stage-cache', 0, nowMs),
+      checkpoint: { ...nextCheckpoint, cacheRevision: benchmarkCandidateCacheRevision(snapshot, checkpoint.cycleId) },
+      alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS,
+      outputCount: derived.partitions.length,
+    };
+  }
+  return {
+    kind: 'advanced',
+    cycle: advancePhase(cycle, 'stage-facts', 0, nowMs),
+    checkpoint: nextCheckpoint,
+    alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS,
+    outputCount: derived.partitions.length,
+  };
+}
+
+async function stageFactsStep(
+  cycle: IngestionCycle,
+  checkpoint: BenchmarkCheckpoint,
+  nowMs: number,
+  env: BenchmarkIngestEnv,
+): Promise<BenchmarkStepResult> {
+  if (!checkpoint.derived) throw new Error('derived benchmark candidate is missing');
+  const manifest = await requireManifest(env, checkpoint);
+  const openRouterHash = checkpoint.frozenOpenRouterCatalog.contentHash;
+  await ensurePendingBenchmarkRevision({
+    db: env.CATALOG_DB as never,
+    cycleId: checkpoint.cycleId,
+    revision: checkpoint.derived.revision,
+    generatedAt: checkpoint.observedAt,
+    checkedAt: checkpoint.observedAt,
+    contentHash: checkpoint.derived.contentHash,
+    catalogRevision: checkpoint.frozenCatalogRevision,
+    openrouterContentHash: openRouterHash,
+  });
+  const partition = checkpoint.derived.partitions[cycle.cursor];
+  if (!partition) {
+    await validateStagedBenchmarkFacts({
+      db: env.CATALOG_DB as never,
+      cycleId: checkpoint.cycleId,
+      revision: checkpoint.derived.revision,
+      manifest,
+    });
+    return {
+      kind: 'advanced', cycle: advancePhase(cycle, 'stage-profiles', 0, nowMs), checkpoint,
+      alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 0,
+    };
+  }
+  const staged = await stageBenchmarkFactPartition({
+    db: env.CATALOG_DB as never,
+    bucket: env.SOURCE_SNAPSHOTS,
+    cycleId: checkpoint.cycleId,
+    revision: checkpoint.derived.revision,
+    partition,
+  });
+  return {
+    kind: 'advanced',
+    cycle: advancePhase(cycle, 'stage-facts', cycle.cursor + 1, nowMs),
+    checkpoint,
+    alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS,
+    outputCount: staged.rows,
+  };
+}
+
+async function stageProfilesStep(
+  cycle: IngestionCycle,
+  checkpoint: BenchmarkCheckpoint,
+  nowMs: number,
+  env: BenchmarkIngestEnv,
+): Promise<BenchmarkStepResult> {
+  if (!checkpoint.derived) throw new Error('derived benchmark candidate is missing');
+  const manifest = await requireManifest(env, checkpoint);
+  const snapshot = await readDerivedCandidateSnapshot({
+    manifest,
+    bucket: env.SOURCE_SNAPSHOTS,
+    revision: checkpoint.derived.revision,
+    contentHash: checkpoint.derived.contentHash,
+    generatedAt: checkpoint.observedAt,
+  });
+  const offset = cycle.cursor * 100;
+  if (offset >= snapshot.models.length) {
+    const cacheRevision = benchmarkCandidateCacheRevision(snapshot, checkpoint.cycleId);
+    return {
+      kind: 'advanced', cycle: advancePhase(cycle, 'stage-cache', 0, nowMs),
+      checkpoint: { ...checkpoint, cacheRevision }, alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 0,
+    };
+  }
+  const partition = await prepareModelProfilePartition(
+    snapshot,
+    publicLeaderboardFromSnapshot(snapshot),
+    checkpoint.observedAt,
+    offset,
+  );
+  const profileBytes = new TextEncoder().encode(JSON.stringify(partition));
+  const profileDigest = await crypto.subtle.digest('SHA-256', profileBytes);
+  const profileHash = [...new Uint8Array(profileDigest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  await env.SOURCE_SNAPSHOTS.put(
+    `benchmark-candidates/${checkpoint.cycleId}/profiles/${cycle.cursor}/${profileHash}.json`,
+    profileBytes,
+    { httpMetadata: { contentType: 'application/json' }, customMetadata: { content_hash: `sha256:${profileHash}` } },
+  );
+  await stageModelProfilePartition({
+    db: env.CATALOG_DB as never,
+    cycleId: checkpoint.cycleId,
+    revision: checkpoint.derived.revision,
+    partition,
+  });
+  return {
+    kind: 'advanced', cycle: advancePhase(cycle, 'stage-profiles', cycle.cursor + 1, nowMs),
+    checkpoint,
+    alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS,
+    outputCount: partition.profiles.length,
+  };
+}
+
+async function stageCacheStep(
+  cycle: IngestionCycle,
+  checkpoint: BenchmarkCheckpoint,
+  nowMs: number,
+  env: BenchmarkIngestEnv,
+): Promise<BenchmarkStepResult> {
+  if (!checkpoint.derived || !checkpoint.cacheRevision) throw new Error('cache candidate metadata is missing');
+  const manifest = await requireManifest(env, checkpoint);
+  const snapshot = await readDerivedCandidateSnapshot({
+    manifest, bucket: env.SOURCE_SNAPSHOTS, revision: checkpoint.derived.revision,
+    contentHash: checkpoint.derived.contentHash, generatedAt: checkpoint.observedAt,
+  });
+  const cacheKeys = listRequiredBenchmarkCachePartitions(snapshot);
+  const cacheKey = cacheKeys[cycle.cursor];
+  if (!cacheKey) {
+    return {
+      kind: 'advanced', cycle: advancePhase(cycle, 'validate-candidate', 0, nowMs), checkpoint,
+      alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 0,
+    };
+  }
+  await stageBenchmarkCachePartition({
+    db: env.CATALOG_DB as never,
+    snapshot,
+    cacheKey,
+    cacheRevision: checkpoint.cacheRevision,
+    publicationAttemptId: checkpoint.cycleId,
+    updatedAt: checkpoint.observedAt,
+  });
+  return {
+    kind: 'advanced', cycle: advancePhase(cycle, 'stage-cache', cycle.cursor + 1, nowMs), checkpoint,
+    alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 1,
+  };
+}
+
+async function validateCandidateStep(
+  cycle: IngestionCycle,
+  checkpoint: BenchmarkCheckpoint,
+  nowMs: number,
+  env: BenchmarkIngestEnv,
+): Promise<BenchmarkStepResult> {
+  if (!checkpoint.derived || !checkpoint.cacheRevision || !checkpoint.manifestContentHash) {
+    throw new Error('complete benchmark candidate metadata is missing');
+  }
+  const manifest = await requireManifest(env, checkpoint);
+  const snapshot = await readDerivedCandidateSnapshot({
+    manifest, bucket: env.SOURCE_SNAPSHOTS, revision: checkpoint.derived.revision,
+    contentHash: checkpoint.derived.contentHash, generatedAt: checkpoint.observedAt,
+  });
+  const receipt = await validateCompleteBenchmarkCandidate({
+    db: env.CATALOG_DB as never, cycleId: checkpoint.cycleId, revision: checkpoint.derived.revision,
+    cacheRevision: checkpoint.cacheRevision, snapshot, manifest, manifestHash: checkpoint.manifestContentHash,
+  });
+  return {
+    kind: 'advanced', cycle: copyCycle(cycle, {
+      state: 'ready_to_publish', phase: 'publish', cursor: 0, attempt: 0,
+      updatedAt: iso(nowMs), nextRetryAt: null, errorCode: null, errorSourceId: null, errorArtifactId: null,
+    }), checkpoint, alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: receipt.cacheKeyCount,
+  };
+}
+
+async function publishCandidateStep(
+  cycle: IngestionCycle,
+  checkpoint: BenchmarkCheckpoint,
+  nowMs: number,
+  env: BenchmarkIngestEnv,
+): Promise<BenchmarkStepResult> {
+  if (!checkpoint.derived || !checkpoint.cacheRevision || !checkpoint.manifestContentHash) {
+    throw new Error('publishable benchmark candidate metadata is missing');
+  }
+  const manifest = await requireManifest(env, checkpoint);
+  const snapshot = await readDerivedCandidateSnapshot({
+    manifest, bucket: env.SOURCE_SNAPSHOTS, revision: checkpoint.derived.revision,
+    contentHash: checkpoint.derived.contentHash, generatedAt: checkpoint.observedAt,
+  });
+  await publishBenchmarkCandidate({
+    db: env.CATALOG_DB as never,
+    cycleId: checkpoint.cycleId,
+    cadenceKey: cycle.cadenceKey,
+    revision: checkpoint.derived.revision,
+    cacheRevision: checkpoint.cacheRevision,
+    manifestHash: checkpoint.manifestContentHash,
+    snapshot,
+    checkedAt: checkpoint.observedAt,
+  });
+  const published = copyCycle(cycle, {
+    state: 'published', phase: 'receipt', cursor: 0, attempt: 0, updatedAt: iso(nowMs),
+    nextRetryAt: null, finalRevision: checkpoint.derived.revision,
+    errorCode: null, errorSourceId: null, errorArtifactId: null,
+  });
+  return { kind: 'terminal', cycle: published, status: 'published', errorCode: 'published', stepAttempt: 1 };
 }
 
 function retryOrFail(
@@ -942,7 +1210,7 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
 
   async alarm(): Promise<void> {
     const cycle = await this.durable.get<IngestionCycle>(CYCLE_STORAGE_KEY);
-    if (!cycle || cycle.state === 'failed' || cycle.state === 'expired' || cycle.phase === 'derive') {
+    if (!cycle || isTerminalState(cycle.state)) {
       await this.durable.deleteAlarm();
       return;
     }
@@ -1007,6 +1275,12 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
         case 'retrieve-lmarena-revision': return await retrieveLmArenaRevisionStepHandler(current, checkpoint, nowMs, this.coordinatorEnv, this.deps);
         case 'retrieve-lmarena-pages': return await retrieveLmArenaPagesStep(current, checkpoint, nowMs, this.coordinatorEnv, this.deps);
         case 'normalize-sources': return await normalizeSourcesStep(current, checkpoint, nowMs, this.coordinatorEnv, this.deps);
+        case 'derive': return await deriveStep(current, checkpoint, nowMs, this.coordinatorEnv);
+        case 'stage-facts': return await stageFactsStep(current, checkpoint, nowMs, this.coordinatorEnv);
+        case 'stage-profiles': return await stageProfilesStep(current, checkpoint, nowMs, this.coordinatorEnv);
+        case 'stage-cache': return await stageCacheStep(current, checkpoint, nowMs, this.coordinatorEnv);
+        case 'validate-candidate': return await validateCandidateStep(current, checkpoint, nowMs, this.coordinatorEnv);
+        case 'publish': return await publishCandidateStep(current, checkpoint, nowMs, this.coordinatorEnv);
         default: throw new Error(`unknown benchmark retrieval phase: ${current.phase}`);
       }
     } catch (error) {
@@ -1039,10 +1313,18 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
       ? { status: 'completed', stepAttempt: Math.max(1, previous.attempt + 1), outputCount: result.outputCount, errorCode: null, completedAt: result.cycle.updatedAt }
       : result.kind === 'retry'
         ? { status: 'retry_wait', stepAttempt: result.stepAttempt, outputCount: 0, errorCode: result.errorCode, completedAt: null }
-        : { status: 'failed', stepAttempt: result.stepAttempt, outputCount: 0, errorCode: result.errorCode, completedAt: result.cycle.updatedAt };
+        : { status: result.status === 'published' ? 'completed' : 'failed', stepAttempt: result.stepAttempt, outputCount: 0, errorCode: result.status === 'published' ? null : result.errorCode, completedAt: result.cycle.updatedAt };
     await persistStep(this.coordinatorEnv, previous, result.cycle, receipt);
 
-    const keepsAlarm = (result.kind === 'advanced' && result.handoff !== true) || result.kind === 'retry';
+    if (result.kind === 'terminal' && result.status === 'published') {
+      await this.durable.deleteAlarm();
+      this.deps.log(logRecord('benchmark_cycle_step', result.cycle, {
+        status: 'published', outputCount: 0, elapsedMs,
+      }));
+      return;
+    }
+
+    const keepsAlarm = result.kind === 'advanced' || result.kind === 'retry';
     if (keepsAlarm) await this.durable.setAlarm((result as AdvancedResult | RetryResult).alarmAt);
     else await this.durable.deleteAlarm();
 

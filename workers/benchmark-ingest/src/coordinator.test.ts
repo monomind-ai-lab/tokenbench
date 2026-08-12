@@ -398,7 +398,7 @@ describe('weekly retrieval end to end', () => {
     const cycle = cycleOf(durable);
     expect(cycle.phase).toBe('derive');
     expect(cycle.state).toBe('running');
-    expect(durable.alarm).toBeNull();
+    expect(durable.alarm).not.toBeNull();
     expect(Math.max(...perAlarm)).toBeLessThanOrEqual(1);
 
     // one revision lookup shared by all subsets
@@ -809,5 +809,7 @@ function acquireCheckpoint() {
     lmArenaProgress: { subsetIndex: 0, offset: 0, declaredTotal: null, transport: 'dataset-viewer' as const, download: null, pageCount: 0 },
     normalizedPartitions: [] as CandidatePartition[],
     manifestContentHash: null as string | null,
+    derived: null,
+    cacheRevision: null,
   };
 }

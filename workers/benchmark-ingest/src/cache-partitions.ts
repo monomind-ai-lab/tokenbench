@@ -414,7 +414,8 @@ export async function stageBenchmarkCachePartition(input: StageCachePartitionInp
   const owner = await db.prepare(`SELECT publication_state AS state, publication_attempt_id AS attempt
     FROM benchmark_revisions WHERE revision = ?`).bind(snapshot.revision.revision)
     .first<{ state: string; attempt: string | null }>();
-  if (!owner || owner.state !== 'pending' || owner.attempt !== publicationAttemptId) {
+  const unchangedActive = owner?.state === 'published';
+  if (!owner || (!unchangedActive && (owner.state !== 'pending' || owner.attempt !== publicationAttemptId))) {
     fail('cache partition requires the attempt-owned pending benchmark revision');
   }
 
