@@ -647,10 +647,11 @@ Pages. Use one verified commit and preserve this order:
    model links, stale browser fallback, desktop/mobile overflow, and SEO checks
    to pass.
 2. Deploy `workers/benchmark-ingest` from that commit. Because the production
-   account's Workers Free Cron ceiling is already proven insufficient, perform
-   the separately authorized controlled publication through the documented
-   local Workers runtime with official remote D1/R2 bindings; do not spend on a
-   plan upgrade or claim the normal Cron invocation succeeded.
+  former all-in-one Worker exceeded the account's Workers Free Cron ceiling.
+  The normal production path is now the SQLite Durable Object checkpointed
+  pipeline: one bounded step and normally one upstream request per alarm. Do
+  not use the former all-in-one controlled publication unless explicitly
+  invoking the documented recovery tool.
 3. Before Pages, verify cache key `price-performance:complete:v1` has exactly
    one complete fresh and one complete stale body for the active revision and
    was written before the publication pointer. Record the active revision,

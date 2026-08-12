@@ -142,18 +142,15 @@ valid and one that is fresh:
 
 | Worker | Cron | Work performed | Operational constraint |
 | --- | --- | --- | --- |
-| tokenbench-catalog-ingest | 0 */6 * * * | Refreshes the approved OpenRouter model catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
-| tokenbench-catalog-ingest | 30 */6 * * * | Refreshes the approved OpenCode Zen catalog. | Only sources named in AUTOMATED_SOURCE_IDS may refresh automatically. |
-| tokenbench-catalog-ingest | 0 */3 * * * | Rotates the reviewed manual subscription manifest. | Unverified providers remain provenance-only. |
-| tokenbench-benchmark-ingest | 15 */12 * * * | Refreshes LMArena, LiteLLM, and catalog-correlated route evidence twice daily; BenchLM completes at most one successful upstream check per UTC day. | This Worker is scheduled-only; its fetch handler intentionally returns 405. |
+| tokenbench-catalog-ingest | `20 0 * * *` | Starts one resumable daily catalog cycle. OpenRouter and OpenCode requests run serially in separate Durable Object alarms; reviewed manual manifests are prepared without external requests. | Only sources named in `AUTOMATED_SOURCE_IDS` may refresh automatically. |
+| tokenbench-benchmark-ingest | `15 2 * * SUN` | Starts one resumable weekly benchmark cycle. Retrieval, normalization, derivation, D1 facts, 100-model profile windows, cache keys, validation, and publication are checkpointed into separate alarms. | Scheduled-only; fetch returns 405. Last-good remains public until the final guarded transaction. |
 
-The automated OpenRouter and OpenCode source fetches remain at four runs per
-day. That cadence should be reduced only after observed rate limiting (notably
-HTTP 429), a provider policy change, or sustained source errors attributable to
-request frequency. Ordinary 5xx failures do not justify slowing the catalog.
-LMArena stays at two runs per day; if it becomes unstable, reduce its fetch
-concurrency before reducing freshness cadence. Manual-manifest rotations do not
-make external provider requests.
+This cadence is intentionally spread across the week and day for provider and
+Workers Free limits. A source artifact receives at most three requests in one
+cycle. HTTP 429 is never retried in the same invocation: the coordinator stores
+the complete trusted provider reset, adds 0–15 seconds jitter, and resumes via a
+later alarm. Catalog cycles expire after 12 hours and benchmark cycles after 24
+hours; either outcome preserves the active revision.
 
 On later benchmark runs in a UTC day, the Worker rehydrates all five
 hash-verified immutable BenchLM projections from R2 instead of calling
@@ -167,14 +164,10 @@ BenchLM check or cause a same-day refetch. A successful 304 likewise persists a
 daily manifest and advances BenchLM check freshness without publishing a new
 content revision.
 
-An overlapping lease loser checks for the owner every 500 ms for at most 10
-seconds, then rehydrates the owner's exact completed manifest. If the owner
-releases the lease, the waiter may claim it and perform the check itself. This
-bound leaves enough of the Workers Paid 1,000-query invocation allowance for a
-maximum-size benchmark publication and its failure cleanup. If neither handoff
-completes in that bound, the waiter fails before fetching downstream sources or
-publishing, so it cannot supersede the winner with stale BenchLM projections.
-LMArena and LiteLLM otherwise continue to refresh on both scheduled runs.
+The current checkpointed flow supersedes the former overlapping monolithic
+lease/polling path for normal scheduling. The old `refreshBenchmarkRevision`
+export remains only as a local recovery/parity tool and is not called by the
+default scheduled handler.
 
 There is no public HTTP endpoint for a benchmark refresh. A controlled refresh
 must use an authorized Cloudflare scheduling or dashboard mechanism, not a
@@ -186,6 +179,8 @@ From the repository root, the corresponding deployment commands are:
 ~~~sh
 npx wrangler deploy --config workers/catalog-ingest/wrangler.toml
 npx wrangler deploy --config workers/benchmark-ingest/wrangler.toml
+npm run inspect:ingestion -- --scope catalog
+npm run inspect:ingestion -- --scope benchmarks
 ~~~
 
 Run either command only with explicit Cloudflare deployment authorization. A
