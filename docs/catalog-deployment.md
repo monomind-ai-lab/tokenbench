@@ -108,6 +108,36 @@ released. This is separate from Pages request-time CPU: Pages APIs use raw
 materialized responses or bounded targeted readers so normal requests do not
 rebuild the full fact graph.
 
+### Checkpointed ingestion cycles
+
+Migration
+[../migrations/0010_ingestion_cycles.sql](../migrations/0010_ingestion_cycles.sql)
+adds the shared operational receipt tables `ingestion_cycles` and
+`ingestion_cycle_steps`. Both ingestion Workers (catalog and benchmark) own and
+write these tables; the tables are not a Pages concern. A cycle row records one
+resumable cadence run (scope, cadence key, state, cursor, attempt, expiry, retry
+time, and any final revision or error identifiers). A step row records one
+bounded, idempotent step within that run, keyed by (scope, cycle, phase, cursor),
+so a Durable Object alarm can resume from a persisted cursor after a replay or
+crash. Rows are attempt-owned and the active revision pointers are moved only by
+the existing guarded final transaction. `attempt` is capped at 3 per source
+artifact; catalog cycles expire after 12 hours and benchmark cycles after 24
+hours.
+
+Checkpointed ingestion keeps a strict distinction between a revision that is
+valid and one that is fresh:
+
+- A published revision is **valid** whenever a complete candidate passed
+  validation and moved the pointer. A served response built from it is usable
+  even when no newer cycle has finished.
+- Evidence is **fresh** only within its window: 36 hours for catalog evidence
+  and exactly 8 days for every benchmark-derived surface (benchmark,
+  leaderboard, comparison, model-profile, and price-performance evidence).
+- A refresh failure or expiration leaves the last complete revision active and
+  serves it as labeled last-good evidence. "Unavailable" is reserved for a cold
+  system with no valid revision at all; it is never the response for a refresh
+  failure.
+
 ## Scheduled ingestion
 
 | Worker | Cron | Work performed | Operational constraint |
