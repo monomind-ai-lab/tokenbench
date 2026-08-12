@@ -305,6 +305,45 @@ describe('acquire phase', () => {
     expect(store.objects.has(`benchmark-candidates/${CYCLE_ID}/manifest.json`)).toBe(false);
   });
 
+  it('passes frozen active validators and exact prior R2 bytes into conditional retrieval', async () => {
+    nowMs = SUNDAY;
+    const priorBytes = new TextEncoder().encode('{"prior":true}');
+    const priorHash = `sha256:${hex('{"prior":true}')}`;
+    const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
+    const { env, store } = environment({
+      catalogRevision: CATALOG_REVISION,
+      benchmarkRevision: PREV_BENCHMARK_REVISION,
+      sourceRecords: [{
+        sourceId: 'benchlm',
+        artifactId: 'leaderboard',
+        sourceUrl: 'https://benchlm.ai/data/leaderboard.json',
+        etag: '"prior-etag"',
+        lastModified: null,
+        snapshotKey: 'benchmarks/benchlm/leaderboard/prior.json',
+        contentHash: priorHash,
+        originalContentHash: priorHash,
+        upstreamRevision: null,
+        schemaVersion: null,
+      }],
+    });
+    store.objects.set('benchmarks/benchlm/leaderboard/prior.json', {
+      bytes: priorBytes,
+      customMetadata: { original_content_hash: priorHash },
+    });
+    const { steps, calls } = fakeSteps();
+
+    await fireAlarm(durable, env, baseDeps(steps));
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    expect(calls[0].name).toBe('retrieveBenchLmArtifactStep');
+    expect(calls[0].args.previous).toMatchObject({
+      artifactId: 'leaderboard',
+      key: 'benchmarks/benchlm/leaderboard/prior.json',
+      byteLength: priorBytes.byteLength,
+      etag: '"prior-etag"',
+    });
+  });
+
   it('fails terminally when no active catalog revision exists', async () => {
     nowMs = SUNDAY;
     const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });

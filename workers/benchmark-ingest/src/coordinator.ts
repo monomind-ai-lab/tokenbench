@@ -277,6 +277,34 @@ function errorCodeFor(error: unknown): string {
   return 'step_failed';
 }
 
+async function validatorFor(
+  checkpoint: BenchmarkCheckpoint,
+  sourceId: string,
+  artifactId: string,
+  store: CandidateR2Bucket,
+): Promise<CandidateArtifact | null> {
+  const previous = checkpoint.validators.find((candidate) => (
+    candidate.sourceId === sourceId && candidate.artifactId === artifactId
+  ));
+  if (!previous) return null;
+  const object = await store.get(previous.snapshotKey);
+  if (!object) throw new Error(`frozen ${sourceId}/${artifactId} candidate bytes are missing`);
+  const byteLength = (await object.arrayBuffer()).byteLength;
+  if (byteLength < 1) throw new Error(`frozen ${sourceId}/${artifactId} candidate bytes are empty`);
+  return {
+    artifactId: previous.artifactId,
+    key: previous.snapshotKey,
+    contentHash: previous.contentHash,
+    originalContentHash: previous.originalContentHash,
+    byteLength,
+    sourceUrl: previous.sourceUrl,
+    etag: previous.etag,
+    lastModified: previous.lastModified,
+    upstreamRevision: previous.upstreamRevision,
+    schemaVersion: previous.schemaVersion,
+  };
+}
+
 export function createBenchmarkCycle(scheduledTime: number, cycleId: string): IngestionCycle {
   const startedAt = iso(scheduledTime);
   return {
@@ -534,7 +562,7 @@ async function retrieveBenchLmStep(
     fetchImpl: deps.fetchImpl,
     observedAt: checkpoint.observedAt,
     artifact: artifactName,
-    previous: null,
+    previous: await validatorFor(checkpoint, 'benchlm', artifactName, env.SOURCE_SNAPSHOTS),
   });
   const nextCheckpoint: BenchmarkCheckpoint = { ...checkpoint, benchLm: [...checkpoint.benchLm, descriptor] };
   const nextCursor = cycle.cursor + 1;
@@ -583,7 +611,7 @@ async function retrieveLiteLlmStepHandler(
     store: env.SOURCE_SNAPSHOTS,
     fetchImpl: deps.fetchImpl,
     observedAt: checkpoint.observedAt,
-    previous: null,
+    previous: await validatorFor(checkpoint, 'litellm', 'model-prices', env.SOURCE_SNAPSHOTS),
   });
   const withLiteLlm: BenchmarkCheckpoint = { ...checkpoint, liteLlm: descriptor };
   const nextCheckpoint: BenchmarkCheckpoint = { ...withLiteLlm, manifestContentHash: await writeManifestIfReady(env, withLiteLlm) };
