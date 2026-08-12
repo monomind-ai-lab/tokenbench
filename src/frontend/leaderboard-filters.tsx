@@ -2,7 +2,8 @@ import { Check } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import type { LeaderboardSort } from '../benchmarks/leaderboards';
 import { LEADERBOARD_DEFINITIONS } from '../benchmarks/leaderboards';
-import { normalizeLeaderboardQueryState } from '../benchmarks/leaderboard-query';
+import { LEADERBOARD_EVIDENCE_STATUSES, normalizeLeaderboardQueryState } from '../benchmarks/leaderboard-query';
+import type { EvidenceStatus } from '../benchmarks/contracts';
 import type { LeaderboardKey } from '../routing/routes';
 import {
   leaderboardFilterCapabilities,
@@ -313,7 +314,10 @@ export function LeaderboardFilters({ keyName, filters, onChange, capabilities }:
 
         {showEvidence ? <label className="leaderboard-filter-field">
           <span>Evidence</span>
-          <select aria-label="Evidence" value={filters.evidence ?? ''} onChange={(event) => update({ evidence: event.target.value || null })}>
+          <select aria-label="Evidence" value={filters.evidence ?? ''} onChange={(event) => {
+            const raw = event.target.value;
+            update({ evidence: LEADERBOARD_EVIDENCE_STATUSES.includes(raw as EvidenceStatus) ? raw as EvidenceStatus : null });
+          }}>
             <option value="">All evidence</option>
             {routeCapabilities.evidenceStatuses!.map((status) => <option key={status} value={status}>{status === 'source_only' ? 'Source-only' : status[0].toUpperCase() + status.slice(1)}</option>)}
           </select>

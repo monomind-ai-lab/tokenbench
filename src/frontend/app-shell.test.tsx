@@ -214,7 +214,7 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'Review the recommendation' })).toBeInTheDocument();
     const result = await calculatedResult();
     expect(screen.getByRole('status', { name: 'Default API mapping' })).toHaveTextContent('Alpha Direct');
-    expect(screen.getByText('Advanced model mapping').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('Advanced model mapping').closest('details')).toHaveAttribute('open');
     expect(result).toHaveTextContent('API is cheaper on a token-equivalent basis.');
     expect(result).toHaveTextContent('Not independently verified');
     expect(result).toHaveTextContent('Breakeven messages per day');
@@ -342,7 +342,6 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('radio', { name: /Fixed 10M/i })).toBeChecked();
     expect(screen.getByRole('spinbutton', { name: 'Conversations per day' })).toHaveValue(12);
     expect(screen.getByRole('spinbutton', { name: 'Messages per conversation' })).toHaveValue(6);
-    fireEvent.click(screen.getByText('Advanced model mapping'));
     expect(screen.getByRole('checkbox', { name: /Alpha Direct/i })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Alpha via OpenRouter/i })).not.toBeChecked();
 
@@ -361,7 +360,6 @@ describe('responsive calculator app shell', () => {
     renderCalculator(marketplaceOnlyCatalog, CALCULATOR_PATH);
 
     expect(await screen.findByText('Select a verified model')).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Advanced model mapping'));
     expect(screen.getByRole('checkbox', { name: /Alpha via OpenRouter/i })).not.toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Alpha via OpenCode Zen/i })).not.toBeChecked();
     expect(screen.queryByText(/token-equivalent costs are equal/i)).not.toBeInTheDocument();
@@ -392,7 +390,6 @@ describe('responsive calculator app shell', () => {
     const result = await calculatedResult();
     expect(screen.getByRole('radio', { name: 'Provider B' })).toBeChecked();
     expect(result).toHaveTextContent(/token-equivalent basis/i);
-    fireEvent.click(screen.getByText('Advanced model mapping'));
     expect(screen.getByRole('checkbox', { name: /Beta Direct/i })).toBeChecked();
   });
 
@@ -446,6 +443,7 @@ describe('responsive calculator app shell', () => {
 
     await calculatedResult();
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}${pathname}`);
@@ -581,8 +579,7 @@ describe('responsive calculator app shell', () => {
     await calculatorReadyHeading();
 
     const advanced = screen.getByText('Advanced model mapping');
-    expect(advanced.closest('details')).not.toHaveAttribute('open');
-    fireEvent.click(advanced);
+    expect(advanced.closest('details')).toHaveAttribute('open');
     const modelGroup = screen.getByRole('group', { name: /Model selection/i });
     const checkboxes = within(modelGroup).getAllByRole('checkbox');
     fireEvent.click(checkboxes[1]);
@@ -700,7 +697,9 @@ describe('responsive calculator app shell', () => {
   it('gives every range control a minimum 44px touch target', async () => {
     render(<App />);
     await calculatorReadyHeading();
-    fireEvent.click(screen.getByText('Advanced model mapping'));
+    const modelGroup = screen.getByRole('group', { name: /Model selection/i });
+    const checkboxes = within(modelGroup).getAllByRole('checkbox');
+    fireEvent.click(checkboxes[1]);
 
     const ranges = screen.getAllByRole('slider');
     expect(ranges.length).toBeGreaterThan(0);

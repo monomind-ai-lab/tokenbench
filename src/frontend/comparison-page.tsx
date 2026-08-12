@@ -260,7 +260,7 @@ function PairHeader({ viewModel }: { readonly viewModel: ComparisonViewModel }) 
   return <section className="comparison-intro comparison-result-header" aria-labelledby="comparison-detail-heading">
     <div className="comparison-header-topline">
       <nav className="comparison-breadcrumb" aria-label="Breadcrumb"><a href="/compare/">Compare</a><span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav>
-      <ShareAction text={`Compare ${title} on TokenBench.`} title={`${title} comparison`} url={`${SITE_CONFIG.origin}${viewModel.canonicalPath}`} />
+      <ShareAction title={`${title} comparison`} url={`${SITE_CONFIG.origin}${viewModel.canonicalPath}`} />
     </div>
     <h1 id="comparison-detail-heading">{title}</h1>
     <p>Read the published evidence, route context, and missing facts before making a local decision. This page does not name a universal winner.</p>

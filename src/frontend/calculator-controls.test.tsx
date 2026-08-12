@@ -51,10 +51,19 @@ describe('calculator controls', () => {
     expect(props.onWorkloadChange).toHaveBeenCalledWith({ ...workload, conversationsPerDay: 12 });
   });
 
-  it('keeps Advanced model mapping collapsed and discloses the visible default route', () => {
+  it('keeps Advanced model mapping open by default and discloses the visible default route', () => {
     renderControls();
     const mapping = screen.getByRole('status', { name: 'Default API mapping' });
     expect(mapping).toHaveTextContent(directOffer.displayName);
-    expect(screen.getByText('Advanced model mapping').closest('details')).not.toHaveAttribute('open');
+    expect(screen.getByText('Advanced model mapping').closest('details')).toHaveAttribute('open');
+  });
+
+  it('hides the usage mix selector until two or more models are selected', () => {
+    renderControls();
+    expect(screen.queryByRole('group', { name: 'Model usage mix' })).not.toBeInTheDocument();
+
+    renderControls({ selectedModelIds: [directOffer.id, FRONTEND_TEST_CATALOG.modelOffers[1].id] });
+    expect(screen.getByRole('group', { name: 'Model usage mix' })).toBeInTheDocument();
+    expect(screen.getByText('100% total')).toBeInTheDocument();
   });
 });

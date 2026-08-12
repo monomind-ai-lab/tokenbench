@@ -1,10 +1,9 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Share2, X } from 'lucide-react';
 
-interface LegacyShareActionProps {
+interface UrlPopupShareActionProps {
   readonly url: string;
   readonly title: string;
-  readonly text: string;
   readonly label?: string;
   readonly canonicalUrl?: never;
   readonly variant?: never;
@@ -19,46 +18,65 @@ interface DialogShareActionProps {
   readonly text?: never;
 }
 
-export type ShareActionProps = LegacyShareActionProps | DialogShareActionProps;
+export type ShareActionProps = UrlPopupShareActionProps | DialogShareActionProps;
 
 type ShareFeedback =
   | { readonly kind: 'success'; readonly message: string }
   | { readonly kind: 'error'; readonly message: string };
 
-const UNABLE_TO_SHARE_MESSAGE = 'Unable to share this link. Please copy the URL from your browser.';
+const COPY_FAILURE_MESSAGE = 'Unable to copy the link. Please copy the URL from your browser.';
 const COPY_FAILED_MESSAGE = 'Copy failed. Select the URL and copy it manually.';
 
-function LegacyShareAction({ url, title, text, label = 'Share result' }: LegacyShareActionProps) {
+function UrlPopupShareAction({ url, title, label = 'Share result' }: UrlPopupShareActionProps) {
+  const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState<ShareFeedback | null>(null);
 
-  const share = async () => {
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ url, title, text });
-        setFeedback({ kind: 'success', message: 'Link shared.' });
-      } catch {
-        setFeedback({ kind: 'error', message: UNABLE_TO_SHARE_MESSAGE });
-      }
-      return;
-    }
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
 
+  const copy = async () => {
     try {
       if (typeof navigator.clipboard?.writeText !== 'function') throw new Error('Clipboard sharing is unavailable');
       await navigator.clipboard.writeText(url);
       setFeedback({ kind: 'success', message: 'Link copied to clipboard.' });
     } catch {
-      setFeedback({ kind: 'error', message: UNABLE_TO_SHARE_MESSAGE });
+      setFeedback({ kind: 'error', message: COPY_FAILURE_MESSAGE });
     }
   };
 
+  const toggle = () => {
+    setFeedback(null);
+    setOpen((current) => !current);
+  };
+
   return <div className="share-action">
-    <button className="button button-secondary button-small" type="button" onClick={share}>
+    <button className="button button-secondary button-small" type="button" aria-expanded={open} aria-haspopup="dialog" onClick={toggle}>
       {label}
     </button>
-    {feedback ? <p
-      className={`share-action-feedback share-action-feedback-${feedback.kind}`}
-      role={feedback.kind === 'error' ? 'alert' : 'status'}
-    >{feedback.message}</p> : null}
+    {open ? <div className="share-action-popup" role="dialog" aria-label={`Share ${title}`}>
+      <div className="share-action-popup-title">{title}</div>
+      <div className="share-action-popup-field">
+        <input
+          className="share-action-popup-input"
+          readOnly
+          value={url}
+          aria-label="Shareable link"
+          autoFocus
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <button className="button button-small" type="button" onClick={copy}>Copy link</button>
+      </div>
+      {feedback ? <p
+        className={`share-action-feedback share-action-feedback-${feedback.kind}`}
+        role={feedback.kind === 'error' ? 'alert' : 'status'}
+      >{feedback.message}</p> : null}
+    </div> : null}
   </div>;
 }
 
@@ -184,5 +202,5 @@ export function ShareAction(props: ShareActionProps) {
       label={props.label}
     />;
   }
-  return <LegacyShareAction url={props.url} title={props.title} text={props.text} label={props.label} />;
+  return <UrlPopupShareAction url={props.url} title={props.title} label={props.label} />;
 }

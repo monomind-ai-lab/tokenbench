@@ -514,8 +514,8 @@ test.describe('responsive calculator browser harness', () => {
     test(`${viewport.width}px renders the expected mode without document overflow`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: 1000 });
       await openCalculator(page);
-      await page.getByText('Advanced model mapping', { exact: true }).click();
       await expect(page.locator('.model-mix-details')).toHaveAttribute('open', '');
+      await page.locator('.model-list input[type="checkbox"]').nth(1).check();
 
       await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', viewport.layout);
       const dimensions = await page.evaluate(() => ({
@@ -553,7 +553,7 @@ test.describe('responsive calculator browser harness', () => {
     test(`${viewport.width}px keyboard Tab reaches provider, plan, model, and workload controls with visible focus`, async ({ page }) => {
       await page.setViewportSize({ width: viewport.width, height: 1000 });
       await openCalculator(page);
-      await page.getByText('Advanced model mapping', { exact: true }).click();
+      await page.locator('.model-list input[type="checkbox"]').nth(1).check();
       await page.locator('body').click({ position: { x: 2, y: 2 } });
       for (const selector of ['input[name="provider"]', 'input[name="plan"]', 'input[type="checkbox"]', '#conversations-per-day', 'input[type="range"]']) {
         expect(await tabTo(page, selector)).toEqual(expect.objectContaining({ outlineWidth: '3px', outlineStyle: 'solid' }));
@@ -778,9 +778,8 @@ test.describe('responsive calculator browser harness', () => {
     await outputTokens.fill('400');
     await expect(outputTokens).toHaveValue('400');
     const advanced = page.locator('.model-mix-details');
-    await expect(advanced).not.toHaveAttribute('open', '');
-    await page.getByText('Advanced model mapping', { exact: true }).click();
     await expect(advanced).toHaveAttribute('open', '');
+    await page.locator('.model-list input[type="checkbox"]').nth(1).check();
     await expect(page.getByRole('status', { name: 'Default API mapping' })).toContainText('Advanced override is active.');
   });
 
@@ -2163,7 +2162,15 @@ test.describe('handler-backed compare browser coverage', () => {
     });
     page.on('pageerror', (error) => pageErrors.push(error.message));
     await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'share', { configurable: true, value: () => Promise.resolve() });
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: {
+          writeText: (text: string) => {
+            localStorage.setItem('tokenbench:browser-test-clipboard', text);
+            return Promise.resolve();
+          },
+        },
+      });
     });
     await page.setViewportSize({ width: 1024, height: 1000 });
     await blockExternalRequests(page, origin);
@@ -2245,7 +2252,8 @@ test.describe('handler-backed compare browser coverage', () => {
         expect(shareBounds.width).toBeGreaterThanOrEqual(44);
         expect(shareBounds.height).toBeGreaterThanOrEqual(44);
         await shareAction.click();
-        await expect(page.locator('.share-action').getByRole('status')).toContainText('Link shared.');
+        await page.locator('.share-action').getByRole('button', { name: 'Copy link' }).click();
+        await expect(page.locator('.share-action').getByRole('status')).toContainText('Link copied to clipboard.');
         await assertNoHorizontalOverflow(page);
 
         await page.goto(HANDLER_SPARSE_COMPARISON_PATH, { waitUntil: 'networkidle' });

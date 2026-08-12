@@ -195,6 +195,7 @@ describe('comparison detail page', () => {
     expect(headings.indexOf('Pricing and context')).toBeLessThan(headings.indexOf('Evidence provenance'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
   });
 
@@ -239,6 +240,7 @@ describe('comparison detail page', () => {
     expect(screen.getByRole('heading', { name: 'Evidence provenance' }).closest('section')).toHaveTextContent('Model A — route openrouter:provider:model-a · source openrouter · provider openrouter');
 
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
   });
 

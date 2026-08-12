@@ -280,7 +280,7 @@ function CalculatorPage() {
             />
             <div className="calculator-guided-results">
               <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} hasAvailableModels={providerModels.length > 0} catalog={catalog} />
-              {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" text={recommendation} url={`${location.origin}${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
+              {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" url={`${location.origin}${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
             </div>
           </div>
           <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} workload={workload} modelMixBasisPoints={selection.modelMixBasisPoints} />

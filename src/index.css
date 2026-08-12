@@ -257,6 +257,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .button-secondary { color: var(--primary-strong); background: transparent; }
 .button-small { min-height: 44px; padding: 7px 10px; font-size: 0.7rem; }
 .share-action { display: grid; justify-items: start; gap: 6px; }
+.share-action-popup { min-width: min(100%, 320px); display: grid; gap: 8px; padding: 12px; border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--outline)); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); }
+.share-action-popup-title { color: var(--text); font-size: 0.74rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-action-popup-field { display: flex; gap: 8px; }
+.share-action-popup-input { min-width: 0; flex: 1; min-height: 44px; padding: 8px 11px; border: 1px solid var(--outline); border-radius: 8px; color: var(--muted); background: var(--surface-low); font-family: var(--font-label); font-size: 0.68rem; }
+.share-action-popup-field .button { flex: 0 0 auto; }
 .share-action-feedback { margin: 0; color: var(--muted); font-size: 0.7rem; line-height: 1.4; }
 .share-action-feedback-error { color: var(--danger); }
 .share-dialog-trigger { display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
@@ -335,6 +340,13 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .chart-bar { width: min(54px, 100%); min-height: 0; border-radius: 6px 6px 0 0; background: color-mix(in srgb, var(--primary) 24%, transparent); }
 .chart-column-current .chart-bar { background: color-mix(in srgb, var(--primary-card) 68%, transparent); }
 .current-mix-label { position: absolute; top: -1px; left: 50%; z-index: 2; transform: translateX(-50%); padding: 4px 6px; border-radius: 4px; background: var(--primary-card); color: #ffffff; font-size: 0.55rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+/* Dark theme: the primary brand blue is too dark to read against the dark
+   surface, so chart bars, gridlines, and the current-mix label switch to the
+   light periwinkle accent for visible contrast. */
+[data-theme='dark'] .trend-chart { background: repeating-linear-gradient(to bottom, var(--surface-low) 0, var(--surface-low) calc(25% - 1px), color-mix(in srgb, var(--primary-strong) 24%, var(--surface-low)) 25%); }
+[data-theme='dark'] .chart-bar { background: color-mix(in srgb, var(--primary-strong) 38%, transparent); }
+[data-theme='dark'] .chart-column-current .chart-bar { background: color-mix(in srgb, var(--primary-strong) 88%, transparent); }
+[data-theme='dark'] .current-mix-label { background: var(--primary-strong); color: var(--surface); }
 .break-even-marker { position: absolute; top: 0; bottom: 24px; z-index: 3; width: 2px; border-left: 2px dashed var(--tertiary); pointer-events: none; }
 .break-even-marker span { position: absolute; top: 5px; left: 5px; padding: 4px 6px; border-radius: 4px; background: var(--tertiary); color: var(--surface); font-family: var(--font-label); font-size: 0.54rem; font-weight: 700; white-space: nowrap; }
 

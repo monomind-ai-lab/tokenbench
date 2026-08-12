@@ -178,26 +178,27 @@ export function CalculatorControls({
         <fieldset className="control-block model-block">
           <legend><span className="control-legend"><Boxes size={18} aria-hidden="true" />{UI_COPY.modelSelection}</span></legend>
           <p className="field-help">Advanced model mapping keeps direct, OpenRouter, and OpenCode Zen pricing identities explicit.</p>
-          <details className="model-mix-details" onToggle={(event) => { if (event.currentTarget.open) onMappingModeChange('override'); }}>
+          <details className="model-mix-details" open onToggle={(event) => { if (event.currentTarget.open) onMappingModeChange('override'); }}>
             <summary>Advanced model mapping</summary>
             <div className="model-list">
               {models.map((model) => <ModelChoice key={model.id} model={model} selected={selectedModelIds.includes(model.id)} onChange={() => { onMappingModeChange('override'); onModelToggle(model.id); }} />)}
             </div>
             {models.length === 0 ? <EmptyState title="No verified models for this provider" description="This provider has no published model offers in the current revision." /> : null}
-            <div className="usage-mix" role="group" aria-label="Model usage mix">
-              <div className="mix-heading"><span>Model usage mix</span><strong>{selectedModels.length ? '100% total' : 'Select a model first'}</strong></div>
-              {selectedModels.map((model) => {
-                const share = modelMixBasisPoints[model.id] ?? 0;
-                const id = `share-${inputId(model.id)}`;
-                return (
-                  <div className="mix-row" key={model.id}>
-                    <div className="mix-label"><label htmlFor={id}>{model.displayName}</label><output>{formatPercentBasisPoints(share)}</output></div>
-                    <input id={id} type="range" min="0" max="100" step="1" value={share / 100} aria-valuenow={share / 100} aria-valuetext={`${formatPercentBasisPoints(share)} of workload`} onChange={(event) => { onMappingModeChange('override'); onModelShareChange(model.id, Math.round(Number(event.target.value) * 100)); }} />
-                  </div>
-                );
-              })}
-              {selectedModels.length === 0 ? <p className="muted">Select at least one model to edit its mix.</p> : null}
-            </div>
+            {selectedModels.length > 1 ? (
+              <div className="usage-mix" role="group" aria-label="Model usage mix">
+                <div className="mix-heading"><span>Model usage mix</span><strong>100% total</strong></div>
+                {selectedModels.map((model) => {
+                  const share = modelMixBasisPoints[model.id] ?? 0;
+                  const id = `share-${inputId(model.id)}`;
+                  return (
+                    <div className="mix-row" key={model.id}>
+                      <div className="mix-label"><label htmlFor={id}>{model.displayName}</label><output>{formatPercentBasisPoints(share)}</output></div>
+                      <input id={id} type="range" min="0" max="100" step="1" value={share / 100} aria-valuenow={share / 100} aria-valuetext={`${formatPercentBasisPoints(share)} of workload`} onChange={(event) => { onMappingModeChange('override'); onModelShareChange(model.id, Math.round(Number(event.target.value) * 100)); }} />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </details>
         </fieldset>
       </section>
