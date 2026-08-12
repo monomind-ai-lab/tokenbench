@@ -890,7 +890,7 @@ test.describe('leaderboard browser harness', () => {
       return { label: element.getAttribute('aria-label'), width: bounds.width, height: bounds.height };
     }));
 
-    expect(targets).toEqual([{ label: 'Sort by metric', width: expect.any(Number), height: expect.any(Number) }]);
+    expect(targets).toEqual([{ label: 'Sort by score', width: expect.any(Number), height: expect.any(Number) }]);
     for (const target of targets) {
       expect(target.width, `${target.label} width`).toBeGreaterThanOrEqual(44);
       expect(target.height, `${target.label} height`).toBeGreaterThanOrEqual(44);
@@ -1233,8 +1233,8 @@ test.describe('leaderboard browser harness', () => {
     await expect(page.getByRole('group', { name: 'Providers' })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Workload profile' })).toHaveCount(0);
     await expect(page.getByRole('combobox', { name: 'Sort leaderboard' })).toHaveCount(0);
-    expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['none', 'descending', 'none', 'none']);
-    await expect(page.getByRole('button', { name: 'Sort by metric' })).toBeVisible();
+    expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['none', 'descending', 'none']);
+    await expect(page.getByRole('button', { name: 'Sort by score' })).toBeVisible();
     const codingNames = await codingTable.locator('tbody th[scope="row"] .leaderboard-model > a:first-child').allTextContents();
     expect(codingNames).toEqual(['Alpha', 'Beta']);
 
@@ -1252,7 +1252,7 @@ test.describe('leaderboard browser harness', () => {
     await page.goto('/leaderboards/media/text-to-image/');
     const mediaTable = page.getByRole('table', { name: 'Text to image' });
     await expect(mediaTable).toBeVisible();
-    expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['ascending', 'none', 'none', 'none']);
+    expect(await page.locator('.leaderboard-desktop-table th[aria-sort]').evaluateAll((headers) => headers.map((header) => header.getAttribute('aria-sort')))).toEqual(['ascending', 'none', 'none']);
     const mediaNames = await mediaTable.locator('tbody th[scope="row"] .leaderboard-model > a:first-child').allTextContents();
     expect(mediaNames).toEqual(['Canvas', 'Prism']);
 
