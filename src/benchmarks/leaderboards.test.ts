@@ -77,6 +77,36 @@ function price(overrides: Partial<BenchmarkPriceCheck> = {}): BenchmarkPriceChec
 }
 
 describe('frozen v1 leaderboard definitions', () => {
+  it('builds a value frontier from same-source BenchLM pricing', () => {
+    const cheap = model({ modelKey: 'source:benchlm:cheap', slug: 'cheap', sourceModelId: 'cheap' });
+    const pricey = model({ modelKey: 'source:benchlm:pricey', slug: 'pricey', sourceModelId: 'pricey' });
+    const metrics = [
+      metric({ modelKey: cheap.modelKey, metricKey: 'benchlm:overall:raw', value: 70, rank: 2, sourceModelId: 'cheap' }),
+      metric({ modelKey: pricey.modelKey, metricKey: 'benchlm:overall:raw', value: 90, rank: 1, sourceModelId: 'pricey' }),
+    ];
+    const prices = [
+      price({ modelKey: cheap.modelKey, sourceId: 'benchlm', providerId: 'anthropic', routeId: 'benchlm:cheap', sourceModelId: 'cheap', sourceArtifactId: 'pricing', inputUsdPerMillion: 1, outputUsdPerMillion: 1 }),
+      price({ modelKey: pricey.modelKey, sourceId: 'benchlm', providerId: 'anthropic', routeId: 'benchlm:pricey', sourceModelId: 'pricey', sourceArtifactId: 'pricing', inputUsdPerMillion: 10, outputUsdPerMillion: 50 }),
+    ];
+
+    const result = buildLeaderboard('llm-value', [cheap, pricey], metrics, prices, 'balanced');
+
+    expect(result.entries).toHaveLength(2);
+    expect(result.entries.every((entry) => entry.primaryPrice !== null)).toBe(true);
+    expect(result.entries.filter((entry) => entry.onValueFrontier)).toHaveLength(2);
+  });
+
+  it('carries same-source price evidence onto a score leaderboard row', () => {
+    const alpha = model({ modelKey: 'source:benchlm:alpha', slug: 'alpha', sourceModelId: 'alpha' });
+    const metrics = [metric({ modelKey: alpha.modelKey, metricKey: 'benchlm:category:coding', category: 'coding', value: 80, rank: 1, sourceModelId: 'alpha' })];
+    const prices = [price({ modelKey: alpha.modelKey, sourceId: 'benchlm', providerId: 'anthropic', routeId: 'benchlm:alpha', sourceModelId: 'alpha', sourceArtifactId: 'pricing', inputUsdPerMillion: 2, outputUsdPerMillion: 6 })];
+
+    const result = buildLeaderboard('llm-coding', [alpha], metrics, prices, 'balanced');
+
+    expect(result.entries[0].primaryPrice?.routeId).toBe('benchlm:alpha');
+    expect(result.entries[0].blendedCostPerMillion).toBe(4);
+  });
+
   it('defines every generated leaderboard route with only exact approved metric keys', () => {
     expect(Object.keys(LEADERBOARD_DEFINITIONS).sort()).toEqual(Object.keys(LEADERBOARD_ROUTES).sort());
     expect(LEADERBOARD_DEFINITIONS).toMatchObject({

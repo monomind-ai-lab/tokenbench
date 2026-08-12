@@ -116,6 +116,7 @@ function representativeRates(snapshot: BenchmarkProjectionSnapshot): ReadonlyMap
       model.modelKey,
       pricesByModel.get(model.modelKey) ?? [],
       'outputHeavy',
+      model.sourceId,
     ));
   }
   return rates;
