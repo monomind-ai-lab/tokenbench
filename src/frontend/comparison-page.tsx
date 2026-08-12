@@ -412,17 +412,17 @@ function EvidenceProvenance({
 
 function RelatedComparisonBanner({ pair }: { readonly pair: RelatedComparison }) {
   const title = `${pair.modelA.name} vs ${pair.modelB.name}`;
-  return <li className="comparison-related-banner">
+  return <>
     <a href={`/compare/${encodeURIComponent(pair.pairSlug)}`}>{title}</a>
     <span>{pair.sharedMetricCount} shared source metrics</span>
-  </li>;
+  </>;
 }
 
 function RelatedComparisons({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
   if (viewModel.relatedPairs.length === 0) return null;
   return <section className="comparison-panel comparison-section" aria-labelledby="comparison-related-pairs-heading">
     <div className="comparison-section-heading"><h2 id="comparison-related-pairs-heading">Keep comparing</h2><p>Other reviewed matchups from the same published revision, ready to open without changing this result’s evidence.</p></div>
-    <ul className="comparison-related-list">{viewModel.relatedPairs.map((pair) => <RelatedComparisonBanner key={pair.pairSlug} pair={pair} />)}</ul>
+    <ul className="comparison-related-list">{viewModel.relatedPairs.map((pair) => <li className="comparison-related-banner" key={pair.pairSlug}><RelatedComparisonBanner pair={pair} /></li>)}</ul>
   </section>;
 }
 
