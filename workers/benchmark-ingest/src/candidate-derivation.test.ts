@@ -8,6 +8,7 @@ import { compareUtf8Binary } from '../../../src/benchmarks/contracts';
 import type { BenchmarkCandidateManifestV1, CandidatePartition } from './candidate-storage';
 import { candidateKeyPrefix } from './candidate-storage';
 import { deriveComparisonPairs } from './comparison-derivation';
+import { mergeNormalizedBatches } from './normalized-merge';
 import {
   DERIVED_PARTITION_KINDS,
   MAX_DERIVED_PARTITION_ROWS,
@@ -289,6 +290,49 @@ describe('deriveCandidatePartitions', () => {
     const solCoding = (await rowsFor('metrics') as { modelKey: string; category: string; value: number }[])
       .find((metric) => metric.modelKey === 'gpt-5-6-sol' && metric.category === 'coding');
     expect(solCoding?.value).toBe(77.95);
+  });
+
+  it('matches the production merged fact rows across multiple source partitions', async () => {
+    const primary = fixtureBatch();
+    const secondarySource = {
+      ...primary.sources[0],
+      sourceId: 'lmarena' as const,
+      artifactId: 'agent:latest:overall:rows-0-100',
+      sourceUrl: 'https://datasets-server.huggingface.co/rows',
+      licenseId: 'CC-BY-4.0' as const,
+      attributionText: 'Data from LMSYS Chatbot Arena',
+    };
+    const secondary: NormalizedSourceBatch = {
+      sources: [secondarySource],
+      models: [{
+        ...primary.models[0],
+        name: 'Lower-priority arena display name',
+        sourceId: 'lmarena',
+        sourceArtifactId: secondarySource.artifactId,
+      }],
+      metrics: [],
+      priceChecks: [],
+      comparisonSeeds: [],
+    };
+    const expected = mergeNormalizedBatches([primary, secondary]);
+    const expectedPairs = deriveComparisonPairs(expected);
+    const bucket = new FakeR2Bucket();
+    const manifest = manifestFor([
+      writeNormalizedPartition(bucket, 'lmarena', 1, secondary),
+      writeNormalizedPartition(bucket, 'benchlm', 0, primary),
+    ]);
+
+    const checkpointed = await deriveCandidatePartitions(manifest, { SOURCE_SNAPSHOTS: bucket });
+    const rowsFor = async (kind: string) => (await Promise.all(checkpointed.partitions
+      .filter((partition) => partition.kind === kind)
+      .sort((left, right) => left.index - right.index)
+      .map((partition) => readPartitionRows(bucket, partition.key)))).flat();
+
+    expect(await rowsFor('sources')).toEqual(expected.sources);
+    expect(await rowsFor('models')).toEqual(expected.models);
+    expect(await rowsFor('metrics')).toEqual(expected.metrics);
+    expect(await rowsFor('prices')).toEqual(expected.priceChecks);
+    expect(await rowsFor('comparisons')).toEqual(expectedPairs);
   });
 
   it('emits a deterministic revision and content hash independent of partition order', async () => {
