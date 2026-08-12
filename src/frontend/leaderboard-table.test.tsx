@@ -215,19 +215,19 @@ describe('LeaderboardTable', () => {
     const table = screen.getByRole('table', { name: 'Coding benchmark' });
     expect(within(table).getByRole('columnheader', { name: 'Position' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Model' })).toHaveAttribute('scope', 'col');
-    expect(within(table).getByRole('columnheader', { name: 'Metric' })).toHaveAttribute('scope', 'col');
-    expect(within(table).getByRole('columnheader', { name: 'Blended cost' })).toHaveAttribute('scope', 'col');
-    expect(within(table).getByRole('columnheader', { name: 'Metric' })).toHaveAttribute('aria-sort', 'descending');
+    expect(within(table).getByRole('columnheader', { name: 'Score' })).toHaveAttribute('scope', 'col');
+    expect(within(table).getByRole('columnheader', { name: 'Supported Modalities' })).toHaveAttribute('scope', 'col');
+    expect(within(table).getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'descending');
     expect(within(table).getAllByText('Unavailable').length).toBeGreaterThan(1);
     expect(within(table).getByRole('link', { name: 'Model A' })).toHaveAttribute('href', '/models/model-a/');
     expect(screen.queryByRole('link', { name: 'Data from BenchLM.ai' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Leaderboard evidence')).not.toBeInTheDocument();
 
-    fireEvent.click(within(table).getByRole('button', { name: 'Sort by metric' }));
+    fireEvent.click(within(table).getByRole('button', { name: 'Sort by score' }));
     expect(onSortChange).toHaveBeenCalledWith('score-desc');
   });
 
-  it('keeps separate source lenses separate and renders the same ordered rows as mobile cards', () => {
+  it('shows only the primary score and supported modalities in the table and mobile cards', () => {
     const multiLens = entry({
       model: { ...entry().model, modelKey: 'vision-model', slug: 'vision-model', name: 'Vision Model', sourceId: 'benchlm' },
       metrics: [
@@ -243,19 +243,22 @@ describe('LeaderboardTable', () => {
           methodology: 'bradley_terry',
         },
       ],
+      primaryPrice: { ...primaryOpenRouterPrice(), modelKey: 'vision-model', sourceModelId: 'vision-model', canonicalSlug: 'vision-model' },
     });
     renderTable('multimodal-vision-documents', 'score-desc', [multiLens]);
 
     const metricSort = screen.getByRole('button', { name: 'Use source lens order' });
     expect(metricSort.closest('th')).toHaveAttribute('aria-sort', 'other');
-    expect(screen.getAllByText('BenchLM multimodal').length).toBeGreaterThan(1);
-    expect(screen.getAllByText('LMArena vision').length).toBeGreaterThan(1);
+    const table = screen.getByRole('table', { name: 'Multimodal' });
+    expect(within(table).getByText('72.0')).toBeInTheDocument();
+    expect(within(table).getByText('text · text')).toBeInTheDocument();
+    expect(screen.queryByText('BenchLM multimodal')).not.toBeInTheDocument();
+    expect(screen.queryByText('LMArena vision')).not.toBeInTheDocument();
     const cards = document.querySelector<HTMLOListElement>('.leaderboard-card-list');
     expect(cards).not.toBeNull();
     const cardRows = within(cards!).getAllByRole('listitem', { hidden: true });
     expect(cardRows[0]).toHaveTextContent('Vision Model');
-    expect(cardRows[0]).toHaveTextContent('BenchLM multimodal');
-    expect(cardRows[0]).toHaveTextContent('LMArena vision');
+    expect(cardRows[0]).toHaveTextContent('text · text');
   });
 
   it('keeps a provider mark and its textual label in equivalent desktop and mobile model rows', () => {
@@ -323,7 +326,7 @@ describe('LeaderboardTable', () => {
   it.each([
     ['llm-reasoning', 'benchlm:category:reasoning', 'reasoning', 'BenchLM reasoning', 'Top Reasoning'],
     ['llm-knowledge', 'benchlm:category:knowledge', 'knowledge', 'BenchLM knowledge', 'Top Knowledge'],
-  ] as const)('uses semantic category-lens labels and a specific top badge for %s', (key, metricKey, category, label, badge) => {
+  ] as const)('uses a specific top badge for %s and shows the bare score without the lens label', (key, metricKey, category, label, badge) => {
     const metric = {
       ...entry().metric!,
       metricKey,
@@ -333,8 +336,9 @@ describe('LeaderboardTable', () => {
 
     renderTable(key, 'score-desc', [entry({ metric, metrics: [metric], sourceRank: 1 })]);
 
-    expect(screen.getAllByText(label).length).toBeGreaterThan(1);
     expect(screen.getAllByText(badge).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('83.2').length).toBeGreaterThan(0);
+    expect(screen.queryByText(label)).not.toBeInTheDocument();
     expect(screen.queryByText('Top Capability')).not.toBeInTheDocument();
     expect(screen.queryByText(/BenchAlign/i)).not.toBeInTheDocument();
   });
@@ -380,9 +384,8 @@ describe('LeaderboardTable', () => {
       capabilities={capabilities}
     />);
 
-    expect(screen.getByRole('button', { name: 'Sort by metric' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sort by score' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sort by position' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sort by blended cost' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sort by context window' })).not.toBeInTheDocument();
   });
 });

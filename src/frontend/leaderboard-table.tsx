@@ -46,32 +46,8 @@ function formatMetricValue(value: number, unit: string): string {
     : formatNumber(value);
 }
 
-function formatPrice(value: number | null): string {
-  return value === null ? 'Unavailable' : `$${formatNumber(value, 4)} / 1M`;
-}
-
 function formatContext(value: number | null): string {
   return value === null ? 'Unavailable' : `${formatNumber(value)} tokens`;
-}
-
-function metricLabel(metricKey: string): string {
-  const labels: Record<string, string> = {
-    'benchlm:overall:raw': 'BenchLM overall',
-    'benchlm:category:coding': 'BenchLM coding',
-    'benchlm:category:agentic': 'BenchLM agentic',
-    'benchlm:category:reasoning': 'BenchLM reasoning',
-    'benchlm:category:knowledge': 'BenchLM knowledge',
-    'benchlm:category:multimodalGrounded': 'BenchLM multimodal',
-    'lmarena:text_style_control:overall': 'LMArena human preference',
-    'lmarena:vision_style_control:overall': 'LMArena vision',
-    'lmarena:document_style_control:overall': 'LMArena documents',
-    'lmarena:text_to_image:overall': 'LMArena text to image',
-    'lmarena:image_edit:overall': 'LMArena image editing',
-    'lmarena:text_to_video:overall': 'LMArena text to video',
-    'lmarena:image_to_video:overall': 'LMArena image to video',
-    'lmarena:video_edit:overall': 'LMArena video editing',
-  };
-  return labels[metricKey] ?? metricKey;
 }
 
 function sourceLenses(entry: LeaderboardEntry) {
@@ -80,14 +56,6 @@ function sourceLenses(entry: LeaderboardEntry) {
 
 function isEstimated(entry: LeaderboardEntry): boolean {
   return entry.model.evidenceStatus === 'estimated';
-}
-
-function evidenceLabel(entry: LeaderboardEntry): string {
-  switch (entry.model.evidenceStatus) {
-    case 'estimated': return 'Estimated';
-    case 'source_only': return 'Source-only';
-    default: return 'Supported';
-  }
 }
 
 function badgeFor(keyName: LeaderboardKey, entry: LeaderboardEntry, position: number): string | null {
@@ -106,17 +74,23 @@ function usesPublishedSourceRank(keyName: LeaderboardKey): boolean {
   return kind === 'benchlm' || kind === 'lmarena' || kind === 'multimodal';
 }
 
-function LensList({ entry }: { readonly entry: LeaderboardEntry }) {
+function ScoreValue({ entry }: { readonly entry: LeaderboardEntry }) {
   if (isEstimated(entry)) return <span>Unavailable</span>;
   const lenses = sourceLenses(entry);
   if (lenses.length === 0) return <span>Unavailable</span>;
-  return <ul className="leaderboard-lenses" aria-label={`${entry.model.name} source lenses`}>
-    {lenses.map((metric) => <li key={`${metric.sourceId}-${metric.metricKey}-${metric.sourceArtifactId}`}>
-      <span>{metricLabel(metric.metricKey)}</span>
-      <strong>{formatMetricValue(metric.value, metric.unit)}</strong>
-      {metric.rank !== null ? <small>Source rank {metric.rank}</small> : null}
-    </li>)}
-  </ul>;
+  return <span className="leaderboard-score-value">{formatMetricValue(lenses[0].value, lenses[0].unit)}</span>;
+}
+
+function ModalitiesValue({ entry }: { readonly entry: LeaderboardEntry }) {
+  const price = entry.primaryPrice;
+  const input = price?.inputModalities ?? null;
+  const output = price?.outputModalities ?? null;
+  if (input === null && output === null) return <span>Unavailable</span>;
+  const parts: string[] = [];
+  if (input !== null && input.length > 0) parts.push(input.join(', '));
+  if (output !== null && output.length > 0) parts.push(output.join(', '));
+  if (parts.length === 0) return <span>Unavailable</span>;
+  return <span className="leaderboard-modalities">{parts.join(' · ')}</span>;
 }
 
 export function LeaderboardEvidence({
@@ -148,10 +122,10 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
   return <li className={`leaderboard-card${estimated ? ' leaderboard-card-estimated' : ''}`}>
     <div className="leaderboard-card-heading"><span className="leaderboard-position">{position === null ? 'Unranked' : `#${position}`}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div>
     <h3><a href={modelPath(entry.model.slug)}>{entry.model.name}</a></h3>
-    <p className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span></p>
+    <p className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span></p>
     <dl>
-      <div><dt>Metric</dt><dd><LensList entry={entry} /></dd></div>
-      <div><dt>Blended cost</dt><dd>{estimated ? 'Unavailable' : formatPrice(entry.blendedCostPerMillion)}</dd></div>
+      <div><dt>Score</dt><dd><ScoreValue entry={entry} /></dd></div>
+      <div><dt>Supported Modalities</dt><dd><ModalitiesValue entry={entry} /></dd></div>
       <div><dt>Context</dt><dd>{estimated ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</dd></div>
       <div><dt>Source rank</dt><dd>{estimated || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</dd></div>
     </dl>
@@ -182,17 +156,17 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
           <tr>
             <th scope="col" aria-sort={canSort('rank-asc') ? sortDirection(sort, 'rank-asc') : 'none'}>{canSort('rank-asc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button> : 'Position'}</th>
             <th scope="col">Model</th>
-            <th scope="col" aria-sort={canSort('score-desc') ? (usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')) : 'none'}>{canSort('score-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by metric'}>Metric</button> : 'Metric'}</th>
-            <th scope="col" aria-sort={canSort('price-asc') ? sortDirection(sort, 'price-asc') : 'none'}>{canSort('price-asc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('price-asc')} aria-label="Sort by blended cost">Blended cost</button> : 'Blended cost'}</th>
+            <th scope="col" aria-sort={canSort('score-desc') ? (usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')) : 'none'}>{canSort('score-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by score'}>Score</button> : 'Score'}</th>
+            <th scope="col">Supported Modalities</th>
             <th scope="col" aria-sort={canSort('context-desc') ? sortDirection(sort, 'context-desc') : 'none'}>{canSort('context-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button> : 'Context'}</th>
           </tr>
         </thead>
         <tbody>
           {rows.map(({ entry, position }) => <tr key={entry.model.modelKey} className={isEstimated(entry) ? 'leaderboard-row-estimated' : undefined}>
             <td>{position === null ? 'Unranked' : `#${position}`}</td>
-            <th scope="row"><div className="leaderboard-model"><a href={modelPath(entry.model.slug)}>{entry.model.name}</a><ProviderIdentity entry={entry} /><span className={`leaderboard-evidence-status evidence-${entry.model.evidenceStatus}`}>{evidenceLabel(entry)}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
-            <td><LensList entry={entry} /></td>
-            <td>{isEstimated(entry) ? 'Unavailable' : formatPrice(entry.blendedCostPerMillion)}</td>
+            <th scope="row"><div className="leaderboard-model"><a href={modelPath(entry.model.slug)}>{entry.model.name}</a><ProviderIdentity entry={entry} /><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
+            <td><ScoreValue entry={entry} /></td>
+            <td><ModalitiesValue entry={entry} /></td>
             <td>{isEstimated(entry) ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</td>
           </tr>)}
         </tbody>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { parseModelDirectoryEnvelope, type ModelDirectoryEnvelope } from '../frontend/model-directory-contracts';
 import { ModelsPage, ModelsApp } from './models-page';
@@ -32,6 +32,18 @@ describe('popular models directory', () => {
     expect(screen.getAllByRole('link', { name: 'GPT-5.6 Sol' })).toHaveLength(2);
     expect(screen.getAllByText('81.48')).toHaveLength(2);
     expect(screen.getAllByText('Coding · 77.95')).toHaveLength(2);
+  });
+
+  it('links every model row and card to the model profile page', () => {
+    render(<ModelsPage envelope={directoryEnvelope([model('gpt-5-6-sol', 'GPT-5.6 Sol'), model('claude-sonnet-5', 'Claude Sonnet 5')])} />);
+    const links = screen.getAllByRole('link', { name: /GPT-5.6 Sol|Claude Sonnet 5/ });
+    expect(links).toHaveLength(4);
+    expect(links.every((link) => link.getAttribute('href')?.startsWith('/models/'))).toBe(true);
+    const table = screen.getByTestId('models-desktop-table');
+    expect(within(table).getByRole('link', { name: 'GPT-5.6 Sol' })).toHaveAttribute('href', '/models/gpt-5-6-sol/');
+    expect(within(table).getByRole('link', { name: 'Claude Sonnet 5' })).toHaveAttribute('href', '/models/claude-sonnet-5/');
+    const rows = within(table).getAllByRole('row');
+    expect(rows.length).toBeGreaterThan(2);
   });
 
   it('renders retained records with an explicit archived state', () => {

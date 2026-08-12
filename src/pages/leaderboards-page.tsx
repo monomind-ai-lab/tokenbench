@@ -154,7 +154,7 @@ function CurrentDecisionPicks({ keyName }: { readonly keyName: LeaderboardKey })
   if (!group || group.entries.length === 0) return null;
 
   return <section className="panel leaderboard-decision-picks" aria-labelledby="leaderboard-decision-picks-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Available from the published summary</span><h2 id="leaderboard-decision-picks-heading">Decision-ready picks</h2><p>Supported entries only. Use this short list to orient your review, then inspect the filtered results below.</p></div></div>
+    <div className="panel-heading"><div><span className="eyebrow">Available from the published summary</span><h2 id="leaderboard-decision-picks-heading">Decision-ready picks</h2><p>The current top 3 models:</p></div></div>
     <ol className="decision-pick-list">{group.entries.map((entry) => <DecisionEntry key={entry.modelKey} entry={entry} />)}</ol>
   </section>;
 }

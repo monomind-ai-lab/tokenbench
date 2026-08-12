@@ -76,7 +76,7 @@ function ModelDirectoryTable({ models }: { readonly models: readonly ModelDirect
   return <div className="models-desktop-table" data-testid="models-desktop-table">
     <table aria-label="Popular AI models">
       <thead><tr><th scope="col">Model</th><th scope="col">Decision facts</th><th scope="col">Status</th></tr></thead>
-      <tbody>{models.map((model) => <tr key={model.canonicalSlug}>
+      <tbody>{models.map((model) => <tr className="model-directory-row" key={model.canonicalSlug}>
         <th scope="row"><ModelLink model={model} /><small>{model.creator} · {model.sourceType}</small></th>
         <td><ModelDecisionFacts model={model} /></td>
         <td><span className={`model-status model-status-${model.status}`}>{model.status === 'archived' ? 'Archived' : 'Current'}</span></td>
