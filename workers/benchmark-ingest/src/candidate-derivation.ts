@@ -36,6 +36,7 @@ import {
   parseBenchmarkCandidateManifest,
 } from './candidate-storage';
 import { deriveComparisonPairs } from './comparison-derivation';
+import { mergeNormalizedBatches } from './normalized-merge';
 
 /** The exactly-five derived fact partition kinds, in canonical emission order. */
 export const DERIVED_PARTITION_KINDS = ['sources', 'models', 'metrics', 'prices', 'comparisons'] as const;
@@ -199,22 +200,11 @@ async function reconstructBatch(
   bucket: CandidateR2Bucket,
   manifest: BenchmarkCandidateManifestV1,
 ): Promise<NormalizedSourceBatch> {
-  const grouped = {
-    sources: [] as NormalizedSourceBatch['sources'][number][],
-    models: [] as NormalizedSourceBatch['models'][number][],
-    metrics: [] as NormalizedSourceBatch['metrics'][number][],
-    priceChecks: [] as NormalizedSourceBatch['priceChecks'][number][],
-    comparisonSeeds: [] as NormalizedSourceBatch['comparisonSeeds'][number][],
-  };
+  const batches: NormalizedSourceBatch[] = [];
   for (const partition of manifest.normalizedPartitions) {
-    const batch = await readNormalizedPartition(bucket, partition);
-    grouped.sources.push(...batch.sources);
-    grouped.models.push(...batch.models);
-    grouped.metrics.push(...batch.metrics);
-    grouped.priceChecks.push(...batch.priceChecks);
-    grouped.comparisonSeeds.push(...batch.comparisonSeeds);
+    batches.push(await readNormalizedPartition(bucket, partition));
   }
-  return validateNormalizedSourceBatch(grouped);
+  return mergeNormalizedBatches(batches);
 }
 
 function canonicalDerivedRows(

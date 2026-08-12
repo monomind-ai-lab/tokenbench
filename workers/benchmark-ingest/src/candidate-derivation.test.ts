@@ -309,6 +309,47 @@ describe('deriveCandidatePartitions', () => {
       .toEqual(first.partitions.map((partition) => partition.contentHash));
   });
 
+  it('reconciles repeated canonical models across source partitions with production priority', async () => {
+    const benchLm = fixtureBatch();
+    const duplicate = {
+      ...benchLm.models[0],
+      name: 'Lower-priority arena display name',
+      sourceId: 'lmarena' as const,
+      sourceArtifactId: 'agent:latest:overall:rows-0-100',
+    };
+    const arenaSource = {
+      ...benchLm.sources[0],
+      sourceId: 'lmarena' as const,
+      artifactId: 'agent:latest:overall:rows-0-100',
+      sourceUrl: 'https://datasets-server.huggingface.co/rows',
+      licenseId: 'CC-BY-4.0' as const,
+      attributionText: 'Data from LMSYS Chatbot Arena',
+    };
+    const arenaBatch: NormalizedSourceBatch = {
+      sources: [arenaSource],
+      models: [duplicate],
+      metrics: [],
+      priceChecks: [],
+      comparisonSeeds: [],
+    };
+    const bucket = new FakeR2Bucket();
+    const partitions = [
+      writeNormalizedPartition(bucket, 'benchlm', 0, benchLm),
+      writeNormalizedPartition(bucket, 'lmarena', 1, arenaBatch),
+    ];
+
+    const result = await deriveCandidatePartitions(manifestFor(partitions.reverse()), { SOURCE_SNAPSHOTS: bucket });
+    const modelRows = (await Promise.all(result.partitions
+      .filter((partition) => partition.kind === 'models')
+      .map((partition) => readPartitionRows(bucket, partition.key)))).flat() as NormalizedSourceBatch['models'];
+
+    expect(modelRows.filter((model) => model.modelKey === 'gpt-5-6-sol')).toHaveLength(1);
+    expect(modelRows.find((model) => model.modelKey === 'gpt-5-6-sol')).toMatchObject({
+      name: 'GPT-5.6 Sol',
+      sourceId: 'benchlm',
+    });
+  });
+
   it('bounds each partition to the fixed maximum row count', async () => {
     const models = Array.from({ length: MAX_DERIVED_PARTITION_ROWS + 5 }, (_, index) => benchLmModel({
       modelKey: `model-${String(index).padStart(4, '0')}`,

@@ -81,6 +81,7 @@ import { parseOpenRouterModels, projectOpenRouterModelsPayload } from '../../cat
 import { parquetReadObjects } from 'hyparquet';
 import { BENCHMARK_FRESHNESS_WINDOW_MS } from '../../../src/ingestion/cadence';
 import { deriveComparisonPairs } from './comparison-derivation';
+import { mergeNormalizedBatches } from './normalized-merge';
 
 type BoundStatement = {
   bind(...values: unknown[]): BoundStatement;
@@ -1689,28 +1690,6 @@ async function mapWithConcurrency<T, R>(items: readonly T[], concurrency: number
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
   return results;
-}
-
-function sourcePriority(sourceId: BenchmarkSourceRecord['sourceId']): number {
-  return ({ benchlm: 0, lmarena: 1, openrouter: 2, litellm: 3 } as const)[sourceId];
-}
-
-function mergeNormalizedBatches(batches: readonly NormalizedSourceBatch[]): NormalizedSourceBatch {
-  const sources = batches.flatMap((batch) => batch.sources).sort((left, right) => binaryCompare(sourceKey(left.sourceId, left.artifactId), sourceKey(right.sourceId, right.artifactId)));
-  const models = new Map<string, BenchmarkModel>();
-  for (const candidate of batches.flatMap((batch) => batch.models)) {
-    const previous = models.get(candidate.modelKey);
-    if (!previous || sourcePriority(candidate.sourceId) < sourcePriority(previous.sourceId)
-      || (candidate.sourceId === previous.sourceId && binaryCompare(candidate.sourceArtifactId, previous.sourceArtifactId) < 0)) {
-      models.set(candidate.modelKey, { ...candidate });
-    } else if (candidate.sourceId === previous.sourceId && candidate.sourceModelId === previous.sourceModelId) {
-      previous.benchmarkCount += candidate.benchmarkCount;
-    }
-  }
-  const metrics = batches.flatMap((batch) => batch.metrics).sort((left, right) => binaryCompare(`${left.modelKey}\u0000${left.metricKey}`, `${right.modelKey}\u0000${right.metricKey}`));
-  const prices = batches.flatMap((batch) => batch.priceChecks).sort((left, right) => binaryCompare(`${left.modelKey}\u0000${left.sourceId}\u0000${left.providerId}\u0000${left.routeId}`, `${right.modelKey}\u0000${right.sourceId}\u0000${right.providerId}\u0000${right.routeId}`));
-  const seeds = batches.flatMap((batch) => batch.comparisonSeeds).sort((left, right) => binaryCompare(left.pairSlug, right.pairSlug));
-  return validateNormalizedSourceBatch({ sources, models: [...models.values()].sort((left, right) => binaryCompare(left.modelKey, right.modelKey)), metrics, priceChecks: prices, comparisonSeeds: seeds });
 }
 
 function safeBenchLmCategories(metrics: readonly BenchmarkMetric[], modelKey: string): Map<string, BenchmarkMetric> {
