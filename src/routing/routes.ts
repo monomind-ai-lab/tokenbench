@@ -12,6 +12,8 @@ export const ROUTE_PATHS = {
   leaderboards: '/leaderboards/',
   methodologyBenchAlign: '/methodology/benchalign/',
   newsletterConfirmed: '/newsletter/confirmed/',
+  welcome: '/welcome/',
+  privacy: '/privacy/',
 } as const;
 
 export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'compare' | 'leaderboards' | 'guides';
@@ -173,6 +175,8 @@ export type AppRoute =
   | { kind: 'comparison'; pair: string }
   | { kind: 'modelProfile'; slug: string }
   | { kind: 'newsletterConfirmed' }
+  | { kind: 'welcome' }
+  | { kind: 'privacy' }
   | { kind: 'leaderboards' }
   | { kind: 'leaderboard'; key: LeaderboardKey }
   | { kind: 'redirect'; to: string }
@@ -200,6 +204,8 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
   { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
+  { id: 'welcome', pathname: ROUTE_PATHS.welcome, route: { kind: 'welcome' } },
+  { id: 'privacy', pathname: ROUTE_PATHS.privacy, route: { kind: 'privacy' } },
   { id: 'leaderboards', pathname: ROUTE_PATHS.leaderboards, route: { kind: 'leaderboards' } },
   { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
 ];
@@ -243,6 +249,8 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
     case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
+    case 'welcome': return ROUTE_PATHS.welcome;
+    case 'privacy': return ROUTE_PATHS.privacy;
     case 'leaderboards': return ROUTE_PATHS.leaderboards;
     case 'leaderboard': return LEADERBOARD_ROUTES[route.key].pathname;
     case 'redirect': return route.to;
@@ -262,6 +270,8 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
   if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
+  if (normalizedPathname === ROUTE_PATHS.welcome) return { kind: 'welcome' };
+  if (normalizedPathname === ROUTE_PATHS.privacy) return { kind: 'privacy' };
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
 
   if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };

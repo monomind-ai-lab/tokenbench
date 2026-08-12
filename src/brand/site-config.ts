@@ -10,5 +10,7 @@ export const SITE_CONFIG = {
 
 export const HOME_PAGE_COPY = {
   h1: 'Transparent AI Costs. Verified Benchmarks.',
+  heroH1Leading: 'Transparent AI Costs.',
+  heroH1Trailing: 'Verified Benchmarks.',
   subcopy: 'The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.',
 } as const;

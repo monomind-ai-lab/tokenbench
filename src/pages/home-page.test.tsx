@@ -159,7 +159,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare/');
-    expect(screen.getByRole('link', { name: 'Calculate subscription vs API' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Review Your Subscriptions' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
     expect(screen.queryByText(/Updated /)).not.toBeInTheDocument();

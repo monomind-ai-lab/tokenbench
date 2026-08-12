@@ -97,6 +97,8 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/knowledge/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/privacy/</loc>');
+    expect(sitemap).not.toContain('/welcome/');
     expect(new Set(sitemap.match(/<loc>[^<]+<\/loc>/g)).size).toBe(sitemap.match(/<loc>[^<]+<\/loc>/g)?.length);
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
   });
@@ -119,13 +121,37 @@ describe('crawlable static-page generator', () => {
     expect(confirmed).not.toContain('google_translate_element');
     expect(confirmed).not.toContain('googleTranslateElementInit');
     expect(confirmed).not.toContain('translate.google.com');
-    expect(confirmed).toContain('<a class="button" href="/">Start Exploring</a>');
+    expect(confirmed).toContain('<a class="button" href="/welcome/">Start Exploring</a>');
     expect(confirmed.match(/<a\b/gu)).toHaveLength(1);
     expect(confirmed).toContain('<script type="application/ld+json">');
     expect(confirmed).toContain('"@type":"WebPage"');
 
     const sitemap = await readFile(join(root, 'public', 'sitemaps', 'static.xml'), 'utf8');
     expect(sitemap).not.toContain('/newsletter/confirmed/');
+  });
+
+  it('publishes the welcome landing as a noindex static page and the privacy policy as an indexable page', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
+    outputRoots.push(root);
+
+    await generateStaticPages(root);
+
+    const welcome = await readFile(join(root, 'welcome', 'index.html'), 'utf8');
+    expect(welcome).toContain('<h1>Welcome to TokenBench</h1>');
+    expect(welcome).toContain('<meta name="robots" content="noindex,follow,max-image-preview:large">');
+    expect(welcome).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/welcome/">');
+    expect(welcome).toContain('class="app-shell static-page-shell"');
+    expect(welcome).toContain('class="static-page-links"');
+    expect(welcome).toContain('Review Your Subscriptions');
+    expect(welcome).not.toContain('class="transactional-page-shell"');
+
+    const privacy = await readFile(join(root, 'privacy', 'index.html'), 'utf8');
+    expect(privacy).toContain('<h1>Privacy Policy for TokenBench</h1>');
+    expect(privacy).toContain('<meta name="robots" content="index,follow,max-image-preview:large">');
+    expect(privacy).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/privacy/">');
+    expect(privacy).toContain('privacy@monomind.one');
+    expect(privacy).toContain('We <strong>do not sell or rent</strong>');
+    expect(privacy).toContain('class="content-stack static-page-content static-policy"');
   });
 
   it.each([
@@ -199,7 +225,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(29);
+    expect(FIXED_ROUTES).toHaveLength(31);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

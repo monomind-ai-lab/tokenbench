@@ -107,6 +107,17 @@ const pageDefinitions = {
     h1: 'Your subscription is confirmed.',
     robots: 'noindex,follow' as const,
   },
+  welcome: {
+    title: `Welcome to ${SITE_CONFIG.name}`,
+    description: `Welcome to ${SITE_CONFIG.name}. Compare direct AI API pricing, model benchmarks, and subscription value with source-backed evidence.`,
+    h1: `Welcome to ${SITE_CONFIG.name}`,
+    robots: 'noindex,follow' as const,
+  },
+  privacy: {
+    title: `Privacy Policy | ${SITE_CONFIG.name}`,
+    description: `Read the ${SITE_CONFIG.name} privacy policy explaining how MonoMind AI Lab collects, uses, protects, and safeguards personal data across the site, decision engines, and newsletter.`,
+    h1: 'Privacy Policy for TokenBench',
+  },
   leaderboards: {
     title: `AI Model Leaderboards | ${SITE_CONFIG.name}`,
     description: `Browse ${SITE_CONFIG.name}'s source-aware AI model leaderboards for capability, coding, agentic work, human preference, multimodal tasks, and media generation.`,
@@ -146,6 +157,8 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
     case 'models': return makeMetadata(ROUTE_PATHS.models, pageDefinitions.models);
     case 'newsletterConfirmed': return makeMetadata(ROUTE_PATHS.newsletterConfirmed, pageDefinitions.newsletterConfirmed);
+    case 'welcome': return makeMetadata(ROUTE_PATHS.welcome, pageDefinitions.welcome);
+    case 'privacy': return makeMetadata(ROUTE_PATHS.privacy, pageDefinitions.privacy);
     case 'leaderboards': return makeMetadata('/leaderboards/', pageDefinitions.leaderboards);
     case 'leaderboard': {
       const definition = LEADERBOARD_ROUTES[route.key];

@@ -11,7 +11,7 @@ export function NewsletterConfirmedPage() {
       <p className="eyebrow">Email confirmed</p>
       <h1 id="newsletter-confirmed-heading">Your subscription is confirmed.</h1>
       <p>The current TokenBench test cheatsheet will arrive by email.</p>
-      <a className="button" href="/">Start Exploring</a>
+      <a className="button" href="/welcome/">Start Exploring</a>
     </main>
   );
 }

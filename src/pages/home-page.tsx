@@ -172,11 +172,11 @@ export function HomePage() {
     <div className="content-stack home-page">
       <section className="panel home-hero" aria-labelledby="home-hero-heading">
         <span className="eyebrow">TokenBench</span>
-        <h1 id="home-hero-heading">{HOME_PAGE_COPY.h1}</h1>
+        <h1 id="home-hero-heading">{HOME_PAGE_COPY.heroH1Leading}<br />{HOME_PAGE_COPY.heroH1Trailing}</h1>
         <p>{HOME_PAGE_COPY.subcopy}</p>
         <div className="home-hero-actions" aria-label="Primary TokenBench decisions">
           <a className="button" href={ROUTE_PATHS.compareHub}>Compare models <ArrowRight aria-hidden="true" size={16} /></a>
-          <a className="button button-secondary" href={ROUTE_PATHS.calculator}>Calculate subscription vs API</a>
+          <a className="button button-secondary" href={ROUTE_PATHS.calculator}>Review Your Subscriptions</a>
           <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Browse leaderboards</a>
         </div>
       </section>

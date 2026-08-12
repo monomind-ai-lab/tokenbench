@@ -1687,7 +1687,7 @@ test.describe('home and tools route runtime', () => {
         await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
         const heroActions = page.locator('.home-hero-actions');
         await expect(heroActions.getByRole('link', { name: 'Compare models', exact: true })).toHaveAttribute('href', '/compare/');
-        await expect(heroActions.getByRole('link', { name: 'Calculate subscription vs API', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+        await expect(heroActions.getByRole('link', { name: 'Review Your Subscriptions', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
         await expect(heroActions.getByRole('link', { name: 'Browse leaderboards', exact: true })).toHaveAttribute('href', '/leaderboards/');
         await expect(page.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeVisible();
 
@@ -1895,7 +1895,7 @@ test.describe('release 2 confirmation and test cheatsheet delivery', () => {
       const links = page.getByRole('link');
       await expect(links).toHaveCount(1);
       await expect(links.first()).toHaveAccessibleName('Start Exploring');
-      await expect(links.first()).toHaveAttribute('href', '/');
+      await expect(links.first()).toHaveAttribute('href', '/welcome/');
       await expect(page.getByRole('button')).toHaveCount(0);
       await expect(page.getByRole('navigation')).toHaveCount(0);
       await expect(page.locator('.top-header')).toHaveCount(0);

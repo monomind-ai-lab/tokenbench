@@ -3,13 +3,13 @@ import { render, screen } from '@testing-library/react';
 import { NewsletterConfirmedPage } from './newsletter-confirmed-page';
 
 describe('newsletter confirmation page', () => {
-  it('renders exactly one Start Exploring action that links home and no other action', () => {
+  it('renders exactly one Start Exploring action that links the welcome landing and no other action', () => {
     render(<NewsletterConfirmedPage />);
 
     const links = screen.getAllByRole('link');
     expect(links).toHaveLength(1);
     expect(links[0]).toHaveAccessibleName('Start Exploring');
-    expect(links[0]).toHaveAttribute('href', '/');
+    expect(links[0]).toHaveAttribute('href', '/welcome/');
   });
 
   it('does not render any button, form, or shell navigation actions', () => {

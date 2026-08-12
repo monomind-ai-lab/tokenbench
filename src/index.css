@@ -114,6 +114,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .page-main { width: min(100% - 64px, 1280px); margin: 0 auto; padding: 24px 0 72px; }
 .content-stack, .pricing-stack { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.static-page-content { max-width: 780px; }
+.static-page-links { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.static-policy { max-width: 860px; }
+.static-policy h2 { margin: 28px 0 12px; font-family: var(--font-display); font-size: 1.1rem; letter-spacing: -0.02em; }
+.static-policy h3 { margin: 20px 0 8px; color: var(--text); font-size: 0.92rem; }
+.static-policy p, .static-policy li { color: var(--muted); line-height: 1.65; }
+.static-policy ul { margin: 8px 0 0; padding-left: 22px; }
+.static-policy li + li { margin-top: 6px; }
+.static-policy .policy-effective-date { font-family: var(--font-label); font-size: 0.78rem; }
 
 .home-page, .tools-page { gap: clamp(48px, 7vw, 96px); }
 .home-hero, .tools-hero { position: relative; isolation: isolate; overflow: hidden; padding: clamp(32px, 6vw, 72px); border-color: color-mix(in srgb, var(--primary) 44%, var(--outline)); background: radial-gradient(circle at 50% 74%, color-mix(in srgb, var(--primary) 32%, transparent), transparent 48%), var(--surface); box-shadow: none; }

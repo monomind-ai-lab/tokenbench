@@ -31,6 +31,8 @@ const fixedRouteCases = [
   ['/compare', { kind: 'compareHub' }],
   ['/llm-price-performance', { kind: 'pricePerformance' }],
   ['/newsletter/confirmed', { kind: 'newsletterConfirmed' }],
+  ['/welcome', { kind: 'welcome' }],
+  ['/privacy', { kind: 'privacy' }],
   ['/leaderboards', { kind: 'leaderboards' }],
   ['/models', { kind: 'models' }],
   ['/leaderboards/llm/overall', { kind: 'leaderboard', key: 'llm-overall' }],
@@ -125,8 +127,10 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/methodology/benchalign/index.html',
       '/generated-tokenbench/models/index.html',
       '/generated-tokenbench/newsletter/confirmed/index.html',
+      '/generated-tokenbench/privacy/index.html',
       '/generated-tokenbench/tools/index.html',
       '/generated-tokenbench/tools/subscriptions-vs-apis/index.html',
+      '/generated-tokenbench/welcome/index.html',
     ]);
     expect(inputs.home).toBe('/generated-tokenbench/index.html');
     expect(Object.values(inputs)).not.toContain('/generated-tokenbench/compare/claude-4-vs-gpt-5/index.html');
