@@ -8,8 +8,8 @@ const WIDTH = 760;
 const HEIGHT = 420;
 const PLOT = { left: 64, right: 22, top: 24, bottom: 52 } as const;
 const TICK_COUNT = 5;
-const MARKER_SIZE = 44;
-const TIE_MARKER_STEP = 48;
+const MARKER_SIZE = 26;
+const TIE_MARKER_STEP = 30;
 const AXIS_FORMATTER = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export interface PricePerformanceChartProps {
@@ -275,7 +275,7 @@ export function PricePerformanceChart({
         const facts = formatPricePerformancePointView(point, attribution);
         const base = layout!.base.get(point.modelKey)!;
         const tieSeparated = base.x !== coordinates.x || base.y !== coordinates.y;
-        return <foreignObject key={point.modelKey} className="price-performance-scatter-point" data-frontier={point.frontier ? 'true' : 'false'} data-evidence={point.evidenceStatus} data-tie-separated={tieSeparated ? 'true' : 'false'} x={coordinates.x - 24} y={coordinates.y - 24} width="48" height="48">
+        return <foreignObject key={point.modelKey} className="price-performance-scatter-point" data-frontier={point.frontier ? 'true' : 'false'} data-evidence={point.evidenceStatus} data-tie-separated={tieSeparated ? 'true' : 'false'} x={coordinates.x - (MARKER_SIZE + 4) / 2} y={coordinates.y - (MARKER_SIZE + 4) / 2} width={MARKER_SIZE + 4} height={MARKER_SIZE + 4}>
           <button
             className={`scatter-point evidence-${point.evidenceStatus}${point.frontier ? ' scatter-point-frontier' : ''}`}
             type="button"

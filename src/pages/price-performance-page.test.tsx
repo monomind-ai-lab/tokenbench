@@ -106,6 +106,23 @@ describe('PricePerformancePage', () => {
     expect(within(screen.getByRole('table', { name: 'Price versus performance values' })).queryAllByRole('row')).toHaveLength(1);
   });
 
+  it('lists only the latest attribution per source in the evidence source list', () => {
+    const attribution: PricePerformanceEnvelope['attribution'] = [
+      { sourceId: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/models', updatedAt: '2026-08-10T00:00:00.000Z' },
+      { sourceId: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/models/archived', updatedAt: '2026-08-09T00:00:00.000Z' },
+      { sourceId: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/models/prices', updatedAt: '2026-08-11T00:00:00.000Z' },
+      { sourceId: 'lmarena', label: 'LMArena', url: 'https://lmarena.ai/leaderboard', updatedAt: '2026-08-11T00:00:00.000Z' },
+    ];
+    render(<PricePerformancePage envelope={{ ...envelope(), attribution }} />);
+
+    const sourceList = within(screen.getByRole('list', { name: 'Price-performance sources' }));
+    const links = sourceList.getAllByRole('link');
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAttribute('href', 'https://openrouter.ai/models/prices');
+    expect(links[0].closest('li')).toHaveTextContent('Updated 2026-08-11T00:00:00.000Z');
+    expect(links[1]).toHaveAttribute('href', 'https://lmarena.ai/leaderboard');
+  });
+
   it('keeps the default summary deterministic under binary model-key ordering', () => {
     const modelKeys = ['model-A', 'model-a', 'model-B', 'model-b', 'model-C', 'model-c', 'model-D', 'model-d', 'model-E', 'model-e', 'model-F'];
     window.history.replaceState({}, '', '/llm-price-performance/?variants=all-variants');
