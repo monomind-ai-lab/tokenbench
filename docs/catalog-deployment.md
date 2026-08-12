@@ -169,6 +169,23 @@ lease/polling path for normal scheduling. The old `refreshBenchmarkRevision`
 export remains only as a local recovery/parity tool and is not called by the
 default scheduled handler.
 
+### First production checkpointed cycles — 2026-08-12 UTC
+
+- Catalog cycle `febfd4cf-1c1b-44bd-9004-02717a9873f6` completed in about two
+  minutes and published `catalog_5170daddb7cf9cf1632f2676_febfd4cf` under
+  Worker version `c3b23ed9-83b1-4371-85cb-a18a0f3618cb`.
+- Benchmark cycle `60b8a16f-dff7-430d-a835-274b60273a8f` completed in about
+  54 minutes and published `benchmark_c4fcd4a63e4d612d4f88a9fc60ecfaa6`.
+  Its 92 materialized cache keys have fresh and stale variants, all 4,444
+  directory models have selected profiles, and the current popular-model week
+  has exactly 100 unique contiguous ranks. The deployed benchmark Worker is
+  version `c7b3d0c1-d61f-4055-88d2-60c795fd37e2`.
+- These observed durations and request partitions fit the intended Free-plan
+  design: one bounded Durable Object alarm step at a time, daily catalog work
+  at 00:20 UTC, and weekly benchmark work at 02:15 UTC Sunday. A failed later
+  cycle does not invalidate this published revision; the API continues serving
+  it as labeled last-good evidence until a newer complete cycle publishes.
+
 There is no public HTTP endpoint for a benchmark refresh. A controlled refresh
 must use an authorized Cloudflare scheduling or dashboard mechanism, not a
 browser request to the Worker. Record the mechanism, time, operator, and result

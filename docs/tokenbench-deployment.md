@@ -720,6 +720,71 @@ Pages. Use one verified commit and preserve this order:
   9/9 local-production-preview browser tests, 72/72 responsive browser tests,
   clean `tsc --noEmit`, clean build, and 29 generated crawlable fixed pages.
 
+### Release 5 checkpointed-ingestion and decision-surface production receipt — 2026-08-12/13 UTC
+
+- Release lineage: the evidence/decision-surface release is on pushed `main`.
+  The production benchmark Worker is the exact `6de2b88` build; the final Pages
+  source is `aca57623ba9e75fd09ff94001086793f90d99f9a` after aligning the
+  newsletter confirmation action in both hydrated React and no-JavaScript SSR.
+- Pre-migration backup: `/private/tmp/tokenbench-ai-plan-catalog-before-1c00d36-20260812.sql`
+  (196 MB, SHA-256
+  `5103ac3352cb23f85f3059077fd95d043ae8cde20f7e0e34ee73abe13baad5d7`).
+  Additive migrations `0010_ingestion_cycles.sql` and
+  `0011_ingestion_cycle_steps.sql` are applied with no pending migration.
+- Catalog Worker: version `c3b23ed9-83b1-4371-85cb-a18a0f3618cb`,
+  scheduled at `20 0 * * *`. Cycle
+  `febfd4cf-1c1b-44bd-9004-02717a9873f6` published
+  `catalog_5170daddb7cf9cf1632f2676_febfd4cf` from
+  `2026-08-12T13:34:27.000Z` through `2026-08-12T13:36:28.711Z`.
+- Benchmark Worker: version `c7b3d0c1-d61f-4055-88d2-60c795fd37e2`,
+  scheduled at `15 2 * * SUN`. The Worker remains scheduled-only: a normal HTTP
+  request returns 405. Cycle `60b8a16f-dff7-430d-a835-274b60273a8f`
+  published `benchmark_c4fcd4a63e4d612d4f88a9fc60ecfaa6` from
+  `2026-08-12T18:12:30.182Z` through `2026-08-12T19:06:45.833Z` with no
+  exhausted step. The active cache revision is
+  `benchmark_c4fcd4a63e4d612d4f88a9fc60ecfaa6+cache-20260812181230182-60b8a16f-dff7-430d-a835-274b60273a8f`
+  and contains 92 keys, 184 fresh/stale rows, and two variants.
+- Directory integrity: 4,444 current directory rows have 4,444 selected profile
+  snapshots and zero missing profiles. The current week
+  `2026-08-10T00:00:00.000Z` has exactly 100 unique models at contiguous ranks
+  1–100, source snapshot `2026-08-12-dd1beb1b443db410`, and methodology
+  `bench-align-v5.3-2026-07-24`. The canonical model API returns 100 rows,
+  fresh status, no next cursor, rank 1 Claude Mythos 5, and rank 100 Claude
+  Sonnet 4.5. Its exact ETag revalidation returns HTTP 304. The dynamic model
+  sitemap exposes 4,444 unique query-free profile URLs.
+- The first corrected top-100 publication exposed an incomplete current-week
+  snapshot left by earlier `INSERT OR IGNORE` ownership. A one-time atomic D1
+  repair replaced only that incomplete week with the validated candidate. The
+  durable fix in `6de2b88` now performs the same delete/update/insert as one D1
+  batch whenever a future current-week snapshot is incomplete; complete weekly
+  snapshots remain immutable. The temporary maintenance handler was removed
+  before the exact Worker deployment.
+- Current GPT-5.6 Sol source evidence is overall `81.23` and coding `78.58`,
+  coding rank `#3 of 28`; the UI renders coding `78.6`. This differs from the
+  earlier `77.95`/`78.0` receipt because the active BenchLM source snapshot
+  changed, not because TokenBench recalculated the source score.
+- Pages deployment `2d4785a1-5ccd-488f-b5d3-e180a483fe7c` is live at
+  `https://2d4785a1.tokenbench-27t.pages.dev` and promoted to
+  `https://tokenbench.monomind.one`. Live checks passed for Home, calculator,
+  Models, GPT-5.6 Sol, price-performance, coding leaderboard, and newsletter
+  confirmation: HTTP 200, one H1, unique title/description/canonical, robots,
+  Open Graph, Twitter, JSON-LD, no dataset-level unavailable state, no footer
+  Data Sources link, and no document overflow at desktop or 390 px. The Share
+  Leaderboard secondary action opens a canonical-URL dialog with Copy. The
+  calculator displays a numeric efficiency result (`+28.9%` in the smoke
+  scenario) without the former always-unavailable review fields.
+- The standalone confirmation page has exactly one action, `Start Exploring`,
+  linked to `/` in raw SSR and hydrated output. The deterministic blank test
+  cheatsheet is live at `/downloads/tokenbench-cheatsheet-test-v1.pdf` as a
+  431-byte one-page PDF with `application/pdf` and immutable caching. Individual
+  missing model facts remain explicitly Unavailable/Not verified; a retrieval
+  failure serves the last complete revision instead of replacing the dataset.
+- Final local gate: 132 Vitest files and 1,517 tests passed serially, `tsc
+  --noEmit` passed, Worker generated types are current, and the production build
+  generated 31 crawlable fixed pages. Live browser checks found no horizontal
+  overflow on the representative route matrix at 390 px or desktop width.
+  Rollback was not required.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
