@@ -9,6 +9,7 @@ import type {
 import {
   appendModelDirectoryPublicationStatements,
   prepareModelDirectoryPublicationCandidate,
+  prepareModelProfilePartition,
   type D1Database,
   type BoundStatement,
 } from './model-directory-publication';
@@ -149,6 +150,30 @@ function statementIndex(records: readonly RecordedStatement[], fragment: string)
 }
 
 describe('atomic model directory publication', () => {
+  it('prepares deterministic profile windows capped at 100 models', async () => {
+    const candidate = snapshot(205);
+    const leaderboard = publicLeaderboard(candidate.models);
+    const windows = await Promise.all([0, 100, 200].map((offset) =>
+      prepareModelProfilePartition(candidate, leaderboard, UPDATED_AT, offset)));
+
+    expect(windows.map((window) => window.profiles.length)).toEqual([100, 100, 5]);
+    expect(windows.every((window) => window.limit === 100 && window.totalModelCount === 205)).toBe(true);
+    expect(windows.flatMap((window) => window.modelKeys)).toEqual(candidate.models.map((entry) => entry.modelKey));
+    expect(windows.flatMap((window) => window.profiles).every((profile) =>
+      profile.contentHash === hashModelProfileSnapshotJson(profile.profileJson))).toBe(true);
+    expect(windows[0]?.ranks).toHaveLength(100);
+    expect(windows[1]?.ranks).toHaveLength(0);
+  });
+
+  it('rejects invalid or oversized profile windows', async () => {
+    const candidate = snapshot(2);
+    const leaderboard = publicLeaderboard(candidate.models);
+    await expect(prepareModelProfilePartition(candidate, leaderboard, UPDATED_AT, -1))
+      .rejects.toThrow(/offset/);
+    await expect(prepareModelProfilePartition(candidate, leaderboard, UPDATED_AT, 0, 101))
+      .rejects.toThrow(/limit/);
+  });
+
   it('prepares exact profile hashes through the native asynchronous publication path', async () => {
     const records: RecordedStatement[] = [];
     const candidate = snapshot();

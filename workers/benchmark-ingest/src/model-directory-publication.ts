@@ -248,6 +248,13 @@ export interface ModelDirectoryPublicationCandidate {
   readonly weekStart: string;
 }
 
+export interface ModelProfilePartition extends ModelDirectoryPublicationCandidate {
+  readonly offset: number;
+  readonly limit: number;
+  readonly totalModelCount: number;
+  readonly modelKeys: readonly string[];
+}
+
 interface ModelDirectoryPublicationCandidateInputs {
   readonly directoryRows: readonly ModelDirectoryRecord[];
   readonly profiles: readonly {
@@ -263,6 +270,7 @@ function candidateInputs(
   snapshot: ActiveBenchmarkSnapshot,
   publicLeaderboard: BenchLmPublicLeaderboard,
   updatedAt: string,
+  selectedModels: readonly ActiveBenchmarkSnapshot['models'][number][] = snapshot.models,
 ): ModelDirectoryPublicationCandidateInputs {
   if (!Number.isSafeInteger(snapshot.models.length) || snapshot.models.length === 0) {
     throw new Error('model directory publication requires at least one candidate model');
@@ -272,6 +280,12 @@ function candidateInputs(
   const metricsByModel = new Map<string, ActiveBenchmarkSnapshot['metrics'][number][]>();
   const metricsByIdentity = new Map<string, ActiveBenchmarkSnapshot['metrics'][number][]>();
   const rankedMetricsByIdentity = new Map<string, ActiveBenchmarkSnapshot['metrics'][number][]>();
+  for (const model of snapshot.models) {
+    if (modelKeys.has(model.modelKey)) throw new Error(`model directory candidate repeats model key: ${model.modelKey}`);
+    if (slugs.has(model.slug)) throw new Error(`model directory candidate repeats canonical slug: ${model.slug}`);
+    modelKeys.add(model.modelKey);
+    slugs.add(model.slug);
+  }
   for (const metric of snapshot.metrics) {
     const modelRows = metricsByModel.get(metric.modelKey) ?? [];
     modelRows.push(metric);
@@ -292,10 +306,7 @@ function candidateInputs(
     profileJson: string;
     generatedAt: string;
   }[] = [];
-  for (const model of snapshot.models) {
-    if (modelKeys.has(model.modelKey)) throw new Error(`model directory candidate repeats model key: ${model.modelKey}`);
-    if (slugs.has(model.slug)) throw new Error(`model directory candidate repeats canonical slug: ${model.slug}`);
-    modelKeys.add(model.modelKey);
+  for (const model of selectedModels) {
     directoryRows.push(directoryRecordFromModel(model, snapshot.revision.revision, updatedAt));
     const profileSnapshot = profileSnapshotForModel(
       snapshot,
@@ -365,6 +376,42 @@ export async function prepareModelDirectoryPublicationCandidate(
     }))));
   }
   return { ...candidate, profiles };
+}
+
+/** Prepare one deterministic, CPU-bounded model/profile publication window. */
+export async function prepareModelProfilePartition(
+  snapshot: ActiveBenchmarkSnapshot,
+  publicLeaderboard: BenchLmPublicLeaderboard,
+  updatedAt: string,
+  offset: number,
+  limit = 100,
+): Promise<ModelProfilePartition> {
+  if (!Number.isSafeInteger(offset) || offset < 0) {
+    throw new Error('model profile partition offset must be a non-negative safe integer');
+  }
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error('model profile partition limit must be between 1 and 100');
+  }
+  if (offset > snapshot.models.length) {
+    throw new Error('model profile partition offset exceeds the model count');
+  }
+  const selectedModels = snapshot.models.slice(offset, offset + limit);
+  const selectedKeys = new Set(selectedModels.map((model) => model.modelKey));
+  const selected = candidateInputs(snapshot, publicLeaderboard, updatedAt, selectedModels);
+  const profiles = await Promise.all(selected.profiles.map(async (profile) => ({
+    ...profile,
+    contentHash: await hashModelProfileSnapshotJsonAsync(profile.profileJson),
+  })));
+  return {
+    directoryRows: selected.directoryRows,
+    profiles,
+    ranks: selected.ranks.filter((rank) => selectedKeys.has(rank.modelKey)),
+    weekStart: selected.weekStart,
+    offset,
+    limit,
+    totalModelCount: snapshot.models.length,
+    modelKeys: selectedModels.map((model) => model.modelKey),
+  };
 }
 
 /**
