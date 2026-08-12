@@ -276,6 +276,8 @@ describe('ingestion receipt migration', () => {
       .toThrow();
     expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'running', 4, validCycle.startedAt, 0))
       .toThrow();
+    expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', -1, 'running', 1, validCycle.startedAt, 0))
+      .toThrow();
     expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'running', 1, validCycle.startedAt, -1))
       .toThrow();
     expect(() => insertStep.run('benchmarks', validCycle.cycleId, 'acquire', 0, 'running', 1, validCycle.startedAt, 0))
