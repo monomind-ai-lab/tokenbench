@@ -40,7 +40,6 @@ function OfferCells({ offer, catalog, selected }: OfferProps) {
     <td data-label="Model">
       <span className="offer-title-line"><strong>{offer.displayName}</strong>{selected ? <SelectedBadge /> : null}</span>
       <small>{offer.modelId}</small>
-      <small>Availability: {offer.availability ?? 'not published'}</small>
     </td>
     <td data-label="Input / 1M"><strong>{formatCurrencyMicroDollars(offer.inputMicroDollarsPerMillion)}</strong></td>
     <td data-label="Output / 1M"><strong>{formatCurrencyMicroDollars(offer.outputMicroDollarsPerMillion)}</strong></td>

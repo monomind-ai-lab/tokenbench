@@ -480,7 +480,8 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'OpenRouter API', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'OpenCode Zen', level: 3 })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /evidence/i }).length).toBeGreaterThan(0);
-    expect(screen.getByText('Availability: available')).toBeInTheDocument();
+    expect(screen.queryByText('Availability: available', { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByText(/· Availability: available/)).toBeInTheDocument();
   });
 
   it('renders the TokenBench shared chrome with its canonical navigation', async () => {

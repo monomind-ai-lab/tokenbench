@@ -322,6 +322,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .value-summary-notes section { display: grid; gap: 6px; }
 .value-summary-notes h3 { margin: 0; color: rgba(214, 227, 255, 0.78); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
 .value-summary-notes p, .value-summary-notes ul { margin: 0; color: rgba(255, 255, 255, 0.8); font-size: 0.72rem; line-height: 1.5; }
+.value-summary-notes a { color: #d6e3ff; font-weight: 700; text-decoration: underline; text-decoration-color: rgba(214, 227, 255, 0.45); text-underline-offset: 2px; }
+.value-summary-notes a:hover { color: #ffffff; text-decoration-color: #ffffff; }
 .value-summary-notes ul { padding-left: 17px; }
 .value-summary-notes li + li { margin-top: 4px; }
 .trend-panel { min-width: 0; min-height: 410px; display: flex; flex-direction: column; padding: 24px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
@@ -376,6 +378,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .offer-title-line, .offer-card-heading { display: flex; align-items: center; gap: 8px; }
 .selected-badge { display: inline-flex; width: fit-content; align-items: center; min-height: 20px; padding: 2px 7px; border: 1px solid color-mix(in srgb, var(--primary) 56%, transparent); border-radius: 999px; background: color-mix(in srgb, var(--primary-soft) 72%, var(--surface)); color: var(--primary-strong); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; }
 .evidence-link { display: inline-flex; align-items: center; min-height: 44px; padding: 5px 0; font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
+.comparison-table .evidence-link { align-items: flex-start; padding-top: 1px; }
 .confidence { display: inline-block; color: var(--muted); font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
 .confidence-manual_verified { color: var(--warning); }
 .confidence-official { color: var(--primary-strong); }
