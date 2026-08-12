@@ -33,7 +33,7 @@ interface SiteHeaderProps {
 }
 
 interface SiteFooterProps {
-  readonly notice: ReactNode;
+  readonly disclaimer: string;
 }
 
 export function SiteHeader({ theme, language, activePage, onThemeToggle, onLanguageChange }: SiteHeaderProps) {
@@ -63,12 +63,13 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
  * refresh state or source-update history; those belong to the pages that
  * publish the evidence.
  */
-export function SiteFooter({ notice }: SiteFooterProps) {
+export function SiteFooter({ disclaimer }: SiteFooterProps) {
   return <footer className="app-footer">
     <div className="footer-grid">
       <section className="footer-brand" aria-label="About TokenBench">
         <strong>{SITE_CONFIG.name}</strong>
         <p>Source-aware model, pricing, and workload evidence for practical AI decisions.</p>
+        <p className="footer-disclaimer">{disclaimer}</p>
       </section>
       <nav className="footer-links" aria-label="Explore">
         <strong>Explore</strong>
@@ -82,13 +83,11 @@ export function SiteFooter({ notice }: SiteFooterProps) {
         <a href={ROUTE_PATHS.methodologyBenchAlign}>Methodology</a>
         <a href={ROUTE_PATHS.leaderboards}>Data sources</a>
         <a href="/privacy/">Privacy</a>
-        <span>{notice}</span>
       </nav>
       <NewsletterSignup context="footer" />
     </div>
     <div className="footer-meta">
       <a href={SITE_CONFIG.parentUrl}>Powered by {SITE_CONFIG.parentName}</a>
-      <span>Double opt-in required. Unsubscribe at any time.</span>
     </div>
   </footer>;
 }
@@ -114,7 +113,7 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
         {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
         {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
         <main id="page-content" className="page-main" tabIndex={-1}>{children}</main>
-        <SiteFooter notice="Verify provider evidence before purchasing." />
+        <SiteFooter disclaimer="Verify provider evidence before purchasing." />
       </div>
     </SiteThemeProvider>
   );

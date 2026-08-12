@@ -50,8 +50,8 @@ const MARKET_LEADER_CARDS: readonly { readonly key: LeaderboardKey; readonly tit
   { key: 'llm-overall', title: 'Overall' },
   { key: 'llm-coding', title: 'Coding' },
   { key: 'llm-agentic', title: 'Agentic' },
-  { key: 'llm-reasoning', title: 'Reasoning' },
   { key: 'multimodal-vision-documents', title: 'Multimodal' },
+  { key: 'llm-knowledge', title: 'Knowledge' },
 ];
 
 interface MarketLeaderCard {
@@ -155,12 +155,13 @@ function MarketAtAGlance() {
           {cards.length === 0
             ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
             : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}
-          {comparisons.length > 0 ? <ul className="home-snapshot-grid home-comparison-grid" aria-label="Representative comparisons">
-            {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
-          </ul> : null}
+          {comparisons.length > 0 ? <>
+            <div className="home-comparison-heading"><div><span className="eyebrow">Representative comparisons</span><h3>Compare best models</h3><p>Each card pairs two models from the active source revision and names the category where the published evidence actually differs — priced and scored as the source published them.</p></div></div>
+            <ul className="home-snapshot-grid home-comparison-grid" aria-label="Representative comparisons">
+              {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
+            </ul>
+          </> : null}
           {envelope === null ? null : <p className="home-snapshot-provenance">
-            <span>Source published {formatCheckedAt(envelope.publishedAt)}</span>
-            <span aria-hidden="true">·</span>
             <span>Checked {formatCheckedAt(envelope.freshness.checkedAt)}</span>
             {envelope.attribution.map((source) => <a href={source.url} key={source.sourceId} rel="noreferrer" target="_blank">{source.label}</a>)}
           </p>}

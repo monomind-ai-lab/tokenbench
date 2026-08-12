@@ -159,7 +159,8 @@ describe('responsive calculator app shell', () => {
     expect(within(footer).queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
     expect(footer).not.toHaveTextContent(/Catalog refresh/i);
     expect(footer).not.toHaveTextContent(/Updated /i);
-    expect(footer).toHaveTextContent('Double opt-in required. Unsubscribe at any time.');
+    expect(footer).not.toHaveTextContent('Double opt-in required. Unsubscribe at any time.');
+    expect(within(footer).getByText('Verify provider evidence before purchasing.')).toBeInTheDocument();
   });
 
   it('makes the tools directory link to the subscription versus API calculator', () => {
