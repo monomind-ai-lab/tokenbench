@@ -281,15 +281,23 @@ export async function deriveCandidatePartitions(
     fail(`derived candidate emits ${partitions.length} partitions, exceeding the ${MAX_CANDIDATE_PARTITIONS} bound`);
   }
 
+  const sourceRows = rowsByKind.sources as readonly BenchmarkSourceRecord[];
+  const openRouter = sourceRows.find((source) => source.sourceId === 'openrouter');
+  if (!openRouter) fail('derived candidate is missing its frozen OpenRouter catalog source');
+  const artifacts = sourceRows.map((source) => ({
+    sourceId: source.sourceId,
+    artifactId: source.artifactId,
+    contentHash: source.contentHash,
+  })).sort((left, right) => compareUtf8Binary(
+    `${left.sourceId}\u0000${left.artifactId}`,
+    `${right.sourceId}\u0000${right.artifactId}`,
+  ));
+  // Keep the production fingerprint byte-for-byte compatible with the former
+  // monolithic path so cutover and unchanged weekly cycles preserve revision IDs.
   const contentHash = await sha256Digest(jsonBytes({
-    derivationSchemaVersion: BENCHMARK_DERIVATION_SCHEMA_VERSION,
-    frozenCatalogRevision: validated.frozenCatalogRevision,
-    partitions: partitions.map((partition) => ({
-      kind: partition.kind,
-      index: partition.index,
-      rowCount: partition.rowCount,
-      contentHash: partition.contentHash,
-    })),
+    catalogRevision: validated.frozenCatalogRevision,
+    openrouterContentHash: openRouter.contentHash,
+    artifacts,
   }));
   const fingerprint = await sha256Digest(jsonBytes({
     derivationSchemaVersion: BENCHMARK_DERIVATION_SCHEMA_VERSION,

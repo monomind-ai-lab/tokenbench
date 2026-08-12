@@ -4,7 +4,7 @@ import type {
   BenchmarkComparisonPair,
   NormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
-import { compareUtf8Binary } from '../../../src/benchmarks/contracts';
+import { BENCHMARK_DERIVATION_SCHEMA_VERSION, compareUtf8Binary } from '../../../src/benchmarks/contracts';
 import type { BenchmarkCandidateManifestV1, CandidatePartition } from './candidate-storage';
 import { candidateKeyPrefix } from './candidate-storage';
 import { deriveComparisonPairs } from './comparison-derivation';
@@ -158,7 +158,16 @@ function fixtureBatch(): NormalizedSourceBatch {
   const sol = benchLmModel({ modelKey: 'gpt-5-6-sol', slug: 'gpt-5-6-sol', name: 'GPT-5.6 Sol', creator: 'OpenAI' });
   const rival = benchLmModel({ modelKey: 'claude-opus-9', slug: 'claude-opus-9', name: 'Claude Opus 9', creator: 'Anthropic' });
   return {
-    sources: [benchLmSource('public-leaderboard')],
+    sources: [
+      benchLmSource('public-leaderboard'),
+      {
+        sourceId: 'openrouter', artifactId: `catalog:${CATALOG_REVISION}`,
+        sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt: CHECKED_AT,
+        etag: null, lastModified: null, upstreamRevision: CATALOG_REVISION, schemaVersion: null,
+        snapshotKey: 'catalog/openrouter.json', contentHash: SOURCE_HASH, originalContentHash: SOURCE_HASH,
+        licenseId: 'OpenRouter-ToS', attributionText: 'Catalog and pricing data from OpenRouter',
+      },
+    ],
     models: [sol, rival],
     metrics: [
       overallMetric('gpt-5-6-sol', 81.48),
@@ -292,6 +301,35 @@ describe('deriveCandidatePartitions', () => {
     expect(solCoding?.value).toBe(77.95);
   });
 
+  it('uses the existing production content fingerprint and revision formula', async () => {
+    const batch = fixtureBatch();
+    const bucket = new FakeR2Bucket();
+    const result = await deriveCandidatePartitions(
+      manifestFor(normalizeBatch(bucket, batch)),
+      { SOURCE_SNAPSHOTS: bucket },
+    );
+    const artifacts = batch.sources.map((source) => ({
+      sourceId: source.sourceId,
+      artifactId: source.artifactId,
+      contentHash: source.contentHash,
+    })).sort((left, right) => compareUtf8Binary(
+      `${left.sourceId}\u0000${left.artifactId}`,
+      `${right.sourceId}\u0000${right.artifactId}`,
+    ));
+    const expectedContentHash = sha256(new TextEncoder().encode(JSON.stringify({
+      catalogRevision: CATALOG_REVISION,
+      openrouterContentHash: SOURCE_HASH,
+      artifacts,
+    })));
+    const expectedFingerprint = sha256(new TextEncoder().encode(JSON.stringify({
+      derivationSchemaVersion: BENCHMARK_DERIVATION_SCHEMA_VERSION,
+      contentHash: expectedContentHash,
+    })));
+
+    expect(result.contentHash).toBe(expectedContentHash);
+    expect(result.revision).toBe(`benchmark_${expectedFingerprint.slice(7, 39)}`);
+  });
+
   it('matches the production merged fact rows across multiple source partitions', async () => {
     const primary = fixtureBatch();
     const secondarySource = {
@@ -402,7 +440,7 @@ describe('deriveCandidatePartitions', () => {
       creator: 'BenchLM',
     }));
     const batch: NormalizedSourceBatch = {
-      sources: [benchLmSource('public-leaderboard')],
+      sources: fixtureBatch().sources,
       models,
       metrics: [],
       priceChecks: [],
