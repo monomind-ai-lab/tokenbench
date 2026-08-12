@@ -82,6 +82,30 @@ export function hasModalityEvidence(entries: readonly LeaderboardEntry[]): boole
   });
 }
 
+export interface GroupedAttribution {
+  readonly sourceId: string;
+  readonly label: string;
+  readonly urls: readonly string[];
+  readonly updatedAt: string;
+}
+
+/** Collapses per-artifact attribution into one row per source. */
+export function groupAttribution(
+  attribution: readonly { sourceId: string; label: string; url: string; updatedAt: string }[],
+): readonly GroupedAttribution[] {
+  const bySource = new Map<string, { sourceId: string; label: string; urls: string[]; updatedAt: string }>();
+  for (const item of attribution) {
+    const existing = bySource.get(item.sourceId);
+    if (!existing) {
+      bySource.set(item.sourceId, { sourceId: item.sourceId, label: item.label, urls: [item.url], updatedAt: item.updatedAt });
+      continue;
+    }
+    if (!existing.urls.includes(item.url)) existing.urls.push(item.url);
+    if (item.updatedAt > existing.updatedAt) existing.updatedAt = item.updatedAt;
+  }
+  return [...bySource.values()];
+}
+
 function ScoreValue({ entry }: { readonly entry: LeaderboardEntry }) {
   if (isEstimated(entry)) return <span>Unavailable</span>;
   const lenses = sourceLenses(entry);
@@ -112,7 +136,12 @@ export function LeaderboardEvidence({
     <p><strong>Published</strong> {formatDateTime(publishedAt)} <span aria-hidden="true">·</span> <strong>Checked</strong> {formatDateTime(freshness.checkedAt)} <span className={`leaderboard-freshness freshness-${freshness.status}`}>{freshness.status === 'fresh' ? 'Fresh' : 'Stale'}</span></p>
     {freshness.message ? <p className="muted">{freshness.message}</p> : null}
     <ul aria-label="Source attribution">
-      {attribution.map((source) => <li key={`${source.sourceId}-${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a><span>Observed {formatDateTime(source.updatedAt)}</span></li>)}
+      {groupAttribution(attribution).map((source) => <li key={source.sourceId}>
+        {source.urls.length > 1
+          ? <><span>{source.label}</span>{source.urls.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer">Source {index + 1}</a>)}</>
+          : <a href={source.urls[0]} target="_blank" rel="noreferrer">{source.label}</a>}
+        <span>Observed {formatDateTime(source.updatedAt)}</span>
+      </li>)}
     </ul>
   </footer>;
 }

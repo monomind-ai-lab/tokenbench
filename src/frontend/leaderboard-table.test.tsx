@@ -15,7 +15,7 @@ import {
   leaderboardFilterCapabilities,
   type LeaderboardQueryCapabilities,
 } from './leaderboard-filter-state';
-import { LeaderboardTable } from './leaderboard-table';
+import { groupAttribution, LeaderboardTable } from './leaderboard-table';
 import '../index.css';
 
 const ISO_TIME = '2026-08-05T12:00:00.000Z';
@@ -207,6 +207,19 @@ function renderTable(
   />);
   return onSortChange;
 }
+
+it('groups repeated sources into one attribution entry', () => {
+  const grouped = groupAttribution([
+    { sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data/models.json', updatedAt: '2026-08-12T18:12:30.182Z' },
+    { sourceId: 'benchlm', label: 'Data from BenchLM.ai', url: 'https://benchlm.ai/data/pricing.json', updatedAt: '2026-08-12T19:00:00.000Z' },
+    { sourceId: 'openrouter', label: 'Catalog and pricing data from OpenRouter', url: 'https://openrouter.ai/api/v1/models', updatedAt: '2026-08-12T13:34:28.701Z' },
+  ]);
+
+  expect(grouped).toHaveLength(2);
+  expect(grouped[0]).toMatchObject({ sourceId: 'benchlm', updatedAt: '2026-08-12T19:00:00.000Z' });
+  expect(grouped[0].urls).toHaveLength(2);
+  expect(grouped[1].sourceId).toBe('openrouter');
+});
 
 describe('LeaderboardTable', () => {
   it('renders an accessible semantic table with nulls explicitly unavailable without duplicating provenance', () => {
