@@ -539,7 +539,9 @@ async function acquireStep(
     FROM catalog_publication_state
     JOIN catalog_revisions ON catalog_revisions.revision = catalog_publication_state.active_revision
     JOIN source_records ON source_records.revision = catalog_revisions.revision
-    WHERE catalog_publication_state.singleton = 1 AND catalog_revisions.publication_state = 'published'`)
+    WHERE catalog_publication_state.singleton = 1
+      AND catalog_revisions.publication_state = 'published'
+      AND source_records.id = 'openrouter-models'`)
     .bind().first<{ revision: string; sourceUrl: string; observedAt: string; snapshotKey: string; contentHash: string }>();
   const frozenCatalogRevision = catalogRow?.revision ?? null;
   if (!frozenCatalogRevision) {

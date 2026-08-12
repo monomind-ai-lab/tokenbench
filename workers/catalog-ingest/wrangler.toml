@@ -1,4 +1,5 @@
 name = "tokenbench-catalog-ingest"
+account_id = "e9ac0943443affe2bd7b18971265deee"
 main = "src/index.ts"
 compatibility_date = "2026-08-12"
 

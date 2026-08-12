@@ -143,13 +143,27 @@ function seedPreviousPublication(
 ): void {
   const catalogBytes = new TextEncoder().encode('{"data":[]}');
   const catalogHash = sha256(catalogBytes);
+  const manualBytes = new TextEncoder().encode('{"plans":[]}');
   r2.objects.set('catalog/openrouter.json', {
     bytes: catalogBytes,
     customMetadata: { original_content_hash: catalogHash },
   });
+  r2.objects.set('catalog/alibaba-subscription.json', {
+    bytes: manualBytes,
+    customMetadata: { content_hash: sha256(manualBytes) },
+  });
   sqlite.prepare(`INSERT INTO catalog_revisions
     (revision, published_at, checked_at, publication_state, publication_attempt_id)
     VALUES (?, ?, ?, 'published', NULL)`).run(CATALOG_REVISION, CHECKED_AT, CHECKED_AT);
+  // Keep a non-OpenRouter row first so removing the production source-id
+  // predicate deterministically exercises the invalid-snapshot failure.
+  sqlite.prepare(`INSERT INTO source_records
+    (revision, id, provider_id, source_url, observed_at, source_kind, confidence,
+     snapshot_key, content_hash, parser_version, evidence_locator, review_status)
+    VALUES (?, 'alibaba-subscription', 'alibaba', 'https://example.com/alibaba-plan', ?,
+      'manual_manifest', 'manual_verified', 'catalog/alibaba-subscription.json', ?,
+      'fixture-v1', 'Plan details', 'verified')`)
+    .run(CATALOG_REVISION, CHECKED_AT, sha256(manualBytes));
   sqlite.prepare(`INSERT INTO source_records
     (revision, id, provider_id, source_url, observed_at, source_kind, confidence,
      snapshot_key, content_hash, parser_version, evidence_locator, review_status)
