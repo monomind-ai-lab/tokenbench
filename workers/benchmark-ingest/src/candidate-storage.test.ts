@@ -87,7 +87,7 @@ function partition(cycleId: string, id: string, seed: string): MutablePartition 
   const bytes = new TextEncoder().encode(seed);
   return {
     partitionId: id,
-    kind: id === 'leaderboard' ? 'derived' : 'normalized',
+    kind: id === 'leaderboard' ? 'comparisons' : 'normalized',
     index: 0,
     key: `${candidateKeyPrefix(cycleId)}partitions/${id}.json`,
     contentHash: sha256(bytes),
@@ -351,6 +351,15 @@ describe('candidate manifest storage', () => {
     objects.set(key, { bytes: tampered, customMetadata: {} });
     await expect(readCandidateManifest(bucket, CYCLE_ID, sha256(tampered)))
       .rejects.toThrow(/schemaVersion/);
+  });
+
+  it('rejects a valid manifest stored under another requested cycle identity', async () => {
+    const { bucket, objects } = createR2();
+    const otherCycle = randomUUID();
+    const payload = new TextEncoder().encode(JSON.stringify(validManifest(otherCycle)));
+    objects.set(candidateManifestKey(CYCLE_ID), { bytes: payload, customMetadata: {} });
+    await expect(readCandidateManifest(bucket, CYCLE_ID, sha256(payload)))
+      .rejects.toThrow(/requested cycle/);
   });
 
   it('keeps candidate keys of distinct cycles disjoint', async () => {

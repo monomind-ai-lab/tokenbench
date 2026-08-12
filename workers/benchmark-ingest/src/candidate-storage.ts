@@ -39,10 +39,21 @@ export interface CandidateArtifact {
   readonly schemaVersion: string | null;
 }
 
+export type CandidatePartitionKind =
+  | 'benchlm-bundle'
+  | 'normalized'
+  | 'sources'
+  | 'models'
+  | 'metrics'
+  | 'prices'
+  | 'comparisons'
+  | 'profiles'
+  | 'cache';
+
 /** One normalized or derived partition staged for later publication. */
 export interface CandidatePartition {
   readonly partitionId: string;
-  readonly kind: string;
+  readonly kind: CandidatePartitionKind;
   readonly index: number;
   readonly key: string;
   readonly contentHash: string;
@@ -75,8 +86,8 @@ export const BENCHLM_ARTIFACT_IDS = [
   'public-leaderboard',
 ] as const;
 
-/** LMArena dataset-viewer pages are hard-bounded at 200 per the plan. */
-export const MAX_LMARENA_CANDIDATE_ARTIFACTS = 200;
+/** LMArena pages are hard-bounded at 200 for each of the 11 accepted subsets. */
+export const MAX_LMARENA_CANDIDATE_ARTIFACTS = 200 * 11;
 /** Normalized and derived partition lists are individually bounded. */
 export const MAX_CANDIDATE_PARTITIONS = 64;
 
@@ -213,13 +224,22 @@ function readCandidatePartition(value: unknown, prefix: string, label: string): 
   assertNoUnknownKeys(record, PARTITION_KEYS, label);
   return {
     partitionId: requireString(record.partitionId, `${label}.partitionId`),
-    kind: requireString(record.kind, `${label}.kind`),
+    kind: requirePartitionKind(record.kind, `${label}.kind`),
     index: requireNonNegativeInteger(record.index, `${label}.index`),
     key: requireSafeKey(record.key, prefix, label),
     contentHash: requireContentHash(record.contentHash, `${label}.contentHash`),
     byteLength: requireByteLength(record.byteLength, `${label}.byteLength`),
     rowCount: requireNonNegativeInteger(record.rowCount, `${label}.rowCount`),
   };
+}
+
+function requirePartitionKind(value: unknown, label: string): CandidatePartitionKind {
+  const kind = requireString(value, label);
+  if (![
+    'benchlm-bundle', 'normalized', 'sources', 'models', 'metrics', 'prices',
+    'comparisons', 'profiles', 'cache',
+  ].includes(kind)) fail(`${label} is not recognized`);
+  return kind as CandidatePartitionKind;
 }
 
 function requireNonNegativeInteger(value: unknown, label: string): number {
@@ -249,7 +269,7 @@ function readLmArenaSet(
 ): CandidateArtifact[] {
   if (!Array.isArray(value)) fail('candidate manifest lmArena set must be an array');
   if (value.length > MAX_LMARENA_CANDIDATE_ARTIFACTS) {
-    fail('candidate manifest lmArena set exceeds the 200-page bound');
+    fail('candidate manifest lmArena set exceeds the 200-page-per-subset bound');
   }
   const artifacts = value.map((entry, index) =>
     readCandidateArtifactDescriptor(entry, prefix, `candidate manifest lmArena[${index}]`));
@@ -480,5 +500,7 @@ export async function readCandidateManifest(
   if (await sha256Digest(bytes) !== expectedContentHash) {
     fail('candidate manifest content hash does not match its exact bytes');
   }
-  return parseBenchmarkCandidateManifest(decodeJson(bytes, 'candidate manifest'));
+  const manifest = parseBenchmarkCandidateManifest(decodeJson(bytes, 'candidate manifest'));
+  if (manifest.cycleId !== cycleId) fail('candidate manifest cycleId does not match the requested cycle');
+  return manifest;
 }

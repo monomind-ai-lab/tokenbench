@@ -18,6 +18,11 @@ import {
   validateNormalizedSourceBatch,
 } from '../../../src/benchmarks/contracts';
 import { providerRetryAt } from '../../_shared/checkpointed-ingestion';
+import type {
+  CandidateArtifact,
+  CandidatePartition,
+} from './candidate-storage';
+export type { CandidateArtifact, CandidatePartition } from './candidate-storage';
 import {
   parseBenchLm,
   prepareBenchLmMixed,
@@ -100,30 +105,6 @@ const LMARENA_CATEGORY = 'overall';
  * and `originalContentHash` keeps the upstream response traceable without
  * mistaking raw data for the persisted projection.
  */
-export interface CandidateArtifact {
-  readonly artifactId: string;
-  readonly key: string;
-  readonly contentHash: string;
-  readonly originalContentHash: string;
-  readonly byteLength: number;
-  readonly sourceUrl: string;
-  readonly etag: string | null;
-  readonly lastModified: string | null;
-  readonly upstreamRevision: string | null;
-  readonly schemaVersion: string | null;
-}
-
-/** Structural description of one bounded candidate partition object. */
-export interface CandidatePartition {
-  readonly partitionId: string;
-  readonly kind: 'benchlm-bundle' | 'normalized';
-  readonly index: number;
-  readonly key: string;
-  readonly contentHash: string;
-  readonly byteLength: number;
-  readonly rowCount: number;
-}
-
 export interface CandidateObjectBody {
   arrayBuffer(): Promise<ArrayBuffer>;
   readonly customMetadata?: Record<string, string>;
