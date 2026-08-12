@@ -1088,7 +1088,8 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     await waitFor(() => expect(screen.getByRole('radio', { name: 'Output-heavy' })).toBeChecked());
     expect(screen.getByRole('searchbox', { name: 'Search model or provider' })).toHaveValue('Beta');
     expect(screen.getByRole('button', { name: 'Provider B' })).toHaveAttribute('aria-pressed', 'true');
-    expect(await screen.findAllByText('Beta')).toHaveLength(2);
+    // The table row, the responsive card, and the score chart's axis label.
+    expect(await screen.findAllByText('Beta')).toHaveLength(3);
     expect(screen.queryByText('Alpha')).not.toBeInTheDocument();
     expect(fetchMock.mock.calls.at(-1)?.[0]).toContain('profile=outputHeavy');
     expect(replaceState).not.toHaveBeenCalled();
@@ -1127,7 +1128,8 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     render(<App />);
 
     expect(await screen.findByRole('button', { name: 'Provider, Inc.' })).toHaveAttribute('aria-pressed', 'true');
-    await waitFor(() => expect(screen.getAllByText('Incorporated Model')).toHaveLength(2));
+    // The table row, the responsive card, and the score chart's axis label.
+    await waitFor(() => expect(screen.getAllByText('Incorporated Model')).toHaveLength(3));
     await waitFor(() => expect(screen.queryAllByText('Other Model')).toHaveLength(0));
     expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
   });
@@ -1145,7 +1147,8 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
     expect(await screen.findByRole('status')).toHaveTextContent('Stale benchmark data');
     expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
-    expect(screen.getAllByText('Model A')).toHaveLength(2);
+    // The table row, the responsive card, and the score chart's axis label.
+    expect(screen.getAllByText('Model A')).toHaveLength(3);
   });
 
   it('keeps stale envelope metadata, source links, and cached rows visible together', async () => {
@@ -1166,7 +1169,8 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     expect(evidence).toHaveTextContent('2026');
     expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
-    expect(screen.getAllByText('Model A')).toHaveLength(2);
+    // The table row, the responsive card, and the score chart's axis label.
+    expect(screen.getAllByText('Model A')).toHaveLength(3);
   });
 
   it('keeps ready revision evidence visible when filters match zero rows', async () => {
