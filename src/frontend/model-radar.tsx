@@ -7,6 +7,7 @@ export interface ModelRadarProps {
 const SIZE = 360;
 const CENTER = SIZE / 2;
 const RADIUS = 132;
+const LABEL_RADIUS = RADIUS + 16;
 
 function point(index: number, count: number, radius: number) {
   const angle = -Math.PI / 2 + index * 2 * Math.PI / count;
@@ -16,7 +17,7 @@ function point(index: number, count: number, radius: number) {
 function pointsFor(count: number, radius: number): string {
   return Array.from({ length: count }, (_, index) => {
     const current = point(index, count, radius);
-    return `${current.x},${current.y}`;
+    return `${current.x.toFixed(3)},${current.y.toFixed(3)}`;
   }).join(' ');
 }
 
@@ -26,10 +27,15 @@ function percentileLabel(value: number): string {
 
 export function ModelRadar({ axes }: ModelRadarProps) {
   const count = Math.max(axes.length, 3);
-  const allAvailable = axes.length >= 3 && axes.every((axis) => axis.percentile !== null);
-  const evidencePoints = allAvailable
-    ? axes.map((axis, index) => point(index, count, RADIUS * Math.max(0, Math.min(100, axis.percentile ?? 0)) / 100))
-    : [];
+  const boundaryPoints = pointsFor(count, RADIUS);
+  const measured = axes.filter((axis) => axis.percentile !== null).length;
+  const evidencePoints = axes
+    .map((axis, index) => ({ axis, index }))
+    .filter(({ axis }) => axis.percentile !== null)
+    .map(({ axis, index }) => point(index, count, RADIUS * Math.max(0, Math.min(100, axis.percentile ?? 0)) / 100));
+  const seriesPoints = evidencePoints.length >= 3
+    ? evidencePoints.map(({ x, y }) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' ')
+    : '';
   return <section className="model-profile-section model-radar-section" aria-label="Capability radar">
     <div className="model-section-heading">
       <div><p className="eyebrow">Relative field position</p><h2>Capability radar</h2></div>
@@ -37,19 +43,18 @@ export function ModelRadar({ axes }: ModelRadarProps) {
     </div>
     <div className="model-radar-layout">
       <svg className="model-radar-chart" viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Capability ranking percentile radar">
-        {[25, 50, 75, 100].map((level) => <polygon key={level} points={pointsFor(count, RADIUS * level / 100)} className="model-radar-grid" />)}
+        <title>Capability ranking percentile radar</title>
+        <polygon className="model-radar-boundary" points={boundaryPoints} aria-hidden="true" />
+        {measured >= 3 ? <polygon className="model-radar-evidence" points={seriesPoints} aria-hidden="true" /> : null}
         {axes.map((axis, index) => {
-          const edge = point(index, count, RADIUS);
-          const label = point(index, count, RADIUS + 28);
+          const label = point(index, count, LABEL_RADIUS);
           const available = axis.percentile !== null;
           const valuePoint = point(index, count, RADIUS * Math.max(0, Math.min(100, axis.percentile ?? 0)) / 100);
           return <g key={axis.key}>
-            <line x1={CENTER} y1={CENTER} x2={edge.x} y2={edge.y} className="model-radar-axis" />
-            <text x={label.x} y={label.y} textAnchor={label.x < CENTER - 8 ? 'end' : label.x > CENTER + 8 ? 'start' : 'middle'} className="model-radar-label">{axis.label}</text>
-            {available ? <circle cx={valuePoint.x} cy={valuePoint.y} r="5" className="model-radar-point" /> : null}
+            <text x={label.x} y={label.y} textAnchor="middle" className="model-radar-label">{axis.label}</text>
+            {available ? <circle cx={valuePoint.x} cy={valuePoint.y} r="3" className="model-radar-point" aria-hidden="true" /> : null}
           </g>;
         })}
-        {allAvailable ? <polygon points={evidencePoints.map(({ x, y }) => `${x},${y}`).join(' ')} className="model-radar-evidence" /> : null}
       </svg>
       <dl className="model-radar-text" aria-label="Capability radar values">
         {axes.map((axis) => <div key={axis.key}>
