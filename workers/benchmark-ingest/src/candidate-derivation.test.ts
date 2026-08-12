@@ -183,19 +183,24 @@ function fixtureBatch(): NormalizedSourceBatch {
   };
 }
 
-type NormalizedKind = 'sources' | 'models' | 'metrics' | 'priceChecks' | 'comparisonSeeds';
-
 function writeNormalizedPartition(
   bucket: FakeR2Bucket,
-  kind: NormalizedKind,
+  source: string,
   index: number,
-  rows: readonly unknown[],
+  batch: NormalizedSourceBatch,
 ): CandidatePartition {
-  const bytes = new TextEncoder().encode(JSON.stringify({ kind, index, rows }));
+  const bytes = new TextEncoder().encode(JSON.stringify({
+    schemaVersion: 'normalized-source-v1', cycleId: CYCLE_ID, index, source, batch,
+  }));
   const contentHash = sha256(bytes);
-  const key = `${candidateKeyPrefix(CYCLE_ID)}normalized/${kind}-${index}.json`;
+  const key = `${candidateKeyPrefix(CYCLE_ID)}normalized/${index}.json`;
   bucket.store.set(key, { bytes, customMetadata: { content_hash: contentHash } });
-  return { partitionId: `${kind}:${index}`, key, contentHash, byteLength: bytes.byteLength };
+  const rowCount = batch.sources.length + batch.models.length + batch.metrics.length
+    + batch.priceChecks.length + batch.comparisonSeeds.length;
+  return {
+    partitionId: `${source}:${index}`, kind: 'normalized', index, key,
+    contentHash, byteLength: bytes.byteLength, rowCount,
+  };
 }
 
 function benchLmArtifactDescriptor(artifactId: string) {
@@ -234,13 +239,7 @@ function manifestFor(normalizedPartitions: readonly CandidatePartition[]): Bench
 
 /** Splits a batch into one normalized partition per non-empty kind. */
 function normalizeBatch(bucket: FakeR2Bucket, batch: NormalizedSourceBatch): CandidatePartition[] {
-  const partitions: CandidatePartition[] = [];
-  const kinds: NormalizedKind[] = ['sources', 'models', 'metrics', 'priceChecks', 'comparisonSeeds'];
-  for (const kind of kinds) {
-    const rows = batch[kind];
-    if (rows.length > 0) partitions.push(writeNormalizedPartition(bucket, kind, 0, rows));
-  }
-  return partitions;
+  return [writeNormalizedPartition(bucket, 'fixture', 0, batch)];
 }
 
 async function readPartitionRows(bucket: FakeR2Bucket, key: string): Promise<unknown[]> {

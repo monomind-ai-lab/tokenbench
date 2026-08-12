@@ -41,10 +41,6 @@ import { deriveComparisonPairs } from './index';
 export const DERIVED_PARTITION_KINDS = ['sources', 'models', 'metrics', 'prices', 'comparisons'] as const;
 export type DerivedPartitionKind = typeof DERIVED_PARTITION_KINDS[number];
 
-/** The normalized partition kinds this module consumes from Task 3. */
-const NORMALIZED_PARTITION_KINDS = ['sources', 'models', 'metrics', 'priceChecks', 'comparisonSeeds'] as const;
-type NormalizedPartitionKind = typeof NORMALIZED_PARTITION_KINDS[number];
-
 /**
  * Fixed maximum rows per derived partition. Keeps each partition to exactly one
  * bounded D1 `json_each` staging statement well under the 1.5MB parameter and
@@ -146,9 +142,12 @@ export function parseDerivedPartitionId(partitionId: string): {
 export function derivedPartitionToCandidate(receipt: DerivedPartitionReceipt): CandidatePartition {
   return {
     partitionId: derivedPartitionId(receipt.kind, receipt.index, receipt.rowCount),
+    kind: receipt.kind,
+    index: receipt.index,
     key: receipt.key,
     contentHash: receipt.contentHash,
     byteLength: receipt.byteLength,
+    rowCount: receipt.rowCount,
   };
 }
 
@@ -163,7 +162,10 @@ function chunkRows<T>(rows: readonly T[]): T[][] {
 async function readNormalizedPartition(
   bucket: CandidateR2Bucket,
   partition: CandidatePartition,
-): Promise<{ kind: NormalizedPartitionKind; rows: unknown[] }> {
+): Promise<NormalizedSourceBatch> {
+  if (partition.kind !== 'normalized') {
+    fail(`normalized partition ${partition.partitionId} descriptor kind must be normalized`);
+  }
   const object = await bucket.get(partition.key);
   if (!object) fail(`normalized partition ${partition.partitionId} is missing`);
   const bytes = new Uint8Array(await object.arrayBuffer());
@@ -177,12 +179,14 @@ async function readNormalizedPartition(
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
     fail(`normalized partition ${partition.partitionId} payload must be an object`);
   }
-  const { kind, rows } = payload as { kind?: unknown; rows?: unknown };
-  if (typeof kind !== 'string' || !(NORMALIZED_PARTITION_KINDS as readonly string[]).includes(kind)) {
-    fail(`normalized partition ${partition.partitionId} has an unknown kind`);
+  const record = payload as { schemaVersion?: unknown; batch?: unknown };
+  if (record.schemaVersion !== 'normalized-source-v1') {
+    fail(`normalized partition ${partition.partitionId} schemaVersion is not supported`);
   }
-  if (!Array.isArray(rows)) fail(`normalized partition ${partition.partitionId} rows must be an array`);
-  return { kind: kind as NormalizedPartitionKind, rows };
+  if (!record.batch || typeof record.batch !== 'object' || Array.isArray(record.batch)) {
+    fail(`normalized partition ${partition.partitionId} batch must be an object`);
+  }
+  return validateNormalizedSourceBatch(record.batch as NormalizedSourceBatch);
 }
 
 /**
@@ -195,20 +199,22 @@ async function reconstructBatch(
   bucket: CandidateR2Bucket,
   manifest: BenchmarkCandidateManifestV1,
 ): Promise<NormalizedSourceBatch> {
-  const grouped: Record<NormalizedPartitionKind, unknown[]> = {
-    sources: [], models: [], metrics: [], priceChecks: [], comparisonSeeds: [],
+  const grouped = {
+    sources: [] as NormalizedSourceBatch['sources'][number][],
+    models: [] as NormalizedSourceBatch['models'][number][],
+    metrics: [] as NormalizedSourceBatch['metrics'][number][],
+    priceChecks: [] as NormalizedSourceBatch['priceChecks'][number][],
+    comparisonSeeds: [] as NormalizedSourceBatch['comparisonSeeds'][number][],
   };
   for (const partition of manifest.normalizedPartitions) {
-    const { kind, rows } = await readNormalizedPartition(bucket, partition);
-    grouped[kind].push(...rows);
+    const batch = await readNormalizedPartition(bucket, partition);
+    grouped.sources.push(...batch.sources);
+    grouped.models.push(...batch.models);
+    grouped.metrics.push(...batch.metrics);
+    grouped.priceChecks.push(...batch.priceChecks);
+    grouped.comparisonSeeds.push(...batch.comparisonSeeds);
   }
-  return validateNormalizedSourceBatch({
-    sources: grouped.sources,
-    models: grouped.models,
-    metrics: grouped.metrics,
-    priceChecks: grouped.priceChecks,
-    comparisonSeeds: grouped.comparisonSeeds,
-  });
+  return validateNormalizedSourceBatch(grouped);
 }
 
 function canonicalDerivedRows(
