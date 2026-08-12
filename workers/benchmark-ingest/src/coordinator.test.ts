@@ -667,7 +667,7 @@ describe('retry, rate limits, and expiry', () => {
       phase: 'normalize-sources',
       cursor: 3,
       attempt: 1,
-      errorCode: 'step_failed',
+      errorCode: 'normalize_artifact_failed',
     });
     expect(durable.alarm).not.toBeNull();
 
@@ -681,6 +681,34 @@ describe('retry, rate limits, and expiry', () => {
       attempt: 0,
     });
     expect(calls).toBe(2);
+  });
+
+  it('persists the normalization operation that failed without exposing the error message', async () => {
+    nowMs = SUNDAY;
+    const checkpoint = acquireCheckpoint();
+    checkpoint.lmArenaRevision = LMARENA_REVISION;
+    checkpoint.lmArena = [{
+      artifact: artifact('lmarena/text_style_control/offset-0/page.json',
+        'text_style_control:latest:overall:rows-0-100',
+        { upstreamRevision: LMARENA_REVISION }),
+      subset: 'text_style_control',
+      offset: 0,
+    }];
+    const durable = storage({ [CYCLE_KEY]: {
+      ...createBenchmarkCycle(SUNDAY, CYCLE_ID),
+      phase: 'normalize-sources',
+      cursor: 3,
+      frozenCatalogRevision: CATALOG_REVISION,
+    }, [CHECKPOINT_KEY]: checkpoint });
+    const { env, db } = environment({ catalogRevision: CATALOG_REVISION });
+    const { steps } = fakeSteps({
+      normalizeSourceStep: () => { throw new Error('secret R2 failure detail'); },
+    });
+
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    expect(cycleOf(durable).errorCode).toBe('normalize_artifact_failed');
+    expect(JSON.stringify(db.writes)).not.toContain('secret R2 failure detail');
   });
 
   it('persists a full provider reset on 429 and does not retry inside the alarm', async () => {

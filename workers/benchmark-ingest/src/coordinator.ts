@@ -325,6 +325,8 @@ function advancePhase(cycle: IngestionCycle, phase: string, cursor: number, nowM
 
 function errorCodeFor(error: unknown): string {
   if (error instanceof SourceRateLimitedError) return 'rate_limited';
+  if (error instanceof SourceStepFailure && error.message === 'normalize_artifact_failed') return 'normalize_artifact_failed';
+  if (error instanceof SourceStepFailure && error.message === 'normalize_manifest_failed') return 'normalize_manifest_failed';
   if (error instanceof SourceStepFailure) return 'source_step_failed';
   if (error instanceof Error && /manifest/i.test(error.message)) return 'manifest_invalid';
   return 'step_failed';
@@ -841,48 +843,58 @@ async function normalizeSourcesStep(
   }
   const item = worklist[cycle.cursor];
   let partition: CandidatePartition;
-  if (item.source === 'benchlm') {
-    if (!checkpoint.benchLmBundle) throw new Error('benchlm bundle is missing before normalization');
-    partition = await deps.steps.normalizeSourceStep({
-      source: 'benchlm',
-      cycleId: checkpoint.cycleId,
-      store: env.SOURCE_SNAPSHOTS,
-      observedAt: checkpoint.observedAt,
-      index: cycle.cursor,
-      bundle: checkpoint.benchLmBundle,
-    });
-  } else if (item.source === 'litellm') {
-    if (!checkpoint.liteLlm) throw new Error('litellm artifact is missing before normalization');
-    partition = await deps.steps.normalizeSourceStep({
-      source: 'litellm',
-      cycleId: checkpoint.cycleId,
-      store: env.SOURCE_SNAPSHOTS,
-      observedAt: checkpoint.observedAt,
-      index: cycle.cursor,
-      artifact: checkpoint.liteLlm,
-    });
-  } else if (item.source === 'openrouter') {
-    partition = await deps.steps.normalizeOpenRouterCatalogStep({
-      cycleId: checkpoint.cycleId,
-      store: env.SOURCE_SNAPSHOTS,
-      catalog: checkpoint.frozenOpenRouterCatalog,
-      index: cycle.cursor,
-    });
-  } else {
-    partition = await deps.steps.normalizeSourceStep({
-      source: 'lmarena',
-      cycleId: checkpoint.cycleId,
-      store: env.SOURCE_SNAPSHOTS,
-      observedAt: checkpoint.observedAt,
-      index: cycle.cursor,
-      artifact: item.entry.artifact,
-      subset: item.entry.subset,
-      offset: item.entry.offset,
-    });
+  try {
+    if (item.source === 'benchlm') {
+      if (!checkpoint.benchLmBundle) throw new Error('benchlm bundle is missing before normalization');
+      partition = await deps.steps.normalizeSourceStep({
+        source: 'benchlm',
+        cycleId: checkpoint.cycleId,
+        store: env.SOURCE_SNAPSHOTS,
+        observedAt: checkpoint.observedAt,
+        index: cycle.cursor,
+        bundle: checkpoint.benchLmBundle,
+      });
+    } else if (item.source === 'litellm') {
+      if (!checkpoint.liteLlm) throw new Error('litellm artifact is missing before normalization');
+      partition = await deps.steps.normalizeSourceStep({
+        source: 'litellm',
+        cycleId: checkpoint.cycleId,
+        store: env.SOURCE_SNAPSHOTS,
+        observedAt: checkpoint.observedAt,
+        index: cycle.cursor,
+        artifact: checkpoint.liteLlm,
+      });
+    } else if (item.source === 'openrouter') {
+      partition = await deps.steps.normalizeOpenRouterCatalogStep({
+        cycleId: checkpoint.cycleId,
+        store: env.SOURCE_SNAPSHOTS,
+        catalog: checkpoint.frozenOpenRouterCatalog,
+        index: cycle.cursor,
+      });
+    } else {
+      partition = await deps.steps.normalizeSourceStep({
+        source: 'lmarena',
+        cycleId: checkpoint.cycleId,
+        store: env.SOURCE_SNAPSHOTS,
+        observedAt: checkpoint.observedAt,
+        index: cycle.cursor,
+        artifact: item.entry.artifact,
+        subset: item.entry.subset,
+        offset: item.entry.offset,
+      });
+    }
+  } catch {
+    throw new SourceStepFailure(item.source === 'openrouter' ? 'openrouter' : item.source, `normalize:${cycle.cursor}`, 'normalize_artifact_failed');
   }
 
   const withPartition: BenchmarkCheckpoint = { ...checkpoint, normalizedPartitions: [...checkpoint.normalizedPartitions, partition] };
-  const nextCheckpoint: BenchmarkCheckpoint = { ...withPartition, manifestContentHash: await writeManifestIfReady(env, withPartition) };
+  let manifestContentHash: string | null;
+  try {
+    manifestContentHash = await writeManifestIfReady(env, withPartition);
+  } catch {
+    throw new SourceStepFailure(item.source === 'openrouter' ? 'openrouter' : item.source, `manifest:${cycle.cursor}`, 'normalize_manifest_failed');
+  }
+  const nextCheckpoint: BenchmarkCheckpoint = { ...withPartition, manifestContentHash };
   const nextCursor = cycle.cursor + 1;
   if (nextCursor >= worklist.length) {
     return { kind: 'advanced', cycle: advancePhase(cycle, 'derive', 0, nowMs), checkpoint: nextCheckpoint, alarmAt: nowMs + BENCHMARK_STEP_DELAY_MS, outputCount: 1 };
