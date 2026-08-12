@@ -177,6 +177,14 @@ describe('final benchmark publication', () => {
             },
           };
         }
+        if (sql.includes('FROM benchmark_popular_model_weeks')) {
+          return {
+            ...statement(sql),
+            bind() {
+              return { ...statement(sql), async first<T>() { return null as T | null; } };
+            },
+          };
+        }
         return statement(sql);
       },
       async batch(statements: ReturnType<typeof statement>[]) { batches.push(statements); },
@@ -202,6 +210,64 @@ describe('final benchmark publication', () => {
     expect(benchmarkPointer).toBeGreaterThan(directory);
     expect(cachePointer).toBeGreaterThan(benchmarkPointer);
     expect(sql.some((value) => value.includes("state = 'published'"))).toBe(true);
+  });
+
+  it('atomically replaces an incomplete weekly snapshot and leaves complete weeks immutable', async () => {
+    const candidate = snapshot();
+    const publishWithRankCount = async (rankCount: number) => {
+      const batches: ReturnType<typeof statement>[][] = [];
+      const db = {
+        prepare(sql: string) {
+          if (sql.includes('FROM benchmark_publication_state')) {
+            return {
+              ...statement(sql),
+              bind() {
+                return { ...statement(sql), async first<T>() {
+                  return { revision: 'benchmark-old', contentHash: HASH } as T;
+                } };
+              },
+            };
+          }
+          if (sql.includes('FROM benchmark_popular_model_weeks')) {
+            return {
+              ...statement(sql),
+              bind() {
+                return { ...statement(sql), async first<T>() {
+                  return { rankCount } as T;
+                } };
+              },
+            };
+          }
+          return statement(sql);
+        },
+        async batch(statements: ReturnType<typeof statement>[]) { batches.push(statements); },
+      } as PublicationD1Database;
+      await publishBenchmarkCandidate({
+        db,
+        cycleId: CYCLE_ID,
+        cadenceKey: '2026-W33',
+        revision: REVISION,
+        cacheRevision: benchmarkCandidateCacheRevision(candidate, CYCLE_ID),
+        manifestHash: HASH,
+        snapshot: candidate,
+        checkedAt: CHECKED_AT,
+      });
+      return batches[0]!.map((entry) => entry.sql);
+    };
+
+    const partial = await publishWithRankCount(1);
+    const deleteRanks = partial.findIndex((sql) => sql.includes('DELETE FROM benchmark_popular_model_ranks'));
+    const replaceWeek = partial.findIndex((sql) => sql.includes('UPDATE benchmark_popular_model_weeks'));
+    const insertRanks = partial.findIndex((sql) => sql.includes('INSERT INTO benchmark_popular_model_ranks'));
+    expect(deleteRanks).toBeGreaterThanOrEqual(0);
+    expect(replaceWeek).toBeGreaterThan(deleteRanks);
+    expect(insertRanks).toBeGreaterThan(replaceWeek);
+    expect(partial.filter((sql) => sql.includes('INSERT INTO benchmark_popular_model_ranks'))).toHaveLength(1);
+
+    const complete = await publishWithRankCount(2);
+    expect(complete.some((sql) => sql.includes('DELETE FROM benchmark_popular_model_ranks'))).toBe(false);
+    expect(complete.some((sql) => sql.includes('UPDATE benchmark_popular_model_weeks'))).toBe(false);
+    expect(complete.some((sql) => sql.includes('INSERT INTO benchmark_popular_model_ranks'))).toBe(false);
   });
 
   it('leaves pointers unchanged when the sole D1 batch fails', async () => {

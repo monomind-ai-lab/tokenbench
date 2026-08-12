@@ -180,7 +180,7 @@ const INSERT_WEEK = `INSERT OR IGNORE INTO benchmark_popular_model_weeks
   (week_start, benchmark_revision, source_snapshot_id, methodology_version, generated_at)
 VALUES (?, ?, ?, ?, ?)`;
 const INSERT_RANKS = `WITH target AS (
-  SELECT ? AS week_start, ? AS source_snapshot_id, ? AS methodology_version
+  SELECT ? AS week_start, ? AS benchmark_revision
 )
 INSERT INTO benchmark_popular_model_ranks
   (week_start, rank, model_key)
@@ -190,18 +190,11 @@ FROM target
 JOIN json_each(?) AS row
 WHERE EXISTS (
   SELECT 1 FROM benchmark_popular_model_weeks
-  WHERE week_start = target.week_start
-    AND source_snapshot_id = target.source_snapshot_id
-    AND methodology_version = target.methodology_version
+  WHERE week_start = target.week_start AND benchmark_revision = target.benchmark_revision
 )
 AND NOT EXISTS (
   SELECT 1 FROM benchmark_popular_model_ranks AS existing
-  WHERE existing.week_start = target.week_start AND (
-    (existing.rank = json_extract(row.value, '$.rank')
-      AND existing.model_key <> json_extract(row.value, '$.modelKey'))
-    OR (existing.model_key = json_extract(row.value, '$.modelKey')
-      AND existing.rank <> json_extract(row.value, '$.rank'))
-  )
+  WHERE existing.week_start = target.week_start
 )
 ON CONFLICT(week_start, rank) DO NOTHING`;
 function metricIdentity(metric: ActiveBenchmarkSnapshot['metrics'][number]): string {
@@ -512,11 +505,7 @@ export function appendModelDirectoryPublicationStatements(
     publicLeaderboard.methodologyVersion,
     updatedAt,
   ]));
-  appendJsonEachStatements(next, db, INSERT_RANKS, [
-    candidate.weekStart,
-    publicLeaderboard.sourceSnapshotId,
-    publicLeaderboard.methodologyVersion,
-  ], rankRows, 'popular model ranks');
+  appendJsonEachStatements(next, db, INSERT_RANKS, [candidate.weekStart, snapshot.revision.revision], rankRows, 'popular model ranks');
 
   if (next.length > MAX_D1_PUBLICATION_STATEMENTS) {
     throw new Error(`Model directory publication exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);

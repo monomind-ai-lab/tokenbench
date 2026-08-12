@@ -189,6 +189,17 @@ export async function publishBenchmarkCandidate(input: PublishCandidateInput): P
     if (!model) fail(`popular model ${row.creator}/${row.model} is missing from the snapshot`);
     return { weekStart, rank: row.rank, modelKey: model.modelKey };
   });
+  const existingWeek = await input.db.prepare(`SELECT COUNT(ranks.rank) AS rankCount
+    FROM benchmark_popular_model_weeks AS week
+    LEFT JOIN benchmark_popular_model_ranks AS ranks ON ranks.week_start = week.week_start
+    WHERE week.week_start = ?
+    GROUP BY week.week_start`).bind(weekStart).first<{ rankCount: number }>();
+  const existingRankCount = existingWeek?.rankCount ?? 0;
+  if (!Number.isSafeInteger(existingRankCount) || existingRankCount < 0 || existingRankCount > ranks.length) {
+    fail('published weekly model snapshot has an invalid rank count');
+  }
+  const replaceIncompleteWeek = existingWeek !== null && existingRankCount < ranks.length;
+  const createWeek = existingWeek === null;
   statements.push(
     ...directoryStatements(input),
     input.db.prepare(`UPDATE benchmark_model_directory SET status = 'archived', updated_at = ?
@@ -196,15 +207,27 @@ export async function publishBenchmarkCandidate(input: PublishCandidateInput): P
         SELECT 1 FROM benchmark_model_revision_membership membership
         WHERE membership.revision = ? AND membership.model_key = benchmark_model_directory.model_key
       )`).bind(input.checkedAt, input.revision),
-    input.db.prepare(`INSERT OR IGNORE INTO benchmark_popular_model_weeks
+  );
+  if (replaceIncompleteWeek) {
+    statements.push(
+      input.db.prepare('DELETE FROM benchmark_popular_model_ranks WHERE week_start = ?').bind(weekStart),
+      input.db.prepare(`UPDATE benchmark_popular_model_weeks SET benchmark_revision = ?, source_snapshot_id = ?,
+        methodology_version = ?, generated_at = ? WHERE week_start = ?`).bind(
+        input.revision, leaderboard.sourceSnapshotId, leaderboard.methodologyVersion, input.checkedAt, weekStart,
+      ),
+    );
+  } else if (createWeek) {
+    statements.push(input.db.prepare(`INSERT INTO benchmark_popular_model_weeks
       (week_start, benchmark_revision, source_snapshot_id, methodology_version, generated_at)
       VALUES (?, ?, ?, ?, ?)`).bind(
       weekStart, input.revision, leaderboard.sourceSnapshotId, leaderboard.methodologyVersion, input.checkedAt,
-    ),
-    input.db.prepare(`INSERT OR IGNORE INTO benchmark_popular_model_ranks (week_start, rank, model_key)
+    ));
+  }
+  if (replaceIncompleteWeek || createWeek) {
+    statements.push(input.db.prepare(`INSERT INTO benchmark_popular_model_ranks (week_start, rank, model_key)
       SELECT json_extract(row.value, '$.weekStart'), json_extract(row.value, '$.rank'),
-        json_extract(row.value, '$.modelKey') FROM json_each(?) AS row`).bind(JSON.stringify(ranks)),
-  );
+        json_extract(row.value, '$.modelKey') FROM json_each(?) AS row`).bind(JSON.stringify(ranks)));
+  }
   if (!unchanged) {
     statements.push(input.db.prepare(`INSERT INTO benchmark_publication_state (singleton, active_revision, updated_at)
       VALUES (1, ?, ?) ON CONFLICT(singleton) DO UPDATE SET
