@@ -5,12 +5,10 @@ import {
   type BenchmarkPriceCheck,
   type BenchmarkRevision,
   type BenchmarkSourceRecord,
-  type ComparisonSeed,
   type NormalizedSourceBatch,
   BENCHMARK_DERIVATION_SCHEMA_VERSION,
   compareUtf8Binary,
   createComparisonPairSlugResolver,
-  isComparisonPairRouteSafe,
   validateBenchmarkComparisonPair,
   validateIndexableComparisonPairRoute,
   validateNormalizedSourceBatch,
@@ -30,7 +28,6 @@ import {
   benchmarkPricePerformanceProjectionCacheKey,
 } from '../../../src/benchmarks/api-response-cache-keys';
 import { splitApiResponseBody } from '../../../src/cache/api-response-chunks';
-import { COMPARISON_ALLOWLIST } from '../../../src/benchmarks/comparison-allowlist';
 import { createLeaderboardQueryCapabilities } from '../../../src/benchmarks/leaderboard-query';
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
 import { LEADERBOARD_DEFINITIONS } from '../../../src/benchmarks/leaderboards';
@@ -1690,26 +1687,6 @@ async function mapWithConcurrency<T, R>(items: readonly T[], concurrency: number
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
   return results;
-}
-
-function safeBenchLmCategories(metrics: readonly BenchmarkMetric[], modelKey: string): Map<string, BenchmarkMetric> {
-  return new Map(metrics
-    .filter((metric) => metric.modelKey === modelKey && metric.sourceId === 'benchlm'
-      && metric.metricKey.startsWith('benchlm:category:') && metric.rankingEligible
-      && Number.isFinite(metric.value) && !normalizeProhibited(metric).includes('artificialanalysis'))
-    .map((metric) => [metric.category, metric]));
-}
-
-function editorialSeeds(models: readonly BenchmarkModel[]): ComparisonSeed[] {
-  const bySlug = new Map(models.map((model) => [model.slug, model]));
-  return COMPARISON_ALLOWLIST.flatMap((pairSlug) => {
-    const [leftSlug, rightSlug] = pairSlug.split('-vs-');
-    const left = bySlug.get(leftSlug);
-    const right = bySlug.get(rightSlug);
-    if (!left || !right || left.modelKey === right.modelKey) return [];
-    const [modelA, modelB] = compareUtf8Binary(left.modelKey, right.modelKey) < 0 ? [left, right] : [right, left];
-    return [{ pairSlug: `${modelA.slug}-vs-${modelB.slug}`, modelAKey: modelA.modelKey, modelBKey: modelB.modelKey, sourceId: 'benchlm', sourceArtifactId: 'comparisons', sourceModelAId: modelA.sourceModelId, sourceModelBId: modelB.sourceModelId, featuredRank: null }];
-  });
 }
 
 export { deriveComparisonPairs } from './comparison-derivation';
