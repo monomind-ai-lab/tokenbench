@@ -3,7 +3,58 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DecisionPickEntry } from '../benchmarks/decision-picks';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult } from '../frontend/use-benchmarks';
 import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
-import { LeaderboardDirectoryPage, LeaderboardPage, positionNoteFor } from './leaderboards-page';
+import type { BenchmarkMetric, BenchmarkModel } from '../benchmarks/contracts';
+import type { LeaderboardEntry } from '../benchmarks/leaderboards';
+import { LeaderboardDirectoryPage, LeaderboardPage, positionNoteFor, scoreChartData } from './leaderboards-page';
+
+const chartModel: BenchmarkModel = {
+  modelKey: 'a', slug: 'alpha', name: 'Alpha', creator: 'Example', sourceType: 'Proprietary',
+  reasoningType: null, releaseDate: null, contextWindowTokens: 128_000, evidenceStatus: 'supported',
+  rankingEligible: true, confidenceLower: null, confidenceUpper: null, benchmarkCount: 1,
+  sourceId: 'benchlm', sourceModelId: 'alpha', sourceArtifactId: 'models',
+};
+
+const chartMetric: BenchmarkMetric = {
+  modelKey: 'a', metricKey: 'benchlm:overall:raw', category: 'overall', value: 80, rawValue: null,
+  rank: 1, lower: null, upper: null, voteCount: null, unit: 'score', sourceId: 'benchlm',
+  sourceUpdatedAt: '2026-08-05T00:00:00.000Z', sourceModelId: 'alpha', sourceArtifactId: 'models',
+  rankingEligible: true, methodology: 'benchlm_raw_composite', observationCount: null, sessionCount: null,
+};
+
+function chartEntry(overrides: Partial<LeaderboardEntry> = {}): LeaderboardEntry {
+  return {
+    model: chartModel, metric: chartMetric, metrics: [chartMetric], primaryPrice: null,
+    blendedCostPerMillion: null, contextWindowTokens: 128_000, sourceRank: 1, onValueFrontier: false,
+    ...overrides,
+  };
+}
+
+describe('leaderboard score chart data', () => {
+  it('builds chart data from scored entries and marks estimated rows muted', () => {
+    const data = scoreChartData([
+      chartEntry(),
+      chartEntry({
+        model: { ...chartModel, modelKey: 'b', name: 'Beta', evidenceStatus: 'estimated' },
+        metric: { ...chartMetric, value: 60 },
+      }),
+      chartEntry({ model: { ...chartModel, modelKey: 'c', name: 'Gamma' }, metric: null }),
+    ]);
+
+    expect(data).toHaveLength(2);
+    expect(data[0]).toMatchObject({ label: 'Alpha', value: 80, muted: false });
+    expect(data[1]).toMatchObject({ label: 'Beta', value: 60, muted: true });
+  });
+
+  it('caps the chart at the requested number of rows', () => {
+    const many = Array.from({ length: 20 }, (_, index) => chartEntry({
+      model: { ...chartModel, modelKey: `m${index}`, name: `Model ${index}` },
+      metric: { ...chartMetric, value: 100 - index },
+    }));
+
+    expect(scoreChartData(many)).toHaveLength(12);
+    expect(scoreChartData(many, 5)).toHaveLength(5);
+  });
+});
 
 describe('leaderboard position notes', () => {
   it('explains that positions are published source ranks', () => {
@@ -401,7 +452,11 @@ describe('LeaderboardPage', () => {
       expect.objectContaining({ headers: { accept: 'application/json' } }),
     );
     await new Promise<void>((resolve) => { window.setTimeout(resolve, 25); });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    // The score chart reuses the leaderboard entries already fetched for the
+    // table, so this route no longer issues a second `/api/benchmarks` request
+    // for a panel that restated those same rows.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/benchmarks', expect.anything());
     expect(screen.getByRole('link', { name: 'Download CSV' })).toHaveAttribute(
       'href',
       '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Needle',
@@ -777,7 +832,7 @@ describe('LeaderboardPage', () => {
       '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha',
     );
 
-    const picks = await screen.findByRole('region', { name: 'Decision-ready picks' });
+    const picks = await screen.findByRole('region', { name: 'Score comparison' });
     const filters = screen.getByRole('region', { name: 'Filter and sort' });
     const results = screen.getByRole('region', { name: 'Coding benchmark results' });
     const evidence = screen.getByRole('region', { name: 'Evidence and methodology' });
