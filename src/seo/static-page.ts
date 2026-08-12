@@ -57,7 +57,7 @@ export function staticChrome(content: string, activePage: StaticNavigationPage):
   return `<div class="app-shell static-page-shell">
       <a class="skip-link" href="#page-content">Skip to page content</a>
       <header class="top-header"><div class="header-inner">
-        <div class="brand-lockup"><a class="brand-home" href="/" aria-label="${SITE_CONFIG.name} home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram"><span class="brand-copy"><span class="brand-name">${SITE_CONFIG.name}</span><span class="brand-tagline">${SITE_CONFIG.tagline}</span></span></a></div>
+        <div class="brand-lockup"><a class="brand-home" href="/" aria-label="${SITE_CONFIG.name} home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram"><span class="brand-copy"><span class="brand-name">${SITE_CONFIG.name}</span></span></a></div>
         <nav class="primary-nav" aria-label="Primary navigation">${navLink('/', 'Home', activePage, 'home')}${navLink(ROUTE_PATHS.calculator, 'Subscribe vs API', activePage, 'calculator')}${navLink(ROUTE_PATHS.pricePerformance, 'Price vs Performance', activePage, 'pricePerformance')}${navLink(ROUTE_PATHS.models, 'Models', activePage, 'models')}${navLink(ROUTE_PATHS.compareHub, 'Compare', activePage, 'compare')}${navLink(ROUTE_PATHS.leaderboards, 'Leaderboards', activePage, 'leaderboards')}${navLink(ROUTE_PATHS.guides, 'Guides', activePage, 'guides')}</nav>
       </div></header>
       ${content}

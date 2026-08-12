@@ -489,7 +489,7 @@ describe('responsive calculator app shell', () => {
     await calculatorReadyHeading();
     expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
-    expect(screen.getByText('The Decision Engine for AI Costs & Model Benchmarks')).toBeInTheDocument();
+    expect(screen.queryByText('The Decision Engine for AI Costs & Model Benchmarks')).not.toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APIPrice vs PerformanceModelsCompareLeaderboardsGuides');
   });

@@ -15,7 +15,7 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4175',
     headless: true,
     launchOptions: {
-      executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      executablePath: process.env.CHROME_PATH ?? '/Applications/ego lite.app/Contents/MacOS/ego lite',
     },
     trace: 'off',
     screenshot: 'off',

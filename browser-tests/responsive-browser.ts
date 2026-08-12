@@ -1694,9 +1694,9 @@ test.describe('home and tools route runtime', () => {
         const snapshot = page.getByRole('region', { name: 'Market at a glance' });
         await expect(snapshot.getByText('Browser Model 1', { exact: true })).toHaveCount(5);
         await expect(snapshot.getByText('Source published')).toHaveCount(0);
-        await expect(snapshot.getByText('Checked')).toBeVisible();
-        await expect(snapshot.getByRole('link', { name: 'Data from BenchLM.ai' })).toBeVisible();
-        await expect(snapshot.getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toBeVisible();
+        await expect(snapshot.getByText('Checked')).toHaveCount(0);
+        await expect(snapshot.getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveCount(0);
+        await expect(snapshot.getByRole('link', { name: 'Catalog and pricing data from OpenRouter' })).toHaveCount(0);
 
         await expect(page.getByText('Benchmark signals', { exact: true })).toHaveCount(0);
         await expect(page.getByRole('group', { name: 'TokenBench decision workflow' })).toHaveCount(0);
