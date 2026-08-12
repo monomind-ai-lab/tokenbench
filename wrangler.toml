@@ -1,5 +1,4 @@
 name = "tokenbench"
-account_id = "e9ac0943443affe2bd7b18971265deee"
 compatibility_date = "2026-08-03"
 pages_build_output_dir = "dist"
 
