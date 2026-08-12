@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS ingestion_cycles (
   state TEXT NOT NULL CHECK (state IN ('idle','running','retry_wait','ready_to_publish','published','failed','expired')),
   phase TEXT NOT NULL,
   cursor INTEGER NOT NULL CHECK (cursor >= 0),
+  -- Upstream requests consumed for the current bounded step (0 before fetch).
   attempt INTEGER NOT NULL CHECK (attempt BETWEEN 0 AND 3),
   frozen_catalog_revision TEXT,
   frozen_benchmark_revision TEXT,

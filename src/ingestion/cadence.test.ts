@@ -34,17 +34,24 @@ describe('catalogCadenceKey', () => {
 });
 
 describe('benchmarkCadenceKey', () => {
-  it('derives the Sunday-anchored weekly key at the boundary', () => {
+  it('derives the ISO week key at the scheduled Sunday boundary', () => {
     expect(benchmarkCadenceKey('2026-08-16T01:00:00.000Z')).toBe('2026-W33');
   });
 
-  it('keeps every day of a Sunday-week under one key', () => {
-    expect(benchmarkCadenceKey('2026-08-16T00:00:00.000Z')).toBe('2026-W33');
-    expect(benchmarkCadenceKey('2026-08-22T23:59:59.999Z')).toBe('2026-W33');
+  it('keeps every day of an ISO Monday-to-Sunday week under one key', () => {
+    expect(benchmarkCadenceKey('2026-08-10T00:00:00.000Z')).toBe('2026-W33');
+    expect(benchmarkCadenceKey('2026-08-16T23:59:59.999Z')).toBe('2026-W33');
   });
 
-  it('numbers the first week of the year as W01', () => {
-    expect(benchmarkCadenceKey('2026-01-05T00:00:00.000Z')).toBe('2026-W01');
+  it('uses the ISO week-year across calendar-year boundaries', () => {
+    expect(benchmarkCadenceKey('2023-01-01T12:00:00.000Z')).toBe('2022-W52');
+    expect(benchmarkCadenceKey('2024-12-30T00:00:00.000Z')).toBe('2025-W01');
+    expect(benchmarkCadenceKey('2026-01-05T00:00:00.000Z')).toBe('2026-W02');
+  });
+
+  it('supports ISO week 53 without negative or zero week numbers', () => {
+    expect(benchmarkCadenceKey('2020-12-31T23:59:59.999Z')).toBe('2020-W53');
+    expect(benchmarkCadenceKey('2021-01-01T00:00:00.000Z')).toBe('2020-W53');
   });
 });
 

@@ -30,25 +30,25 @@ export function catalogCadenceKey(timestamp: string): string {
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
 }
 
-/**
- * Sunday-anchored weekly key for a benchmark cycle, e.g. `2026-W33`.
- *
- * The benchmark schedule fires weekly on Sunday, so each benchmark week is the
- * Sunday-to-Saturday window it opens. The week number is derived from the
- * first Sunday of the reference year week (Jan 4 backed up to its Sunday), the
- * same Jan-4 anchor ISO-8601 uses but shifted to a Sunday start. A Sunday
- * therefore opens its own numbered week.
- */
+/** UTC ISO-8601 week-year key, independent of the Sunday Cron fire time. */
 export function benchmarkCadenceKey(timestamp: string): string {
   const date = new Date(timestamp);
-  const sunday = new Date(date);
-  sunday.setUTCDate(sunday.getUTCDate() - sunday.getUTCDay());
-  const year = sunday.getUTCFullYear();
-  const reference = new Date(Date.UTC(year, 0, 4));
-  const referenceSunday = new Date(reference);
-  referenceSunday.setUTCDate(referenceSunday.getUTCDate() - referenceSunday.getUTCDay());
-  const week = Math.floor((sunday.getTime() - referenceSunday.getTime()) / (7 * 86_400_000)) + 1;
-  return `${year}-W${pad2(week)}`;
+  const thursday = new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate(),
+  ));
+  const isoDay = thursday.getUTCDay() || 7;
+  thursday.setUTCDate(thursday.getUTCDate() + 4 - isoDay);
+
+  const isoYear = thursday.getUTCFullYear();
+  const firstThursday = new Date(Date.UTC(isoYear, 0, 4));
+  const firstIsoDay = firstThursday.getUTCDay() || 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() + 4 - firstIsoDay);
+  const week = Math.round(
+    (thursday.getTime() - firstThursday.getTime()) / (7 * 86_400_000),
+  ) + 1;
+  return `${isoYear}-W${pad2(week)}`;
 }
 
 /**

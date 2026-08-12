@@ -34,6 +34,7 @@ export interface IngestionCycle {
   readonly state: IngestionCycleState;
   readonly phase: IngestionPhase;
   readonly cursor: number;
+  /** Upstream requests consumed in the current bounded step, from 0 to 3. */
   readonly attempt: number;
   readonly startedAt: string;
   readonly updatedAt: string;
@@ -110,17 +111,16 @@ function parseHfRateLimitReset(value: string, nowMs: number): number | null {
   return resetMs;
 }
 
-const RETRY_FALLBACK_MS = [60_000, 300_000, 1_800_000]; // 1, 5, 30 minutes
+export const RETRY_BACKOFF_DELAYS_MS = [60_000, 300_000, 1_800_000] as const;
 
 /**
  * Compute when the next retry alarm must fire.
  *
- * `attempt` is the zero-indexed number of retries already consumed in this
- * cycle (0 before the first retry), matching the persisted `attempt` column
- * whose fresh value is 0 and whose cap is 3. The fallback deadline grows 1, 5,
- * then 30 minutes as retries are consumed. The returned alarm time is the later
- * of that fallback deadline and any provider reset, plus the injected jitter
- * (0-15 seconds). Attempts at or beyond the three-attempt cap throw.
+ * `attempt` is the 1-based number of upstream requests already consumed.
+ * Failures after request one and two schedule the second and third requests;
+ * failure after request three is terminal. The approved third progressive
+ * delay remains exported for observability/config parity but cannot schedule a
+ * fourth request. The provider reset dominates fallback before jitter is added.
  */
 export function nextRetryAlarmAt(input: {
   attempt: number;
@@ -129,8 +129,13 @@ export function nextRetryAlarmAt(input: {
   jitterMs: number;
 }): number {
   const { attempt, nowMs, providerRetryAtMs, jitterMs } = input;
-  if (attempt >= 3) throw new Error('retry attempt limit');
-  const fallbackMs = RETRY_FALLBACK_MS[attempt] ?? RETRY_FALLBACK_MS[RETRY_FALLBACK_MS.length - 1];
+  if (!Number.isInteger(attempt) || attempt <= 0 || attempt >= 3) {
+    throw new Error('retry attempt limit');
+  }
+  if (!Number.isFinite(jitterMs) || jitterMs < 0 || jitterMs > 15_000) {
+    throw new Error('retry jitter must be between 0 and 15000 milliseconds');
+  }
+  const fallbackMs = RETRY_BACKOFF_DELAYS_MS[attempt - 1];
   const fallbackAt = nowMs + fallbackMs;
   const base = providerRetryAtMs === null ? fallbackAt : Math.max(fallbackAt, providerRetryAtMs);
   return base + jitterMs;
@@ -155,6 +160,7 @@ export function assertCycleTransition(
   previous: IngestionCycleState,
   next: IngestionCycleState,
 ): void {
+  if (previous === next) return;
   if (!LEGAL_TRANSITIONS[previous].includes(next)) {
     throw new Error(`illegal cycle transition: ${previous} -> ${next}`);
   }
