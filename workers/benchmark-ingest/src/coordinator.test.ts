@@ -633,6 +633,56 @@ describe('LMArena pagination', () => {
 // ---------------------------------------------------------------------------
 
 describe('retry, rate limits, and expiry', () => {
+  it('retries an idempotent normalization failure on a later alarm', async () => {
+    nowMs = SUNDAY;
+    const checkpoint = acquireCheckpoint();
+    checkpoint.lmArenaRevision = LMARENA_REVISION;
+    checkpoint.lmArena = [{
+      artifact: artifact('lmarena/text_style_control/offset-0/page.json',
+        'text_style_control:latest:overall:rows-0-100',
+        { upstreamRevision: LMARENA_REVISION }),
+      subset: 'text_style_control',
+      offset: 0,
+    }];
+    const durable = storage({ [CYCLE_KEY]: {
+      ...createBenchmarkCycle(SUNDAY, CYCLE_ID),
+      phase: 'normalize-sources',
+      cursor: 3,
+      frozenCatalogRevision: CATALOG_REVISION,
+    }, [CHECKPOINT_KEY]: checkpoint });
+    const { env } = environment({ catalogRevision: CATALOG_REVISION });
+    let calls = 0;
+    const { steps } = fakeSteps({
+      normalizeSourceStep: (input) => {
+        calls += 1;
+        if (calls === 1) throw new Error('transient R2 read failure');
+        return partition(`normalized/${Number(input.index)}/part.json`, 'normalized', Number(input.index), 42);
+      },
+    });
+
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    expect(cycleOf(durable)).toMatchObject({
+      state: 'retry_wait',
+      phase: 'normalize-sources',
+      cursor: 3,
+      attempt: 1,
+      errorCode: 'step_failed',
+    });
+    expect(durable.alarm).not.toBeNull();
+
+    nowMs = Date.parse(cycleOf(durable).nextRetryAt as string) + 1;
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    expect(cycleOf(durable)).toMatchObject({
+      state: 'running',
+      phase: 'derive',
+      cursor: 0,
+      attempt: 0,
+    });
+    expect(calls).toBe(2);
+  });
+
   it('persists a full provider reset on 429 and does not retry inside the alarm', async () => {
     nowMs = SUNDAY;
     const providerReset = SUNDAY + 3_600_000;

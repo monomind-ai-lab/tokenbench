@@ -251,6 +251,7 @@ const RETRYABLE_PHASES: Record<string, true> = {
   'retrieve-litellm': true,
   'retrieve-lmarena-revision': true,
   'retrieve-lmarena-pages': true,
+  'normalize-sources': true,
 };
 
 // ---------------------------------------------------------------------------
