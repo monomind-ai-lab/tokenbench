@@ -28,6 +28,7 @@
   },
   "exclude": [
     "workers/catalog-ingest/src/coordinator.ts",
-    "workers/catalog-ingest/worker-configuration.d.ts"
+    "workers/catalog-ingest/worker-configuration.d.ts",
+    "workers/benchmark-ingest/worker-configuration.d.ts"
   ]
 }

@@ -1,9 +1,9 @@
 name = "tokenbench-benchmark-ingest"
 main = "src/index.ts"
-compatibility_date = "2026-08-05"
+compatibility_date = "2026-08-12"
 
-# This Worker uses D1 batches for atomic benchmark publications. Deploy it on
-# Workers Paid: the configured query budget relies on the Paid D1 allowance.
+# The scheduled handler only starts the singleton coordinator. Each SQLite
+# Durable Object alarm performs one bounded checkpointed step.
 [observability]
 enabled = true
 
@@ -17,5 +17,13 @@ migrations_dir = "../../migrations"
 binding = "SOURCE_SNAPSHOTS"
 bucket_name = "ai-plan-catalog-snapshots"
 
+[[durable_objects.bindings]]
+name = "INGEST_COORDINATOR"
+class_name = "BenchmarkIngestCoordinator"
+
+[exports.BenchmarkIngestCoordinator]
+type = "durable-object"
+storage = "sqlite"
+
 [triggers]
-crons = ["15 */12 * * *"]
+crons = ["15 2 * * SUN"]

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "skipLibCheck": true,
+    "strict": false,
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "worker-configuration.d.ts",
+    "../../workers/_shared/checkpointed-ingestion.ts",
+    "../../src/benchmarks/**/*.ts",
+    "../../src/cache/**/*.ts",
+    "../../src/catalog/**/*.ts",
+    "../../src/ingestion/**/*.ts",
+    "../../src/routing/**/*.ts",
+    "../../functions/_shared/**/*.ts",
+    "../../functions/api/catalog.ts"
+  ]
+}

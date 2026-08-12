@@ -2617,25 +2617,27 @@ describe('atomic benchmark ingestion', () => {
   });
 
   it('awaits scheduled ingestion and does not expose a public refresh route', async () => {
-    const { env, db } = seededEnvironment();
+    const { env } = seededEnvironment();
     const waitUntil = vi.fn();
-    vi.stubGlobal('fetch', healthyFetch());
-    try {
-      await worker.scheduled(
-        { cron: '15 */12 * * *', scheduledTime: Date.now(), noRetry: () => undefined },
-        env,
-        { waitUntil },
-      );
-      expect(waitUntil).not.toHaveBeenCalled();
-      expect(db.state.activeRevision).not.toBeNull();
+    const start = vi.fn(async () => undefined);
+    const scheduledEnv = env as Parameters<typeof worker.scheduled>[1];
+    scheduledEnv.INGEST_COORDINATOR = { getByName: (name: string) => {
+      expect(name).toBe('weekly-benchmarks');
+      return { start };
+    } };
+    const scheduledTime = Date.parse('2026-08-16T02:15:00.000Z');
+    await worker.scheduled(
+      { cron: '15 2 * * SUN', scheduledTime, noRetry: () => undefined },
+      scheduledEnv,
+      { waitUntil },
+    );
+    expect(start).toHaveBeenCalledWith({ scheduledTime });
+    expect(waitUntil).not.toHaveBeenCalled();
 
-      const response = await worker.fetch(new Request('https://worker.example/refresh', { method: 'POST' }), env, {
-        waitUntil: () => undefined,
-      });
-      expect(response.status).toBe(405);
-      expect(response.headers.get('allow')).toBeNull();
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const response = await worker.fetch(new Request('https://worker.example/refresh', { method: 'POST' }), scheduledEnv, {
+      waitUntil: () => undefined,
+    });
+    expect(response.status).toBe(405);
+    expect(response.headers.get('allow')).toBeNull();
   });
 });

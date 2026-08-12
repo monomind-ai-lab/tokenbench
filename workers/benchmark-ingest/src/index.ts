@@ -109,6 +109,11 @@ interface R2Bucket {
 export interface BenchmarkIngestEnv {
   CATALOG_DB: D1Database;
   SOURCE_SNAPSHOTS: R2Bucket;
+  INGEST_COORDINATOR?: {
+    getByName(name: string): {
+      start(input: { scheduledTime: number; force?: boolean }): Promise<unknown>;
+    };
+  };
 }
 
 export interface RefreshDependencies {
@@ -2612,6 +2617,8 @@ export async function refreshBenchmarkRevision(
   }
 }
 
+export { BenchmarkIngestCoordinator } from './coordinator';
+
 export default {
   async fetch(
     _request: Request,
@@ -2625,8 +2632,8 @@ export default {
     env: BenchmarkIngestEnv,
     _ctx: { waitUntil(promise: Promise<unknown>): void },
   ): Promise<void> {
-    const result = await refreshBenchmarkRevision(env);
-    if (result.status === 'failed') controller.noRetry();
-    console.log(JSON.stringify({ message: 'benchmark refresh finished', status: result.status, revision: result.revision, checkedAt: result.checkedAt }));
+    if (!env.INGEST_COORDINATOR) throw new Error('Benchmark ingest coordinator binding is required');
+    const coordinator = env.INGEST_COORDINATOR.getByName('weekly-benchmarks');
+    await coordinator.start({ scheduledTime: controller.scheduledTime ?? Date.now() });
   },
 };

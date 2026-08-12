@@ -23,9 +23,9 @@
     "test:browser:production": "env -u FORCE_COLOR -u NO_COLOR TOKENBENCH_BROWSER_ASSET_MODE=production playwright test --config=playwright.production.config.ts browser-tests/responsive-browser.ts",
     "test:mockups": "npm test -- scripts/*mockup*.test.ts && env -u FORCE_COLOR -u NO_COLOR playwright test --config=playwright.mockups.config.ts",
     "render:mockups": "tsx scripts/render-tokenbench-mockups.ts",
-    "types:workers": "WRANGLER_WRITE_LOGS=false wrangler types workers/catalog-ingest/worker-configuration.d.ts --config workers/catalog-ingest/wrangler.toml --env-interface CatalogIngestEnv",
-    "types:workers:check": "WRANGLER_WRITE_LOGS=false wrangler types workers/catalog-ingest/worker-configuration.d.ts --config workers/catalog-ingest/wrangler.toml --env-interface CatalogIngestEnv --check",
-    "lint:workers": "tsc --noEmit -p workers/catalog-ingest/tsconfig.json",
+    "types:workers": "WRANGLER_WRITE_LOGS=false wrangler types workers/catalog-ingest/worker-configuration.d.ts --config workers/catalog-ingest/wrangler.toml --env-interface CatalogIngestEnv && WRANGLER_WRITE_LOGS=false wrangler types workers/benchmark-ingest/worker-configuration.d.ts --config workers/benchmark-ingest/wrangler.toml --env-interface BenchmarkIngestEnv",
+    "types:workers:check": "WRANGLER_WRITE_LOGS=false wrangler types workers/catalog-ingest/worker-configuration.d.ts --config workers/catalog-ingest/wrangler.toml --env-interface CatalogIngestEnv --check && WRANGLER_WRITE_LOGS=false wrangler types workers/benchmark-ingest/worker-configuration.d.ts --config workers/benchmark-ingest/wrangler.toml --env-interface BenchmarkIngestEnv --check",
+    "lint:workers": "tsc --noEmit -p workers/catalog-ingest/tsconfig.json && tsc --noEmit -p workers/benchmark-ingest/tsconfig.json",
     "inspect:ingestion": "tsx scripts/inspect-ingestion-cycle.ts",
     "lint": "tsc --noEmit"
   },
