@@ -328,9 +328,12 @@ directly:
 
 - Keep both Workers scheduled-only. Their public `fetch` handlers continue to
   return 405.
-- The immediate cutover cycle uses the existing controlled Wrangler scheduled
-  test path with production bindings; no permanent public refresh route is
-  added.
+- The immediate cutover cycle uses a temporary one-minute Cron applied with
+  Wrangler trigger configuration. The due/active guard makes later minute ticks
+  no-ops. As soon as the D1 receipt becomes `running`, Wrangler restores the
+  checked-in daily or weekly trigger. SQLite Durable Objects do not support
+  remote development bindings, so cutover does not use `wrangler dev --remote`.
+  No permanent public refresh route is added.
 - No secret is added to source or Wrangler configuration.
 - Attempt IDs use `crypto.randomUUID()`.
 - Error and receipt strings are bounded and content-free.
@@ -399,12 +402,13 @@ directly:
 ## Rollout and rollback
 
 1. Apply the receipt-table migration.
-2. Deploy the catalog Worker with its coordinator but leave the existing Cron
-   schedule until a controlled synthetic cycle passes.
+2. Deploy the catalog Worker with its coordinator after a controlled local
+   synthetic cycle passes.
 3. Deploy the benchmark Worker with its coordinator and run a production-sized
    no-publish validation against immutable active snapshots.
 4. Enable the one-daily and one-weekly schedules.
-5. Trigger immediate controlled catalog and benchmark cycles.
+5. Apply a temporary one-minute trigger to each Worker, wait until its receipt
+   becomes `running`, then restore the checked-in daily or weekly trigger.
 6. Keep the previous Worker versions and schedules as rollback targets until
    the first complete checkpointed cycle publishes.
 7. If a coordinator or alarm fails, roll back Worker code and schedule without
