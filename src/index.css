@@ -1246,3 +1246,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .price-performance-details-heading .button { width: 100%; justify-content: center; }
   .price-performance-details-facts, .price-performance-evidence-facts, .price-performance-card dl { grid-template-columns: minmax(0, 1fr); }
 }
+.score-bar-chart { display: block; width: 100%; max-width: 100%; overflow: visible; }
+.score-bar-chart-label { fill: var(--text); font-family: var(--font-label); font-size: 0.72rem; }
+.score-bar-chart-value { fill: var(--muted); font-size: 0.7rem; }
+.score-bar-chart-tick { fill: var(--muted); font-size: 0.66rem; }
