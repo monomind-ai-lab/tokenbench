@@ -121,7 +121,7 @@ describe('crawlable static-page generator', () => {
     expect(confirmed).not.toContain('google_translate_element');
     expect(confirmed).not.toContain('googleTranslateElementInit');
     expect(confirmed).not.toContain('translate.google.com');
-    expect(confirmed).toContain('<a class="button" href="/welcome/">Start Exploring</a>');
+    expect(confirmed).toContain('<a class="button" href="/">Start Exploring</a>');
     expect(confirmed.match(/<a\b/gu)).toHaveLength(1);
     expect(confirmed).toContain('<script type="application/ld+json">');
     expect(confirmed).toContain('"@type":"WebPage"');
