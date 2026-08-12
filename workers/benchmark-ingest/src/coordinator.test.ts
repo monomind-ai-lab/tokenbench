@@ -626,6 +626,48 @@ describe('LMArena pagination', () => {
     expect(done.lmArena).toHaveLength(1);
     expect(calls.filter((call) => call.name === 'retrieveLmArenaPageStep')).toHaveLength(3);
   });
+
+  it('preserves each page offset when parquet fallback returns multiple artifacts', async () => {
+    nowMs = SUNDAY;
+    const durable = storage({ [CYCLE_KEY]: {
+      ...createBenchmarkCycle(SUNDAY, CYCLE_ID),
+      phase: 'retrieve-lmarena-pages',
+      cursor: 0,
+      frozenCatalogRevision: CATALOG_REVISION,
+    } });
+    durable.values.set(CHECKPOINT_KEY, {
+      ...acquireCheckpoint(),
+      lmArenaRevision: LMARENA_REVISION,
+      lmArenaProgress: {
+        subsetIndex: 0, offset: 0, declaredTotal: null,
+        transport: 'hub-parquet-download',
+        download: {
+          subset: 'text_style_control', upstreamRevision: LMARENA_REVISION,
+          downloadUrl: 'https://cdn-lfs.hf.co/x', originalContentHash: `sha256:${hex('parquet')}`, etag: null,
+        },
+        pageCount: 0,
+      },
+    });
+    const { env } = environment({ catalogRevision: CATALOG_REVISION });
+    const { steps } = fakeSteps({
+      retrieveLmArenaPageStep: () => ({
+        kind: 'pages', subset: 'text_style_control', declaredTotal: 200,
+        artifacts: [
+          artifact('lmarena/text_style_control/hub/o0.json',
+            'text_style_control:latest:overall:hub-parquet:rows-0-100',
+            { upstreamRevision: LMARENA_REVISION, schemaVersion: 'hub-parquet-v1' }),
+          artifact('lmarena/text_style_control/hub/o100.json',
+            'text_style_control:latest:overall:hub-parquet:rows-100-200',
+            { upstreamRevision: LMARENA_REVISION, schemaVersion: 'hub-parquet-v1' }),
+        ],
+      }),
+    });
+
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    const checkpoint = durable.values.get(CHECKPOINT_KEY) as { lmArena: { offset: number }[] };
+    expect(checkpoint.lmArena.map((entry) => entry.offset)).toEqual([0, 100]);
+  });
 });
 
 // ---------------------------------------------------------------------------

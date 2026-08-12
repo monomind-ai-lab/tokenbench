@@ -799,7 +799,14 @@ async function retrieveLmArenaPagesStep(
   } else if (output.kind === 'resolved') {
     nextProgress = { ...progress, transport: 'hub-parquet-download', download: output.download };
   } else {
-    lmArena = [...checkpoint.lmArena, ...output.artifacts.map((artifact) => ({ artifact, subset, offset: 0 }))];
+    lmArena = [
+      ...checkpoint.lmArena,
+      ...output.artifacts.map((artifact, pageIndex) => ({
+        artifact,
+        subset,
+        offset: pageIndex * 100,
+      })),
+    ];
     outputCount = output.artifacts.length;
     nextProgress = { subsetIndex: progress.subsetIndex + 1, offset: 0, declaredTotal: null, transport: 'dataset-viewer', download: null, pageCount: 0 };
   }
