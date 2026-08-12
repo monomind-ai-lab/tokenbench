@@ -24,7 +24,7 @@ The benchmark scheduled handler currently performs all of these operations in
 one invocation:
 
 1. read the active catalog and benchmark revision;
-2. fetch or rehydrate five BenchLM artifacts;
+2. fetch or rehydrate six BenchLM artifacts;
 3. fetch and normalize LiteLLM pricing;
 4. fetch all LMArena subsets or its parquet fallback;
 5. merge facts and derive comparisons;
@@ -139,9 +139,9 @@ advances through these phases:
 
 1. **Acquire** — allocate an attempt-unique cycle ID, record the frozen catalog
    revision, active benchmark revision, and source validators.
-2. **Retrieve BenchLM** — process one of the five artifacts per step using
+2. **Retrieve BenchLM** — process one of the six artifacts per step using
    conditional headers. Persist projected bytes and provenance to immutable R2
-   candidate paths. All five must describe one valid BenchLM bundle before the
+   candidate paths. All six must describe one valid BenchLM bundle before the
    phase completes.
 3. **Retrieve LiteLLM** — fetch, bound, validate, project, hash, and store its
    pricing snapshot in one step.
@@ -233,7 +233,11 @@ is a hard maximum; the selected design normally uses one per step.
 - Successful steps schedule the next alarm 15 seconds later. This keeps the
   cycle moving while giving logs and D1/R2 state a clear boundary.
 - A transient upstream failure retries the same cursor after 1, 5, then 30
-  minutes.
+  minutes unless a valid `Retry-After` or provider reset header requires a later
+  alarm. Provider reset times are persisted without the current ten-second cap.
+- A retrieval alarm makes one upstream attempt. It never nests an in-invocation
+  retry loop, including for HTTP 429. OpenCode model and pricing retrieval is
+  serialized rather than issued as a two-request burst.
 - Three failed attempts mark the cycle `failed`. The next regular cadence may
   start a new cycle; operators may start a controlled cycle sooner.
 - Catalog cycles expire after 12 hours. Benchmark cycles expire after 24 hours.
@@ -355,6 +359,8 @@ directly:
 - duplicate alarms before and after each completion marker;
 - restart from every persisted cursor;
 - transient retry sequence and permanent failure;
+- full `Retry-After`/rate-limit reset persistence, no nested 429 retry, jittered
+  alarms, and serialized OpenCode requests;
 - cycle expiry and next-cadence recovery;
 - source revision change during LMArena/BenchLM collection;
 - bounded profile/cache batches;
