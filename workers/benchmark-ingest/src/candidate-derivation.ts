@@ -26,7 +26,9 @@ import {
   BENCHMARK_DERIVATION_SCHEMA_VERSION,
   compareUtf8Binary,
   validateNormalizedSourceBatch,
+  validateBenchmarkComparisonPair,
 } from '../../../src/benchmarks/contracts';
+import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
 import {
   type BenchmarkCandidateManifestV1,
   type CandidatePartition,
@@ -75,6 +77,14 @@ export interface DerivedCandidate {
   readonly revision: string;
   readonly contentHash: `sha256:${string}`;
   readonly partitions: readonly DerivedPartitionReceipt[];
+}
+
+interface DerivedRows {
+  readonly sources: BenchmarkSourceRecord[];
+  readonly models: BenchmarkModel[];
+  readonly metrics: BenchmarkMetric[];
+  readonly prices: BenchmarkPriceCheck[];
+  readonly comparisons: BenchmarkComparisonPair[];
 }
 
 /** Minimal R2 surface required for derivation. */
@@ -248,6 +258,74 @@ async function writeDerivedPartition(
     });
   }
   return { key, contentHash, byteLength: bytes.byteLength };
+}
+
+async function readDerivedRows(
+  manifest: BenchmarkCandidateManifestV1,
+  bucket: CandidateR2Bucket,
+): Promise<DerivedRows> {
+  const rows: DerivedRows = { sources: [], models: [], metrics: [], prices: [], comparisons: [] };
+  for (const descriptor of manifest.derivedPartitions) {
+    const parsed = parseDerivedPartitionId(descriptor.partitionId);
+    if (descriptor.kind !== parsed.kind || descriptor.index !== parsed.index || descriptor.rowCount !== parsed.rowCount) {
+      fail(`derived partition ${descriptor.partitionId} descriptor is inconsistent`);
+    }
+    const object = await bucket.get(descriptor.key);
+    if (!object) fail(`derived partition ${descriptor.partitionId} is missing`);
+    const bytes = new Uint8Array(await object.arrayBuffer());
+    if (bytes.byteLength !== descriptor.byteLength || await sha256Digest(bytes) !== descriptor.contentHash) {
+      fail(`derived partition ${descriptor.partitionId} does not match its exact bytes`);
+    }
+    const payload = decodeJson(bytes, `derived partition ${descriptor.partitionId}`) as {
+      kind?: unknown; index?: unknown; rows?: unknown;
+    };
+    if (payload.kind !== parsed.kind || payload.index !== parsed.index
+      || !Array.isArray(payload.rows) || payload.rows.length !== parsed.rowCount) {
+      fail(`derived partition ${descriptor.partitionId} payload is inconsistent`);
+    }
+    (rows[parsed.kind] as unknown[]).push(...payload.rows);
+  }
+  return rows;
+}
+
+/** Reconstruct a runtime-validated snapshot from immutable derived partitions. */
+export async function readDerivedCandidateSnapshot(input: {
+  readonly manifest: BenchmarkCandidateManifestV1;
+  readonly bucket: CandidateR2Bucket;
+  readonly revision: string;
+  readonly contentHash: string;
+  readonly generatedAt: string;
+  readonly publishedAt?: string;
+}): Promise<ActiveBenchmarkSnapshot> {
+  const manifest = parseBenchmarkCandidateManifest(input.manifest);
+  const rows = await readDerivedRows(manifest, input.bucket);
+  const batch = validateNormalizedSourceBatch({
+    sources: rows.sources,
+    models: rows.models,
+    metrics: rows.metrics,
+    priceChecks: rows.prices,
+    comparisonSeeds: [],
+  });
+  rows.comparisons.forEach((pair) => validateBenchmarkComparisonPair(pair));
+  const openRouter = batch.sources.find((source) => source.sourceId === 'openrouter');
+  if (!openRouter) fail('derived snapshot is missing its OpenRouter catalog source');
+  return {
+    revision: {
+      revision: input.revision,
+      generatedAt: input.generatedAt,
+      publishedAt: input.publishedAt ?? manifest.checkedAt,
+      checkedAt: manifest.checkedAt,
+      publicationState: 'published',
+      contentHash: input.contentHash,
+      catalogRevision: manifest.frozenCatalogRevision,
+      openrouterContentHash: openRouter.contentHash,
+    },
+    sources: batch.sources,
+    models: batch.models,
+    metrics: batch.metrics,
+    priceChecks: batch.priceChecks,
+    comparisonPairs: rows.comparisons,
+  };
 }
 
 /**

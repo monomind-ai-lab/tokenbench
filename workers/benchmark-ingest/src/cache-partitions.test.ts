@@ -217,6 +217,9 @@ class RecordingStatement {
 
   async first<T = unknown>(): Promise<T | null> {
     this.sink.push({ sql: this.statementSql, values: this.statementValues });
+    if (this.statementSql.includes('FROM benchmark_revisions')) {
+      return { state: 'pending', attempt: PUBLICATION_ATTEMPT_ID } as T;
+    }
     return null;
   }
 
@@ -465,6 +468,32 @@ describe('stageBenchmarkCachePartition', () => {
       updatedAt: CHECKED_AT,
     })).rejects.toThrow('foreign publication attempt');
     expect(db.statements.length).toBe(0);
+  });
+
+  it('rejects a cache partition when D1 ownership is not pending for the attempt', async () => {
+    const statements: RecordedStatement[] = [];
+    const db = {
+      prepare(sql: string) {
+        const statement = new RecordingStatement(statements, sql);
+        if (!sql.includes('FROM benchmark_revisions')) return statement;
+        return Object.assign(statement, {
+          bind(...values: unknown[]) {
+            return {
+              async first() { return { state: 'pending', attempt: 'foreign-attempt' }; },
+              async run() { statements.push({ sql, values }); return { meta: { changes: 1 } }; },
+            };
+          },
+        });
+      },
+    } as D1Database;
+    await expect(stageBenchmarkCachePartition({
+      db,
+      snapshot: compactSnapshot(),
+      cacheKey: BENCHMARK_SUMMARY_CACHE_KEY,
+      cacheRevision: cacheRevisionFor(PUBLICATION_ATTEMPT_ID),
+      publicationAttemptId: PUBLICATION_ATTEMPT_ID,
+      updatedAt: CHECKED_AT,
+    })).rejects.toThrow('attempt-owned pending');
   });
 
   it('is idempotent while leaving the active pointer on the prior revision', async () => {

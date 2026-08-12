@@ -15,6 +15,7 @@ import {
   deriveCandidatePartitions,
   derivedPartitionToCandidate,
   parseDerivedPartitionId,
+  readDerivedCandidateSnapshot,
 } from './candidate-derivation';
 
 const CYCLE_ID = '11111111-2222-4333-8444-555555555555';
@@ -488,5 +489,33 @@ describe('deriveCandidatePartitions', () => {
       });
     }
     expect(DERIVED_PARTITION_KINDS).toContain('comparisons');
+  });
+
+  it('reconstructs a validated publication snapshot from derived partitions', async () => {
+    const batch = fixtureBatch();
+    const bucket = new FakeR2Bucket();
+    const baseManifest = manifestFor(normalizeBatch(bucket, batch));
+    const derived = await deriveCandidatePartitions(baseManifest, { SOURCE_SNAPSHOTS: bucket });
+    const manifest = {
+      ...baseManifest,
+      derivedPartitions: derived.partitions.map(derivedPartitionToCandidate),
+    };
+
+    const snapshot = await readDerivedCandidateSnapshot({
+      manifest,
+      bucket,
+      revision: derived.revision,
+      contentHash: derived.contentHash,
+      generatedAt: CHECKED_AT,
+    });
+
+    expect(snapshot.revision.revision).toBe(derived.revision);
+    expect(snapshot.models).toEqual(batch.models.slice().sort((left, right) => compareUtf8Binary(left.modelKey, right.modelKey)));
+    expect(snapshot.metrics.find((metric) => metric.category === 'coding' && metric.modelKey === 'gpt-5-6-sol')?.value)
+      .toBe(77.95);
+    expect(snapshot.priceChecks).toEqual(batch.priceChecks.slice().sort((left, right) => compareUtf8Binary(
+      `${left.modelKey}\u0000${left.sourceId}\u0000${left.providerId}\u0000${left.routeId}`,
+      `${right.modelKey}\u0000${right.sourceId}\u0000${right.providerId}\u0000${right.routeId}`,
+    )));
   });
 });

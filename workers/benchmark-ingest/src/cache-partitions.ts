@@ -49,6 +49,7 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 /** A single D1 write surface used only for staging inactive cache entries. */
 export interface BoundStatement {
   bind(...values: unknown[]): BoundStatement;
+  first<T = Record<string, unknown>>(): Promise<T | null>;
   run(): Promise<{ meta?: { changes?: number } }>;
 }
 
@@ -409,6 +410,13 @@ export async function stageBenchmarkCachePartition(input: StageCachePartitionInp
   const partition = materializeBenchmarkCachePartition(snapshot, cacheKey);
   validateBody(partition.fresh, cacheKey);
   validateBody(partition.stale, cacheKey);
+
+  const owner = await db.prepare(`SELECT publication_state AS state, publication_attempt_id AS attempt
+    FROM benchmark_revisions WHERE revision = ?`).bind(snapshot.revision.revision)
+    .first<{ state: string; attempt: string | null }>();
+  if (!owner || owner.state !== 'pending' || owner.attempt !== publicationAttemptId) {
+    fail('cache partition requires the attempt-owned pending benchmark revision');
+  }
 
   const statements = apiResponseStatements(
     db,
