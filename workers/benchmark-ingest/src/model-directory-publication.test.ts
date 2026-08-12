@@ -10,6 +10,7 @@ import {
   appendModelDirectoryPublicationStatements,
   prepareModelDirectoryPublicationCandidate,
   prepareModelProfilePartition,
+  stageModelProfilePartition,
   type D1Database,
   type BoundStatement,
 } from './model-directory-publication';
@@ -142,6 +143,7 @@ function recordingDatabase(records: RecordedStatement[]): D1Database {
         },
       } as unknown as BoundStatement;
     },
+    async batch() { return undefined; },
   };
 }
 
@@ -172,6 +174,28 @@ describe('atomic model directory publication', () => {
       .rejects.toThrow(/offset/);
     await expect(prepareModelProfilePartition(candidate, leaderboard, UPDATED_AT, 0, 101))
       .rejects.toThrow(/limit/);
+  });
+
+  it('stages one profile window idempotently without mutable directory or rank changes', async () => {
+    const records: RecordedStatement[] = [];
+    const candidate = snapshot(101);
+    const partition = await prepareModelProfilePartition(
+      candidate, publicLeaderboard(candidate.models), UPDATED_AT, 0,
+    );
+    const result = await stageModelProfilePartition({
+      db: recordingDatabase(records),
+      cycleId: 'cycle-1',
+      revision: candidate.revision.revision,
+      partition,
+    });
+
+    expect(result).toEqual({ models: 100, profiles: 100 });
+    expect(records.some(({ sql }) => sql.includes('benchmark_model_revision_membership'))).toBe(true);
+    expect(records.some(({ sql }) => sql.includes('benchmark_model_profile_snapshots'))).toBe(true);
+    expect(records.every(({ sql }) => !sql.includes('benchmark_model_directory'))).toBe(true);
+    expect(records.every(({ sql }) => !sql.includes('benchmark_popular_model'))).toBe(true);
+    expect(records.every(({ sql }) => !sql.includes('benchmark_publication_state'))).toBe(true);
+    expect(records.every(({ sql }) => sql.includes('publication_attempt_id = ?'))).toBe(true);
   });
 
   it('prepares exact profile hashes through the native asynchronous publication path', async () => {

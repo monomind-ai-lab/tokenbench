@@ -31,6 +31,7 @@ export type BoundStatement = {
 
 export type D1Database = {
   prepare(sql: string): BoundStatement;
+  batch?(statements: BoundStatement[]): Promise<unknown>;
 };
 
 const serializedStatementBytes = new WeakMap<object, number>();
@@ -412,6 +413,58 @@ export async function prepareModelProfilePartition(
     totalModelCount: snapshot.models.length,
     modelKeys: selectedModels.map((model) => model.modelKey),
   };
+}
+
+export async function stageModelProfilePartition(input: {
+  readonly db: D1Database;
+  readonly cycleId: string;
+  readonly revision: string;
+  readonly partition: ModelProfilePartition;
+}): Promise<{ models: number; profiles: number }> {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(input.cycleId)) {
+    throw new Error('model profile partition cycleId is invalid');
+  }
+  if (input.partition.modelKeys.length > 100 || input.partition.profiles.length > 100) {
+    throw new Error('model profile partition exceeds the 100-model bound');
+  }
+  const membershipRows = input.partition.modelKeys.map((modelKey) => ({ modelKey }));
+  const profileRows = input.partition.profiles.map((profile) => ({
+    modelKey: profile.modelKey,
+    profileJson: profile.profileJson,
+    contentHash: profile.contentHash,
+    generatedAt: profile.generatedAt,
+  }));
+  const statements: BoundStatement[] = [];
+  for (const payload of jsonPayloads(membershipRows, 'model revision membership partition')) {
+    statements.push(boundedStatement(input.db, `INSERT INTO benchmark_model_revision_membership
+      (revision, model_key)
+    SELECT ?, json_extract(row.value, '$.modelKey')
+    FROM json_each(?) AS row
+    WHERE EXISTS (
+      SELECT 1 FROM benchmark_revisions
+      WHERE revision = ? AND publication_attempt_id = ? AND publication_state = 'pending'
+    )
+    ON CONFLICT(revision, model_key) DO NOTHING`, [
+      input.revision, payload, input.revision, input.cycleId,
+    ]));
+  }
+  for (const payload of jsonPayloads(profileRows, 'model profile partition')) {
+    statements.push(boundedStatement(input.db, `INSERT INTO benchmark_model_profile_snapshots
+      (model_key, revision, profile_json, content_hash, generated_at)
+    SELECT json_extract(row.value, '$.modelKey'), ?, json_extract(row.value, '$.profileJson'),
+      json_extract(row.value, '$.contentHash'), json_extract(row.value, '$.generatedAt')
+    FROM json_each(?) AS row
+    WHERE EXISTS (
+      SELECT 1 FROM benchmark_revisions
+      WHERE revision = ? AND publication_attempt_id = ? AND publication_state = 'pending'
+    )
+    ON CONFLICT(model_key, revision) DO NOTHING`, [
+      input.revision, payload, input.revision, input.cycleId,
+    ]));
+  }
+  if (!input.db.batch) throw new Error('model profile partition staging requires D1 batch support');
+  await input.db.batch(statements);
+  return { models: membershipRows.length, profiles: profileRows.length };
 }
 
 /**
