@@ -1,4 +1,4 @@
-import type { BenchmarkPriceCheck } from './contracts';
+import type { BenchmarkPriceCheck, BenchmarkSourceId } from './contracts';
 
 export const WORKLOAD_PROFILES = {
   inputHeavy: { inputShare: 0.90, outputShare: 0.10 },
@@ -78,12 +78,20 @@ export function blendedCostPerMillion(
 }
 
 /**
- * A cost-derived calculation can only use an explicit, primary OpenRouter
- * route. A zero on a self-hosted or corroborating source is evidence, but not
- * proof of a hosted API route.
+ * A cost-derived calculation needs an explicit, primary hosted route.
+ * OpenRouter always qualifies. A source may also publish pricing for its own
+ * models (BenchLM `pricing`), which is same-source evidence rather than a
+ * cross-source guess, so it qualifies when the model came from that same
+ * source. litellm stays corroborating-only and never qualifies. A zero on a
+ * corroborating source is evidence, but not proof of a hosted API route.
  */
-export function isPrimaryHostedRoute(price: BenchmarkPriceCheck): boolean {
-  return price.sourceId === 'openrouter'
+export function isPrimaryHostedRoute(
+  price: BenchmarkPriceCheck,
+  modelSourceId?: BenchmarkSourceId,
+): boolean {
+  const hostedSource = price.sourceId === 'openrouter'
+    || (modelSourceId !== undefined && price.sourceId === modelSourceId && price.sourceId !== 'litellm');
+  return hostedSource
     && price.verificationStatus === 'primary'
     && typeof price.routeId === 'string'
     && price.routeId.trim().length > 0
@@ -99,11 +107,12 @@ export function primaryHostedRoutesForModel(
   modelKey: string,
   prices: readonly BenchmarkPriceCheck[],
   profile: WorkloadProfile,
+  modelSourceId?: BenchmarkSourceId,
 ): readonly BenchmarkPriceCheck[] {
   if (!isWorkloadProfile(profile)) throw new RangeError('profile must be a supported workload profile');
 
   return prices
-    .filter((price) => price.modelKey === modelKey && isPrimaryHostedRoute(price))
+    .filter((price) => price.modelKey === modelKey && isPrimaryHostedRoute(price, modelSourceId))
     .slice()
     .sort((left, right) => {
       const leftCost = nullableBlendedCost(left, profile);
@@ -122,8 +131,9 @@ export function primaryHostedPriceForModel(
   modelKey: string,
   prices: readonly BenchmarkPriceCheck[],
   profile: WorkloadProfile,
+  modelSourceId?: BenchmarkSourceId,
 ): PrimaryHostedPrice | null {
-  for (const price of primaryHostedRoutesForModel(modelKey, prices, profile)) {
+  for (const price of primaryHostedRoutesForModel(modelKey, prices, profile, modelSourceId)) {
     const cost = nullableBlendedCost(price, profile);
     if (cost !== null) {
       return {

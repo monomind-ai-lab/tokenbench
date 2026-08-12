@@ -331,7 +331,7 @@ function buildBenchLmLeaderboard(
     .flatMap((model) => {
       const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
       if (!metric) return [];
-      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy');
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy', model.sourceId);
       return [makeEntry(
         model,
         metric,
@@ -382,7 +382,7 @@ function buildValueLeaderboard(
     .flatMap((model) => {
       const metric = selectMetric(model, metricsByModel.get(model.modelKey) ?? [], (candidate) => isSupportedBenchLmMetric(model, candidate, metricKey));
       if (!metric) return [];
-      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], profile);
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], profile, model.sourceId);
       return hostedPrice
         ? [makeEntry(model, metric, [metric], hostedPrice.price, hostedPrice.blendedCostPerMillion)]
         : [];
@@ -451,7 +451,7 @@ function buildMultimodalLeaderboard(
         .map((metricKey) => metricForMultimodalLens(model, metricsByModel.get(model.modelKey) ?? [], metricKey))
         .filter((metric): metric is BenchmarkMetric => metric !== null);
       if (lenses.length === 0) return [];
-      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy');
+      const hostedPrice = primaryHostedPriceForModel(model.modelKey, pricesByModel.get(model.modelKey) ?? [], 'outputHeavy', model.sourceId);
       return [makeEntry(
         model,
         lenses[0],

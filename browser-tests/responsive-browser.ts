@@ -1263,14 +1263,14 @@ test.describe('leaderboard browser harness', () => {
     expect(await mediaCards.getByRole('heading', { level: 3 }).allTextContents()).toEqual(mediaNames);
   });
 
-  test('keeps current leaderboard actions, decision picks, and provider identity readable across themes and breakpoints', async ({ page }) => {
+  test('keeps current leaderboard actions, score chart, and provider identity readable across themes and breakpoints', async ({ page }) => {
     test.setTimeout(120_000);
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
     await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
     await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
 
-    for (const [width, expectedPickColumns] of [[320, 1], [1440, 3]] as const) {
+    for (const width of [320, 1440] as const) {
       await page.setViewportSize({ width, height: 1000 });
       for (const theme of ['dark', 'light'] as const) {
         await setStoredTheme(page, theme);
@@ -1286,8 +1286,8 @@ test.describe('leaderboard browser harness', () => {
           '/api/benchmarks/leaderboards/llm-coding/csv?profile=balanced&sort=score-desc&q=Alpha',
         );
 
-        const picks = page.getByRole('region', { name: 'Decision-ready picks' });
-        await expect(picks).toBeVisible({ timeout: 15_000 });
+        const scoreChart = page.getByRole('region', { name: 'Score comparison' });
+        await expect(scoreChart).toBeVisible({ timeout: 15_000 });
         await expect(page.getByRole('heading', { name: 'Evidence and methodology', level: 2 })).toHaveCount(1);
         await expect(page.locator('.leaderboard-results .leaderboard-evidence')).toHaveCount(0);
         await expect(page.locator('.leaderboard-evidence-panel .leaderboard-evidence')).toHaveCount(1);
@@ -1295,7 +1295,7 @@ test.describe('leaderboard browser harness', () => {
 
         const sectionPositions = await page.locator('.leaderboard-page').evaluate((leaderboardPage) => [
           '.leaderboard-hero',
-          '.leaderboard-decision-picks',
+          '.leaderboard-score-chart-panel',
           '.leaderboard-filter-panel',
           'section[aria-label="Coding benchmark results"]',
           '.leaderboard-evidence-panel',
@@ -1303,10 +1303,12 @@ test.describe('leaderboard browser harness', () => {
         expect(sectionPositions.every((position) => position >= 0)).toBe(true);
         expect(sectionPositions).toEqual([...sectionPositions].sort((left, right) => left - right));
 
-        const pickColumnCount = await picks.locator('.decision-pick-list').evaluate((list) => (
-          getComputedStyle(list).gridTemplateColumns.split(/\s+/).filter(Boolean).length
-        ));
-        expect(pickColumnCount).toBe(expectedPickColumns);
+        // The chart replaces the panel that restated the table's top three rows.
+        // It stays a labeled, non-empty SVG at every breakpoint.
+        const chartSvg = scoreChart.locator('svg.score-bar-chart');
+        await expect(chartSvg).toHaveAttribute('role', 'img');
+        await expect(chartSvg).toHaveAttribute('aria-label', /score by model/i);
+        expect(await chartSvg.locator('rect.visx-bar').count()).toBeGreaterThan(0);
 
         const provider = width < 1024
           ? page.locator('.leaderboard-card-list .leaderboard-provider').first()

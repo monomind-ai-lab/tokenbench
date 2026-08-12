@@ -17,10 +17,25 @@ import {
   type LeaderboardQueryCapabilities,
 } from '../frontend/leaderboard-filter-state';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
+import { ScoreBarChart, type ScoreBarChartDatum } from '../frontend/charts/score-bar-chart';
+import type { LeaderboardEntry } from '../benchmarks/leaderboards';
 import { ProviderMark } from '../frontend/provider-mark';
 import { ShareAction } from '../frontend/share-action';
 import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
 import { SITE_CONFIG } from '../brand/site-config';
+
+const UNRANKED_LENS_KEYS = new Set<LeaderboardKey>(['llm-reasoning', 'llm-knowledge']);
+
+/**
+ * Positions are published source ranks, so a category view can legitimately
+ * start at #2 or skip a number when the model at that rank has no measurement
+ * for the category. Say so, rather than letting the gap read as a defect.
+ */
+export function positionNoteFor(keyName: LeaderboardKey): string {
+  return UNRANKED_LENS_KEYS.has(keyName)
+    ? 'This is an unranked evidence lens. Positions come from the source where published, and rows without a published rank stay unranked rather than being renumbered.'
+    : 'Positions are the published source rank, not the row number. A gap means the model at that rank has no published measurement for this category.';
+}
 
 function methodologySummary(keyName: LeaderboardKey): string {
   if (keyName === 'llm-value') {
@@ -148,14 +163,42 @@ function LeaderboardState({
   return <div className="empty-state leaderboard-state" role="alert"><strong>Unable to load benchmark data</strong><p>{error ?? 'The cached benchmark request failed.'}</p><button type="button" className="button button-secondary" onClick={onRetry}>Retry benchmark request</button></div>;
 }
 
-function CurrentDecisionPicks({ keyName }: { readonly keyName: LeaderboardKey }) {
-  const state = useDecisionPicks();
-  const group = state.decisionPicks?.find((candidate) => candidate.key === keyName);
-  if (!group || group.entries.length === 0) return null;
+/**
+ * Projects leaderboard rows into chart rows without inventing a score. Rows
+ * with no published measurement are dropped rather than plotted at zero.
+ */
+export function scoreChartData(
+  entries: readonly LeaderboardEntry[],
+  limit = 12,
+): readonly ScoreBarChartDatum[] {
+  return entries
+    .filter((entry) => entry.metric !== null && Number.isFinite(entry.metric.value))
+    .slice(0, limit)
+    .map((entry) => ({
+      label: entry.model.name,
+      value: entry.metric!.value,
+      muted: entry.model.evidenceStatus === 'estimated',
+    }));
+}
 
-  return <section className="panel leaderboard-decision-picks" aria-labelledby="leaderboard-decision-picks-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Available from the published summary</span><h2 id="leaderboard-decision-picks-heading">Decision-ready picks</h2><p>The current top 3 models:</p></div></div>
-    <ol className="decision-pick-list">{group.entries.map((entry) => <DecisionEntry key={entry.modelKey} entry={entry} />)}</ol>
+/**
+ * Replaces the former "Decision-ready picks" panel, which restated the top
+ * three rows of the table directly beneath it. The chart shows the whole
+ * visible field at a glance while exact values stay in that table.
+ */
+function LeaderboardScoreChart({
+  keyName,
+  entries,
+}: {
+  readonly keyName: LeaderboardKey;
+  readonly entries: readonly LeaderboardEntry[];
+}) {
+  const chartData = useMemo(() => scoreChartData(entries), [entries]);
+  if (chartData.length === 0) return null;
+
+  return <section className="panel leaderboard-score-chart-panel" aria-labelledby="leaderboard-score-chart-heading">
+    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-score-chart-heading">Score comparison</h2><p>The published score for each model in this view. Exact values stay in the table below.</p></div></div>
+    <ScoreBarChart data={chartData} ariaLabel={`${LEADERBOARD_ROUTES[keyName].seo.h1} score by model`} />
   </section>;
 }
 
@@ -286,7 +329,9 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       </div>
     </section>
 
-    {state.phase === 'ready' || state.phase === 'stale' ? <CurrentDecisionPicks keyName={keyName} /> : null}
+    {state.phase === 'ready' || state.phase === 'stale'
+      ? <LeaderboardScoreChart keyName={keyName} entries={entries} />
+      : null}
 
     <section className="panel leaderboard-filter-panel" aria-labelledby="leaderboard-filters-heading">
       <div className="panel-heading"><div><span className="eyebrow">Review the published revision</span><h2 id="leaderboard-filters-heading">Filter and sort</h2><p>Use the filters supported by this route’s published evidence. Estimated records remain visibly separate from ranked evidence.</p></div></div>
@@ -323,7 +368,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     </section>
 
     <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p><p className="muted">{positionNoteFor(keyName)}</p></div></div>
       {state.envelope
         ? <LeaderboardEvidence publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} label="Published leaderboard evidence" compact />
         : <p className="leaderboard-evidence-unavailable">No published source record is available for this view yet. TokenBench will show source links, publication time, and freshness here when a valid revision is available.</p>}
