@@ -226,7 +226,7 @@ describe('PricePerformancePage', () => {
 
     const staleStatus = await screen.findByRole('status');
     expect(staleStatus).toHaveTextContent('server-rendered revision');
-    expect(screen.getByText('Revision price-performance-rev-1')).toBeInTheDocument();
-    expect(screen.queryByText('Revision price-performance-rev-older')).not.toBeInTheDocument();
+    expect(screen.getByText('price-performance-rev-1')).toBeInTheDocument();
+    expect(screen.queryByText('price-performance-rev-older')).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck, BenchmarkSourceRecord } from '../benchmarks/contracts';
+import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck } from '../benchmarks/contracts';
 import { modelPath } from '../benchmarks/model-directory';
 import { SITE_CONFIG } from '../brand/site-config';
 import { ComparisonRadar, radarAxes } from './comparison-radar';
@@ -38,15 +38,6 @@ function formatDateTime(value: string): string {
     year: 'numeric',
     timeZoneName: 'short',
   }).format(new Date(timestamp));
-}
-
-function isHttpsUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname.length > 0;
-  } catch {
-    return false;
-  }
 }
 
 function unavailable(): ReactNode {
@@ -396,12 +387,6 @@ function PricingContext({
   </section>;
 }
 
-function Attribution({ source }: { readonly source: BenchmarkSourceRecord }) {
-  return <>{isHttpsUrl(source.sourceUrl)
-    ? <a href={source.sourceUrl} rel="noreferrer" target="_blank">{source.attributionText}</a>
-    : <span>{source.attributionText}</span>}<span>{source.sourceId} · observed {formatDateTime(source.observedAt)}</span></>;
-}
-
 function EvidenceProvenance({
   selectedRoutes,
   viewModel,
@@ -421,7 +406,6 @@ function EvidenceProvenance({
       <div><dt>Methodology</dt><dd>{methodology === 'Unavailable' ? unavailable() : methodology}</dd></div>
       <div className="comparison-provenance-sources"><dt>Model records</dt><dd><ul>{viewModel.models.map((model, index) => <li key={model.modelKey}>{modelDisplayLabel(viewModel.models, index as 0 | 1)} — source {model.sourceId} · artifact {model.sourceArtifactId} · model {model.sourceModelId}</li>)}</ul></dd></div>
       <div className="comparison-provenance-sources"><dt>Selected price routes</dt><dd><ul>{selectedRoutes.map((selection, index) => <li key={viewModel.models[index]!.modelKey}>{routeProvenanceLabel(viewModel.models, index as 0 | 1, selection)}</li>)}</ul></dd></div>
-      <div className="comparison-provenance-sources"><dt>Source records</dt><dd><ul>{viewModel.attribution.map((source) => <li key={`${source.sourceId}:${source.artifactId}`}><Attribution source={source} /></li>)}</ul></dd></div>
     </dl>
   </section>;
 }

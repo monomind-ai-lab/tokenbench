@@ -392,7 +392,7 @@ describe('comparison detail page', () => {
     expect(screen.getByRole('link', { name: 'View selected comparison' })).toHaveAttribute('href', '/compare/model-b-vs-other');
   });
 
-  it('keeps source links inside the one provenance disclosure and refuses unsafe targets', () => {
+  it('omits the source records ledger and renders exactly one provenance disclosure', () => {
     const model = viewModel();
     render(<ComparisonPage viewModel={{
       ...model,
@@ -401,8 +401,8 @@ describe('comparison detail page', () => {
 
     const provenance = screen.getByRole('heading', { name: 'Evidence provenance' }).closest('section');
     expect(provenance).not.toBeNull();
+    expect(screen.queryByText('Source records')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Data from BenchLM' })).not.toBeInTheDocument();
-    expect(within(provenance!).getByText('Data from BenchLM')).toBeVisible();
     expect(document.querySelectorAll('.comparison-provenance')).toHaveLength(1);
   });
 });

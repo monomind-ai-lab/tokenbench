@@ -210,7 +210,7 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
       <span className="eyebrow">TokenBench decision surface</span>
       <h1 id="price-performance-heading">LLM price vs performance</h1>
       <p>Compare corrected public benchmark scores against published API prices. Use the frontier to find score/cost trade-offs, then inspect the equivalent values table.</p>
-      <div className="price-performance-facts"><span>Revision {envelope.revision}</span><span className={stale ? 'price-performance-freshness stale' : 'price-performance-freshness'}>{stale ? 'Stale evidence' : 'Fresh evidence'}</span><span>Output USD / 1M default</span></div>
+      <div className="price-performance-facts"><span className={stale ? 'price-performance-freshness stale' : 'price-performance-freshness'}>{stale ? 'Stale evidence' : 'Fresh evidence'}</span><span>Output USD / 1M default</span></div>
     </section>
 
     {stale ? <div className="price-performance-stale" role="status"><strong>Stale benchmark data</strong><span>{envelope.freshness.message ?? 'Showing the last valid published revision while refresh is unavailable.'}</span></div> : null}

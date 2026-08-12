@@ -8,7 +8,7 @@ const WIDTH = 760;
 const HEIGHT = 420;
 const PLOT = { left: 64, right: 22, top: 24, bottom: 52 } as const;
 const TICK_COUNT = 5;
-const MARKER_SIZE = 26;
+const MARKER_SIZE = 13;
 const TIE_MARKER_STEP = 30;
 const AXIS_FORMATTER = new Intl.NumberFormat('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -292,7 +292,7 @@ export function PricePerformanceChart({
               event.preventDefault();
               selectPoint(point, event.currentTarget);
             }}
-          ><span aria-hidden="true">{point.frontier ? '◆' : '●'}</span><span className="sr-only">{point.frontier ? 'Frontier point' : 'Non-frontier point'}</span></button>
+          ><span aria-hidden="true">{point.frontier ? '■' : '●'}</span><span className="sr-only">{point.frontier ? 'Frontier point' : 'Non-frontier point'}</span></button>
         </foreignObject>;
       })}
     </svg>

@@ -9,9 +9,7 @@ export interface PricePerformanceTableProps {
 }
 
 function ProviderRouteEvidence({ facts }: { readonly facts: PricePerformancePointViewFacts }) {
-  return facts.sourceHref
-    ? <a href={facts.sourceHref} target="_blank" rel="noreferrer">{facts.sourceLinkLabel}</a>
-    : facts.sourceLinkLabel;
+  return facts.sourceLinkLabel;
 }
 
 function PointFacts({ facts }: { readonly facts: PricePerformancePointViewFacts }) {
@@ -52,17 +50,15 @@ export function PricePerformanceTable({
           <th scope="col">Provider / route</th>
           <th scope="col">Evidence</th>
           <th scope="col">Frontier</th>
-          <th scope="col">Profile</th>
         </tr></thead>
         <tbody>{rows.map(({ point, facts }) => <tr key={point.modelKey}>
-          <th scope="row">{facts.modelName}<span className={`price-performance-status status-${point.status}`}>{facts.status}</span></th>
+          <th scope="row"><a className="price-performance-model-link" href={facts.profileHref}>{facts.modelName}</a><span className={`price-performance-status status-${point.status}`}>{facts.status}</span></th>
           <td>{facts.score}</td>
           <td>{facts.selectedCost}</td>
           <td>{facts.scorePerDollar}</td>
           <td><ProviderRouteEvidence facts={facts} /></td>
           <td>{facts.evidence}</td>
           <td>{facts.frontier}</td>
-          <td><a className="price-performance-profile-link" href={facts.profileHref}>{facts.profileLinkLabel}</a></td>
         </tr>)}</tbody>
       </table>
     </div>

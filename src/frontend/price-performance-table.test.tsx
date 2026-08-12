@@ -49,8 +49,11 @@ describe('PricePerformanceTable', () => {
     expect(within(table).getByRole('row', { name: /Alpha/ })).toHaveTextContent('81.5');
     expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('78.0');
     expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('Score per dollar unavailable');
-    expect(screen.getAllByRole('link', { name: 'View Alpha model profile' })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: /openai.*openai:alpha/i })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'View Alpha model profile' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Alpha' })).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Alpha' })).toHaveAttribute('href', '/models/alpha/');
+    expect(screen.getAllByText('OpenAI · openai · openai:alpha')).toHaveLength(2);
+    expect(screen.queryAllByRole('link', { name: 'OpenAI · openai · openai:alpha' })).toHaveLength(0);
     expect(screen.getAllByText('Pareto frontier')).toHaveLength(2);
     expect(screen.getAllByText('Score per dollar unavailable')).toHaveLength(2);
   });

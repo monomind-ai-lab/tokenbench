@@ -125,7 +125,7 @@ export function ModelsPage({ envelope, query = DEFAULT_MODEL_DIRECTORY_QUERY, on
       <span className="eyebrow">Weekly model directory</span>
       <h1>Popular AI models</h1>
       <p>Start with the current BenchLM-derived top 100, then search the retained directory for models that have left the weekly list or active revision.</p>
-      <div className="models-hero-facts"><span>Week of {formatWeek(envelope.data.week?.weekStart ?? null)}</span><span>Revision {envelope.revision}</span><span className={`models-freshness models-freshness-${envelope.freshness.status}`}>{envelope.freshness.status === 'fresh' ? 'Fresh evidence' : 'Snapshot needs refresh'}</span></div>
+      <div className="models-hero-facts"><span>Week of {formatWeek(envelope.data.week?.weekStart ?? null)}</span><span className={`models-freshness models-freshness-${envelope.freshness.status}`}>{envelope.freshness.status === 'fresh' ? 'Fresh evidence' : 'Snapshot needs refresh'}</span></div>
     </section>
     <ModelFilterForm query={query} envelope={envelope} onQueryChange={onQueryChange} loading={loading} />
     {requestError ? <p className="models-request-status" role="status">Search unavailable. Showing the last validated model list.</p> : null}

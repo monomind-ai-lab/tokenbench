@@ -31,7 +31,7 @@ function costBasisLabel(point: PricePerformancePointView): string {
 }
 
 function evidenceLabel(point: PricePerformancePointView): string {
-  if (point.evidenceStatus === 'supported') return 'Supported evidence';
+  if (point.evidenceStatus === 'supported') return 'Supported';
   if (point.evidenceStatus === 'estimated') return 'Estimated evidence';
   return 'Source-only evidence';
 }
