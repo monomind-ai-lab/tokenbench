@@ -22,6 +22,17 @@ function date(value: string | null): string {
   return value ? new Date(value).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }) : 'Unavailable';
 }
 
+const SOURCE_DISPLAY_NAMES: Record<string, string> = {
+  benchlm: 'BenchLM',
+  lmarena: 'LMArena',
+  litellm: 'LiteLLM',
+  openrouter: 'OpenRouter',
+};
+
+function sourceName(sourceId: string): string {
+  return SOURCE_DISPLAY_NAMES[sourceId] ?? sourceId;
+}
+
 function CategoryCard({ category }: { readonly category: ModelProfileCategory }) {
   return <article className="model-category-card" aria-label={category.label}>
     <header><span>{category.label}</span><small>{category.evidenceStatus.replace('_', ' ')}</small></header>
@@ -99,14 +110,12 @@ export function ModelProfilePage({ viewModel }: ModelProfilePageProps) {
       <div className="model-section-heading"><div><p className="eyebrow">Auditable evidence</p><h2 id="benchmark-ledger-title">Benchmark ledger</h2></div><p>Display values, source ranks, and provenance remain visible without implying unsupported aggregate weight.</p></div>
       {ledgerGroups(profile.ledger).map(([category, rows]) => <div className="model-ledger-group" key={category}>
         <h3>{category}</h3>
-        <div className="model-ledger-scroll"><table><thead><tr><th>Benchmark</th><th>Display</th><th>Raw</th><th>Rank</th><th>Weight</th><th>Evidence</th><th>Observed</th><th>Source</th></tr></thead><tbody>
-          {rows.map((row) => <tr key={`${row.metricKey}:${row.sourceArtifactId}`}><th scope="row">{row.benchmarkName}</th><td>{score(row.displayValue)}</td><td>{row.rawValue === null ? 'Unavailable' : score(row.rawValue)}</td><td>{row.rank === null ? 'Not ranked' : `#${row.rank}`}</td><td>{row.weight === null ? 'Not published' : row.weight}</td><td>{row.evidenceStatus.replace('_', ' ')}</td><td>{date(row.observedAt)}</td><td><a href={row.sourceUrl} rel="noreferrer" target="_blank" aria-label={`${row.benchmarkName} source`}>Source</a></td></tr>)}
+        <div className="model-ledger-scroll"><table><thead><tr><th>Score</th><th>Rank</th><th>Weight</th><th>Last Updated</th><th>Source</th></tr></thead><tbody>
+          {rows.map((row) => <tr key={`${row.metricKey}:${row.sourceArtifactId}`}><td>{score(row.displayValue)}</td><td>{row.rank === null ? 'Not ranked' : `#${row.rank}`}</td><td>{row.weight === null ? 'Not published' : row.weight}</td><td>{date(row.observedAt)}</td><td><a href={row.sourceUrl} rel="noreferrer" target="_blank" aria-label={`${row.benchmarkName} source`}>{sourceName(row.sourceId)}</a></td></tr>)}
         </tbody></table></div>
       </div>)}
     </section>
 
     {profile.comparisons.length ? <section className="model-profile-section" aria-labelledby="profile-comparisons-title"><div className="model-section-heading"><div><p className="eyebrow">Related evidence</p><h2 id="profile-comparisons-title">Compare this model</h2></div></div><div className="model-comparison-links">{profile.comparisons.map((comparison) => <a href={comparison.path} key={comparison.pairSlug}>{comparison.pairSlug.replaceAll('-', ' ')}</a>)}</div></section> : null}
-
-    <section className="model-profile-section" aria-labelledby="profile-sources-title"><div className="model-section-heading"><div><p className="eyebrow">Provenance</p><h2 id="profile-sources-title">Sources</h2></div></div><ul className="model-source-list">{profile.sources.map((source) => <li key={`${source.sourceId}:${source.artifactId}`}><a href={source.sourceUrl} rel="noreferrer" target="_blank">{source.attributionText}</a><span>{source.sourceId} · observed {date(source.observedAt)}</span></li>)}</ul></section>
   </div>;
 }
