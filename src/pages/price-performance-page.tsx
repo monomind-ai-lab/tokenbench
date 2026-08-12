@@ -6,6 +6,7 @@ import {
 } from '../benchmarks/price-performance';
 import {
   parsePricePerformanceEnvelope,
+  type PricePerformanceAttribution,
   type PricePerformanceEnvelope,
 } from '../benchmarks/price-performance-contracts';
 import { PricePerformanceChart } from '../frontend/price-performance-chart';
@@ -135,11 +136,22 @@ function PricePerformanceFilters({
   </div>;
 }
 
+function latestAttributionBySource(attribution: readonly PricePerformanceAttribution[]): readonly PricePerformanceAttribution[] {
+  const latest = new Map<string, PricePerformanceAttribution>();
+  for (const source of attribution) {
+    const existing = latest.get(source.sourceId);
+    if (!existing || source.updatedAt > existing.updatedAt) {
+      latest.set(source.sourceId, source);
+    }
+  }
+  return [...latest.values()];
+}
+
 function Evidence({ envelope }: { readonly envelope: PricePerformanceEnvelope }) {
   return <section className="panel price-performance-evidence" aria-labelledby="price-performance-evidence-heading">
     <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="price-performance-evidence-heading">Method and freshness</h2><p>Scores are source-published benchmark lanes. Missing score or price facts are unavailable and excluded; published zero prices remain visible without a finite score-per-dollar value.</p></div></div>
     <dl className="price-performance-evidence-facts"><div><dt>Revision</dt><dd>{envelope.revision}</dd></div><div><dt>Published</dt><dd>{envelope.publishedAt}</dd></div><div><dt>Checked</dt><dd>{envelope.freshness.checkedAt}</dd></div></dl>
-    <ul className="price-performance-source-list" aria-label="Price-performance sources">{envelope.attribution.map((source) => <li key={`${source.sourceId}-${source.url}`}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a><span>Updated {source.updatedAt}</span></li>)}</ul>
+    <ul className="price-performance-source-list" aria-label="Price-performance sources">{latestAttributionBySource(envelope.attribution).map((source) => <li key={source.sourceId}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a><span>Updated {source.updatedAt}</span></li>)}</ul>
   </section>;
 }
 
