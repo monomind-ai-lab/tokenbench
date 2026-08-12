@@ -17,10 +17,9 @@ export function useSiteTheme(): ThemeMode {
 export function readStoredTheme(): ThemeMode {
   if (typeof window === 'undefined') return SITE_CONFIG.defaultTheme;
   try {
-    return window.localStorage.getItem(SITE_CONFIG.themeStorageKey) === 'dark'
-      && window.localStorage.getItem(SITE_CONFIG.themeExplicitStorageKey) === EXPLICIT_THEME_VALUE
-      ? 'dark'
-      : SITE_CONFIG.defaultTheme;
+    const stored = window.localStorage.getItem(SITE_CONFIG.themeStorageKey);
+    const explicit = window.localStorage.getItem(SITE_CONFIG.themeExplicitStorageKey) === EXPLICIT_THEME_VALUE;
+    return explicit && (stored === 'light' || stored === 'dark') ? stored : SITE_CONFIG.defaultTheme;
   } catch {
     return SITE_CONFIG.defaultTheme;
   }
@@ -28,19 +27,20 @@ export function readStoredTheme(): ThemeMode {
 
 /**
  * Earlier releases wrote a bare dark value for every first visit, without any
- * signal that the visitor actively chose it. An unmarked legacy dark value is
- * therefore migrated to the new light default. This cannot distinguish an
- * old explicit dark toggle from that automatic write; new user choices carry
- * an explicit marker so they always persist.
+ * signal that the visitor actively chose it. Dark is now the default theme, so
+ * an unmarked legacy dark value simply matches the default and is left to the
+ * default path; an unmarked legacy light value is removed so the dark default
+ * applies unless the visitor actively chose light with the explicit marker.
+ * New user choices carry an explicit marker so they always persist.
  */
 function migrateLegacyThemePreference(): void {
   try {
-    if (window.localStorage.getItem(SITE_CONFIG.themeStorageKey) === 'dark'
+    if (window.localStorage.getItem(SITE_CONFIG.themeStorageKey) !== null
       && window.localStorage.getItem(SITE_CONFIG.themeExplicitStorageKey) !== EXPLICIT_THEME_VALUE) {
       window.localStorage.removeItem(SITE_CONFIG.themeStorageKey);
     }
   } catch {
-    // Storage access is optional; the in-memory light default remains usable.
+    // Storage access is optional; the in-memory dark default remains usable.
   }
 }
 

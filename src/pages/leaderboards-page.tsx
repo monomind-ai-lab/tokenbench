@@ -387,7 +387,6 @@ function DecisionEntry({ entry }: { readonly entry: DecisionPickEntry; readonly 
   return <li className="decision-pick-entry">
     <div className="decision-pick-entry-heading">
       <span className="decision-pick-rank">{entry.rank === null ? 'Unranked' : `Rank ${entry.rank}`}</span>
-      <span className="leaderboard-evidence-status evidence-supported">Supported evidence</span>
     </div>
     <h4>{entry.name}</h4>
     <p className="decision-pick-provider"><ProviderMark providerId={entry.provider} providerName={entry.provider} decorative size={20} /><span>{entry.provider}</span></p>
@@ -410,7 +409,7 @@ function DecisionPickCard({ group }: { readonly group: DecisionPickGroup; readon
   >
     <div className="decision-pick-card-heading">
       <div><span className="eyebrow">{statusText}</span><h3 id={headingId}>{title}</h3></div>
-      <a href={group.entries[0]?.routePath ?? LEADERBOARD_ROUTES[group.key].pathname}>View full {title} benchmark <ArrowRight aria-hidden="true" size={14} /></a>
+      <a href={group.entries[0]?.routePath ?? LEADERBOARD_ROUTES[group.key].pathname}>View full leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
     </div>
     {group.entries.length > 0
       ? <ol className="decision-pick-list">{group.entries.map((entry) => <DecisionEntry key={entry.modelKey} entry={entry} />)}</ol>
@@ -450,7 +449,7 @@ function LeaderboardDirectory() {
             return <article className="panel" role="listitem" key={key}>
               <h4><a href={route.pathname}>{title}</a></h4>
               <p>{route.seo.summary}</p>
-              <a href={route.pathname}>View {title} <ArrowRight aria-hidden="true" size={14} /></a>
+              <a href={route.pathname}>View leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
             </article>;
           })}
         </div>

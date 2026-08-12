@@ -5,7 +5,7 @@ export const SITE_CONFIG = {
   parentUrl: 'https://monomind.one/',
   themeStorageKey: 'tokenbench:theme',
   themeExplicitStorageKey: 'tokenbench:theme:explicit',
-  defaultTheme: 'light',
+  defaultTheme: 'dark',
 } as const;
 
 export const HOME_PAGE_COPY = {

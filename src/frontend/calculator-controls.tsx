@@ -145,7 +145,6 @@ export function CalculatorControls({
     <section className="controls-panel" aria-label="Calculator controls">
       <section id="calculator-provider-plan" className="calculator-control-step" aria-labelledby="provider-plan-heading">
         <header className="calculator-step-heading"><span>Step 1</span><h2 id="provider-plan-heading">Choose a provider and plan</h2></header>
-        <p className="step-description">Plan fee and API-equivalent arithmetic stay visible even when the provider has not independently verified a fixed capacity.</p>
         <div className="control-grid guided-provider-plan-grid">
           <fieldset className="control-block">
             <legend><span className="control-legend"><GitBranch size={18} aria-hidden="true" />{UI_COPY.providerSelection}</span></legend>
@@ -169,7 +168,6 @@ export function CalculatorControls({
 
       <section id="calculator-models" className="calculator-control-step" aria-labelledby="models-heading">
         <header className="calculator-step-heading"><span>Step 2</span><h2 id="models-heading">Choose the models you actually use</h2></header>
-        <p className="step-description">The visible default mapping is deterministic. Open Advanced only when your workload uses an explicit model mix or a non-direct route.</p>
         <div className="default-api-mapping" role="status" aria-label="Default API mapping">
           <strong>Default API mapping</strong>
           {defaultApiEquivalentOffer ? <span>{defaultApiEquivalentOffer.displayName} · {basisLabel(defaultApiEquivalentOffer.pricingBasis)} · {defaultApiEquivalentOffer.modelId}</span> : <span>No direct provider API offer is published for this plan.</span>}
@@ -205,7 +203,6 @@ export function CalculatorControls({
 
       <section id="calculator-workload" className="calculator-control-step" aria-labelledby="workload-heading">
         <header className="calculator-step-heading"><span>Step 3</span><h2 id="workload-heading">Describe your message-level workload</h2></header>
-        <p className="step-description">Use the five inputs that describe how people actually use the model. Monthly messages and directional token totals are derived exactly.</p>
         <fieldset className="control-block usage-block" aria-describedby="usage-help">
           <legend><span className="control-legend"><SlidersHorizontal size={18} aria-hidden="true" />{UI_COPY.workloadUsage}</span></legend>
           <div className="workload-input-grid">

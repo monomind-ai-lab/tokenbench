@@ -572,7 +572,7 @@ test.describe('responsive calculator browser harness', () => {
     await expect(first).toHaveAttribute('target', '_blank');
     await expect(first).toHaveAttribute('rel', 'noreferrer');
     await page.locator('body').click({ position: { x: 2, y: 2 } });
-    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle dark theme"]', 'a.evidence-link']) {
+    for (const selector of ['select[aria-label="Language"]', 'button[aria-label="Toggle light theme"]', 'a.evidence-link']) {
       expectVisibleFocus(await tabTo(page, selector));
     }
   });
@@ -660,24 +660,24 @@ test.describe('responsive calculator browser harness', () => {
     expect(comparisonOwnsVisibleContent).toBe(true);
   });
 
-  test('defaults light, persists both theme choices, and changes language without resetting catalog controls', async ({ page }) => {
+  test('defaults dark, persists both theme choices, and changes language without resetting catalog controls', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await openCalculator(page);
     const initialProvider = await page.locator('input[name="provider"]:checked').inputValue();
 
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBeNull();
-    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme:explicit'))).toBe('true');
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('button', { name: 'Toggle light theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme:explicit'))).toBe('true');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-TW');
     await expect(page.locator('html')).toHaveAttribute('lang', 'zh-TW');
     await expect(page.locator('input[name="provider"]:checked')).toHaveValue(initialProvider);
@@ -1459,22 +1459,22 @@ test.describe('guides browser harness', () => {
     await expect(page.getByRole('heading', { name: 'Related guides' })).toBeVisible();
   });
 
-  test('guide theme control defaults light and persists both theme choices', async ({ page }) => {
+  test('guide theme control defaults dark and persists both theme choices', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/guides/openrouter-guide-model-routing-cost-controls/');
 
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
-    await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('button', { name: 'Toggle light theme' }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
+    await page.reload();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 });
 
@@ -1934,14 +1934,14 @@ test.describe('handler-backed compare browser coverage', () => {
     await page.route(origin + errorPath, (route) => route.fulfill({
       status: 503,
       contentType: 'text/html',
-      body: `<!doctype html><html lang="en" data-theme="light"><head>${themeBootstrapMarkup()}</head><body><main>Comparison temporarily unavailable</main></body></html>`,
+      body: `<!doctype html><html lang="en" data-theme="dark"><head>${themeBootstrapMarkup()}</head><body><main>Comparison temporarily unavailable</main></body></html>`,
     }));
 
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await page.evaluate(() => localStorage.setItem('tokenbench:theme', 'dark'));
     await page.goto(errorPath, { waitUntil: 'domcontentloaded' });
 
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBeNull();
 
     await page.evaluate(() => {

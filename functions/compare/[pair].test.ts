@@ -19,7 +19,7 @@ vi.mock('../_shared/benchmark-db', async () => {
 import { onRequestGet } from './[pair]';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
-const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme==='dark'&&explicit){document.documentElement.dataset.theme='dark'}else{if(theme==='dark')localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
+const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='dark'}}catch(e){document.documentElement.dataset.theme='dark'}</script>";
 
 function model(modelKey: string, slug: string, name: string, creator = 'Example Labs'): BenchmarkModel {
   return {
@@ -260,7 +260,7 @@ describe('dynamic comparison Pages Function', () => {
     expect(rootWithoutProvenance.textContent).not.toContain('Workload');
     expect(data.metricRows[0]).toMatchObject({ metricKey: 'benchlm:category:coding', sourceId: 'benchlm', methodology: 'benchlm_raw_composite' });
     expect(html).toContain('<title>Model A vs Model B: Cost, Coding &amp; Benchmarks | TokenBench</title>');
-    expect(html).toContain('<html lang="en" data-theme="light">');
+    expect(html).toContain('<html lang="en" data-theme="dark">');
     expect(html).toContain(THEME_BOOTSTRAP);
     expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/compare/zeta-vs-alpha">');
     expect(html).toContain('<meta name="robots" content="index,follow">');
@@ -356,7 +356,7 @@ describe('dynamic comparison Pages Function', () => {
       const html = await response.text();
 
       expect(response.status, pairValue).toBe(404);
-      expect(html, pairValue).toContain('<html lang="en" data-theme="light">');
+      expect(html, pairValue).toContain('<html lang="en" data-theme="dark">');
       expect(html, pairValue).toContain(THEME_BOOTSTRAP);
       expect(html, pairValue).toContain('<meta name="robots" content="noindex,follow">');
       expect(html, pairValue).not.toContain('rel="canonical"');
@@ -364,7 +364,7 @@ describe('dynamic comparison Pages Function', () => {
     }
   });
 
-  it('migrates bare legacy dark storage in every non-hydrated error shell while preserving explicit dark', async () => {
+  it('migrates bare legacy dark storage to the dark default in every non-hydrated error shell while preserving explicit dark', async () => {
     const notFound = await request('missing-vs-zeta');
     readActiveComparisonSnapshot.mockResolvedValueOnce(null);
     const unavailable = await request('zeta-vs-alpha');
@@ -373,7 +373,7 @@ describe('dynamic comparison Pages Function', () => {
       const html = await response.text();
 
       expect(executeThemeBootstrap(html, { 'tokenbench:theme': 'dark' })).toEqual({
-        theme: 'light',
+        theme: 'dark',
         storedTheme: null,
         explicitMarker: null,
       });
@@ -383,6 +383,14 @@ describe('dynamic comparison Pages Function', () => {
       })).toEqual({
         theme: 'dark',
         storedTheme: 'dark',
+        explicitMarker: 'true',
+      });
+      expect(executeThemeBootstrap(html, {
+        'tokenbench:theme': 'light',
+        'tokenbench:theme:explicit': 'true',
+      })).toEqual({
+        theme: 'light',
+        storedTheme: 'light',
         explicitMarker: 'true',
       });
     }
@@ -602,7 +610,7 @@ describe('dynamic comparison Pages Function', () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
-    expect(html).toContain('<html lang="en" data-theme="light">');
+    expect(html).toContain('<html lang="en" data-theme="dark">');
     expect(html).toContain(THEME_BOOTSTRAP);
     expect(html).toContain('Comparison temporarily unavailable');
     expect(html).toContain('<meta name="robots" content="noindex,follow">');
@@ -625,7 +633,7 @@ describe('dynamic comparison Pages Function', () => {
       const html = await response.text();
       expect(response.status).toBe(503);
       expect(response.headers.get('x-robots-tag')).toBe('noindex, follow');
-      expect(html).toContain('<html lang="en" data-theme="light">');
+      expect(html).toContain('<html lang="en" data-theme="dark">');
       expect(html).toContain(THEME_BOOTSTRAP);
       expect(html).toContain('<meta name="robots" content="noindex,follow">');
       expect(html).toContain('Comparison temporarily unavailable');

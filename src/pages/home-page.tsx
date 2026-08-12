@@ -83,7 +83,7 @@ function marketLeaderCards(groups: readonly DecisionPickGroup[] | null): readonl
 
 function MarketLeaderArticle({ card }: { readonly card: MarketLeaderCard; readonly key?: string }) {
   return <article className="panel home-snapshot-card">
-    <h3>{card.title}</h3>
+    <h3><a href={LEADERBOARD_ROUTES[card.key].pathname}>{card.title}</a></h3>
     <ol className="home-snapshot-leaders">
       {card.leaders.map((leader, index) => <li key={leader.modelKey}>
         <span className="home-snapshot-leader-rank">{card.status === 'benchalign' && Number.isSafeInteger(leader.rank) && leader.rank > 0 ? leader.rank : index + 1}</span>
@@ -131,35 +131,41 @@ function MarketAtAGlance() {
   const cards = marketLeaderCards(state.decisionPicks);
   const comparisons = envelope?.data.representativeComparisons ?? [];
 
-  return <section className="panel home-snapshot-section" aria-label="Market at a glance">
-    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>Leaders for each decision route, republished from the active source revision without recalculation.</p></div></div>
-    {state.phase === 'loading'
-      ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p>
-      : state.phase === 'error'
-        ? <div className="home-snapshot-state home-snapshot-state-error" role="alert">
-          <p>Published decision snapshot could not be loaded. {state.error ?? 'Benchmark request failed.'}</p>
-          <button className="button button-secondary" onClick={state.retry} type="button">Retry</button>
-        </div>
-        : <>
-          {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">{state.fallback === 'browser-cache'
-            ? state.error
-            : <>Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</>}</p> : null}
-          {cards.length === 0
-            ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
-            : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}
-          {comparisons.length > 0 ? <>
-            <div className="home-comparison-heading"><div><span className="eyebrow">Representative comparisons</span><h3>Compare best models</h3><p>Each card pairs two models from the active source revision and names the category where the published evidence actually differs — priced and scored as the source published them.</p></div></div>
-            <ul className="home-snapshot-grid home-comparison-grid" aria-label="Representative comparisons">
-              {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
-            </ul>
-          </> : null}
-        </>}
-    <div className="home-snapshot-actions">
-      <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Open all leaderboards <ArrowRight aria-hidden="true" size={14} /></a>
-      <a className="button button-secondary" href={ROUTE_PATHS.compareHub}>Compare two models <ArrowRight aria-hidden="true" size={14} /></a>
-      <a className="home-snapshot-method" href={ROUTE_PATHS.methodologyBenchAlign}>How rankings work <ArrowRight aria-hidden="true" size={14} /></a>
-    </div>
-  </section>;
+  return <>
+    <section className="panel home-snapshot-section" aria-label="Market at a glance">
+      <div className="panel-heading">
+        <div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>Leaders for each decision route, republished from the active source revision without recalculation.</p></div>
+        <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Open all leaderboards <ArrowRight aria-hidden="true" size={14} /></a>
+      </div>
+      {state.phase === 'loading'
+        ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p>
+        : state.phase === 'error'
+          ? <div className="home-snapshot-state home-snapshot-state-error" role="alert">
+            <p>Published decision snapshot could not be loaded. {state.error ?? 'Benchmark request failed.'}</p>
+            <button className="button button-secondary" onClick={state.retry} type="button">Retry</button>
+          </div>
+          : <>
+            {state.phase === 'stale' ? <p className="home-snapshot-state" role="status">{state.fallback === 'browser-cache'
+              ? state.error
+              : <>Stale published decision snapshot. {state.error ?? 'The last published decision facts remain visible while refresh is overdue.'}</>}</p> : null}
+            {cards.length === 0
+              ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
+              : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}
+          </>}
+    </section>
+    {comparisons.length > 0 ? <section className="panel home-comparison-section" aria-label="Representative comparisons">
+      <div className="panel-heading">
+        <div><span className="eyebrow">Representative comparisons</span><h3 id="home-comparison-heading">Compare best models</h3><p>Each card pairs two models from the active source revision and names the category where the published evidence actually differs — priced and scored as the source published them.</p></div>
+        <a className="button button-secondary" href={ROUTE_PATHS.compareHub}>Compare two models <ArrowRight aria-hidden="true" size={14} /></a>
+      </div>
+      <ul className="home-snapshot-grid home-comparison-grid" aria-label="Representative comparisons">
+        {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
+      </ul>
+      <div className="home-snapshot-actions">
+        <a className="home-snapshot-method" href={ROUTE_PATHS.compareHub}>Compare more models <ArrowRight aria-hidden="true" size={14} /></a>
+      </div>
+    </section> : null}
+  </>;
 }
 
 export function HomePage() {
@@ -208,15 +214,10 @@ export function HomePage() {
         </div>
       </section>
 
-      <section className="panel home-builder-section" aria-labelledby="home-builders-heading">
-        <span className="eyebrow">A practical decision engine</span>
-        <h2 id="home-builders-heading">Built for AI builders</h2>
-        <p>Use the same transparent inputs to compare a new model, explain a budget choice, or hand an evidence-backed result to the rest of your team.</p>
-      </section>
-
       <aside className="panel home-monomind-banner" aria-label="MonoMind optimization services">
         <div className="home-monomind-label"><img src="/brand/monomind-tokenbench.png" alt="" /><h2 className="eyebrow">MonoMind AI Lab</h2></div>
-        <p>Spending over $1,000/month on LLM tokens? MonoMind designs routing, caching, and agent pipelines that can cut API bills by up to 90%.</p>
+        <p className="home-monomind-lead">Spending over $1,000/month on LLM tokens?</p>
+        <p className="home-monomind-copy">MonoMind designs routing, caching, and agent pipelines that can cut API bills by up to 90%.</p>
         <a className="button" href="https://monomind.one/">Talk to MonoMind <ArrowRight aria-hidden="true" size={16} /></a>
       </aside>
     </div>

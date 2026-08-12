@@ -503,22 +503,22 @@ describe('responsive calculator app shell', () => {
       .toEqual(['Home', 'Subscribe vs API', 'Price vs Performance', 'Models', 'Compare', 'Leaderboards', 'Guides']);
   });
 
-  it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {
+  it('defaults a no-storage document to dark and persists both TokenBench theme choices', async () => {
     render(<App />);
 
     await calculatorReadyHeading();
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset.theme).toBe('dark');
     expect(localStorage.getItem('tokenbench:theme')).toBeNull();
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle dark theme' }));
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
-    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
     expect(document.documentElement.dataset.theme).toBe('light');
     expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle dark theme' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
   });
 
@@ -592,19 +592,19 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('status', { name: 'Default API mapping' })).toHaveTextContent('Advanced override is active.');
   });
 
-  it('keeps calculator state while switching language and returns to the light theme', async () => {
+  it('keeps calculator state while switching language and returns to the dark theme', async () => {
     render(<App />);
     await calculatorReadyHeading();
     const usage = screen.getByRole('spinbutton', { name: 'Conversations per day' });
     fireEvent.change(usage, { target: { value: '42' } });
-    fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 
     expect(usage).toHaveValue(42);
-    expect(document.documentElement.dataset.theme).toBe('light');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
-    expect(screen.getByRole('button', { name: /Toggle dark theme/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+    expect(screen.getByRole('button', { name: /Toggle light theme/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('combobox', { name: /Language/i })).toHaveValue('zh-TW');
   });
 

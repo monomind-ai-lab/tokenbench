@@ -24,8 +24,8 @@ function plan(id: string, monthlyCostMicroDollars: number): PlanOffer {
   };
 }
 
-describe('same-workload plan comparison', () => {
-  it('calculates each paid individual plan with its own direct default offer', () => {
+describe('comparison', () => {
+  it('omits the removed same-workload table while keeping the plan and API price tables', () => {
     const catalog = {
       ...FRONTEND_TEST_CATALOG,
       plans: [plan('Lower plan', 5_000_000), plan('Higher plan', 20_000_000)],
@@ -39,10 +39,27 @@ describe('same-workload plan comparison', () => {
       modelMixBasisPoints={{ [directOffer.id]: 10_000 }}
     />);
 
-    const table = screen.getByRole('table', { name: 'Same-workload plan comparison' });
-    expect(within(table).getByText('Lower plan')).toBeInTheDocument();
-    expect(within(table).getByText('Higher plan')).toBeInTheDocument();
-    expect(within(table).getAllByText('$7.00').length).toBeGreaterThan(0);
-    expect(within(table).getByText('Subscription is cheaper on a token-equivalent basis.')).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Same-workload plan comparison' })).not.toBeInTheDocument();
+    expect(screen.getByRole('table', { name: /paid individual subscription plans/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('table', { name: /model pricing/i }).length).toBeGreaterThan(0);
+  });
+
+  it('omits API route groups that have no verified offers', () => {
+    const catalog = {
+      ...FRONTEND_TEST_CATALOG,
+      modelOffers: FRONTEND_TEST_CATALOG.modelOffers.filter((offer) => offer.pricingBasis === 'openrouter'),
+    };
+    render(<Comparison
+      catalog={catalog}
+      selectedProviderId="provider-a"
+      selectedModelIds={[directOffer.id]}
+      selectedPlanId="provider-a:starter"
+      workload={workload}
+      modelMixBasisPoints={{ [directOffer.id]: 10_000 }}
+    />);
+
+    expect(screen.queryByText('No Direct provider API offers')).not.toBeInTheDocument();
+    expect(screen.queryByText('No OpenCode Zen offers')).not.toBeInTheDocument();
+    expect(screen.getByText('OpenRouter API')).toBeInTheDocument();
   });
 });

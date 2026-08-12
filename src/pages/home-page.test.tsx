@@ -166,7 +166,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'What TokenBench gives you', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Make the next decision with less guessing', level: 2 })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Built for AI builders', level: 2 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Built for AI builders', level: 2 })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeInTheDocument();
     expect(screen.queryByText('Benchmark signals')).not.toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
@@ -203,10 +203,15 @@ describe('HomePage', () => {
     expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
     expect(within(snapshot).queryByText('Source rank #1')).not.toBeInTheDocument();
     expect(within(snapshot).queryByText('Not ranked by source')).not.toBeInTheDocument();
+    expect(within(snapshot).getByRole('link', { name: 'Overall' })).toHaveAttribute('href', '/leaderboards/llm/overall/');
+    expect(within(snapshot).getByRole('link', { name: 'Coding' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
+    expect(within(snapshot).getByRole('link', { name: 'Agentic' })).toHaveAttribute('href', '/leaderboards/llm/agentic/');
+    expect(within(snapshot).getByRole('link', { name: 'Multimodal' })).toHaveAttribute('href', '/leaderboards/multimodal/vision-documents/');
+    expect(within(snapshot).getByRole('link', { name: 'Knowledge' })).toHaveAttribute('href', '/leaderboards/llm/knowledge/');
     expect(snapshot.querySelectorAll('.home-snapshot-leaders li')).toHaveLength(11);
     expect(within(snapshot).getByRole('link', { name: 'Open all leaderboards' })).toHaveAttribute('href', '/leaderboards/');
-    expect(within(snapshot).getByRole('link', { name: 'Compare two models' })).toHaveAttribute('href', '/compare/');
-    expect(within(snapshot).getByRole('link', { name: 'How rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
+    expect(screen.queryByRole('link', { name: 'How rankings work' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Compare more models' })).toHaveAttribute('href', '/compare/');
     expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(11);
   });
 

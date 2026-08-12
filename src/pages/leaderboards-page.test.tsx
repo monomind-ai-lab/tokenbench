@@ -217,10 +217,10 @@ describe('LeaderboardDirectoryPage', () => {
     expect(within(codingCard).getAllByText(/Rank [1-3]/)).toHaveLength(3);
     expect(within(codingCard).getAllByText('OpenAI')).toHaveLength(3);
     expect(within(codingCard).getAllByText(/score$/)).toHaveLength(3);
-    expect(within(codingCard).getAllByText('Supported evidence')).toHaveLength(3);
+    expect(within(codingCard).queryByText('Supported evidence')).not.toBeInTheDocument();
     expect(within(codingCard).getAllByText(/Updated /)).toHaveLength(3);
     expect(codingCard.querySelectorAll('.provider-mark')).toHaveLength(3);
-    expect(within(codingCard).getByRole('link', { name: 'View full Coding benchmark' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
+    expect(within(codingCard).getByRole('link', { name: 'View full leaderboard' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
     expect(screen.getByRole('link', { name: 'How BenchAlign rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(document.querySelector('.leaderboard-cover-image')).toBeNull();
   });
@@ -298,7 +298,7 @@ describe('LeaderboardDirectoryPage', () => {
     const codingCard = await screen.findByRole('region', { name: 'Coding leaders' });
     expect(within(codingCard).getByText('No supported ranking is published.')).toBeInTheDocument();
     expect(within(codingCard).queryByText(/Rank [1-3]/)).not.toBeInTheDocument();
-    expect(within(codingCard).getByRole('link', { name: 'View full Coding benchmark' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
+    expect(within(codingCard).getByRole('link', { name: 'View full leaderboard' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
   });
 
   it('shows a loading placeholder before the summary resolves', async () => {

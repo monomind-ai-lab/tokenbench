@@ -11,7 +11,7 @@ import { generateStaticPages } from './generate-static-pages';
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
 const requireFromTest = createRequire(import.meta.url);
-const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme==='dark'&&explicit){document.documentElement.dataset.theme='dark'}else{if(theme==='dark')localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
+const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='dark'}}catch(e){document.documentElement.dataset.theme='dark'}</script>";
 
 function gitCheckIgnoreStatus(pathname: string): number | null {
   const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', pathname], {
@@ -45,7 +45,7 @@ describe('crawlable static-page generator', () => {
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
     expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
-    expect(home).toContain('<html lang="en" data-theme="light">');
+    expect(home).toContain('<html lang="en" data-theme="dark">');
     expect(home).toContain(THEME_BOOTSTRAP);
     expect(home).toContain('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.');
     expect(home).toContain('<meta name="description" content="The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.">');
@@ -86,7 +86,7 @@ describe('crawlable static-page generator', () => {
     expect(home).not.toContain('href="/sources/"');
 
     expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
-    expect(guide).toContain('<html lang="en" data-theme="light">');
+    expect(guide).toContain('<html lang="en" data-theme="dark">');
     expect(guide).toContain(THEME_BOOTSTRAP);
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
@@ -141,7 +141,7 @@ describe('crawlable static-page generator', () => {
     expect(welcome).toContain('<meta name="robots" content="noindex,follow,max-image-preview:large">');
     expect(welcome).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/welcome/">');
     expect(welcome).toContain('class="app-shell static-page-shell"');
-    expect(welcome).toContain('class="static-page-links"');
+    expect(welcome).toContain('class="static-page-links home-hero-actions"');
     expect(welcome).toContain('Review Your Subscriptions');
     expect(welcome).toContain('<img src="/brand/welcome-cover.jpg"');
     expect(welcome).toContain('Nikita Kachanovsky');
