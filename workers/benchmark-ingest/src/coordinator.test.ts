@@ -112,7 +112,13 @@ function fakeD1(seed: D1Seed = {}) {
     values,
     async first<T>() {
       if (sql.includes('catalog_publication_state')) {
-        return (seed.catalogRevision ? { revision: seed.catalogRevision } : null) as T | null;
+        return (seed.catalogRevision ? {
+          revision: seed.catalogRevision,
+          sourceUrl: 'https://openrouter.ai/api/v1/models',
+          observedAt: new Date(SUNDAY).toISOString(),
+          snapshotKey: 'catalog/openrouter.json',
+          contentHash: `sha256:${hex('catalog')}`,
+        } : null) as T | null;
       }
       if (sql.includes('benchmark_publication_state')) {
         return (seed.benchmarkRevision ? { revision: seed.benchmarkRevision } : null) as T | null;
@@ -180,6 +186,9 @@ function fakeSteps(overrides: Partial<Record<string, (args: Record<string, unkno
     normalizeSourceStep: async (input: Record<string, unknown>) =>
       record('normalizeSourceStep', input,
         partition(`normalized/${Number(input.index)}/part.json`, 'normalized', Number(input.index), 42)),
+    normalizeOpenRouterCatalogStep: async (input: Record<string, unknown>) =>
+      record('normalizeOpenRouterCatalogStep', input,
+        partition(`normalized/${Number(input.index)}/openrouter.json`, 'normalized', Number(input.index), 42)),
   };
   return { steps: steps as unknown as CoordinatorDependencies['steps'], calls };
 }
@@ -201,6 +210,11 @@ function storage(initial: Record<string, unknown> = {}) {
 function environment(seed: D1Seed = {}) {
   const db = fakeD1(seed);
   const store = memoryStore();
+  const catalogBytes = new TextEncoder().encode('{"catalog":true}');
+  store.objects.set('catalog/openrouter.json', {
+    bytes: catalogBytes,
+    customMetadata: { original_content_hash: `sha256:${hex('catalog-raw')}` },
+  });
   const env = { CATALOG_DB: db, SOURCE_SNAPSHOTS: store } as unknown as BenchmarkIngestEnv;
   return { env, db, store };
 }
@@ -401,7 +415,7 @@ describe('weekly retrieval end to end', () => {
     expect(manifest.liteLlm).not.toBeNull();
     expect(manifest.lmArena).toHaveLength(LMARENA_SUBSETS.length);
     expect(manifest.lmArenaRevision).toBe(LMARENA_REVISION);
-    expect(manifest.normalizedPartitions).toHaveLength(2 + LMARENA_SUBSETS.length);
+    expect(manifest.normalizedPartitions).toHaveLength(3 + LMARENA_SUBSETS.length);
     expect(manifest.frozenCatalogRevision).toBe(CATALOG_REVISION);
     expect(manifest.previousBenchmarkRevision).toBe(PREV_BENCHMARK_REVISION);
   });
@@ -778,6 +792,14 @@ function acquireCheckpoint() {
     observedAt: new Date(SUNDAY).toISOString(),
     frozenCatalogRevision: CATALOG_REVISION,
     frozenBenchmarkRevision: null,
+    frozenOpenRouterCatalog: {
+      revision: CATALOG_REVISION,
+      sourceUrl: 'https://openrouter.ai/api/v1/models',
+      observedAt: new Date(SUNDAY).toISOString(),
+      snapshotKey: 'catalog/openrouter.json',
+      contentHash: `sha256:${hex('catalog')}`,
+      originalContentHash: `sha256:${hex('catalog-raw')}`,
+    },
     validators: [] as unknown[],
     benchLm: [] as CandidateArtifact[],
     benchLmBundle: null as CandidatePartition | null,

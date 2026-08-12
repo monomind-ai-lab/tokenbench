@@ -31,6 +31,10 @@ import {
   type LmArenaPageTransport,
   type LmArenaParquetDownload,
 } from './source-steps';
+import {
+  normalizeOpenRouterCatalogStep,
+  type FrozenOpenRouterCatalog,
+} from './openrouter-normalization';
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -94,6 +98,7 @@ export interface CoordinatorSteps {
   retrieveLmArenaRevisionStep: typeof retrieveLmArenaRevisionStep;
   retrieveLmArenaPageStep: typeof retrieveLmArenaPageStep;
   normalizeSourceStep: typeof normalizeSourceStep;
+  normalizeOpenRouterCatalogStep: typeof normalizeOpenRouterCatalogStep;
 }
 
 export interface CoordinatorDependencies {
@@ -120,6 +125,7 @@ const defaultDependencies: CoordinatorDependencies = {
     retrieveLmArenaRevisionStep,
     retrieveLmArenaPageStep,
     normalizeSourceStep,
+    normalizeOpenRouterCatalogStep,
   },
 };
 
@@ -170,6 +176,7 @@ export interface BenchmarkCheckpoint {
   readonly observedAt: string;
   readonly frozenCatalogRevision: string;
   readonly frozenBenchmarkRevision: string | null;
+  readonly frozenOpenRouterCatalog: FrozenOpenRouterCatalog;
   readonly validators: readonly FrozenSourceValidator[];
   readonly benchLm: readonly CandidateArtifact[];
   readonly benchLmBundle: CandidatePartition | null;
@@ -481,11 +488,14 @@ async function acquireStep(
   nowMs: number,
   env: BenchmarkIngestEnv,
 ): Promise<BenchmarkStepResult> {
-  const catalogRow = await env.CATALOG_DB.prepare(`SELECT catalog_revisions.revision AS revision
+  const catalogRow = await env.CATALOG_DB.prepare(`SELECT catalog_revisions.revision AS revision,
+      source_records.source_url AS sourceUrl, source_records.observed_at AS observedAt,
+      source_records.snapshot_key AS snapshotKey, source_records.content_hash AS contentHash
     FROM catalog_publication_state
     JOIN catalog_revisions ON catalog_revisions.revision = catalog_publication_state.active_revision
+    JOIN source_records ON source_records.revision = catalog_revisions.revision
     WHERE catalog_publication_state.singleton = 1 AND catalog_revisions.publication_state = 'published'`)
-    .bind().first<{ revision: string }>();
+    .bind().first<{ revision: string; sourceUrl: string; observedAt: string; snapshotKey: string; contentHash: string }>();
   const frozenCatalogRevision = catalogRow?.revision ?? null;
   if (!frozenCatalogRevision) {
     const failed = copyCycle(cycle, {
@@ -497,6 +507,23 @@ async function acquireStep(
     });
     return { kind: 'terminal', cycle: failed, status: 'failed', errorCode: 'catalog_unavailable', stepAttempt: 1 };
   }
+  const catalogObject = await env.SOURCE_SNAPSHOTS.get(catalogRow.snapshotKey);
+  const catalogOriginalHash = catalogObject?.customMetadata?.original_content_hash ?? null;
+  if (!catalogObject || !/^sha256:[a-f0-9]{64}$/.test(catalogOriginalHash ?? '')) {
+    const failed = copyCycle(cycle, {
+      state: 'failed', updatedAt: iso(nowMs), nextRetryAt: null,
+      errorCode: 'catalog_snapshot_invalid', errorSourceId: 'openrouter', errorArtifactId: 'catalog',
+    });
+    return { kind: 'terminal', cycle: failed, status: 'failed', errorCode: 'catalog_snapshot_invalid', stepAttempt: 1 };
+  }
+  const frozenOpenRouterCatalog: FrozenOpenRouterCatalog = {
+    revision: catalogRow.revision,
+    sourceUrl: catalogRow.sourceUrl,
+    observedAt: catalogRow.observedAt,
+    snapshotKey: catalogRow.snapshotKey,
+    contentHash: catalogRow.contentHash,
+    originalContentHash: catalogOriginalHash as string,
+  };
 
   const benchmarkRow = await env.CATALOG_DB.prepare(`SELECT benchmark_revisions.revision AS revision
     FROM benchmark_publication_state
@@ -521,6 +548,7 @@ async function acquireStep(
     observedAt: cycle.startedAt,
     frozenCatalogRevision,
     frozenBenchmarkRevision,
+    frozenOpenRouterCatalog,
     validators,
     benchLm: [],
     benchLmBundle: null,
@@ -738,12 +766,14 @@ async function retrieveLmArenaPagesStep(
 type NormalizationItem =
   | { source: 'benchlm' }
   | { source: 'litellm' }
+  | { source: 'openrouter' }
   | { source: 'lmarena'; entry: LmArenaCandidate };
 
 function normalizationWorklist(checkpoint: BenchmarkCheckpoint): NormalizationItem[] {
   return [
     { source: 'benchlm' },
     { source: 'litellm' },
+    { source: 'openrouter' },
     ...checkpoint.lmArena.map((entry): NormalizationItem => ({ source: 'lmarena', entry })),
   ];
 }
@@ -780,6 +810,13 @@ async function normalizeSourcesStep(
       observedAt: checkpoint.observedAt,
       index: cycle.cursor,
       artifact: checkpoint.liteLlm,
+    });
+  } else if (item.source === 'openrouter') {
+    partition = await deps.steps.normalizeOpenRouterCatalogStep({
+      cycleId: checkpoint.cycleId,
+      store: env.SOURCE_SNAPSHOTS,
+      catalog: checkpoint.frozenOpenRouterCatalog,
+      index: cycle.cursor,
     });
   } else {
     partition = await deps.steps.normalizeSourceStep({
