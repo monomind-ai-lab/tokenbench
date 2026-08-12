@@ -195,9 +195,9 @@ describe('HomePage', () => {
     expect(within(snapshot).getByRole('heading', { name: 'Overall', level: 3 })).toBeInTheDocument();
     expect(within(snapshot).getByRole('heading', { name: 'Coding', level: 3 })).toBeInTheDocument();
     expect(within(snapshot).getByRole('heading', { name: 'Agentic', level: 3 })).toBeInTheDocument();
-    expect(within(snapshot).getByRole('heading', { name: 'Reasoning', level: 3 })).toBeInTheDocument();
     expect(within(snapshot).getByRole('heading', { name: 'Multimodal', level: 3 })).toBeInTheDocument();
-    expect(within(snapshot).queryByRole('heading', { name: 'Knowledge', level: 3 })).not.toBeInTheDocument();
+    expect(within(snapshot).getByRole('heading', { name: 'Knowledge', level: 3 })).toBeInTheDocument();
+    expect(within(snapshot).queryByRole('heading', { name: 'Reasoning', level: 3 })).not.toBeInTheDocument();
     expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
     expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/models/Model%20Alpha/');
     expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
@@ -212,6 +212,7 @@ describe('HomePage', () => {
   it('renders exactly two representative comparison cards from the published summary', async () => {
     renderWithHomeSummary();
 
+    expect(await screen.findByRole('heading', { name: 'Compare best models', level: 3 })).toBeInTheDocument();
     const comparisons = await screen.findByRole('list', { name: 'Representative comparisons' });
     expect(within(comparisons).getAllByRole('listitem')).toHaveLength(2);
     expect(within(comparisons).getByRole('heading', { name: 'Claude Opus 5 vs GPT-5.6 Sol' })).toBeInTheDocument();
@@ -230,7 +231,7 @@ describe('HomePage', () => {
     const provenance = snapshot.querySelector('.home-snapshot-provenance');
 
     expect(provenance).not.toBeNull();
-    expect(provenance!).toHaveTextContent('Source published');
+    expect(provenance!).not.toHaveTextContent('Source published');
     expect(provenance!).toHaveTextContent('Checked');
     expect(provenance!).not.toHaveTextContent('Updated');
     expect(within(provenance as HTMLElement).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
@@ -324,6 +325,7 @@ describe('HomePage', () => {
     expect(notice).toHaveAttribute('role', 'status');
     const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
     expect(within(snapshot).getByText('Model Alpha')).toBeInTheDocument();
-    expect(within(snapshot).getByText(/Source published/)).toBeInTheDocument();
+    expect(within(snapshot).getByText(/Checked Aug 6, 2026/)).toBeInTheDocument();
+    expect(within(snapshot).queryByText(/Source published/)).not.toBeInTheDocument();
   });
 });
