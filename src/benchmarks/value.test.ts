@@ -69,6 +69,48 @@ describe('workload costs', () => {
       .toMatchObject({ routeId: 'openrouter:model-a', blendedCostPerMillion: 0 });
   });
 
+  it('accepts a same-source primary route so BenchLM scores can carry BenchLM pricing', () => {
+    const benchlmRoute = price({
+      modelKey: 'source:benchlm:model-a',
+      sourceId: 'benchlm',
+      providerId: 'anthropic',
+      routeId: 'benchlm:model-a',
+      sourceModelId: 'model-a',
+      inputUsdPerMillion: 10,
+      outputUsdPerMillion: 50,
+      sourceArtifactId: 'pricing',
+    });
+
+    expect(primaryHostedPriceForModel('source:benchlm:model-a', [benchlmRoute], 'balanced', 'benchlm'))
+      .toMatchObject({ routeId: 'benchlm:model-a', blendedCostPerMillion: 20 });
+  });
+
+  it('still refuses a route published by a source unrelated to the model', () => {
+    const openrouterRoute = price({ modelKey: 'source:benchlm:model-a', routeId: 'openrouter:model-a' });
+    const litellmRoute = price({
+      modelKey: 'source:benchlm:model-a',
+      sourceId: 'litellm',
+      routeId: 'litellm:model-a',
+    });
+
+    expect(primaryHostedPriceForModel('source:benchlm:model-a', [openrouterRoute], 'balanced', 'benchlm'))
+      .toMatchObject({ routeId: 'openrouter:model-a' });
+    expect(primaryHostedPriceForModel('source:benchlm:model-a', [litellmRoute], 'balanced', 'benchlm'))
+      .toBeNull();
+  });
+
+  it('keeps corroborating same-source routes out of cost math', () => {
+    const corroborating = price({
+      modelKey: 'source:benchlm:model-a',
+      sourceId: 'benchlm',
+      routeId: 'benchlm:model-a',
+      verificationStatus: 'corroborating',
+    });
+
+    expect(primaryHostedPriceForModel('source:benchlm:model-a', [corroborating], 'balanced', 'benchlm'))
+      .toBeNull();
+  });
+
   it('selects the least expensive explicit route deterministically without sorting caller input', () => {
     const expensive = price({ routeId: 'openrouter:z-route', inputUsdPerMillion: 2, outputUsdPerMillion: 6 });
     const inexpensive = price({ routeId: 'openrouter:a-route', inputUsdPerMillion: 1, outputUsdPerMillion: 5 });
