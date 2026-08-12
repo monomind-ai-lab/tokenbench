@@ -59,50 +59,42 @@ interface MarketLeaderCard {
   readonly key: LeaderboardKey;
   readonly title: string;
   readonly status: DecisionPickGroup['status'];
-  readonly leader: DecisionPickEntry;
+  readonly leaders: readonly DecisionPickEntry[];
 }
 
 function formatScore(score: number, unit: string): string {
   return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score)} ${unit}`;
 }
 
-function formatRate(rate: number): string {
-  return `$${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(rate)} / 1M`;
-}
-
 /**
- * Reads the published leader for each decision route without sorting or
- * re-ranking a filtered subset. `evidence-lens` routes publish evidence the
- * source does not rank, so they are labelled instead of given a position.
+ * Reads the published top three leaders for each decision route without
+ * sorting or re-ranking a filtered subset. `evidence-lens` routes publish
+ * evidence the source does not rank, so they are shown without a position.
  */
 function marketLeaderCards(groups: readonly DecisionPickGroup[] | null): readonly MarketLeaderCard[] {
   if (groups === null) return [];
   return MARKET_LEADER_CARDS.flatMap(({ key, title }) => {
     const group = groups.find((candidate) => candidate.key === key);
-    const leader = group?.entries[0];
-    if (!group || !leader) return [];
-    return [{ key, title, status: group.status, leader }];
+    const leaders = group?.entries.slice(0, 3) ?? [];
+    if (!group || leaders.length === 0) return [];
+    return [{ key, title, status: group.status, leaders }];
   });
 }
 
 function MarketLeaderArticle({ card }: { readonly card: MarketLeaderCard; readonly key?: string }) {
-  const { leader } = card;
   return <article className="panel home-snapshot-card">
-    <div className="home-snapshot-card-heading">
-      <h3>{card.title}</h3>
-      <span className="home-snapshot-rank">{card.status === 'benchalign' && Number.isSafeInteger(leader.rank) && leader.rank > 0 ? `Source rank #${leader.rank}` : 'Not ranked by source'}</span>
-    </div>
-    <a className="home-snapshot-model" href={modelPath(leader.slug)}>
-      <ProviderMark providerId={leader.provider} providerName={leader.provider} decorative size={20} />
-      <span>{leader.name}</span>
-      <ArrowRight aria-hidden="true" size={14} />
-    </a>
-    <dl>
-      <div><dt>Published value</dt><dd>{formatScore(leader.score, leader.unit)}</dd></div>
-      {leader.representativePriceUsdPerMillion === null
-        ? null
-        : <div><dt>Representative price</dt><dd>{formatRate(leader.representativePriceUsdPerMillion)}</dd></div>}
-    </dl>
+    <h3>{card.title}</h3>
+    <ol className="home-snapshot-leaders">
+      {card.leaders.map((leader, index) => <li key={leader.modelKey}>
+        <span className="home-snapshot-leader-rank">{card.status === 'benchalign' && Number.isSafeInteger(leader.rank) && leader.rank > 0 ? leader.rank : index + 1}</span>
+        <a className="home-snapshot-model" href={modelPath(leader.slug)}>
+          <ProviderMark providerId={leader.provider} providerName={leader.provider} decorative size={20} />
+          <span className="home-snapshot-leader-name">{leader.name}</span>
+          <span className="home-snapshot-leader-score">{formatScore(leader.score, leader.unit)}</span>
+          <ArrowRight aria-hidden="true" size={14} />
+        </a>
+      </li>)}
+    </ol>
   </article>;
 }
 
@@ -114,18 +106,21 @@ function RepresentativeComparisonArticle({ comparison }: { readonly comparison: 
   const finding = strongest
     ? leaderName ? `${leaderName} leads on ${strongest.category}` : `Tied on ${strongest.category}`
     : 'No comparable metric finding';
-  const implication = comparison.modelAPriceUsdPerMillion !== null && comparison.modelBPriceUsdPerMillion !== null
-    ? `${comparison.modelAName} ${formatRate(comparison.modelAPriceUsdPerMillion)} · ${comparison.modelBName} ${formatRate(comparison.modelBPriceUsdPerMillion)}`
-    : comparison.modelAContextWindowTokens !== null && comparison.modelBContextWindowTokens !== null
-      ? `Context: ${formatScore(comparison.modelAContextWindowTokens, 'tokens')} · ${formatScore(comparison.modelBContextWindowTokens, 'tokens')}`
-      : null;
+  const scoreLine = strongest
+    ? `${formatScore(strongest.modelAValue, strongest.unit)} vs ${formatScore(strongest.modelBValue, strongest.unit)}`
+    : null;
+  const contextLine = comparison.modelAContextWindowTokens !== null && comparison.modelBContextWindowTokens !== null
+    ? `${formatScore(comparison.modelAContextWindowTokens, 'tokens')} · ${formatScore(comparison.modelBContextWindowTokens, 'tokens')}`
+    : null;
   return <li>
     <article className="panel home-snapshot-card home-comparison-card">
-      <h3><a href={modelPath(comparison.modelASlug)}>{comparison.modelAName}</a> vs <a href={modelPath(comparison.modelBSlug)}>{comparison.modelBName}</a></h3>
-      <p><strong>{finding}</strong></p>
-      {strongest ? <p className="muted">{formatScore(strongest.modelAValue, strongest.unit)} vs {formatScore(strongest.modelBValue, strongest.unit)}</p> : null}
-      {implication ? <p className="muted">{implication}</p> : null}
-      <a className="home-snapshot-model" href={`/compare/${encodeURIComponent(comparison.pairSlug)}`} aria-label={`Compare ${comparison.modelAName} and ${comparison.modelBName}`}>Open comparison <ArrowRight aria-hidden="true" size={14} /></a>
+      <h3><a href={modelPath(comparison.modelASlug)}>{comparison.modelAName}</a> <span className="home-comparison-vs">vs</span> <a href={modelPath(comparison.modelBSlug)}>{comparison.modelBName}</a></h3>
+      <p className="home-comparison-result"><strong>{finding}</strong></p>
+      <dl className="home-comparison-details">
+        {scoreLine ? <div><dt>Score</dt><dd>{scoreLine}</dd></div> : null}
+        {contextLine ? <div><dt>Context window</dt><dd>{contextLine}</dd></div> : null}
+      </dl>
+      <a className="home-snapshot-model home-comparison-cta" href={`/compare/${encodeURIComponent(comparison.pairSlug)}`} aria-label={`Compare ${comparison.modelAName} and ${comparison.modelBName}`}>Open comparison <ArrowRight aria-hidden="true" size={14} /></a>
     </article>
   </li>;
 }

@@ -55,9 +55,9 @@ function leaderFor(routePath: string, name: string, score: number): DecisionPick
 }
 
 const DECISION_PICK_GROUPS: readonly DecisionPickGroup[] = [
-  { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/overall/', 'Model Alpha', 92)] },
-  { key: 'llm-agentic', label: 'Agentic BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/agentic/', 'Model Agentic', 88)] },
-  { key: 'llm-coding', label: 'Coding BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/coding/', 'Model Coding', 84)] },
+  { key: 'llm-overall', label: 'BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/overall/', 'Model Alpha', 92), leaderFor('/leaderboards/llm/overall/', 'Model Beta', 90), leaderFor('/leaderboards/llm/overall/', 'Model Gamma', 88)] },
+  { key: 'llm-agentic', label: 'Agentic BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/agentic/', 'Model Agentic', 88), leaderFor('/leaderboards/llm/agentic/', 'Model Agentic B', 86), leaderFor('/leaderboards/llm/agentic/', 'Model Agentic C', 84)] },
+  { key: 'llm-coding', label: 'Coding BenchAlign leaders', status: 'benchalign', entries: [leaderFor('/leaderboards/llm/coding/', 'Model Coding', 84), leaderFor('/leaderboards/llm/coding/', 'Model Coding B', 82), leaderFor('/leaderboards/llm/coding/', 'Model Coding C', 80)] },
   { key: 'llm-reasoning', label: 'Reasoning evidence lens', status: 'evidence-lens', entries: [leaderFor('/leaderboards/llm/reasoning/', 'Model Reasoning', 80)] },
   { key: 'multimodal-vision-documents', label: 'Vision and documents evidence lens', status: 'evidence-lens', entries: [leaderFor('/leaderboards/multimodal/vision-documents/', 'Model Multimodal', 77)] },
   { key: 'llm-knowledge', label: 'Knowledge evidence lens', status: 'evidence-lens', entries: [leaderFor('/leaderboards/llm/knowledge/', 'Model Knowledge', 75)] },
@@ -201,12 +201,13 @@ describe('HomePage', () => {
     expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
     expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/models/Model%20Alpha/');
     expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
-    expect(within(snapshot).getAllByText('Source rank #1')).toHaveLength(3);
-    expect(within(snapshot).getAllByText('Not ranked by source')).toHaveLength(2);
+    expect(within(snapshot).queryByText('Source rank #1')).not.toBeInTheDocument();
+    expect(within(snapshot).queryByText('Not ranked by source')).not.toBeInTheDocument();
+    expect(snapshot.querySelectorAll('.home-snapshot-leaders li')).toHaveLength(11);
     expect(within(snapshot).getByRole('link', { name: 'Open all leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(within(snapshot).getByRole('link', { name: 'Compare two models' })).toHaveAttribute('href', '/compare/');
     expect(within(snapshot).getByRole('link', { name: 'How rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
-    expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(5);
+    expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(11);
   });
 
   it('renders exactly two representative comparison cards from the published summary', async () => {
@@ -257,7 +258,7 @@ describe('HomePage', () => {
       status: 200,
       headers: { 'content-type': 'application/json' },
     }));
-    expect(await within(snapshot).findAllByText('Model Alpha')).toHaveLength(1);
+    expect((await within(snapshot).findAllByText('Model Alpha')).length).toBeGreaterThan(0);
     expect(unavailableCountWhileLoading).toBe(0);
   });
 
@@ -322,7 +323,7 @@ describe('HomePage', () => {
     const notice = await screen.findByText('Showing the last published revision while refresh is unavailable.');
     expect(notice).toHaveAttribute('role', 'status');
     const snapshot = screen.getByRole('region', { name: 'Market at a glance' });
-    expect(within(snapshot).getByText('Model Alpha')).toBeInTheDocument();
+    expect(within(snapshot).getAllByText('Model Alpha').length).toBeGreaterThan(0);
     expect(within(snapshot).queryByText(/Checked Aug 6, 2026/)).not.toBeInTheDocument();
     expect(within(snapshot).queryByText(/Source published/)).not.toBeInTheDocument();
   });
