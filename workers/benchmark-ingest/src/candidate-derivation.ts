@@ -35,7 +35,7 @@ import {
   candidateKeyPrefix,
   parseBenchmarkCandidateManifest,
 } from './candidate-storage';
-import { deriveComparisonPairs } from './index';
+import { deriveComparisonPairs } from './comparison-derivation';
 
 /** The exactly-five derived fact partition kinds, in canonical emission order. */
 export const DERIVED_PARTITION_KINDS = ['sources', 'models', 'metrics', 'prices', 'comparisons'] as const;

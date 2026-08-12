@@ -7,7 +7,7 @@ import type {
 import { compareUtf8Binary } from '../../../src/benchmarks/contracts';
 import type { BenchmarkCandidateManifestV1, CandidatePartition } from './candidate-storage';
 import { candidateKeyPrefix } from './candidate-storage';
-import { deriveComparisonPairs } from './index';
+import { deriveComparisonPairs } from './comparison-derivation';
 import {
   DERIVED_PARTITION_KINDS,
   MAX_DERIVED_PARTITION_ROWS,
@@ -20,6 +20,7 @@ const CYCLE_ID = '11111111-2222-4333-8444-555555555555';
 const CATALOG_REVISION = 'catalog_rev_1';
 const CHECKED_AT = '2026-08-05T12:00:00.000Z';
 const SOURCE_HASH = `sha256:${'a'.repeat(64)}`;
+
 
 function sha256(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
