@@ -22,6 +22,19 @@ import { ShareAction } from '../frontend/share-action';
 import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
 import { SITE_CONFIG } from '../brand/site-config';
 
+const UNRANKED_LENS_KEYS = new Set<LeaderboardKey>(['llm-reasoning', 'llm-knowledge']);
+
+/**
+ * Positions are published source ranks, so a category view can legitimately
+ * start at #2 or skip a number when the model at that rank has no measurement
+ * for the category. Say so, rather than letting the gap read as a defect.
+ */
+export function positionNoteFor(keyName: LeaderboardKey): string {
+  return UNRANKED_LENS_KEYS.has(keyName)
+    ? 'This is an unranked evidence lens. Positions come from the source where published, and rows without a published rank stay unranked rather than being renumbered.'
+    : 'Positions are the published source rank, not the row number. A gap means the model at that rank has no published measurement for this category.';
+}
+
 function methodologySummary(keyName: LeaderboardKey): string {
   if (keyName === 'llm-value') {
     return 'This is an overall-capability value frontier: it pairs supported BenchLM overall evidence with a disclosed workload price. It is not a coding-value ranking.';
@@ -323,7 +336,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     </section>
 
     <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p><p className="muted">{positionNoteFor(keyName)}</p></div></div>
       {state.envelope
         ? <LeaderboardEvidence publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} label="Published leaderboard evidence" compact />
         : <p className="leaderboard-evidence-unavailable">No published source record is available for this view yet. TokenBench will show source links, publication time, and freshness here when a valid revision is available.</p>}

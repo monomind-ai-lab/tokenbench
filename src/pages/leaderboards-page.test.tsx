@@ -3,7 +3,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DecisionPickEntry } from '../benchmarks/decision-picks';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult } from '../frontend/use-benchmarks';
 import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
-import { LeaderboardDirectoryPage, LeaderboardPage } from './leaderboards-page';
+import { LeaderboardDirectoryPage, LeaderboardPage, positionNoteFor } from './leaderboards-page';
+
+describe('leaderboard position notes', () => {
+  it('explains that positions are published source ranks', () => {
+    expect(positionNoteFor('llm-coding')).toMatch(/source rank/i);
+    expect(positionNoteFor('llm-coding')).toMatch(/gap/i);
+  });
+
+  it('marks reasoning and knowledge as unranked evidence lenses', () => {
+    expect(positionNoteFor('llm-reasoning')).toMatch(/unranked/i);
+    expect(positionNoteFor('llm-knowledge')).toMatch(/unranked/i);
+  });
+});
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
 
