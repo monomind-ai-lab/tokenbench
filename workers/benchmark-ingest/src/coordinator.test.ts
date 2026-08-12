@@ -295,6 +295,26 @@ describe('BenchmarkIngestCoordinator.start', () => {
     expect(db.writes).toEqual([]);
     expect(durable.alarm).toBeNull();
   });
+
+  it('expires a different-cadence active receipt before starting the next week', async () => {
+    nowMs = SUNDAY;
+    const prior = createBenchmarkCycle(SUNDAY, '11111111-2222-4333-8444-555555555555');
+    const durable = storage({ [CYCLE_KEY]: prior });
+    const { env, db } = environment({ catalogRevision: CATALOG_REVISION });
+    const { steps } = fakeSteps();
+    const nextSunday = Date.parse('2026-08-23T02:15:00.000Z');
+    const coordinator = new BenchmarkIngestCoordinator({ storage: durable } as never, env, baseDeps(steps));
+
+    const result = await coordinator.start({ scheduledTime: nextSunday });
+
+    expect(result.status).toBe('started');
+    expect(result.cycle.cadenceKey).toBe('2026-W34');
+    expect(db.writes[0]).toMatchObject({
+      sql: expect.stringContaining('UPDATE ingestion_cycles'),
+      values: expect.arrayContaining(['expired', 'cadence_superseded', prior.cycleId]),
+    });
+    expect(db.writes[1]?.sql).toContain('INSERT INTO ingestion_cycles');
+  });
 });
 
 // ---------------------------------------------------------------------------

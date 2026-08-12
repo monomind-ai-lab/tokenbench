@@ -14,6 +14,7 @@ import {
   type ModelProfileSourceAttribution,
 } from '../../src/benchmarks/model-profile';
 import { decodeOpaqueValue, encodeOpaqueValue, type D1Database } from './benchmark-db';
+import { BENCHMARK_FRESHNESS_WINDOW_MS } from '../../src/ingestion/cadence';
 
 export interface ModelDirectoryQuery {
   readonly q: string;
@@ -85,7 +86,6 @@ export class ModelDirectoryRequestError extends Error {}
 const DIRECTORY_PAGE_MAX = 100;
 const PROFILE_HISTORY_LIMIT = 20;
 const DIRECTORY_PROFILE_HISTORY_LIMIT = 5;
-const WEEK_STALE_AFTER_MS = 8 * 24 * 60 * 60 * 1000;
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -425,7 +425,7 @@ export async function readModelDirectory(
   });
   const fallbackDate = entries[0]?.profileCheckedAt ?? new Date(0).toISOString();
   const checkedAt = week?.generatedAt ?? fallbackDate;
-  const stale = week === null || Date.now() - Date.parse(checkedAt) > WEEK_STALE_AFTER_MS;
+  const stale = week === null || Date.now() - Date.parse(checkedAt) > BENCHMARK_FRESHNESS_WINDOW_MS;
   return {
     revision: week?.benchmarkRevision ?? entries[0]?.profileRevision ?? 'durable-model-directory',
     publishedAt: week?.generatedAt ?? entries[0]?.profilePublishedAt ?? fallbackDate,

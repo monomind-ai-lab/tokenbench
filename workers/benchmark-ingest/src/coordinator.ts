@@ -223,6 +223,25 @@ export interface BenchmarkCheckpoint {
 export const BENCHMARK_CYCLE_EXPIRY_MS = 24 * 60 * 60 * 1_000;
 export const BENCHMARK_STEP_DELAY_MS = 15_000;
 
+/** Persisted phase order used by operations and the production-scale restart harness. */
+export const BENCHMARK_CYCLE_PHASES = [
+  'acquire',
+  'retrieve-benchlm',
+  'assemble-benchlm',
+  'retrieve-litellm',
+  'retrieve-lmarena-revision',
+  'retrieve-lmarena-pages',
+  'normalize-sources',
+  'derive',
+  'stage-facts',
+  'stage-profiles',
+  'stage-cache',
+  'validate-candidate',
+  'publish',
+  'receipt',
+] as const;
+export type BenchmarkCyclePhase = typeof BENCHMARK_CYCLE_PHASES[number];
+
 const CYCLE_STORAGE_KEY = 'benchmark-cycle';
 const CHECKPOINT_STORAGE_KEY = 'benchmark-checkpoint';
 
@@ -1194,6 +1213,20 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
       const cycle = existing ?? createBenchmarkCycle(scheduledTime, this.deps.randomUUID());
       this.deps.log(logRecord('benchmark_cycle_already_completed', cycle));
       return { status: 'already-completed', cycle };
+    }
+
+    if (existing && existing.cadenceKey !== cadenceKey && isActive(existing)) {
+      const expired = copyCycle(existing, {
+        state: 'expired',
+        updatedAt: iso(scheduledTime),
+        nextRetryAt: null,
+        errorCode: 'cadence_superseded',
+        errorSourceId: existing.phase,
+        errorArtifactId: null,
+      });
+      await this.coordinatorEnv.CATALOG_DB.batch([
+        updateCycleStatement(this.coordinatorEnv, expired, expired.updatedAt),
+      ]);
     }
 
     const cycle = createBenchmarkCycle(scheduledTime, this.deps.randomUUID());

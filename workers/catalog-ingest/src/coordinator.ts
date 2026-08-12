@@ -193,6 +193,22 @@ export class CatalogIngestCoordinator extends DurableObject<CatalogIngestEnv> {
       return { status: 'already-completed', cycle: existing };
     }
 
+    if (existing && existing.cadenceKey !== cadenceKey && isActive(existing)) {
+      const updatedAt = new Date(scheduledTime).toISOString();
+      const expired: IngestionCycle = {
+        ...existing,
+        state: 'expired',
+        updatedAt,
+        nextRetryAt: null,
+        errorCode: 'cadence_superseded',
+        errorSourceId: existing.phase,
+        errorArtifactId: null,
+      };
+      await this.coordinatorEnv.CATALOG_DB.batch([
+        updateCycleStatement(this.coordinatorEnv, expired, updatedAt),
+      ]);
+    }
+
     const cycle = createCatalogCycle(scheduledTime, this.dependencies.randomUUID());
     await this.coordinatorEnv.CATALOG_DB.batch([insertCycleStatement(this.coordinatorEnv, cycle)]);
     await this.coordinatorState.storage.put(CYCLE_STORAGE_KEY, cycle);

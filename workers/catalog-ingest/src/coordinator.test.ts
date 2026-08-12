@@ -120,6 +120,28 @@ describe('catalog ingest coordinator', () => {
     expect(statements).toEqual([]);
   });
 
+  it('expires a different-cadence active receipt before starting the next day', async () => {
+    const prior = createCatalogCycle(
+      Date.parse('2026-08-12T00:20:00.000Z'),
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    const durableStorage = storage({ 'catalog-cycle': prior });
+    const { env, statements } = environment();
+    const coordinator = new CatalogIngestCoordinator({ storage: durableStorage } as never, env, {
+      randomUUID: () => '11111111-2222-4333-8444-555555555555',
+    });
+
+    const result = await coordinator.start({ scheduledTime: Date.parse('2026-08-13T00:20:00.000Z') });
+
+    expect(result.status).toBe('started');
+    expect(result.cycle.cadenceKey).toBe('2026-08-13');
+    expect(statements[0]).toMatchObject({
+      sql: expect.stringContaining('UPDATE ingestion_cycles'),
+      values: expect.arrayContaining(['expired', 'cadence_superseded', prior.cycleId]),
+    });
+    expect(statements[1]?.sql).toContain('INSERT INTO ingestion_cycles');
+  });
+
   it('catches an alarm failure, persists a bounded code, and removes the alarm', async () => {
     const cycle = createCatalogCycle(
       Date.parse('2026-08-12T00:20:00.000Z'),
