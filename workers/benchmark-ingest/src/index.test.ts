@@ -2,8 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { BenchmarkComparisonPair, NormalizedSourceBatch } from '../../../src/benchmarks/contracts';
+import { BENCHMARK_CRON } from '../../../src/ingestion/cadence';
 import * as benchmarkIngest from './index';
 import worker, {
+  MAINTENANCE_FORCE_CRON,
   buildPublicationStatementPlan,
   buildUnchangedPublicationStatementPlan,
   deriveComparisonPairs,
@@ -2639,5 +2641,43 @@ describe('atomic benchmark ingestion', () => {
     });
     expect(response.status).toBe(405);
     expect(response.headers.get('allow')).toBeNull();
+  });
+
+  it('forces one re-materialization only for the dedicated maintenance cron', async () => {
+    const { env } = seededEnvironment();
+    const start = vi.fn(async () => undefined);
+    const scheduledEnv = env as Parameters<typeof worker.scheduled>[1];
+    scheduledEnv.INGEST_COORDINATOR = { getByName: () => ({ start }) };
+    const scheduledTime = Date.parse('2026-08-13T00:20:00.000Z');
+
+    await worker.scheduled(
+      { cron: MAINTENANCE_FORCE_CRON, scheduledTime, noRetry: () => undefined },
+      scheduledEnv,
+      { waitUntil: () => undefined },
+    );
+
+    expect(start).toHaveBeenCalledWith({ scheduledTime, force: true });
+  });
+
+  it('never forces a re-materialization from the weekly cadence cron', async () => {
+    const { env } = seededEnvironment();
+    const startCalls: { scheduledTime: number; force?: boolean }[] = [];
+    const start = vi.fn(async (input: { scheduledTime: number; force?: boolean }) => {
+      startCalls.push(input);
+      return undefined;
+    });
+    const scheduledEnv = env as Parameters<typeof worker.scheduled>[1];
+    scheduledEnv.INGEST_COORDINATOR = { getByName: () => ({ start }) };
+    const scheduledTime = Date.parse('2026-08-23T02:15:00.000Z');
+
+    await worker.scheduled(
+      { cron: BENCHMARK_CRON, scheduledTime, noRetry: () => undefined },
+      scheduledEnv,
+      { waitUntil: () => undefined },
+    );
+
+    expect(start).toHaveBeenCalledWith({ scheduledTime });
+    expect(startCalls).toHaveLength(1);
+    expect(startCalls[0]).not.toHaveProperty('force');
   });
 });
