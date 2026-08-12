@@ -329,8 +329,11 @@ describe('retrieveBenchLmArtifactStep', () => {
     expect(fetcher.calls).toHaveLength(1);
     expect(fetcher.calls[0].headers['if-none-match']).toBe('W/"pricing-active"');
     expect(fetcher.calls[0].headers['if-modified-since']).toBe('Sat, 08 Aug 2026 00:00:00 GMT');
-    expect(artifact).toEqual(previous);
-    expect(store.writes).toEqual([]);
+    expect(artifact).toEqual({
+      ...previous,
+      key: `${CANDIDATE_PREFIX}benchlm/projected/pricing/${sha256(projection).slice('sha256:'.length)}.json`,
+    });
+    expect(store.writes).toEqual([artifact.key]);
   });
 
   it('refuses to reuse a 304 whose stored bytes no longer hash to the recorded content hash', async () => {
@@ -541,9 +544,12 @@ describe('retrieveLiteLlmStep', () => {
       previous,
     });
 
-    expect(artifact).toEqual(previous);
+    expect(artifact).toEqual({
+      ...previous,
+      key: `${CANDIDATE_PREFIX}litellm/model-prices/${sha256(projected).slice('sha256:'.length)}.json`,
+    });
     expect(fetcher.calls[0].headers['if-none-match']).toBe('"litellm-active"');
-    expect(store.writes).toEqual([]);
+    expect(store.writes).toEqual([artifact.key]);
   });
 
   it('rejects a 304 whose stored candidate is not the exact safe projection', async () => {

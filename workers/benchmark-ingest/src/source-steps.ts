@@ -521,8 +521,19 @@ export async function retrieveBenchLmArtifactStep(
     if (previous.artifactId !== artifact) {
       throw new SourceStepFailure('benchlm', artifact, `BenchLM ${artifact} conditional candidate has the wrong artifact identity`);
     }
-    await readExactCandidateBytes(store, previous, `BenchLM ${artifact}`);
-    return { ...previous };
+    const bytes = await readExactCandidateBytes(store, previous, `BenchLM ${artifact}`);
+    const key = previous.schemaVersion === BENCHLM_PROJECTION_SCHEMA_VERSION
+      ? benchLmProjectedKey(cycleId, artifact, previous.contentHash)
+      : benchLmRawKey(cycleId, artifact, previous.contentHash);
+    await putCandidateObject(
+      store,
+      cycleId,
+      key,
+      bytes,
+      previous.contentHash,
+      previous.originalContentHash,
+    );
+    return { ...previous, key };
   }
 
   const bytes = await readBoundedBytes(response, MAX_BENCHLM_BYTES, `BenchLM ${artifact}`);
@@ -693,7 +704,16 @@ export async function retrieveLiteLlmStep(input: SourceStepInput): Promise<Candi
     if (!byteArraysEqual(bytes, jsonBytes(projection))) {
       throw new SourceStepFailure('litellm', LITELLM_ARTIFACT_ID, 'LiteLLM immutable candidate is not the exact safe projection');
     }
-    return { ...previous };
+    const key = `${candidatePrefix(cycleId)}litellm/${LITELLM_ARTIFACT_ID}/${digestHex(previous.contentHash)}.json`;
+    await putCandidateObject(
+      store,
+      cycleId,
+      key,
+      bytes,
+      previous.contentHash,
+      previous.originalContentHash,
+    );
+    return { ...previous, key };
   }
 
   const raw = await readBoundedBytes(response, MAX_LITELLM_BYTES, 'LiteLLM');
