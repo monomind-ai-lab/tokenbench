@@ -30,8 +30,13 @@ export interface CandidateArtifact {
   readonly artifactId: string;
   readonly key: string;
   readonly contentHash: string;
+  readonly originalContentHash: string;
   readonly byteLength: number;
+  readonly sourceUrl: string;
+  readonly etag: string | null;
+  readonly lastModified: string | null;
   readonly upstreamRevision: string | null;
+  readonly schemaVersion: string | null;
 }
 
 /** One normalized or derived partition staged for later publication. */
@@ -94,7 +99,10 @@ const MANIFEST_KEYS = [
   'normalizedPartitions',
   'derivedPartitions',
 ] as const;
-const ARTIFACT_KEYS = ['artifactId', 'key', 'contentHash', 'byteLength', 'upstreamRevision'] as const;
+const ARTIFACT_KEYS = [
+  'artifactId', 'key', 'contentHash', 'originalContentHash', 'byteLength',
+  'sourceUrl', 'etag', 'lastModified', 'upstreamRevision', 'schemaVersion',
+] as const;
 const PARTITION_KEYS = ['partitionId', 'key', 'contentHash', 'byteLength'] as const;
 
 function fail(message: string): never {
@@ -164,16 +172,35 @@ function requireSafeKey(value: unknown, prefix: string, label: string): string {
   return value;
 }
 
-function readCandidateArtifact(value: unknown, prefix: string, label: string): CandidateArtifact {
+function readCandidateArtifactDescriptor(value: unknown, prefix: string, label: string): CandidateArtifact {
   const record = requireRecord(value, label);
   assertNoUnknownKeys(record, ARTIFACT_KEYS, label);
   return {
     artifactId: requireString(record.artifactId, `${label}.artifactId`),
     key: requireSafeKey(record.key, prefix, label),
     contentHash: requireContentHash(record.contentHash, `${label}.contentHash`),
+    originalContentHash: requireContentHash(record.originalContentHash, `${label}.originalContentHash`),
     byteLength: requireByteLength(record.byteLength, `${label}.byteLength`),
+    sourceUrl: requireSourceUrl(record.sourceUrl, `${label}.sourceUrl`),
+    etag: readNullableString(record.etag, `${label}.etag`),
+    lastModified: readNullableString(record.lastModified, `${label}.lastModified`),
     upstreamRevision: readNullableString(record.upstreamRevision, `${label}.upstreamRevision`),
+    schemaVersion: readNullableString(record.schemaVersion, `${label}.schemaVersion`),
   };
+}
+
+function requireSourceUrl(value: unknown, label: string): string {
+  const sourceUrl = requireString(value, label);
+  let parsed: URL;
+  try {
+    parsed = new URL(sourceUrl);
+  } catch {
+    return fail(`${label} must be a valid HTTPS URL`);
+  }
+  if (parsed.protocol !== 'https:' || parsed.username || parsed.password) {
+    fail(`${label} must be a credential-free HTTPS URL`);
+  }
+  return sourceUrl;
 }
 
 function readCandidatePartition(value: unknown, prefix: string, label: string): CandidatePartition {
@@ -191,7 +218,7 @@ function readBenchLmSet(value: unknown, prefix: string): CandidateArtifact[] {
   if (!Array.isArray(value)) fail('candidate manifest BenchLM set must be an array');
   if (value.length > BENCHLM_ARTIFACT_IDS.length) fail('candidate manifest BenchLM set is unbounded');
   const artifacts = value.map((entry, index) =>
-    readCandidateArtifact(entry, prefix, `candidate manifest benchLm[${index}]`));
+    readCandidateArtifactDescriptor(entry, prefix, `candidate manifest benchLm[${index}]`));
   const ids = new Set(artifacts.map((artifact) => artifact.artifactId));
   if (ids.size !== artifacts.length) fail('candidate manifest BenchLM set has duplicate artifact ids');
   for (const required of BENCHLM_ARTIFACT_IDS) {
@@ -210,7 +237,7 @@ function readLmArenaSet(
     fail('candidate manifest lmArena set exceeds the 200-page bound');
   }
   const artifacts = value.map((entry, index) =>
-    readCandidateArtifact(entry, prefix, `candidate manifest lmArena[${index}]`));
+    readCandidateArtifactDescriptor(entry, prefix, `candidate manifest lmArena[${index}]`));
   const ids = new Set(artifacts.map((artifact) => artifact.artifactId));
   if (ids.size !== artifacts.length) fail('candidate manifest lmArena set has duplicate artifact ids');
   if (artifacts.length === 0) {
@@ -256,7 +283,7 @@ export function parseBenchmarkCandidateManifest(value: unknown): BenchmarkCandid
   const benchLm = readBenchLmSet(record.benchLm, prefix);
   const liteLlm = record.liteLlm === null
     ? null
-    : readCandidateArtifact(record.liteLlm, prefix, 'benchmark candidate manifest liteLlm');
+    : readCandidateArtifactDescriptor(record.liteLlm, prefix, 'benchmark candidate manifest liteLlm');
   const lmArena = readLmArenaSet(record.lmArena, lmArenaRevision, prefix);
   const normalizedPartitions = readPartitionSet(record.normalizedPartitions, prefix, 'normalizedPartitions');
   const derivedPartitions = readPartitionSet(record.derivedPartitions, prefix, 'derivedPartitions');
@@ -336,7 +363,16 @@ function decodeJson(bytes: Uint8Array, label: string): unknown {
 export async function writeCandidateArtifact(
   bucket: CandidateR2Bucket,
   cycleId: string,
-  input: { artifactId: string; bytes: Uint8Array; upstreamRevision?: string | null },
+  input: {
+    artifactId: string;
+    bytes: Uint8Array;
+    originalContentHash: string;
+    sourceUrl: string;
+    etag: string | null;
+    lastModified: string | null;
+    upstreamRevision: string | null;
+    schemaVersion: string | null;
+  },
 ): Promise<CandidateArtifact> {
   const prefix = candidateKeyPrefix(cycleId);
   const { artifactId, bytes } = input;
@@ -344,6 +380,8 @@ export async function writeCandidateArtifact(
     fail(`candidate artifact ${artifactId} byte length is out of bounds`);
   }
   const contentHash = await sha256Digest(bytes);
+  requireContentHash(input.originalContentHash, 'candidate artifact originalContentHash');
+  requireSourceUrl(input.sourceUrl, 'candidate artifact sourceUrl');
   const key = `${prefix}artifacts/${contentHash.slice('sha256:'.length)}.json`;
   const existing = await bucket.get(key);
   if (existing) {
@@ -361,9 +399,30 @@ export async function writeCandidateArtifact(
     artifactId,
     key,
     contentHash,
+    originalContentHash: input.originalContentHash,
     byteLength: bytes.byteLength,
-    upstreamRevision: input.upstreamRevision ?? null,
+    sourceUrl: input.sourceUrl,
+    etag: input.etag,
+    lastModified: input.lastModified,
+    upstreamRevision: input.upstreamRevision,
+    schemaVersion: input.schemaVersion,
   };
+}
+
+/** Read and rehash one exact candidate artifact before any normalization step. */
+export async function readCandidateArtifact(
+  bucket: CandidateR2Bucket,
+  cycleId: string,
+  artifact: CandidateArtifact,
+): Promise<Uint8Array> {
+  const validated = readCandidateArtifactDescriptor(artifact, candidateKeyPrefix(cycleId), 'candidate artifact');
+  const object = await bucket.get(validated.key);
+  if (!object) fail(`candidate artifact ${validated.artifactId} is missing`);
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  if (bytes.byteLength !== validated.byteLength || await sha256Digest(bytes) !== validated.contentHash) {
+    fail(`candidate artifact ${validated.artifactId} content hash does not match its exact bytes`);
+  }
+  return bytes;
 }
 
 /**

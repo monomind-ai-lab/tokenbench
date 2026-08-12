@@ -7,6 +7,7 @@ import {
   candidateKeyPrefix,
   candidateManifestKey,
   parseBenchmarkCandidateManifest,
+  readCandidateArtifact,
   readCandidateManifest,
   writeCandidateArtifact,
   writeCandidateManifest,
@@ -72,8 +73,13 @@ function artifact(cycleId: string, id: string, seed: string, revision: string | 
     artifactId: id,
     key: `${candidateKeyPrefix(cycleId)}artifacts/${createHash('sha256').update(bytes).digest('hex')}.json`,
     contentHash: sha256(bytes),
+    originalContentHash: sha256(bytes),
     byteLength: bytes.byteLength,
+    sourceUrl: `https://example.com/${encodeURIComponent(id)}`,
+    etag: '"fixture-etag"',
+    lastModified: 'Wed, 12 Aug 2026 02:15:00 GMT',
     upstreamRevision: revision,
+    schemaVersion: null,
   };
 }
 
@@ -219,6 +225,16 @@ describe('parseBenchmarkCandidateManifest', () => {
     expect(() => parseBenchmarkCandidateManifest(bad)).toThrow(/contentHash|hash/);
   });
 
+  it('rejects missing or malformed immutable provenance', () => {
+    const missing = structuredClone(validManifest()) as unknown as Record<string, unknown>;
+    delete (missing.benchLm as Record<string, unknown>[])[0].originalContentHash;
+    expect(() => parseBenchmarkCandidateManifest(missing)).toThrow(/originalContentHash/);
+
+    const badUrl = structuredClone(validManifest());
+    badUrl.benchLm[0] = { ...badUrl.benchLm[0], sourceUrl: 'http://example.com/unsafe' };
+    expect(() => parseBenchmarkCandidateManifest(badUrl)).toThrow(/sourceUrl/);
+  });
+
   it('rejects a non-positive byte length', () => {
     const bad = structuredClone(validManifest());
     bad.benchLm[0] = { ...bad.benchLm[0], byteLength: 0 };
@@ -233,11 +249,18 @@ describe('writeCandidateArtifact', () => {
     const result = await writeCandidateArtifact(bucket, CYCLE_ID, {
       artifactId: 'leaderboard',
       bytes,
+      originalContentHash: sha256(bytes),
+      sourceUrl: 'https://benchlm.ai/data/leaderboard.json',
+      etag: '"leaderboard-v1"',
+      lastModified: null,
       upstreamRevision: null,
+      schemaVersion: 'benchlm-v2',
     });
     expect(result.key.startsWith(`${candidateKeyPrefix(CYCLE_ID)}artifacts/`)).toBe(true);
     expect(result.contentHash).toBe(sha256(bytes));
     expect(result.byteLength).toBe(bytes.byteLength);
+    expect(result.originalContentHash).toBe(sha256(bytes));
+    expect(result.sourceUrl).toBe('https://benchlm.ai/data/leaderboard.json');
     expect(objects.get(result.key)?.customMetadata.content_hash).toBe(sha256(bytes));
     expect(puts).toEqual([result.key]);
   });
@@ -245,8 +268,13 @@ describe('writeCandidateArtifact', () => {
   it('is idempotent for identical bytes (no second put)', async () => {
     const { bucket, puts } = createR2();
     const bytes = new TextEncoder().encode('{"a":1}');
-    const first = await writeCandidateArtifact(bucket, CYCLE_ID, { artifactId: 'a', bytes });
-    const second = await writeCandidateArtifact(bucket, CYCLE_ID, { artifactId: 'a', bytes });
+    const input = {
+      artifactId: 'a', bytes, originalContentHash: sha256(bytes),
+      sourceUrl: 'https://example.com/a', etag: null, lastModified: null,
+      upstreamRevision: null, schemaVersion: null,
+    };
+    const first = await writeCandidateArtifact(bucket, CYCLE_ID, input);
+    const second = await writeCandidateArtifact(bucket, CYCLE_ID, input);
     expect(second).toEqual(first);
     expect(puts).toEqual([first.key]);
   });
@@ -254,13 +282,31 @@ describe('writeCandidateArtifact', () => {
   it('rejects a corrupted content-addressed object rather than trusting the key', async () => {
     const { bucket, objects } = createR2();
     const bytes = new TextEncoder().encode('{"a":1}');
-    const result = await writeCandidateArtifact(bucket, CYCLE_ID, { artifactId: 'a', bytes });
+    const input = {
+      artifactId: 'a', bytes, originalContentHash: sha256(bytes),
+      sourceUrl: 'https://example.com/a', etag: null, lastModified: null,
+      upstreamRevision: null, schemaVersion: null,
+    };
+    const result = await writeCandidateArtifact(bucket, CYCLE_ID, input);
     objects.set(result.key, {
       bytes: new TextEncoder().encode('{"a":2}'),
       customMetadata: { content_hash: result.contentHash },
     });
-    await expect(writeCandidateArtifact(bucket, CYCLE_ID, { artifactId: 'a', bytes }))
+    await expect(writeCandidateArtifact(bucket, CYCLE_ID, input))
       .rejects.toThrow(/content hash|exact bytes/i);
+  });
+
+  it('rehashes exact stored bytes before a downstream source step uses them', async () => {
+    const { bucket, objects } = createR2();
+    const bytes = new TextEncoder().encode('{"a":1}');
+    const artifact = await writeCandidateArtifact(bucket, CYCLE_ID, {
+      artifactId: 'a', bytes, originalContentHash: sha256(bytes),
+      sourceUrl: 'https://example.com/a', etag: null, lastModified: null,
+      upstreamRevision: null, schemaVersion: null,
+    });
+    await expect(readCandidateArtifact(bucket, CYCLE_ID, artifact)).resolves.toEqual(bytes);
+    objects.get(artifact.key)!.bytes = new TextEncoder().encode('{"a":2}');
+    await expect(readCandidateArtifact(bucket, CYCLE_ID, artifact)).rejects.toThrow(/exact bytes/);
   });
 });
 
