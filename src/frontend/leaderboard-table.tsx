@@ -74,6 +74,14 @@ function usesPublishedSourceRank(keyName: LeaderboardKey): boolean {
   return kind === 'benchlm' || kind === 'lmarena' || kind === 'multimodal';
 }
 
+/** True when at least one row has modality evidence worth a column. */
+export function hasModalityEvidence(entries: readonly LeaderboardEntry[]): boolean {
+  return entries.some((entry) => {
+    const price = entry.primaryPrice;
+    return (price?.inputModalities?.length ?? 0) > 0 || (price?.outputModalities?.length ?? 0) > 0;
+  });
+}
+
 function ScoreValue({ entry }: { readonly entry: LeaderboardEntry }) {
   if (isEstimated(entry)) return <span>Unavailable</span>;
   const lenses = sourceLenses(entry);
@@ -117,7 +125,7 @@ function ProviderIdentity({ entry }: { readonly entry: LeaderboardEntry }) {
   return <span className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span></span>;
 }
 
-function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; readonly entry: LeaderboardEntry; readonly position: number | null; readonly key?: string }) {
+function Card({ keyName, entry, position, showModalities }: { readonly keyName: LeaderboardKey; readonly entry: LeaderboardEntry; readonly position: number | null; readonly showModalities: boolean; readonly key?: string }) {
   const estimated = isEstimated(entry);
   return <li className={`leaderboard-card${estimated ? ' leaderboard-card-estimated' : ''}`}>
     <div className="leaderboard-card-heading"><span className="leaderboard-position">{position === null ? 'Unranked' : `#${position}`}</span><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div>
@@ -125,7 +133,7 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
     <p className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span></p>
     <dl>
       <div><dt>Score</dt><dd><ScoreValue entry={entry} /></dd></div>
-      <div><dt>Supported Modalities</dt><dd><ModalitiesValue entry={entry} /></dd></div>
+      {showModalities ? <div><dt>Supported Modalities</dt><dd><ModalitiesValue entry={entry} /></dd></div> : null}
       <div><dt>Context</dt><dd>{estimated ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</dd></div>
       <div><dt>Source rank</dt><dd>{estimated || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</dd></div>
     </dl>
@@ -134,6 +142,7 @@ function Card({ keyName, entry, position }: { readonly keyName: LeaderboardKey; 
 
 export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSortChange, capabilities }: LeaderboardTableProps) {
   const label = tableLabel(keyName);
+  const showModalities = hasModalityEvidence(entries);
   const orderDescriptionId = `leaderboard-order-${keyName}`;
   const usesSourceLensOrder = keyName === 'multimodal-vision-documents' && sort === 'score-desc';
   const canSort = (candidate: LeaderboardSort) => capabilities === undefined || capabilities.sorts.includes(candidate);
@@ -157,7 +166,7 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
             <th scope="col" aria-sort={canSort('rank-asc') ? sortDirection(sort, 'rank-asc') : 'none'}>{canSort('rank-asc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('rank-asc')} aria-label="Sort by position">Position</button> : 'Position'}</th>
             <th scope="col">Model</th>
             <th scope="col" aria-sort={canSort('score-desc') ? (usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')) : 'none'}>{canSort('score-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by score'}>Score</button> : 'Score'}</th>
-            <th scope="col">Supported Modalities</th>
+            {showModalities ? <th scope="col">Supported Modalities</th> : null}
             <th scope="col" aria-sort={canSort('context-desc') ? sortDirection(sort, 'context-desc') : 'none'}>{canSort('context-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button> : 'Context'}</th>
           </tr>
         </thead>
@@ -166,14 +175,14 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
             <td>{position === null ? 'Unranked' : `#${position}`}</td>
             <th scope="row"><div className="leaderboard-model"><a href={modelPath(entry.model.slug)}>{entry.model.name}</a><ProviderIdentity entry={entry} /><Badge value={badgeFor(keyName, entry, position ?? 0)} /></div></th>
             <td><ScoreValue entry={entry} /></td>
-            <td><ModalitiesValue entry={entry} /></td>
+            {showModalities ? <td><ModalitiesValue entry={entry} /></td> : null}
             <td>{isEstimated(entry) ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</td>
           </tr>)}
         </tbody>
       </table>
     </div>
     <ol className="leaderboard-card-list" aria-label={cardLabel(keyName)}>
-      {rows.map(({ entry, position }) => <Card key={entry.model.modelKey} keyName={keyName} entry={entry} position={position} />)}
+      {rows.map(({ entry, position }) => <Card key={entry.model.modelKey} keyName={keyName} entry={entry} position={position} showModalities={showModalities} />)}
     </ol>
   </section>;
 }

@@ -216,15 +216,52 @@ describe('LeaderboardTable', () => {
     expect(within(table).getByRole('columnheader', { name: 'Position' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Model' })).toHaveAttribute('scope', 'col');
     expect(within(table).getByRole('columnheader', { name: 'Score' })).toHaveAttribute('scope', 'col');
-    expect(within(table).getByRole('columnheader', { name: 'Supported Modalities' })).toHaveAttribute('scope', 'col');
+    expect(within(table).queryByRole('columnheader', { name: 'Supported Modalities' })).toBeNull();
     expect(within(table).getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'descending');
-    expect(within(table).getAllByText('Unavailable').length).toBeGreaterThan(1);
+    expect(within(table).getAllByText('Unavailable')).toHaveLength(1);
     expect(within(table).getByRole('link', { name: 'Model A' })).toHaveAttribute('href', '/models/model-a/');
     expect(screen.queryByRole('link', { name: 'Data from BenchLM.ai' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Leaderboard evidence')).not.toBeInTheDocument();
 
     fireEvent.click(within(table).getByRole('button', { name: 'Sort by score' }));
     expect(onSortChange).toHaveBeenCalledWith('score-desc');
+  });
+
+  it('hides the modalities column when no row publishes modality evidence', () => {
+    const rows = [
+      entry({ contextWindowTokens: 128_000, sourceRank: 1 }),
+      entry({
+        model: { ...entry().model, modelKey: 'model-b', slug: 'model-b', name: 'Model B' },
+        metric: { ...entry().metric!, modelKey: 'model-b', sourceModelId: 'model-b' },
+        contextWindowTokens: 128_000,
+        sourceRank: 2,
+      }),
+    ];
+
+    renderTable('llm-coding', 'score-desc', rows);
+
+    expect(screen.queryByRole('columnheader', { name: /supported modalities/i })).toBeNull();
+    expect(screen.queryByText('Unavailable')).toBeNull();
+  });
+
+  it('keeps the modalities column when at least one row publishes it', () => {
+    const withModalities = entry({
+      primaryPrice: { ...primaryOpenRouterPrice(), inputModalities: ['text', 'image'], outputModalities: ['text'] },
+      contextWindowTokens: 128_000,
+      sourceRank: 1,
+    });
+    const withoutModalities = entry({
+      model: { ...entry().model, modelKey: 'model-b', slug: 'model-b', name: 'Model B' },
+      metric: { ...entry().metric!, modelKey: 'model-b', sourceModelId: 'model-b' },
+      contextWindowTokens: 128_000,
+      sourceRank: 2,
+    });
+
+    renderTable('llm-coding', 'score-desc', [withModalities, withoutModalities]);
+
+    expect(screen.getByRole('columnheader', { name: /supported modalities/i })).toBeTruthy();
+    expect(screen.getAllByText('text, image · text')).toHaveLength(2);
+    expect(screen.getAllByText('Unavailable')).toHaveLength(2);
   });
 
   it('shows only the primary score and supported modalities in the table and mobile cards', () => {
