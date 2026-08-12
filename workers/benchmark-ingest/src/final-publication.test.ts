@@ -19,7 +19,7 @@ function snapshot(): ActiveBenchmarkSnapshot {
   const source = {
     sourceId: 'benchlm' as const,
     artifactId: 'public-leaderboard',
-    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
+    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
     observedAt: CHECKED_AT,
     etag: null,
     lastModified: null,

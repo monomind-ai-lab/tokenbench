@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DatabaseSync } from 'node:sqlite';
 import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
 import type {
   BenchmarkMetric,
@@ -263,12 +264,16 @@ describe('atomic model directory publication', () => {
     const week = records.find((statement) => statement.sql.includes('benchmark_popular_model_weeks'));
     const ranks = records.find((statement) => statement.sql.includes('benchmark_popular_model_ranks'));
     expect(week?.sql).toContain('INSERT OR IGNORE');
-    expect(ranks?.sql).toContain('benchmark_revision');
+    expect(ranks?.sql).toContain('source_snapshot_id');
     const encodedRanks = ranks?.values.at(-1);
     expect(typeof encodedRanks).toBe('string');
     expect(JSON.parse(String(encodedRanks))).toHaveLength(100);
     expect(String(encodedRanks)).toContain(WEEK_START);
-    expect(ranks?.values.slice(0, -1)).toEqual([WEEK_START, 'rev-1']);
+    expect(ranks?.values.slice(0, -1)).toEqual([
+      WEEK_START,
+      '2026-08-10-8c567bd96953b15d',
+      METHODOLOGY,
+    ]);
   });
 
   it('uses canonical slug conflict guards and deterministic updated timestamps', () => {
@@ -290,7 +295,7 @@ describe('atomic model directory publication', () => {
     expect(directory?.values.some((value) => String(value).includes(UPDATED_AT))).toBe(true);
   });
 
-  it('skips rank insertion when the weekly snapshot already has rows', () => {
+  it('only extends an incomplete weekly snapshot from the identical source snapshot without reordering existing ranks', () => {
     const records: RecordedStatement[] = [];
     const candidate = snapshot();
 
@@ -303,7 +308,76 @@ describe('atomic model directory publication', () => {
     );
 
     const ranks = records.find((statement) => statement.sql.includes('benchmark_popular_model_ranks'));
-    expect(ranks?.sql).toContain('NOT EXISTS');
+    expect(ranks?.sql).toContain('source_snapshot_id = target.source_snapshot_id');
+    expect(ranks?.sql).toContain('methodology_version = target.methodology_version');
+    expect(ranks?.sql).toContain('existing.rank = json_extract(row.value');
+    expect(ranks?.sql).toContain('existing.model_key <> json_extract(row.value');
+    expect(ranks?.sql).toContain('existing.model_key = json_extract(row.value');
+    expect(ranks?.sql).toContain('existing.rank <> json_extract(row.value');
+    expect(ranks?.sql).toContain('ON CONFLICT(week_start, rank) DO NOTHING');
+  });
+
+  it('executes the guarded extension in SQLite and preserves conflicting existing assignments', () => {
+    const records: RecordedStatement[] = [];
+    const candidate = snapshot(100);
+    appendModelDirectoryPublicationStatements(
+      [],
+      recordingDatabase(records),
+      candidate,
+      publicLeaderboard(candidate.models),
+      UPDATED_AT,
+    );
+    const ranks = records.find((statement) => statement.sql.includes('benchmark_popular_model_ranks'));
+    if (!ranks) throw new Error('missing popular rank statement');
+
+    const sqlite = new DatabaseSync(':memory:');
+    sqlite.exec(`CREATE TABLE benchmark_popular_model_weeks (
+      week_start TEXT PRIMARY KEY,
+      benchmark_revision TEXT NOT NULL,
+      source_snapshot_id TEXT NOT NULL,
+      methodology_version TEXT NOT NULL,
+      generated_at TEXT NOT NULL
+    );
+    CREATE TABLE benchmark_popular_model_ranks (
+      week_start TEXT NOT NULL,
+      rank INTEGER NOT NULL CHECK (rank BETWEEN 1 AND 100),
+      model_key TEXT NOT NULL,
+      PRIMARY KEY (week_start, rank),
+      UNIQUE (week_start, model_key)
+    );`);
+    sqlite.prepare('INSERT INTO benchmark_popular_model_weeks VALUES (?, ?, ?, ?, ?)').run(
+      WEEK_START,
+      'rev-first',
+      '2026-08-10-8c567bd96953b15d',
+      METHODOLOGY,
+      UPDATED_AT,
+    );
+    for (let index = 0; index < 50; index += 1) {
+      sqlite.prepare('INSERT INTO benchmark_popular_model_ranks VALUES (?, ?, ?)').run(
+        WEEK_START,
+        index + 1,
+        candidate.models[index]!.modelKey,
+      );
+    }
+
+    sqlite.prepare(ranks.sql).run(...ranks.values as (string | number | null)[]);
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM benchmark_popular_model_ranks').get())
+      .toEqual({ count: 100 });
+
+    const conflictingRows = JSON.parse(String(ranks.values.at(-1))) as Array<{ rank: number; modelKey: string }>;
+    [conflictingRows[0]!.modelKey, conflictingRows[1]!.modelKey] = [
+      conflictingRows[1]!.modelKey,
+      conflictingRows[0]!.modelKey,
+    ];
+    sqlite.prepare(ranks.sql).run(
+      ...ranks.values.slice(0, -1) as (string | number | null)[],
+      JSON.stringify(conflictingRows),
+    );
+    expect(sqlite.prepare('SELECT rank, model_key FROM benchmark_popular_model_ranks WHERE rank IN (1, 2) ORDER BY rank').all())
+      .toEqual([
+        { rank: 1, model_key: candidate.models[0]!.modelKey },
+        { rank: 2, model_key: candidate.models[1]!.modelKey },
+      ]);
   });
 
   it('guards canonical slug ownership against existing models', () => {

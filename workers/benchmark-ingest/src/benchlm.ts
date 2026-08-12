@@ -27,7 +27,7 @@ const ARTIFACT_URLS: Record<ArtifactName, string> = {
   pricing: 'https://benchlm.ai/data/pricing.json',
   comparisons: 'https://benchlm.ai/data/comparisons.json',
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
-  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
+  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
 };
 
 export interface BenchLmTransportHeaders {

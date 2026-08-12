@@ -93,7 +93,7 @@ function snapshotFromFixture(): ActiveBenchmarkSnapshot {
   const source: BenchmarkSourceRecord = {
     sourceId: 'benchlm',
     artifactId: 'public-leaderboard',
-    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
+    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
     observedAt: '2026-08-10T00:00:00.000Z',
     etag: null,
     lastModified: null,

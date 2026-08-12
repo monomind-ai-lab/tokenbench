@@ -134,7 +134,7 @@ describe('parseBenchLm', () => {
       sourceArtifactId: 'pricing',
     })]);
     expect(batch.sources.find((source) => source.artifactId === 'public-leaderboard')).toMatchObject({
-      sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5',
+      sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
       upstreamRevision: '2026-08-10-8c567bd96953b15d',
       schemaVersion: 'bench-align-v5.3-2026-07-24',
     });
