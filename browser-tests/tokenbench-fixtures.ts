@@ -978,7 +978,7 @@ export function staleCodingLeaderboard(): BenchmarkApiEnvelope<LeaderboardPageRe
     freshness: {
       status: 'stale',
       checkedAt: '2000-01-01T00:00:00.000Z',
-      message: 'Published benchmark revision has not refreshed within 36 hours.',
+      message: 'Published weekly benchmark evidence has not refreshed within 8 days.',
     },
   };
 }

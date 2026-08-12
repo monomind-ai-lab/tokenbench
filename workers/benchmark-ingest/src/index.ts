@@ -79,6 +79,7 @@ import {
 import { parseLiteLlmPrices } from './litellm';
 import { parseOpenRouterModels, projectOpenRouterModelsPayload } from '../../catalog-ingest/src/index';
 import { parquetReadObjects } from 'hyparquet';
+import { BENCHMARK_FRESHNESS_WINDOW_MS } from '../../../src/ingestion/cadence';
 
 type BoundStatement = {
   bind(...values: unknown[]): BoundStatement;
@@ -225,7 +226,6 @@ const MAX_D1_RPC_BATCH_BYTES = 16 * 1024 * 1024;
 // this 20-minute ownership window are therefore abandoned and safe to reclaim.
 const BENCHMARK_PUBLICATION_OWNERSHIP_WINDOW_MS = 20 * 60 * 1000;
 const BENCHMARK_API_RESPONSE_SCOPE = 'benchmarks' as const;
-const BENCHMARK_API_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1000;
 const BENCHMARK_LEADERBOARD_CACHE_LIMIT = 50;
 const MAX_API_RESPONSE_CHUNKS_PER_STATEMENT = 8;
 
@@ -2054,7 +2054,7 @@ function materializedBenchmarkApiResponses(snapshot: ActiveBenchmarkSnapshot): r
   const checkedAtMs = Date.parse(snapshot.revision.checkedAt);
   if (!Number.isFinite(checkedAtMs)) throw new Error('benchmark response cache requires an ISO checked_at timestamp');
   const fresh = freshnessFor(snapshot.revision, checkedAtMs);
-  const stale = freshnessFor(snapshot.revision, checkedAtMs + BENCHMARK_API_FRESHNESS_WINDOW_MS + 1);
+  const stale = freshnessFor(snapshot.revision, checkedAtMs + BENCHMARK_FRESHNESS_WINDOW_MS + 1);
   const materialized: MaterializedBenchmarkApiResponse[] = [];
   const response = (
     cacheKey: string,

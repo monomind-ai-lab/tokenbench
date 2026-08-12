@@ -1145,10 +1145,10 @@ describe('cached benchmark APIs', () => {
     ['model', (rows: D1Rows, headers?: HeadersInit) => model('alpha', rows, headers)],
   ])('invalidates the %s ETag when evaluated freshness crosses from fresh to stale', async (_label, requestEndpoint) => {
     vi.useFakeTimers();
-    vi.setSystemTime(Date.parse(CHECKED_AT) + 36 * 60 * 60 * 1000);
+    vi.setSystemTime(Date.parse(CHECKED_AT) + 8 * 24 * 60 * 60 * 1000);
     const fresh = await requestEndpoint(publishedRows());
     const etag = fresh.headers.get('etag')!;
-    vi.setSystemTime(Date.parse(CHECKED_AT) + 36 * 60 * 60 * 1000 + 1);
+    vi.setSystemTime(Date.parse(CHECKED_AT) + 8 * 24 * 60 * 60 * 1000 + 1);
     const stale = await requestEndpoint(publishedRows(), { 'If-None-Match': etag });
 
     expect(fresh.status).toBe(200);
@@ -1166,17 +1166,17 @@ describe('cached benchmark APIs', () => {
     expect(defaultResponse.headers.get('etag')).toBe(reorderedResponse.headers.get('etag'));
   });
 
-  it('stays fresh at exactly 36 hours and becomes stale strictly beyond it', async () => {
+  it('stays fresh at exactly 8 days and becomes stale strictly beyond it', async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(Date.parse(CHECKED_AT) + 36 * 60 * 60 * 1000);
+    vi.setSystemTime(Date.parse(CHECKED_AT) + 8 * 24 * 60 * 60 * 1000);
     const boundary = await summary();
-    vi.setSystemTime(Date.parse(CHECKED_AT) + 36 * 60 * 60 * 1000 + 1);
+    vi.setSystemTime(Date.parse(CHECKED_AT) + 8 * 24 * 60 * 60 * 1000 + 1);
     const stale = await summary();
 
     await expect(boundary.json()).resolves.toMatchObject({ freshness: { status: 'fresh' } });
     await expect(stale.json()).resolves.toMatchObject({ freshness: {
       status: 'stale',
-      message: 'Published benchmark revision has not refreshed within 36 hours.',
+      message: 'Published weekly benchmark evidence has not refreshed within 8 days.',
     } });
   });
 

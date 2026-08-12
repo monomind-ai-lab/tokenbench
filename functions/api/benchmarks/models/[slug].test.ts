@@ -53,6 +53,7 @@ function database() {
 
 describe('durable model profile API', () => {
   beforeEach(() => {
+    vi.useRealTimers();
     reads.profile.mockReset();
     reads.alias.mockReset();
     reads.profile.mockResolvedValue(null);
@@ -104,5 +105,28 @@ describe('durable model profile API', () => {
       params: { slug: 'alpha' },
     });
     expect(revalidated.status).toBe(304);
+  });
+
+  it('uses the weekly 8-day freshness boundary for durable profile envelopes', async () => {
+    const result = durableProfile();
+    reads.profile.mockResolvedValue(result);
+    const checkedAt = result.profile.revision.checkedAt;
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse(checkedAt) + 8 * 24 * 60 * 60 * 1_000);
+    const fresh = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/models/alpha'),
+      env: { CATALOG_DB: database() }, params: { slug: 'alpha' },
+    });
+    await expect(fresh.json()).resolves.toMatchObject({ freshness: { status: 'fresh' } });
+
+    vi.setSystemTime(Date.parse(checkedAt) + 8 * 24 * 60 * 60 * 1_000 + 1);
+    const stale = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/models/alpha'),
+      env: { CATALOG_DB: database() }, params: { slug: 'alpha' },
+    });
+    await expect(stale.json()).resolves.toMatchObject({ freshness: {
+      status: 'stale',
+      message: 'Published weekly benchmark evidence has not refreshed within 8 days.',
+    } });
   });
 });

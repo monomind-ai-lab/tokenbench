@@ -16,6 +16,9 @@ export const CATALOG_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1_000;
 /** Benchmark-derived evidence is fresh for exactly 8 days. */
 export const BENCHMARK_FRESHNESS_WINDOW_MS = 8 * 24 * 60 * 60 * 1_000;
 
+export const BENCHMARK_STALE_MESSAGE =
+  'Published weekly benchmark evidence has not refreshed within 8 days.';
+
 function pad2(value: number): string {
   return String(value).padStart(2, '0');
 }

@@ -17,6 +17,10 @@ import {
   type BenchmarkSourceRecord,
 } from '../../src/benchmarks/contracts';
 import { matchesIfNoneMatch } from './entity-tag';
+import {
+  BENCHMARK_FRESHNESS_WINDOW_MS,
+  BENCHMARK_STALE_MESSAGE,
+} from '../../src/ingestion/cadence';
 
 export interface D1Statement {
   bind(...values: unknown[]): { all(): Promise<{ results: unknown[] }> };
@@ -79,7 +83,6 @@ const ACTIVE_REVISION_QUERY = `
   LIMIT 1
 `;
 
-const FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1000;
 const CACHE_CONTROL = 'public, max-age=0, must-revalidate';
 
 function fail(message: string): never {
@@ -815,12 +818,12 @@ export async function readActiveBenchmarkSnapshot(db: D1Database): Promise<Activ
 }
 
 export function freshnessFor(revision: BenchmarkRevision, now: number): BenchmarkFreshness {
-  const isStale = now - Date.parse(revision.checkedAt) > FRESHNESS_WINDOW_MS;
+  const isStale = now - Date.parse(revision.checkedAt) > BENCHMARK_FRESHNESS_WINDOW_MS;
   return isStale
     ? {
       status: 'stale',
       checkedAt: revision.checkedAt,
-      message: 'Published benchmark revision has not refreshed within 36 hours.',
+      message: BENCHMARK_STALE_MESSAGE,
     }
     : { status: 'fresh', checkedAt: revision.checkedAt };
 }

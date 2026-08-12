@@ -9,8 +9,10 @@ import type { ModelProfileViewModel } from '../../src/frontend/model-profile-con
 import { escapeHtmlAttribute, escapeHtmlText, serializeJsonForScript } from '../_shared/html';
 import type { BenchmarkApiEnv } from '../_shared/benchmark-db';
 import { readDurableModelProfile, type ModelProfileReadResult } from '../_shared/model-directory-db';
-
-const PROFILE_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1000;
+import {
+  BENCHMARK_FRESHNESS_WINDOW_MS,
+  BENCHMARK_STALE_MESSAGE,
+} from '../../src/ingestion/cadence';
 
 function requestedSlug(request: Request, parameter: string | undefined): string | null {
   if (typeof parameter === 'string' && isModelSlugRouteSafe(parameter)) return parameter;
@@ -28,7 +30,7 @@ function viewModelFor(result: ModelProfileReadResult, now: number): ModelProfile
   const checkedAt = result.profile.revision.checkedAt;
   const stale = result.fallback === 'prior-profile'
     || result.directory.status === 'archived'
-    || now - Date.parse(checkedAt) > PROFILE_FRESHNESS_WINDOW_MS;
+    || now - Date.parse(checkedAt) > BENCHMARK_FRESHNESS_WINDOW_MS;
   return {
     revision: result.selectedRevision,
     publishedAt: result.profile.revision.publishedAt ?? result.profile.revision.generatedAt,
@@ -39,7 +41,7 @@ function viewModelFor(result: ModelProfileReadResult, now: number): ModelProfile
         ? 'Showing the prior valid durable profile because the latest snapshot did not validate.'
         : result.directory.status === 'archived'
           ? 'Showing the latest valid retained profile for an archived model.'
-          : 'Published model evidence has not refreshed within 36 hours.',
+          : BENCHMARK_STALE_MESSAGE,
     } : { status: 'fresh', checkedAt },
     attribution: result.profile.sources.map((source) => ({
       sourceId: source.sourceId,

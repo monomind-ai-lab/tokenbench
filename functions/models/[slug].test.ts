@@ -18,7 +18,10 @@ function context(slug = 'gpt-5-6-sol') {
 }
 
 describe('server-rendered model profile', () => {
-  beforeEach(() => read.mockReset());
+  beforeEach(() => {
+    read.mockReset();
+    vi.useRealTimers();
+  });
 
   it('renders substantive evidence, complete metadata, and Dataset JSON-LD before JavaScript', async () => {
     const fixture = modelProfileViewModelFixture();
@@ -58,5 +61,20 @@ describe('server-rendered model profile', () => {
     const response = await onRequestGet(context('old-sol'));
     expect(response.status).toBe(308);
     expect(response.headers.get('Location')).toBe('/models/gpt-5-6-sol/');
+  });
+
+  it('uses the weekly 8-day freshness boundary for SSR profiles', async () => {
+    const fixture = modelProfileViewModelFixture();
+    read.mockResolvedValue({
+      directory: fixture.directory, profile: fixture.profile, selectedRevision: fixture.selectedRevision,
+      fallback: fixture.fallback, aliasFrom: fixture.aliasFrom,
+    });
+    const checkedAt = fixture.profile.revision.checkedAt;
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse(checkedAt) + 8 * 24 * 60 * 60 * 1_000);
+    expect(await (await onRequestGet(context())).text()).not.toContain('Published weekly benchmark evidence');
+    vi.setSystemTime(Date.parse(checkedAt) + 8 * 24 * 60 * 60 * 1_000 + 1);
+    expect(await (await onRequestGet(context())).text())
+      .toContain('Published weekly benchmark evidence has not refreshed within 8 days.');
   });
 });

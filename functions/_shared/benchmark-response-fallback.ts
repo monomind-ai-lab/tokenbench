@@ -4,8 +4,8 @@ import {
   readNewestCompleteApiResponseCache,
   type ApiResponseCacheDatabase,
 } from './api-response-cache';
+import { BENCHMARK_FRESHNESS_WINDOW_MS } from '../../src/ingestion/cadence';
 
-const BENCHMARK_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1_000;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9._:-]{1,128}$/u;
 
 export type BenchmarkFallbackStage = 'active-cache' | 'active-revision' | 'historical-cache';

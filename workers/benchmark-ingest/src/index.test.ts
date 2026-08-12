@@ -1400,7 +1400,7 @@ describe('atomic benchmark ingestion', () => {
     });
     expect(JSON.parse(summaryStale.body)).toMatchObject({
       revision: result.revision,
-      freshness: { status: 'stale', checkedAt: observedAt, message: 'Published benchmark revision has not refreshed within 36 hours.' },
+      freshness: { status: 'stale', checkedAt: observedAt, message: 'Published weekly benchmark evidence has not refreshed within 8 days.' },
     });
     expect((freshSummaryData.decisionPicks as Array<Record<string, unknown>>).map((group) => group.key)).toEqual([
       'llm-overall',

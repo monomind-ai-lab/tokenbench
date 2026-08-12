@@ -36,8 +36,12 @@ import {
   type ActiveBenchmarkSnapshot,
   type BenchmarkApiEnvelope,
 } from './benchmark-db';
+import {
+  BENCHMARK_FRESHNESS_WINDOW_MS,
+  BENCHMARK_STALE_MESSAGE,
+} from '../../src/ingestion/cadence';
 
-export const BENCHMARK_LEADERBOARD_PROJECTION_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1_000;
+export const BENCHMARK_LEADERBOARD_PROJECTION_FRESHNESS_WINDOW_MS = BENCHMARK_FRESHNESS_WINDOW_MS;
 export const BENCHMARK_LEADERBOARD_PROJECTION_MAX_ENTRIES = 4_096;
 const COMPLETE_PROJECTION_SNAPSHOT = Symbol('complete leaderboard projection snapshot');
 
@@ -45,7 +49,7 @@ export type CompleteLeaderboardProjectionEnvelope = BenchmarkApiEnvelope<Leaderb
   readonly [COMPLETE_PROJECTION_SNAPSHOT]: ActiveBenchmarkSnapshot;
 };
 
-const STALE_FRESHNESS_MESSAGE = 'Published benchmark revision has not refreshed within 36 hours.';
+const STALE_FRESHNESS_MESSAGE = BENCHMARK_STALE_MESSAGE;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);

@@ -291,13 +291,13 @@ describe('complete leaderboard projection cache reader', () => {
       'llm-coding',
       'balanced',
       false,
-      Date.parse('2026-08-08T00:00:01.000Z'),
+      Date.parse(CHECKED_AT) + 8 * 24 * 60 * 60 * 1_000 + 1,
     );
 
     expect(result?.freshness).toEqual({
       status: 'stale',
       checkedAt: CHECKED_AT,
-      message: 'Published benchmark revision has not refreshed within 36 hours.',
+      message: 'Published weekly benchmark evidence has not refreshed within 8 days.',
     });
     expect(result?.publishedAt).toBe(PUBLISHED_AT);
   });
@@ -310,7 +310,7 @@ describe('complete leaderboard projection cache reader', () => {
       'llm-coding',
       'balanced',
       false,
-      Date.parse('2026-08-08T00:00:01.000Z'),
+      Date.parse(CHECKED_AT) + 8 * 24 * 60 * 60 * 1_000 + 1,
     );
 
     expect(fixture.calls).toHaveLength(2);
