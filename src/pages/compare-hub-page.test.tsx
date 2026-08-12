@@ -58,7 +58,7 @@ describe('CompareHubPage', () => {
     const tools = await screen.findByRole('group', { name: 'Comparison tools' });
     const selectorPanel = within(tools).getByRole('region', { name: 'Choose a model pair' });
     const alertsPanel = within(tools).getByRole('complementary', { name: 'Model and price alerts' });
-    const alerts = within(alertsPanel).getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' });
+    const alerts = within(alertsPanel).getByRole('checkbox', { name: 'Notify me when new models are added to TokenBench.' });
     expect(alerts).not.toBeChecked();
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
     expect(Array.from(tools.children)).toEqual([selectorPanel, alertsPanel]);

@@ -21,24 +21,24 @@ describe('NewsletterSignup', () => {
   it('leaves alerts unchecked and explains double opt in', () => {
     renderSignup(<NewsletterSignup context="footer" />);
 
-    expect(screen.getByRole('heading', { name: 'The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)' })).toBeInTheDocument();
-    expect(screen.getByText('A downloadable, printable reference sheet listing top models, current per-1M token rates, context windows, and category ranks.')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' })).not.toBeChecked();
-    expect(screen.getByText(/confirmation email/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'LLM API Cost & Benchmark Cheatsheet' })).toBeInTheDocument();
+    expect(screen.getByText('Stop overpaying for tokens. Get monthly per-1M token rates, context windows, and category rankings for top models in one downloadable PDF or CSV.')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Notify me when new models are added to TokenBench.' })).not.toBeChecked();
+    expect(screen.getByText('Check your inbox to confirm your email and access your instant download.')).toBeInTheDocument();
   });
 
   it('reveals monthly consent only after a compact comparison alert opt-in', () => {
     renderSignup(<NewsletterSignup context="compare" />);
 
     expect(screen.queryByLabelText('Email address')).not.toBeInTheDocument();
-    const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' });
+    const alerts = screen.getByRole('checkbox', { name: 'Notify me when new models are added to TokenBench.' });
     expect(alerts).not.toBeChecked();
 
     fireEvent.click(alerts);
 
     expect(screen.getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email address')).toBeInTheDocument();
-    expect(screen.getByText(/You’ll also receive the Monthly LLM API Cost & Benchmark Cheatsheet \(PDF\/CSV\)/)).toBeInTheDocument();
+    expect(screen.getByText('Check your inbox to confirm your email and access your instant download.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Notify me' })).toBeInTheDocument();
   });
 
@@ -86,7 +86,7 @@ describe('NewsletterSignup', () => {
 
     fillProfile();
     fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'builder@example.com' } });
-    const submit = screen.getByRole('button', { name: 'Get the cheatsheet' });
+    const submit = screen.getByRole('button', { name: 'Download Free Cheatsheet' });
     submit.focus();
     expect(submit).toHaveFocus();
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
@@ -218,17 +218,17 @@ describe('NewsletterSignup', () => {
 
     fillProfile();
     const email = screen.getByLabelText('Email address');
-    const alerts = screen.getByRole('checkbox', { name: /new models or price drops/i });
+    const alerts = screen.getByRole('checkbox', { name: /new models are added/i });
     fireEvent.change(email, { target: { value: 'builder@example.com' } });
     fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
 
     expect(email).toBeDisabled();
     expect(alerts).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Get the cheatsheet' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Download Free Cheatsheet' })).toBeDisabled();
 
     resolveRequest(new Response('{"status":"confirmation-required"}', { status: 202 }));
     await screen.findByRole('status');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Get the cheatsheet' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download Free Cheatsheet' })).toBeEnabled());
   });
 
   it('does not start a duplicate request while submission is in flight', async () => {
@@ -277,7 +277,7 @@ describe('NewsletterSignup', () => {
     const outside = screen.getByRole('button', { name: 'Outside signup' });
     outside.focus();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Get the cheatsheet' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Download Free Cheatsheet' })).toBeEnabled());
     expect(email).toHaveValue('builder@example.com');
     expect(outside).toHaveFocus();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();

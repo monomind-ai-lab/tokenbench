@@ -54,7 +54,7 @@ describe('crawlable static-page generator', () => {
     expect(home).toContain('<script type="application/ld+json">');
     expect(home).toContain('TokenBench');
 
-    expect(compareHub).toContain('<h1>Compare models side by side</h1>');
+    expect(compareHub).toContain('<h1>Compare models<br/> side by side</h1>');
     expect(compareHub).toContain('Compare evidence, not a fabricated universal score');
 
     expect(leaderboardDirectory).toContain('<h1>Model leaderboards</h1>');

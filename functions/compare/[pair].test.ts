@@ -312,7 +312,7 @@ describe('dynamic comparison Pages Function', () => {
     expect(reverse.status).toBe(301);
     expect(reverse.headers.get('location')).toBe('/compare/private-use-vs-astral');
     expect(canonical.status).toBe(200);
-    expect((await canonical.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Private use model vs Astral model</h1>');
+    expect((await canonical.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Private use model vs<br/> Astral model</h1>');
   });
 
   it('accepts the raw percent-encoded Pages parameter exactly once, including literal percent, Unicode, spaces, query, and fragment markers', async () => {

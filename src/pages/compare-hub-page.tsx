@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ModelPairPicker, type CompareDirectoryEnvelope, type DirectoryModel, type DirectoryPair, type EvidenceStatus, type SourceType } from '../frontend/model-pair-picker';
 import { NewsletterSignup } from '../frontend/newsletter-signup';
-import { guidePath } from '../guides/content';
-import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
 
 interface DirectoryState {
   readonly phase: 'loading' | 'ready' | 'unavailable';
@@ -128,7 +126,7 @@ function modelPairLabel(pair: DirectoryPair, modelsBySlug: ReadonlyMap<string, D
 
 function CompareHubHero() {
   return <section className="comparison-hub-hero" aria-labelledby="compare-hub-heading">
-    <h1 id="compare-hub-heading">Compare models side by side</h1>
+    <h1 id="compare-hub-heading">Compare models<br /> side by side</h1>
     <p>Choose two models to compare benchmark performance, API pricing, context limits, and evidence coverage.</p>
   </section>;
 }
@@ -222,18 +220,8 @@ export function CompareHubPage() {
       <section className="comparison-panel comparison-section" aria-labelledby="comparison-reviewed-heading">
         <div className="comparison-section-heading"><h2 id="comparison-reviewed-heading">Popular reviewed matchups</h2><p>Only source-backed, indexable pairs are listed as published matchup links.</p></div>
         {popularPairs.length === 0 ? <div className="comparison-empty-state"><strong>No reviewed matchups published yet</strong><p>This directory remains honest when the active revision contains models but no indexable pair records.</p></div> : <ol className="comparison-reviewed-list">
-          {popularPairs.map((pair) => <li key={pair.pairSlug}><a href={`/compare/${encodeURIComponent(pair.pairSlug)}`}>{modelPairLabel(pair, modelsBySlug)}</a><span>{pair.sharedMetricCount} shared source metrics</span></li>)}
+          {popularPairs.map((pair) => <li key={pair.pairSlug}><a className="comparison-matchup-link" href={`/compare/${encodeURIComponent(pair.pairSlug)}`}><strong>{modelPairLabel(pair, modelsBySlug)}</strong><span aria-hidden="true">→</span></a></li>)}
         </ol>}
-      </section>
-
-      <div className="comparison-hub-support-grid">
-        <section className="comparison-panel comparison-section" aria-labelledby="comparison-method-heading"><div className="comparison-section-heading"><h2 id="comparison-method-heading">How to read a matchup</h2><p>Compare exact source metric names and units. A workload profile recalculates only route-cost interpretation; it does not create a blended winner.</p></div></section>
-        <section className="comparison-panel comparison-section" aria-labelledby="comparison-directory-heading"><div className="comparison-section-heading"><h2 id="comparison-directory-heading">Catalog evidence states</h2><p>Supported, estimated, and source-only records remain visibly distinct in the catalog options and detail evidence.</p></div></section>
-      </div>
-
-      <section className="comparison-panel comparison-section comparison-related-guides" aria-labelledby="comparison-guides-heading">
-        <div className="comparison-section-heading"><h2 id="comparison-guides-heading">Related guides and tools</h2><p>Use these adjacent decision aids without treating a subscription estimate or a ranking lens as a model verdict.</p></div>
-        <nav aria-label="Related comparison guides"><a href={ROUTE_PATHS.calculator}>Subscription vs. API calculator</a><a href={guidePath('openrouter-guide-model-routing-cost-controls')}>OpenRouter routing and cost controls guide</a><a href={LEADERBOARD_ROUTES['llm-pricing-context'].pathname}>Pricing and context leaderboard</a></nav>
       </section>
     </> : null}
   </div>;

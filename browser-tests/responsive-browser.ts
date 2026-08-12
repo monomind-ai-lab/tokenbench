@@ -1502,7 +1502,7 @@ test.describe('generated static route runtime', () => {
     const rawHtml = await rawResponse.text();
     expect(rawResponse.ok()).toBe(true);
     expect(rawHtml).toContain('class="app-shell static-page-shell"');
-    expect(rawHtml).toContain('<h1>Compare models side by side</h1>');
+    expect(rawHtml).toContain('<h1>Compare models<br/> side by side</h1>');
 
     const previewOrigin = new URL(baseURL).origin;
     const browserContext = page.context();
@@ -1775,12 +1775,12 @@ test.describe('newsletter and alerts browser coverage', () => {
 
       const footer = page.getByRole('contentinfo');
       await footer.scrollIntoViewIfNeeded();
-      const alerts = footer.getByRole('checkbox', { name: /new models or price drops/i });
+      const alerts = footer.getByRole('checkbox', { name: /new models are added/i });
       const form = footer.getByRole('form', { name: 'Newsletter signup' });
       const firstName = footer.getByLabel('First name');
       const company = footer.getByLabel('Company');
       const email = footer.getByLabel('Email address');
-      const submit = footer.getByRole('button', { name: 'Get the cheatsheet' });
+      const submit = footer.getByRole('button', { name: 'Download Free Cheatsheet' });
 
       await expect(alerts).not.toBeChecked();
       await firstName.fill('Ada');
@@ -1812,7 +1812,7 @@ test.describe('newsletter and alerts browser coverage', () => {
 
       const alertsPanel = page.getByRole('complementary', { name: 'Model and price alerts' });
       await alertsPanel.scrollIntoViewIfNeeded();
-      const alerts = alertsPanel.getByRole('checkbox', { name: /new models or price drops/i });
+      const alerts = alertsPanel.getByRole('checkbox', { name: /new models are added/i });
       await expect(alerts).not.toBeChecked();
       await expect(alertsPanel.getByRole('form', { name: 'Newsletter signup' })).toHaveCount(0);
       await alerts.focus();

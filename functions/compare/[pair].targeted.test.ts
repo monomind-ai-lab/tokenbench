@@ -153,7 +153,7 @@ describe('targeted comparison Pages Function', () => {
     });
 
     expect(response.status).toBe(200);
-    expect((await response.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Alpha vs Beta</h1>');
+    expect((await response.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Alpha vs<br/> Beta</h1>');
     expect(db.queries.some((sql) => sql === 'SELECT * FROM benchmark_models WHERE revision = ?')).toBe(false);
   });
 

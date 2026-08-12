@@ -30,8 +30,9 @@ function activeNavigation(route: AppRoute): StaticNavigationPage {
   }
 }
 
-function pageIntro(metadata: PageMetadata, body: string): string {
-  return `<main id="page-content" class="page-main" tabindex="-1"><section class="content-stack static-page-content"><span class="eyebrow">${SITE_CONFIG.name}</span><h1>${escapeHtml(metadata.h1)}</h1>${body}</section></main>`;
+function pageIntro(metadata: PageMetadata, body: string, h1Override?: string): string {
+  const h1 = h1Override ?? escapeHtml(metadata.h1);
+  return `<main id="page-content" class="page-main" tabindex="-1"><section class="content-stack static-page-content"><span class="eyebrow">${SITE_CONFIG.name}</span><h1>${h1}</h1>${body}</section></main>`;
 }
 
 function fixedPageContent(
@@ -60,7 +61,7 @@ function fixedPageContent(
     case 'models':
       return pageIntro(metadata, `<p>Browse the current BenchLM-derived weekly top 100 and search retained model profiles with source-linked benchmark, pricing, and evidence facts.</p><section><h2>Decision facts stay visible</h2><p>Each model keeps its weekly rank, overall score, strongest category, representative direct API price, and evidence status in one responsive directory. Search results include models that have left the current weekly list.</p></section>`);
     case 'compareHub':
-      return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`);
+      return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`, 'Compare models<br/> side by side');
     case 'leaderboards':
       return pageIntro(metadata, `<p>Explore current model leaders by capability, workload, cost, and human preference.</p><section><h2>Leaderboard categories</h2><p>Each leaderboard shows its source, methodology, timestamp, and unavailable-data treatment with the published revision.</p><ul>${Object.values(LEADERBOARD_ROUTES).map((route) => `<li><a href="${route.pathname}">${escapeHtml(route.seo.h1)}</a></li>`).join('')}</ul></section>`);
     case 'leaderboard': {

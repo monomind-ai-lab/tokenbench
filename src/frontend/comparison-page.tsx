@@ -9,6 +9,7 @@ import {
   type ComparisonMetricRow,
   type ComparisonPriceChecks,
   type ComparisonViewModel,
+  type RelatedComparison,
 } from './comparison-contracts';
 import { ModelPairPicker, type DirectoryModel, type DirectoryPair } from './model-pair-picker';
 import { ProviderMark } from './provider-mark';
@@ -253,13 +254,12 @@ function PairHeader({ viewModel }: { readonly viewModel: ComparisonViewModel }) 
       <nav className="comparison-breadcrumb" aria-label="Breadcrumb"><a href="/compare/">Compare</a><span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav>
       <ShareAction title={`${title} comparison`} url={`${SITE_CONFIG.origin}${viewModel.canonicalPath}`} />
     </div>
-    <h1 id="comparison-detail-heading">{title}</h1>
+    <h1 id="comparison-detail-heading">{modelDisplayLabel(models, 0)} vs<br /> {modelDisplayLabel(models, 1)}</h1>
     <p>Read the published evidence, route context, and missing facts before making a local decision. This page does not name a universal winner.</p>
     <section className="comparison-model-pair" aria-labelledby="comparison-model-pair-heading">
       <div className="comparison-section-heading"><h2 id="comparison-model-pair-heading">Models in this comparison</h2><p>Provider identity and evidence state stay balanced across the pair.</p></div>
       <div className="comparison-model-pair-grid"><ModelIdentity index={0} models={models} /><span className="comparison-versus-marker" aria-label="versus">VS</span><ModelIdentity index={1} models={models} /></div>
     </section>
-    <QuickPairSwitch viewModel={viewModel} />
   </section>;
 }
 
@@ -410,6 +410,22 @@ function EvidenceProvenance({
   </section>;
 }
 
+function RelatedComparisonBanner({ pair }: { readonly pair: RelatedComparison }) {
+  const title = `${pair.modelA.name} vs ${pair.modelB.name}`;
+  return <li className="comparison-related-banner">
+    <a href={`/compare/${encodeURIComponent(pair.pairSlug)}`}>{title}</a>
+    <span>{pair.sharedMetricCount} shared source metrics</span>
+  </li>;
+}
+
+function RelatedComparisons({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
+  if (viewModel.relatedPairs.length === 0) return null;
+  return <section className="comparison-panel comparison-section" aria-labelledby="comparison-related-pairs-heading">
+    <div className="comparison-section-heading"><h2 id="comparison-related-pairs-heading">Keep comparing</h2><p>Other reviewed matchups from the same published revision, ready to open without changing this result’s evidence.</p></div>
+    <ul className="comparison-related-list">{viewModel.relatedPairs.map((pair) => <RelatedComparisonBanner key={pair.pairSlug} pair={pair} />)}</ul>
+  </section>;
+}
+
 export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
   const [clientHydrated, setClientHydrated] = useState(false);
   const [selectedRouteIds, setSelectedRouteIds] = useState<readonly [string | null, string | null]>(() => [
@@ -440,5 +456,7 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
     <SourceMetrics models={viewModel.models} rows={viewModel.metricRows} />
     <PricingContext groups={viewModel.priceChecks} models={viewModel.models} onRouteChange={(index, routeId) => setSelectedRouteIds((current) => index === 0 ? [routeId, current[1]] : [current[0], routeId])} selectedRouteIds={selectedRouteIds} />
     <EvidenceProvenance selectedRoutes={selectedRoutes} viewModel={viewModel} />
+    <RelatedComparisons viewModel={viewModel} />
+    <QuickPairSwitch viewModel={viewModel} />
   </div>;
 }

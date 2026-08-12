@@ -6,7 +6,7 @@ export interface NewsletterSignupProps {
   readonly alertLabel?: string;
 }
 
-export const MODEL_PRICE_ALERT_LABEL = 'Notify me when new models or price drops are added to TokenBench.';
+export const MODEL_PRICE_ALERT_LABEL = 'Notify me when new models are added to TokenBench.';
 
 type SignupFeedback = 'idle' | 'invalid-profile' | 'invalid-email' | 'confirmation-required' | 'retry';
 type PostSubmissionFocus = 'email' | 'confirmation-status';
@@ -146,10 +146,10 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
 
   return <section className="newsletter-signup" data-compact={isCompact} data-context={context}>
     {showForm ? <div className="newsletter-signup-offer">
-      <h2>The Monthly LLM API Cost &amp; Benchmark Cheatsheet (PDF/CSV)</h2>
-      <p>A downloadable, printable reference sheet listing top models, current per-1M token rates, context windows, and category ranks.</p>
+      <h2>LLM API Cost &amp; Benchmark Cheatsheet</h2>
+      <p>Stop overpaying for tokens. Get monthly per-1M token rates, context windows, and category rankings for top models in one downloadable PDF or CSV.</p>
     </div> : null}
-    <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label>
+    {!isCompact ? null : <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label>}
     {showForm ? <form aria-busy={submitting} aria-label="Newsletter signup" noValidate onSubmit={submitSignup}>
       <label htmlFor={`newsletter-first-name-${context}`}>First name</label>
       <input autoComplete="given-name" disabled={submitting} id={`newsletter-first-name-${context}`} maxLength={120} name="firstName" onChange={(event) => { setFirstName(event.target.value); setFeedback('idle'); }} required type="text" value={firstName} />
@@ -157,13 +157,13 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
       <input autoComplete="organization" disabled={submitting} id={`newsletter-company-${context}`} maxLength={120} name="company" onChange={(event) => { setCompany(event.target.value); setFeedback('idle'); }} required type="text" value={company} />
       <label htmlFor={`newsletter-email-${context}`}>Email address</label>
       <input aria-describedby={invalidEmail ? `newsletter-email-error-${context}` : undefined} aria-invalid={invalidEmail || undefined} disabled={submitting} id={`newsletter-email-${context}`} name="email" onChange={(event) => { setEmail(event.target.value); setFeedback('idle'); }} ref={emailInput} required type="email" value={email} />
-      <p>You’ll also receive the Monthly LLM API Cost &amp; Benchmark Cheatsheet (PDF/CSV).</p>
-      <p>We’ll send a confirmation email before anything is delivered.</p>
+      {!isCompact ? <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label> : null}
+      <p className="newsletter-signup-helper">Check your inbox to confirm your email and access your instant download.</p>
       <div aria-hidden="true" className="newsletter-signup-honeypot">
         <label htmlFor={`newsletter-website-${context}`}>Website</label>
         <input autoComplete="off" disabled={submitting} id={`newsletter-website-${context}`} name="website" onChange={(event) => setHoneypot(event.target.value)} tabIndex={-1} type="text" value={honeypot} />
       </div>
-      <button disabled={submitting} type="submit">{isCompact ? 'Notify me' : 'Get the cheatsheet'}</button>
+      <button disabled={submitting} type="submit">{isCompact ? 'Notify me' : 'Download Free Cheatsheet'}</button>
       {feedbackCopy ? <p id={invalidEmail ? `newsletter-email-error-${context}` : undefined} ref={feedback === 'confirmation-required' ? confirmationStatus : undefined} role={feedback === 'confirmation-required' ? 'status' : 'alert'} tabIndex={feedback === 'confirmation-required' ? -1 : undefined}>{feedbackCopy}</p> : null}
     </form> : null}
   </section>;

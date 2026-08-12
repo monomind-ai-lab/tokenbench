@@ -199,6 +199,24 @@ describe('comparison detail page', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
   });
 
+  it('places the pair switch and related comparison banners after the provenance panel and breaks the title at vs', () => {
+    render(<ComparisonPage viewModel={viewModel()} />);
+
+    const heading = screen.getByRole('heading', { name: 'Model A vs Model B', level: 1 });
+    expect(heading.innerHTML).toMatch(/vs<br\/?>/);
+    const page = document.querySelector('.comparison-detail-page')!;
+    const order = Array.from(page.children).map((child) => child.className);
+    const provenanceIndex = order.indexOf('comparison-panel comparison-section comparison-provenance');
+    expect(provenanceIndex).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('comparison-quick-switch')).toBeGreaterThan(provenanceIndex);
+    const relatedList = screen.getByRole('heading', { name: 'Keep comparing' }).closest('section')!.querySelector('ul');
+    expect(relatedList).not.toBeNull();
+    expect(relatedList!.querySelectorAll('li')).toHaveLength(1);
+    expect(screen.getByRole('link', { name: 'Model B vs Other' })).toHaveAttribute('href', '/compare/model-b-vs-other');
+    const intro = document.querySelector('.comparison-intro')!;
+    expect(intro.querySelector('.comparison-quick-switch')).toBeNull();
+  });
+
   it('retains every full source metric row when compact highlights omit category names', () => {
     render(<ComparisonPage viewModel={largeComparisonViewModel()} />);
 

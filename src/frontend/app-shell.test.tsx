@@ -168,7 +168,7 @@ describe('responsive calculator app shell', () => {
     expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
     const footer = screen.getByRole('contentinfo');
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
-    expect(within(footer).getByRole('checkbox', { name: /Notify me when new models or price drops/i })).toBeInTheDocument();
+    expect(within(footer).getByRole('checkbox', { name: /Notify me when new models are added/i })).toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(within(footer).getByRole('link', { name: 'Price vs performance' })).toHaveAttribute('href', '/llm-price-performance/');
     expect(within(footer).queryByRole('link', { name: 'Data sources' })).not.toBeInTheDocument();
@@ -650,8 +650,8 @@ describe('responsive calculator app shell', () => {
 
     const footer = document.querySelector('footer');
     if (!footer) throw new Error('Expected the shared site footer');
-    expect(within(footer).getByRole('heading', { name: 'The Monthly LLM API Cost & Benchmark Cheatsheet (PDF/CSV)' })).toBeInTheDocument();
-    expect(within(footer).getByRole('checkbox', { name: 'Notify me when new models or price drops are added to TokenBench.' })).not.toBeChecked();
+    expect(within(footer).getByRole('heading', { name: 'LLM API Cost & Benchmark Cheatsheet' })).toBeInTheDocument();
+    expect(within(footer).getByRole('checkbox', { name: 'Notify me when new models are added to TokenBench.' })).not.toBeChecked();
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
   });
 
