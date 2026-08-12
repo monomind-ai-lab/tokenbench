@@ -209,7 +209,7 @@ describe('HomePage', () => {
     expect(within(snapshot).getByRole('link', { name: 'Multimodal' })).toHaveAttribute('href', '/leaderboards/multimodal/vision-documents/');
     expect(within(snapshot).getByRole('link', { name: 'Knowledge' })).toHaveAttribute('href', '/leaderboards/llm/knowledge/');
     expect(snapshot.querySelectorAll('.home-snapshot-leaders li')).toHaveLength(11);
-    expect(within(snapshot).getByRole('link', { name: 'Open all leaderboards' })).toHaveAttribute('href', '/leaderboards/');
+    expect(within(snapshot).getByRole('link', { name: 'Explore more leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.queryByRole('link', { name: 'How rankings work' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare more models' })).toHaveAttribute('href', '/compare/');
     expect(snapshot.querySelectorAll('.provider-mark')).toHaveLength(11);

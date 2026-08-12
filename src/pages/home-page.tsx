@@ -135,7 +135,6 @@ function MarketAtAGlance() {
     <section className="panel home-snapshot-section" aria-label="Market at a glance">
       <div className="panel-heading">
         <div><span className="eyebrow">Published evidence</span><h2 id="home-market-heading">See the market at a glance</h2><p>Leaders for each decision route, republished from the active source revision without recalculation.</p></div>
-        <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Open all leaderboards <ArrowRight aria-hidden="true" size={14} /></a>
       </div>
       {state.phase === 'loading'
         ? <p className="home-snapshot-state" role="status">Loading the published decision snapshot.</p>
@@ -152,11 +151,13 @@ function MarketAtAGlance() {
               ? <p className="home-snapshot-state" role="status">No decision route has a supported leader in the active revision.</p>
               : <div className="home-snapshot-grid">{cards.map((card) => <MarketLeaderArticle card={card} key={card.key} />)}</div>}
           </>}
+      <div className="home-snapshot-actions">
+        <a className="home-snapshot-method" href={ROUTE_PATHS.leaderboards}>Explore more leaderboards <ArrowRight aria-hidden="true" size={14} /></a>
+      </div>
     </section>
     {comparisons.length > 0 ? <section className="panel home-comparison-section" aria-label="Representative comparisons">
       <div className="panel-heading">
         <div><span className="eyebrow">Representative comparisons</span><h3 id="home-comparison-heading">Compare best models</h3><p>Each card pairs two models from the active source revision and names the category where the published evidence actually differs — priced and scored as the source published them.</p></div>
-        <a className="button button-secondary" href={ROUTE_PATHS.compareHub}>Compare two models <ArrowRight aria-hidden="true" size={14} /></a>
       </div>
       <ul className="home-snapshot-grid home-comparison-grid" aria-label="Representative comparisons">
         {comparisons.map((comparison) => <RepresentativeComparisonArticle comparison={comparison} key={comparison.pairSlug} />)}
