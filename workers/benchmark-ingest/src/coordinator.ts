@@ -1256,6 +1256,36 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
     return await this.durable.get<IngestionCycle>(CYCLE_STORAGE_KEY) ?? null;
   }
 
+  async checkpointMetadata(): Promise<Record<string, unknown> | null> {
+    const cycle = await this.durable.get<IngestionCycle>(CYCLE_STORAGE_KEY);
+    const checkpoint = await this.durable.get<BenchmarkCheckpoint>(CHECKPOINT_STORAGE_KEY);
+    if (!cycle || !checkpoint) return null;
+    return {
+      cycleId: cycle.cycleId,
+      phase: cycle.phase,
+      cursor: cycle.cursor,
+      manifestContentHash: checkpoint.manifestContentHash,
+      normalizedPartitions: checkpoint.normalizedPartitions.map((partition) => ({
+        partitionId: partition.partitionId,
+        index: partition.index,
+        key: partition.key,
+        contentHash: partition.contentHash,
+        byteLength: partition.byteLength,
+      })),
+      lmArena: checkpoint.lmArena.map((entry) => ({
+        subset: entry.subset,
+        offset: entry.offset,
+        artifactId: entry.artifact.artifactId,
+        key: entry.artifact.key,
+        contentHash: entry.artifact.contentHash,
+        originalContentHash: entry.artifact.originalContentHash,
+        byteLength: entry.artifact.byteLength,
+        upstreamRevision: entry.artifact.upstreamRevision,
+        schemaVersion: entry.artifact.schemaVersion,
+      })),
+    };
+  }
+
   async alarm(): Promise<void> {
     const cycle = await this.durable.get<IngestionCycle>(CYCLE_STORAGE_KEY);
     if (!cycle || isTerminalState(cycle.state)) {

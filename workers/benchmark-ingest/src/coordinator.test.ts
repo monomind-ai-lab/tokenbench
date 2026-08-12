@@ -791,6 +791,36 @@ describe('retry, rate limits, and expiry', () => {
 // ---------------------------------------------------------------------------
 
 describe('resume, replay, and logging', () => {
+  it('reports bounded checkpoint metadata without source payloads', async () => {
+    const checkpoint = acquireCheckpoint();
+    checkpoint.lmArenaRevision = LMARENA_REVISION;
+    checkpoint.lmArena = [{
+      artifact: artifact('lmarena/text_style_control/offset-100/page.json',
+        'text_style_control:latest:overall:rows-100-200',
+        { upstreamRevision: LMARENA_REVISION }),
+      subset: 'text_style_control',
+      offset: 100,
+    }];
+    const durable = storage({ [CYCLE_KEY]: {
+      ...createBenchmarkCycle(SUNDAY, CYCLE_ID),
+      phase: 'normalize-sources', cursor: 4, frozenCatalogRevision: CATALOG_REVISION,
+    }, [CHECKPOINT_KEY]: checkpoint });
+    const { env } = environment({ catalogRevision: CATALOG_REVISION });
+    const { steps } = fakeSteps();
+    const coordinator = new BenchmarkIngestCoordinator({ storage: durable } as never, env, baseDeps(steps));
+
+    const result = await coordinator.checkpointMetadata();
+
+    expect(result).toMatchObject({
+      cycleId: CYCLE_ID,
+      phase: 'normalize-sources',
+      cursor: 4,
+      manifestContentHash: null,
+      lmArena: [{ subset: 'text_style_control', offset: 100 }],
+    });
+    expect(JSON.stringify(result)).not.toMatch(/payload|response|body|bytes/i);
+  });
+
   it('resumes the persisted cursor after coordinator reconstruction', async () => {
     nowMs = SUNDAY;
     const durable = storage({ [CYCLE_KEY]: {
