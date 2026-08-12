@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
 import type { IngestionCycle, IngestionStepReceipt } from './checkpointed-ingestion';
 import {
@@ -128,6 +129,60 @@ describe('ingestion receipt migration', () => {
     'utf8',
   );
 
+  function migratedDatabase(): DatabaseSync {
+    const database = new DatabaseSync(':memory:');
+    database.exec('PRAGMA foreign_keys = ON');
+    database.exec(migration);
+    return database;
+  }
+
+  interface CycleFixture {
+    scope: string;
+    cycleId: string;
+    cadenceKey: string;
+    state: string;
+    phase: string;
+    cursor: number;
+    attempt: number;
+    startedAt: string;
+    updatedAt: string;
+    expiresAt: string;
+  }
+
+  const validCycle: CycleFixture = {
+    scope: 'catalog',
+    cycleId: 'cycle-valid',
+    cadenceKey: '2026-08-12',
+    state: 'running',
+    phase: 'acquire',
+    cursor: 0,
+    attempt: 0,
+    startedAt: '2026-08-12T00:00:00.000Z',
+    updatedAt: '2026-08-12T00:00:00.000Z',
+    expiresAt: '2026-08-12T12:00:00.000Z',
+  };
+
+  function insertCycle(database: DatabaseSync, overrides: Partial<CycleFixture> = {}): void {
+    const cycle = { ...validCycle, ...overrides };
+    database.prepare(`
+      INSERT INTO ingestion_cycles (
+        scope, cycle_id, cadence_key, state, phase, cursor, attempt,
+        started_at, updated_at, expires_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      cycle.scope,
+      cycle.cycleId,
+      cycle.cadenceKey,
+      cycle.state,
+      cycle.phase,
+      cycle.cursor,
+      cycle.attempt,
+      cycle.startedAt,
+      cycle.updatedAt,
+      cycle.expiresAt,
+    );
+  }
+
   it('defines both shared receipt tables and the composite cascade', () => {
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS ingestion_cycles');
     expect(migration).toContain('CREATE TABLE IF NOT EXISTS ingestion_cycle_steps');
@@ -152,6 +207,85 @@ describe('ingestion receipt migration', () => {
     expect(migration).toContain('(scope, cadence_key, state, updated_at DESC)');
     expect(migration).toContain('ingestion_cycles_scope_state_expires_idx');
     expect(migration).toContain('(scope, state, expires_at)');
+  });
+
+  it('applies both receipt tables with every required column and index', () => {
+    using database = migratedDatabase();
+    expect(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all())
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'ingestion_cycles' }),
+        expect.objectContaining({ name: 'ingestion_cycle_steps' }),
+      ]));
+
+    expect(database.prepare('PRAGMA table_info(ingestion_cycles)').all().map((row) => row.name))
+      .toEqual(expect.arrayContaining([
+        'scope', 'cycle_id', 'cadence_key', 'state', 'phase', 'cursor', 'attempt',
+        'frozen_catalog_revision', 'frozen_benchmark_revision', 'manifest_key',
+        'started_at', 'updated_at', 'completed_at', 'expires_at', 'next_retry_at',
+        'final_revision', 'result_json', 'error_code', 'error_source_id',
+        'error_artifact_id',
+      ]));
+    expect(database.prepare('PRAGMA table_info(ingestion_cycle_steps)').all().map((row) => row.name))
+      .toEqual(expect.arrayContaining([
+        'scope', 'cycle_id', 'phase', 'cursor', 'status', 'attempt', 'started_at',
+        'completed_at', 'output_count', 'error_code',
+      ]));
+    expect(database.prepare('PRAGMA index_list(ingestion_cycles)').all().map((row) => row.name))
+      .toEqual(expect.arrayContaining([
+        'ingestion_cycles_scope_cadence_state_idx',
+        'ingestion_cycles_scope_state_expires_idx',
+      ]));
+  });
+
+  it('enforces cycle scope, state, cursor, attempt, and result-json constraints', () => {
+    using database = migratedDatabase();
+    for (const overrides of [
+      { scope: 'unknown' },
+      { state: 'unknown' },
+      { cursor: -1 },
+      { attempt: -1 },
+      { attempt: 4 },
+    ]) {
+      expect(() => insertCycle(database, {
+        ...overrides,
+        cycleId: `invalid-${String(Object.values(overrides)[0])}`,
+      })).toThrow();
+    }
+
+    insertCycle(database);
+    expect(() => database.prepare(
+      "UPDATE ingestion_cycles SET result_json = 'not-json' WHERE cycle_id = ?",
+    ).run(validCycle.cycleId)).toThrow();
+    expect(() => database.prepare(
+      'UPDATE ingestion_cycles SET result_json = ? WHERE cycle_id = ?',
+    ).run(JSON.stringify({ payload: 'x'.repeat(65_536) }), validCycle.cycleId)).toThrow();
+  });
+
+  it('enforces step status, attempt, output count, and composite cascade', () => {
+    using database = migratedDatabase();
+    insertCycle(database);
+    const insertStep = database.prepare(`
+      INSERT INTO ingestion_cycle_steps (
+        scope, cycle_id, phase, cursor, status, attempt, started_at, output_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'unknown', 1, validCycle.startedAt, 0))
+      .toThrow();
+    expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'running', 0, validCycle.startedAt, 0))
+      .toThrow();
+    expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'running', 4, validCycle.startedAt, 0))
+      .toThrow();
+    expect(() => insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'running', 1, validCycle.startedAt, -1))
+      .toThrow();
+    expect(() => insertStep.run('benchmarks', validCycle.cycleId, 'acquire', 0, 'running', 1, validCycle.startedAt, 0))
+      .toThrow();
+
+    insertStep.run('catalog', validCycle.cycleId, 'acquire', 0, 'completed', 1, validCycle.startedAt, 1);
+    database.prepare('DELETE FROM ingestion_cycles WHERE scope = ? AND cycle_id = ?')
+      .run('catalog', validCycle.cycleId);
+    expect(database.prepare('SELECT COUNT(*) AS count FROM ingestion_cycle_steps').get())
+      .toEqual(expect.objectContaining({ count: 0 }));
   });
 });
 
