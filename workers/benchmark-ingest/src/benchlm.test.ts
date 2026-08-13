@@ -103,7 +103,9 @@ describe('parseBenchLm', () => {
     expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')).toMatchObject({
       value: 79.5,
       rawValue: null,
-      rank: 2,
+      // Published rank from models.json ranking.categoryRanks, not a position
+      // derived by sorting the fetched leaderboard window.
+      rank: 3,
       rankingEligible: true,
       sourceArtifactId: 'public-leaderboard',
     });
@@ -134,7 +136,7 @@ describe('parseBenchLm', () => {
       sourceArtifactId: 'pricing',
     })]);
     expect(batch.sources.find((source) => source.artifactId === 'public-leaderboard')).toMatchObject({
-      sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
+      sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=200',
       upstreamRevision: '2026-08-10-8c567bd96953b15d',
       schemaVersion: 'bench-align-v5.3-2026-07-24',
     });
@@ -148,7 +150,9 @@ describe('parseBenchLm', () => {
     expect(batch.metrics.find((metric) => metric.sourceModelId === 'gpt-5-6-sol'
       && metric.metricKey === 'benchlm:category:coding')).toMatchObject({
       value: 77.95,
-      rank: 3,
+      // Published coding rank #99 from the full upstream cohort, not the #3
+      // position it happens to occupy inside the fetched window.
+      rank: 99,
       rawValue: null,
       sourceArtifactId: 'public-leaderboard',
     });
@@ -183,7 +187,9 @@ describe('parseBenchLm', () => {
     const overall = batch.metrics.find((metric) => metric.metricKey === 'benchlm:overall:raw');
     const coding = batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding');
     expect(overall).toMatchObject({ value: 81.48, rank: 4, rawValue: 81, sourceArtifactId: 'public-leaderboard' });
-    expect(coding).toMatchObject({ value: 79.5, rank: 2, sourceArtifactId: 'public-leaderboard' });
+    // The overridden published rank (7) is honored verbatim. Previously a
+    // window-derived position (2) silently replaced it.
+    expect(coding).toMatchObject({ value: 79.5, rank: 7, sourceArtifactId: 'public-leaderboard' });
     // Prohibited proxy values and interval fields never appear in metrics or
     // bytes; the published overallRank/categoryRanks are now legitimately kept.
     expect(`${serialized}\n${projected}`).not.toMatch(/99999[5-9]|scoreInterval90/);
@@ -201,6 +207,47 @@ describe('parseBenchLm', () => {
       && metric.metricKey === 'benchlm:overall:raw')).toBe(false);
     expect(batch.metrics.some((metric) => metric.sourceModelId === 'model-a'
       && metric.metricKey === 'benchlm:category:coding')).toBe(false);
+  });
+
+  it('never invents a category rank upstream did not publish', async () => {
+    // Kimi K3 publishes a coding score but an empty ranking.categoryRanks map.
+    // A derived within-window rank would be fabricated evidence.
+    const batch = await parsePayloads();
+
+    const coding = batch.metrics.find((metric) => metric.sourceModelId === 'kimi-3'
+      && metric.metricKey === 'benchlm:category:coding');
+
+    expect(coding).toBeDefined();
+    expect(coding?.value).toBe(85);
+    expect(coding?.rank).toBeNull();
+  });
+
+  it('keeps the published category rank verbatim instead of a window position', async () => {
+    // GPT-5.6 Sol publishes coding rank #99. Sorting the four in-window coding
+    // scores would place it far higher; the published rank is authoritative.
+    const batch = await parsePayloads();
+
+    const coding = batch.metrics.find((metric) => metric.sourceModelId === 'gpt-5-6-sol'
+      && metric.metricKey === 'benchlm:category:coding');
+
+    expect(coding?.rank).toBe(99);
+  });
+
+  it('counts only benchmarks that actually joined into published evidence', async () => {
+    // Drop Model A from the public window: it still has coverage
+    // trustedBenchmarkCount 4 in models.json, but nothing joins. A profile
+    // must never advertise benchmarks it cannot show.
+    const source = payloads();
+    const publicLeaderboard = source['public-leaderboard'] as { models: Array<Record<string, unknown>> };
+    publicLeaderboard.models = publicLeaderboard.models.filter((row) => row.model !== 'Model A');
+
+    const batch = await parsePayloads(source);
+
+    const model = batch.models.find((candidate) => candidate.sourceModelId === 'model-a');
+    const joined = batch.metrics.filter((metric) => metric.sourceModelId === 'model-a');
+
+    expect(joined).toHaveLength(0);
+    expect(model?.benchmarkCount).toBe(0);
   });
 
   it('omits a category until its safe definitions are present', async () => {
@@ -323,7 +370,7 @@ describe('parseBenchLm', () => {
 
     expect(model?.rankingEligible).toBe(false);
     expect(overall).toMatchObject({ value: 81.48, rankingEligible: false, sourceArtifactId: 'public-leaderboard' });
-    expect(coding).toMatchObject({ value: 79.5, rank: 2, rankingEligible: true, sourceArtifactId: 'public-leaderboard' });
+    expect(coding).toMatchObject({ value: 79.5, rank: 3, rankingEligible: true, sourceArtifactId: 'public-leaderboard' });
   });
 });
 

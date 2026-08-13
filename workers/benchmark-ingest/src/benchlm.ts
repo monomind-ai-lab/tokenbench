@@ -21,13 +21,22 @@ const ARTIFACTS = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmark
 
 type ArtifactName = typeof ARTIFACTS[number];
 
+/**
+ * Single source of truth for the public BenchAlign leaderboard URL.
+ *
+ * 200 is the upstream ceiling: limit=500 and limit=1000 both return 200 rows.
+ * The previous limit=100 silently dropped ~100 ranked models, publishing empty
+ * profile pages for models the sitemap still advertised.
+ */
+export const BENCHLM_PUBLIC_LEADERBOARD_URL = 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=200';
+
 const ARTIFACT_URLS: Record<ArtifactName, string> = {
   leaderboard: 'https://benchlm.ai/data/leaderboard.json',
   models: 'https://benchlm.ai/data/models.json',
   pricing: 'https://benchlm.ai/data/pricing.json',
   comparisons: 'https://benchlm.ai/data/comparisons.json',
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
-  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
+  'public-leaderboard': BENCHLM_PUBLIC_LEADERBOARD_URL,
 };
 
 export interface BenchLmTransportHeaders {
@@ -749,7 +758,15 @@ function safeBenchmarkCategories(items: unknown[]): Set<string> {
 function toBenchmarkModels(
   models: SafeModelInput[],
   publicScores: ReadonlyMap<string, PublicBenchLmScore>,
+  metrics: readonly BenchmarkMetric[],
 ): BenchmarkModel[] {
+  // Coverage must describe evidence the profile can actually show. The
+  // upstream `coverage.trustedBenchmarkCount` describes the source's own
+  // corpus, which includes rows that never join into our published snapshot.
+  const joinedCounts = new Map<string, number>();
+  metrics.forEach((metric) => {
+    joinedCounts.set(metric.modelKey, (joinedCounts.get(metric.modelKey) ?? 0) + 1);
+  });
   return models.map((model) => ({
     modelKey: model.modelKey,
     slug: model.slug,
@@ -765,7 +782,7 @@ function toBenchmarkModels(
       && publicScores.get(model.modelKey)?.evidenceStatus === 'supported',
     confidenceLower: null,
     confidenceUpper: null,
-    benchmarkCount: model.trustedBenchmarkCount,
+    benchmarkCount: Math.min(model.trustedBenchmarkCount, joinedCounts.get(model.modelKey) ?? 0),
     sourceId: 'benchlm',
     sourceModelId: model.sourceModelId,
     sourceArtifactId: 'models',
@@ -996,17 +1013,20 @@ export async function parseBenchLm(
     modelKey: model.modelKey,
     name: model.name,
     creator: model.creator,
+    categoryRanks: model.categoryRanks,
   })), publicLeaderboard);
+
+  const metrics = toMetrics(
+    safeModels,
+    publicScores,
+    safeBenchmarkCategories(artifacts.benchmarks.items),
+    artifacts['public-leaderboard'].generatedAt,
+  );
 
   const batch: NormalizedSourceBatch = {
     sources: ARTIFACTS.map((artifact) => sourceRecord(artifact, prepared[artifact], observedAt)),
-    models: toBenchmarkModels(safeModels, publicScores),
-    metrics: toMetrics(
-      safeModels,
-      publicScores,
-      safeBenchmarkCategories(artifacts.benchmarks.items),
-      artifacts['public-leaderboard'].generatedAt,
-    ),
+    models: toBenchmarkModels(safeModels, publicScores, metrics),
+    metrics,
     priceChecks: toPriceChecks(artifacts.pricing.items, modelsBySourceId),
     comparisonSeeds: toComparisonSeeds(artifacts.comparisons.items, modelsBySourceId),
   };

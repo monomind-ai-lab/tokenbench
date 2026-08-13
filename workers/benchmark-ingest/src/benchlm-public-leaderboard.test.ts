@@ -24,8 +24,24 @@ function identities(): SafeBenchLmModelIdentity[] {
     ['kimi-3', 'source:benchlm:kimi-3', 'Kimi K3', 'Moonshot AI'],
     ['gpt-5-6-sol', 'source:benchlm:gpt-5-6-sol', 'GPT-5.6 Sol', 'OpenAI'],
     ['sakana-fugu-ultra', 'source:benchlm:sakana-fugu-ultra', 'Sakana Fugu-Ultra', 'Sakana AI'],
-  ].map(([sourceModelId, modelKey, name, creator]) => ({ sourceModelId, modelKey, name, creator }));
+  ].map(([sourceModelId, modelKey, name, creator]) => ({
+    sourceModelId,
+    modelKey,
+    name,
+    creator,
+    // Published ranks travel with the identity; the join never derives them.
+    categoryRanks: publishedRanks[sourceModelId!] ?? {},
+  }));
 }
+
+/** Published `ranking.categoryRanks` mirrored from the models.json fixture. */
+const publishedRanks: Record<string, Record<string, number | null>> = {
+  'model-a': { coding: 3, multimodalGrounded: 5 },
+  'model-b': { coding: 8 },
+  'kimi-3': {},
+  'gpt-5-6-sol': { coding: 99 },
+  'sakana-fugu-ultra': { coding: 2, reasoning: 1, multimodalGrounded: 1 },
+};
 function snapshotFromFixture(): ActiveBenchmarkSnapshot {
   const parsed = parseBenchLmPublicLeaderboard(fixture());
   const models: BenchmarkModel[] = parsed.models.map((row, index) => ({
@@ -93,7 +109,7 @@ function snapshotFromFixture(): ActiveBenchmarkSnapshot {
   const source: BenchmarkSourceRecord = {
     sourceId: 'benchlm',
     artifactId: 'public-leaderboard',
-    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
+    sourceUrl: 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=200',
     observedAt: '2026-08-10T00:00:00.000Z',
     etag: null,
     lastModified: null,
@@ -141,17 +157,62 @@ describe('BenchLM public leaderboard contract', () => {
     });
   });
 
-  it('joins one-to-one and derives GPT-5.6 Sol coding rank from the public rows', () => {
+  it('joins one-to-one and keeps the published GPT-5.6 Sol coding rank', () => {
     const joined = joinPublicLeaderboardScores(identities(), parseBenchLmPublicLeaderboard(fixture()));
     expect(joined.get('source:benchlm:gpt-5-6-sol')).toMatchObject({
       modelKey: 'source:benchlm:gpt-5-6-sol',
       overallScore: 81.48,
       overallRank: 4,
       categoryScores: { coding: 77.95 },
-      categoryRanks: { coding: 3 },
+      categoryRanks: { coding: 99 },
       methodologyVersion: 'bench-align-v5.3-2026-07-24',
       sourceSnapshotId: '2026-08-10-8c567bd96953b15d',
     });
+  });
+
+  it('reports null for a category the source ranked no model on', () => {
+    // Kimi K3 has a coding score but publishes no coding rank.
+    const joined = joinPublicLeaderboardScores(identities(), parseBenchLmPublicLeaderboard(fixture()));
+    expect(joined.get('source:benchlm:kimi-3')?.categoryRanks).toEqual({ coding: null, reasoning: null });
+  });
+
+  /**
+   * Source-of-truth contract for the public category rank.
+   *
+   * `models.json` -> `ranking.categoryRanks` is the only upstream field that
+   * publishes a category rank. The public leaderboard response carries
+   * `categoryScores` and a single overall `rank`, but no per-category ranks.
+   *
+   * Verified against production upstream on 2026-08-13 for GPT-5.6 Sol:
+   *   published ranking.categoryRanks = { agentic: 6, coding: 3,
+   *                                       multimodalGrounded: 5, knowledge: 6 }
+   *   live tokenbench profile          = agentic #6, coding #3, knowledge #6
+   * Agentic, coding and knowledge already matched the published values, which
+   * is why those ranks are unchanged by using the published field directly.
+   *
+   * Ranks are also order-consistent with scores: across 214 adjacent
+   * published-rank pairs in the live cohort there were zero cases where a
+   * lower rank held a lower score. The published ranks are therefore a real
+   * ordering of a larger cohort, not an artifact of our fetched window.
+   */
+  it('takes category ranks only from the published rank field', () => {
+    const leaderboard = parseBenchLmPublicLeaderboard(fixture());
+    // The public leaderboard response itself publishes no category ranks.
+    expect(leaderboard.models.every((row) => !('categoryRanks' in row))).toBe(true);
+
+    const joined = joinPublicLeaderboardScores(identities(), leaderboard);
+    // Model A publishes coding #3 and multimodalGrounded #5.
+    expect(joined.get('source:benchlm:model-a')?.categoryRanks)
+      .toEqual({ coding: 3, multimodalGrounded: 5, reasoning: null });
+  });
+
+  it('ignores a published rank that is not a positive integer', () => {
+    const models = identities().map((identity) => (identity.sourceModelId === 'model-a'
+      ? { ...identity, categoryRanks: { coding: 0, multimodalGrounded: -2 } }
+      : identity));
+    const joined = joinPublicLeaderboardScores(models, parseBenchLmPublicLeaderboard(fixture()));
+    expect(joined.get('source:benchlm:model-a')?.categoryRanks)
+      .toEqual({ coding: null, multimodalGrounded: null, reasoning: null });
   });
 
   it('accepts a unique normalized fallback but rejects ambiguous normalized identities', () => {

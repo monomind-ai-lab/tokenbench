@@ -6,6 +6,11 @@ export interface SafeBenchLmModelIdentity {
   readonly modelKey: string;
   readonly name: string;
   readonly creator: string;
+  /**
+   * Published category ranks from `models.json` (`ranking.categoryRanks`).
+   * Sparse by design: an absent category means upstream published no rank.
+   */
+  readonly categoryRanks?: Readonly<Record<string, number | null>>;
 }
 
 export interface BenchLmPublicLeaderboardRow {
@@ -139,31 +144,27 @@ function normalizedIdentity(value: string): string {
   return value.normalize('NFKC').toLocaleLowerCase('en-US').replace(/[^\p{Letter}\p{Number}]+/gu, '');
 }
 
-function categoryRanks(rows: readonly BenchLmPublicLeaderboardRow[]): readonly Readonly<Record<string, number | null>>[] {
-  const categories = new Set<string>();
-  rows.forEach((row) => Object.keys(row.categoryScores).forEach((category) => categories.add(category)));
-  const ranks = rows.map(() => ({} as Record<string, number | null>));
-  for (const category of categories) {
-    const ranked = rows
-      .map((row, index) => ({ row, index, score: row.categoryScores[category] ?? null }))
-      .filter((entry): entry is { row: BenchLmPublicLeaderboardRow; index: number; score: number } => (
-        entry.row.evidenceStatus === 'supported' && entry.score !== null
-      ))
-      .sort((left, right) => right.score - left.score || left.index - right.index);
-    let previousScore: number | null = null;
-    let currentRank = 0;
-    ranked.forEach((entry, index) => {
-      if (previousScore === null || entry.score !== previousScore) currentRank = index + 1;
-      ranks[entry.index][category] = currentRank;
-      previousScore = entry.score;
-    });
-    rows.forEach((row, index) => {
-      if (!Object.prototype.hasOwnProperty.call(ranks[index], category)) ranks[index][category] = null;
-    });
-  }
-  return ranks.map((rank) => Object.freeze(Object.fromEntries(
-    Object.entries(rank).sort(([left], [right]) => compareText(left, right)),
-  )));
+/**
+ * Normalizes published category ranks for one model.
+ *
+ * Ranks are never derived. A rank exists only when the upstream source
+ * publishes it for that exact category; every other category resolves to
+ * `null` so the frontend can render an explicit `Unavailable`. Deriving a
+ * position from the fetched window would fabricate evidence, because the
+ * window is a truncated slice of a much larger published cohort.
+ */
+function publishedCategoryRanks(
+  published: Readonly<Record<string, number | null>>,
+  categoryScores: Readonly<Record<string, number | null>>,
+): Readonly<Record<string, number | null>> {
+  const ranks: Record<string, number | null> = {};
+  Object.keys(categoryScores).forEach((category) => {
+    const rank = published[category];
+    ranks[category] = typeof rank === 'number' && Number.isSafeInteger(rank) && rank > 0 ? rank : null;
+  });
+  return Object.freeze(Object.fromEntries(
+    Object.entries(ranks).sort(([left], [right]) => compareText(left, right)),
+  ));
 }
 
 export interface JoinedPublicBenchLmScore {
@@ -176,9 +177,8 @@ export function joinPublicLeaderboardRows(
   models: readonly SafeBenchLmModelIdentity[],
   leaderboard: BenchLmPublicLeaderboard,
 ): readonly JoinedPublicBenchLmScore[] {
-  const ranks = categoryRanks(leaderboard.models);
   const result: JoinedPublicBenchLmScore[] = [];
-  leaderboard.models.forEach((row, index) => {
+  leaderboard.models.forEach((row) => {
     const exact = models.filter((model) => model.name === row.model && model.creator === row.creator);
     const candidates = exact.length > 0 ? exact : models.filter((model) => (
       normalizedIdentity(model.name) === normalizedIdentity(row.model)
@@ -198,7 +198,7 @@ export function joinPublicLeaderboardRows(
         overallScore: row.overallScore,
         overallRank: row.rank,
         categoryScores: row.categoryScores,
-        categoryRanks: ranks[index]!,
+        categoryRanks: publishedCategoryRanks(model.categoryRanks ?? {}, row.categoryScores),
         evidenceStatus: row.evidenceStatus,
         methodologyVersion: leaderboard.methodologyVersion,
         sourceSnapshotId: leaderboard.sourceSnapshotId,
