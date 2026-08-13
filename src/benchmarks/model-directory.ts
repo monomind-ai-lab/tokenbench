@@ -166,8 +166,26 @@ export function sortModelDirectoryRecords(records: readonly ModelDirectoryRecord
 }
 
 /**
+ * Weekly Popular Models size.
+ *
+ * This is a product decision (the weekly list is a top 100) and a schema
+ * constraint: `benchmark_popular_model_ranks.rank` is `CHECK (rank BETWEEN 1
+ * AND 100)` in migrations/0009_model_directory.sql.
+ *
+ * It is deliberately independent of the ingested evidence cohort. We ingest up
+ * to the upstream ceiling (200) so profiles carry fuller category evidence and
+ * every ingested model keeps a searchable page, while the weekly ranked list
+ * stays at 100. Raising this constant alone would violate the CHECK.
+ */
+export const POPULAR_MODEL_LIMIT = 100;
+
+/**
  * Keeps the first occurrence of each eligible model in source rank order and
- * caps a weekly snapshot at the public top 100.
+ * caps a weekly snapshot at the Popular Models top 100.
+ *
+ * This cap governs only the weekly ranked list. Models outside it are still
+ * ingested and keep their own searchable profile pages; they are never dropped
+ * merely for falling outside the top 100.
  */
 export function selectPopularModelRanks(
   weekStart: string,
@@ -177,7 +195,7 @@ export function selectPopularModelRanks(
   const seen = new Set<string>();
   const seenRanks = new Set<number>();
   return rows
-    .filter((row) => Number.isSafeInteger(row.rank) && row.rank >= 1 && row.rank <= 100 && typeof row.modelKey === 'string' && row.modelKey.length > 0)
+    .filter((row) => Number.isSafeInteger(row.rank) && row.rank >= 1 && row.rank <= POPULAR_MODEL_LIMIT && typeof row.modelKey === 'string' && row.modelKey.length > 0)
     .slice()
     .sort((left, right) => left.rank - right.rank || compareUtf8Binary(left.modelKey, right.modelKey))
     .filter((row) => {
@@ -186,7 +204,7 @@ export function selectPopularModelRanks(
       seenRanks.add(row.rank);
       return true;
     })
-    .slice(0, 100)
+    .slice(0, POPULAR_MODEL_LIMIT)
     .map((row) => ({ weekStart, rank: row.rank, modelKey: row.modelKey }));
 }
 

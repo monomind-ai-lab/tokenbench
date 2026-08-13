@@ -1,5 +1,5 @@
 import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
-import { weekStartUtc, directoryRecordFromModel } from '../../../src/benchmarks/model-directory';
+import { weekStartUtc, directoryRecordFromModel, POPULAR_MODEL_LIMIT } from '../../../src/benchmarks/model-directory';
 import type { BenchmarkCandidateManifestV1 } from './candidate-storage';
 import { listRequiredBenchmarkCachePartitions } from './cache-partitions';
 import { publicLeaderboardFromSnapshot } from './benchlm-public-leaderboard';
@@ -182,7 +182,10 @@ export async function publishBenchmarkCandidate(input: PublishCandidateInput): P
   }
   const leaderboard = publicLeaderboardFromSnapshot(input.snapshot);
   const weekStart = weekStartUtc(input.checkedAt);
-  const ranks = leaderboard.models.slice(0, 100).map((row) => {
+  // Weekly Popular Models is a top 100 by product decision, and
+  // benchmark_popular_model_ranks.rank is CHECK (rank BETWEEN 1 AND 100).
+  // The ingested evidence cohort is larger; only this list is capped.
+  const ranks = leaderboard.models.slice(0, POPULAR_MODEL_LIMIT).map((row) => {
     const model = input.snapshot.models.find((candidate) => (
       candidate.name === row.model && candidate.creator === row.creator
     ));

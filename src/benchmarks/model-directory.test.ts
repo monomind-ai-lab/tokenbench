@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   modelPath,
+  POPULAR_MODEL_LIMIT,
   selectPopularModelRanks,
   weekStartUtc,
 } from './model-directory';
@@ -93,6 +94,20 @@ describe('model directory contracts', () => {
       { weekStart: '2026-08-10T00:00:00.000Z', rank: 1, modelKey: 'alpha' },
       { weekStart: '2026-08-10T00:00:00.000Z', rank: 2, modelKey: 'bravo' },
     ]);
+  });
+
+  it('keeps the weekly list at 100 even when a larger cohort is ingested', () => {
+    // The ingested evidence cohort runs to the upstream ceiling (200), but the
+    // weekly ranked list must stay inside the schema CHECK of 1..100.
+    const cohort = Array.from({ length: 200 }, (_, index) => ({
+      modelKey: `model-${index + 1}`,
+      rank: index + 1,
+    }));
+    const selected = selectPopularModelRanks('2026-08-10T00:00:00.000Z', cohort);
+
+    expect(selected).toHaveLength(POPULAR_MODEL_LIMIT);
+    expect(POPULAR_MODEL_LIMIT).toBe(100);
+    expect(Math.max(...selected.map((row) => row.rank))).toBe(100);
   });
 
   it('defines durable directory, profile, membership, alias, and weekly rank tables', () => {

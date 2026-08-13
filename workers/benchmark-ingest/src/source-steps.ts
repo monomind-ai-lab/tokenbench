@@ -27,6 +27,7 @@ import {
   parseBenchLm,
   prepareBenchLmMixed,
   rehydrateBenchLmProjections,
+  BENCHLM_PUBLIC_LEADERBOARD_URL,
   type BenchLmPreparationInput,
   type BenchLmPreparationInputs,
   type PreparedBenchLmPayloads,
@@ -65,7 +66,7 @@ export const BENCHLM_URLS: Readonly<Record<BenchLmArtifact, string>> = {
   pricing: 'https://benchlm.ai/data/pricing.json',
   comparisons: 'https://benchlm.ai/data/comparisons.json',
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
-  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
+  'public-leaderboard': BENCHLM_PUBLIC_LEADERBOARD_URL,
 };
 
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
