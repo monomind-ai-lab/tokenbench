@@ -13,6 +13,7 @@ export const ROUTE_PATHS = {
   pricePerformance: '/llm-price-performance/',
   compareHub: '/compare/',
   models: '/models/',
+  modelLifecycle: '/models/lifecycle/',
   leaderboards: '/leaderboards/',
   methodologyBenchAlign: '/methodology/benchalign/',
   newsletterConfirmed: '/newsletter/confirmed/',
@@ -180,6 +181,7 @@ export type AppRoute =
   | { kind: 'insights' }
   | { kind: 'compareHub' }
   | { kind: 'models' }
+  | { kind: 'modelLifecycle' }
   | { kind: 'comparison'; pair: string }
   | { kind: 'modelProfile'; slug: string }
   | { kind: 'newsletterConfirmed' }
@@ -215,6 +217,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'price-performance', pathname: ROUTE_PATHS.pricePerformance, route: { kind: 'pricePerformance' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
+  { id: 'model-lifecycle', pathname: ROUTE_PATHS.modelLifecycle, route: { kind: 'modelLifecycle' } },
   { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
   { id: 'welcome', pathname: ROUTE_PATHS.welcome, route: { kind: 'welcome' } },
   { id: 'privacy', pathname: ROUTE_PATHS.privacy, route: { kind: 'privacy' } },
@@ -262,6 +265,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'insights': return ROUTE_PATHS.insights;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'models': return ROUTE_PATHS.models;
+    case 'modelLifecycle': return ROUTE_PATHS.modelLifecycle;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
     case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
@@ -289,6 +293,7 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.insights) return { kind: 'insights' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
+  if (normalizedPathname === ROUTE_PATHS.modelLifecycle) return { kind: 'modelLifecycle' };
   if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
   if (normalizedPathname === ROUTE_PATHS.welcome) return { kind: 'welcome' };
   if (normalizedPathname === ROUTE_PATHS.privacy) return { kind: 'privacy' };

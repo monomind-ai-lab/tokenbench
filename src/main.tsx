@@ -8,6 +8,7 @@ import { parseModelDirectoryEnvelope } from './frontend/model-directory-contract
 import { parsePricePerformanceEnvelope } from './benchmarks/price-performance-contracts';
 import { NewsletterConfirmedPage } from './pages/newsletter-confirmed-page';
 import { ModelsApp } from './pages/models-page';
+import { ModelLifecycleApp } from './pages/model-lifecycle-page';
 import { matchRoute } from './routing/routes';
 import './index.css';
 
@@ -82,6 +83,10 @@ if (route.kind === 'modelProfile') {
       </StrictMode>,
     );
   }
+} else if (route.kind === 'modelLifecycle') {
+  const root = document.getElementById('root')!;
+  root.replaceChildren();
+  createRoot(root).render(<StrictMode><ModelLifecycleApp /></StrictMode>);
 } else if (route.kind === 'comparison') {
   const viewModel = initialComparisonViewModel();
   // A malformed payload must never erase the crawlable server response or

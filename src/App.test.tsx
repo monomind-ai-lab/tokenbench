@@ -37,4 +37,12 @@ describe('calculator application flow', () => {
     expect(await screen.findByText('Breakeven messages per day')).toBeInTheDocument();
     expect(screen.getByText('Breakeven monthly tokens')).toBeInTheDocument();
   });
+
+  it('mounts the model lifecycle radar at its canonical route', () => {
+    window.history.replaceState({}, '', '/models/lifecycle/');
+    render(<App />);
+    expect(screen.getByRole('heading', { name: 'Model Lifecycle Radar' })).toBeInTheDocument();
+    expect(screen.getByText('No validated lifecycle records are available.')).toBeInTheDocument();
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+  });
 });

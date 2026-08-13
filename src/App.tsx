@@ -30,6 +30,7 @@ import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-
 import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
 import { ModelProfilePage } from './pages/model-profile-page';
+import { ModelLifecycleApp } from './pages/model-lifecycle-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
@@ -366,6 +367,7 @@ export default function App() {
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
   if (route.kind === 'models') return <ModelsRoute />;
+  if (route.kind === 'modelLifecycle') return <ModelLifecycleApp />;
   if (route.kind === 'redirect') {
     window.location.replace(route.to);
     return null;

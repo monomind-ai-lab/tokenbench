@@ -7,6 +7,7 @@ export type StaticNavigationPage = SiteNavigationPage | undefined;
 
 interface StaticDocumentOptions {
   readonly includeTranslation?: boolean;
+  readonly bodyPrefix?: string;
 }
 
 export function escapeHtml(value: string): string {
@@ -83,7 +84,7 @@ export function documentHtml(head: string, content: string, options: StaticDocum
     ${head}
   </head>
   <body>
-${translationMount}    <div id="root">${content}</div>
+${options.bodyPrefix ?? ''}${translationMount}    <div id="root">${content}</div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>\n`;

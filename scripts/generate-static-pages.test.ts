@@ -41,6 +41,7 @@ describe('crawlable static-page generator', () => {
     const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
+    const lifecycle = await readFile(join(root, 'models/lifecycle/index.html'), 'utf8');
     const guide = await readFile(join(root, 'articles/guides/track-claude-code-usage/index.html'), 'utf8');
     const tools = await readFile(join(root, 'tools/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
@@ -82,6 +83,11 @@ describe('crawlable static-page generator', () => {
     expect(methodology).toContain('TokenBench republishes BenchLM&#039;s BenchAlign results');
     expect(methodology).toContain('https://benchlm.ai/methodology');
     expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
+    expect(lifecycle).toContain('<h1>Model Lifecycle Radar</h1>');
+    expect(lifecycle).toContain('No validated lifecycle records are embedded in this static shell.');
+    expect(lifecycle).not.toContain('opencodex/gpt-5.6-terra');
+    expect(lifecycle).toContain('<body>\n    <!-- THESIS: Evidence before prediction. OWN-WORLD: TokenBench model lifecycle ledger. STORY: Current and archived records with explicit unknowns. FIRST VIEWPORT: Status, evidence dates, and catalog path. FORM: lifecycle-ledger-extension; semantic table with equivalent mobile cards. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md. -->');
+    expect(lifecycle).not.toContain('<dt>Release date</dt>');
 
     expect(home).toContain('<a href="/methodology/benchalign/">Methodology</a>');
     expect(home).not.toContain('href="/sources/"');
@@ -233,7 +239,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(35);
+    expect(FIXED_ROUTES).toHaveLength(36);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

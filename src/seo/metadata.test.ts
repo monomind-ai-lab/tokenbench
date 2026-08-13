@@ -44,6 +44,7 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'privacy' }, canonical: `${origin}/privacy/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
   { route: { kind: 'models' }, canonical: `${origin}/models/` },
+  { route: { kind: 'modelLifecycle' }, canonical: `${origin}/models/lifecycle/` },
   { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
   { route: { kind: 'leaderboard', key: 'llm-coding' }, canonical: `${origin}/leaderboards/llm/coding/` },
@@ -161,6 +162,14 @@ describe('route metadata registry', () => {
     expect(page.robots).toBe('index,follow');
     expect(page.openGraph.url).toBe(page.canonical);
     expect(page.twitter.title).toBe(page.title);
+  });
+
+  it('publishes canonical metadata for the model lifecycle radar', () => {
+    const page = metadataForRoute({ kind: 'modelLifecycle' });
+    expect(page.title).toBe('Model Lifecycle Radar | TokenBench');
+    expect(page.canonical).toBe(`${origin}/models/lifecycle/`);
+    expect(page.description).toContain('current and archived');
+    expect(page.description).not.toContain('opencodex');
   });
 
   it.each([

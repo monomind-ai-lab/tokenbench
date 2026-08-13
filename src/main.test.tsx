@@ -130,6 +130,7 @@ describe('browser entrypoint', () => {
     ['/cost/breakeven/', 'Cost experience'],
     ['/articles/', 'Articles experience'],
     ['/articles/insights/', 'Insights experience'],
+    ['/models/lifecycle/', 'Model Lifecycle Radar'],
   ])('mounts the intended experience at %s', async (pathname, expectedExperience) => {
       window.history.replaceState({}, '', pathname);
 
