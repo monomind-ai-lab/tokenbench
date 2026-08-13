@@ -251,7 +251,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .choice-card.choice-selected, .model-choice.choice-selected { border-color: var(--primary); background: color-mix(in srgb, var(--primary-soft) 58%, var(--surface-low)); }
 [data-theme='dark'] .choice-card.choice-selected, [data-theme='dark'] .model-choice.choice-selected { background: color-mix(in srgb, var(--primary) 18%, var(--surface-high)); }
 .choice-card input, .model-choice input { flex: 0 0 auto; width: 18px; height: 18px; min-height: 18px; accent-color: var(--primary); }
-.provider-choice { min-height: 42px; padding: 8px 10px; }
+.provider-choice { min-height: 44px; padding: 8px 10px; }
 .provider-choice > input { position: absolute; width: 1px; height: 1px; min-height: 1px; margin: -1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .provider-choice:has(input:focus-visible) { outline: 3px solid var(--tertiary); outline-offset: 2px; }
 .choice-check { flex: 0 0 auto; margin-left: auto; color: var(--primary); }
@@ -1091,6 +1091,16 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .lifecycle-ledger { overflow: hidden; border: 1px solid #e5e7eb; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
 .lifecycle-ledger-heading { display: grid; gap: 10px; padding: 24px; border-bottom: 1px solid #e5e7eb; background: color-mix(in srgb, #741a66 5%, var(--surface)); }
 .lifecycle-ledger-heading h2 { font-size: clamp(1.4rem, 3vw, 2.1rem); }
+.lifecycle-ledger-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid #e5e7eb; background: var(--surface-low); }
+.lifecycle-ledger-toolbar fieldset { min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
+.lifecycle-ledger-toolbar legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.lifecycle-ledger-toolbar label { min-height: 44px; display: inline-flex; align-items: center; cursor: pointer; }
+.lifecycle-ledger-toolbar input { position: absolute; width: 1px; height: 1px; min-height: 1px; overflow: hidden; opacity: 0; }
+.lifecycle-ledger-toolbar label span { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 13px; border: 1px solid var(--outline); border-radius: 999px; color: var(--muted); font-family: var(--font-label); font-size: .72rem; font-weight: 800; }
+.lifecycle-ledger-toolbar label:has(input:checked) span { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-strong); }
+.lifecycle-ledger-toolbar label:has(input:focus-visible) span { outline: 3px solid var(--tertiary); outline-offset: 2px; }
+.lifecycle-ledger-toolbar p { margin: 0; color: var(--muted); font-size: .78rem; }
+.lifecycle-load-more { display: flex; justify-content: center; padding: 20px; border-top: 1px solid #e5e7eb; }
 .lifecycle-desktop-table { overflow-x: auto; }
 .lifecycle-desktop-table table { width: 100%; min-width: 850px; border-collapse: collapse; }
 .lifecycle-desktop-table th, .lifecycle-desktop-table td { padding: 20px; border-bottom: 1px solid #e5e7eb; text-align: left; vertical-align: top; }
@@ -1104,7 +1114,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .lifecycle-mobile-cards { display: none; margin: 0; padding: 0; list-style: none; }
 .lifecycle-mobile-cards li { display: grid; gap: 10px; padding: 20px; }
 [data-theme='dark'] .lifecycle-hero { border-color: var(--outline); background: linear-gradient(135deg, color-mix(in srgb, #741a66 40%, var(--surface)), var(--surface) 60%); }
-[data-theme='dark'] .lifecycle-ledger, [data-theme='dark'] .lifecycle-ledger-heading, [data-theme='dark'] .lifecycle-desktop-table th, [data-theme='dark'] .lifecycle-desktop-table td, [data-theme='dark'] .lifecycle-facts > div { border-color: var(--outline); }
+[data-theme='dark'] .lifecycle-ledger, [data-theme='dark'] .lifecycle-ledger-heading, [data-theme='dark'] .lifecycle-ledger-toolbar, [data-theme='dark'] .lifecycle-load-more, [data-theme='dark'] .lifecycle-desktop-table th, [data-theme='dark'] .lifecycle-desktop-table td, [data-theme='dark'] .lifecycle-facts > div { border-color: var(--outline); }
 @media (max-width: 1023px) {
   .models-filter-panel { grid-template-columns: minmax(0, 1fr); }
   .models-filter-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1155,6 +1165,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .model-card .model-decision-facts { grid-template-columns: minmax(0, 1fr); }
   .lifecycle-page { gap: 20px; }
   .lifecycle-hero, .lifecycle-ledger-heading, .lifecycle-mobile-cards li { padding: 20px; }
+  .lifecycle-ledger-toolbar { align-items: stretch; flex-direction: column; padding: 16px 20px; }
+  .lifecycle-ledger-toolbar fieldset { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .lifecycle-ledger-toolbar label span { width: 100%; justify-content: center; }
   .lifecycle-facts { grid-template-columns: minmax(0, 1fr); }
 }
 /* Durable model evidence profiles */

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelDirectoryRecord } from '../frontend/model-directory-contracts';
 import { ModelLifecycleApp, ModelLifecyclePage } from './model-lifecycle-page';
@@ -41,6 +41,34 @@ describe('Model Lifecycle Radar', () => {
     expect(cards.getAllByText('Current vs archived')).toHaveLength(2);
     expect(table.getAllByText('Migration target')).toHaveLength(2);
     expect(cards.getAllByText('Migration target')).toHaveLength(2);
+  });
+
+  it('bounds long ledgers and filters current or archived records without losing the full count', () => {
+    const longRecords = Array.from({ length: 24 }, (_, index): ModelDirectoryRecord => ({
+      ...records[index % records.length]!,
+      modelKey: `benchlm:model-${index}`,
+      canonicalSlug: `model-${index}`,
+      displayName: `Model ${index}`,
+      sourceModelId: `model-${index}`,
+      status: index < 18 ? 'current' : 'archived',
+    }));
+    render(<ModelLifecyclePage records={longRecords} />);
+
+    expect(screen.getByText('Showing 20 of 24 records')).toBeInTheDocument();
+    expect(screen.queryAllByText('Model 23')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Show 4 more records' }));
+    expect(screen.getAllByText('Model 23')).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Archived (6)' }));
+    expect(screen.getByText('Showing 6 of 6 archived records')).toBeInTheDocument();
+    expect(screen.getAllByText('Model 23')).toHaveLength(2);
+    expect(screen.queryAllByText('Model 0')).toHaveLength(0);
+  });
+
+  it('lets headings carry the hierarchy without decorative eyebrow labels', () => {
+    render(<ModelLifecyclePage records={records} />);
+    expect(screen.queryByText('Evidence Ledger')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model records')).not.toBeInTheDocument();
   });
 
   it('loads and renders validated all-status directory evidence', async () => {
