@@ -27,4 +27,9 @@ type = "durable-object"
 storage = "sqlite"
 
 [triggers]
+# A one-shot maintenance trigger can be added here temporarily to force a
+# re-materialization when a corrected derivation ships mid-week (the coordinator
+# dedupes on an ISO-week cadence key). Such a trigger must not overlap the
+# catalog Worker's "20 0 * * *" cron: a benchmark cycle freezes the catalog
+# revision at start and fails validation if it changes mid-cycle.
 crons = ["15 2 * * SUN"]

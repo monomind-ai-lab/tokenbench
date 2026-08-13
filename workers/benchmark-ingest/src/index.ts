@@ -2634,6 +2634,7 @@ export default {
   ): Promise<void> {
     if (!env.INGEST_COORDINATOR) throw new Error('Benchmark ingest coordinator binding is required');
     const coordinator = env.INGEST_COORDINATOR.getByName('weekly-benchmarks');
-    await coordinator.start({ scheduledTime: controller.scheduledTime ?? Date.now() });
+    const scheduledTime = controller.scheduledTime ?? Date.now();
+    await coordinator.start({ scheduledTime });
   },
 };
