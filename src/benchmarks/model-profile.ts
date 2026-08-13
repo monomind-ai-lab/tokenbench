@@ -339,15 +339,37 @@ function metricIdentity(metric: BenchmarkMetric): string {
   return `${metric.metricKey}\u0000${metric.sourceId}\u0000${metric.methodology}\u0000${metric.unit}`;
 }
 
+/**
+ * Size of the ranked field a published rank is measured against.
+ *
+ * Rank and field size must describe one population. Counting only
+ * ranking-eligible rows while the rank itself comes from the source's full
+ * published cohort produced impossible pairs such as "#17 of 17" and "#33 of
+ * 32", and a spurious 0 percentile for merely uneligible rows.
+ *
+ * The observed field is a truncated window over a larger published cohort, so
+ * the highest published rank we can see is a lower bound on the real cohort
+ * size. When our observed rows cannot account for the rank, the field size is
+ * unknown rather than wrong, and the percentile stays unavailable.
+ */
 function rankFieldSize(metrics: readonly BenchmarkMetric[], metric: BenchmarkMetric): number {
-  return metrics.filter((candidate) => metricIdentity(candidate) === metricIdentity(metric)
-    && candidate.rankingEligible
+  const ranked = metrics.filter((candidate) => metricIdentity(candidate) === metricIdentity(metric)
     && Number.isSafeInteger(candidate.rank)
-    && (candidate.rank as number) > 0).length;
+    && (candidate.rank as number) > 0);
+  return ranked.reduce((highest, candidate) => Math.max(highest, candidate.rank as number), 0);
 }
 
+/**
+ * Relative field position for a published rank.
+ *
+ * The observed field is a truncated window over a larger published cohort, so
+ * the largest rank we can see is only a lower bound on the true cohort size. A
+ * model sitting exactly on that boundary is indistinguishable from a model
+ * whose peers were simply cut off by the window, and computing a percentile
+ * there yields a fabricated 0. Such a rank reports no percentile instead.
+ */
 function percentile(rank: number | null, fieldSize: number): number | null {
-  if (rank === null || fieldSize <= 1 || rank < 1 || rank > fieldSize) return null;
+  if (rank === null || fieldSize <= 1 || rank < 1 || rank >= fieldSize) return null;
   return Math.max(0, Math.min(100, 100 * (fieldSize - rank) / (fieldSize - 1)));
 }
 

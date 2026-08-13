@@ -164,6 +164,8 @@ describe('atomic model directory publication', () => {
     expect(windows.flatMap((window) => window.modelKeys)).toEqual(candidate.models.map((entry) => entry.modelKey));
     expect(windows.flatMap((window) => window.profiles).every((profile) =>
       profile.contentHash === hashModelProfileSnapshotJson(profile.profileJson))).toBe(true);
+    // Each 100-model D1 window carries only the ranks of the models it holds,
+    // and the weekly ranked list stops at the top 100.
     expect(windows[0]?.ranks).toHaveLength(100);
     expect(windows[1]?.ranks).toHaveLength(0);
   });
@@ -249,9 +251,9 @@ describe('atomic model directory publication', () => {
     expect(records[archive]?.sql).toContain('benchmark_model_revision_membership');
   });
 
-  it('caps weekly ranks at 100 and preserves first-week ownership', () => {
+  it('caps weekly ranks at the Popular Models top 100 and preserves first-week ownership', () => {
     const records: RecordedStatement[] = [];
-    const candidate = snapshot(101);
+    const candidate = snapshot(201);
 
     appendModelDirectoryPublicationStatements(
       [],
@@ -267,6 +269,8 @@ describe('atomic model directory publication', () => {
     expect(ranks?.sql).toContain('benchmark_revision');
     const encodedRanks = ranks?.values.at(-1);
     expect(typeof encodedRanks).toBe('string');
+    // The ranked list stays at 100 even though 201 models are ingested:
+    // benchmark_popular_model_ranks.rank is CHECK (rank BETWEEN 1 AND 100).
     expect(JSON.parse(String(encodedRanks))).toHaveLength(100);
     expect(String(encodedRanks)).toContain(WEEK_START);
     expect(ranks?.values.slice(0, -1)).toEqual([WEEK_START, 'rev-1']);
@@ -324,7 +328,7 @@ describe('atomic model directory publication', () => {
     expect(conflict?.sql).toContain('existing.model_key <> json_extract');
   });
 
-  it('computes percentile fields across every ranked peer metric', () => {
+  it('sizes the ranked field by the highest published rank, not the row count', () => {
     const records: RecordedStatement[] = [];
     const base = snapshot(3);
     const candidate: ActiveBenchmarkSnapshot = {
@@ -345,6 +349,9 @@ describe('atomic model directory publication', () => {
     const target = JSON.parse(profiles.find((profile) => profile.modelKey === candidate.models[0]?.modelKey)?.profileJson ?? '{}') as {
       categories?: Array<{ key: string; fieldSize: number | null }>;
     };
-    expect(target.categories?.find((category) => category.key === 'overall')?.fieldSize).toBe(2);
+    // One of three peer ranks is nulled, leaving published ranks #1 and #3.
+    // The field is 3 because rank #3 exists: counting surviving rows instead
+    // would report "#3 of 2" and a fabricated 0 percentile.
+    expect(target.categories?.find((category) => category.key === 'overall')?.fieldSize).toBe(3);
   });
 });

@@ -22,4 +22,24 @@ describe('ModelRadar', () => {
     expect(document.querySelector('.model-radar-evidence')).not.toBeNull();
     expect(document.querySelectorAll('.model-radar-point')).toHaveLength(3);
   });
+
+  it('distinguishes a measured last place from a missing axis', () => {
+    // A 0 percentile is a real measurement, but plotting it at the polygon
+    // centre makes it indistinguishable from an axis with no evidence.
+    render(<ModelRadar axes={[
+      { key: 'overall', label: 'Overall', percentile: 90, rank: 4, fieldSize: 31 },
+      { key: 'coding', label: 'Coding', percentile: 60, rank: 12, fieldSize: 31 },
+      { key: 'vision', label: 'Vision', percentile: 0, rank: 31, fieldSize: 31 },
+      { key: 'math', label: 'Math', percentile: null, rank: null, fieldSize: null },
+    ]} />);
+
+    // The measured last-place axis still reports its rank in the text list.
+    expect(screen.getByText(/Rank #31 of 31/)).toBeInTheDocument();
+    expect(screen.getByText('Math: Unavailable')).toBeInTheDocument();
+
+    // It must render a visible marker; only the unmeasured axis has none.
+    expect(document.querySelectorAll('.model-radar-point')).toHaveLength(3);
+    const measuredZero = document.querySelector('.model-radar-point-floor');
+    expect(measuredZero).not.toBeNull();
+  });
 });

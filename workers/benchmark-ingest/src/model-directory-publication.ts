@@ -295,7 +295,11 @@ function candidateInputs(
     const identityRows = metricsByIdentity.get(identity) ?? [];
     identityRows.push(metric);
     metricsByIdentity.set(identity, identityRows);
-    if (metric.rankingEligible && Number.isSafeInteger(metric.rank) && (metric.rank as number) > 0) {
+    // The ranked peer set sizes the field a published rank is measured
+    // against, so it must include every row carrying a published rank.
+    // Restricting it to ranking-eligible rows made the denominator smaller
+    // than the numerator and produced pairs such as "#17 of 17".
+    if (Number.isSafeInteger(metric.rank) && (metric.rank as number) > 0) {
       const rankedRows = rankedMetricsByIdentity.get(identity) ?? [];
       rankedRows.push(metric);
       rankedMetricsByIdentity.set(identity, rankedRows);

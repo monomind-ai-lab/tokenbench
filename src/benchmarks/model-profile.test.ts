@@ -189,6 +189,59 @@ describe('model profile contracts', () => {
     expect(profile.radar.find((axis) => axis.key === 'missing')).toMatchObject({ percentile: null, rank: null });
   });
 
+  it('never reports a rank beyond its own field size', () => {
+    // Production shape: a published rank drawn from the full upstream cohort
+    // while only a subset of that cohort is ranking-eligible in our window.
+    // Counting only eligible rows produced impossible pairs like "#17 of 17".
+    const snapshot = activeSnapshot();
+    const ineligiblePeers = [
+      model({ modelKey: 'benchlm:peer:delta', slug: 'delta', name: 'Delta', sourceModelId: 'peer/delta' }),
+      model({ modelKey: 'benchlm:peer:epsilon', slug: 'epsilon', name: 'Epsilon', sourceModelId: 'peer/epsilon' }),
+    ];
+    const vision = [
+      // The profile model ranks #17 in the published cohort but is not
+      // ranking-eligible, exactly like Claude Fable 5 on multimodalGrounded.
+      metric({
+        metricKey: 'benchlm:category:vision',
+        category: 'vision',
+        value: 63.3,
+        rawValue: null,
+        rank: 17,
+        rankingEligible: false,
+      }),
+      metric({
+        modelKey: 'benchlm:peer:delta',
+        sourceModelId: 'peer/delta',
+        metricKey: 'benchlm:category:vision',
+        category: 'vision',
+        value: 88,
+        rawValue: null,
+        rank: 1,
+      }),
+      metric({
+        modelKey: 'benchlm:peer:epsilon',
+        sourceModelId: 'peer/epsilon',
+        metricKey: 'benchlm:category:vision',
+        category: 'vision',
+        value: 70,
+        rawValue: null,
+        rank: 2,
+      }),
+    ];
+
+    const profile = buildModelProfileSnapshot({
+      ...snapshot,
+      models: [...snapshot.models, ...ineligiblePeers],
+      metrics: [...snapshot.metrics, ...vision],
+    }, 'benchlm:openai:gpt-5-6-sol');
+
+    const category = profile.categories.find((row) => row.key === 'vision');
+    expect(category?.rank).toBe(17);
+    expect(category?.fieldSize === null || category!.fieldSize >= 17).toBe(true);
+    // A last-place artifact of a mismatched denominator is not a measurement.
+    expect(category?.percentile).not.toBe(0);
+  });
+
   it('serializes exact UTF-8 profile JSON and validates it at the byte bound', () => {
     const profile = buildModelProfileSnapshot(activeSnapshot(), 'benchlm:openai:gpt-5-6-sol');
     const serialized = serializeModelProfileSnapshot(profile);

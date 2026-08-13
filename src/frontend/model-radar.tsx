@@ -8,6 +8,19 @@ const SIZE = 360;
 const CENTER = SIZE / 2;
 const RADIUS = 132;
 const LABEL_RADIUS = RADIUS + 16;
+/**
+ * Smallest plotted radius for a measured axis.
+ *
+ * A 0 percentile is real evidence, but plotting it at the exact centre makes
+ * it visually identical to an axis with no evidence at all. A measured floor
+ * keeps the marker visible and readable without implying a higher value.
+ */
+const MEASURED_FLOOR_RADIUS = 6;
+
+function radiusFor(percentile: number): number {
+  const bounded = Math.max(0, Math.min(100, percentile));
+  return MEASURED_FLOOR_RADIUS + (RADIUS - MEASURED_FLOOR_RADIUS) * bounded / 100;
+}
 
 function point(index: number, count: number, radius: number) {
   const angle = -Math.PI / 2 + index * 2 * Math.PI / count;
@@ -32,7 +45,7 @@ export function ModelRadar({ axes }: ModelRadarProps) {
   const evidencePoints = axes
     .map((axis, index) => ({ axis, index }))
     .filter(({ axis }) => axis.percentile !== null)
-    .map(({ axis, index }) => point(index, count, RADIUS * Math.max(0, Math.min(100, axis.percentile ?? 0)) / 100));
+    .map(({ axis, index }) => point(index, count, radiusFor(axis.percentile ?? 0)));
   const seriesPoints = evidencePoints.length >= 3
     ? evidencePoints.map(({ x, y }) => `${x.toFixed(3)},${y.toFixed(3)}`).join(' ')
     : '';
@@ -49,10 +62,16 @@ export function ModelRadar({ axes }: ModelRadarProps) {
         {axes.map((axis, index) => {
           const label = point(index, count, LABEL_RADIUS);
           const available = axis.percentile !== null;
-          const valuePoint = point(index, count, RADIUS * Math.max(0, Math.min(100, axis.percentile ?? 0)) / 100);
+          const valuePoint = point(index, count, radiusFor(axis.percentile ?? 0));
           return <g key={axis.key}>
             <text x={label.x} y={label.y} textAnchor="middle" className="model-radar-label">{axis.label}</text>
-            {available ? <circle cx={valuePoint.x} cy={valuePoint.y} r="3" className="model-radar-point" aria-hidden="true" /> : null}
+            {available ? <circle
+              cx={valuePoint.x}
+              cy={valuePoint.y}
+              r="3"
+              className={axis.percentile === 0 ? 'model-radar-point model-radar-point-floor' : 'model-radar-point'}
+              aria-hidden="true"
+            /> : null}
           </g>;
         })}
       </svg>
