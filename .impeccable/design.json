@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "title": "Design System: TokenBench",
+  "extensions": {
+    "colorMeta": {
+      "plum": { "role": "primary", "displayName": "Ledger Plum", "canonical": "#741a66" },
+      "plum-strong": { "role": "primary", "displayName": "Plum Ink", "canonical": "#5d1552" },
+      "plum-soft": { "role": "primary", "displayName": "Plum Wash", "canonical": "#f2ddec" },
+      "light-canvas": { "role": "neutral", "displayName": "Pale Slate Canvas", "canonical": "#e9edf4" },
+      "light-surface": { "role": "neutral", "displayName": "Evidence White", "canonical": "#ffffff" },
+      "dark-canvas": { "role": "neutral", "displayName": "Dark Ledger Canvas", "canonical": "#0c0c0c" },
+      "dark-surface": { "role": "neutral", "displayName": "Dark Evidence Surface", "canonical": "#1d1d1d" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Responsive evidence-surface and directory heroes." },
+      "body": { "displayName": "Body", "purpose": "Primary reading voice." },
+      "label": { "displayName": "Evidence Label", "purpose": "Metadata, revisions, statuses, measurements, and table headers." }
+    },
+    "shadows": [
+      { "name": "panel-light", "value": "0 4px 18px rgba(31, 45, 64, 0.08)", "purpose": "Raised shell panels in light mode." },
+      { "name": "panel-dark", "value": "0 8px 24px rgba(0, 0, 0, 0.45)", "purpose": "Raised shell panels in dark mode." },
+      { "name": "dialog", "value": "0 24px 80px rgba(0, 0, 0, 0.32)", "purpose": "Modal dialogs." }
+    ],
+    "motion": [
+      { "name": "micro-fast", "value": "120ms ease", "purpose": "Chart-point emphasis." },
+      { "name": "control-state", "value": "150ms ease", "purpose": "Choice, preset, border, and background transitions." },
+      { "name": "reduced-motion", "value": "0.001ms", "purpose": "Effective transition removal when reduced motion is requested." }
+    ],
+    "breakpoints": [
+      { "name": "narrow", "value": "380px" },
+      { "name": "mobile", "value": "768px" },
+      { "name": "navigation-collapse", "value": "900px" },
+      { "name": "table-to-card", "value": "1024px" }
+    ]
+  }
+}
