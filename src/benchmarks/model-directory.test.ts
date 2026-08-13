@@ -18,7 +18,62 @@ describe('model directory contracts', () => {
 
   it('builds one-segment canonical model paths', () => {
     expect(modelPath('gpt-5-6-sol')).toBe('/models/gpt-5-6-sol/');
-    expect(modelPath('model%20name')).toBe('/models/model%2520name/');
+    // A slug that already carries valid percent escapes is passed through, so
+    // one decodeURIComponent in the route handler returns the stored slug.
+    expect(modelPath('model%20name')).toBe('/models/model%20name/');
+  });
+
+  describe('modelPath percent-encoded slugs', () => {
+    it('does not re-encode a slug that already contains percent escapes', () => {
+      // Directory slugs are built by sourceSpecificModelKey(), which already
+      // encodeURIComponent()s the upstream model id. Encoding again produced
+      // %252F and a live 404 for ~3,079 sitemap URLs.
+      expect(modelPath('source-litellm-libertai%2Fgemma-4-31b-it'))
+        .toBe('/models/source-litellm-libertai%2Fgemma-4-31b-it/');
+    });
+
+    it('emits the stored slug verbatim as the single route segment', () => {
+      // The stored slug IS the wire form: /api/benchmarks/models/<slug> and
+      // /models/<slug>/ both return 200 for this exact string in production.
+      // Decoding it once yields the upstream id ("…1024-x-1024/dall-e-2"),
+      // which is why the segment must not be encoded a second time.
+      const stored = 'source-litellm-1024-x-1024%2Fdall-e-2';
+      expect(modelPath(stored)).toBe(`/models/${stored}/`);
+      expect(decodeURIComponent(stored)).toBe('source-litellm-1024-x-1024/dall-e-2');
+    });
+
+    it('still encodes a raw slug that has never been encoded', () => {
+      expect(modelPath('claude fable')).toBe('/models/claude%20fable/');
+    });
+
+    it('still rejects a slug containing a literal path separator', () => {
+      expect(() => modelPath('a/b')).toThrow('model slug must be one route segment');
+    });
+  });
+
+  describe('modelPath against real production slug shapes', () => {
+    // Sampled from benchmark_model_directory / the live sitemap on 2026-08-13.
+    const productionSlugs = [
+      'gemma-4-31b',
+      'claude-fable',
+      'source-litellm-bedrock_mantle%2Fgoogle.gemma-4-31b',
+      'source-litellm-libertai%2Fgemma-4-31b-it',
+      'source-litellm-1024-x-1024%2F50-steps%2Fbedrock%2Famazon.nova-canvas-v1%3A0',
+      'source-openrouter-cohere%2Fnorth-mini-code%3Afree',
+      'source-openrouter-google%2Flyria-3-pro-preview',
+    ];
+
+    it('emits the stored slug as the route segment for every shape', () => {
+      for (const slug of productionSlugs) {
+        expect(modelPath(slug)).toBe(`/models/${slug}/`);
+      }
+    });
+
+    it('never emits a double-encoded escape', () => {
+      for (const slug of productionSlugs) {
+        expect(modelPath(slug)).not.toMatch(/%25[0-9A-Fa-f]{2}/u);
+      }
+    });
   });
 
   it('rejects unsafe model route slugs', () => {

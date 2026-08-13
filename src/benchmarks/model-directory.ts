@@ -93,13 +93,28 @@ export function isModelSlugRouteSafe(slug: unknown): slug is string {
   }
 }
 
+/** True when every percent sequence in the slug is already a valid escape. */
+function isAlreadyPercentEncoded(slug: string): boolean {
+  if (!slug.includes('%')) return false;
+  try {
+    return decodeURIComponent(slug) !== slug;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Builds the sole canonical internal model link. Encoding happens exactly once
  * here, so callers never concatenate untrusted slug text into a route.
+ *
+ * Directory slugs produced by `sourceSpecificModelKey()` already carry
+ * `encodeURIComponent`-escaped upstream model ids, so encoding again produced
+ * `%252F` and a 404 for every such row. A slug that already decodes to
+ * something different is emitted as-is; a raw slug is still encoded once.
  */
 export function modelPath(slug: string): string {
   if (!isModelSlugRouteSafe(slug)) throw new Error(MODEL_SLUG_ERROR);
-  return `/models/${encodeURIComponent(slug)}/`;
+  return `/models/${isAlreadyPercentEncoded(slug) ? slug : encodeURIComponent(slug)}/`;
 }
 
 /** Returns Monday 00:00:00.000Z for the UTC week containing a timestamp. */
