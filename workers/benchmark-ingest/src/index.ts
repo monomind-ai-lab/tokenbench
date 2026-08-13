@@ -2632,8 +2632,15 @@ export { BenchmarkIngestCoordinator } from './coordinator';
  * forced cycle; the weekly `BENCHMARK_CRON` never forces. Remove the trigger
  * once the forced cycle publishes. The Worker still exposes no public refresh
  * route: `fetch` remains 405.
+ *
+ * The window matters. A benchmark cycle freezes the active catalog revision at
+ * start, and `validateCompleteBenchmarkCandidate` aborts the publication if
+ * that revision changes mid-cycle. The catalog Worker's own cron is
+ * `20 0 * * *` and a benchmark cycle takes roughly 55 minutes, so a forced
+ * start must not fall between about 23:20 and 00:25 UTC. A first attempt at
+ * 00:10 UTC failed for exactly this reason.
  */
-export const MAINTENANCE_FORCE_CRON = '10 0 13 8 *';
+export const MAINTENANCE_FORCE_CRON = '20 1 13 8 *';
 
 export default {
   async fetch(
