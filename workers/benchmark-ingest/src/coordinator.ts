@@ -221,7 +221,25 @@ export interface BenchmarkCheckpoint {
 // ---------------------------------------------------------------------------
 
 export const BENCHMARK_CYCLE_EXPIRY_MS = 24 * 60 * 60 * 1_000;
-export const BENCHMARK_STEP_DELAY_MS = 15_000;
+
+/**
+ * Delay between two purely internal steps (D1 staging, derivation, publish).
+ *
+ * These steps call no upstream source, so the only reason to wait was the
+ * free-tier CPU budget. Measured on cycle 111cf1e4: 172 of 207 steps were
+ * internal, so a flat 15s delay spent ~43 minutes idling for no external
+ * reason. The account is now on Workers Paid, where the alarm CPU ceiling is
+ * far higher than a single staging step needs.
+ */
+export const BENCHMARK_STEP_DELAY_MS = 500;
+
+/**
+ * Delay between two steps that call an upstream source. Deliberately unchanged
+ * from the proven pacing: this is politeness toward BenchLM, LiteLLM, and
+ * LMArena, not a CPU-budget concession, so the paid plan does not justify
+ * shortening it.
+ */
+export const BENCHMARK_UPSTREAM_STEP_DELAY_MS = 15_000;
 
 /** Persisted phase order used by operations and the production-scale restart harness. */
 export const BENCHMARK_CYCLE_PHASES = [
@@ -253,6 +271,16 @@ const RETRYABLE_PHASES: Record<string, true> = {
   'retrieve-lmarena-pages': true,
   'normalize-sources': true,
 };
+
+/**
+ * Returns the delay to schedule after completing a step in `phase`. Upstream
+ * phases keep the polite 15s spacing; internal phases advance promptly.
+ */
+export function stepDelayMsFor(phase: string): number {
+  return RETRYABLE_PHASES[phase] === true
+    ? BENCHMARK_UPSTREAM_STEP_DELAY_MS
+    : BENCHMARK_STEP_DELAY_MS;
+}
 
 // ---------------------------------------------------------------------------
 // Step results
@@ -1409,9 +1437,17 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
       return;
     }
 
-    const keepsAlarm = result.kind === 'advanced' || result.kind === 'retry';
-    if (keepsAlarm) await this.durable.setAlarm((result as AdvancedResult | RetryResult).alarmAt);
-    else await this.durable.deleteAlarm();
+    // Step handlers schedule with the internal delay. Re-pace the alarm here
+    // from the phase the cycle is entering, so upstream phases keep the polite
+    // 15s spacing while internal staging advances promptly. Retry backoff is
+    // deliberately left exactly as the retry path computed it.
+    if (result.kind === 'advanced') {
+      await this.durable.setAlarm(this.deps.now() + stepDelayMsFor(result.cycle.phase));
+    } else if (result.kind === 'retry') {
+      await this.durable.setAlarm(result.alarmAt);
+    } else {
+      await this.durable.deleteAlarm();
+    }
 
     const status = result.kind === 'advanced' ? 'completed' : result.kind === 'retry' ? 'retry_wait' : result.status;
     this.deps.log(logRecord('benchmark_cycle_step', result.cycle, {

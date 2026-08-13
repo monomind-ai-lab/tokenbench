@@ -16,8 +16,10 @@ import {
 import {
   BENCHMARK_CYCLE_EXPIRY_MS,
   BENCHMARK_STEP_DELAY_MS,
+  BENCHMARK_UPSTREAM_STEP_DELAY_MS,
   BenchmarkIngestCoordinator,
   createBenchmarkCycle,
+  stepDelayMsFor,
   type BenchmarkIngestEnv,
   type CoordinatorDependencies,
 } from './coordinator';
@@ -242,6 +244,28 @@ async function fireAlarm(durable: ReturnType<typeof storage>, env: BenchmarkInge
 // ---------------------------------------------------------------------------
 // Cycle identity
 // ---------------------------------------------------------------------------
+
+describe('step pacing', () => {
+  it('keeps a polite delay only for phases that call an upstream source', () => {
+    for (const phase of ['retrieve-benchlm', 'retrieve-litellm', 'retrieve-lmarena-revision', 'retrieve-lmarena-pages', 'normalize-sources'] as const) {
+      expect(stepDelayMsFor(phase)).toBe(BENCHMARK_UPSTREAM_STEP_DELAY_MS);
+    }
+  });
+
+  it('does not idle between purely internal staging steps', () => {
+    // 172 of the 207 steps in cycle 111cf1e4 were internal D1 staging. At the
+    // former flat 15s delay that was ~43 minutes of pure idle with no upstream
+    // request to be polite to.
+    for (const phase of ['stage-facts', 'stage-profiles', 'stage-cache', 'derive', 'validate-candidate', 'publish', 'receipt'] as const) {
+      expect(stepDelayMsFor(phase)).toBe(BENCHMARK_STEP_DELAY_MS);
+      expect(stepDelayMsFor(phase)).toBeLessThan(BENCHMARK_UPSTREAM_STEP_DELAY_MS);
+    }
+  });
+
+  it('keeps the upstream delay unchanged from the proven free-tier pacing', () => {
+    expect(BENCHMARK_UPSTREAM_STEP_DELAY_MS).toBe(15_000);
+  });
+});
 
 describe('createBenchmarkCycle', () => {
   it('creates a UUID-owned 24-hour benchmark cycle for one ISO-week cadence key', () => {
