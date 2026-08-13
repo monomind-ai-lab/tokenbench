@@ -2619,29 +2619,6 @@ export async function refreshBenchmarkRevision(
 
 export { BenchmarkIngestCoordinator } from './coordinator';
 
-/**
- * Dedicated one-shot maintenance cadence.
- *
- * `BenchmarkIngestCoordinator.start()` dedupes on an ISO-week cadence key, so a
- * week whose receipt is already published can never re-materialize the
- * `api_response_cache` rows from the weekly cron. When a corrected derivation
- * ships mid-week, the cache would otherwise keep serving rows built by the old
- * logic until the following ISO week.
- *
- * Adding this exact expression to the Worker's cron triggers requests one
- * forced cycle; the weekly `BENCHMARK_CRON` never forces. Remove the trigger
- * once the forced cycle publishes. The Worker still exposes no public refresh
- * route: `fetch` remains 405.
- *
- * The window matters. A benchmark cycle freezes the active catalog revision at
- * start, and `validateCompleteBenchmarkCandidate` aborts the publication if
- * that revision changes mid-cycle. The catalog Worker's own cron is
- * `20 0 * * *` and a benchmark cycle takes roughly 55 minutes, so a forced
- * start must not fall between about 23:20 and 00:25 UTC. A first attempt at
- * 00:10 UTC failed for exactly this reason.
- */
-export const MAINTENANCE_FORCE_CRON = '20 1 13 8 *';
-
 export default {
   async fetch(
     _request: Request,
@@ -2658,10 +2635,6 @@ export default {
     if (!env.INGEST_COORDINATOR) throw new Error('Benchmark ingest coordinator binding is required');
     const coordinator = env.INGEST_COORDINATOR.getByName('weekly-benchmarks');
     const scheduledTime = controller.scheduledTime ?? Date.now();
-    if (controller.cron === MAINTENANCE_FORCE_CRON) {
-      await coordinator.start({ scheduledTime, force: true });
-      return;
-    }
     await coordinator.start({ scheduledTime });
   },
 };

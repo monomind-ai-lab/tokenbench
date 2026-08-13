@@ -127,7 +127,7 @@ function representativePrice(entry: LeaderboardEntry): number | null {
   const price = entry.primaryPrice;
   if (price === null
     || price.modelKey !== entry.model.modelKey
-    || !isPrimaryHostedRoute(price)
+    || !isPrimaryHostedRoute(price, entry.model.sourceId)
     || !isNonNegativeFinite(price.inputUsdPerMillion)
     || !isNonNegativeFinite(price.outputUsdPerMillion)) return null;
   const result = (price.inputUsdPerMillion + price.outputUsdPerMillion) / 2;

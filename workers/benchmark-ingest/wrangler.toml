@@ -27,11 +27,9 @@ type = "durable-object"
 storage = "sqlite"
 
 [triggers]
-# "20 1 13 8 *" is the temporary one-shot maintenance trigger (MAINTENANCE_FORCE_CRON
-# in src/index.ts). It forces one cycle so the corrected price join re-materializes
-# the api_response_cache rows that the ISO-week dedupe would otherwise block until
-# 2026-W34. Remove this entry and redeploy once the forced cycle publishes.
-#
-# Must not overlap the catalog Worker's "20 0 * * *" cron: a benchmark cycle
-# freezes the catalog revision at start and fails validation if it changes.
-crons = ["15 2 * * SUN", "20 1 13 8 *"]
+# A one-shot maintenance trigger can be added here temporarily to force a
+# re-materialization when a corrected derivation ships mid-week (the coordinator
+# dedupes on an ISO-week cadence key). Such a trigger must not overlap the
+# catalog Worker's "20 0 * * *" cron: a benchmark cycle freezes the catalog
+# revision at start and fails validation if it changes mid-cycle.
+crons = ["15 2 * * SUN"]

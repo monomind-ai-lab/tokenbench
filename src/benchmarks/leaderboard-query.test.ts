@@ -241,6 +241,54 @@ describe('leaderboard query contract', () => {
     expect(filterLeaderboardEntries([incomplete], state)).toEqual([]);
   });
 
+  it('keeps representative prices published by the model own source', () => {
+    const sameSource = entry({
+      primaryPrice: {
+        ...entry().primaryPrice!,
+        sourceId: 'benchlm',
+        providerId: 'benchlm',
+        routeId: 'benchlm:model-a',
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 9,
+      },
+      blendedCostPerMillion: 2,
+    });
+    const state = {
+      ...DEFAULT_STATE,
+      priceMode: 'representative',
+      priceMinimum: 5,
+      priceMaximum: 5,
+    } as LeaderboardQueryState & { readonly priceMode: 'representative' };
+
+    expect(filterLeaderboardEntries([sameSource], state)).toHaveLength(1);
+    expect(createLeaderboardQueryCapabilities(
+      LEADERBOARD_DEFINITIONS['llm-coding'],
+      [sameSource],
+    ).priceValues).toEqual([5]);
+  });
+
+  it('excludes representative prices from a corroborating cross-source route', () => {
+    const crossSource = entry({
+      primaryPrice: {
+        ...entry().primaryPrice!,
+        sourceId: 'litellm',
+        providerId: 'litellm',
+        routeId: 'litellm:model-a',
+        inputUsdPerMillion: 1,
+        outputUsdPerMillion: 9,
+      },
+      blendedCostPerMillion: 2,
+    });
+    const state = {
+      ...DEFAULT_STATE,
+      priceMode: 'representative',
+      priceMinimum: 5,
+      priceMaximum: 5,
+    } as LeaderboardQueryState & { readonly priceMode: 'representative' };
+
+    expect(filterLeaderboardEntries([crossSource], state)).toEqual([]);
+  });
+
   it('publishes sorted unique representative prices from the complete projection', () => {
     const definition = LEADERBOARD_DEFINITIONS['llm-coding'];
     const prices = [

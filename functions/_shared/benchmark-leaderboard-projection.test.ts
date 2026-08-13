@@ -620,6 +620,85 @@ describe('complete leaderboard projection cache reader', () => {
     )).toThrow(/route invariants/i);
   });
 
+  it('accepts value rows priced by the model own source rather than only openrouter', () => {
+    const fixture = entry();
+    const overallMetric = {
+      ...fixture.metric!,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+    };
+    const sameSourceEntry: LeaderboardEntry = {
+      ...fixture,
+      metric: overallMetric,
+      metrics: [overallMetric],
+      primaryPrice: {
+        ...fixture.primaryPrice!,
+        sourceId: 'benchlm',
+        providerId: 'benchlm',
+        routeId: 'benchlm:alpha',
+        sourceArtifactId: 'benchlm-pricing',
+      },
+      blendedCostPerMillion: 2,
+      onValueFrontier: true,
+    };
+    const base = projection();
+    const sameSourceProjection: CachedLeaderboardPaginationProjection = {
+      ...base,
+      leaderboard: {
+        key: 'llm-value',
+        profile: 'balanced',
+        definition: LEADERBOARD_DEFINITIONS['llm-value'],
+        entries: [sameSourceEntry],
+      },
+      entries: [sameSourceEntry],
+    };
+
+    expect(parseCompleteLeaderboardProjection(
+      JSON.stringify(sameSourceProjection),
+      'llm-value',
+      'balanced',
+    ).entries).toHaveLength(1);
+  });
+
+  it('still rejects a cross-source price route that the model source does not publish', () => {
+    const fixture = entry();
+    const overallMetric = {
+      ...fixture.metric!,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+    };
+    const crossSourceEntry: LeaderboardEntry = {
+      ...fixture,
+      metric: overallMetric,
+      metrics: [overallMetric],
+      primaryPrice: {
+        ...fixture.primaryPrice!,
+        sourceId: 'litellm',
+        providerId: 'litellm',
+        routeId: 'litellm:alpha',
+        sourceArtifactId: 'litellm-pricing',
+      },
+      blendedCostPerMillion: 2,
+    };
+    const base = projection();
+    const crossSourceProjection: CachedLeaderboardPaginationProjection = {
+      ...base,
+      leaderboard: {
+        key: 'llm-value',
+        profile: 'balanced',
+        definition: LEADERBOARD_DEFINITIONS['llm-value'],
+        entries: [crossSourceEntry],
+      },
+      entries: [crossSourceEntry],
+    };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(crossSourceProjection),
+      'llm-value',
+      'balanced',
+    )).toThrow(/route invariants/i);
+  });
+
   it('accepts valid materialized entry invariants for every route kind', () => {
     const base = projection();
     const fixture = entry();

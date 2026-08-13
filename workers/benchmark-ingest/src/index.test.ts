@@ -5,7 +5,6 @@ import type { BenchmarkComparisonPair, NormalizedSourceBatch } from '../../../sr
 import { BENCHMARK_CRON } from '../../../src/ingestion/cadence';
 import * as benchmarkIngest from './index';
 import worker, {
-  MAINTENANCE_FORCE_CRON,
   buildPublicationStatementPlan,
   buildUnchangedPublicationStatementPlan,
   deriveComparisonPairs,
@@ -1428,7 +1427,10 @@ describe('atomic benchmark ingestion', () => {
         key: 'llm-overall',
         profile: 'balanced',
         pagination: { limit: 50 },
-        capabilities: { dataReady: true, supportsPrice: false, priceValues: [] },
+        // Model A is a BenchLM model priced by BenchLM's own pricing artifact
+        // (2.5 in / 10 out), which is same-source evidence rather than a
+        // cross-source guess, so it is a usable representative rate: 6.25.
+        capabilities: { dataReady: true, supportsPrice: true, priceValues: [6.25] },
       },
     });
     expect(JSON.parse(estimatedFresh.body)).toMatchObject({
@@ -1436,7 +1438,7 @@ describe('atomic benchmark ingestion', () => {
         key: 'llm-overall',
         profile: 'balanced',
         pagination: { limit: 50 },
-        capabilities: { dataReady: true, supportsPrice: false, priceValues: [] },
+        capabilities: { dataReady: true, supportsPrice: true, priceValues: [6.25] },
       },
     });
     expect(JSON.parse(paginationProjection.body)).toMatchObject({
@@ -2643,23 +2645,7 @@ describe('atomic benchmark ingestion', () => {
     expect(response.headers.get('allow')).toBeNull();
   });
 
-  it('forces one re-materialization only for the dedicated maintenance cron', async () => {
-    const { env } = seededEnvironment();
-    const start = vi.fn(async () => undefined);
-    const scheduledEnv = env as Parameters<typeof worker.scheduled>[1];
-    scheduledEnv.INGEST_COORDINATOR = { getByName: () => ({ start }) };
-    const scheduledTime = Date.parse('2026-08-13T00:20:00.000Z');
-
-    await worker.scheduled(
-      { cron: MAINTENANCE_FORCE_CRON, scheduledTime, noRetry: () => undefined },
-      scheduledEnv,
-      { waitUntil: () => undefined },
-    );
-
-    expect(start).toHaveBeenCalledWith({ scheduledTime, force: true });
-  });
-
-  it('never forces a re-materialization from the weekly cadence cron', async () => {
+  it('never forces a re-materialization from any scheduled cron', async () => {
     const { env } = seededEnvironment();
     const startCalls: { scheduledTime: number; force?: boolean }[] = [];
     const start = vi.fn(async (input: { scheduledTime: number; force?: boolean }) => {

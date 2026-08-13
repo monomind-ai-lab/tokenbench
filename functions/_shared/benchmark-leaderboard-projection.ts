@@ -224,7 +224,7 @@ function hasPriceInvariants(
       && entry.contextWindowTokens === normalizedContextWindow(entry.model.contextWindowTokens);
   }
   if (price.modelKey !== entry.model.modelKey
-    || !isPrimaryHostedRoute(price)
+    || !isPrimaryHostedRoute(price, entry.model.sourceId)
     || price.inputUsdPerMillion === null
     || price.outputUsdPerMillion === null) return false;
   const priceProfile = definition.kind === 'value' || definition.kind === 'pricing-context' ? profile : 'outputHeavy';
