@@ -33,7 +33,7 @@ describe('generateGuidePages', () => {
     for (const html of [hub, article]) {
       expect(html).toContain('id="page-content"');
       expect(html).toContain('tabindex="-1"');
-      expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
+      expect(html).toContain('href="/cost/calculator/#calculator"');
       expect(html).not.toContain('href="/#calculator"');
     }
   });
@@ -49,10 +49,11 @@ describe('generateGuidePages', () => {
 
       expect(html).toContain('TokenBench');
       expect(html).not.toContain('AI Cost Engine');
-      expect(html).toContain(`<link rel="canonical" href="https://tokenbench.monomind.one/guides/${slug}/">`);
+      expect(html).toContain(`<link rel="canonical" href="https://tokenbench.monomind.one/articles/guides/${slug}/">`);
       expect(html).toContain('"@type":"Article"');
       expect(html).toContain('"@type":"BreadcrumbList"');
-      expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
+      expect(html).toContain('href="/cost/calculator/#calculator"');
+      expect(html).toContain('"item":"https://tokenbench.monomind.one/articles/guides/"');
       for (const path of paths) expect(html).toContain(`href="${path}"`);
     }
   });

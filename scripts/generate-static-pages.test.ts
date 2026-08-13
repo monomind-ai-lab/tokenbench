@@ -42,6 +42,7 @@ describe('crawlable static-page generator', () => {
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
     const guide = await readFile(join(root, 'articles/guides/track-claude-code-usage/index.html'), 'utf8');
+    const tools = await readFile(join(root, 'tools/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
     expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
@@ -91,6 +92,9 @@ describe('crawlable static-page generator', () => {
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
     expect(guide).toContain('https://tokenbench.monomind.one/articles/guides/track-claude-code-usage/');
+
+    expect(tools).toContain('href="/cost/calculator/"');
+    expect(tools).not.toContain('href="/cost/breakeven/"');
 
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/cost/calculator/</loc>');
     expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');

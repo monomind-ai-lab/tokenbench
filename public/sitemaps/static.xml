@@ -1,14 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://tokenbench.monomind.one</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/track-claude-code-usage/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/monitor-openai-codex-usage/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/openrouter-guide-model-routing-cost-controls/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/legitimate-free-ai-api-access-credits/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/reduce-llm-api-costs-caching-batch-output-limits/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/cost/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/cost/calculator/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/cost/breakeven/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/guides/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/guides/track-claude-code-usage/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/guides/monitor-openai-codex-usage/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/guides/openrouter-guide-model-routing-cost-controls/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/guides/legitimate-free-ai-api-access-credits/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/articles/guides/reduce-llm-api-costs-caching-batch-output-limits/</loc></url>
   <url><loc>https://tokenbench.monomind.one/tools/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc></url>
   <url><loc>https://tokenbench.monomind.one/llm-price-performance/</loc></url>
   <url><loc>https://tokenbench.monomind.one/compare/</loc></url>
   <url><loc>https://tokenbench.monomind.one/models/</loc></url>

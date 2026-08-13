@@ -356,8 +356,10 @@ export default function App() {
   const route = matchRoute(window.location.pathname);
 
   if (route.kind === 'home') return <HomeRoute />;
+  if (route.kind === 'cost') return <ToolsRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
+  if (route.kind === 'breakeven') return <CalculatorPage />;
   if (route.kind === 'pricePerformance') return <PricePerformanceRoute />;
   if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;

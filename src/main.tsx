@@ -48,9 +48,9 @@ function initialModelProfileViewModel() {
 }
 
 const route = matchRoute(window.location.pathname);
-const RootApp = route.kind === 'guides'
+const RootApp = route.kind === 'articles' || route.kind === 'guides' || route.kind === 'insights'
   ? GuidesApp
-  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'methodologyBenchAlign' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
+  : route.kind === 'home' || route.kind === 'cost' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'breakeven' || route.kind === 'methodologyBenchAlign' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
     ? App
     : null;
 

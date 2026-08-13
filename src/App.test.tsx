@@ -6,7 +6,7 @@ import './index.css';
 
 describe('calculator application flow', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
+    window.history.replaceState({}, '', '/cost/calculator/');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(FRONTEND_TEST_CATALOG), {
       status: 200,
       headers: { 'content-type': 'application/json', etag: `"${FRONTEND_TEST_CATALOG.revision}"` },
@@ -21,5 +21,20 @@ describe('calculator application flow', () => {
     expect(screen.getByText('Advanced model mapping')).toBeInTheDocument();
     expect((await screen.findAllByText(/token-equivalent basis/)).length).toBeGreaterThan(0);
     expect((await screen.findAllByText('Capacity evidence')).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the cost directory and breakeven route within truthful cost experiences', async () => {
+    window.history.replaceState({}, '', '/cost/');
+    const { unmount } = render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'AI cost decision tools' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /open subscription vs. api calculator/i })).toHaveAttribute('href', '/cost/calculator/');
+    unmount();
+
+    window.history.replaceState({}, '', '/cost/breakeven/');
+    render(<App />);
+
+    expect(await screen.findByText('Breakeven messages per day')).toBeInTheDocument();
+    expect(screen.getByText('Breakeven monthly tokens')).toBeInTheDocument();
   });
 });

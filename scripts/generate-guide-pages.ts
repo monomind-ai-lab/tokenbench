@@ -82,7 +82,7 @@ function articleStructuredData(guide: GuideArticle): unknown[] {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: SITE_CONFIG.name, item: SITE_CONFIG.origin },
-        { '@type': 'ListItem', position: 2, name: 'Guides', item: `${SITE_CONFIG.origin}/guides/` },
+        { '@type': 'ListItem', position: 2, name: 'Guides', item: `${SITE_CONFIG.origin}/articles/guides/` },
         { '@type': 'ListItem', position: 3, name: guide.title, item: metadata.canonical },
       ],
     },

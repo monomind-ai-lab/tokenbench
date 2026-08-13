@@ -11,8 +11,8 @@ const parseModelDirectoryEnvelopeMock = vi.hoisted(() => vi.fn());
 const parsePricePerformanceEnvelopeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-dom/client', () => ({ createRoot: createRootMock, hydrateRoot: hydrateRootMock }));
-vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null, ModelProfileApp: () => null, PricePerformanceRoute: () => null }));
-vi.mock('./GuidesApp.tsx', () => ({ default: () => null }));
+vi.mock('./App.tsx', () => ({ default: () => 'Cost experience', ComparisonDetailApp: () => null, ModelProfileApp: () => null, PricePerformanceRoute: () => null }));
+vi.mock('./GuidesApp.tsx', () => ({ default: () => window.location.pathname === '/articles/insights/' ? 'Insights experience' : 'Articles experience' }));
 vi.mock('./pages/models-page', () => ({ ModelsApp: () => null }));
 vi.mock('./frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
 vi.mock('./frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
@@ -123,6 +123,23 @@ describe('browser entrypoint', () => {
     expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
     expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
+
+  it.each([
+    ['/cost/', 'Cost experience'],
+    ['/cost/calculator/', 'Cost experience'],
+    ['/cost/breakeven/', 'Cost experience'],
+    ['/articles/', 'Articles experience'],
+    ['/articles/insights/', 'Insights experience'],
+  ])('mounts the intended experience at %s', async (pathname, expectedExperience) => {
+      window.history.replaceState({}, '', pathname);
+
+      await import('./main.tsx');
+
+      expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
+      expect(rootRenderer).toHaveBeenCalledTimes(1);
+      const rendered = (rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode;
+      expect(renderToStaticMarkup(rendered)).toContain(expectedExperience);
+    });
   it('hydrates the models directory from its validated server payload without refetching', async () => {
     document.body.innerHTML = '<div id="root"><main data-server-models>Popular models</main></div><script id="models-initial-data" type="application/json">{"revision":"benchlm-r1"}</script>';
     window.history.replaceState({}, '', '/models/');
