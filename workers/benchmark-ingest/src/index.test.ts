@@ -6,6 +6,7 @@ import { BENCHMARK_CRON } from '../../../src/ingestion/cadence';
 import * as benchmarkIngest from './index';
 import worker, {
   BENCHMARK_CACHE_REPUBLISH_CRON,
+  buildCacheOnlyRepublishStatementPlan,
   buildPublicationStatementPlan,
   buildUnchangedPublicationStatementPlan,
   deriveComparisonPairs,
@@ -1257,6 +1258,104 @@ describe('atomic benchmark ingestion', () => {
     expect(directory).toBeDefined();
     expect(week?.values[0]).toBe('2026-08-10T00:00:00.000Z');
     expect(ranks).toBeDefined();
+  });
+
+  it('republishes only the API cache, never same-revision directory or profile rows', () => {
+    // A cache-only republish reruns derivation for the *already active*
+    // revision. Same-revision profile snapshots are immutable
+    // (ON CONFLICT(model_key, revision) DO NOTHING), so emitting directory,
+    // profile, membership, archive, or weekly-rank statements here would be
+    // silently ineffective while looking like a repair. Profile/field-size
+    // fixes need a newly published revision instead.
+    const previous: RevisionRow = {
+      revision: 'benchmark-r0', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: `sha256:${'a'.repeat(64)}`,
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const fixtureBatch = liveScaleBatch().batch;
+    const { db } = createDatabase({
+      activeBenchmark: previous,
+      activeSources: fixtureBatch.sources,
+      activeApiResponseRevision: 'benchmark-r0+cache-initial',
+      activeApiResponseBodies: ['r0-complete-cache'],
+    }, []);
+    const snapshot = {
+      revision: previous,
+      sources: fixtureBatch.sources,
+      models: fixtureBatch.models.slice(0, 2),
+      metrics: fixtureBatch.metrics.slice(0, 2),
+      priceChecks: fixtureBatch.priceChecks.slice(0, 2),
+      comparisonPairs: [],
+    };
+
+    const plan = buildCacheOnlyRepublishStatementPlan(db, snapshot, 'attempt-republish');
+    const planned = [...plan.staging, ...plan.commit, ...plan.cleanup] as unknown as Statement[];
+    const sql = planned.map((statement) => statement.sql);
+
+    expect(sql.some((entry) => entry.startsWith('INSERT INTO api_response_entries'))).toBe(true);
+    expect(sql.some((entry) => entry.startsWith('INSERT INTO api_response_revisions'))).toBe(true);
+    expect((plan.commit as unknown as Statement[]).some((statement) => (
+      statement.sql.includes('api_response_publication_state')
+    ))).toBe(true);
+    for (const forbidden of [
+      'benchmark_model_profile_snapshots',
+      'benchmark_model_revision_membership',
+      'benchmark_model_directory',
+      'benchmark_popular_model_weeks',
+      'benchmark_popular_model_ranks',
+      "status = 'archived'",
+    ]) {
+      expect(sql.filter((entry) => entry.includes(forbidden))).toEqual([]);
+    }
+  });
+
+  it('aborts a republish that would repoint the cache at a superseded revision', async () => {
+    // A republish reads the active snapshot, then commits. If an ingest cycle
+    // publishes a newer revision in between, the pointer trigger must reject
+    // the stale cache rather than serving readers older data.
+    const previous: RevisionRow = {
+      revision: 'benchmark-r0', generatedAt: observedAt, publishedAt: observedAt, checkedAt: observedAt,
+      publicationState: 'published', contentHash: `sha256:${'a'.repeat(64)}`,
+      catalogRevision: 'catalog-rev-1', openrouterContentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+    };
+    const previousApiRevision = 'benchmark-r0+cache-initial';
+    const fixtureBatch = liveScaleBatch().batch;
+    const batch: NormalizedSourceBatch = {
+      sources: fixtureBatch.sources,
+      models: fixtureBatch.models.slice(0, 2),
+      metrics: fixtureBatch.metrics.slice(0, 2),
+      priceChecks: fixtureBatch.priceChecks.slice(0, 2),
+      comparisonSeeds: [],
+    };
+    const { db, state } = createDatabase({
+      activeBenchmark: previous,
+      activeSources: batch.sources,
+      activeApiResponseRevision: previousApiRevision,
+      activeApiResponseBodies: ['r0-complete-cache'],
+    }, []);
+    const snapshot = {
+      revision: previous,
+      sources: batch.sources,
+      models: batch.models,
+      metrics: batch.metrics,
+      priceChecks: batch.priceChecks,
+      comparisonPairs: [],
+    };
+
+    // Republish is planned against r0, then a concurrent cycle publishes r1.
+    const republish = buildCacheOnlyRepublishStatementPlan(db, snapshot, 'attempt-republish');
+    const changed = buildPublicationStatementPlan(db, 'benchmark-r1', observedAt,
+      '2026-08-05T13:00:00.000Z', `sha256:${'b'.repeat(64)}`, {
+        revision: 'catalog-rev-1', sourceUrl: 'https://openrouter.ai/api/v1/models', observedAt,
+        snapshotKey: openRouterSnapshotKey, contentHash: sha256(new TextEncoder().encode(openRouterProjected)),
+      }, batch, [], true, 'attempt-changed');
+    await executePublicationStatementPlan(db, changed);
+    const changedApiRevision = state.activeApiResponseRevision;
+
+    await expect(executePublicationStatementPlan(db, republish))
+      .rejects.toThrow('benchmark cache pointer must match the active benchmark revision');
+    expect(state.activeRevision).toBe('benchmark-r1');
+    expect(state.activeApiResponseRevision).toBe(changedApiRevision);
   });
 
   it('keeps the active cache complete when a same-timestamp unchanged commit fails', async () => {

@@ -2437,6 +2437,57 @@ export function buildUnchangedPublicationStatementPlan(
   };
 }
 
+/**
+ * Rebuilds only the materialized API response cache for the already-active
+ * revision. Nothing durable and revision-scoped is touched.
+ *
+ * This is deliberately narrower than `buildUnchangedPublicationStatementPlan`.
+ * That plan also bootstraps directory, membership, profile, and weekly-rank
+ * rows, which is correct the first time a revision publishes them. Replaying it
+ * against a revision that already has those rows is a silent no-op:
+ * `benchmark_model_profile_snapshots` is written with
+ * `ON CONFLICT(model_key, revision) DO NOTHING`, and the weekly rank insert is
+ * guarded by `NOT EXISTS`. Emitting those statements here would look like a
+ * repair while changing nothing.
+ *
+ * So a derivation fix reaches production through this path only if it is
+ * expressed in a cached API response. A fix to a stored profile snapshot, a
+ * persisted `benchmark_metrics.rank`, or the ingested cohort requires a newly
+ * published revision.
+ */
+export function buildCacheOnlyRepublishStatementPlan(
+  db: D1Database,
+  snapshot: ActiveBenchmarkSnapshot,
+  publicationAttemptId: string,
+): PublicationStatementPlan {
+  const responseRevision = benchmarkApiResponseStorageRevision(snapshot, publicationAttemptId);
+  const staging: BoundStatement[] = [];
+  appendMaterializedBenchmarkApiResponseStatements(
+    staging,
+    db,
+    snapshot,
+    responseRevision,
+    snapshot.revision.checkedAt,
+  );
+  // The cache pointer carries the active benchmark revision as its prefix, and
+  // trg_benchmark_cache_publication_update_matches_revision re-checks that
+  // prefix against benchmark_publication_state inside this transaction. If a
+  // concurrent ingest publishes a newer revision first, this commit aborts
+  // rather than repointing public readers at a stale cache.
+  const commit = [
+    benchmarkApiResponsePointerStatement(db, responseRevision, snapshot.revision.checkedAt),
+    ...benchmarkApiResponseRetentionStatements(db),
+  ];
+  if (staging.length + commit.length > MAX_D1_PUBLICATION_STATEMENTS) {
+    throw new Error(`Benchmark cache republish exceeds the ${MAX_D1_PUBLICATION_STATEMENTS}-statement D1 safety budget`);
+  }
+  return {
+    staging,
+    commit,
+    cleanup: [inactiveApiResponseRevisionCleanupStatement(db, responseRevision)],
+  };
+}
+
 async function recordFailure(env: BenchmarkIngestEnv, sourceId: BenchmarkSourceRecord['sourceId'], artifactId: string, error: unknown): Promise<void> {
   const message = (error instanceof Error ? error.message : String(error)).slice(0, MAX_ERROR_LENGTH);
   await env.CATALOG_DB.batch([env.CATALOG_DB.prepare(`
@@ -2624,10 +2675,11 @@ export { BenchmarkIngestCoordinator } from './coordinator';
 /**
  * Cron reserved for the cache-only republish path.
  *
- * Scheduling this cron rebuilds derived output (API cache rows, profile
- * snapshots) from the active revision. It performs no upstream fetch and does
- * not create an ingest cycle, so it cannot widen the ingested cohort or repair
- * persisted normalized metric ranks; those need a newly published revision.
+ * Scheduling this cron rebuilds the materialized API response cache from the
+ * active revision. It performs no upstream fetch and does not create an ingest
+ * cycle. It writes no durable revision-scoped rows, so it cannot widen the
+ * ingested cohort, rebuild stored model profile snapshots, or repair persisted
+ * normalized metric ranks; each of those needs a newly published revision.
  */
 export const BENCHMARK_CACHE_REPUBLISH_CRON = '*/5 * * * *';
 
@@ -2646,9 +2698,11 @@ export default {
   ): Promise<void> {
     if (!env.INGEST_COORDINATOR) throw new Error('Benchmark ingest coordinator binding is required');
     const coordinator = env.INGEST_COORDINATOR.getByName('weekly-benchmarks');
-    // A dedicated cron rebuilds published cache and profile rows from the
-    // active revision without any upstream fetch. It is cadence-independent,
-    // so a derivation fix does not wait for the next weekly window.
+    // A dedicated cron rebuilds the published API response cache from the
+    // active revision without any upstream fetch. It is cadence-independent, so
+    // a cache-served derivation fix does not wait for the next weekly window.
+    // It does not touch stored profile snapshots or ranks; those need a new
+    // revision.
     if (controller.cron === BENCHMARK_CACHE_REPUBLISH_CRON) {
       if (!coordinator.republishCache) throw new Error('Benchmark ingest coordinator cannot republish the cache');
       await coordinator.republishCache();

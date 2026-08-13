@@ -51,7 +51,6 @@ import {
   prepareModelProfilePartition,
   stageModelProfilePartition,
 } from './model-directory-publication';
-import { prepareModelDirectoryPublicationCandidate } from './model-directory-publication';
 import {
   readActiveBenchmarkSnapshot,
   type ActiveBenchmarkSnapshot,
@@ -142,7 +141,7 @@ export interface CoordinatorDependencies {
   steps: CoordinatorSteps;
   /** Reads the currently published snapshot for a cache-only republish. */
   readActiveSnapshot: (db: BenchmarkD1Database) => Promise<ActiveBenchmarkSnapshot | null>;
-  /** Rebuilds cache and profile rows from an unchanged active revision. */
+  /** Rebuilds only the materialized API cache from the active revision. */
   republishActiveSnapshot: (
     db: BenchmarkD1Database,
     snapshot: ActiveBenchmarkSnapshot,
@@ -170,27 +169,13 @@ const defaultDependencies: CoordinatorDependencies = {
   republishActiveSnapshot: async (db, snapshot, publicationAttemptId) => {
     // Imported lazily: index.ts re-exports this coordinator, so a top-level
     // import would close a module cycle.
-    const { buildUnchangedPublicationStatementPlan, executePublicationStatementPlan } = await import('./index');
+    const { buildCacheOnlyRepublishStatementPlan, executePublicationStatementPlan } = await import('./index');
     // index.ts and model-directory-publication.ts each declare a structurally
     // compatible local D1 surface; the coordinator holds only its own.
     const database = db as never;
-    const preparedModelDirectoryCandidate = snapshot.sources.some((source) => (
-      source.sourceId === 'benchlm' && source.artifactId === 'public-leaderboard'
-    ))
-      ? await prepareModelDirectoryPublicationCandidate(
-          snapshot,
-          publicLeaderboardFromSnapshot(snapshot),
-          snapshot.revision.checkedAt,
-        )
-      : undefined;
     await executePublicationStatementPlan(
       database,
-      buildUnchangedPublicationStatementPlan(
-        database,
-        snapshot,
-        publicationAttemptId,
-        preparedModelDirectoryCandidate,
-      ),
+      buildCacheOnlyRepublishStatementPlan(database, snapshot, publicationAttemptId),
     );
   },
 };
@@ -1332,17 +1317,24 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
   }
 
   /**
-   * Rebuilds published API cache rows and profile snapshots from the already
-   * active revision, without contacting any upstream source.
+   * Rebuilds the published API response cache from the already active
+   * revision, without contacting any upstream source.
    *
-   * Use this for **derivation** fixes: anything computed from the stored
-   * snapshot, such as profile percentiles, category field sizes, radar axes,
-   * and materialized API responses.
+   * Use this for derivation fixes that are served *from the API cache*:
+   * leaderboard projections, the benchmark summary, and the price-performance
+   * projection are all recomputed from the stored snapshot.
    *
-   * It deliberately cannot repair everything:
+   * This operation is cache-only. It writes `api_response_revisions`,
+   * `api_response_entries`, and the `api_response_publication_state` pointer,
+   * and nothing else. In particular it does **not** repair:
+   * - `benchmark_model_profile_snapshots`, which model pages read directly
+   *   from D1. Those rows are immutable for a published revision
+   *   (`ON CONFLICT(model_key, revision) DO NOTHING`), so replaying them here
+   *   would change nothing while appearing to fix something. Profile content,
+   *   including category field sizes and percentiles, needs a new revision.
+   * - the durable directory, membership, and weekly Popular Models rows.
    * - Persisted normalized `benchmark_metrics.rank` values are immutable for a
-   *   published revision. A fix to how ranks are *ingested* needs a newly
-   *   published revision.
+   *   published revision, so a fix to how ranks are ingested needs one too.
    * - It cannot add rows that were never fetched. Widening the upstream window
    *   (limit=100 -> 200) requires a real ingest cycle.
    *

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
 import type {
   BenchmarkMetric,
@@ -353,5 +355,35 @@ describe('atomic model directory publication', () => {
     // The field is 3 because rank #3 exists: counting surviving rows instead
     // would report "#3 of 2" and a fabricated 0 percentile.
     expect(target.categories?.find((category) => category.key === 'overall')?.fieldSize).toBe(3);
+  });
+
+  it('never rewrites a profile snapshot already stored for the same revision', async () => {
+    // Proven against real SQLite rather than a recording double: INSERT_PROFILE
+    // is ON CONFLICT(model_key, revision) DO NOTHING, so replaying the same
+    // revision cannot repair a stored profile. A derivation fix to profile
+    // contents therefore requires a newly published revision, not a replay.
+    const sqlite = new DatabaseSync(':memory:');
+    for (const file of ['0001_catalog.sql', '0004_benchmarks.sql', '0009_model_directory.sql']) {
+      sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations', file), 'utf8'));
+    }
+    const candidate = snapshot();
+    const stale = JSON.stringify({ summary: { evidenceStatus: 'stale-before-fix' } });
+    sqlite.prepare(`INSERT INTO benchmark_model_profile_snapshots
+      (model_key, revision, profile_json, content_hash, generated_at) VALUES (?, ?, ?, ?, ?)`)
+      .run(candidate.models[0]!.modelKey, candidate.revision.revision, stale,
+        hashModelProfileSnapshotJson(stale), UPDATED_AT);
+
+    const records: RecordedStatement[] = [];
+    appendModelDirectoryPublicationStatements(
+      [], recordingDatabase(records), candidate, publicLeaderboard(candidate.models), UPDATED_AT,
+    );
+    for (const statement of records.filter(({ sql }) => sql.startsWith('INSERT INTO benchmark_model_profile_snapshots'))) {
+      sqlite.prepare(statement.sql).run(...statement.values as Array<string | number | null>);
+    }
+
+    const stored = sqlite.prepare('SELECT profile_json FROM benchmark_model_profile_snapshots WHERE model_key = ? AND revision = ?')
+      .get(candidate.models[0]!.modelKey, candidate.revision.revision) as { profile_json: string };
+    expect(stored.profile_json).toBe(stale);
+    sqlite.close();
   });
 });

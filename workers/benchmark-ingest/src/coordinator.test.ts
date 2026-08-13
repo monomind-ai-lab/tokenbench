@@ -1005,7 +1005,7 @@ describe('cache-only republish', () => {
     };
   }
 
-  it('rebuilds cache rows from the active revision without fetching upstream', async () => {
+  it('rebuilds API cache rows from the active revision without fetching upstream', async () => {
     const { env } = environment();
     const fetchSpy = vi.fn();
     const { deps, calls } = republishDeps();
@@ -1063,6 +1063,118 @@ describe('cache-only republish', () => {
     const coordinator = new BenchmarkIngestCoordinator({ storage: storage() } as never, env, deps);
 
     await expect(coordinator.republishCache()).rejects.toThrow(/staging budget exceeded/);
+  });
+
+  it('wires the production republish dependency to the cache-only plan', async () => {
+    // The tests above substitute republishActiveSnapshot, so they cannot prove
+    // which statements production emits. Capture the real default dependency
+    // and assert it never touches durable revision-scoped directory rows.
+    const executed: string[] = [];
+    const database = {
+      prepare(sql: string) {
+        const statement = { sql, bind: () => statement };
+        return statement;
+      },
+      async batch(statements: { sql: string }[]) {
+        executed.push(...statements.map((statement) => statement.sql));
+        return [];
+      },
+    };
+    // The snapshot carries the BenchLM public-leaderboard source on purpose:
+    // that is exactly the condition under which the previous implementation
+    // emitted directory, profile, membership, archive, and weekly-rank
+    // statements, so this test fails if the cache-only wiring regresses.
+    const checkedAt = '2026-08-13T00:00:00.000Z';
+    const leaderboardSource = {
+      sourceId: 'benchlm' as const,
+      artifactId: 'public-leaderboard',
+      sourceUrl: 'https://benchlm.ai/public-leaderboard',
+      observedAt: checkedAt,
+      etag: null,
+      lastModified: null,
+      upstreamRevision: '2026-08-13-abcdef0123456789',
+      schemaVersion: 'bench-align-v5.3-2026-07-24',
+      snapshotKey: 'benchmarks/benchlm/public-leaderboard.json',
+      contentHash: `sha256:${'a'.repeat(64)}`,
+      originalContentHash: `sha256:${'b'.repeat(64)}`,
+      licenseId: 'MIT' as const,
+      attributionText: 'Data from BenchLM.ai',
+    };
+    const snapshot = {
+      revision: {
+        revision: 'bench-active',
+        generatedAt: checkedAt,
+        publishedAt: checkedAt,
+        checkedAt,
+        publicationState: 'published',
+        contentHash: `sha256:${'a'.repeat(64)}`,
+        catalogRevision: 'catalog-1',
+        openrouterContentHash: `sha256:${'b'.repeat(64)}`,
+      },
+      sources: [leaderboardSource],
+      models: [{
+        modelKey: 'benchlm:example:alpha',
+        slug: 'alpha',
+        name: 'Alpha',
+        creator: 'Example Org',
+        sourceType: 'Proprietary' as const,
+        reasoningType: null,
+        releaseDate: null,
+        contextWindowTokens: 128_000,
+        evidenceStatus: 'supported' as const,
+        rankingEligible: true,
+        confidenceLower: null,
+        confidenceUpper: null,
+        benchmarkCount: 1,
+        sourceId: 'benchlm' as const,
+        sourceModelId: 'example/alpha',
+        sourceArtifactId: 'public-leaderboard',
+      }],
+      metrics: [{
+        modelKey: 'benchlm:example:alpha',
+        metricKey: 'benchlm:overall:raw',
+        category: 'overall',
+        value: 90,
+        rawValue: null,
+        rank: 1,
+        lower: null,
+        upper: null,
+        voteCount: null,
+        unit: 'score',
+        sourceId: 'benchlm' as const,
+        sourceUpdatedAt: checkedAt,
+        sourceModelId: 'example/alpha',
+        sourceArtifactId: 'public-leaderboard',
+        rankingEligible: true,
+        methodology: 'benchlm_raw_composite',
+        observationCount: null,
+        sessionCount: null,
+      }],
+      priceChecks: [],
+      comparisonPairs: [],
+    };
+
+    const { BenchmarkIngestCoordinator: Production } = await import('./coordinator');
+    const coordinator = new Production({ storage: storage() } as never, {
+      CATALOG_DB: database,
+    } as never, {
+      randomUUID: () => CYCLE_ID,
+      log: () => undefined,
+      readActiveSnapshot: async () => snapshot as never,
+    });
+
+    await coordinator.republishCache();
+
+    expect(executed.some((sql) => sql.startsWith('INSERT INTO api_response_revisions'))).toBe(true);
+    expect(executed.some((sql) => sql.includes('api_response_publication_state'))).toBe(true);
+    for (const forbidden of [
+      'benchmark_model_profile_snapshots',
+      'benchmark_model_revision_membership',
+      'benchmark_model_directory',
+      'benchmark_popular_model',
+    ]) {
+      expect(executed.filter((sql) => sql.includes(forbidden))).toEqual([]);
+    }
   });
 });
 

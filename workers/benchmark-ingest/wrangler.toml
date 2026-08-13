@@ -33,10 +33,16 @@ storage = "sqlite"
 # catalog Worker's "20 0 * * *" cron: a benchmark cycle freezes the catalog
 # revision at start and fails validation if it changes mid-cycle.
 #
-# For derivation-only fixes prefer the cache-only republish path instead of a
-# forced cycle: temporarily add BENCHMARK_CACHE_REPUBLISH_CRON ("*/5 * * * *")
-# to this list, let one tick land, then remove it and redeploy triggers. It
-# performs no upstream fetch and ignores the ISO-week dedupe. It cannot widen
-# the ingested cohort or rewrite persisted normalized metric ranks; those still
-# require a full cycle that publishes a new revision.
+# For fixes that live entirely in the materialized API response cache
+# (leaderboard projections, the benchmark summary, the price-performance
+# projection) prefer the cache-only republish path instead of a forced cycle:
+# temporarily add BENCHMARK_CACHE_REPUBLISH_CRON ("*/5 * * * *") to this list,
+# let one tick land, then remove it and redeploy triggers. It performs no
+# upstream fetch and ignores the ISO-week dedupe.
+#
+# It rewrites api_response_* rows only. It cannot widen the ingested cohort,
+# rebuild benchmark_model_profile_snapshots (model pages read those directly
+# from D1, and they are immutable per revision), or rewrite persisted
+# normalized metric ranks. Each of those still requires a full cycle that
+# publishes a new revision.
 crons = ["15 2 * * SUN"]
