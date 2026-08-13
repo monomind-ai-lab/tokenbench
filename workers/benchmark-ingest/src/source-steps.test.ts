@@ -460,17 +460,20 @@ describe('assembleBenchLmStep', () => {
     expect(store.writes.every((key) => key.startsWith(CANDIDATE_PREFIX))).toBe(true);
   });
 
-  it('recognizes only strict versioned projection keys for conditional reuse', () => {
+  it('recognizes only strict versioned projection keys with matching content hashes', () => {
     const digest = 'a'.repeat(64);
     const valid = `${CANDIDATE_PREFIX}benchlm/projected/${BENCHLM_PROJECTION_SCHEMA_VERSION}/models/${digest}.json`;
+    const contentHash = `sha256:${digest}`;
 
-    expect(benchLmProjectionVersionFromKey(valid, 'models')).toBe(BENCHLM_PROJECTION_SCHEMA_VERSION);
+    expect(benchLmProjectionVersionFromKey(valid, 'models', contentHash)).toBe(BENCHLM_PROJECTION_SCHEMA_VERSION);
     expect(benchLmProjectionVersionFromKey(
       `${CANDIDATE_PREFIX}benchlm/projected/models/${digest}.json`,
       'models',
+      contentHash,
     )).toBeNull();
-    expect(benchLmProjectionVersionFromKey(valid, 'pricing')).toBeNull();
-    expect(benchLmProjectionVersionFromKey(valid.replace(CYCLE_ID, '../escape'), 'models')).toBeNull();
+    expect(benchLmProjectionVersionFromKey(valid, 'pricing', contentHash)).toBeNull();
+    expect(benchLmProjectionVersionFromKey(valid, 'models', `sha256:${'b'.repeat(64)}`)).toBeNull();
+    expect(benchLmProjectionVersionFromKey(valid.replace(CYCLE_ID, '../escape'), 'models', contentHash)).toBeNull();
   });
 
   it('rejects a bundle whose artifacts disagree on generatedAt before any normalization', async () => {

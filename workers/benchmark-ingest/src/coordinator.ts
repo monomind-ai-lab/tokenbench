@@ -397,7 +397,7 @@ async function validatorFor(
   ));
   if (!previous) return null;
   const projectionVersion = sourceId === 'benchlm'
-    ? benchLmProjectionVersionFromKey(previous.snapshotKey, artifactId)
+    ? benchLmProjectionVersionFromKey(previous.snapshotKey, artifactId, previous.contentHash)
     : null;
   // Existing published BenchLM rows predate the durable internal-format
   // marker. They are deliberately not sent as conditional validators: the
@@ -652,6 +652,23 @@ async function acquireStep(
       upstream_revision AS upstreamRevision, schema_version AS schemaVersion
       FROM benchmark_source_records WHERE revision = ?`).bind(frozenBenchmarkRevision).all<FrozenSourceValidator>();
     validators = rows.results;
+    const benchLmValidators = validators.filter((candidate) => candidate.sourceId === 'benchlm');
+    const completeBenchLmProjectionSet = BENCHLM_ARTIFACTS.every((artifactId) => {
+      const matches = benchLmValidators.filter((candidate) => candidate.artifactId === artifactId);
+      return matches.length === 1
+        && benchLmProjectionVersionFromKey(
+          matches[0]!.snapshotKey,
+          artifactId,
+          matches[0]!.contentHash,
+        ) !== null;
+    }) && benchLmValidators.length === BENCHLM_ARTIFACTS.length;
+    // BenchLM artifacts form one canonical bundle. Mixing legacy and v3
+    // projections would allow a torn-format 304 assembly, so reuse is
+    // all-or-none: one incompatible record forces all six fresh while other
+    // providers keep their independent conditional validators.
+    if (!completeBenchLmProjectionSet) {
+      validators = validators.filter((candidate) => candidate.sourceId !== 'benchlm');
+    }
   }
 
   const checkpoint: BenchmarkCheckpoint = {

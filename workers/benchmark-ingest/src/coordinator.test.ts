@@ -9,6 +9,7 @@ import {
 } from './candidate-storage';
 import { LMARENA_SUBSETS } from './lmarena';
 import {
+  BENCHLM_ARTIFACTS,
   SourceRateLimitedError,
   type CandidateArtifact,
   type CandidatePartition,
@@ -367,28 +368,28 @@ describe('acquire phase', () => {
     nowMs = SUNDAY;
     const priorBytes = new TextEncoder().encode('{"prior":true}');
     const priorHash = `sha256:${hex('{"prior":true}')}`;
-    const priorKey = `benchmark-candidates/11111111-2222-4333-8444-555555555555/benchlm/projected/v3/leaderboard/${priorHash.slice('sha256:'.length)}.json`;
+    const sourceRecords = BENCHLM_ARTIFACTS.map((artifactId) => ({
+      sourceId: 'benchlm',
+      artifactId,
+      sourceUrl: `https://benchlm.ai/${artifactId}.json`,
+      etag: `"${artifactId}-etag"`,
+      lastModified: null,
+      snapshotKey: `benchmark-candidates/11111111-2222-4333-8444-555555555555/benchlm/projected/v3/${artifactId}/${priorHash.slice('sha256:'.length)}.json`,
+      contentHash: priorHash,
+      originalContentHash: priorHash,
+      upstreamRevision: null,
+      schemaVersion: artifactId === 'public-leaderboard' ? 'bench-align-v5' : '1.0',
+    }));
     const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
     const { env, store } = environment({
       catalogRevision: CATALOG_REVISION,
       benchmarkRevision: PREV_BENCHMARK_REVISION,
-      sourceRecords: [{
-        sourceId: 'benchlm',
-        artifactId: 'leaderboard',
-        sourceUrl: 'https://benchlm.ai/data/leaderboard.json',
-        etag: '"prior-etag"',
-        lastModified: null,
-        snapshotKey: priorKey,
-        contentHash: priorHash,
-        originalContentHash: priorHash,
-        upstreamRevision: null,
-        schemaVersion: null,
-      }],
+      sourceRecords,
     });
-    store.objects.set(priorKey, {
+    sourceRecords.forEach((record) => store.objects.set(record.snapshotKey, {
       bytes: priorBytes,
       customMetadata: { original_content_hash: priorHash },
-    });
+    }));
     const { steps, calls } = fakeSteps();
 
     await fireAlarm(durable, env, baseDeps(steps));
@@ -397,9 +398,9 @@ describe('acquire phase', () => {
     expect(calls[0].name).toBe('retrieveBenchLmArtifactStep');
     expect(calls[0].args.previous).toMatchObject({
       artifactId: 'leaderboard',
-      key: priorKey,
+      key: sourceRecords[0]!.snapshotKey,
       byteLength: priorBytes.byteLength,
-      etag: '"prior-etag"',
+      etag: '"leaderboard-etag"',
       schemaVersion: 'v3',
     });
   });
@@ -435,29 +436,123 @@ describe('acquire phase', () => {
     expect(retrievals.map((call) => call.args.previous)).toEqual(Array(6).fill(null));
   });
 
+  it('keeps non-BenchLM validators while bypassing a legacy BenchLM bundle', async () => {
+    nowMs = SUNDAY;
+    const legacyHash = `sha256:${hex('legacy')}`;
+    const liteLlmBytes = new TextEncoder().encode('{"litellm":true}');
+    const liteLlmHash = `sha256:${hex('{"litellm":true}')}`;
+    const liteLlmKey = 'benchmark-candidates/prior/litellm/projected/model-prices.json';
+    const durable = storage({ [CYCLE_KEY]: {
+      ...createBenchmarkCycle(SUNDAY, CYCLE_ID),
+      phase: 'retrieve-litellm',
+      cursor: 0,
+      frozenCatalogRevision: CATALOG_REVISION,
+      frozenBenchmarkRevision: PREV_BENCHMARK_REVISION,
+    } });
+    const checkpoint = acquireCheckpoint();
+    checkpoint.frozenBenchmarkRevision = PREV_BENCHMARK_REVISION;
+    checkpoint.validators = [
+      {
+        sourceId: 'benchlm', artifactId: 'models', sourceUrl: 'https://benchlm.ai/data/models.json',
+        etag: '"models"', lastModified: null,
+        snapshotKey: `benchmark-candidates/prior/benchlm/projected/models/${legacyHash.slice(7)}.json`,
+        contentHash: legacyHash, originalContentHash: legacyHash, upstreamRevision: null, schemaVersion: '1.0',
+      },
+      {
+        sourceId: 'litellm', artifactId: 'model-prices', sourceUrl: 'https://example.com/litellm.json',
+        etag: '"litellm"', lastModified: null, snapshotKey: liteLlmKey,
+        contentHash: liteLlmHash, originalContentHash: liteLlmHash, upstreamRevision: null, schemaVersion: null,
+      },
+    ];
+    durable.values.set(CHECKPOINT_KEY, checkpoint);
+    const { env, store } = environment({ catalogRevision: CATALOG_REVISION });
+    store.objects.set(liteLlmKey, { bytes: liteLlmBytes, customMetadata: {} });
+    const { steps, calls } = fakeSteps();
+
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    const retrieval = calls.find((call) => call.name === 'retrieveLiteLlmStep');
+    expect(retrieval?.args.previous).toMatchObject({
+      artifactId: 'model-prices',
+      key: liteLlmKey,
+      etag: '"litellm"',
+    });
+  });
+
+  it('bypasses all six BenchLM validators when even one projection key is legacy', async () => {
+    nowMs = SUNDAY;
+    const priorBytes = new TextEncoder().encode('{"projected":true}');
+    const priorHash = `sha256:${hex('{"projected":true}')}`;
+    const sourceRecords = BENCHLM_ARTIFACTS.map((artifactId, index) => ({
+      sourceId: 'benchlm',
+      artifactId,
+      sourceUrl: `https://benchlm.ai/${artifactId}.json`,
+      etag: `"${artifactId}"`,
+      lastModified: null,
+      snapshotKey: index === 2
+        ? `benchmark-candidates/prior/benchlm/projected/${artifactId}/${priorHash.slice(7)}.json`
+        : `benchmark-candidates/111cf1e4-0e2e-4bc6-b3cb-e697f3f16ae9/benchlm/projected/v3/${artifactId}/${priorHash.slice(7)}.json`,
+      contentHash: priorHash,
+      originalContentHash: `sha256:${hex(`${artifactId}:raw`)}`,
+      upstreamRevision: null,
+      schemaVersion: artifactId === 'public-leaderboard' ? 'bench-align-v5' : '1.0',
+    }));
+    const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
+    const { env, store } = environment({
+      catalogRevision: CATALOG_REVISION,
+      benchmarkRevision: PREV_BENCHMARK_REVISION,
+      sourceRecords,
+    });
+    sourceRecords.filter((_, index) => index !== 2).forEach((record) => {
+      store.objects.set(record.snapshotKey, {
+        bytes: priorBytes,
+        customMetadata: { original_content_hash: record.originalContentHash },
+      });
+    });
+    const { steps, calls } = fakeSteps();
+
+    await fireAlarm(durable, env, baseDeps(steps));
+    for (const _artifact of BENCHLM_ARTIFACTS) await fireAlarm(durable, env, baseDeps(steps));
+
+    const retrievals = calls.filter((call) => call.name === 'retrieveBenchLmArtifactStep');
+    expect(retrievals).toHaveLength(BENCHLM_ARTIFACTS.length);
+    expect(retrievals.map((call) => call.args.previous)).toEqual(
+      Array(BENCHLM_ARTIFACTS.length).fill(null),
+    );
+  });
+
   it('restores conditional reuse from a strict v3 projection key without trusting upstream schema', async () => {
     nowMs = SUNDAY;
     const priorBytes = new TextEncoder().encode('{"schemaVersion":"1.0","generatedAt":"2026-08-05T00:00:00.000Z","items":[]}');
     const priorHash = `sha256:${hex(new TextDecoder().decode(priorBytes))}`;
     const digest = priorHash.slice('sha256:'.length);
-    const key = `benchmark-candidates/111cf1e4-0e2e-4bc6-b3cb-e697f3f16ae9/benchlm/projected/v3/leaderboard/${digest}.json`;
+    const sourceRecords = BENCHLM_ARTIFACTS.map((artifactId) => ({
+      sourceId: 'benchlm', artifactId, sourceUrl: `https://benchlm.ai/${artifactId}.json`,
+      etag: `"${artifactId}-etag"`, lastModified: null,
+      snapshotKey: `benchmark-candidates/111cf1e4-0e2e-4bc6-b3cb-e697f3f16ae9/benchlm/projected/v3/${artifactId}/${digest}.json`,
+      contentHash: priorHash, originalContentHash: priorHash, upstreamRevision: null,
+      schemaVersion: artifactId === 'public-leaderboard' ? 'bench-align-v5' : '1.0',
+    }));
     const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
     const { env, store } = environment({
       catalogRevision: CATALOG_REVISION,
       benchmarkRevision: PREV_BENCHMARK_REVISION,
-      sourceRecords: [{
-        sourceId: 'benchlm', artifactId: 'leaderboard', sourceUrl: 'https://benchlm.ai/data/leaderboard.json',
-        etag: '"prior-etag"', lastModified: null, snapshotKey: key,
-        contentHash: priorHash, originalContentHash: priorHash, upstreamRevision: null, schemaVersion: '1.0',
-      }],
+      sourceRecords,
     });
-    store.objects.set(key, { bytes: priorBytes, customMetadata: { original_content_hash: priorHash } });
+    sourceRecords.forEach((record) => store.objects.set(record.snapshotKey, {
+      bytes: priorBytes,
+      customMetadata: { original_content_hash: priorHash },
+    }));
     const { steps, calls } = fakeSteps();
 
     await fireAlarm(durable, env, baseDeps(steps));
     await fireAlarm(durable, env, baseDeps(steps));
 
-    expect(calls[0].args.previous).toMatchObject({ key, schemaVersion: 'v3', etag: '"prior-etag"' });
+    expect(calls[0].args.previous).toMatchObject({
+      key: sourceRecords[0]!.snapshotKey,
+      schemaVersion: 'v3',
+      etag: '"leaderboard-etag"',
+    });
   });
 
   it('fails terminally when no active catalog revision exists', async () => {

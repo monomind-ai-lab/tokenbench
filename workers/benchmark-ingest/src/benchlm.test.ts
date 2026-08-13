@@ -301,6 +301,18 @@ describe('parseBenchLm', () => {
       expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')?.rankFieldSize)
         .toBeNull();
     });
+
+    it('does not treat totalModels on a non-model artifact as a model cohort declaration', async () => {
+      const source = payloads();
+      const pricing = source.pricing as Record<string, unknown>;
+      pricing.counts = { totalModels: 5 };
+
+      const prepared = await prepareBenchLm(rawBundleFromPayloads(source));
+
+      expect(prepared.pricing.payload.itemCount).toBeUndefined();
+      expect(JSON.parse(new TextDecoder().decode(prepared.pricing.projectedBytes)))
+        .not.toHaveProperty('itemCount');
+    });
   });
 
   it('counts only benchmarks that actually joined into published evidence', async () => {
@@ -717,6 +729,33 @@ describe('prepareBenchLm', () => {
 });
 
 describe('rehydrateBenchLmProjections', () => {
+  it('preserves totalModels through canonical bytes and rehydration into exact field sizes', async () => {
+    const source = payloads();
+    const models = (source.models as { counts: { totalModels: number }; items: Array<Record<string, unknown>> });
+    models.counts.totalModels = models.items.length;
+    models.items.forEach((candidate, index) => {
+      const ranking = candidate.ranking as Record<string, unknown>;
+      ranking.categoryRanks = {
+        ...(ranking.categoryRanks as Record<string, number | null>),
+        coding: index + 1,
+      };
+    });
+    const prepared = await prepareBenchLm(rawBundleFromPayloads(source));
+    const projectedModels = JSON.parse(new TextDecoder().decode(prepared.models.projectedBytes)) as {
+      itemCount?: number;
+    };
+
+    expect(projectedModels.itemCount).toBe(models.items.length);
+
+    const rehydrated = await rehydrateBenchLmProjections(storedFromPrepared(prepared));
+    const batch = await parseBenchLm(rehydrated, observedAt);
+    const coding = batch.metrics.find((metric) => metric.sourceModelId === 'model-a'
+      && metric.metricKey === 'benchlm:category:coding');
+
+    expect(rehydrated.models.payload.itemCount).toBe(models.items.length);
+    expect(coding).toMatchObject({ rank: 1, rankFieldSize: models.items.length });
+  });
+
   it('rejects valid-hash stored projections containing Unicode-obfuscated external categories', async () => {
     const prepared = await prepareBenchLm(rawBundleFromPayloads(payloads()));
     const stored = storedFromPrepared(prepared);

@@ -488,8 +488,10 @@ function benchLmProjectedKey(cycleId: string, artifact: BenchLmArtifact, content
 export function benchLmProjectionVersionFromKey(
   key: string,
   artifact: string,
+  contentHash: string,
 ): typeof BENCHLM_PROJECTION_SCHEMA_VERSION | null {
   const segments = key.split('/');
+  const digest = /^sha256:([a-f0-9]{64})$/.exec(contentHash)?.[1];
   if (segments.length !== 7
     || segments[0] !== 'benchmark-candidates'
     || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segments[1] ?? '')
@@ -497,7 +499,8 @@ export function benchLmProjectionVersionFromKey(
     || segments[3] !== 'projected'
     || segments[4] !== BENCHLM_PROJECTION_SCHEMA_VERSION
     || segments[5] !== artifact
-    || !/^[a-f0-9]{64}\.json$/.test(segments[6] ?? '')) {
+    || digest === undefined
+    || segments[6] !== `${digest}.json`) {
     return null;
   }
   return BENCHLM_PROJECTION_SCHEMA_VERSION;

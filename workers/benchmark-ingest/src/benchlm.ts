@@ -184,9 +184,14 @@ function parseArtifact(value: unknown, artifact: ArtifactName): BenchLmProjected
   if (payload.schemaVersion !== '1.0') fail(`BenchLM ${artifact} schemaVersion must be 1.0`);
   const generatedAt = requireIsoTimestamp(payload.generatedAt, `BenchLM ${artifact}.generatedAt`);
   if (!Array.isArray(payload.items)) fail(`BenchLM ${artifact}.items must be an array`);
-  const rawCount = payload.itemCount ?? (isRecord(payload.counts)
-    ? payload.counts.totalModels ?? payload.counts.items
-    : undefined);
+  // Only models.json enumerates the complete model corpus. Other artifacts may
+  // expose unrelated count objects, which must never be promoted into the
+  // ranked-model cohort contract.
+  const rawCount = artifact === 'models'
+    ? payload.itemCount ?? (isRecord(payload.counts)
+        ? payload.counts.totalModels ?? payload.counts.items
+        : undefined)
+    : undefined;
   const itemCount = rawCount === undefined
     ? undefined
     : requireNonNegativeInteger(rawCount, `BenchLM ${artifact}.itemCount`);
