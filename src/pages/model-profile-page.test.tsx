@@ -44,6 +44,16 @@ describe('ModelProfilePage', () => {
     expect(screen.queryByRole('heading', { name: 'Sources' })).not.toBeInTheDocument();
   });
 
+  it('names each category ledger without dropping its source-linked evidence', () => {
+    render(<ModelProfilePage viewModel={modelProfileViewModelFixture()} />);
+
+    const overallLedger = screen.getByRole('table', { name: 'Overall benchmark ledger' });
+    const codingLedger = screen.getByRole('table', { name: 'Coding benchmark ledger' });
+    expect(overallLedger).toHaveTextContent('81.48');
+    expect(codingLedger).toHaveTextContent('77.95');
+    expect(screen.getAllByRole('link', { name: 'Overall source' })[0]).toHaveAttribute('href', 'https://benchlm.ai/models/gpt-5-6-sol');
+  });
+
   it('links each category name to its leaderboard', () => {
     render(<ModelProfilePage viewModel={modelProfileViewModelFixture()} />);
     const coding = screen.getByRole('link', { name: 'Coding leaderboard' });

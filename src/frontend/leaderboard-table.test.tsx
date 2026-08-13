@@ -231,7 +231,7 @@ describe('LeaderboardTable', () => {
     expect(within(table).getByRole('columnheader', { name: 'Score' })).toHaveAttribute('scope', 'col');
     expect(within(table).queryByRole('columnheader', { name: 'Supported Modalities' })).toBeNull();
     expect(within(table).getByRole('columnheader', { name: 'Score' })).toHaveAttribute('aria-sort', 'descending');
-    expect(within(table).getAllByText('Unavailable')).toHaveLength(1);
+    expect(within(table).getAllByText('Unavailable')).toHaveLength(2);
     expect(within(table).getByRole('link', { name: 'Model A' })).toHaveAttribute('href', '/models/model-a/');
     expect(screen.queryByRole('link', { name: 'Data from BenchLM.ai' })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Leaderboard evidence')).not.toBeInTheDocument();
@@ -323,6 +323,38 @@ describe('LeaderboardTable', () => {
     expect(within(cards!).getByText('OpenAI')).toBeInTheDocument();
     expect(table.querySelectorAll('.provider-mark')).toHaveLength(1);
     expect(cards!.querySelectorAll('.provider-mark')).toHaveLength(1);
+  });
+
+  it('shows source rank in both the desktop table and mobile card for a source-ranked route', () => {
+    const ranked = entry({
+      metric: { ...entry().metric!, rank: 5 },
+      metrics: [{ ...entry().metric!, rank: 5 }],
+      sourceRank: 5,
+    });
+    renderTable('llm-coding', 'score-desc', [ranked]);
+
+    const table = screen.getByRole('table', { name: 'Coding benchmark' });
+    const cards = document.querySelector<HTMLOListElement>('.leaderboard-card-list');
+    expect(cards).not.toBeNull();
+    expect(within(table).getByRole('columnheader', { name: 'Source rank' })).toBeInTheDocument();
+    const tableRows = within(table).getAllByRole('row');
+    expect(tableRows[1]).toHaveTextContent('#5');
+    const cardItems = within(cards!).getAllByRole('listitem', { hidden: true });
+    expect(cardItems[0]).toHaveTextContent('Source rank');
+    expect(cardItems[0]).toHaveTextContent('5');
+  });
+
+  it('shows source rank as Unavailable in both desktop and mobile for a non-source-ranked route', () => {
+    renderTable('llm-value', 'pareto-score-desc', [entry({ onValueFrontier: true, sourceRank: 5 })]);
+
+    const table = screen.getByRole('table', { name: 'Value frontier' });
+    const cards = document.querySelector<HTMLOListElement>('.leaderboard-card-list');
+    expect(cards).not.toBeNull();
+    expect(within(table).getByRole('columnheader', { name: 'Source rank' })).toBeInTheDocument();
+    const tableUnavailable = within(table).getAllByText('Unavailable');
+    const cardUnavailable = within(cards!).getAllByText('Unavailable');
+    expect(tableUnavailable.length).toBeGreaterThan(0);
+    expect(cardUnavailable.length).toBeGreaterThan(0);
   });
 
   it.each([

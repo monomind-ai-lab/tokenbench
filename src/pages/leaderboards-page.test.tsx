@@ -413,6 +413,59 @@ describe('LeaderboardDirectoryPage', () => {
     }));
     await screen.findByRole('region', { name: 'Decision-ready picks' });
   });
+
+  it('labels each directory card with its evidence status so the index does not read as a universal composite', () => {
+    respondWithSummary();
+
+    render(<LeaderboardDirectoryPage />);
+
+    const directory = screen.getByRole('region', { name: 'Full leaderboard directory' });
+
+    const codingHeading = within(directory).getByRole('heading', { name: 'Coding benchmark', level: 4 });
+    const codingArticle = codingHeading.closest('article')!;
+    expect(within(codingArticle).getByText('BenchAlign ranking')).toBeInTheDocument();
+
+    const reasoningHeading = within(directory).getByRole('heading', { name: 'Reasoning', level: 4 });
+    const reasoningArticle = reasoningHeading.closest('article')!;
+    expect(within(reasoningArticle).getByText('Evidence lens')).toBeInTheDocument();
+
+    const preferenceHeading = within(directory).getByRole('heading', { name: 'Human preference', level: 4 });
+    const preferenceArticle = preferenceHeading.closest('article')!;
+    expect(within(preferenceArticle).getByText('Source lens')).toBeInTheDocument();
+
+    const valueHeading = within(directory).getByRole('heading', { name: 'Value frontier', level: 4 });
+    const valueArticle = valueHeading.closest('article')!;
+    const valueStatuses = within(valueArticle).getAllByText('Value frontier');
+    expect(valueStatuses.length).toBeGreaterThan(1);
+
+    const pricingHeading = within(directory).getByRole('heading', { name: 'Pricing and context', level: 4 });
+    const pricingArticle = pricingHeading.closest('article')!;
+    expect(within(pricingArticle).getByText('Route evidence')).toBeInTheDocument();
+  });
+
+  it('labels each directory card with its source lane so users know which evidence source they enter', () => {
+    respondWithSummary();
+
+    render(<LeaderboardDirectoryPage />);
+
+    const directory = screen.getByRole('region', { name: 'Full leaderboard directory' });
+    const codingHeading = within(directory).getByRole('heading', { name: 'Coding benchmark', level: 4 });
+    const codingArticle = codingHeading.closest('article')!;
+    expect(within(codingArticle).getByText('BenchLM')).toBeInTheDocument();
+
+    const preferenceHeading = within(directory).getByRole('heading', { name: 'Human preference', level: 4 });
+    const preferenceArticle = preferenceHeading.closest('article')!;
+    expect(within(preferenceArticle).getByText('LMArena')).toBeInTheDocument();
+
+    const pricingHeading = within(directory).getByRole('heading', { name: 'Pricing and context', level: 4 });
+    const pricingArticle = pricingHeading.closest('article')!;
+    expect(within(pricingArticle).getByText('OpenRouter')).toBeInTheDocument();
+
+    const multimodalHeading = within(directory).getByRole('heading', { name: 'Multimodal', level: 4 });
+    const multimodalArticle = multimodalHeading.closest('article')!;
+    expect(within(multimodalArticle).getByText(/BenchLM/)).toBeInTheDocument();
+    expect(within(multimodalArticle).getByText(/LMArena/)).toBeInTheDocument();
+  });
 });
 
 describe('LeaderboardPage', () => {

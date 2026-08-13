@@ -16,7 +16,22 @@ export function GuideCard({ guide }: { readonly guide: GuideArticle; readonly ke
   </article>;
 }
 
-export function GuidesHub() {
+export function InsightsChannel() {
+  return <main id="guide-content" className="guides-main" tabIndex={-1}>
+    <section className="guides-hero" aria-labelledby="insights-heading">
+      <span className="eyebrow"><BookOpen aria-hidden="true" size={16} /> LLM insights</span>
+      <h1 id="insights-heading">LLM insights</h1>
+      <p>Evidence-aware ecosystem updates, model releases, and benchmark analysis as this channel is populated.</p>
+    </section>
+    <section className="guide-index" aria-labelledby="insights-channel-heading">
+      <div className="guide-index-heading"><div><span className="eyebrow">Insights</span><h2 id="insights-channel-heading">Not yet separately populated</h2></div><p>This channel is reserved for future evidence-ledger analysis. The guides channel remains the populated Articles destination.</p></div>
+      <div className="guide-grid"><a className="guide-card-link" href={ROUTE_PATHS.guides}>Browse all guides <ArrowRight aria-hidden="true" size={16} /></a></div>
+    </section>
+  </main>;
+}
+
+export function GuidesHub({ isInsights = false }: { readonly isInsights?: boolean }) {
+  if (isInsights) return <InsightsChannel />;
   return <main id="guide-content" className="guides-main" tabIndex={-1}>
     <section className="guides-hero" aria-labelledby="guides-heading">
       <span className="eyebrow"><BookOpen aria-hidden="true" size={16} /> AI bill playbook</span>

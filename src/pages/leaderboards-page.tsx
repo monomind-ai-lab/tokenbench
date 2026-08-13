@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { LEADERBOARD_NAVIGATION, LEADERBOARD_ROUTES, ROUTE_PATHS, type LeaderboardKey } from '../routing/routes';
-import type { DecisionPickEntry, DecisionPickGroup } from '../benchmarks/decision-picks';
+import { DECISION_PICK_CATEGORIES, type DecisionPickEntry, type DecisionPickGroup } from '../benchmarks/decision-picks';
+import { LEADERBOARD_DEFINITIONS } from '../benchmarks/leaderboards';
 import { EmptyState, Skeleton, formatDateTime } from '../frontend/ui';
 import {
   LeaderboardFilters,
@@ -54,6 +55,55 @@ function methodologySummary(keyName: LeaderboardKey): string {
     return 'LMArena evidence remains an exact source lens: source rank, category, and publication time stay visible without being blended with BenchLM scores.';
   }
   return 'Only the exact published source metric for this route is shown. Missing measurements remain unavailable rather than being converted to zero.';
+}
+
+const BENCHALIGN_KEYS = new Set<LeaderboardKey>(
+  DECISION_PICK_CATEGORIES
+    .filter((category) => category.status === 'benchalign')
+    .map((category) => category.key),
+);
+
+const EVIDENCE_LENS_KEYS = new Set<LeaderboardKey>(
+  DECISION_PICK_CATEGORIES
+    .filter((category) => category.status === 'evidence-lens')
+    .map((category) => category.key),
+);
+
+/**
+ * Labels each directory card with its evidence status so the vertical index
+ * does not read as a fabricated universal composite. BenchAlign views are
+ * validated rankings; evidence lenses are published category metrics without
+ * a validated rank; source lenses are exact LMArena arena views; value and
+ * pricing-context views have their own non-composite presentations.
+ */
+export function leaderboardEvidenceStatusLabel(keyName: LeaderboardKey): string {
+  if (BENCHALIGN_KEYS.has(keyName)) return 'BenchAlign ranking';
+  if (EVIDENCE_LENS_KEYS.has(keyName)) return 'Evidence lens';
+  const kind = LEADERBOARD_DEFINITIONS[keyName].kind;
+  if (kind === 'lmarena') return 'Source lens';
+  if (kind === 'value') return 'Value frontier';
+  if (kind === 'pricing-context') return 'Route evidence';
+  return 'Evidence lens';
+}
+
+const SOURCE_LANE_LABELS: Readonly<Record<string, string>> = {
+  benchlm: 'BenchLM',
+  lmarena: 'LMArena',
+  openrouter: 'OpenRouter',
+};
+
+/**
+ * Names the source lane(s) for a directory card so users know which evidence
+ * source they are entering. Multimodal views span BenchLM and LMArena; the
+ * list preserves each source lane rather than collapsing them into one label.
+ */
+export function leaderboardSourceLanes(keyName: LeaderboardKey): readonly string[] {
+  const definition = LEADERBOARD_DEFINITIONS[keyName];
+  if (definition.kind === 'multimodal') return ['BenchLM', 'LMArena'];
+  const sourceId = definition.sourceId;
+  if (sourceId && SOURCE_LANE_LABELS[sourceId]) return [SOURCE_LANE_LABELS[sourceId]];
+  if (definition.kind === 'value') return ['BenchLM', 'OpenRouter'];
+  return [];
 }
 
 function useLeaderboardFilters(keyName: LeaderboardKey): [LeaderboardFilterState, (filters: LeaderboardFilterState) => void] {
@@ -570,7 +620,13 @@ function LeaderboardDirectory() {
           {group.keys.map((key) => {
             const route = LEADERBOARD_ROUTES[key];
             const title = route.seo.h1;
+            const statusLabel = leaderboardEvidenceStatusLabel(key);
+            const lanes = leaderboardSourceLanes(key);
             return <article className="panel" role="listitem" key={key}>
+              <div className="leaderboard-directory-card-meta">
+                <span className="leaderboard-directory-card-status">{statusLabel}</span>
+                {lanes.length > 0 ? <span className="leaderboard-directory-card-source">{lanes.join(' · ')}</span> : null}
+              </div>
               <h4><a href={route.pathname}>{title}</a></h4>
               <p>{route.seo.summary}</p>
               <a href={route.pathname}>View leaderboard <ArrowRight aria-hidden="true" size={14} /></a>

@@ -159,7 +159,7 @@ describe('HomePage', () => {
     expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare/');
-    expect(screen.getByRole('link', { name: 'Review Your Subscriptions' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Review Your Subscriptions' })).toHaveAttribute('href', '/cost/calculator/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('heading', { name: 'See the market at a glance', level: 2 })).toBeInTheDocument();
     expect(screen.queryByText(/Updated /)).not.toBeInTheDocument();
@@ -334,5 +334,14 @@ describe('HomePage', () => {
     expect(within(snapshot).getAllByText('Model Alpha').length).toBeGreaterThan(0);
     expect(within(snapshot).queryByText(/Checked Aug 6, 2026/)).not.toBeInTheDocument();
     expect(within(snapshot).queryByText(/Source published/)).not.toBeInTheDocument();
+  });
+
+  it('exposes the Articles channel destinations with the insights channel marked as not yet populated', () => {
+    renderWithHomeSummary();
+
+    const articles = screen.getByRole('region', { name: 'Evidence-ledger articles' });
+    expect(within(articles).getByRole('link', { name: 'Browse all guides' })).toHaveAttribute('href', '/articles/guides/');
+    expect(within(articles).getByRole('link', { name: 'LLM insights' })).toHaveAttribute('href', '/articles/insights/');
+    expect(within(articles).getByText(/Not yet separately populated/)).toBeInTheDocument();
   });
 });

@@ -142,7 +142,7 @@ export function ModelProfilePage({ viewModel }: ModelProfilePageProps) {
       <div className="model-section-heading"><div><p className="eyebrow">Auditable evidence</p><h2 id="benchmark-ledger-title">Benchmark ledger</h2></div><p>Display values, source ranks, and provenance remain visible without implying unsupported aggregate weight.</p></div>
       {ledgerGroups(profile.ledger).map(([category, rows]) => <div className="model-ledger-group" key={category}>
         <h3>{category}</h3>
-        <div className="model-ledger-scroll"><table><thead><tr><th>Score</th><th>Rank</th><th>Weight</th><th>Last Updated</th><th>Source</th></tr></thead><tbody>
+        <div className="model-ledger-scroll"><table aria-label={`${category[0]!.toUpperCase()}${category.slice(1)} benchmark ledger`}><thead><tr><th>Score</th><th>Rank</th><th>Weight</th><th>Last Updated</th><th>Source</th></tr></thead><tbody>
           {rows.map((row) => <tr key={`${row.metricKey}:${row.sourceArtifactId}`}><td>{score(row.displayValue)}</td><td>{row.rank === null ? 'Not ranked' : `#${row.rank}`}</td><td>{row.weight === null ? 'Not published' : row.weight}</td><td>{date(row.observedAt)}</td><td><a href={row.sourceUrl} rel="noreferrer" target="_blank" aria-label={`${row.benchmarkName} source`}>{sourceName(row.sourceId)}</a></td></tr>)}
         </tbody></table></div>
       </div>)}

@@ -224,6 +224,24 @@ export function HomePage() {
         </div>
       </section>
 
+      <section className="home-feature-section" aria-labelledby="home-articles-heading">
+        <div className="panel-heading"><div><span className="eyebrow">Articles</span><h2 id="home-articles-heading">Evidence-ledger articles</h2><p>Source-backed guides and analysis channels, with each destination's population state stated explicitly.</p></div></div>
+        <div className="home-feature-grid home-guide-grid" role="list" aria-label="TokenBench Articles channels">
+          <article className="panel" role="listitem">
+            <span className="eyebrow">Guides</span>
+            <h3>Practical operating guides</h3>
+            <p className="muted">Curated, source-backed guides for cost control, routing, and usage visibility.</p>
+            <a href={ROUTE_PATHS.guides}>Browse all guides <ArrowRight aria-hidden="true" size={14} /></a>
+          </article>
+          <article className="panel" role="listitem">
+            <span className="eyebrow">Insights</span>
+            <h3>LLM insights</h3>
+            <p className="muted">Not yet separately populated. This channel is reserved for future evidence-ledger analysis.</p>
+            <a href={ROUTE_PATHS.insights}>LLM insights <ArrowRight aria-hidden="true" size={14} /></a>
+          </article>
+        </div>
+      </section>
+
       <aside className="panel home-monomind-banner" aria-label="MonoMind optimization services">
         <div className="home-monomind-label"><img src="/brand/monomind-tokenbench.png" alt="" /><h2 className="eyebrow">MonoMind AI Lab</h2></div>
         <p className="home-monomind-lead">Spending over $1,000/month on LLM tokens?</p>

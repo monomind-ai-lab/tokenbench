@@ -164,7 +164,7 @@ function Card({ keyName, entry, position, showModalities }: { readonly keyName: 
       <div><dt>Score</dt><dd><ScoreValue entry={entry} /></dd></div>
       {showModalities ? <div><dt>Supported Modalities</dt><dd><ModalitiesValue entry={entry} /></dd></div> : null}
       <div><dt>Context</dt><dd>{estimated ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</dd></div>
-      <div><dt>Source rank</dt><dd>{estimated || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</dd></div>
+      <div><dt>Source rank</dt><dd>{estimated || !usesPublishedSourceRank(keyName) || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</dd></div>
     </dl>
   </li>;
 }
@@ -197,6 +197,7 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
             <th scope="col" aria-sort={canSort('score-desc') ? (usesSourceLensOrder ? 'other' : sortDirection(sort, 'score-desc')) : 'none'}>{canSort('score-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('score-desc')} aria-label={keyName === 'multimodal-vision-documents' ? 'Use source lens order' : 'Sort by score'}>Score</button> : 'Score'}</th>
             {showModalities ? <th scope="col">Supported Modalities</th> : null}
             <th scope="col" aria-sort={canSort('context-desc') ? sortDirection(sort, 'context-desc') : 'none'}>{canSort('context-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button> : 'Context'}</th>
+            <th scope="col">Source rank</th>
           </tr>
         </thead>
         <tbody>
@@ -206,6 +207,7 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
             <td><ScoreValue entry={entry} /></td>
             {showModalities ? <td><ModalitiesValue entry={entry} /></td> : null}
             <td>{isEstimated(entry) ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</td>
+            <td>{isEstimated(entry) || !sourceRanked || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</td>
           </tr>)}
         </tbody>
       </table>

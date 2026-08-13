@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import GuidesApp from '../GuidesApp';
 import { SITE_CONFIG } from '../brand/site-config';
 import { GUIDES } from '../guides/content';
+import { ROUTE_PATHS } from '../routing/routes';
 import { GuideArticlePage, GuidesHub } from './guides-page';
 
 const expectedLeaderboardLinks = {
@@ -27,7 +28,7 @@ const expectedLeaderboardLinks = {
 describe('guides experience', () => {
   beforeEach(() => {
     localStorage.clear();
-    window.history.replaceState({}, '', '/guides/');
+    window.history.replaceState({}, '', ROUTE_PATHS.guides);
   });
 
   it('uses shared TokenBench chrome and the dedicated calculator route', () => {
@@ -35,7 +36,7 @@ describe('guides experience', () => {
 
     expect(screen.getByRole('link', { name: `${SITE_CONFIG.name} home` })).toHaveAttribute('href', '/');
     expect(screen.getByText('Source-aware model, pricing, and workload evidence for practical AI decisions.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
+    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', `${ROUTE_PATHS.calculator}#calculator`);
     expect(screen.queryByText(/AI Cost Engine/i)).not.toBeInTheDocument();
   });
 
@@ -43,7 +44,7 @@ describe('guides experience', () => {
     render(<GuidesHub />);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'Spend smarter on AI' })).toBeInTheDocument();
-    for (const guide of GUIDES) expect(screen.getByRole('link', { name: guide.title })).toHaveAttribute('href', `/guides/${guide.slug}/`);
+    for (const guide of GUIDES) expect(screen.getByRole('link', { name: guide.title })).toHaveAttribute('href', `/articles/guides/${guide.slug}/`);
   });
 
   it('renders article navigation, official sources, and valid related guides', () => {
@@ -55,7 +56,7 @@ describe('guides experience', () => {
     for (const section of guide.sections) expect(within(toc).getByRole('link', { name: section.title.replace(/^\d+\.\s*/, '') })).toHaveAttribute('href', `#${section.id}`);
     expect(screen.getAllByRole('link', { name: /Claude Code/i }).some((link) => link.getAttribute('href')?.startsWith('https://'))).toBe(true);
     expect(screen.getByRole('heading', { name: 'Related guides' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open calculator/i })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
+    expect(screen.getByRole('link', { name: /Open calculator/i })).toHaveAttribute('href', `${ROUTE_PATHS.calculator}#calculator`);
   });
 
   it('renders a relevant checked-in leaderboard context link for every article', () => {
@@ -69,5 +70,20 @@ describe('guides experience', () => {
 
       view.unmount();
     }
+  });
+
+  it('marks the insights channel as not yet separately populated', () => {
+    render(<GuidesHub isInsights />);
+
+    expect(screen.getByRole('heading', { name: /Not yet separately populated/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse all guides' })).toHaveAttribute('href', ROUTE_PATHS.guides);
+  });
+
+  it('renders the insights channel from the insights route', () => {
+    window.history.replaceState({}, '', ROUTE_PATHS.insights);
+    render(<GuidesApp />);
+
+    expect(screen.getByRole('heading', { name: /Not yet separately populated/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Browse all guides' })).toHaveAttribute('href', ROUTE_PATHS.guides);
   });
 });
