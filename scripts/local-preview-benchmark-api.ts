@@ -43,7 +43,7 @@ import {
   type ModelDirectoryQueryState,
 } from '../src/frontend/model-directory-state';
 import { buildLeaderboard, LEADERBOARD_DEFINITIONS, type LeaderboardResult } from '../src/benchmarks/leaderboards';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../src/routing/routes';
+import { LEADERBOARD_ROUTES, ROUTE_PATHS, type LeaderboardKey } from '../src/routing/routes';
 import { renderModelDirectoryDocument } from '../functions/models/index';
 import {
   renderModelProfileDocument,
@@ -613,6 +613,7 @@ function serveLocalModelDocument(
   url: URL,
   response: ServerResponse,
   headOnly: boolean,
+  next: () => void,
 ): boolean {
   if (url.pathname === '/models') {
     writeRedirect(response, 301, '/models/');
@@ -624,6 +625,10 @@ function serveLocalModelDocument(
     writeHtml(response, 200, renderModelDirectoryDocument(envelope, { ...parsed.query, limit: parsed.limit, cursor: null }), headOnly, {
       'X-Robots-Tag': 'index, follow',
     });
+    return true;
+  }
+  if (url.pathname === ROUTE_PATHS.modelLifecycle || url.pathname === ROUTE_PATHS.modelLifecycle.slice(0, -1)) {
+    next();
     return true;
   }
   const match = /^\/models\/([^/]+)\/?$/u.exec(url.pathname);
@@ -713,7 +718,7 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
     return;
   }
   const headOnly = method === 'HEAD';
-  if (isModelDocument && serveLocalModelDocument(url, response, headOnly)) return;
+  if (isModelDocument && serveLocalModelDocument(url, response, headOnly, next)) return;
   if (isPricePerformanceDocument && serveLocalPricePerformanceDocument(url, response, headOnly)) return;
   const previewState = request.headers[LOCAL_PREVIEW_STATE_HEADER];
   if (previewState === '503') {

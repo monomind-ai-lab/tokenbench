@@ -179,12 +179,16 @@ function statusResponse(status: 404 | 503, slug: string | null): Response {
   });
 }
 
-export async function onRequestGet({ request, env, params }: {
+export async function onRequestGet({ request, env, params, next }: {
   request: Request;
   env: BenchmarkApiEnv;
   params?: { slug?: string };
+  next?: (input?: Request | string, init?: RequestInit) => Promise<Response>;
 }): Promise<Response> {
   const slug = requestedSlug(request, params?.slug);
+  if (slug === 'lifecycle') {
+    return next ? next() : statusResponse(404, slug);
+  }
   if (!slug) return statusResponse(404, null);
   if (!env.CATALOG_DB) return statusResponse(503, slug);
   try {

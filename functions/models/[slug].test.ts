@@ -63,6 +63,20 @@ describe('server-rendered model profile', () => {
     expect(response.headers.get('Location')).toBe('/models/gpt-5-6-sol/');
   });
 
+  it('delegates the canonical lifecycle slug to static handling without reading a durable model profile', async () => {
+    const next = vi.fn().mockResolvedValue(new Response('static lifecycle shell', { status: 200 }));
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.monomind.one/models/lifecycle/'),
+      env: { CATALOG_DB: { prepare() { throw new Error('mocked read'); } } },
+      params: { slug: 'lifecycle' },
+      next,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('static lifecycle shell');
+    expect(read).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalledTimes(1);
+  });
+
   it('uses the weekly 8-day freshness boundary for SSR profiles', async () => {
     const fixture = modelProfileViewModelFixture();
     read.mockResolvedValue({

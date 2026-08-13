@@ -119,6 +119,25 @@ describe('local Vite benchmark preview API', () => {
     }
   });
 
+  it('delegates the canonical lifecycle path to generated static handling instead of a model-profile 404', async () => {
+    const { server, origin } = await startLocalPreviewServer();
+    try {
+      const [lifecycle, canonicalRedirect] = await Promise.all([
+        getLocalResponse(origin, '/models/lifecycle/'),
+        getLocalResponse(origin, '/models/lifecycle'),
+      ]);
+      expect(lifecycle.status).toBe(200);
+      expect(lifecycle.contentType).toContain('text/html');
+      expect(lifecycle.body).toContain('Model Lifecycle Radar');
+      expect(lifecycle.body).not.toContain('Model profile not found');
+      expect(lifecycle.body).not.toContain('model-profile-initial-data');
+      expect(canonicalRedirect.status).toBe(301);
+      expect(canonicalRedirect.headers.location).toBe('/models/lifecycle/');
+    } finally {
+      await server.close();
+    }
+  });
+
   it('serves clearly labeled sample summary and coding rows through the public JSON contracts', async () => {
     const { server, origin } = await startLocalPreviewServer();
     try {
