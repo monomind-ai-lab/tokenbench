@@ -43,9 +43,14 @@ export function formatPricePerformancePointView(
 ): PricePerformancePointViewFacts {
   const score = formatScore(point.score);
   const selectedCost = `$${formatNumber(point.selectedCost, 4)} / 1M ${costBasisLabel(point)}`;
+  // The unit is stated once in the column header, not once per cell. A screen
+  // reader user cannot see that header, so `accessibleName` still speaks it.
   const scorePerDollar = point.scorePerDollar === null
-    ? 'Score per dollar unavailable'
-    : `${formatNumber(point.scorePerDollar, 2)} score / $`;
+    ? 'Unavailable'
+    : formatNumber(point.scorePerDollar, 2);
+  const spokenScorePerDollar = point.scorePerDollar === null
+    ? 'score per dollar unavailable'
+    : `${formatNumber(point.scorePerDollar, 2)} score per dollar`;
   const provider = point.creator;
   const route = `${point.route.providerId} · ${point.route.routeId}`;
   const sourceLinkLabel = `${provider} · ${route}`;
@@ -55,7 +60,7 @@ export function formatPricePerformancePointView(
   const status = point.status === 'current' ? 'Current model' : 'Archived model';
   const profileHref = modelPath(point.slug);
   const profileLinkLabel = `View ${point.displayName} model profile`;
-  const accessibleName = `${point.displayName}, score ${score}, ${selectedCost}, ${scorePerDollar}, ${evidence}, ${frontier}`;
+  const accessibleName = `${point.displayName}, score ${score}, ${selectedCost}, ${spokenScorePerDollar}, ${evidence}, ${frontier}`;
   return {
     modelName: point.displayName,
     score,

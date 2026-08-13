@@ -48,7 +48,7 @@ describe('PricePerformanceTable', () => {
     const table = screen.getByRole('table', { name: 'Price versus performance values' });
     expect(within(table).getByRole('row', { name: /Alpha/ })).toHaveTextContent('81.5');
     expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('78.0');
-    expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('Score per dollar unavailable');
+    expect(within(table).getByRole('row', { name: /Beta/ })).toHaveTextContent('Unavailable');
     expect(screen.getAllByRole('link', { name: 'View Alpha model profile' })).toHaveLength(1);
     expect(screen.getAllByRole('link', { name: 'Alpha' })).toHaveLength(1);
     expect(screen.getByRole('link', { name: 'Alpha' })).toHaveAttribute('href', '/models/alpha/');
@@ -56,7 +56,7 @@ describe('PricePerformanceTable', () => {
     expect(screen.queryByText('Current model')).not.toBeInTheDocument();
     expect(screen.queryByText('Provider / route')).not.toBeInTheDocument();
     expect(screen.getAllByText('Pareto frontier')).toHaveLength(2);
-    expect(screen.getAllByText('Score per dollar unavailable')).toHaveLength(2);
+    expect(screen.getAllByText('Unavailable')).toHaveLength(2);
   });
 
   it('renders a category-empty table without zero-value placeholders', () => {
