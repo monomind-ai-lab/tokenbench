@@ -1,8 +1,12 @@
 import type { ActiveBenchmarkSnapshot } from '../../../functions/_shared/benchmark-db';
-import { weekStartUtc, directoryRecordFromModel, POPULAR_MODEL_LIMIT } from '../../../src/benchmarks/model-directory';
+import { weekStartUtc, directoryRecordFromModel, selectPopularModelRanks } from '../../../src/benchmarks/model-directory';
 import type { BenchmarkCandidateManifestV1 } from './candidate-storage';
 import { listRequiredBenchmarkCachePartitions } from './cache-partitions';
-import { publicLeaderboardFromSnapshot } from './benchlm-public-leaderboard';
+import {
+  joinPublicLeaderboardRows,
+  publicLeaderboardFromSnapshot,
+  type BenchLmPublicLeaderboard,
+} from './benchlm-public-leaderboard';
 
 type BoundStatement = {
   bind(...values: unknown[]): BoundStatement;
@@ -37,6 +41,37 @@ export interface PublishCandidateInput {
 
 function fail(message: string): never {
   throw new Error(message);
+}
+
+/**
+ * The exact weekly Popular Models rank rows, for both publication and its
+ * validation receipt.
+ *
+ * Source ranks are preserved verbatim and never renumbered. `selectPopularModelRanks`
+ * applies the only transformations the storage layer requires: it drops ranks
+ * outside 1..100 (`benchmark_popular_model_ranks.rank` is
+ * `CHECK (rank BETWEEN 1 AND 100)`) and keeps one model per rank
+ * (`PRIMARY KEY (week_start, rank)`), deterministically in source-rank then
+ * binary model-key order.
+ *
+ * Taking the first 100 leaderboard rows and trusting their raw `rank` instead
+ * would abort the single publication batch whenever upstream published a
+ * duplicate or out-of-range rank, and would let the expected rank count
+ * overstate what is actually representable.
+ */
+function weeklyPopularModelRanks(
+  snapshot: ActiveBenchmarkSnapshot,
+  leaderboard: BenchLmPublicLeaderboard,
+  weekStart: string,
+): readonly { readonly weekStart: string; readonly rank: number; readonly modelKey: string }[] {
+  const identities = snapshot.models.map((model) => ({
+    sourceModelId: model.sourceModelId,
+    modelKey: model.modelKey,
+    name: model.name,
+    creator: model.creator,
+  }));
+  return selectPopularModelRanks(weekStart, joinPublicLeaderboardRows(identities, leaderboard)
+    .map(({ modelKey, score }) => ({ modelKey, rank: score.overallRank })));
 }
 
 async function count(
@@ -93,7 +128,10 @@ export async function validateCompleteBenchmarkCandidate(input: {
 
   const leaderboard = publicLeaderboardFromSnapshot(snapshot);
   const weekStart = weekStartUtc(input.snapshot.revision.checkedAt);
-  const expectedRanks = Math.min(100, leaderboard.models.length);
+  // Derived from the exact rank set publication will insert, not from the raw
+  // leaderboard length: out-of-range and duplicate source ranks are not
+  // representable, so counting rows would overstate the receipt.
+  const expectedRanks = weeklyPopularModelRanks(snapshot, leaderboard, weekStart).length;
 
   const requiredCacheKeys = listRequiredBenchmarkCachePartitions(snapshot);
   const cacheRows = await db.prepare(`SELECT cache_key AS cacheKey, variant, chunk_index AS chunkIndex, etag, body
@@ -182,16 +220,7 @@ export async function publishBenchmarkCandidate(input: PublishCandidateInput): P
   }
   const leaderboard = publicLeaderboardFromSnapshot(input.snapshot);
   const weekStart = weekStartUtc(input.checkedAt);
-  // Weekly Popular Models is a top 100 by product decision, and
-  // benchmark_popular_model_ranks.rank is CHECK (rank BETWEEN 1 AND 100).
-  // The ingested evidence cohort is larger; only this list is capped.
-  const ranks = leaderboard.models.slice(0, POPULAR_MODEL_LIMIT).map((row) => {
-    const model = input.snapshot.models.find((candidate) => (
-      candidate.name === row.model && candidate.creator === row.creator
-    ));
-    if (!model) fail(`popular model ${row.creator}/${row.model} is missing from the snapshot`);
-    return { weekStart, rank: row.rank, modelKey: model.modelKey };
-  });
+  const ranks = weeklyPopularModelRanks(input.snapshot, leaderboard, weekStart);
   const existingWeek = await input.db.prepare(`SELECT COUNT(ranks.rank) AS rankCount
     FROM benchmark_popular_model_weeks AS week
     LEFT JOIN benchmark_popular_model_ranks AS ranks ON ranks.week_start = week.week_start

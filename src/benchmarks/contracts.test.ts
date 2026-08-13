@@ -205,6 +205,17 @@ describe('benchmark contracts', () => {
     expect(result.sources[0]).toMatchObject({ contentHash: projectedHash, originalContentHash: originalHash });
   });
 
+  it('accepts an additive exact rank field size and rejects contradictory evidence', () => {
+    expect(validateNormalizedSourceBatch({
+      ...validBatch,
+      metrics: [{ ...validBatch.metrics[0], rankFieldSize: 5 }],
+    }).metrics[0].rankFieldSize).toBe(5);
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      metrics: [{ ...validBatch.metrics[0], rank: 6, rankFieldSize: 5 }],
+    })).toThrow('metrics[0].rank exceeds metrics[0].rankFieldSize');
+  });
+
   it('requires real, separate SHA-256 evidence hashes for every source artifact', () => {
     expect(() => validateNormalizedSourceBatch({
       ...validBatch,

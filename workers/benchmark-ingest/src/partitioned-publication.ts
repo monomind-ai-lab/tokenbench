@@ -91,9 +91,9 @@ SELECT ?, json_extract(row.value, '$.modelKey'), json_extract(row.value, '$.slug
 FROM json_each(?) AS row
 WHERE ${OWNERSHIP_GUARD}`,
   metrics: `INSERT OR IGNORE INTO benchmark_metrics
-  (revision, model_key, metric_key, category, value, raw_value, rank, lower_bound, upper_bound, vote_count, unit, source_id, source_updated_at, source_model_id, source_artifact_id, ranking_eligible, methodology, observation_count, session_count)
+  (revision, model_key, metric_key, category, value, raw_value, rank, rank_field_size, lower_bound, upper_bound, vote_count, unit, source_id, source_updated_at, source_model_id, source_artifact_id, ranking_eligible, methodology, observation_count, session_count)
 SELECT ?, json_extract(row.value, '$.modelKey'), json_extract(row.value, '$.metricKey'), json_extract(row.value, '$.category'), json_extract(row.value, '$.value'),
-  json_extract(row.value, '$.rawValue'), json_extract(row.value, '$.rank'), json_extract(row.value, '$.lower'), json_extract(row.value, '$.upper'), json_extract(row.value, '$.voteCount'), json_extract(row.value, '$.unit'),
+  json_extract(row.value, '$.rawValue'), json_extract(row.value, '$.rank'), json_extract(row.value, '$.rankFieldSize'), json_extract(row.value, '$.lower'), json_extract(row.value, '$.upper'), json_extract(row.value, '$.voteCount'), json_extract(row.value, '$.unit'),
   json_extract(row.value, '$.sourceId'), json_extract(row.value, '$.sourceUpdatedAt'), json_extract(row.value, '$.sourceModelId'), json_extract(row.value, '$.sourceArtifactId'),
   CASE WHEN json_extract(row.value, '$.rankingEligible') THEN 1 ELSE 0 END, json_extract(row.value, '$.methodology'), json_extract(row.value, '$.observationCount'), json_extract(row.value, '$.sessionCount')
 FROM json_each(?) AS row

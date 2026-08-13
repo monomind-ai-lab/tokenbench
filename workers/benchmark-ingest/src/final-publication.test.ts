@@ -15,7 +15,7 @@ const CATALOG_REVISION = 'catalog-revision';
 const CHECKED_AT = '2026-08-16T02:15:00.000Z';
 const HASH = `sha256:${'a'.repeat(64)}`;
 
-function snapshot(): ActiveBenchmarkSnapshot {
+function snapshot(overallRanks?: readonly number[]): ActiveBenchmarkSnapshot {
   const source = {
     sourceId: 'benchlm' as const,
     artifactId: 'public-leaderboard',
@@ -31,10 +31,18 @@ function snapshot(): ActiveBenchmarkSnapshot {
     licenseId: 'MIT' as const,
     attributionText: 'Data from BenchLM.ai',
   };
-  const models = [
-    { modelKey: 'model-a', slug: 'model-a', name: 'Model A', creator: 'Creator A' },
-    { modelKey: 'model-b', slug: 'model-b', name: 'Model B', creator: 'Creator B' },
-  ].map((model, index) => ({
+  const identities = overallRanks
+    ? overallRanks.map((_, index) => ({
+        modelKey: `model-${index}`,
+        slug: `model-${index}`,
+        name: `Model ${index}`,
+        creator: `Creator ${index}`,
+      }))
+    : [
+      { modelKey: 'model-a', slug: 'model-a', name: 'Model A', creator: 'Creator A' },
+      { modelKey: 'model-b', slug: 'model-b', name: 'Model B', creator: 'Creator B' },
+    ];
+  const models = identities.map((model, index) => ({
     ...model,
     sourceType: 'Proprietary' as const,
     reasoningType: null,
@@ -56,7 +64,7 @@ function snapshot(): ActiveBenchmarkSnapshot {
       category: 'overall',
       value: 90 - index,
       rawValue: 90 - index,
-      rank: index + 1,
+      rank: overallRanks ? overallRanks[index]! : index + 1,
       lower: null,
       upper: null,
       voteCount: null,
@@ -268,6 +276,72 @@ describe('final benchmark publication', () => {
     expect(complete.some((sql) => sql.includes('DELETE FROM benchmark_popular_model_ranks'))).toBe(false);
     expect(complete.some((sql) => sql.includes('UPDATE benchmark_popular_model_weeks'))).toBe(false);
     expect(complete.some((sql) => sql.includes('INSERT INTO benchmark_popular_model_ranks'))).toBe(false);
+  });
+
+  describe('weekly rank selection is source-rank safe', () => {
+    async function publishedRanks(candidate: ActiveBenchmarkSnapshot) {
+      const batches: ReturnType<typeof statement>[][] = [];
+      const db = {
+        prepare(sql: string) {
+          if (sql.includes('FROM benchmark_publication_state')) {
+            return {
+              ...statement(sql),
+              bind() {
+                return { ...statement(sql), async first<T>() {
+                  return { revision: 'benchmark-old', contentHash: HASH } as T;
+                } };
+              },
+            };
+          }
+          if (sql.includes('FROM benchmark_popular_model_weeks')) {
+            return {
+              ...statement(sql),
+              bind() { return { ...statement(sql), async first<T>() { return null as T | null; } }; },
+            };
+          }
+          return statement(sql);
+        },
+        async batch(statements: ReturnType<typeof statement>[]) { batches.push(statements); },
+      } as PublicationD1Database;
+      await publishBenchmarkCandidate({
+        db,
+        cycleId: CYCLE_ID,
+        cadenceKey: '2026-W33',
+        revision: REVISION,
+        cacheRevision: benchmarkCandidateCacheRevision(candidate, CYCLE_ID),
+        manifestHash: HASH,
+        snapshot: candidate,
+        checkedAt: CHECKED_AT,
+      });
+      const insert = batches[0]!.find((entry) => entry.sql.includes('INSERT INTO benchmark_popular_model_ranks'));
+      return JSON.parse(String(insert?.values.at(-1) ?? '[]')) as Array<{ rank: number; modelKey: string }>;
+    }
+
+    it('drops source ranks above the top 100 instead of renumbering them', async () => {
+      // benchmark_popular_model_ranks.rank is CHECK (rank BETWEEN 1 AND 100).
+      // Inserting rank 101 would abort the single publication batch.
+      const ranks = await publishedRanks(snapshot([1, 2, 101]));
+
+      expect(ranks.map((row) => row.rank)).toEqual([1, 2]);
+      expect(ranks.every((row) => row.rank >= 1 && row.rank <= 100)).toBe(true);
+    });
+
+    it('keeps one model per duplicated source rank without violating the primary key', async () => {
+      // PRIMARY KEY (week_start, rank): two models sharing rank 2 would abort
+      // the batch. Deduplication is deterministic on binary model-key order.
+      const ranks = await publishedRanks(snapshot([1, 2, 2]));
+
+      expect(ranks.map((row) => row.rank)).toEqual([1, 2]);
+      expect(new Set(ranks.map((row) => row.rank)).size).toBe(ranks.length);
+      expect(new Set(ranks.map((row) => row.modelKey)).size).toBe(ranks.length);
+    });
+
+    it('preserves sparse source ranks verbatim rather than closing the gaps', async () => {
+      const ranks = await publishedRanks(snapshot([1, 5, 9]));
+
+      expect(ranks.map((row) => row.rank)).toEqual([1, 5, 9]);
+    });
+
   });
 
   it('leaves pointers unchanged when the sole D1 batch fails', async () => {

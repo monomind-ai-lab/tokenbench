@@ -440,6 +440,11 @@ export function parseLmArenaSubset(
       value: row.value,
       rawValue: null,
       rank: row.rank,
+      // LMArena is retrieved in offset pages, so one parsed artifact is a
+      // window over the leaderboard rather than the whole ranked cohort. The
+      // exact field size is therefore not provable here and stays null; the
+      // published rank is still preserved verbatim.
+      rankFieldSize: null,
       lower: row.lower,
       upper: row.upper,
       voteCount: row.voteCount,

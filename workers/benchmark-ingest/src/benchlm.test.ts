@@ -233,6 +233,53 @@ describe('parseBenchLm', () => {
     expect(coding?.rank).toBe(99);
   });
 
+  describe('exact published category cohort size', () => {
+    function setCodingRanks(source: ReturnType<typeof payloads>, ranks: readonly number[]) {
+      const models = (source.models as { items: Array<Record<string, unknown>> }).items;
+      expect(models).toHaveLength(ranks.length);
+      models.forEach((candidate, index) => {
+        const ranking = candidate.ranking as Record<string, unknown>;
+        ranking.categoryRanks = {
+          ...(ranking.categoryRanks as Record<string, number | null>),
+          coding: ranks[index],
+        };
+      });
+    }
+
+    it('carries a dense, unique 1..N models.json category cohort into joined metrics', async () => {
+      const source = payloads();
+      setCodingRanks(source, [1, 2, 3, 4, 5]);
+
+      const batch = await parsePayloads(source);
+      const coding = batch.metrics.find((metric) => metric.sourceModelId === 'model-a'
+        && metric.metricKey === 'benchlm:category:coding');
+
+      expect(coding).toMatchObject({ rank: 1, rankFieldSize: 5 });
+      expect(batch.metrics.find((metric) => metric.sourceModelId === 'model-a'
+        && metric.metricKey === 'benchlm:overall:raw')?.rankFieldSize).toBeNull();
+    });
+
+    it('leaves the denominator unavailable when the complete artifact has a rank gap', async () => {
+      const source = payloads();
+      setCodingRanks(source, [1, 3, 4, 5, 6]);
+
+      const batch = await parsePayloads(source);
+
+      expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')?.rankFieldSize)
+        .toBeNull();
+    });
+
+    it('leaves the denominator unavailable when the complete artifact duplicates a rank', async () => {
+      const source = payloads();
+      setCodingRanks(source, [1, 2, 2, 3, 4]);
+
+      const batch = await parsePayloads(source);
+
+      expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')?.rankFieldSize)
+        .toBeNull();
+    });
+  });
+
   it('counts only benchmarks that actually joined into published evidence', async () => {
     // Drop Model A from the public window: it still has coverage
     // trustedBenchmarkCount 4 in models.json, but nothing joins. A profile

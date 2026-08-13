@@ -78,6 +78,7 @@ function metric(candidate: BenchmarkModel, rank: number): BenchmarkMetric {
     value: 90 - rank,
     rawValue: null,
     rank,
+    rankFieldSize: null,
     lower: null,
     upper: null,
     voteCount: null,
@@ -330,31 +331,66 @@ describe('atomic model directory publication', () => {
     expect(conflict?.sql).toContain('existing.model_key <> json_extract');
   });
 
-  it('sizes the ranked field by the highest published rank, not the row count', () => {
-    const records: RecordedStatement[] = [];
-    const base = snapshot(3);
-    const candidate: ActiveBenchmarkSnapshot = {
-      ...base,
-      metrics: base.metrics.map((entry, index) => index === 1 ? { ...entry, rank: null } : entry),
-    };
+  describe('published field size travels through the publication path', () => {
+    function publishedOverall(candidate: ActiveBenchmarkSnapshot, modelIndex = 0) {
+      const records: RecordedStatement[] = [];
+      appendModelDirectoryPublicationStatements(
+        [],
+        recordingDatabase(records),
+        candidate,
+        publicLeaderboard(candidate.models),
+        UPDATED_AT,
+      );
+      const profileStatement = records.find((statement) => (
+        statement.sql.startsWith('INSERT INTO benchmark_model_profile_snapshots')
+      ));
+      const profiles = JSON.parse(String(profileStatement?.values.at(-1))) as Array<{ modelKey: string; profileJson: string }>;
+      const target = JSON.parse(
+        profiles.find((profile) => profile.modelKey === candidate.models[modelIndex]?.modelKey)?.profileJson ?? '{}',
+      ) as { categories?: Array<{ key: string; rank: number | null; fieldSize: number | null; percentile: number | null }> };
+      return target.categories?.find((category) => category.key === 'overall');
+    }
 
-    appendModelDirectoryPublicationStatements(
-      [],
-      recordingDatabase(records),
-      candidate,
-      publicLeaderboard(candidate.models),
-      UPDATED_AT,
-    );
+    it('publishes the exact cohort size the source supplied', () => {
+      const base = snapshot(3);
+      const overall = publishedOverall({
+        ...base,
+        metrics: base.metrics.map((entry) => ({ ...entry, rankFieldSize: 3 })),
+      });
 
-    const profileStatement = records.find((statement) => statement.sql.startsWith('INSERT INTO benchmark_model_profile_snapshots'));
-    const profiles = JSON.parse(String(profileStatement?.values.at(-1))) as Array<{ modelKey: string; profileJson: string }>;
-    const target = JSON.parse(profiles.find((profile) => profile.modelKey === candidate.models[0]?.modelKey)?.profileJson ?? '{}') as {
-      categories?: Array<{ key: string; fieldSize: number | null }>;
-    };
-    // One of three peer ranks is nulled, leaving published ranks #1 and #3.
-    // The field is 3 because rank #3 exists: counting surviving rows instead
-    // would report "#3 of 2" and a fabricated 0 percentile.
-    expect(target.categories?.find((category) => category.key === 'overall')?.fieldSize).toBe(3);
+      expect(overall?.rank).toBe(1);
+      expect(overall?.fieldSize).toBe(3);
+      expect(overall?.percentile).toBe(100);
+    });
+
+    it('publishes percentile 0 for true last place in an exact cohort', () => {
+      const base = snapshot(3);
+      const overall = publishedOverall({
+        ...base,
+        metrics: base.metrics.map((entry) => ({ ...entry, rankFieldSize: 3 })),
+      }, 2);
+
+      expect(overall?.rank).toBe(3);
+      expect(overall?.fieldSize).toBe(3);
+      expect(overall?.percentile).toBe(0);
+    });
+
+    it('leaves the field unavailable when no exact cohort size is published', () => {
+      // Sparse published ranks #1 and #3 with no source-supplied size. Treating
+      // the highest observed rank as exact would report "#1 of 3" from a cohort
+      // that was never proven complete.
+      const base = snapshot(3);
+      const overall = publishedOverall({
+        ...base,
+        metrics: base.metrics.map((entry, index) => (
+          index === 1 ? { ...entry, rank: null } : entry
+        )),
+      });
+
+      expect(overall?.rank).toBe(1);
+      expect(overall?.fieldSize).toBeNull();
+      expect(overall?.percentile).toBeNull();
+    });
   });
 
   it('never rewrites a profile snapshot already stored for the same revision', async () => {

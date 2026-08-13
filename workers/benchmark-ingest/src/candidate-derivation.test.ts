@@ -105,6 +105,7 @@ function categoryMetric(modelKey: string, category: string, value: number) {
     value,
     rawValue: null,
     rank: null,
+    rankFieldSize: null,
     lower: null,
     upper: null,
     voteCount: null,

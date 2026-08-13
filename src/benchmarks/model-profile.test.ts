@@ -72,6 +72,7 @@ function metric(overrides: Partial<BenchmarkMetric> = {}): BenchmarkMetric {
     value: 81.48,
     rawValue: 81,
     rank: 4,
+    rankFieldSize: null,
     lower: null,
     upper: null,
     voteCount: null,
@@ -132,16 +133,17 @@ function activeSnapshot(): ModelProfileSourceSnapshot {
     model({ modelKey: 'benchlm:peer:gamma', slug: 'gamma', name: 'Gamma', sourceModelId: 'peer/gamma' }),
   ];
   const overall = [
-    metric(),
-    metric({ modelKey: 'benchlm:peer:alpha', sourceModelId: 'peer/alpha', value: 90, rawValue: 90, rank: 1 }),
-    metric({ modelKey: 'benchlm:peer:beta', sourceModelId: 'peer/beta', value: 87, rawValue: 87, rank: 2 }),
-    metric({ modelKey: 'benchlm:peer:gamma', sourceModelId: 'peer/gamma', value: 83, rawValue: 83, rank: 3 }),
+    // Four models, ranks 1..4: the source publishes an exact cohort size of 4.
+    metric({ rankFieldSize: 4 }),
+    metric({ modelKey: 'benchlm:peer:alpha', sourceModelId: 'peer/alpha', value: 90, rawValue: 90, rank: 1, rankFieldSize: 4 }),
+    metric({ modelKey: 'benchlm:peer:beta', sourceModelId: 'peer/beta', value: 87, rawValue: 87, rank: 2, rankFieldSize: 4 }),
+    metric({ modelKey: 'benchlm:peer:gamma', sourceModelId: 'peer/gamma', value: 83, rawValue: 83, rank: 3, rankFieldSize: 4 }),
   ];
   const coding = [
-    metric({ metricKey: 'benchlm:category:coding', category: 'coding', value: 77.95, rawValue: null, rank: 3 }),
-    metric({ modelKey: 'benchlm:peer:alpha', sourceModelId: 'peer/alpha', metricKey: 'benchlm:category:coding', category: 'coding', value: 91, rawValue: null, rank: 1 }),
-    metric({ modelKey: 'benchlm:peer:beta', sourceModelId: 'peer/beta', metricKey: 'benchlm:category:coding', category: 'coding', value: 85, rawValue: null, rank: 2 }),
-    metric({ modelKey: 'benchlm:peer:gamma', sourceModelId: 'peer/gamma', metricKey: 'benchlm:category:coding', category: 'coding', value: 75, rawValue: null, rank: 4 }),
+    metric({ metricKey: 'benchlm:category:coding', category: 'coding', value: 77.95, rawValue: null, rank: 3, rankFieldSize: 4 }),
+    metric({ modelKey: 'benchlm:peer:alpha', sourceModelId: 'peer/alpha', metricKey: 'benchlm:category:coding', category: 'coding', value: 91, rawValue: null, rank: 1, rankFieldSize: 4 }),
+    metric({ modelKey: 'benchlm:peer:beta', sourceModelId: 'peer/beta', metricKey: 'benchlm:category:coding', category: 'coding', value: 85, rawValue: null, rank: 2, rankFieldSize: 4 }),
+    metric({ modelKey: 'benchlm:peer:gamma', sourceModelId: 'peer/gamma', metricKey: 'benchlm:category:coding', category: 'coding', value: 75, rawValue: null, rank: 4, rankFieldSize: 4 }),
   ];
   const missing = metric({
     metricKey: 'benchlm:category:missing',
@@ -240,6 +242,72 @@ describe('model profile contracts', () => {
     expect(category?.fieldSize === null || category!.fieldSize >= 17).toBe(true);
     // A last-place artifact of a mismatched denominator is not a measurement.
     expect(category?.percentile).not.toBe(0);
+  });
+
+  describe('exact cohort rule', () => {
+    // The public leaderboard window is a truncated slice: measured against real
+    // upstream data, coding publishes 132 ranks but only 115 of those models
+    // appear in the limit=200 window. So an observed rank set can look dense
+    // (1..N with no gaps) while still missing the tail. Density of what we
+    // happen to observe therefore cannot prove cohort completeness, and the
+    // exact size must be carried from the source instead.
+    function cohortSnapshot(rankFieldSize: number | null, ranks: readonly number[]) {
+      const base = activeSnapshot();
+      const peers = ranks.slice(1).map((_, index) => model({
+        modelKey: `benchlm:peer:cohort-${index}`,
+        slug: `cohort-${index}`,
+        name: `Cohort ${index}`,
+        sourceModelId: `peer/cohort-${index}`,
+      }));
+      const metrics = ranks.map((rank, index) => metric({
+        ...(index === 0 ? {} : {
+          modelKey: `benchlm:peer:cohort-${index - 1}`,
+          sourceModelId: `peer/cohort-${index - 1}`,
+        }),
+        metricKey: 'benchlm:category:vision',
+        category: 'vision',
+        value: 90 - rank,
+        rawValue: null,
+        rank,
+        rankFieldSize,
+      }));
+      return buildModelProfileSnapshot({
+        ...base,
+        models: [...base.models, ...peers],
+        metrics: [...base.metrics, ...metrics],
+      }, 'benchlm:openai:gpt-5-6-sol');
+    }
+
+    it('uses the exact published cohort size when the source supplies it', () => {
+      const category = cohortSnapshot(3, [1, 2, 3]).categories.find((row) => row.key === 'vision');
+      expect(category?.rank).toBe(1);
+      expect(category?.fieldSize).toBe(3);
+      expect(category?.percentile).toBe(100);
+    });
+
+    it('reports percentile 0 for true last place so the radar floor is reachable', () => {
+      // rank === fieldSize is a real measurement when the cohort size is exact.
+      const category = cohortSnapshot(3, [3, 1, 2]).categories.find((row) => row.key === 'vision');
+      expect(category?.rank).toBe(3);
+      expect(category?.fieldSize).toBe(3);
+      expect(category?.percentile).toBe(0);
+    });
+
+    it('leaves the field unavailable when the source publishes no cohort size', () => {
+      // Sparse observation {1, 3}: treating 3 as exact would invent a
+      // denominator and overstate the percentile.
+      const category = cohortSnapshot(null, [1, 3]).categories.find((row) => row.key === 'vision');
+      expect(category?.rank).toBe(1);
+      expect(category?.fieldSize).toBeNull();
+      expect(category?.percentile).toBeNull();
+    });
+
+    it('never reports a rank larger than an exact cohort size', () => {
+      const category = cohortSnapshot(2, [5, 1]).categories.find((row) => row.key === 'vision');
+      expect(category?.rank).toBe(5);
+      expect(category?.fieldSize).toBeNull();
+      expect(category?.percentile).toBeNull();
+    });
   });
 
   it('serializes exact UTF-8 profile JSON and validates it at the byte bound', () => {

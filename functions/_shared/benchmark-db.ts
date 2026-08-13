@@ -206,6 +206,10 @@ function mapMetric(value: unknown): BenchmarkMetric {
     // absent diagnostics read as null rather than an invalid undefined.
     rawValue: (row.raw_value ?? null) as number | null,
     rank: row.rank as number | null,
+    // Revisions written before the rank_field_size migration have no column
+    // value; an absent exact cohort size reads as null so the profile reports
+    // the field as unavailable rather than inventing a denominator.
+    rankFieldSize: (row.rank_field_size ?? null) as number | null,
     lower: row.lower_bound as number | null,
     upper: row.upper_bound as number | null,
     voteCount: row.vote_count as number | null,

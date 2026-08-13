@@ -789,12 +789,54 @@ function toBenchmarkModels(
   }));
 }
 
+/**
+ * Exact cohort size per ranked category, derived from the whole `models.json`
+ * corpus rather than the public leaderboard window.
+ *
+ * `models.json` enumerates every model BenchLM knows (385 at time of writing),
+ * not a truncated slice, so it is the only artifact that can establish how many
+ * models a published rank was measured against. Across that corpus each
+ * category publishes dense ranks 1..N with no gaps or duplicates. All three
+ * facts must hold: the row count, unique-rank count, and highest rank are equal.
+ * Otherwise the cohort is not fully described and the size stays null so
+ * downstream reports the field as unavailable.
+ *
+ * The `limit=200` public window cannot substitute for this. Measured against
+ * real upstream data, coding publishes 132 ranks while only 115 of those models
+ * appear in the window, so window-derived counts would understate every large
+ * category.
+ */
+function publishedRankCohortSizes(models: readonly SafeModelInput[]): ReadonlyMap<string, number> {
+  const ranks = new Map<string, Set<number>>();
+  const counts = new Map<string, number>();
+  const highest = new Map<string, number>();
+  const record = (population: string, rank: number | null): void => {
+    if (rank === null || !Number.isSafeInteger(rank) || rank < 1) return;
+    const seen = ranks.get(population) ?? new Set<number>();
+    seen.add(rank);
+    ranks.set(population, seen);
+    counts.set(population, (counts.get(population) ?? 0) + 1);
+    highest.set(population, Math.max(highest.get(population) ?? 0, rank));
+  };
+  models.forEach((model) => {
+    Object.entries(model.categoryRanks).forEach(([category, rank]) => record(category, rank));
+  });
+  const sizes = new Map<string, number>();
+  ranks.forEach((seen, population) => {
+    const max = highest.get(population) ?? 0;
+    // Dense and complete: every rank from 1..max is present exactly once.
+    if (counts.get(population) === max && seen.size === max) sizes.set(population, max);
+  });
+  return sizes;
+}
+
 function toMetrics(
   models: SafeModelInput[],
   publicScores: ReadonlyMap<string, PublicBenchLmScore>,
   safeCategories: Set<string>,
   generatedAt: string,
 ): BenchmarkMetric[] {
+  const cohortSizes = publishedRankCohortSizes(models);
   const metrics: BenchmarkMetric[] = [];
   models.forEach((model) => {
     const publicScore = publicScores.get(model.modelKey);
@@ -815,6 +857,10 @@ function toMetrics(
         value: overallValue,
         rawValue: model.rawOverallScore,
         rank: publicScore.overallRank,
+        // Overall rank comes from the truncated public leaderboard response,
+        // not from models.json. That response publishes no total cohort size,
+        // so models.json cannot safely provide its denominator.
+        rankFieldSize: null,
         lower: null,
         upper: null,
         voteCount: null,
@@ -846,6 +892,7 @@ function toMetrics(
         value,
         rawValue: null,
         rank: publicScore.categoryRanks[category] ?? null,
+        rankFieldSize: cohortSizes.get(category) ?? null,
         lower: null,
         upper: null,
         voteCount: null,

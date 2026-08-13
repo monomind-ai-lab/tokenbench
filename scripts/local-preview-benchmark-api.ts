@@ -164,6 +164,7 @@ function benchLmMetric(
   category: string,
   value: number,
   rank: number | null = null,
+  rankFieldSize: number | null = null,
 ): BenchmarkMetric {
   return {
     modelKey: model.modelKey,
@@ -172,6 +173,7 @@ function benchLmMetric(
     value,
     rawValue: null,
     rank,
+    rankFieldSize,
     lower: null,
     upper: null,
     voteCount: null,
@@ -195,6 +197,7 @@ function lmArenaMetric(metricKey: string, category: string, value: number): Benc
     value,
     rawValue: null,
     rank: 1,
+    rankFieldSize: null,
     lower: null,
     upper: null,
     voteCount: 1,

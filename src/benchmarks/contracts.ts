@@ -101,6 +101,17 @@ export interface BenchmarkMetric {
   rawValue: number | null;
   /** Published overall/category source rank (BenchLM + LMArena) or null. */
   rank: number | null;
+  /**
+   * Exact size of the cohort `rank` was measured against, when the source
+   * publishes enough to compute it, otherwise null.
+   *
+   * This cannot be inferred from the rows we observe. The public leaderboard
+   * window is a truncated slice of a larger published cohort, so an observed
+   * rank set can be dense 1..N and still be missing the tail. Only a source
+   * that enumerates the whole cohort can establish this size, and without it
+   * the field size and percentile stay unavailable rather than invented.
+   */
+  rankFieldSize?: number | null;
   lower: number | null;
   upper: number | null;
   voteCount: number | null;
@@ -544,6 +555,14 @@ function validateMetric(
   }
   requireNullableNonNegativeFiniteNumber(metric.rawValue, `${name}.rawValue`);
   requireNullablePositiveInteger(metric.rank, `${name}.rank`);
+  // Optional only for backward compatibility with pre-migration snapshots and
+  // fixtures. Current ingesters always write an explicit integer or null.
+  if (metric.rankFieldSize !== undefined) {
+    requireNullablePositiveInteger(metric.rankFieldSize, `${name}.rankFieldSize`);
+  }
+  if (metric.rankFieldSize != null && metric.rank !== null && metric.rank > metric.rankFieldSize) {
+    fail(`${name}.rank exceeds ${name}.rankFieldSize`);
+  }
   requireNullableInterval(
     metric.lower,
     metric.upper,

@@ -347,29 +347,34 @@ function metricIdentity(metric: BenchmarkMetric): string {
  * published cohort produced impossible pairs such as "#17 of 17" and "#33 of
  * 32", and a spurious 0 percentile for merely uneligible rows.
  *
- * The observed field is a truncated window over a larger published cohort, so
- * the highest published rank we can see is a lower bound on the real cohort
- * size. When our observed rows cannot account for the rank, the field size is
- * unknown rather than wrong, and the percentile stays unavailable.
+ * The size is therefore taken only from the source, never inferred from the
+ * rows we happen to observe. The public leaderboard window is a truncated
+ * slice: measured against real upstream data, coding publishes 132 ranks while
+ * only 115 of those models appear in the limit=200 window. An observed set can
+ * be dense 1..N and still be missing the tail, so the highest rank we can see
+ * is only a lower bound. Without an exact published size the field is unknown
+ * rather than wrong, and the percentile stays unavailable.
+ *
+ * A size that cannot accommodate the rank is self-contradictory evidence, so
+ * it is rejected instead of being reconciled.
  */
-function rankFieldSize(metrics: readonly BenchmarkMetric[], metric: BenchmarkMetric): number {
-  const ranked = metrics.filter((candidate) => metricIdentity(candidate) === metricIdentity(metric)
-    && Number.isSafeInteger(candidate.rank)
-    && (candidate.rank as number) > 0);
-  return ranked.reduce((highest, candidate) => Math.max(highest, candidate.rank as number), 0);
+function rankFieldSize(metric: BenchmarkMetric): number | null {
+  const published = metric.rankFieldSize;
+  if (!Number.isSafeInteger(published) || (published as number) < 1) return null;
+  if (metric.rank !== null && metric.rank > (published as number)) return null;
+  return published as number;
 }
 
 /**
  * Relative field position for a published rank.
  *
- * The observed field is a truncated window over a larger published cohort, so
- * the largest rank we can see is only a lower bound on the true cohort size. A
- * model sitting exactly on that boundary is indistinguishable from a model
- * whose peers were simply cut off by the window, and computing a percentile
- * there yields a fabricated 0. Such a rank reports no percentile instead.
+ * The field size is an exact published cohort size, so last place is a real
+ * measurement: `rank === fieldSize` yields 0 and the radar's measured-floor
+ * marker stays reachable. When no exact size exists the caller passes null and
+ * no percentile is reported at all.
  */
-function percentile(rank: number | null, fieldSize: number): number | null {
-  if (rank === null || fieldSize <= 1 || rank < 1 || rank >= fieldSize) return null;
+function percentile(rank: number | null, fieldSize: number | null): number | null {
+  if (rank === null || fieldSize === null || fieldSize <= 1 || rank < 1 || rank > fieldSize) return null;
   return Math.max(0, Math.min(100, 100 * (fieldSize - rank) / (fieldSize - 1)));
 }
 
@@ -737,7 +742,7 @@ export function buildModelProfileSnapshot(
     .sort(compareUtf8Binary)
     .map((category): ModelProfileCategory => {
       const metric = metricForCategory(metrics, category);
-      const fieldSize = rankFieldSize(snapshot.metrics, metric);
+      const fieldSize = rankFieldSize(metric);
       return {
         key: category,
         metricKey: metric.metricKey,
@@ -745,7 +750,7 @@ export function buildModelProfileSnapshot(
         score: metric.value,
         rawScore: metric.rawValue,
         rank: metric.rank,
-        fieldSize: fieldSize > 0 ? fieldSize : null,
+        fieldSize,
         percentile: percentile(metric.rank, fieldSize),
         evidenceStatus: model.evidenceStatus,
         benchmarkCount: model.benchmarkCount,
