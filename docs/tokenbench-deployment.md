@@ -785,6 +785,57 @@ Pages. Use one verified commit and preserve this order:
   overflow on the representative route matrix at 390 px or desktop width.
   Rollback was not required.
 
+### Release 7 rank-evidence correction production receipt — 2026-08-13 UTC
+
+- Application source is reviewed commit
+  `479b3dfaf04917cbd3b0d5ddf831220b783d828d`, pushed to `main` and
+  `codex/rank-evidence-and-republish`. It parses the real BenchLM
+  `counts.totalModels` contract, preserves published ranks, stores exact
+  `rank_field_size` only for proven complete category cohorts, and uses an
+  all-or-none six-artifact projection upgrade. Every reusable BenchLM snapshot
+  key now contains the strict internal marker
+  `benchlm/projected/v3/{artifact}/{content-hash}.json`; upstream schema remains
+  separate in `schema_version`.
+- Pre-migration D1 backup:
+  `/private/tmp/tokenbench-ai-plan-catalog-before-d501bfe-20260813.sql`
+  (389 MB, SHA-256
+  `43f8781478d07c24e0856223edfd36be822373d38f603c063fbadab6f07b1cf7`).
+  Additive migration `0012_benchmark_metric_rank_field_size.sql` is applied
+  remotely and `benchmark_metrics.rank_field_size` is present.
+- Benchmark Worker production version is
+  `2510f6b5-00fa-40b1-b050-87b1c97048ab`, built from the reviewed source and
+  restored to the normal `15 2 * * SUN` schedule. A temporary minute trigger
+  started exactly one controlled cycle, then was removed; the Worker remains
+  scheduled-only and HTTP fetch remains 405.
+- Controlled cycle `7f347f56-f866-4de8-b82b-c2075d67e4d5` ran from
+  `2026-08-13T07:56:45.000Z` through `2026-08-13T08:12:33.990Z` and atomically
+  published `benchmark_be54b952bd03dda253cf3c67b5ae12f1` with no error. The
+  first upgraded cycle fetched all six BenchLM artifacts fresh; all six active
+  source receipts now have exact v3 keys whose final digest matches
+  `content_hash`. Candidate validation covered all 92 required cache keys.
+- The active revision contains 4,447 model memberships and 4,447 profile
+  snapshots. The retained directory has 4,447 current and eight archived
+  models. The immutable current-week Popular Models snapshot remains complete
+  at 100 unique contiguous ranks, 1–100. All 346 metrics carrying both a rank
+  and an exact field size satisfy `1 <= rank <= rank_field_size`.
+- GPT-5.6 Sol now serves overall `81.79` at source rank `#4` and coding `78.57`
+  at `#3 of 133`, with coding percentile `98.484848...`. Its canonical model
+  endpoint reports the active revision with `fallback: none`, two sources, and
+  seven ledger rows. Overall rank intentionally has no percentile because the
+  upstream source does not publish an exact overall cohort size.
+- Pages deployment `ac685381-ec2c-4bb3-bf8b-760e4592f20b` is the active
+  production deployment for source `479b3df`, at immutable URL
+  `https://ac685381.tokenbench-27t.pages.dev` and canonical domain
+  `https://tokenbench.monomind.one`. Home, Models, GPT-5.6 Sol,
+  price-performance, Subscribe vs API, coding leaderboard, newsletter
+  confirmation, the test PDF, sitemap, and robots.txt all returned HTTP 200.
+  Representative Home, Models, and model-detail responses include title,
+  description, canonical, robots, Open Graph, and Twitter metadata.
+- Fresh final gates on the deployed source: 137 Vitest files and 1,621 tests,
+  72/72 production-mode responsive browser tests, clean application and Worker
+  typechecks, current generated Worker bindings, and a clean production build
+  with 31 generated crawlable fixed pages. Rollback was not required.
+
 ## Production smoke checklist
 
 Record the exact request URL, timestamp, response status, and any relevant
