@@ -699,6 +699,74 @@ describe('complete leaderboard projection cache reader', () => {
     )).toThrow(/route invariants/i);
   });
 
+  it('keeps the published BenchLM source rank on value rows', () => {
+    const fixture = entry();
+    const rankedMetric = {
+      ...fixture.metric!,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+      rank: 3,
+    };
+    const rankedEntry: LeaderboardEntry = {
+      ...fixture,
+      metric: rankedMetric,
+      metrics: [rankedMetric],
+      blendedCostPerMillion: 2,
+      sourceRank: 3,
+    };
+    const base = projection();
+    const rankedProjection: CachedLeaderboardPaginationProjection = {
+      ...base,
+      leaderboard: {
+        key: 'llm-value',
+        profile: 'balanced',
+        definition: LEADERBOARD_DEFINITIONS['llm-value'],
+        entries: [rankedEntry],
+      },
+      entries: [rankedEntry],
+    };
+
+    expect(parseCompleteLeaderboardProjection(
+      JSON.stringify(rankedProjection),
+      'llm-value',
+      'balanced',
+    ).entries).toHaveLength(1);
+  });
+
+  it('rejects a value row whose source rank disagrees with its published metric rank', () => {
+    const fixture = entry();
+    const rankedMetric = {
+      ...fixture.metric!,
+      metricKey: 'benchlm:overall:raw',
+      category: 'overall',
+      rank: 3,
+    };
+    const mismatchedEntry: LeaderboardEntry = {
+      ...fixture,
+      metric: rankedMetric,
+      metrics: [rankedMetric],
+      blendedCostPerMillion: 2,
+      sourceRank: 9,
+    };
+    const base = projection();
+    const mismatchedProjection: CachedLeaderboardPaginationProjection = {
+      ...base,
+      leaderboard: {
+        key: 'llm-value',
+        profile: 'balanced',
+        definition: LEADERBOARD_DEFINITIONS['llm-value'],
+        entries: [mismatchedEntry],
+      },
+      entries: [mismatchedEntry],
+    };
+
+    expect(() => parseCompleteLeaderboardProjection(
+      JSON.stringify(mismatchedProjection),
+      'llm-value',
+      'balanced',
+    )).toThrow(/route invariants/i);
+  });
+
   it('accepts valid materialized entry invariants for every route kind', () => {
     const base = projection();
     const fixture = entry();

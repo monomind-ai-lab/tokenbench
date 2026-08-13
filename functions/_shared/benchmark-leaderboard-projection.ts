@@ -276,7 +276,11 @@ function hasRouteEntryInvariants(
   if (definition.kind === 'value') {
     return entry.metrics.length === 1
       && metricMatchesRoute(entry, entry.metric, definition, false)
-      && entry.sourceRank === null;
+      // The value route carries the same published BenchLM overall rank as the
+      // overall route: `makeEntry` derives `sourceRank` from the metric for
+      // every route kind, and a rank is source evidence rather than a rendered
+      // row position. Requiring `null` here contradicted the producer.
+      && entry.sourceRank === (isPositiveRank(entry.metric.rank) ? entry.metric.rank : null);
   }
   if (definition.kind === 'lmarena') {
     return entry.metrics.length === 1
