@@ -1,5 +1,5 @@
 /** Bump whenever the stable frontend CSS or JavaScript payload changes. */
-export const FRONTEND_ASSET_REVISION = '20260813-release5-3';
+export const FRONTEND_ASSET_REVISION = '20260813-release6-1';
 
 export const FRONTEND_ASSETS = {
   script: `/assets/main.js?v=${FRONTEND_ASSET_REVISION}`,
