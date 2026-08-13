@@ -6,7 +6,7 @@
   "name": "BenchLM Models",
   "description": "Reduced allowlist projection for parser tests.",
   "sourceFiles": ["models.json"],
-  "counts": { "items": 5 },
+  "counts": { "totalModels": 5 },
   "items": [
     {
       "canonicalModelKey": "model-a",

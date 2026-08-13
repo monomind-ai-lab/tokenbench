@@ -4,7 +4,9 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   BENCHLM_ARTIFACTS,
+  BENCHLM_PROJECTION_SCHEMA_VERSION,
   BENCHLM_URLS,
+  benchLmProjectionVersionFromKey,
   SourceRateLimitedError,
   assembleBenchLmStep,
   normalizeSourceStep,
@@ -309,7 +311,7 @@ describe('retrieveBenchLmArtifactStep', () => {
       etag: 'W/"pricing-active"',
       lastModified: 'Sat, 08 Aug 2026 00:00:00 GMT',
       upstreamRevision: null,
-      schemaVersion: 'v2',
+      schemaVersion: BENCHLM_PROJECTION_SCHEMA_VERSION,
     };
     store.seed(previous.key, projection, {
       content_hash: previous.contentHash,
@@ -331,7 +333,7 @@ describe('retrieveBenchLmArtifactStep', () => {
     expect(fetcher.calls[0].headers['if-modified-since']).toBe('Sat, 08 Aug 2026 00:00:00 GMT');
     expect(artifact).toEqual({
       ...previous,
-      key: `${CANDIDATE_PREFIX}benchlm/projected/pricing/${sha256(projection).slice('sha256:'.length)}.json`,
+      key: `${CANDIDATE_PREFIX}benchlm/projected/${BENCHLM_PROJECTION_SCHEMA_VERSION}/pricing/${sha256(projection).slice('sha256:'.length)}.json`,
     });
     expect(store.writes).toEqual([artifact.key]);
   });
@@ -448,14 +450,27 @@ describe('assembleBenchLmStep', () => {
     expect(bundle.generatedAt).toBe('2026-08-05T06:25:54.198Z');
     expect(bundle.artifacts.map((artifact) => artifact.artifactId)).toEqual([...BENCHLM_ARTIFACTS]);
     for (const artifact of bundle.artifacts) {
-      expect(artifact.key.startsWith(`${CANDIDATE_PREFIX}benchlm/projected/`)).toBe(true);
-      expect(artifact.schemaVersion).toBe('v2');
+      expect(artifact.key.startsWith(`${CANDIDATE_PREFIX}benchlm/projected/${BENCHLM_PROJECTION_SCHEMA_VERSION}/`)).toBe(true);
+      expect(artifact.schemaVersion).toBe(BENCHLM_PROJECTION_SCHEMA_VERSION);
       const stored = store.objects.get(artifact.key);
       expect(stored).toBeDefined();
       expect(sha256(stored?.bytes as Uint8Array)).toBe(artifact.contentHash);
       expect((stored?.bytes as Uint8Array).byteLength).toBe(artifact.byteLength);
     }
     expect(store.writes.every((key) => key.startsWith(CANDIDATE_PREFIX))).toBe(true);
+  });
+
+  it('recognizes only strict versioned projection keys for conditional reuse', () => {
+    const digest = 'a'.repeat(64);
+    const valid = `${CANDIDATE_PREFIX}benchlm/projected/${BENCHLM_PROJECTION_SCHEMA_VERSION}/models/${digest}.json`;
+
+    expect(benchLmProjectionVersionFromKey(valid, 'models')).toBe(BENCHLM_PROJECTION_SCHEMA_VERSION);
+    expect(benchLmProjectionVersionFromKey(
+      `${CANDIDATE_PREFIX}benchlm/projected/models/${digest}.json`,
+      'models',
+    )).toBeNull();
+    expect(benchLmProjectionVersionFromKey(valid, 'pricing')).toBeNull();
+    expect(benchLmProjectionVersionFromKey(valid.replace(CYCLE_ID, '../escape'), 'models')).toBeNull();
   });
 
   it('rejects a bundle whose artifacts disagree on generatedAt before any normalization', async () => {

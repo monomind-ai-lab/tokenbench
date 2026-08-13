@@ -75,7 +75,7 @@ const LMARENA_HUB_INFO_URL = 'https://huggingface.co/api/datasets/lmarena-ai/lea
 const USER_AGENT = 'TokenBench/1.0 (+https://tokenbench.monomind.one)';
 
 /** Marks a BenchLM candidate whose bytes are the canonical safe projection. */
-const BENCHLM_PROJECTION_SCHEMA_VERSION = 'v2';
+export const BENCHLM_PROJECTION_SCHEMA_VERSION = 'v3';
 const LMARENA_HUB_PARQUET_SCHEMA_VERSION = 'hub-parquet-v1';
 const BENCHLM_BUNDLE_SCHEMA_VERSION = 'benchlm-bundle-v1';
 const NORMALIZED_PARTITION_SCHEMA_VERSION = 'normalized-source-v1';
@@ -474,7 +474,33 @@ function benchLmRawKey(cycleId: string, artifact: BenchLmArtifact, contentHash: 
 }
 
 function benchLmProjectedKey(cycleId: string, artifact: BenchLmArtifact, contentHash: string): string {
-  return `${candidatePrefix(cycleId)}benchlm/projected/${artifact}/${digestHex(contentHash)}.json`;
+  return `${candidatePrefix(cycleId)}benchlm/projected/${BENCHLM_PROJECTION_SCHEMA_VERSION}/${artifact}/${digestHex(contentHash)}.json`;
+}
+
+/**
+ * Recovers the internal projection format from an immutable checkpoint key.
+ *
+ * Published source rows intentionally keep the upstream schema in their
+ * `schema_version` column, so the internal safe-projection format travels in
+ * the R2 key instead. Legacy unversioned keys return null and are fetched fresh
+ * once; exact v3 keys can safely restore conditional 304 reuse.
+ */
+export function benchLmProjectionVersionFromKey(
+  key: string,
+  artifact: string,
+): typeof BENCHLM_PROJECTION_SCHEMA_VERSION | null {
+  const segments = key.split('/');
+  if (segments.length !== 7
+    || segments[0] !== 'benchmark-candidates'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(segments[1] ?? '')
+    || segments[2] !== 'benchlm'
+    || segments[3] !== 'projected'
+    || segments[4] !== BENCHLM_PROJECTION_SCHEMA_VERSION
+    || segments[5] !== artifact
+    || !/^[a-f0-9]{64}\.json$/.test(segments[6] ?? '')) {
+    return null;
+  }
+  return BENCHLM_PROJECTION_SCHEMA_VERSION;
 }
 
 /**

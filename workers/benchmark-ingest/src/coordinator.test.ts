@@ -367,6 +367,7 @@ describe('acquire phase', () => {
     nowMs = SUNDAY;
     const priorBytes = new TextEncoder().encode('{"prior":true}');
     const priorHash = `sha256:${hex('{"prior":true}')}`;
+    const priorKey = `benchmark-candidates/11111111-2222-4333-8444-555555555555/benchlm/projected/v3/leaderboard/${priorHash.slice('sha256:'.length)}.json`;
     const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
     const { env, store } = environment({
       catalogRevision: CATALOG_REVISION,
@@ -377,14 +378,14 @@ describe('acquire phase', () => {
         sourceUrl: 'https://benchlm.ai/data/leaderboard.json',
         etag: '"prior-etag"',
         lastModified: null,
-        snapshotKey: 'benchmarks/benchlm/leaderboard/prior.json',
+        snapshotKey: priorKey,
         contentHash: priorHash,
         originalContentHash: priorHash,
         upstreamRevision: null,
         schemaVersion: null,
       }],
     });
-    store.objects.set('benchmarks/benchlm/leaderboard/prior.json', {
+    store.objects.set(priorKey, {
       bytes: priorBytes,
       customMetadata: { original_content_hash: priorHash },
     });
@@ -396,10 +397,67 @@ describe('acquire phase', () => {
     expect(calls[0].name).toBe('retrieveBenchLmArtifactStep');
     expect(calls[0].args.previous).toMatchObject({
       artifactId: 'leaderboard',
-      key: 'benchmarks/benchlm/leaderboard/prior.json',
+      key: priorKey,
       byteLength: priorBytes.byteLength,
       etag: '"prior-etag"',
+      schemaVersion: 'v3',
     });
+  });
+
+  it('bypasses every legacy BenchLM projection so the v3 upgrade fetches all six fresh', async () => {
+    nowMs = SUNDAY;
+    const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
+    const sourceRecords = ['leaderboard', 'models', 'pricing', 'comparisons', 'benchmarks', 'public-leaderboard']
+      .map((artifactId) => ({
+        sourceId: 'benchlm',
+        artifactId,
+        sourceUrl: `https://benchlm.ai/${artifactId}.json`,
+        etag: `"${artifactId}"`,
+        lastModified: null,
+        snapshotKey: `benchmark-candidates/111cf1e4-0e2e-4bc6-b3cb-e697f3f16ae9/benchlm/projected/${artifactId}/${hex(artifactId)}.json`,
+        contentHash: `sha256:${hex(artifactId)}`,
+        originalContentHash: `sha256:${hex(`${artifactId}:raw`)}`,
+        upstreamRevision: null,
+        schemaVersion: artifactId === 'public-leaderboard' ? 'bench-align-v5' : '1.0',
+      }));
+    const { env } = environment({
+      catalogRevision: CATALOG_REVISION,
+      benchmarkRevision: PREV_BENCHMARK_REVISION,
+      sourceRecords,
+    });
+    const { steps, calls } = fakeSteps();
+
+    await fireAlarm(durable, env, baseDeps(steps));
+    for (let index = 0; index < 6; index += 1) await fireAlarm(durable, env, baseDeps(steps));
+
+    const retrievals = calls.filter((call) => call.name === 'retrieveBenchLmArtifactStep');
+    expect(retrievals).toHaveLength(6);
+    expect(retrievals.map((call) => call.args.previous)).toEqual(Array(6).fill(null));
+  });
+
+  it('restores conditional reuse from a strict v3 projection key without trusting upstream schema', async () => {
+    nowMs = SUNDAY;
+    const priorBytes = new TextEncoder().encode('{"schemaVersion":"1.0","generatedAt":"2026-08-05T00:00:00.000Z","items":[]}');
+    const priorHash = `sha256:${hex(new TextDecoder().decode(priorBytes))}`;
+    const digest = priorHash.slice('sha256:'.length);
+    const key = `benchmark-candidates/111cf1e4-0e2e-4bc6-b3cb-e697f3f16ae9/benchlm/projected/v3/leaderboard/${digest}.json`;
+    const durable = storage({ [CYCLE_KEY]: createBenchmarkCycle(SUNDAY, CYCLE_ID) });
+    const { env, store } = environment({
+      catalogRevision: CATALOG_REVISION,
+      benchmarkRevision: PREV_BENCHMARK_REVISION,
+      sourceRecords: [{
+        sourceId: 'benchlm', artifactId: 'leaderboard', sourceUrl: 'https://benchlm.ai/data/leaderboard.json',
+        etag: '"prior-etag"', lastModified: null, snapshotKey: key,
+        contentHash: priorHash, originalContentHash: priorHash, upstreamRevision: null, schemaVersion: '1.0',
+      }],
+    });
+    store.objects.set(key, { bytes: priorBytes, customMetadata: { original_content_hash: priorHash } });
+    const { steps, calls } = fakeSteps();
+
+    await fireAlarm(durable, env, baseDeps(steps));
+    await fireAlarm(durable, env, baseDeps(steps));
+
+    expect(calls[0].args.previous).toMatchObject({ key, schemaVersion: 'v3', etag: '"prior-etag"' });
   });
 
   it('fails terminally when no active catalog revision exists', async () => {

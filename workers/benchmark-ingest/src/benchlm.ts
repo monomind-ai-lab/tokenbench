@@ -184,9 +184,9 @@ function parseArtifact(value: unknown, artifact: ArtifactName): BenchLmProjected
   if (payload.schemaVersion !== '1.0') fail(`BenchLM ${artifact} schemaVersion must be 1.0`);
   const generatedAt = requireIsoTimestamp(payload.generatedAt, `BenchLM ${artifact}.generatedAt`);
   if (!Array.isArray(payload.items)) fail(`BenchLM ${artifact}.items must be an array`);
-  const rawCount = payload.itemCount ?? (
-    isRecord(payload.counts) ? payload.counts.items : undefined
-  );
+  const rawCount = payload.itemCount ?? (isRecord(payload.counts)
+    ? payload.counts.totalModels ?? payload.counts.items
+    : undefined);
   const itemCount = rawCount === undefined
     ? undefined
     : requireNonNegativeInteger(rawCount, `BenchLM ${artifact}.itemCount`);

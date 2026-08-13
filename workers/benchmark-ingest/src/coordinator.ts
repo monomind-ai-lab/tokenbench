@@ -26,6 +26,7 @@ import {
   SourceRateLimitedError,
   SourceStepFailure,
   BENCHLM_ARTIFACTS,
+  benchLmProjectionVersionFromKey,
   type BenchLmArtifact,
   type CandidateArtifact,
   type CandidatePartition,
@@ -395,6 +396,14 @@ async function validatorFor(
     candidate.sourceId === sourceId && candidate.artifactId === artifactId
   ));
   if (!previous) return null;
+  const projectionVersion = sourceId === 'benchlm'
+    ? benchLmProjectionVersionFromKey(previous.snapshotKey, artifactId)
+    : null;
+  // Existing published BenchLM rows predate the durable internal-format
+  // marker. They are deliberately not sent as conditional validators: the
+  // first v3 cycle fetches all six artifacts fresh, after which exact v3 keys
+  // restore safe 304 reuse without conflating source and projection schemas.
+  if (sourceId === 'benchlm' && projectionVersion === null) return null;
   const object = await store.get(previous.snapshotKey);
   if (!object) throw new Error(`frozen ${sourceId}/${artifactId} candidate bytes are missing`);
   const byteLength = (await object.arrayBuffer()).byteLength;
@@ -409,7 +418,7 @@ async function validatorFor(
     etag: previous.etag,
     lastModified: previous.lastModified,
     upstreamRevision: previous.upstreamRevision,
-    schemaVersion: previous.schemaVersion,
+    schemaVersion: projectionVersion ?? previous.schemaVersion,
   };
 }
 

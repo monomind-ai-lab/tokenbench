@@ -282,8 +282,8 @@ describe('parseBenchLm', () => {
     it('does not treat a dense truncated artifact as a complete cohort', async () => {
       const source = payloads();
       setCodingRanks(source, [1, 2, 3, 4, 5]);
-      const models = source.models as { counts: { items: number }; items: Array<Record<string, unknown>> };
-      models.counts.items = 6;
+      const models = source.models as { counts: { totalModels: number }; items: Array<Record<string, unknown>> };
+      models.counts.totalModels = 6;
 
       const batch = await parsePayloads(source);
 
