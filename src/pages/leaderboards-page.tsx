@@ -18,6 +18,9 @@ import {
 } from '../frontend/leaderboard-filter-state';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
 import { ScoreBarChart, type ScoreBarChartDatum } from '../frontend/charts/score-bar-chart';
+import { CostScoreScatter, type CostScorePoint } from '../frontend/charts/cost-score-scatter';
+import { PriceHistogram, priceBuckets } from '../frontend/charts/price-histogram';
+import { modelPath } from '../benchmarks/model-directory';
 import type { LeaderboardEntry } from '../benchmarks/leaderboards';
 import { ProviderMark } from '../frontend/provider-mark';
 import { ShareAction } from '../frontend/share-action';
@@ -202,6 +205,74 @@ function LeaderboardScoreChart({
   </section>;
 }
 
+/**
+ * Pairs each entry's published score with its published blended cost. An entry
+ * missing either side is excluded rather than plotted at zero, which would
+ * invent evidence the source never published.
+ */
+export function costScoreChartData(
+  entries: readonly LeaderboardEntry[],
+): readonly CostScorePoint[] {
+  return entries
+    .filter((entry) => entry.metric !== null
+      && Number.isFinite(entry.metric.value)
+      && entry.blendedCostPerMillion !== null
+      && Number.isFinite(entry.blendedCostPerMillion))
+    .map((entry) => ({
+      label: entry.model.name,
+      score: entry.metric!.value,
+      cost: entry.blendedCostPerMillion!,
+      frontier: entry.onValueFrontier,
+      href: modelPath(entry.model.slug),
+    }));
+}
+
+/**
+ * Renders the cost/score trade-off for routes that publish a workload price.
+ * A sorted table cannot show that two models with similar scores differ 10x in
+ * price; this can.
+ */
+function LeaderboardCostScoreChart({
+  keyName,
+  entries,
+}: {
+  readonly keyName: LeaderboardKey;
+  readonly entries: readonly LeaderboardEntry[];
+}) {
+  const chartData = useMemo(() => costScoreChartData(entries), [entries]);
+  if (chartData.length < 2) return null;
+
+  const frontierCount = chartData.filter((point) => point.frontier).length;
+  return <section className="panel leaderboard-cost-score-panel" aria-labelledby="leaderboard-cost-score-heading">
+    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-cost-score-heading">Cost versus score</h2><p>Each point pairs a published score with its published workload price. {frontierCount > 0 ? `The connected line marks the ${frontierCount} value-frontier models: no cheaper published route scores higher.` : 'No value-frontier model is published for this view.'}</p></div></div>
+    <CostScoreScatter data={chartData} ariaLabel={`${LEADERBOARD_ROUTES[keyName].seo.h1} cost versus score`} />
+  </section>;
+}
+
+/**
+ * Shows where published prices cluster on a route that has prices but no
+ * score to plot against. The pricing-context view publishes 400+ routes; a
+ * sorted table cannot show that most of them sit in the cheapest band.
+ */
+function LeaderboardPriceHistogram({
+  keyName,
+  entries,
+}: {
+  readonly keyName: LeaderboardKey;
+  readonly entries: readonly LeaderboardEntry[];
+}) {
+  const buckets = useMemo(() => priceBuckets(entries
+    .map((entry) => entry.blendedCostPerMillion)
+    .filter((cost): cost is number => cost !== null && Number.isFinite(cost))), [entries]);
+  const total = useMemo(() => buckets.reduce((sum, bucket) => sum + bucket.count, 0), [buckets]);
+  if (total < 2) return null;
+
+  return <section className="panel leaderboard-price-histogram-panel" aria-labelledby="leaderboard-price-histogram-heading">
+    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-price-histogram-heading">Price distribution</h2><p>How the {total} published workload prices in this view are spread across the observed range.</p></div></div>
+    <PriceHistogram buckets={buckets} ariaLabel={`${LEADERBOARD_ROUTES[keyName].seo.h1} price distribution`} />
+  </section>;
+}
+
 export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey }) {
   const route = LEADERBOARD_ROUTES[keyName];
   const [filters, setFilters] = useLeaderboardFilters(keyName);
@@ -331,6 +402,14 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
 
     {state.phase === 'ready' || state.phase === 'stale'
       ? <LeaderboardScoreChart keyName={keyName} entries={entries} />
+      : null}
+
+    {state.phase === 'ready' || state.phase === 'stale'
+      ? <LeaderboardCostScoreChart keyName={keyName} entries={entries} />
+      : null}
+
+    {(state.phase === 'ready' || state.phase === 'stale') && keyName === 'llm-pricing-context'
+      ? <LeaderboardPriceHistogram keyName={keyName} entries={entries} />
       : null}
 
     <section className="panel leaderboard-filter-panel" aria-labelledby="leaderboard-filters-heading">

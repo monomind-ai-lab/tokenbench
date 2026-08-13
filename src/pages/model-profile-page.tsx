@@ -2,6 +2,7 @@ import type { ModelProfileCategory, ModelProfileLedgerRow, ModelProfilePriceRout
 import type { ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ModelRadar } from '../frontend/model-radar';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
+import { PercentileBar } from '../frontend/charts/percentile-bar';
 
 export interface ModelProfilePageProps {
   readonly viewModel: ModelProfileViewModel;
@@ -70,7 +71,7 @@ function CategoryCard({ category }: { readonly category: ModelProfileCategory })
     <strong className="model-category-score">{score(category.score, 1)}</strong>
     <dl>
       <div><dt>Rank</dt><dd>{category.rank === null ? 'Not ranked' : `#${category.rank}${category.fieldSize ? ` of ${category.fieldSize}` : ''}`}</dd></div>
-      <div><dt>Percentile</dt><dd>{category.percentile === null ? 'Unavailable' : `${category.percentile.toFixed(1)}%`}</dd></div>
+      <div><dt>Percentile</dt><dd><PercentileBar percentile={category.percentile} label={`${category.label} percentile`} /></dd></div>
       <div><dt>Benchmarks</dt><dd>{category.benchmarkCount}</dd></div>
     </dl>
   </article>;

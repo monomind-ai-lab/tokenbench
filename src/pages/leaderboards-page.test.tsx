@@ -5,7 +5,13 @@ import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult 
 import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
 import type { BenchmarkMetric, BenchmarkModel } from '../benchmarks/contracts';
 import type { LeaderboardEntry } from '../benchmarks/leaderboards';
-import { LeaderboardDirectoryPage, LeaderboardPage, positionNoteFor, scoreChartData } from './leaderboards-page';
+import {
+  LeaderboardDirectoryPage,
+  LeaderboardPage,
+  costScoreChartData,
+  positionNoteFor,
+  scoreChartData,
+} from './leaderboards-page';
 
 const chartModel: BenchmarkModel = {
   modelKey: 'a', slug: 'alpha', name: 'Alpha', creator: 'Example', sourceType: 'Proprietary',
@@ -53,6 +59,36 @@ describe('leaderboard score chart data', () => {
 
     expect(scoreChartData(many)).toHaveLength(12);
     expect(scoreChartData(many, 5)).toHaveLength(5);
+  });
+});
+
+describe('cost versus score chart data', () => {
+  it('keeps only entries that publish both a score and a cost', () => {
+    const data = costScoreChartData([
+      chartEntry({ blendedCostPerMillion: 20, onValueFrontier: true }),
+      chartEntry({
+        model: { ...chartModel, modelKey: 'b', slug: 'beta', name: 'Beta' },
+        metric: { ...chartMetric, value: 60 },
+        blendedCostPerMillion: 4,
+      }),
+      // No published cost: excluded rather than drawn at zero.
+      chartEntry({ model: { ...chartModel, modelKey: 'c', name: 'Gamma' }, blendedCostPerMillion: null }),
+      // No published score: excluded.
+      chartEntry({ model: { ...chartModel, modelKey: 'd', name: 'Delta' }, metric: null, blendedCostPerMillion: 7 }),
+    ]);
+
+    expect(data).toHaveLength(2);
+    expect(data[0]).toMatchObject({ label: 'Alpha', score: 80, cost: 20, frontier: true });
+    expect(data[1]).toMatchObject({ label: 'Beta', score: 60, cost: 4, frontier: false });
+  });
+
+  it('links each point to its model profile', () => {
+    const [point] = costScoreChartData([chartEntry({ blendedCostPerMillion: 20 })]);
+    expect(point?.href).toBe('/models/alpha/');
+  });
+
+  it('returns nothing when no entry publishes a cost', () => {
+    expect(costScoreChartData([chartEntry({ blendedCostPerMillion: null })])).toEqual([]);
   });
 });
 
