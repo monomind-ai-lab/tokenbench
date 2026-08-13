@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   filterPricePerformancePoints,
   markParetoFrontier,
+  priceForBasis,
   type PricePerformancePointView,
 } from '../benchmarks/price-performance';
 import {
   parsePricePerformanceEnvelope,
   type PricePerformanceAttribution,
   type PricePerformanceEnvelope,
+  type PricePerformancePoint,
 } from '../benchmarks/price-performance-contracts';
 import { PricePerformanceChart } from '../frontend/price-performance-chart';
 import {
@@ -22,7 +24,6 @@ import {
   normalizePricePerformanceState,
   pricePerformanceFilters,
   pricePerformanceUrl,
-  type PricePerformanceScale,
   type PricePerformanceState,
 } from '../frontend/price-performance-state';
 
@@ -97,8 +98,112 @@ function summaryPoints(points: readonly PricePerformancePointView[]): readonly P
     .slice(0, 10);
 }
 
-function FilterField({ label, children }: { readonly label: string; readonly children: ReactNode }) {
-  return <label className="price-performance-filter-field"><span>{label}</span>{children}</label>;
+function priceRangeDomain(points: readonly PricePerformancePoint[], basis: PricePerformanceState['costBasis']): readonly number[] {
+  const costs = points
+    .map((point) => priceForBasis(point.route, basis))
+    .filter((cost): cost is number => cost !== null && Number.isFinite(cost) && cost >= 0);
+  return [...new Set(costs)].sort((left, right) => left - right);
+}
+
+function PriceRangeSlider({
+  domain,
+  priceBand,
+  onChange,
+}: {
+  readonly domain: readonly number[];
+  readonly priceBand: PricePerformanceState['priceBand'];
+  readonly onChange: (priceBand: PricePerformanceState['priceBand']) => void;
+}) {
+  const lastIndex = Math.max(0, domain.length - 1);
+  const minimumIndex = priceBand?.[0] !== null && priceBand?.[0] !== undefined && domain.includes(priceBand[0]) ? domain.indexOf(priceBand[0]) : 0;
+  const maximumIndex = priceBand?.[1] !== null && priceBand?.[1] !== undefined && domain.includes(priceBand[1]) ? domain.indexOf(priceBand[1]) : lastIndex;
+  const minimumPercent = lastIndex === 0 ? 0 : (minimumIndex / lastIndex) * 100;
+  const maximumPercent = lastIndex === 0 ? 100 : (maximumIndex / lastIndex) * 100;
+  const position = (percent: number) => `calc(${percent}%)`;
+  const rangeStyle = {
+    '--range-start': `${minimumPercent}%`,
+    '--range-end': `${maximumPercent}%`,
+    '--range-start-position': position(minimumPercent),
+    '--range-end-position': position(maximumPercent),
+  } as CSSProperties & Record<'--range-start' | '--range-end' | '--range-start-position' | '--range-end-position', string>;
+  const formatCost = (value: number) => `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value)} / 1M`;
+  const minimumId = 'price-performance-min-price';
+  const maximumId = 'price-performance-max-price';
+
+  return <fieldset className="price-performance-price-band">
+    <legend>Price range per 1M tokens</legend>
+    {domain.length === 0 ? <p className="price-performance-price-band-empty">No published prices are available for this selection.</p> : <>
+      <div className="price-performance-price-values">
+        <label htmlFor={minimumId}><span>Minimum</span><output htmlFor={minimumId}>{formatCost(domain[minimumIndex]!)}</output></label>
+        <label htmlFor={maximumId}><span>Maximum</span><output htmlFor={maximumId}>{formatCost(domain[maximumIndex]!)}</output></label>
+      </div>
+      <div className="price-performance-price-range-stack" style={rangeStyle}>
+        <input
+          aria-label="Minimum price per 1M tokens"
+          aria-valuetext={formatCost(domain[minimumIndex]!)}
+          id={minimumId}
+          max={lastIndex}
+          min="0"
+          onChange={(event) => {
+            const proposed = Number(event.currentTarget.value);
+            const next = Math.min(proposed, maximumIndex);
+            onChange([domain[next]!, domain[maximumIndex]!]);
+          }}
+          step="1"
+          type="range"
+          value={minimumIndex}
+        />
+        <input
+          aria-label="Maximum price per 1M tokens"
+          aria-valuetext={formatCost(domain[maximumIndex]!)}
+          id={maximumId}
+          max={lastIndex}
+          min="0"
+          onChange={(event) => {
+            const proposed = Number(event.currentTarget.value);
+            const next = Math.max(proposed, minimumIndex);
+            onChange([domain[minimumIndex]!, domain[next]!]);
+          }}
+          step="1"
+          type="range"
+          value={maximumIndex}
+        />
+        <span aria-hidden="true" className="price-performance-price-range-dot price-performance-price-range-dot-minimum" />
+        <span aria-hidden="true" className="price-performance-price-range-dot price-performance-price-range-dot-maximum" />
+      </div>
+    </>}
+  </fieldset>;
+}
+
+function FilterTags({
+  label,
+  options,
+  selected,
+  onSelect,
+}: {
+  readonly label: string;
+  readonly options: readonly { readonly value: string; readonly label: string }[];
+  readonly selected: string | null;
+  readonly onSelect: (value: string | null) => void;
+}) {
+  return <fieldset className="price-performance-filter-tags">
+    <legend>{label}</legend>
+    <div className="price-performance-tag-row">
+      <button
+        aria-pressed={selected === null}
+        className="price-performance-tag"
+        onClick={() => onSelect(null)}
+        type="button"
+      >All</button>
+      {options.map((option) => <button
+        aria-pressed={selected === option.value}
+        className="price-performance-tag"
+        key={option.value}
+        onClick={() => onSelect(selected === option.value ? null : option.value)}
+        type="button"
+      >{option.label}</button>)}
+    </div>
+  </fieldset>;
 }
 
 function PricePerformanceFilters({
@@ -114,27 +219,14 @@ function PricePerformanceFilters({
 }) {
   const capabilities = envelope.data.capabilities;
   const update = (changes: Partial<PricePerformanceState>) => onChange(normalizePricePerformanceState({ ...state, ...changes }, capabilities, displayedCosts));
-  const minimum = state.priceBand?.[0] ?? '';
-  const maximum = state.priceBand?.[1] ?? '';
-  const updatePriceBand = (nextMinimum: string, nextMaximum: string) => {
-    const minimumValue = nextMinimum === '' ? null : Number(nextMinimum);
-    const maximumValue = nextMaximum === '' ? null : Number(nextMaximum);
-    update({ priceBand: [Number.isFinite(minimumValue) ? minimumValue : null, Number.isFinite(maximumValue) ? maximumValue : null] });
-  };
+  const rangeDomain = useMemo(() => priceRangeDomain(envelope.data.points, state.costBasis), [envelope.data.points, state.costBasis]);
   return <div className="price-performance-filters" role="group" aria-label="Price-performance filters">
-    <div className="price-performance-filter-grid">
-      <FilterField label="Score lane"><select value={state.lane} onChange={(event) => update({ lane: event.target.value as PricePerformanceState['lane'] })}>{capabilities.scoreLanes.map((lane) => <option key={lane} value={lane}>{labelForLane(lane)}</option>)}</select></FilterField>
-      <FilterField label="Cost basis"><select value={state.costBasis} onChange={(event) => update({ costBasis: event.target.value as PricePerformanceState['costBasis'] })}>{capabilities.costBases.map((basis) => <option key={basis} value={basis}>{basis === 'output' ? 'Output USD / 1M' : '3:1 blended USD / 1M'}</option>)}</select></FilterField>
-      <FilterField label="Creator"><select value={state.creator ?? ''} onChange={(event) => update({ creator: event.target.value || null })}><option value="">All creators</option>{capabilities.creators.map((creator) => <option key={creator} value={creator}>{creator}</option>)}</select></FilterField>
-      <FilterField label="Source type"><select value={state.sourceType ?? ''} onChange={(event) => update({ sourceType: (event.target.value || null) as PricePerformanceState['sourceType'] })}><option value="">All source types</option>{capabilities.sourceTypes.map((sourceType) => <option key={sourceType} value={sourceType}>{sourceType}</option>)}</select></FilterField>
-      <FilterField label="Evidence"><select value={state.evidenceStatus ?? ''} onChange={(event) => update({ evidenceStatus: (event.target.value || null) as PricePerformanceState['evidenceStatus'] })}><option value="">All evidence</option>{capabilities.evidenceStatuses.map((evidence) => <option key={evidence} value={evidence}>{labelForLane(evidence)}</option>)}</select></FilterField>
-      <FilterField label="Variants"><select value={state.variants} onChange={(event) => update({ variants: event.target.value as PricePerformanceState['variants'] })}>{['one-per-family', 'all-variants'].map((variants) => <option key={variants} value={variants}>{variants === 'one-per-family' ? 'One per family' : 'All model variants'}</option>)}</select></FilterField>
-      <FilterField label="Status"><select value={state.status} onChange={(event) => update({ status: event.target.value as PricePerformanceState['status'] })}>{capabilities.statuses.map((status) => <option key={status} value={status}>{labelForLane(status)}</option>)}</select></FilterField>
-      <FilterField label="Scale"><select value={state.scale} onChange={(event) => update({ scale: event.target.value as PricePerformanceScale })}><option value="linear">Linear</option><option value="log">Log (positive costs only)</option></select></FilterField>
-    </div>
-    <fieldset className="price-performance-price-band"><legend>Selected price band</legend><div><label htmlFor="price-performance-min-price">Minimum USD / 1M</label><input id="price-performance-min-price" inputMode="decimal" min="0" type="number" value={minimum} onChange={(event) => updatePriceBand(event.target.value, maximum === '' ? '' : String(maximum))} /></div><div><label htmlFor="price-performance-max-price">Maximum USD / 1M</label><input id="price-performance-max-price" inputMode="decimal" min="0" type="number" value={maximum} onChange={(event) => updatePriceBand(minimum === '' ? '' : String(minimum), event.target.value)} /></div></fieldset>
+    <FilterTags label="Score lane" options={capabilities.scoreLanes.map((lane) => ({ value: lane, label: labelForLane(lane) }))} selected={state.lane} onSelect={(value) => update({ lane: (value ?? 'overall') as PricePerformanceState['lane'] })} />
+    <FilterTags label="Creator" options={capabilities.creators.map((creator) => ({ value: creator, label: creator }))} selected={state.creator} onSelect={(value) => update({ creator: value })} />
+    <PriceRangeSlider domain={rangeDomain} priceBand={state.priceBand} onChange={(priceBand) => update({ priceBand })} />
   </div>;
 }
+
 
 function latestAttributionBySource(attribution: readonly PricePerformanceAttribution[]): readonly PricePerformanceAttribution[] {
   const latest = new Map<string, PricePerformanceAttribution>();
@@ -208,20 +300,20 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
   return <div className="content-stack price-performance-page">
     <section className="panel price-performance-hero" aria-labelledby="price-performance-heading">
       <span className="eyebrow">TokenBench decision surface</span>
-      <h1 id="price-performance-heading">LLM price vs performance</h1>
-      <p>Compare corrected public benchmark scores against published API prices. Use the frontier to find score/cost trade-offs, then inspect the equivalent values table.</p>
+      <h1 id="price-performance-heading">LLM Price vs. Performance Benchmark</h1>
+      <p>Compare real-time LLM API pricing against verified benchmark scores. Track Pareto frontier models to identify the optimal balance of intelligence and cost for your workload.</p>
       <div className="price-performance-facts"><span className={stale ? 'price-performance-freshness stale' : 'price-performance-freshness'}>{stale ? 'Stale evidence' : 'Fresh evidence'}</span><span>Output USD / 1M default</span></div>
     </section>
 
     {stale ? <div className="price-performance-stale" role="status"><strong>Stale benchmark data</strong><span>{envelope.freshness.message ?? 'Showing the last valid published revision while refresh is unavailable.'}</span></div> : null}
 
     <section className="panel price-performance-filter-panel" aria-labelledby="price-performance-filters-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Decision controls</span><h2 id="price-performance-filters-heading">Filter the price-performance decision surface</h2><p>Choose the score lane, cost basis, evidence, status, and price range used by the chart and equivalent values.</p></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Decision controls</span><h2 id="price-performance-filters-heading">Filter Models &amp; Data Parameters</h2><p>Customize the score lane, pricing range, vendor filters to update the scatter plot and data tables below.</p></div></div>
       <PricePerformanceFilters state={state} envelope={envelope} displayedCosts={displayedCosts} onChange={setState} />
     </section>
 
     <section className="panel price-performance-chart-panel" aria-labelledby="price-performance-chart-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Analytical view</span><h2 id="price-performance-chart-heading">Score and selected cost</h2><p>Frontier points maximize score while minimizing selected cost. Equal score/cost ties share frontier state.</p></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Analytical view</span><h2 id="price-performance-chart-heading">Price–Performance Pareto Frontier</h2><p>Models on the dotted line represent the best performance available at their given price point (Pareto frontier). Click any point to inspect exact scores and token costs.</p></div></div>
       {chartAvailable
         ? noMatches
           ? <p className="price-performance-chart-empty-note">No chart points are available for this category.</p>
@@ -230,7 +322,7 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
     </section>
 
     <section className="panel price-performance-results" aria-labelledby="price-performance-results-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Equivalent values</span><h2 id="price-performance-results-heading">Decision-ready model values</h2><p>{noMatches ? 'No eligible models match these filters.' : `Showing ${summary.length} summary model${summary.length === 1 ? '' : 's'}; the full filtered set remains available below.`}</p></div></div>
+      <div className="panel-heading"><div><span className="eyebrow">Equivalent values</span><h2 id="price-performance-results-heading">Model Performance &amp; Value Leaderboard</h2><p>Compare efficiency metrics, including score-per-dollar values, across all current models.</p></div></div>
       {noMatches ? <div className="price-performance-category-empty" role="status" aria-label="No eligible models match these filters"><strong>No eligible models match these filters</strong><p>Try another score lane, creator, evidence state, status, or price band.</p></div> : null}
       <PricePerformanceTable points={summary} attribution={envelope.attribution} label={tableLabel} showEmptyState={false} />
       {!noMatches && views.length > summary.length ? <details className="price-performance-full-table"><summary>View all {views.length} filtered models</summary><PricePerformanceTable points={views} attribution={envelope.attribution} label="All filtered price versus performance values" showEmptyState={false} /></details> : null}

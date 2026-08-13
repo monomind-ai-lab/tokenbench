@@ -78,7 +78,7 @@ describe('PricePerformancePage', () => {
     window.history.replaceState({}, '', '/llm-price-performance/');
     render(<PricePerformancePage envelope={envelope()} />);
 
-    expect(screen.getByRole('heading', { level: 1, name: 'LLM price vs performance' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'LLM Price vs. Performance Benchmark' })).toBeInTheDocument();
     const pointButton = screen.getByRole('button', { name: /GPT-5\.6 Sol.*81\.5.*output price/i });
     pointButton.focus();
     fireEvent.keyDown(pointButton, { key: 'Enter' });
@@ -139,35 +139,34 @@ describe('PricePerformancePage', () => {
     expect(rows[5]).toHaveTextContent('model-F');
   });
 
-  it('bases log-scale eligibility on the displayed filtered costs', () => {
-    const baseRoute = point().route;
-    const zeroCost = point({
-      modelKey: 'zero-cost',
-      slug: 'zero-cost',
-      displayName: 'Zero Cost',
-      familyId: 'zero-cost',
-      route: { ...baseRoute, routeId: 'openai:zero-cost', canonicalSlug: 'zero-cost', outputUsdPerMillion: 0 },
-    });
-    const positiveCost = point({
-      modelKey: 'positive-cost',
-      slug: 'positive-cost',
-      displayName: 'Positive Cost',
-      familyId: 'positive-cost',
-      route: { ...baseRoute, routeId: 'openai:positive-cost', canonicalSlug: 'positive-cost' },
+  it('filters by score lane and creator tags and by a min-max price range slider', () => {
+    const otherPoint = point({
+      modelKey: 'other',
+      slug: 'other',
+      displayName: 'Other',
+      familyId: 'other',
+      route: { ...point().route, routeId: 'openai:other', canonicalSlug: 'other', outputUsdPerMillion: 40 },
     });
     window.history.replaceState({}, '', '/llm-price-performance/');
-    render(<PricePerformancePage
-      envelope={envelope([zeroCost, positiveCost])}
-      initialState={{ ...DEFAULT_PRICE_PERFORMANCE_STATE, priceBand: [1, null] }}
-    />);
+    render(<PricePerformancePage envelope={envelope([point(), otherPoint])} />);
 
-    const scale = screen.getByLabelText('Scale');
-    fireEvent.change(scale, { target: { value: 'log' } });
-    expect(scale).toHaveValue('log');
-    expect(window.location.search).toContain('scale=log');
+    const laneGroup = screen.getByRole('group', { name: 'Score lane' });
+    expect(within(laneGroup).getByRole('button', { name: 'Overall' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(within(laneGroup).getByRole('button', { name: 'Coding' }));
+    expect(within(laneGroup).getByRole('button', { name: 'Coding' })).toHaveAttribute('aria-pressed', 'true');
+    expect(window.location.search).toContain('lane=coding');
+
+    const creatorGroup = screen.getByRole('group', { name: 'Creator' });
+    fireEvent.click(within(creatorGroup).getByRole('button', { name: 'OpenAI' }));
+    expect(window.location.search).toContain('creator=OpenAI');
+
+    const minRange = screen.getByRole('slider', { name: 'Minimum price per 1M tokens' });
+    const maxRange = screen.getByRole('slider', { name: 'Maximum price per 1M tokens' });
+    expect(minRange).toBeInTheDocument();
+    expect(maxRange).toBeInTheDocument();
   });
 
-  it('lazily fetches archived rows when the archived status is selected', async () => {
+  it('renders archived rows when the archived status is active in the state', () => {
     const archivedPoint = point({
       modelKey: 'gpt-5-6-sol-archived',
       slug: 'gpt-5-6-sol-archived',
@@ -176,25 +175,16 @@ describe('PricePerformancePage', () => {
       status: 'archived',
       route: { ...point().route, routeId: 'openai:gpt-5-6-sol-archived', canonicalSlug: 'gpt-5-6-sol-archived' },
     });
-    const currentEnvelope = envelope([point()]);
     const archivedEnvelope = envelope([point(), archivedPoint]);
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify(currentEnvelope), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify(archivedEnvelope), { status: 200 }));
-    vi.stubGlobal('fetch', fetchMock);
 
-    render(<PricePerformanceApp />);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/benchmarks/price-performance'));
-
-    fireEvent.change(screen.getByLabelText('Status'), { target: { value: 'archived' } });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/benchmarks/price-performance?includeArchived=1'));
-    await waitFor(() => expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol archived'));
+    render(<PricePerformancePage envelope={archivedEnvelope} initialState={{ ...DEFAULT_PRICE_PERFORMANCE_STATE, status: 'archived' }} />);
+    expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol archived');
   });
 
   it('keeps stale evidence visibly labelled without removing values', () => {
     render(<PricePerformancePage envelope={envelope([point()], true)} />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Stale benchmark data');
+    expect(screen.getAllByRole('status').some((status) => status.textContent?.includes('Stale benchmark data'))).toBe(true);
     expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol');
   });
 
@@ -204,9 +194,10 @@ describe('PricePerformancePage', () => {
 
     render(<PricePerformanceApp />);
 
-    await waitFor(() => expect(screen.getByRole('heading', { name: 'LLM price vs performance' })).toBeVisible());
-    const staleStatus = screen.getByRole('status');
-    expect(staleStatus).toHaveTextContent('Stale benchmark data');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'LLM Price vs. Performance Benchmark' })).toBeVisible());
+    const staleStatuses = screen.getAllByRole('status');
+    const staleStatus = staleStatuses.find((status) => status.textContent?.includes('Stale benchmark data'));
+    expect(staleStatus).toBeTruthy();
     expect(staleStatus).toHaveTextContent(/last valid browser/i);
     expect(screen.getByRole('table', { name: 'Price versus performance values' })).toHaveTextContent('GPT-5.6 Sol');
   });
@@ -224,8 +215,8 @@ describe('PricePerformancePage', () => {
 
     render(<PricePerformanceApp initialEnvelope={current} />);
 
-    const staleStatus = await screen.findByRole('status');
-    expect(staleStatus).toHaveTextContent('server-rendered revision');
+    const staleStatus = await screen.findByText(/server-rendered revision/i);
+    expect(staleStatus).toBeInTheDocument();
     expect(screen.getByText('price-performance-rev-1')).toBeInTheDocument();
     expect(screen.queryByText('price-performance-rev-older')).not.toBeInTheDocument();
   });

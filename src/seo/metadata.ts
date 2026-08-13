@@ -89,7 +89,7 @@ const pageDefinitions = {
   pricePerformance: {
     title: `LLM Price vs Performance | ${SITE_CONFIG.name}`,
     description: `Compare current public AI benchmark scores with direct API price on ${SITE_CONFIG.name}, inspect the Pareto efficiency frontier, and review every plotted model in an accessible evidence table.`,
-    h1: 'LLM price vs performance',
+    h1: 'LLM Price vs. Performance Benchmark',
   },
   compareHub: {
     title: `Compare AI Models and Costs | ${SITE_CONFIG.name}`,
