@@ -227,9 +227,14 @@ export async function publishBenchmarkCandidate(input: PublishCandidateInput): P
     WHERE week.week_start = ?
     GROUP BY week.week_start`).bind(weekStart).first<{ rankCount: number }>();
   const existingRankCount = existingWeek?.rankCount ?? 0;
-  if (!Number.isSafeInteger(existingRankCount) || existingRankCount < 0 || existingRankCount > ranks.length) {
+  if (!Number.isSafeInteger(existingRankCount) || existingRankCount < 0 || existingRankCount > 100) {
     fail('published weekly model snapshot has an invalid rank count');
   }
+  // A previously published week is immutable when it already contains at
+  // least as much source-rank-safe evidence as this candidate. Sparse,
+  // duplicate, or out-of-range upstream ranks must not block publication of
+  // the new benchmark revision and caches merely because they yield fewer
+  // representable Popular Models rows.
   const replaceIncompleteWeek = existingWeek !== null && existingRankCount < ranks.length;
   const createWeek = existingWeek === null;
   statements.push(

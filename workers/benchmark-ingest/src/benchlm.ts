@@ -55,6 +55,8 @@ export interface BenchLmProjectedPayload {
   schemaVersion: string;
   generatedAt: string;
   items: unknown[];
+  /** Source-declared row count, preserved for completeness checks when present. */
+  itemCount?: number;
   upstreamRevision?: string;
   methodologyVersion?: string;
   approvedSnapshotId?: string | null;
@@ -182,10 +184,17 @@ function parseArtifact(value: unknown, artifact: ArtifactName): BenchLmProjected
   if (payload.schemaVersion !== '1.0') fail(`BenchLM ${artifact} schemaVersion must be 1.0`);
   const generatedAt = requireIsoTimestamp(payload.generatedAt, `BenchLM ${artifact}.generatedAt`);
   if (!Array.isArray(payload.items)) fail(`BenchLM ${artifact}.items must be an array`);
+  const rawCount = payload.itemCount ?? (
+    isRecord(payload.counts) ? payload.counts.items : undefined
+  );
+  const itemCount = rawCount === undefined
+    ? undefined
+    : requireNonNegativeInteger(rawCount, `BenchLM ${artifact}.itemCount`);
   return {
     schemaVersion: '1.0',
     generatedAt,
     items: payload.items,
+    ...(itemCount === undefined ? {} : { itemCount }),
   };
 }
 
@@ -516,6 +525,7 @@ function projectArtifact(payload: BenchLmProjectedPayload, artifact: ArtifactNam
   return {
     schemaVersion: payload.schemaVersion,
     generatedAt: payload.generatedAt,
+    ...(payload.itemCount === undefined ? {} : { itemCount: payload.itemCount }),
     ...(payload.upstreamRevision ? { upstreamRevision: payload.upstreamRevision } : {}),
     ...(payload.methodologyVersion ? { methodologyVersion: payload.methodologyVersion } : {}),
     ...(Object.prototype.hasOwnProperty.call(payload, 'approvedSnapshotId')
@@ -806,7 +816,15 @@ function toBenchmarkModels(
  * appear in the window, so window-derived counts would understate every large
  * category.
  */
-function publishedRankCohortSizes(models: readonly SafeModelInput[]): ReadonlyMap<string, number> {
+function publishedRankCohortSizes(
+  models: readonly SafeModelInput[],
+  declaredModelCount: number | undefined,
+): ReadonlyMap<string, number> {
+  // A dense prefix is not a completeness proof. Require the source's declared
+  // total to match the exact artifact before interpreting any 1..N category
+  // rank population as complete. Older stored projections omit this metadata
+  // and therefore safely produce no denominator until a fresh artifact lands.
+  if (declaredModelCount === undefined || declaredModelCount !== models.length) return new Map();
   const ranks = new Map<string, Set<number>>();
   const counts = new Map<string, number>();
   const highest = new Map<string, number>();
@@ -835,8 +853,9 @@ function toMetrics(
   publicScores: ReadonlyMap<string, PublicBenchLmScore>,
   safeCategories: Set<string>,
   generatedAt: string,
+  declaredModelCount: number | undefined,
 ): BenchmarkMetric[] {
-  const cohortSizes = publishedRankCohortSizes(models);
+  const cohortSizes = publishedRankCohortSizes(models, declaredModelCount);
   const metrics: BenchmarkMetric[] = [];
   models.forEach((model) => {
     const publicScore = publicScores.get(model.modelKey);
@@ -1068,6 +1087,7 @@ export async function parseBenchLm(
     publicScores,
     safeBenchmarkCategories(artifacts.benchmarks.items),
     artifacts['public-leaderboard'].generatedAt,
+    artifacts.models.itemCount,
   );
 
   const batch: NormalizedSourceBatch = {

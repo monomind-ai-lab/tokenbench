@@ -276,6 +276,12 @@ describe('final benchmark publication', () => {
     expect(complete.some((sql) => sql.includes('DELETE FROM benchmark_popular_model_ranks'))).toBe(false);
     expect(complete.some((sql) => sql.includes('UPDATE benchmark_popular_model_weeks'))).toBe(false);
     expect(complete.some((sql) => sql.includes('INSERT INTO benchmark_popular_model_ranks'))).toBe(false);
+
+    const fullerExistingWeek = await publishWithRankCount(100);
+    expect(fullerExistingWeek.some((sql) => sql.includes('DELETE FROM benchmark_popular_model_ranks'))).toBe(false);
+    expect(fullerExistingWeek.some((sql) => sql.includes('UPDATE benchmark_popular_model_weeks'))).toBe(false);
+    expect(fullerExistingWeek.some((sql) => sql.includes('INSERT INTO benchmark_popular_model_ranks'))).toBe(false);
+    expect(fullerExistingWeek.some((sql) => sql.includes('INSERT INTO benchmark_publication_state'))).toBe(true);
   });
 
   describe('weekly rank selection is source-rank safe', () => {

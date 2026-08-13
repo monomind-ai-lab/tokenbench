@@ -278,6 +278,29 @@ describe('parseBenchLm', () => {
       expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')?.rankFieldSize)
         .toBeNull();
     });
+
+    it('does not treat a dense truncated artifact as a complete cohort', async () => {
+      const source = payloads();
+      setCodingRanks(source, [1, 2, 3, 4, 5]);
+      const models = source.models as { counts: { items: number }; items: Array<Record<string, unknown>> };
+      models.counts.items = 6;
+
+      const batch = await parsePayloads(source);
+
+      expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')?.rankFieldSize)
+        .toBeNull();
+    });
+
+    it('leaves the denominator unavailable when legacy projection metadata has no declared count', async () => {
+      const source = payloads();
+      setCodingRanks(source, [1, 2, 3, 4, 5]);
+      delete (source.models as Record<string, unknown>).counts;
+
+      const batch = await parsePayloads(source);
+
+      expect(batch.metrics.find((metric) => metric.metricKey === 'benchlm:category:coding')?.rankFieldSize)
+        .toBeNull();
+    });
   });
 
   it('counts only benchmarks that actually joined into published evidence', async () => {
