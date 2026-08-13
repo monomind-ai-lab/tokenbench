@@ -21,7 +21,7 @@ import {
   type HomeRepresentativeRate,
   type PricePerformancePoint,
 } from '../benchmarks/decision-picks';
-import { blendedCostPerMillion, type WorkloadProfile } from '../benchmarks/value';
+import { blendedCostPerMillion, isPrimaryHostedRoute, type WorkloadProfile } from '../benchmarks/value';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 import {
   benchmarkCacheKey,
@@ -363,14 +363,14 @@ function validSelectedPriceContext(value: number | null): number | null {
   return Number.isSafeInteger(value) && (value as number) > 0 ? value : null;
 }
 
-function hasModelMatchedPrimaryOpenRouterPrice(
+function hasModelMatchedPrimaryHostedPrice(
   entry: LeaderboardEntry,
   profile: WorkloadProfile,
 ): boolean {
   const price = entry.primaryPrice;
   if (price === null
     || price.modelKey !== entry.model.modelKey
-    || price.sourceId !== 'openrouter'
+    || !isPrimaryHostedRoute(price, entry.model.sourceId)
     || price.verificationStatus !== 'primary'
     || !isNonNegativeFiniteNumber(price.inputUsdPerMillion)
     || !isNonNegativeFiniteNumber(price.outputUsdPerMillion)
@@ -389,7 +389,7 @@ function hasOptionalRepresentativePrice(entry: LeaderboardEntry): boolean {
   const price = entry.primaryPrice;
   if (price === null
     || price.modelKey !== entry.model.modelKey
-    || price.sourceId !== 'openrouter'
+    || !isPrimaryHostedRoute(price, entry.model.sourceId)
     || price.verificationStatus !== 'primary'
     || !isNonNegativeFiniteNumber(price.inputUsdPerMillion)
     || !isNonNegativeFiniteNumber(price.outputUsdPerMillion)
@@ -410,13 +410,15 @@ function hasRouteKindEntryInvariants(
         && !(entry.model.evidenceStatus === 'source_only' && entry.model.sourceId === 'lmarena')
         && entry.metric === null
         && entry.metrics.length === 0
-        && hasModelMatchedPrimaryOpenRouterPrice(entry, profile)
+        && hasModelMatchedPrimaryHostedPrice(entry, profile)
         && entry.sourceRank === null
         && !entry.onValueFrontier;
     case 'value':
       if (entry.model.evidenceStatus === 'estimated') return true;
-      return hasModelMatchedPrimaryOpenRouterPrice(entry, profile)
-        && entry.sourceRank === null;
+      // The value route carries the published BenchLM overall rank, exactly
+      // like the overall route. `hasConsistentSourceRank` checks it against
+      // the metric.
+      return hasModelMatchedPrimaryHostedPrice(entry, profile);
     case 'benchlm':
       return hasOptionalRepresentativePrice(entry)
         && !entry.onValueFrontier;
@@ -427,7 +429,7 @@ function hasRouteKindEntryInvariants(
 }
 
 function hasConsistentSourceRank(entry: LeaderboardEntry, definition: LeaderboardDefinition): boolean {
-  if (definition.kind === 'value' || definition.kind === 'pricing-context' || entry.model.evidenceStatus === 'estimated') {
+  if (definition.kind === 'pricing-context' || entry.model.evidenceStatus === 'estimated') {
     return entry.sourceRank === null;
   }
   return entry.metric !== null && entry.sourceRank === entry.metric.rank;

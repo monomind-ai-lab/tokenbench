@@ -772,6 +772,64 @@ describe('useBenchmarkLeaderboard', () => {
     expect(result.current.envelope).toBeNull();
   });
 
+  it('accepts published value rows that carry a same-source price and a source rank', async () => {
+    // Mirrors the live llm-value payload: BenchLM models priced by BenchLM's
+    // own pricing artifact, each carrying the published BenchLM overall rank.
+    const benchLmPrice = primaryOpenRouterPrice({
+      sourceId: 'benchlm',
+      providerId: 'benchlm',
+      routeId: 'benchlm:model-a',
+      sourceArtifactId: 'benchlm-pricing',
+    });
+    const rankedMetric = benchMetric({ rank: 4 });
+    const payload = valueEnvelopeWithEntryOverrides({
+      primaryPrice: benchLmPrice,
+      metric: rankedMetric,
+      metrics: [{ ...rankedMetric }],
+      sourceRank: 4,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.phase).toBe('ready'));
+    const entry = result.current.envelope?.data.entries[0];
+    expect(entry?.sourceRank).toBe(4);
+    expect(entry?.primaryPrice?.sourceId).toBe('benchlm');
+  });
+
+  it('rejects a value row whose source rank disagrees with its published metric rank', async () => {
+    const rankedMetric = benchMetric({ rank: 4 });
+    const payload = valueEnvelopeWithEntryOverrides({
+      metric: rankedMetric,
+      metrics: [{ ...rankedMetric }],
+      sourceRank: 9,
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
+  it('rejects a value row priced by a corroborating cross-source route', async () => {
+    const payload = valueEnvelopeWithEntryOverrides({
+      primaryPrice: primaryOpenRouterPrice({
+        sourceId: 'litellm',
+        providerId: 'litellm',
+        routeId: 'litellm:model-a',
+        sourceArtifactId: 'litellm-pricing',
+      }),
+    });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(payload)));
+
+    const { result } = renderHook(() => useBenchmarkLeaderboard('llm-value'));
+
+    await waitFor(() => expect(result.current.phase).toBe('unavailable'));
+    expect(result.current.envelope).toBeNull();
+  });
+
   it('keeps a stale revision out of the ready state', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(leaderboardEnvelope({
       freshness: { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue.' },
