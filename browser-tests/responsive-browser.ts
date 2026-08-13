@@ -1897,7 +1897,7 @@ test.describe('release 2 confirmation and test cheatsheet delivery', () => {
       const links = page.getByRole('link');
       await expect(links).toHaveCount(1);
       await expect(links.first()).toHaveAccessibleName('Start Exploring');
-      await expect(links.first()).toHaveAttribute('href', '/welcome/');
+      await expect(links.first()).toHaveAttribute('href', '/');
       await expect(page.getByRole('button')).toHaveCount(0);
       await expect(page.getByRole('navigation')).toHaveCount(0);
       await expect(page.locator('.top-header')).toHaveCount(0);
