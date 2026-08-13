@@ -62,8 +62,37 @@ describe('calculator results dashboard', () => {
     render(<ResultsDashboard selectedPlan={FRONTEND_TEST_CATALOG.plans[0]} snapshot={zeroWorkloadSnapshot()} hasAvailableModels />);
 
     expect(within(screen.getByText('Breakeven messages per day').parentElement!).getByText('Unavailable')).toBeInTheDocument();
+    expect(within(screen.getByText('Breakeven monthly tokens').parentElement!).getByText('Unavailable')).toBeInTheDocument();
     expect(within(screen.getByText('Efficiency').parentElement!).getByText('Unavailable')).toBeInTheDocument();
     expect(screen.queryByText('Not calculated')).not.toBeInTheDocument();
+  });
+
+  it('shows a finite breakeven monthly tokens value when the plan has fixed token capacity', () => {
+    const fixedPlanSnapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: FRONTEND_TEST_CATALOG.plans[1],
+    });
+
+    render(<ResultsDashboard selectedPlan={FRONTEND_TEST_CATALOG.plans[1]} snapshot={fixedPlanSnapshot} hasAvailableModels />);
+
+    expect(within(screen.getByText('Breakeven monthly tokens').parentElement!).getByText('11.4M')).toBeInTheDocument();
+  });
+
+  it('does not present a token breakeven for a plan with variable capacity', () => {
+    const variablePlanSnapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: FRONTEND_TEST_CATALOG.plans[0],
+    });
+
+    render(<ResultsDashboard selectedPlan={FRONTEND_TEST_CATALOG.plans[0]} snapshot={variablePlanSnapshot} hasAvailableModels />);
+
+    expect(within(screen.getByText('Breakeven monthly tokens').parentElement!).getByText('Unavailable')).toBeInTheDocument();
   });
 
   it('does not claim equal costs when no subscription plan is selected', () => {

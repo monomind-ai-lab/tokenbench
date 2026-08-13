@@ -100,6 +100,10 @@ function ValueSummary({ selectedPlan, snapshot, catalog }: Pick<ResultsDashboard
           <dd>{comparison?.breakEvenMessagesPerDay === null || comparison?.breakEvenMessagesPerDay === undefined ? 'Unavailable' : `${comparison.breakEvenMessagesPerDay.toLocaleString()} messages/day`}</dd>
         </div>
         <div>
+          <dt>Breakeven monthly tokens</dt>
+          <dd>{snapshot.breakEvenTokens === null || snapshot.breakEvenTokens === undefined ? 'Unavailable' : formatTokens(snapshot.breakEvenTokens)}</dd>
+        </div>
+        <div>
           <dt>Efficiency</dt>
           <dd>{comparison?.efficiencyBasisPoints === null || comparison?.efficiencyBasisPoints === undefined
             ? 'Unavailable'

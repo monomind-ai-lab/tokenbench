@@ -25,14 +25,18 @@ const APPROVED_LEADERBOARD_TITLES = {
 
 const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'home' }, canonical: origin },
-  { route: { kind: 'guides' }, canonical: `${origin}/guides/` },
-  { route: { kind: 'guides', slug: 'track-claude-code-usage' }, canonical: `${origin}/guides/track-claude-code-usage/` },
-  { route: { kind: 'guides', slug: 'monitor-openai-codex-usage' }, canonical: `${origin}/guides/monitor-openai-codex-usage/` },
-  { route: { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }, canonical: `${origin}/guides/openrouter-guide-model-routing-cost-controls/` },
-  { route: { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }, canonical: `${origin}/guides/legitimate-free-ai-api-access-credits/` },
-  { route: { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }, canonical: `${origin}/guides/reduce-llm-api-costs-caching-batch-output-limits/` },
+  { route: { kind: 'cost' }, canonical: `${origin}/cost/` },
+  { route: { kind: 'calculator' }, canonical: `${origin}/cost/calculator/` },
+  { route: { kind: 'breakeven' }, canonical: `${origin}/cost/breakeven/` },
+  { route: { kind: 'articles' }, canonical: `${origin}/articles/` },
+  { route: { kind: 'guides' }, canonical: `${origin}/articles/guides/` },
+  { route: { kind: 'insights' }, canonical: `${origin}/articles/insights/` },
+  { route: { kind: 'guides', slug: 'track-claude-code-usage' }, canonical: `${origin}/articles/guides/track-claude-code-usage/` },
+  { route: { kind: 'guides', slug: 'monitor-openai-codex-usage' }, canonical: `${origin}/articles/guides/monitor-openai-codex-usage/` },
+  { route: { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }, canonical: `${origin}/articles/guides/openrouter-guide-model-routing-cost-controls/` },
+  { route: { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }, canonical: `${origin}/articles/guides/legitimate-free-ai-api-access-credits/` },
+  { route: { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }, canonical: `${origin}/articles/guides/reduce-llm-api-costs-caching-batch-output-limits/` },
   { route: { kind: 'tools' }, canonical: `${origin}/tools/` },
-  { route: { kind: 'calculator' }, canonical: `${origin}/tools/subscriptions-vs-apis/` },
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
   { route: { kind: 'pricePerformance' }, canonical: `${origin}/llm-price-performance/` },
   { route: { kind: 'newsletterConfirmed' }, canonical: `${origin}/newsletter/confirmed/` },
@@ -97,7 +101,7 @@ describe('route metadata registry', () => {
 
     expect(page.openGraph.type).toBe('article');
     expect(page.h1).toBe('How to Track Claude Code Usage, Tokens, and Spend');
-    expect(page.canonical).toBe(`${origin}/guides/track-claude-code-usage/`);
+    expect(page.canonical).toBe(`${origin}/articles/guides/track-claude-code-usage/`);
   });
 
   it('keeps the crawlable leaderboard heading aligned with the interactive directory', () => {
@@ -178,5 +182,5 @@ describe('route metadata registry', () => {
     expect(page.description).toContain('messages');
     expect(page.description).toContain('input and output tokens');
     expect(page.description).toContain('API-equivalent pricing');
-    expect(page.canonical).toBe(`${origin}/tools/subscriptions-vs-apis/`);
+    expect(page.canonical).toBe(`${origin}/cost/calculator/`);
   });

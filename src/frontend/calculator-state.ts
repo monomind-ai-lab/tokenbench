@@ -153,6 +153,19 @@ function legacyWorkload(inputShareBasisPoints: number, monthlyTokens: number): C
   };
 }
 
+export function breakEvenTokensForMonthlyCost(
+  planCostMicroDollars: number,
+  apiCostMicroDollars: number,
+  monthlyTokens: number,
+): number | null {
+  if (!Number.isSafeInteger(planCostMicroDollars) || !Number.isSafeInteger(apiCostMicroDollars) || !Number.isSafeInteger(monthlyTokens)) return null;
+  if (planCostMicroDollars < 0 || apiCostMicroDollars <= 0 || monthlyTokens <= 0) return null;
+  const numerator = BigInt(planCostMicroDollars) * BigInt(monthlyTokens);
+  const quotient = (numerator + BigInt(apiCostMicroDollars) - 1n) / BigInt(apiCostMicroDollars);
+  if (quotient > SAFE_INTEGER_MAX) throw new Error('Breakeven tokens exceed the safe integer range');
+  return Number(quotient);
+}
+
 function isCompleteMix(entries: readonly ModelMixEntry[]): boolean {
   return entries.length > 0
     && entries.every((entry) => Number.isSafeInteger(entry.shareBasisPoints) && entry.shareBasisPoints >= 0 && entry.shareBasisPoints <= 10_000)
@@ -250,6 +263,9 @@ export function buildCalculatorSnapshot({
       + (weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion') * (derivedWorkload.monthlyOutputTokens / Math.max(1, totalMonthlyTokens))))
     : 0;
   const apiEquivalentValueMicroDollars = apiEquivalentCost?.apiCostMicroDollars ?? 0;
+  const breakEvenTokens = selectedPlan?.entitlement.kind === 'fixed_tokens' && apiEquivalentCost && totalMonthlyTokens > 0
+    ? breakEvenTokensForMonthlyCost(selectedPlan.monthlyCostMicroDollars, apiEquivalentCost.apiCostMicroDollars, totalMonthlyTokens)
+    : null;
   const chartPoints = [0.25, 0.5, 0.75, 1, 1.25].map((multiplier) => ({
     tokens: Math.round(totalMonthlyTokens * multiplier),
     valueMicroDollars: Math.round(apiEquivalentValueMicroDollars * multiplier),
@@ -272,7 +288,7 @@ export function buildCalculatorSnapshot({
     estimatedMonthlySavingsMicroDollars: comparison?.differenceMicroDollars ?? null,
     efficiencyBasisPoints: comparison?.efficiencyBasisPoints ?? null,
     breakEvenMessagesPerDay: comparison?.breakEvenMessagesPerDay ?? null,
-    breakEvenTokens: null,
+    breakEvenTokens,
     maximumPlanValueMicroDollars: null,
     monthlyTokens: totalMonthlyTokens,
     chartPoints,

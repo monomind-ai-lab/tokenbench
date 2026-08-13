@@ -110,7 +110,7 @@ export async function generateGuidePages(outputRoot: string): Promise<void> {
 }
 
 async function runGuideGenerator(): Promise<void> {
-  const outputRoot = resolve(process.cwd(), 'guides');
+  const outputRoot = resolve(process.cwd(), 'articles', 'guides');
   await generateGuidePages(outputRoot);
   console.log(`Generated ${GUIDES.length + 1} guide pages.`);
 }

@@ -5,6 +5,7 @@ import { SITE_CONFIG } from '../src/brand/site-config';
 import {
   FIXED_ROUTES,
   LEADERBOARD_ROUTES,
+  ROUTE_PATHS,
   staticHtmlEntries,
   type AppRoute,
 } from '../src/routing/routes';
@@ -14,8 +15,10 @@ import { generateGuidePages } from './generate-guide-pages';
 
 function activeNavigation(route: AppRoute): StaticNavigationPage {
   switch (route.kind) {
+    case 'cost': return undefined;
     case 'tools': return undefined;
     case 'calculator': return 'calculator';
+    case 'breakeven': return 'calculator';
     case 'home': return 'home';
     case 'compareHub': return 'compare';
     case 'models': return 'models';
@@ -26,6 +29,8 @@ function activeNavigation(route: AppRoute): StaticNavigationPage {
     case 'leaderboard':
     case 'methodologyBenchAlign': return 'leaderboards';
     case 'guides': return 'guides';
+    case 'articles':
+    case 'insights': return 'guides';
     default: return undefined;
   }
 }
@@ -41,11 +46,15 @@ function fixedPageContent(
 ): string {
   switch (route.kind) {
     case 'home':
-      return pageIntro(metadata, `<p>${escapeHtml(metadata.description)}</p><div class="static-page-links"><a class="button" href="/compare/">Compare models</a><a class="button" href="/tools/subscriptions-vs-apis/">Review Your Subscriptions</a><a class="button" href="/leaderboards/">Browse leaderboards</a></div><section><h2>Make an evidence-aware decision</h2><p>Compare direct API pricing, paid subscriptions, workload context, and benchmark categories without treating missing measurements as zero or presenting estimates as facts.</p></section>`);
+      return pageIntro(metadata, `<p>${escapeHtml(metadata.description)}</p><div class="static-page-links"><a class="button" href="/compare/">Compare models</a><a class="button" href="${ROUTE_PATHS.calculator}">Review Your Subscriptions</a><a class="button" href="/leaderboards/">Browse leaderboards</a></div><section><h2>Make an evidence-aware decision</h2><p>Compare direct API pricing, paid subscriptions, workload context, and benchmark categories without treating missing measurements as zero or presenting estimates as facts.</p></section>`);
+    case 'cost':
+      return pageIntro(metadata, `<p>Choose a workload-aware cost decision tool, with source-backed provider evidence and explicit treatment of variable limits.</p><section><h2>Available tools</h2><ul><li><a href="${ROUTE_PATHS.calculator}">Cost simulator</a></li><li><a href="${ROUTE_PATHS.breakeven}">Subscription breakeven calculator</a></li></ul></section>`);
     case 'tools':
       return pageIntro(metadata, `<p>Use ${SITE_CONFIG.name} tools to frame AI cost decisions from your observed usage and the provider evidence that is available for the exact route you are considering.</p><section><h2>Available tool</h2><article><h3><a href="/tools/subscriptions-vs-apis/">Subscription vs API cost calculator</a></h3><p>Estimate an API-equivalent cost from monthly tokens and model mix, then compare it with a paid individual subscription while keeping variable limits explicit.</p></article></section>`);
     case 'calculator':
       return pageIntro(metadata, `<p>Estimate how a paid individual AI subscription compares with direct API pricing. The interactive calculator mounts here in the browser; this crawlable summary explains its inputs and evidence boundaries.</p><section><h2>Use observed workload inputs</h2><p>Choose a provider, plan, model mix, input/output share, and expected monthly token volume. Treat unpublished or guardrail-limited capacity as variable rather than inventing a token cap.</p></section><section><h2>Review the source before purchasing</h2><p>${SITE_CONFIG.name} calculations are decision aids. Follow the provider evidence for current terms, included models, billing conditions, and availability before acting on an estimate.</p></section>`);
+    case 'breakeven':
+      return pageIntro(metadata, `<p>Use the calculator&#039;s verified subscription and direct API inputs to identify when workload changes may alter the cost comparison. The interactive calculator mounts here in the browser.</p><section><h2>Keep the assumptions visible</h2><p>Choose a provider, plan, model mix, and monthly workload. Variable or unavailable plan limits remain explicit rather than being converted into unsupported capacity claims.</p></section>`);
     case 'methodologyBenchAlign':
       // No canonical active-summary artifact is present in this build, so no
       // source version can be proven here. The hydrated page reads the active
@@ -64,17 +73,23 @@ function fixedPageContent(
       return pageIntro(metadata, `<p>${SITE_CONFIG.name} comparison pages help teams examine model capability context and cost information side by side. A searchable comparison experience will load in the browser when current benchmark evidence is available.</p><section><h2>Compare evidence, not a fabricated universal score</h2><p>Use source timestamps, category measurements, route-level pricing, and explicit unavailable states to decide which models deserve a deeper workload-specific evaluation.</p></section>`, 'Compare models<br/> side by side');
     case 'leaderboards':
       return pageIntro(metadata, `<p>Explore current model leaders by capability, workload, cost, and human preference.</p><section><h2>Leaderboard categories</h2><p>Each leaderboard shows its source, methodology, timestamp, and unavailable-data treatment with the published revision.</p><ul>${Object.values(LEADERBOARD_ROUTES).map((route) => `<li><a href="${route.pathname}">${escapeHtml(route.seo.h1)}</a></li>`).join('')}</ul></section>`);
+    case 'articles':
+      return pageIntro(metadata, `<p>Browse technical AI cost guides and evidence-aware articles for practical model and workload decisions.</p><section><h2>Article channels</h2><ul><li><a href="${ROUTE_PATHS.guides}">Guides</a></li><li><a href="${ROUTE_PATHS.insights}">LLM insights</a></li></ul></section>`);
+    case 'insights':
+      return pageIntro(metadata, `<p>This channel is not separately populated yet. Follow the current technical guides while TokenBench publishes evidence-aware AI ecosystem updates and benchmark analysis.</p>`);
     case 'leaderboard': {
       const definition = LEADERBOARD_ROUTES[route.key];
       return pageIntro(metadata, `<p>${escapeHtml(definition.seo.summary)}</p><section class="empty-state"><strong>Awaiting a published benchmark revision</strong><p>Live ranking data is not embedded in this static shell. When a supported revision is available, ${SITE_CONFIG.name} will show the source metric, publication timestamp, methodology, and any unavailable measurements instead of inventing a ranking.</p></section><section><h2>Evidence and methodology</h2><p>This page will attribute its displayed data to the applicable source, including BenchLM, LMArena, OpenRouter, or ${SITE_CONFIG.name}-derived calculations. Source availability and methodology remain visible with the results.</p></section>`);
     }
+    default:
+      return pageIntro(metadata, '');
   }
 }
 
 function structuredDataFor(route: AppRoute, metadata: PageMetadata): unknown[] {
-  const type = route.kind === 'home' || route.kind === 'calculator'
+  const type = route.kind === 'home' || route.kind === 'calculator' || route.kind === 'breakeven'
     ? 'WebApplication'
-    : route.kind === 'tools' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'models'
+    : route.kind === 'tools' || route.kind === 'cost' || route.kind === 'articles' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'models'
       ? 'CollectionPage'
       : 'WebPage';
   return [{
@@ -125,7 +140,7 @@ export async function generateStaticPages(rootDir: string): Promise<void> {
       ));
     }));
 
-  await generateGuidePages(resolve(rootDir, 'guides'));
+  await generateGuidePages(resolve(rootDir, 'articles', 'guides'));
 
   const sitemapPath = resolve(rootDir, 'public', 'sitemaps', 'static.xml');
   await mkdir(dirname(sitemapPath), { recursive: true });

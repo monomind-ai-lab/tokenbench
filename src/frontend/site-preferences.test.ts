@@ -16,15 +16,15 @@ describe('Google Translate chrome suppression', () => {
     document.cookie = 'googtrans=; Max-Age=0; path=/;';
   });
 
-  it('uses the dark default while server-rendering without browser globals', () => {
+  it('uses the light default while server-rendering without browser globals', () => {
     vi.stubGlobal('window', undefined);
     vi.stubGlobal('document', undefined);
 
-    expect(readStoredTheme()).toBe('dark');
+    expect(readStoredTheme()).toBe('light');
     expect(readLanguage()).toBe('en');
   });
 
-  it('migrates the legacy unmarked dark value to the dark default without a recoverable server-markup mismatch', async () => {
+  it('migrates the legacy unmarked dark value to the light default without a recoverable server-markup mismatch', async () => {
     vi.stubGlobal('window', undefined);
     vi.stubGlobal('document', undefined);
     const serverMarkup = renderToString(createElement(StrictMode, null, createElement(PreferenceProbe)));
@@ -42,11 +42,11 @@ describe('Google Translate chrome suppression', () => {
       root = hydrateRoot(container, createElement(StrictMode, null, createElement(PreferenceProbe)), { onRecoverableError: recoverable });
     });
 
-    expect(serverMarkup).toContain('data-theme="dark"');
+    expect(serverMarkup).toContain('data-theme="light"');
     expect(serverMarkup).toContain('data-language="en"');
     expect(recoverable).not.toHaveBeenCalled();
-    expect(container.querySelector('output')).toHaveTextContent('dark:zh-TW');
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(container.querySelector('output')).toHaveTextContent('light:zh-TW');
+    expect(document.documentElement.dataset.theme).toBe('light');
     expect(localStorage.getItem('tokenbench:theme')).toBeNull();
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
 
@@ -73,7 +73,7 @@ describe('Google Translate chrome suppression', () => {
       root = hydrateRoot(container, createElement(StrictMode, null, createElement(PreferenceProbe)), { onRecoverableError: recoverable });
     });
 
-    expect(serverMarkup).toContain('data-theme="dark"');
+    expect(serverMarkup).toContain('data-theme="light"');
     expect(serverMarkup).toContain('data-language="en"');
     expect(recoverable).not.toHaveBeenCalled();
     expect(container.querySelector('output')).toHaveTextContent('light:zh-TW');

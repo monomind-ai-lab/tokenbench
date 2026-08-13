@@ -7,6 +7,7 @@ import App from '../App';
 import type { CatalogResponse, PlanOffer } from '../catalog/contracts';
 import { AppShell, SiteHeader } from './app-shell';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
+import { ROUTE_PATHS } from '../routing/routes';
 import '../index.css';
 
 function respondWithCatalog(catalog = FRONTEND_TEST_CATALOG) {
@@ -21,7 +22,7 @@ function renderAt(pathname: string) {
   return render(<App />);
 }
 
-const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
+const CALCULATOR_PATH = ROUTE_PATHS.calculator;
 const selectedDirectOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
 
 interface CalculatorPathOptions {
@@ -150,7 +151,7 @@ describe('responsive calculator app shell', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.dataset.theme = 'light';
-    window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
+    window.history.replaceState({}, '', ROUTE_PATHS.calculator);
     respondWithCatalog();
   });
 
@@ -161,7 +162,7 @@ describe('responsive calculator app shell', () => {
 
     expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Compare models' })[0]).toHaveAttribute('href', '/compare/');
-    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', ROUTE_PATHS.calculator);
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('region', { name: 'Market at a glance' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
@@ -184,12 +185,12 @@ describe('responsive calculator app shell', () => {
     renderAt('/tools/');
 
     expect(screen.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', ROUTE_PATHS.calculator);
     expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
   });
 
   it('keeps the calculator controls and results on their dedicated route', async () => {
-    renderAt('/tools/subscriptions-vs-apis/');
+    renderAt(ROUTE_PATHS.calculator);
 
     expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 1 })).toBeInTheDocument();
     expect(await screen.findByRole('group', { name: /Provider selection/i })).toBeInTheDocument();
@@ -462,7 +463,7 @@ describe('responsive calculator app shell', () => {
   });
 
   it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
-    renderAt('/tools/subscriptions-vs-apis/');
+    renderAt(ROUTE_PATHS.calculator);
 
     await calculatorReadyHeading();
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Conversations per day' }), { target: { value: '101' } });
@@ -490,6 +491,7 @@ describe('responsive calculator app shell', () => {
     await calculatorReadyHeading();
     expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
+    expect(document.querySelector('.app-shell')).toHaveAttribute('data-brand', 'plum');
     expect(screen.queryByText('The Decision Engine for AI Costs & Model Benchmarks')).not.toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APIPrice vs PerformanceModelsCompareLeaderboardsGuides');
@@ -503,22 +505,22 @@ describe('responsive calculator app shell', () => {
       .toEqual(['Home', 'Subscribe vs API', 'Price vs Performance', 'Models', 'Compare', 'Leaderboards', 'Guides']);
   });
 
-  it('defaults a no-storage document to dark and persists both TokenBench theme choices', async () => {
+  it('defaults a no-storage document to light and persists both TokenBench theme choices', async () => {
     render(<App />);
 
     await calculatorReadyHeading();
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.theme).toBe('light');
     expect(localStorage.getItem('tokenbench:theme')).toBeNull();
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
-    expect(document.documentElement.dataset.theme).toBe('light');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
-    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle dark theme' }));
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
+    expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle light theme' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
     expect(localStorage.getItem('tokenbench:theme:explicit')).toBe('true');
   });
 
@@ -527,6 +529,7 @@ describe('responsive calculator app shell', () => {
 
     const menu = document.querySelector<HTMLButtonElement>('.menu-button');
     if (!menu) throw new Error('Expected an accessible mobile navigation control');
+    expect(menu).toHaveAttribute('data-min-target', '44');
     expect(menu).toHaveAttribute('aria-label', 'Open navigation');
     expect(menu).toHaveAttribute('aria-controls', 'primary-navigation');
     expect(menu).toHaveAttribute('aria-expanded', 'false');
@@ -535,6 +538,16 @@ describe('responsive calculator app shell', () => {
     expect(menu).toHaveAttribute('aria-expanded', 'true');
     fireEvent.keyDown(screen.getByRole('navigation', { name: 'Primary navigation' }), { key: 'Escape' });
     expect(menu).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('keeps the shell usable at the minimum supported viewport', () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+    render(<SiteHeader theme="light" language="en" activePage="home" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
+
+    expect(document.querySelector('.header-inner')).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toBeInTheDocument();
+    const menu = document.querySelector<HTMLButtonElement>('.menu-button');
+    expect(menu).toHaveAttribute('data-min-target', '44');
   });
 
   it('does not present API-only model owners as subscription plan providers', async () => {
@@ -597,14 +610,14 @@ describe('responsive calculator app shell', () => {
     await calculatorReadyHeading();
     const usage = screen.getByRole('spinbutton', { name: 'Conversations per day' });
     fireEvent.change(usage, { target: { value: '42' } });
-    fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.click(screen.getByRole('button', { name: /Toggle dark theme/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Toggle light theme/i }));
     fireEvent.change(screen.getByRole('combobox', { name: /Language/i }), { target: { value: 'zh-TW' } });
 
     expect(usage).toHaveValue(42);
-    expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(localStorage.getItem('tokenbench:theme')).toBe('dark');
-    expect(screen.getByRole('button', { name: /Toggle light theme/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('tokenbench:theme')).toBe('light');
+    expect(screen.getByRole('button', { name: /Toggle dark theme/i })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByRole('combobox', { name: /Language/i })).toHaveValue('zh-TW');
   });
 

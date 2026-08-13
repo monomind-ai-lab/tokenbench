@@ -11,7 +11,7 @@ import { generateStaticPages } from './generate-static-pages';
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
 const requireFromTest = createRequire(import.meta.url);
-const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='dark'}}catch(e){document.documentElement.dataset.theme='dark'}</script>";
+const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
 
 function gitCheckIgnoreStatus(pathname: string): number | null {
   const result = spawnSync('git', ['check-ignore', '--quiet', '--no-index', pathname], {
@@ -41,11 +41,11 @@ describe('crawlable static-page generator', () => {
     const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
-    const guide = await readFile(join(root, 'guides/track-claude-code-usage/index.html'), 'utf8');
+    const guide = await readFile(join(root, 'articles/guides/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
     expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
-    expect(home).toContain('<html lang="en" data-theme="dark">');
+    expect(home).toContain('<html lang="en" data-theme="light">');
     expect(home).toContain(THEME_BOOTSTRAP);
     expect(home).toContain('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.');
     expect(home).toContain('<meta name="description" content="The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.">');
@@ -86,13 +86,14 @@ describe('crawlable static-page generator', () => {
     expect(home).not.toContain('href="/sources/"');
 
     expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
-    expect(guide).toContain('<html lang="en" data-theme="dark">');
+    expect(guide).toContain('<html lang="en" data-theme="light">');
     expect(guide).toContain(THEME_BOOTSTRAP);
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
-    expect(guide).toContain('https://tokenbench.monomind.one/guides/track-claude-code-usage/');
+    expect(guide).toContain('https://tokenbench.monomind.one/articles/guides/track-claude-code-usage/');
 
-    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/cost/calculator/</loc>');
+    expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/reasoning/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/knowledge/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc>');
@@ -228,7 +229,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(31);
+    expect(FIXED_ROUTES).toHaveLength(35);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES
@@ -246,5 +247,5 @@ describe('crawlable static-page generator', () => {
     for (const pathname of unownedPages) {
       expect(gitCheckIgnoreStatus(pathname), pathname).toBe(1);
     }
-  });
+  }, 10_000);
 });

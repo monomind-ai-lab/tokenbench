@@ -3,9 +3,13 @@ import { GUIDE_BY_SLUG, GUIDES, guidePath } from '../guides/content';
 
 export const ROUTE_PATHS = {
   home: '/',
-  guides: '/guides/',
+  articles: '/articles/',
+  guides: '/articles/guides/',
+  insights: '/articles/insights/',
   tools: '/tools/',
-  calculator: '/tools/subscriptions-vs-apis/',
+  cost: '/cost/',
+  calculator: '/cost/calculator/',
+  breakeven: '/cost/breakeven/',
   pricePerformance: '/llm-price-performance/',
   compareHub: '/compare/',
   models: '/models/',
@@ -165,11 +169,15 @@ export type LeaderboardKey = keyof typeof LEADERBOARD_ROUTES;
 
 export type AppRoute =
   | { kind: 'home' }
+  | { kind: 'cost' }
   | { kind: 'tools' }
   | { kind: 'calculator' }
+  | { kind: 'breakeven' }
   | { kind: 'pricePerformance' }
   | { kind: 'methodologyBenchAlign' }
   | { kind: 'guides'; slug?: string }
+  | { kind: 'articles' }
+  | { kind: 'insights' }
   | { kind: 'compareHub' }
   | { kind: 'models' }
   | { kind: 'comparison'; pair: string }
@@ -192,14 +200,18 @@ export interface FixedRouteDefinition {
 
 const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'home', pathname: ROUTE_PATHS.home, route: { kind: 'home' } },
+  { id: 'cost', pathname: ROUTE_PATHS.cost, route: { kind: 'cost' } },
+  { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
+  { id: 'breakeven', pathname: ROUTE_PATHS.breakeven, route: { kind: 'breakeven' } },
+  { id: 'articles', pathname: ROUTE_PATHS.articles, route: { kind: 'articles' } },
   { id: 'guides', pathname: ROUTE_PATHS.guides, route: { kind: 'guides' } },
+  { id: 'insights', pathname: ROUTE_PATHS.insights, route: { kind: 'insights' } },
   ...GUIDES.map((guide) => ({
     id: `guide-${guide.slug}`,
     pathname: guidePath(guide.slug),
     route: { kind: 'guides' as const, slug: guide.slug },
   })),
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
-  { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
   { id: 'price-performance', pathname: ROUTE_PATHS.pricePerformance, route: { kind: 'pricePerformance' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
@@ -239,11 +251,15 @@ function normalizePathname(pathname: string): string {
 export function pathnameForRoute(route: AppRoute): string | null {
   switch (route.kind) {
     case 'home': return ROUTE_PATHS.home;
+    case 'cost': return ROUTE_PATHS.cost;
     case 'tools': return ROUTE_PATHS.tools;
     case 'calculator': return ROUTE_PATHS.calculator;
+    case 'breakeven': return ROUTE_PATHS.breakeven;
     case 'pricePerformance': return ROUTE_PATHS.pricePerformance;
     case 'methodologyBenchAlign': return ROUTE_PATHS.methodologyBenchAlign;
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
+    case 'articles': return ROUTE_PATHS.articles;
+    case 'insights': return ROUTE_PATHS.insights;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'models': return ROUTE_PATHS.models;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
@@ -262,11 +278,15 @@ export function matchRoute(pathname: string): AppRoute {
   const normalizedPathname = normalizePathname(pathname);
 
   if (normalizedPathname === ROUTE_PATHS.home) return { kind: 'home' };
+  if (normalizedPathname === ROUTE_PATHS.cost) return { kind: 'cost' };
   if (normalizedPathname === ROUTE_PATHS.tools) return { kind: 'tools' };
   if (normalizedPathname === ROUTE_PATHS.calculator) return { kind: 'calculator' };
+  if (normalizedPathname === ROUTE_PATHS.breakeven) return { kind: 'breakeven' };
   if (normalizedPathname === ROUTE_PATHS.pricePerformance) return { kind: 'pricePerformance' };
   if (normalizedPathname === ROUTE_PATHS.methodologyBenchAlign) return { kind: 'methodologyBenchAlign' };
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
+  if (normalizedPathname === ROUTE_PATHS.articles) return { kind: 'articles' };
+  if (normalizedPathname === ROUTE_PATHS.insights) return { kind: 'insights' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
   if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
@@ -275,6 +295,8 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
 
   if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };
+  if (normalizedPathname === '/calculator/' || normalizedPathname === '/tools/subscriptions-vs-apis/') return { kind: 'redirect', to: ROUTE_PATHS.calculator };
+  if (normalizedPathname === '/guides/') return { kind: 'redirect', to: ROUTE_PATHS.guides };
   const legacyLeaderboardMatch = normalizedPathname.match(/^\/leaderboard\/(.+)\/$/);
   if (legacyLeaderboardMatch) {
     const canonicalPathname = `/leaderboards/${legacyLeaderboardMatch[1]}/`;
@@ -283,7 +305,10 @@ export function matchRoute(pathname: string): AppRoute {
     if (isPublishedLeaderboard) return { kind: 'redirect', to: canonicalPathname };
   }
 
-  const guideMatch = normalizedPathname.match(/^\/guides\/([^/]+)\/$/);
+  const legacyGuideMatch = normalizedPathname.match(/^\/guides\/([^/]+)\/$/);
+  if (legacyGuideMatch && GUIDE_BY_SLUG.has(legacyGuideMatch[1])) return { kind: 'redirect', to: guidePath(legacyGuideMatch[1]) };
+
+  const guideMatch = normalizedPathname.match(/^\/articles\/guides\/([^/]+)\/$/);
   if (guideMatch && GUIDE_BY_SLUG.has(guideMatch[1])) return { kind: 'guides', slug: guideMatch[1] };
 
   const leaderboardKey = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])

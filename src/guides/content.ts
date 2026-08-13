@@ -596,7 +596,7 @@ export const GUIDES: GuideArticle[] = [
 export const GUIDE_BY_SLUG = new Map(GUIDES.map((guide) => [guide.slug, guide]));
 
 export function guidePath(slug: string): string {
-  return `/guides/${slug}/`;
+  return `/articles/guides/${slug}/`;
 }
 
 export function relatedGuides(guide: GuideArticle): GuideArticle[] {

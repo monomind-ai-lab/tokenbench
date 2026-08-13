@@ -42,7 +42,7 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
   return <header className="top-header" onKeyDown={(event) => { if (event.key === 'Escape') setMobileMenuOpen(false); }}>
     <div className="header-inner">
       <div className="brand-lockup"><a className="brand-home" href="/" aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span></span></a></div>
-      <button type="button" className="menu-button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
+      <button type="button" className="menu-button" data-min-target="44" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => setMobileMenuOpen((open) => !open)}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
       <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
         <a href={ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Home</a>
         <a href={ROUTE_PATHS.calculator} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={() => setMobileMenuOpen(false)}>Subscribe vs API</a>
@@ -110,7 +110,7 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
 
   return (
     <SiteThemeProvider theme={theme}>
-      <div className="app-shell" data-layout={layout}>
+      <div className="app-shell" data-brand="plum" data-layout={layout}>
         <a className="skip-link" href={`#${skipLinkTarget}`}>{skipLinkLabel}</a>
         <SiteHeader theme={theme} language={language} activePage={activePage} onThemeToggle={onThemeToggle} onLanguageChange={onLanguageChange} />
         {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}

@@ -20,14 +20,18 @@ const APPROVED_LEADERBOARD_TITLES = {
 
 const fixedRouteCases = [
   ['/', { kind: 'home' }],
-  ['/guides', { kind: 'guides' }],
-  ['/guides/track-claude-code-usage', { kind: 'guides', slug: 'track-claude-code-usage' }],
-  ['/guides/monitor-openai-codex-usage', { kind: 'guides', slug: 'monitor-openai-codex-usage' }],
-  ['/guides/openrouter-guide-model-routing-cost-controls', { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }],
-  ['/guides/legitimate-free-ai-api-access-credits', { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }],
-  ['/guides/reduce-llm-api-costs-caching-batch-output-limits', { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }],
+  ['/articles', { kind: 'articles' }],
+  ['/articles/guides', { kind: 'guides' }],
+  ['/articles/insights', { kind: 'insights' }],
+  ['/articles/guides/track-claude-code-usage', { kind: 'guides', slug: 'track-claude-code-usage' }],
+  ['/articles/guides/monitor-openai-codex-usage', { kind: 'guides', slug: 'monitor-openai-codex-usage' }],
+  ['/articles/guides/openrouter-guide-model-routing-cost-controls', { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }],
+  ['/articles/guides/legitimate-free-ai-api-access-credits', { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }],
+  ['/articles/guides/reduce-llm-api-costs-caching-batch-output-limits', { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }],
   ['/tools', { kind: 'tools' }],
-  ['/tools/subscriptions-vs-apis', { kind: 'calculator' }],
+  ['/cost', { kind: 'cost' }],
+  ['/cost/calculator', { kind: 'calculator' }],
+  ['/cost/breakeven', { kind: 'breakeven' }],
   ['/compare', { kind: 'compareHub' }],
   ['/llm-price-performance', { kind: 'pricePerformance' }],
   ['/newsletter/confirmed', { kind: 'newsletterConfirmed' }],
@@ -92,7 +96,7 @@ describe('TokenBench route registry', () => {
   });
 
   it('does not turn unknown fixed-path candidates into published pages', () => {
-    expect(matchRoute('/guides/not-a-guide/')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/articles/guides/not-a-guide/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/leaderboards/llm/not-a-metric/')).toEqual({ kind: 'notFound' });
   });
 
@@ -100,13 +104,18 @@ describe('TokenBench route registry', () => {
     const inputs = staticHtmlEntries('/generated-tokenbench');
 
     expect(Object.values(inputs).sort()).toEqual([
+      '/generated-tokenbench/articles/guides/index.html',
+      '/generated-tokenbench/articles/guides/legitimate-free-ai-api-access-credits/index.html',
+      '/generated-tokenbench/articles/guides/monitor-openai-codex-usage/index.html',
+      '/generated-tokenbench/articles/guides/openrouter-guide-model-routing-cost-controls/index.html',
+      '/generated-tokenbench/articles/guides/reduce-llm-api-costs-caching-batch-output-limits/index.html',
+      '/generated-tokenbench/articles/guides/track-claude-code-usage/index.html',
+      '/generated-tokenbench/articles/index.html',
+      '/generated-tokenbench/articles/insights/index.html',
       '/generated-tokenbench/compare/index.html',
-      '/generated-tokenbench/guides/index.html',
-      '/generated-tokenbench/guides/legitimate-free-ai-api-access-credits/index.html',
-      '/generated-tokenbench/guides/monitor-openai-codex-usage/index.html',
-      '/generated-tokenbench/guides/openrouter-guide-model-routing-cost-controls/index.html',
-      '/generated-tokenbench/guides/reduce-llm-api-costs-caching-batch-output-limits/index.html',
-      '/generated-tokenbench/guides/track-claude-code-usage/index.html',
+      '/generated-tokenbench/cost/breakeven/index.html',
+      '/generated-tokenbench/cost/calculator/index.html',
+      '/generated-tokenbench/cost/index.html',
       '/generated-tokenbench/index.html',
       '/generated-tokenbench/leaderboards/index.html',
       '/generated-tokenbench/leaderboards/llm/agentic/index.html',
@@ -129,7 +138,6 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/newsletter/confirmed/index.html',
       '/generated-tokenbench/privacy/index.html',
       '/generated-tokenbench/tools/index.html',
-      '/generated-tokenbench/tools/subscriptions-vs-apis/index.html',
       '/generated-tokenbench/welcome/index.html',
     ]);
     expect(inputs.home).toBe('/generated-tokenbench/index.html');

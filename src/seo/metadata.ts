@@ -1,5 +1,5 @@
 import { HOME_PAGE_COPY, SITE_CONFIG } from '../brand/site-config';
-import { GUIDE_BY_SLUG } from '../guides/content';
+import { GUIDE_BY_SLUG, guidePath } from '../guides/content';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS, pathnameForRoute, type AppRoute } from '../routing/routes';
 
 export interface PageMetadata {
@@ -81,10 +81,31 @@ const pageDefinitions = {
     description: `Explore ${SITE_CONFIG.name} decision tools for comparing AI subscriptions, direct API costs, model pricing context, and workload-aware tradeoffs.`,
     h1: 'AI cost decision tools',
   },
+  cost: {
+    title: `AI Subscription Cost Tools | ${SITE_CONFIG.name}`,
+    description: `Compare AI subscription and direct API costs with ${SITE_CONFIG.name}'s workload-aware, source-backed decision tools.`,
+    h1: 'Subscribe vs API',
+  },
   calculator: {
     title: `Subscription vs API Cost Calculator | ${SITE_CONFIG.name}`,
     description: `Compare subscription plan fees with API-equivalent pricing from conversations, messages, directional input and output tokens, active days, and ${SITE_CONFIG.name}'s verified provider evidence.`,
     h1: 'Subscription vs API cost calculator',
+  },
+  breakeven: {
+    title: `Subscription Breakeven Calculator | ${SITE_CONFIG.name}`,
+    description: `Estimate the workload crossover between an AI subscription and direct API pricing with ${SITE_CONFIG.name}'s source-backed calculator inputs.`,
+    h1: 'Subscription breakeven calculator',
+  },
+  articles: {
+    title: `AI Articles | ${SITE_CONFIG.name}`,
+    description: `Browse ${SITE_CONFIG.name}'s technical AI cost guides and evidence-aware articles for practical model and workload decisions.`,
+    h1: 'AI articles',
+  },
+  insights: {
+    title: `LLM Insights | ${SITE_CONFIG.name}`,
+    description: `Follow ${SITE_CONFIG.name}'s evidence-aware AI ecosystem updates, model releases, and benchmark analysis as this channel is populated.`,
+    h1: 'LLM insights',
+    robots: 'noindex,follow' as const,
   },
   pricePerformance: {
     title: `LLM Price vs Performance | ${SITE_CONFIG.name}`,
@@ -150,8 +171,10 @@ const pageDefinitions = {
 export function metadataForRoute(route: AppRoute): PageMetadata {
   switch (route.kind) {
     case 'home': return makeMetadata('/', pageDefinitions.home);
+    case 'cost': return makeMetadata(ROUTE_PATHS.cost, pageDefinitions.cost);
     case 'tools': return makeMetadata('/tools/', pageDefinitions.tools);
-    case 'calculator': return makeMetadata('/tools/subscriptions-vs-apis/', pageDefinitions.calculator);
+    case 'calculator': return makeMetadata(ROUTE_PATHS.calculator, pageDefinitions.calculator);
+    case 'breakeven': return makeMetadata(ROUTE_PATHS.breakeven, pageDefinitions.breakeven);
     case 'pricePerformance': return makeMetadata(ROUTE_PATHS.pricePerformance, pageDefinitions.pricePerformance);
     case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
@@ -165,16 +188,18 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
       return makeMetadata(definition.pathname, definition.seo);
     }
     case 'guides': {
-      if (!route.slug) return makeMetadata('/guides/', pageDefinitions.guides);
+      if (!route.slug) return makeMetadata(ROUTE_PATHS.guides, pageDefinitions.guides);
       const guide = GUIDE_BY_SLUG.get(route.slug);
-      if (!guide) return makeMetadata('/guides/', pageDefinitions.notFound);
-      return makeMetadata(`/guides/${guide.slug}/`, {
+      if (!guide) return makeMetadata(ROUTE_PATHS.guides, pageDefinitions.notFound);
+      return makeMetadata(guidePath(guide.slug), {
         title: `${guide.seoTitle} | ${SITE_CONFIG.name}`,
         description: guide.description,
         h1: guide.title,
         type: 'article',
       });
     }
+    case 'articles': return makeMetadata(ROUTE_PATHS.articles, pageDefinitions.articles);
+    case 'insights': return makeMetadata(ROUTE_PATHS.insights, pageDefinitions.insights);
     case 'comparison': return makeMetadata(pathnameForRoute(route) ?? '/compare/', {
       ...pageDefinitions.comparison,
       title: `${route.pair.replaceAll('-', ' ')} comparison | ${SITE_CONFIG.name}`,
