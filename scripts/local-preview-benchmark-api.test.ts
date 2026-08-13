@@ -122,7 +122,7 @@ describe('local Vite benchmark preview API', () => {
   it('delegates the canonical lifecycle path to generated static handling instead of a model-profile 404', async () => {
     const { server, origin } = await startLocalPreviewServer();
     try {
-      const [lifecycle, canonicalRedirect] = await Promise.all([
+      const [lifecycle, slashlessLifecycle] = await Promise.all([
         getLocalResponse(origin, '/models/lifecycle/'),
         getLocalResponse(origin, '/models/lifecycle'),
       ]);
@@ -131,8 +131,9 @@ describe('local Vite benchmark preview API', () => {
       expect(lifecycle.body).toContain('Model Lifecycle Radar');
       expect(lifecycle.body).not.toContain('Model profile not found');
       expect(lifecycle.body).not.toContain('model-profile-initial-data');
-      expect(canonicalRedirect.status).toBe(301);
-      expect(canonicalRedirect.headers.location).toBe('/models/lifecycle/');
+      expect(slashlessLifecycle.status).toBe(200);
+      expect(slashlessLifecycle.body).not.toContain('Model profile not found');
+      expect(slashlessLifecycle.body).not.toContain('model-profile-initial-data');
     } finally {
       await server.close();
     }
