@@ -43,6 +43,9 @@ describe('crawlable static-page generator', () => {
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
     const lifecycle = await readFile(join(root, 'models/lifecycle/index.html'), 'utf8');
     const guide = await readFile(join(root, 'articles/guides/track-claude-code-usage/index.html'), 'utf8');
+    const cost = await readFile(join(root, 'cost/index.html'), 'utf8');
+    const calculator = await readFile(join(root, 'cost/calculator/index.html'), 'utf8');
+    const breakeven = await readFile(join(root, 'cost/breakeven/index.html'), 'utf8');
     const tools = await readFile(join(root, 'tools/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
@@ -101,6 +104,11 @@ describe('crawlable static-page generator', () => {
 
     expect(tools).toContain('href="/cost/calculator/"');
     expect(tools).not.toContain('href="/cost/breakeven/"');
+    expect(cost).toContain('href="/cost/calculator/"');
+    expect(cost).toContain('href="/cost/breakeven/"');
+    expect(cost).toContain('fixed-token plan evidence is verified');
+    expect(calculator).toContain('Estimate how a paid individual AI subscription compares with direct API pricing.');
+    expect(breakeven).toContain('Variable or unavailable plan limits remain explicit');
 
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/cost/calculator/</loc>');
     expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');

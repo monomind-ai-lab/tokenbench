@@ -29,13 +29,14 @@ describe('calculator application flow', () => {
 
     expect(screen.getByRole('heading', { name: 'AI cost decision tools' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /open subscription vs. api calculator/i })).toHaveAttribute('href', '/cost/calculator/');
+    expect(screen.getByRole('link', { name: /open breakeven analysis/i })).toHaveAttribute('href', '/cost/breakeven/');
     unmount();
 
     window.history.replaceState({}, '', '/cost/breakeven/');
     render(<App />);
 
-    expect(await screen.findByText('Breakeven messages per day')).toBeInTheDocument();
-    expect(screen.getByText('Breakeven monthly tokens')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Subscription breakeven analysis' })).toBeInTheDocument();
+    expect(screen.getByText('Breakeven evidence')).toBeInTheDocument();
   });
 
   it('mounts the model lifecycle radar at its canonical route', () => {

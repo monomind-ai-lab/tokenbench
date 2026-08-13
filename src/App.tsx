@@ -3,6 +3,7 @@ import { defaultApiEquivalentForPlan } from './catalog/plan-api-equivalent';
 import { redistributeModelMix } from './catalog/calculator';
 import type { ModelOffer, PlanOffer } from './catalog/contracts';
 import { CalculatorControls } from './frontend/calculator-controls';
+import { BreakevenDashboard } from './frontend/breakeven-dashboard';
 import { decodeCalculatorShareState, encodeCalculatorShareState, type CalculatorShareState } from './frontend/calculator-share-state';
 import {
   buildCalculatorSnapshot,
@@ -90,7 +91,7 @@ function selectionsMatch(left: InitialSelection, right: InitialSelection): boole
       && left.modelMixBasisPoints[id] === right.modelMixBasisPoints[id]);
 }
 
-function CalculatorPage() {
+function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' | 'breakeven' }) {
   const catalogState = useCatalog();
   const { catalog, phase } = catalogState;
   const [selectedProviderId, setSelectedProviderId] = useState('');
@@ -240,9 +241,9 @@ function CalculatorPage() {
   return (
     <PageFrame activePage="calculator" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
       <section id="calculator" className="content-stack calculator-page" aria-labelledby="calculator-heading" tabIndex={-1}>
-        <header className="calculator-intro">
-          <h1 id="calculator-heading">Should you subscribe or pay as you go?</h1>
-          <p>Estimate the API-equivalent value of an AI subscription from conversations, messages, directional tokens, and active days that match your workload.</p>
+         <header className="calculator-intro">
+           <h1 id="calculator-heading">{mode === 'breakeven' ? 'Subscription breakeven analysis' : 'Should you subscribe or pay as you go?'}</h1>
+           <p>{mode === 'breakeven' ? 'Use the same verified plan, model, and workload controls to see where a published subscription fee meets published API pricing. Results use the shared calculator snapshot.' : 'Estimate the API-equivalent value of an AI subscription from conversations, messages, directional tokens, and active days that match your workload.'}</p>
         </header>
         <details className="calculator-step-overview" open>
           <summary>Four steps to a useful comparison</summary>
@@ -278,8 +279,10 @@ function CalculatorPage() {
               onMappingModeChange={setMappingMode}
             />
             <div className="calculator-guided-results">
-              <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} hasAvailableModels={providerModels.length > 0} catalog={catalog} />
-              {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" url={`${location.origin}${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
+               {mode === 'breakeven'
+                 ? <BreakevenDashboard snapshot={snapshot} hasAvailableModels={providerModels.length > 0} />
+                 : <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} hasAvailableModels={providerModels.length > 0} catalog={catalog} />}
+                {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" url={`${location.origin}${mode === 'breakeven' ? ROUTE_PATHS.breakeven : ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
             </div>
           </div>
           <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} workload={workload} modelMixBasisPoints={selection.modelMixBasisPoints} />
@@ -360,7 +363,7 @@ export default function App() {
   if (route.kind === 'cost') return <ToolsRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
-  if (route.kind === 'breakeven') return <CalculatorPage />;
+  if (route.kind === 'breakeven') return <CalculatorPage mode="breakeven" />;
   if (route.kind === 'pricePerformance') return <PricePerformanceRoute />;
   if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import {
   breakEvenTokensForMonthlyCost,
+  buildBreakevenSeries,
   buildCalculatorSnapshot,
   createEvenMix,
   createInitialSelection,
@@ -93,7 +94,7 @@ describe('frontend calculator state', () => {
       selectedModelIds: [directOffer.id],
       modelMixBasisPoints: { [directOffer.id]: 10_000 },
       workload,
-      selectedPlan: FRONTEND_TEST_CATALOG.plans[1],
+      selectedPlan: { ...FRONTEND_TEST_CATALOG.plans[1], supportedModelIds: [directOffer.modelId] },
     });
     expect(snapshot.breakEvenTokens).toBe(11_428_572);
     expect(snapshot.breakEvenMessagesPerDay).toBeGreaterThan(0);
@@ -139,5 +140,62 @@ describe('frontend calculator state', () => {
       selectedPlan: FRONTEND_TEST_CATALOG.plans[0],
     });
     expect(snapshot.breakEvenTokens).toBeNull();
+  });
+
+  it('derives the breakeven chart and exact table from one verified snapshot series', () => {
+    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: { ...FRONTEND_TEST_CATALOG.plans[1], supportedModelIds: [directOffer.modelId] },
+    });
+
+    const series = buildBreakevenSeries(snapshot);
+    expect(series.status).toBe('available');
+    if (series.status !== 'available') throw new Error('Expected an available breakeven series');
+    expect(series.points).toHaveLength(5);
+    expect(series.points[2].tokens).toBe(snapshot.breakEvenTokens);
+    expect(series.points[0].tokens).toBe(0);
+    expect(series.points.every((point) => point.planFeeMicroDollars === series.points[0].planFeeMicroDollars)).toBe(true);
+  });
+
+  it('does not create a false crossover when the denominator or evidence is unavailable', () => {
+    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload: { ...workload, conversationsPerDay: 0 },
+      selectedPlan: { ...FRONTEND_TEST_CATALOG.plans[1], supportedModelIds: [directOffer.modelId] },
+    });
+
+    expect(buildBreakevenSeries(snapshot)).toEqual({
+      status: 'unavailable',
+      reason: expect.stringMatching(/positive workload/i),
+      points: [],
+    });
+  });
+
+  it('keeps variable plan capacity unavailable instead of graphing an invented crossover', () => {
+    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const variablePlan = {
+      ...FRONTEND_TEST_CATALOG.plans[0],
+      supportedModelIds: [directOffer.modelId],
+    };
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: variablePlan,
+    });
+
+    expect(buildBreakevenSeries(snapshot)).toEqual({
+      status: 'unavailable',
+      reason: expect.stringMatching(/does not publish a numeric cap/i),
+      points: [],
+    });
   });
 });

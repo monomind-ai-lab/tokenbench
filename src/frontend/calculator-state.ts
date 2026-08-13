@@ -44,6 +44,17 @@ export interface ChartPoint {
   readonly valueMicroDollars: number;
 }
 
+export interface BreakevenSeriesPoint {
+  readonly tokens: number;
+  readonly apiCostMicroDollars: number;
+  readonly planFeeMicroDollars: number;
+  readonly differenceMicroDollars: number;
+}
+
+export type BreakevenSeries =
+  | { readonly status: 'available'; readonly points: BreakevenSeriesPoint[] }
+  | { readonly status: 'unavailable'; readonly reason: string; readonly points: [] };
+
 export interface CapacityEvidenceResult {
   readonly status: 'verified-covered' | 'verified-not-covered' | 'projected' | 'not-verified';
   readonly explanation: string;
@@ -292,6 +303,39 @@ export function buildCalculatorSnapshot({
     maximumPlanValueMicroDollars: null,
     monthlyTokens: totalMonthlyTokens,
     chartPoints,
+  };
+}
+
+export function buildBreakevenSeries(snapshot: CalculatorSnapshot): BreakevenSeries {
+  if (!snapshot.selectedOffers.length) return { status: 'unavailable', reason: 'Select a model with published API pricing.', points: [] };
+  if (!snapshot.apiEquivalentCost) return { status: 'unavailable', reason: 'The selected model mix does not provide complete published API pricing.', points: [] };
+  if (snapshot.monthlyTokens <= 0) return { status: 'unavailable', reason: 'A positive workload is required before calculating breakeven.', points: [] };
+  if (!snapshot.comparison) return { status: 'unavailable', reason: 'Select a paid individual plan with a published monthly fee.', points: [] };
+  if (snapshot.capacityEvidence.status !== 'verified-covered' && snapshot.capacityEvidence.status !== 'verified-not-covered') {
+    return { status: 'unavailable', reason: snapshot.capacityEvidence.explanation, points: [] };
+  }
+  if (snapshot.breakEvenTokens === null) return { status: 'unavailable', reason: 'The selected plan does not publish verified fixed-token capacity.', points: [] };
+  if (snapshot.apiEquivalentCost.apiCostMicroDollars <= 0) {
+    return { status: 'unavailable', reason: 'Published API pricing does not provide a positive denominator for breakeven.', points: [] };
+  }
+  const planFeeMicroDollars = snapshot.comparison.apiCostMicroDollars - snapshot.comparison.differenceMicroDollars;
+  const breakeven = snapshot.breakEvenTokens;
+  const tokenVolumes = [0, Math.floor(breakeven / 2), breakeven, Math.ceil(breakeven * 1.5), breakeven * 2];
+  const costAtTokens = (tokens: number) => Number(
+    (BigInt(snapshot.apiEquivalentCost!.apiCostMicroDollars) * BigInt(tokens) + BigInt(snapshot.monthlyTokens / 2))
+      / BigInt(snapshot.monthlyTokens),
+  );
+  return {
+    status: 'available',
+    points: tokenVolumes.map((tokens) => {
+      const apiCostMicroDollars = costAtTokens(tokens);
+      return {
+        tokens,
+        apiCostMicroDollars,
+        planFeeMicroDollars,
+        differenceMicroDollars: apiCostMicroDollars - planFeeMicroDollars,
+      };
+    }),
   };
 }
 

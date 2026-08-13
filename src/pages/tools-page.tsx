@@ -1,4 +1,4 @@
-import { ArrowRight, CircleDollarSign } from 'lucide-react';
+import { ArrowRight, CircleDollarSign, GitCompareArrows } from 'lucide-react';
 import { ROUTE_PATHS } from '../routing/routes';
 
 export function ToolsPage() {
@@ -18,6 +18,12 @@ export function ToolsPage() {
             <h3>Subscription vs. API calculator</h3>
             <p className="muted">Compare an individual subscription with a selected provider, plan, model mix, input/output ratio, and expected monthly token volume. Unpublished capacity remains explicit rather than being converted into a synthetic limit.</p>
             <a className="button" href={ROUTE_PATHS.calculator}>Open subscription vs. API calculator <ArrowRight aria-hidden="true" size={16} /></a>
+          </article>
+          <article className="panel" role="listitem">
+            <GitCompareArrows aria-hidden="true" size={24} />
+            <h3>Subscription breakeven analysis</h3>
+            <p className="muted">See how a published plan fee compares with the same verified API price across your workload range. Variable capacity and missing pricing stay unavailable.</p>
+            <a className="button" href={ROUTE_PATHS.breakeven}>Open breakeven analysis <ArrowRight aria-hidden="true" size={16} /></a>
           </article>
         </div>
       </section>
