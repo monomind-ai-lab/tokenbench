@@ -62,8 +62,17 @@ interface MarketLeaderCard {
   readonly leaders: readonly DecisionPickEntry[];
 }
 
+/**
+ * Renders a published value with its unit, except where the surrounding label
+ * already states it. A leader row under a "Score" heading reads "82.79", not
+ * "82.79 score"; a context window still reads "128,000 tokens" because that
+ * unit is not self-evident from the label alone.
+ */
+const SELF_EVIDENT_UNITS = new Set(['score', 'arena_score']);
+
 function formatScore(score: number, unit: string): string {
-  return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score)} ${unit}`;
+  const value = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(score);
+  return SELF_EVIDENT_UNITS.has(unit) ? value : `${value} ${unit}`;
 }
 
 /**
@@ -90,7 +99,7 @@ function MarketLeaderArticle({ card }: { readonly card: MarketLeaderCard; readon
         <a className="home-snapshot-model" href={modelPath(leader.slug)}>
           <ProviderMark providerId={leader.provider} providerName={leader.provider} decorative size={20} />
           <span className="home-snapshot-leader-name">{leader.name}</span>
-          <span className="home-snapshot-leader-score">{formatScore(leader.score, leader.unit)}</span>
+          <span className="home-snapshot-leader-score" title={`${leader.unit.replace('_', ' ')}: ${formatScore(leader.score, leader.unit)}`}>{formatScore(leader.score, leader.unit)}</span>
           <ArrowRight aria-hidden="true" size={14} />
         </a>
       </li>)}

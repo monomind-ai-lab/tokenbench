@@ -1,6 +1,7 @@
 import type { ModelProfileCategory, ModelProfileLedgerRow, ModelProfilePriceRoute } from '../benchmarks/model-profile';
 import type { ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ModelRadar } from '../frontend/model-radar';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
 
 export interface ModelProfilePageProps {
   readonly viewModel: ModelProfileViewModel;
@@ -33,9 +34,39 @@ function sourceName(sourceId: string): string {
   return SOURCE_DISPLAY_NAMES[sourceId] ?? sourceId;
 }
 
+/**
+ * Maps a published profile category key to its leaderboard route.
+ *
+ * An explicit table is required: a `llm-${key}` template resolves for coding,
+ * agentic, knowledge, reasoning, and overall, but `multimodalGrounded` would
+ * yield the nonexistent `llm-multimodalGrounded` whose real route is
+ * `multimodal-vision-documents`. A category with no published leaderboard
+ * returns null and stays plain text rather than linking somewhere wrong.
+ */
+const CATEGORY_LEADERBOARD_KEYS: Record<string, LeaderboardKey> = {
+  overall: 'llm-overall',
+  coding: 'llm-coding',
+  agentic: 'llm-agentic',
+  reasoning: 'llm-reasoning',
+  knowledge: 'llm-knowledge',
+  multimodal: 'multimodal-vision-documents',
+  multimodalGrounded: 'multimodal-vision-documents',
+};
+
+export function categoryLeaderboardPath(categoryKey: string): string | null {
+  const routeKey = CATEGORY_LEADERBOARD_KEYS[categoryKey];
+  return routeKey === undefined ? null : LEADERBOARD_ROUTES[routeKey].pathname;
+}
+
 function CategoryCard({ category }: { readonly category: ModelProfileCategory }) {
+  const leaderboardHref = categoryLeaderboardPath(category.key);
   return <article className="model-category-card" aria-label={category.label}>
-    <header><span>{category.label}</span><small>{category.evidenceStatus.replace('_', ' ')}</small></header>
+    <header>
+      {leaderboardHref === null
+        ? <span>{category.label}</span>
+        : <a href={leaderboardHref} aria-label={`${category.label} leaderboard`}>{category.label}</a>}
+      <small>{category.evidenceStatus.replace('_', ' ')}</small>
+    </header>
     <strong className="model-category-score">{score(category.score, 1)}</strong>
     <dl>
       <div><dt>Rank</dt><dd>{category.rank === null ? 'Not ranked' : `#${category.rank}${category.fieldSize ? ` of ${category.fieldSize}` : ''}`}</dd></div>

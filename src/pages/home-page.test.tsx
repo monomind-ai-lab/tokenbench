@@ -200,7 +200,10 @@ describe('HomePage', () => {
     expect(within(snapshot).queryByRole('heading', { name: 'Reasoning', level: 3 })).not.toBeInTheDocument();
     expect(snapshot.querySelectorAll('.home-snapshot-grid:not(.home-comparison-grid) .home-snapshot-card')).toHaveLength(5);
     expect(within(snapshot).getByRole('link', { name: /Model Alpha/ })).toHaveAttribute('href', '/models/Model%20Alpha/');
-    expect(within(snapshot).getByText('92 score')).toBeInTheDocument();
+    // The column context already says these are scores; the bare number is
+    // enough. Units that are not self-evident (tokens) are still rendered.
+    expect(within(snapshot).getByText('92')).toBeInTheDocument();
+    expect(within(snapshot).queryByText('92 score')).not.toBeInTheDocument();
     expect(within(snapshot).queryByText('Source rank #1')).not.toBeInTheDocument();
     expect(within(snapshot).queryByText('Not ranked by source')).not.toBeInTheDocument();
     expect(within(snapshot).getByRole('link', { name: 'Overall' })).toHaveAttribute('href', '/leaderboards/llm/overall/');
