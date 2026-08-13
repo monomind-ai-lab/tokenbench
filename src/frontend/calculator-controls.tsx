@@ -126,8 +126,6 @@ export function CalculatorControls({
   selectedModelIds,
   modelMixBasisPoints,
   workload,
-  mappingMode,
-  defaultApiEquivalentOffer,
   onProviderChange,
   onPlanChange,
   onModelToggle,
@@ -168,11 +166,6 @@ export function CalculatorControls({
 
       <section id="calculator-models" className="calculator-control-step" aria-labelledby="models-heading">
         <header className="calculator-step-heading"><span>Step 2</span><h2 id="models-heading">Choose the models you actually use</h2></header>
-        <div className="default-api-mapping" role="status" aria-label="Default API mapping">
-          <strong>Default API mapping</strong>
-          {defaultApiEquivalentOffer ? <span>{defaultApiEquivalentOffer.displayName} · {basisLabel(defaultApiEquivalentOffer.pricingBasis)} · {defaultApiEquivalentOffer.modelId}</span> : <span>No direct provider API offer is published for this plan.</span>}
-          <small>{mappingMode === 'default' ? 'Used for the current calculation.' : 'Advanced override is active.'}</small>
-        </div>
         <fieldset className="control-block model-block">
           <legend><span className="control-legend"><Boxes size={18} aria-hidden="true" />{UI_COPY.modelSelection}</span></legend>
           <p className="field-help">Advanced model mapping keeps direct, OpenRouter, and OpenCode Zen pricing identities explicit.</p>

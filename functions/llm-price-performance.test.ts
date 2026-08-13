@@ -101,7 +101,7 @@ describe('price-performance SSR handler', () => {
     const html = await response.text();
 
     expect(response.status).toBe(200);
-    expect(html).toContain('<h1 id="price-performance-heading">LLM price vs performance</h1>');
+    expect(html).toContain('<h1 id="price-performance-heading">LLM Price vs. Performance Benchmark</h1>');
     expect(html).toContain('GPT-5.6 Sol');
     expect(html).toContain('81.5');
     expect(html).toContain('Pareto');

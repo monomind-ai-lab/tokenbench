@@ -780,7 +780,6 @@ test.describe('responsive calculator browser harness', () => {
     const advanced = page.locator('.model-mix-details');
     await expect(advanced).toHaveAttribute('open', '');
     await page.locator('.model-list input[type="checkbox"]').nth(1).check();
-    await expect(page.getByRole('status', { name: 'Default API mapping' })).toContainText('Advanced override is active.');
   });
 
   test('renders loading, empty, error, bootstrap, and stale catalog states', async ({ page }) => {

@@ -22,8 +22,6 @@ function renderControls(overrides: Record<string, unknown> = {}) {
     selectedModelIds: [directOffer.id],
     modelMixBasisPoints: { [directOffer.id]: 10_000 },
     workload,
-    mappingMode: 'default' as const,
-    defaultApiEquivalentOffer: directOffer,
     onProviderChange: vi.fn(),
     onPlanChange: vi.fn(),
     onModelToggle: vi.fn(),
@@ -51,10 +49,9 @@ describe('calculator controls', () => {
     expect(props.onWorkloadChange).toHaveBeenCalledWith({ ...workload, conversationsPerDay: 12 });
   });
 
-  it('keeps Advanced model mapping open by default and discloses the visible default route', () => {
+  it('keeps Advanced model mapping open by default', () => {
     renderControls();
-    const mapping = screen.getByRole('status', { name: 'Default API mapping' });
-    expect(mapping).toHaveTextContent(directOffer.displayName);
+    expect(screen.queryByRole('status', { name: 'Default API mapping' })).not.toBeInTheDocument();
     expect(screen.getByText('Advanced model mapping').closest('details')).toHaveAttribute('open');
   });
 

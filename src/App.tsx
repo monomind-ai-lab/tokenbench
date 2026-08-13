@@ -269,8 +269,6 @@ function CalculatorPage() {
               selectedModelIds={selection.selectedModelIds}
               modelMixBasisPoints={selection.modelMixBasisPoints}
               workload={workload}
-              mappingMode={mappingMode}
-              defaultApiEquivalentOffer={defaultApiEquivalentOffer}
               onProviderChange={handleProviderChange}
               onPlanChange={handlePlanChange}
               onModelToggle={handleModelToggle}

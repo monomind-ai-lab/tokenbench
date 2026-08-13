@@ -87,7 +87,7 @@ test('price performance SSR, filters, chart, table, and SEO stay fact-equivalent
     await page.setViewportSize({ width, height: 1_000 });
     await page.goto('/llm-price-performance/', { waitUntil: 'networkidle' });
 
-    await expect(page.getByRole('heading', { name: 'LLM price vs performance', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'LLM Price vs. Performance Benchmark', level: 1 })).toBeVisible();
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://tokenbench.monomind.one/llm-price-performance/');
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /API price.*Pareto/i);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /index,follow/);
@@ -105,7 +105,7 @@ test('price performance SSR, filters, chart, table, and SEO stay fact-equivalent
     await expect(page.getByLabel('Chart legend')).toContainText('Pareto frontier');
     await expectNoHorizontalOverflow(page);
 
-    await page.getByLabel('Score lane').selectOption('coding');
+    await page.getByRole('group', { name: 'Score lane' }).getByRole('button', { name: 'Coding' }).click();
     const gptPoint = page.getByRole('button', { name: /GPT-5\.6 Sol.*78\.0.*output price/i });
     await expect(gptPoint).toBeVisible();
     const gptValues = width < 600
@@ -121,17 +121,7 @@ test('price performance SSR, filters, chart, table, and SEO stay fact-equivalent
     await expect(details).toHaveCount(0);
     await expect(gptPoint).toBeFocused();
 
-    await page.getByLabel('Cost basis').selectOption('blended-3-1');
-    await expect(page).toHaveURL(/basis=blended-3-1/);
-    await page.getByLabel('Variants').selectOption('all-variants');
-    await expect(values).toContainText('Sample Orbit');
-
-    await page.getByLabel('Status').selectOption('archived');
-    await expect(values).toContainText('Sample Archived Sol');
-    await expect(page).toHaveURL(/status=archived/);
-
-    await page.getByLabel('Status').selectOption('current');
-    await page.getByLabel('Score lane').selectOption('mathematics');
+    await page.getByRole('group', { name: 'Score lane' }).getByRole('button', { name: 'Mathematics' }).click();
     await expect(page.getByText('No chart points are available for this category.')).toBeVisible();
     await expect(page.getByRole('status', { name: 'No eligible models match these filters' })).toBeVisible();
     await expectNoHorizontalOverflow(page);

@@ -111,7 +111,7 @@ describe('route metadata registry', () => {
     const page = metadataForRoute({ kind: 'pricePerformance' });
 
     expect(page.title).toBe('LLM Price vs Performance | TokenBench');
-    expect(page.h1).toBe('LLM price vs performance');
+    expect(page.h1).toBe('LLM Price vs. Performance Benchmark');
     expect(page.description).toContain('API price');
     expect(page.description).toContain('Pareto');
     expect(page.canonical).toBe(`${origin}/llm-price-performance/`);

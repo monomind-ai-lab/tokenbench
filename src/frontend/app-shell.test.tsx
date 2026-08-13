@@ -213,7 +213,7 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('heading', { name: 'Describe your message-level workload' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Review the recommendation' })).toBeInTheDocument();
     const result = await calculatedResult();
-    expect(screen.getByRole('status', { name: 'Default API mapping' })).toHaveTextContent('Alpha Direct');
+    expect(screen.queryByRole('status', { name: 'Default API mapping' })).not.toBeInTheDocument();
     expect(screen.getByText('Advanced model mapping').closest('details')).toHaveAttribute('open');
     expect(result).toHaveTextContent('API is cheaper on a token-equivalent basis.');
     expect(result).toHaveTextContent('Not independently verified');
@@ -589,7 +589,7 @@ describe('responsive calculator app shell', () => {
     const conversations = screen.getByRole('spinbutton', { name: 'Conversations per day' });
     fireEvent.change(conversations, { target: { value: '30' } });
     expect(conversations).toHaveValue(30);
-    expect(screen.getByRole('status', { name: 'Default API mapping' })).toHaveTextContent('Advanced override is active.');
+    expect(screen.queryByRole('status', { name: 'Default API mapping' })).not.toBeInTheDocument();
   });
 
   it('keeps calculator state while switching language and returns to the dark theme', async () => {
