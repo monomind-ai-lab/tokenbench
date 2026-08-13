@@ -51,6 +51,11 @@ import {
   prepareModelProfilePartition,
   stageModelProfilePartition,
 } from './model-directory-publication';
+import { prepareModelDirectoryPublicationCandidate } from './model-directory-publication';
+import {
+  readActiveBenchmarkSnapshot,
+  type ActiveBenchmarkSnapshot,
+} from '../../../functions/_shared/benchmark-db';
 import { publicLeaderboardFromSnapshot } from './benchlm-public-leaderboard';
 import {
   listRequiredBenchmarkCachePartitions,
@@ -135,6 +140,14 @@ export interface CoordinatorDependencies {
   readParquetRows: (bytes: ArrayBuffer) => Promise<Record<string, unknown>[]>;
   log: (record: Record<string, unknown>) => void;
   steps: CoordinatorSteps;
+  /** Reads the currently published snapshot for a cache-only republish. */
+  readActiveSnapshot: (db: BenchmarkD1Database) => Promise<ActiveBenchmarkSnapshot | null>;
+  /** Rebuilds cache and profile rows from an unchanged active revision. */
+  republishActiveSnapshot: (
+    db: BenchmarkD1Database,
+    snapshot: ActiveBenchmarkSnapshot,
+    publicationAttemptId: string,
+  ) => Promise<void>;
 }
 
 const defaultDependencies: CoordinatorDependencies = {
@@ -152,6 +165,33 @@ const defaultDependencies: CoordinatorDependencies = {
     retrieveLmArenaPageStep,
     normalizeSourceStep,
     normalizeOpenRouterCatalogStep,
+  },
+  readActiveSnapshot: (db) => readActiveBenchmarkSnapshot(db as never),
+  republishActiveSnapshot: async (db, snapshot, publicationAttemptId) => {
+    // Imported lazily: index.ts re-exports this coordinator, so a top-level
+    // import would close a module cycle.
+    const { buildUnchangedPublicationStatementPlan, executePublicationStatementPlan } = await import('./index');
+    // index.ts and model-directory-publication.ts each declare a structurally
+    // compatible local D1 surface; the coordinator holds only its own.
+    const database = db as never;
+    const preparedModelDirectoryCandidate = snapshot.sources.some((source) => (
+      source.sourceId === 'benchlm' && source.artifactId === 'public-leaderboard'
+    ))
+      ? await prepareModelDirectoryPublicationCandidate(
+          snapshot,
+          publicLeaderboardFromSnapshot(snapshot),
+          snapshot.revision.checkedAt,
+        )
+      : undefined;
+    await executePublicationStatementPlan(
+      database,
+      buildUnchangedPublicationStatementPlan(
+        database,
+        snapshot,
+        publicationAttemptId,
+        preparedModelDirectoryCandidate,
+      ),
+    );
   },
 };
 
@@ -1289,6 +1329,48 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
 
   async status(): Promise<IngestionCycle | null> {
     return await this.durable.get<IngestionCycle>(CYCLE_STORAGE_KEY) ?? null;
+  }
+
+  /**
+   * Rebuilds published API cache rows and profile snapshots from the already
+   * active revision, without contacting any upstream source.
+   *
+   * Use this for **derivation** fixes: anything computed from the stored
+   * snapshot, such as profile percentiles, category field sizes, radar axes,
+   * and materialized API responses.
+   *
+   * It deliberately cannot repair everything:
+   * - Persisted normalized `benchmark_metrics.rank` values are immutable for a
+   *   published revision. A fix to how ranks are *ingested* needs a newly
+   *   published revision.
+   * - It cannot add rows that were never fetched. Widening the upstream window
+   *   (limit=100 -> 200) requires a real ingest cycle.
+   *
+   * It is cadence-independent on purpose: it never consults the ISO-week
+   * dedupe, so a derivation fix does not have to wait a week. It is reachable
+   * only from the scheduled handler; `fetch` stays 405 with no public trigger.
+   */
+  async republishCache(): Promise<{
+    status: 'republished' | 'no-active-revision';
+    revision: string | null;
+  }> {
+    const snapshot = await this.deps.readActiveSnapshot(this.coordinatorEnv.CATALOG_DB);
+    if (!snapshot) {
+      this.deps.log({ event: 'benchmark_cache_republish_skipped', reason: 'no-active-revision' });
+      return { status: 'no-active-revision', revision: null };
+    }
+    const publicationAttemptId = this.deps.randomUUID();
+    await this.deps.republishActiveSnapshot(
+      this.coordinatorEnv.CATALOG_DB,
+      snapshot,
+      publicationAttemptId,
+    );
+    this.deps.log({
+      event: 'benchmark_cache_republished',
+      revision: snapshot.revision.revision,
+      publicationAttemptId,
+    });
+    return { status: 'republished', revision: snapshot.revision.revision };
   }
 
   async checkpointMetadata(): Promise<Record<string, unknown> | null> {

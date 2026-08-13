@@ -51,6 +51,7 @@ import {
   parseBenchLm,
   prepareBenchLmMixed,
   rehydrateBenchLmProjections,
+  BENCHLM_PUBLIC_LEADERBOARD_URL,
   type BenchLmPreparationInputs,
   type PreparedBenchLmPayloads,
   type StoredBenchLmProjections,
@@ -112,6 +113,7 @@ export interface BenchmarkIngestEnv {
   INGEST_COORDINATOR?: {
     getByName(name: string): {
       start(input: { scheduledTime: number; force?: boolean }): Promise<unknown>;
+      republishCache?(): Promise<{ status: 'republished' | 'no-active-revision'; revision: string | null }>;
     };
   };
 }
@@ -187,7 +189,7 @@ const BENCHLM_URLS: Record<BenchLmArtifact, string> = {
   pricing: 'https://benchlm.ai/data/pricing.json',
   comparisons: 'https://benchlm.ai/data/comparisons.json',
   benchmarks: 'https://benchlm.ai/data/benchmarks.json',
-  'public-leaderboard': 'https://benchlm.ai/api/data/leaderboard?mode=bench-align-v5&limit=100',
+  'public-leaderboard': BENCHLM_PUBLIC_LEADERBOARD_URL,
 };
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const OPENROUTER_SOURCE_ID = 'openrouter-models';
@@ -2619,6 +2621,16 @@ export async function refreshBenchmarkRevision(
 
 export { BenchmarkIngestCoordinator } from './coordinator';
 
+/**
+ * Cron reserved for the cache-only republish path.
+ *
+ * Scheduling this cron rebuilds derived output (API cache rows, profile
+ * snapshots) from the active revision. It performs no upstream fetch and does
+ * not create an ingest cycle, so it cannot widen the ingested cohort or repair
+ * persisted normalized metric ranks; those need a newly published revision.
+ */
+export const BENCHMARK_CACHE_REPUBLISH_CRON = '*/5 * * * *';
+
 export default {
   async fetch(
     _request: Request,
@@ -2634,6 +2646,14 @@ export default {
   ): Promise<void> {
     if (!env.INGEST_COORDINATOR) throw new Error('Benchmark ingest coordinator binding is required');
     const coordinator = env.INGEST_COORDINATOR.getByName('weekly-benchmarks');
+    // A dedicated cron rebuilds published cache and profile rows from the
+    // active revision without any upstream fetch. It is cadence-independent,
+    // so a derivation fix does not wait for the next weekly window.
+    if (controller.cron === BENCHMARK_CACHE_REPUBLISH_CRON) {
+      if (!coordinator.republishCache) throw new Error('Benchmark ingest coordinator cannot republish the cache');
+      await coordinator.republishCache();
+      return;
+    }
     const scheduledTime = controller.scheduledTime ?? Date.now();
     await coordinator.start({ scheduledTime });
   },

@@ -5,6 +5,7 @@ import type { BenchmarkComparisonPair, NormalizedSourceBatch } from '../../../sr
 import { BENCHMARK_CRON } from '../../../src/ingestion/cadence';
 import * as benchmarkIngest from './index';
 import worker, {
+  BENCHMARK_CACHE_REPUBLISH_CRON,
   buildPublicationStatementPlan,
   buildUnchangedPublicationStatementPlan,
   deriveComparisonPairs,
@@ -2665,5 +2666,28 @@ describe('atomic benchmark ingestion', () => {
     expect(start).toHaveBeenCalledWith({ scheduledTime });
     expect(startCalls).toHaveLength(1);
     expect(startCalls[0]).not.toHaveProperty('force');
+  });
+
+  it('routes the republish cron to a cache-only rebuild, never an ingest cycle', async () => {
+    const { env } = seededEnvironment();
+    const start = vi.fn(async () => undefined);
+    const republishCache = vi.fn(async () => ({ status: 'republished' as const, revision: 'bench-active' }));
+    const scheduledEnv = env as Parameters<typeof worker.scheduled>[1];
+    scheduledEnv.INGEST_COORDINATOR = { getByName: () => ({ start, republishCache }) };
+
+    await worker.scheduled(
+      { cron: BENCHMARK_CACHE_REPUBLISH_CRON, scheduledTime: Date.now(), noRetry: () => undefined },
+      scheduledEnv,
+      { waitUntil: () => undefined },
+    );
+
+    expect(republishCache).toHaveBeenCalledTimes(1);
+    expect(start).not.toHaveBeenCalled();
+
+    // The republish path stays scheduled-only; there is still no public trigger.
+    const response = await worker.fetch(new Request('https://worker.example/republish', { method: 'POST' }), scheduledEnv, {
+      waitUntil: () => undefined,
+    });
+    expect(response.status).toBe(405);
   });
 });

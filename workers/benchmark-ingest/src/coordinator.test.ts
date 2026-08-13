@@ -979,6 +979,93 @@ describe('resume, replay, and logging', () => {
   });
 });
 
+describe('cache-only republish', () => {
+  function republishDeps(overrides: {
+    snapshot?: unknown;
+    republish?: (...args: unknown[]) => Promise<void>;
+  } = {}) {
+    const calls: { snapshotRevision: string; publicationAttemptId: string }[] = [];
+    const snapshot = 'snapshot' in overrides
+      ? overrides.snapshot
+      : { revision: { revision: 'bench-active', checkedAt: '2026-08-13T00:00:00.000Z' }, sources: [], models: [], metrics: [] };
+    return {
+      calls,
+      deps: {
+        randomUUID: () => CYCLE_ID,
+        log: () => undefined,
+        readActiveSnapshot: async () => snapshot as never,
+        republishActiveSnapshot: overrides.republish ?? (async (
+          _db: unknown,
+          value: { revision: { revision: string } },
+          publicationAttemptId: string,
+        ) => {
+          calls.push({ snapshotRevision: value.revision.revision, publicationAttemptId });
+        }),
+      } as Partial<CoordinatorDependencies>,
+    };
+  }
+
+  it('rebuilds cache rows from the active revision without fetching upstream', async () => {
+    const { env } = environment();
+    const fetchSpy = vi.fn();
+    const { deps, calls } = republishDeps();
+    const coordinator = new BenchmarkIngestCoordinator(
+      { storage: storage() } as never,
+      env,
+      { ...deps, fetchImpl: fetchSpy as unknown as typeof fetch },
+    );
+
+    const result = await coordinator.republishCache();
+
+    expect(result).toEqual({ status: 'republished', revision: 'bench-active' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(calls).toEqual([{ snapshotRevision: 'bench-active', publicationAttemptId: CYCLE_ID }]);
+  });
+
+  it('is not blocked by an already-published cadence key', async () => {
+    // The ISO-week dedupe governs ingest cycles. A derivation fix must not
+    // have to wait a week to reach production.
+    const { env } = environment({ publishedReceipt: true });
+    const { deps } = republishDeps();
+    const coordinator = new BenchmarkIngestCoordinator({ storage: storage() } as never, env, deps);
+
+    expect((await coordinator.republishCache()).status).toBe('republished');
+  });
+
+  it('reports no-active-revision instead of publishing an empty cache', async () => {
+    const { env } = environment();
+    const { deps, calls } = republishDeps({ snapshot: null });
+    const coordinator = new BenchmarkIngestCoordinator({ storage: storage() } as never, env, deps);
+
+    expect(await coordinator.republishCache()).toEqual({ status: 'no-active-revision', revision: null });
+    expect(calls).toEqual([]);
+  });
+
+  it('does not start an ingest cycle or touch the durable cycle state', async () => {
+    // Republishing is not a cycle: it must leave checkpoint state alone so a
+    // paused or scheduled ingest is unaffected.
+    const { env } = environment();
+    const durable = storage();
+    const { deps } = republishDeps();
+    const coordinator = new BenchmarkIngestCoordinator({ storage: durable } as never, env, deps);
+
+    await coordinator.republishCache();
+
+    expect(durable.values.get(CYCLE_KEY)).toBeUndefined();
+    expect(durable.alarm).toBeNull();
+  });
+
+  it('surfaces a republish failure instead of reporting success', async () => {
+    const { env } = environment();
+    const { deps } = republishDeps({
+      republish: async () => { throw new Error('staging budget exceeded'); },
+    });
+    const coordinator = new BenchmarkIngestCoordinator({ storage: storage() } as never, env, deps);
+
+    await expect(coordinator.republishCache()).rejects.toThrow(/staging budget exceeded/);
+  });
+});
+
 function acquireCheckpoint() {
   return {
     schemaVersion: 1 as const,
