@@ -34,7 +34,7 @@ describe('browser entrypoint', () => {
     parsePricePerformanceEnvelopeMock.mockReset();
     parsePricePerformanceEnvelopeMock.mockReturnValue(null);
     document.body.innerHTML = '<div id="root"><div class="static-page-shell">Crawlable fallback</div></div>';
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/');
+    window.history.replaceState({}, '', '/leaderboards/coding/');
   });
 
   it('replaces the crawlable leaderboard shell before mounting the interactive app', async () => {
@@ -46,9 +46,19 @@ describe('browser entrypoint', () => {
     expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
 
+  it('mounts the recovery app for an unmatched startup route', async () => {
+    window.history.replaceState({}, '', '/not-a-published-route/');
+
+    await import('./main.tsx');
+
+    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
+    expect(rootRenderer).toHaveBeenCalledTimes(1);
+    expect(renderToStaticMarkup((rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode)).toContain('Cost experience');
+  });
+
   it('hydrates a comparison detail from its validated server payload without refetching or clearing HTML', async () => {
     document.body.innerHTML = '<div id="root"><article data-server-detail>Server comparison</article></div><script id="comparison-initial-data" type="application/json">{"revision":"published-r1"}</script>';
-    window.history.replaceState({}, '', '/compare/model-a-vs-model-b');
+    window.history.replaceState({}, '', '/models/compare/model-a-vs-model-b/');
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
     parseComparisonViewModelMock.mockReturnValue({ revision: 'published-r1' });
@@ -77,7 +87,7 @@ describe('browser entrypoint', () => {
 
   it('leaves comparison server HTML intact when the embedded data is malformed or invalid', async () => {
     document.body.innerHTML = '<div id="root"><article data-server-detail>Server comparison</article></div><script id="comparison-initial-data" type="application/json">not-json</script>';
-    window.history.replaceState({}, '', '/compare/model-a-vs-model-b');
+    window.history.replaceState({}, '', '/models/compare/model-a-vs-model-b/');
 
     await import('./main.tsx');
 
@@ -108,7 +118,7 @@ describe('browser entrypoint', () => {
     expect(createRootMock).toHaveBeenCalledWith(root);
     expect(createRootMock).toHaveBeenCalledTimes(1);
 
-    const rendered = (rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode; // mock captures the element main.tsx renders
+    const rendered = (rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode;
     const markup = renderToStaticMarkup(rendered);
     expect(markup).toContain('Your subscription is confirmed.');
     expect(markup).toContain('Start Exploring');
@@ -141,6 +151,7 @@ describe('browser entrypoint', () => {
       const rendered = (rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode;
       expect(renderToStaticMarkup(rendered)).toContain(expectedExperience);
     });
+
   it('hydrates the models directory from its validated server payload without refetching', async () => {
     document.body.innerHTML = '<div id="root"><main data-server-models>Popular models</main></div><script id="models-initial-data" type="application/json">{"revision":"benchlm-r1"}</script>';
     window.history.replaceState({}, '', '/models/');
@@ -205,5 +216,4 @@ describe('browser entrypoint', () => {
     expect(createRootMock).toHaveBeenCalledWith(root);
     expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
-
 });

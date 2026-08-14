@@ -12,14 +12,20 @@ export const ROUTE_PATHS = {
   breakeven: '/cost/breakeven/',
   pricePerformance: '/llm-price-performance/',
   compareHub: '/compare/',
+  comparison: '/models/compare/',
   models: '/models/',
   modelLifecycle: '/models/lifecycle/',
   leaderboards: '/leaderboards/',
+  leaderboardSla: '/leaderboards/sla/',
+  leaderboardCustom: '/leaderboards/custom/',
   methodologyBenchAlign: '/methodology/benchalign/',
   newsletterConfirmed: '/newsletter/confirmed/',
   welcome: '/welcome/',
   privacy: '/privacy/',
 } as const;
+
+export const LEADERBOARD_CATEGORIES = ['overall', 'coding', 'agentic', 'math', 'reasoning', 'multimodal'] as const;
+export type LeaderboardCategory = typeof LEADERBOARD_CATEGORIES[number];
 
 export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'compare' | 'leaderboards' | 'guides';
 
@@ -188,11 +194,15 @@ export type AppRoute =
   | { kind: 'welcome' }
   | { kind: 'privacy' }
   | { kind: 'leaderboards' }
+  | { kind: 'leaderboardCategory'; category: LeaderboardCategory }
+  | { kind: 'leaderboardSla' }
+  | { kind: 'leaderboardCustom' }
   | { kind: 'leaderboard'; key: LeaderboardKey }
+  | { kind: 'insightDetail'; slug: string }
   | { kind: 'redirect'; to: string }
   | { kind: 'notFound' };
 
-export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'modelProfile' } | { kind: 'redirect' } | { kind: 'notFound' }>;
+export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'modelProfile' } | { kind: 'insightDetail' } | { kind: 'redirect' } | { kind: 'notFound' }>;
 
 export interface FixedRouteDefinition {
   readonly id: string;
@@ -264,15 +274,19 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'articles': return ROUTE_PATHS.articles;
     case 'insights': return ROUTE_PATHS.insights;
     case 'compareHub': return ROUTE_PATHS.compareHub;
+    case 'comparison': return `${ROUTE_PATHS.comparison}${encodeURIComponent(route.pair)}/`;
     case 'models': return ROUTE_PATHS.models;
     case 'modelLifecycle': return ROUTE_PATHS.modelLifecycle;
-    case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
     case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
     case 'welcome': return ROUTE_PATHS.welcome;
     case 'privacy': return ROUTE_PATHS.privacy;
     case 'leaderboards': return ROUTE_PATHS.leaderboards;
+    case 'leaderboardCategory': return `${ROUTE_PATHS.leaderboards}${route.category}/`;
+    case 'leaderboardSla': return ROUTE_PATHS.leaderboardSla;
+    case 'leaderboardCustom': return ROUTE_PATHS.leaderboardCustom;
     case 'leaderboard': return LEADERBOARD_ROUTES[route.key].pathname;
+    case 'insightDetail': return `${ROUTE_PATHS.insights}${encodeURIComponent(route.slug)}/`;
     case 'redirect': return route.to;
     case 'notFound': return null;
   }
@@ -298,6 +312,8 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.welcome) return { kind: 'welcome' };
   if (normalizedPathname === ROUTE_PATHS.privacy) return { kind: 'privacy' };
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
+  if (normalizedPathname === ROUTE_PATHS.leaderboardSla) return { kind: 'leaderboardSla' };
+  if (normalizedPathname === ROUTE_PATHS.leaderboardCustom) return { kind: 'leaderboardCustom' };
 
   if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };
   if (normalizedPathname === '/calculator/' || normalizedPathname === '/tools/subscriptions-vs-apis/') return { kind: 'redirect', to: ROUTE_PATHS.calculator };
@@ -305,9 +321,12 @@ export function matchRoute(pathname: string): AppRoute {
   const legacyLeaderboardMatch = normalizedPathname.match(/^\/leaderboard\/(.+)\/$/);
   if (legacyLeaderboardMatch) {
     const canonicalPathname = `/leaderboards/${legacyLeaderboardMatch[1]}/`;
-    const isPublishedLeaderboard = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
-      .some((key) => LEADERBOARD_ROUTES[key].pathname === canonicalPathname);
-    if (isPublishedLeaderboard) return { kind: 'redirect', to: canonicalPathname };
+    const legacyKey = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
+      .find((key) => LEADERBOARD_ROUTES[key].pathname === canonicalPathname);
+    if (legacyKey) {
+      const category = legacyLeaderboardCategory(legacyKey);
+      return { kind: 'redirect', to: category ? pathnameForRoute({ kind: 'leaderboardCategory', category })! : canonicalPathname };
+    }
   }
 
   const legacyGuideMatch = normalizedPathname.match(/^\/guides\/([^/]+)\/$/);
@@ -318,10 +337,26 @@ export function matchRoute(pathname: string): AppRoute {
 
   const leaderboardKey = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
     .find((key) => LEADERBOARD_ROUTES[key].pathname === normalizedPathname);
-  if (leaderboardKey) return { kind: 'leaderboard', key: leaderboardKey };
+  if (leaderboardKey) {
+    const category = legacyLeaderboardCategory(leaderboardKey);
+    return category
+      ? { kind: 'redirect', to: pathnameForRoute({ kind: 'leaderboardCategory', category })! }
+      : { kind: 'leaderboard', key: leaderboardKey };
+  }
 
-  const comparisonMatch = normalizedPathname.match(/^\/compare\/([^/]+)\/$/);
+  const categoryMatch = normalizedPathname.match(/^\/leaderboards\/([^/]+)\/$/);
+  if (categoryMatch && isLeaderboardCategory(categoryMatch[1])) return { kind: 'leaderboardCategory', category: categoryMatch[1] };
+
+  const comparisonMatch = normalizedPathname.match(/^\/models\/compare\/([^/]+)\/$/);
   if (comparisonMatch) return { kind: 'comparison', pair: comparisonMatch[1] };
+
+  const legacyComparisonMatch = normalizedPathname.match(/^\/compare\/([^/]+)\/$/);
+  if (legacyComparisonMatch) return { kind: 'redirect', to: `${ROUTE_PATHS.comparison}${legacyComparisonMatch[1]}/` };
+
+  const insightMatch = normalizedPathname.match(/^\/articles\/insights\/([^/]+)\/$/);
+  if (insightMatch) {
+    try { return { kind: 'insightDetail', slug: decodeURIComponent(insightMatch[1]) }; } catch { return { kind: 'notFound' }; }
+  }
 
   const modelMatch = normalizedPathname.match(/^\/models\/([^/]+)\/$/);
   if (modelMatch) {
@@ -329,6 +364,21 @@ export function matchRoute(pathname: string): AppRoute {
   }
 
   return { kind: 'notFound' };
+}
+
+function isLeaderboardCategory(value: string): value is LeaderboardCategory {
+  return (LEADERBOARD_CATEGORIES as readonly string[]).includes(value);
+}
+
+function legacyLeaderboardCategory(key: LeaderboardKey): LeaderboardCategory | null {
+  const categories: Partial<Record<LeaderboardKey, LeaderboardCategory>> = {
+    'llm-overall': 'overall',
+    'llm-coding': 'coding',
+    'llm-agentic': 'agentic',
+    'llm-reasoning': 'reasoning',
+    'multimodal-vision-documents': 'multimodal',
+  };
+  return categories[key] ?? null;
 }
 
 function htmlFileForPathname(rootDir: string, pathname: string): string {

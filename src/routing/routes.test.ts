@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEADERBOARD_ROUTES, matchRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
+import { LEADERBOARD_ROUTES, matchRoute, pathnameForRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
 
 const APPROVED_LEADERBOARD_TITLES = {
   'llm-overall': 'Overall benchmarks',
@@ -40,15 +40,15 @@ const fixedRouteCases = [
   ['/leaderboards', { kind: 'leaderboards' }],
   ['/models', { kind: 'models' }],
   ['/models/lifecycle', { kind: 'modelLifecycle' }],
-  ['/leaderboards/llm/overall', { kind: 'leaderboard', key: 'llm-overall' }],
-  ['/leaderboards/llm/coding', { kind: 'leaderboard', key: 'llm-coding' }],
-  ['/leaderboards/llm/agentic', { kind: 'leaderboard', key: 'llm-agentic' }],
-  ['/leaderboards/llm/reasoning', { kind: 'leaderboard', key: 'llm-reasoning' }],
+  ['/leaderboards/llm/overall', { kind: 'redirect', to: '/leaderboards/overall/' }],
+  ['/leaderboards/llm/coding', { kind: 'redirect', to: '/leaderboards/coding/' }],
+  ['/leaderboards/llm/agentic', { kind: 'redirect', to: '/leaderboards/agentic/' }],
+  ['/leaderboards/llm/reasoning', { kind: 'redirect', to: '/leaderboards/reasoning/' }],
   ['/leaderboards/llm/knowledge', { kind: 'leaderboard', key: 'llm-knowledge' }],
   ['/leaderboards/llm/human-preference', { kind: 'leaderboard', key: 'llm-human-preference' }],
   ['/leaderboards/llm/value', { kind: 'leaderboard', key: 'llm-value' }],
   ['/leaderboards/llm/pricing-context', { kind: 'leaderboard', key: 'llm-pricing-context' }],
-  ['/leaderboards/multimodal/vision-documents', { kind: 'leaderboard', key: 'multimodal-vision-documents' }],
+  ['/leaderboards/multimodal/vision-documents', { kind: 'redirect', to: '/leaderboards/multimodal/' }],
   ['/leaderboards/media/text-to-image', { kind: 'leaderboard', key: 'media-text-to-image' }],
   ['/leaderboards/media/image-editing', { kind: 'leaderboard', key: 'media-image-editing' }],
   ['/leaderboards/media/text-to-video', { kind: 'leaderboard', key: 'media-text-to-video' }],
@@ -69,12 +69,31 @@ describe('TokenBench route registry', () => {
     }
   });
 
-  it('keeps dynamic comparisons distinct from the compare hub in both slash forms', () => {
+  it('redirects legacy comparisons while matching the canonical pair route', () => {
     const expected = { kind: 'comparison', pair: 'claude-4-vs-gpt-5' };
 
-    expect(matchRoute('/compare/claude-4-vs-gpt-5')).toEqual(expected);
-    expect(matchRoute('/compare/claude-4-vs-gpt-5/')).toEqual(expected);
+    expect(matchRoute('/models/compare/claude-4-vs-gpt-5')).toEqual(expected);
+    expect(matchRoute('/models/compare/claude-4-vs-gpt-5/')).toEqual(expected);
+    expect(matchRoute('/compare/claude-4-vs-gpt-5')).toEqual({ kind: 'redirect', to: '/models/compare/claude-4-vs-gpt-5/' });
+    expect(matchRoute('/compare/claude-4-vs-gpt-5/')).toEqual({ kind: 'redirect', to: '/models/compare/claude-4-vs-gpt-5/' });
     expect(matchRoute('/compare/')).toEqual({ kind: 'compareHub' });
+  });
+
+  it('canonicalizes V2.1 comparison and leaderboard destinations', () => {
+    expect(pathnameForRoute({ kind: 'comparison', pair: 'alpha-vs-beta' }))
+      .toBe('/models/compare/alpha-vs-beta/');
+    expect(matchRoute('/models/compare/alpha-vs-beta/')).toEqual({ kind: 'comparison', pair: 'alpha-vs-beta' });
+    expect(matchRoute('/compare/alpha-vs-beta/')).toEqual({ kind: 'redirect', to: '/models/compare/alpha-vs-beta/' });
+    expect(matchRoute('/leaderboards/sla/')).toEqual({ kind: 'leaderboardSla' });
+    expect(matchRoute('/leaderboards/custom/')).toEqual({ kind: 'leaderboardCustom' });
+    expect(matchRoute('/leaderboards/coding/')).toEqual({ kind: 'leaderboardCategory', category: 'coding' });
+    expect(matchRoute('/leaderboards/llm/coding/')).toEqual({ kind: 'redirect', to: '/leaderboards/coding/' });
+  });
+
+  it('keeps insight detail paths distinct from the insight index', () => {
+    expect(matchRoute('/articles/insights/benchmark-update/')).toEqual({ kind: 'insightDetail', slug: 'benchmark-update' });
+    expect(pathnameForRoute({ kind: 'insightDetail', slug: 'benchmark update' }))
+      .toBe('/articles/insights/benchmark%20update/');
   });
 
   it('matches durable model profiles as one decoded route segment', () => {
@@ -87,8 +106,8 @@ describe('TokenBench route registry', () => {
     expect(ROUTE_PATHS.methodologyBenchAlign).toBe('/methodology/benchalign/');
     expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'methodologyBenchAlign' });
     expect(matchRoute('/leaderboard')).toEqual({ kind: 'redirect', to: '/leaderboards/' });
-    expect(matchRoute('/leaderboard/llm/coding')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/coding/' });
-    expect(matchRoute('/leaderboard/llm/reasoning')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/reasoning/' });
+    expect(matchRoute('/leaderboard/llm/coding')).toEqual({ kind: 'redirect', to: '/leaderboards/coding/' });
+    expect(matchRoute('/leaderboard/llm/reasoning')).toEqual({ kind: 'redirect', to: '/leaderboards/reasoning/' });
     expect(matchRoute('/leaderboard/llm/knowledge')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/knowledge/' });
     expect(matchRoute('/leaderboard/not-a-real-route/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/tools/')).toEqual({ kind: 'tools' });

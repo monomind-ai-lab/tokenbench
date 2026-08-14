@@ -3,7 +3,7 @@ import { act, createElement, StrictMode } from 'react';
 import { hydrateRoot, type Root } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import App from '../App';
+import App, { PricePerformanceRoute } from '../App';
 import type { CatalogResponse, PlanOffer } from '../catalog/contracts';
 import { AppShell, SiteHeader } from './app-shell';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
@@ -179,6 +179,20 @@ describe('responsive calculator app shell', () => {
     expect(footer).not.toHaveTextContent(/Updated /i);
     expect(footer).not.toHaveTextContent('Double opt-in required. Unsubscribe at any time.');
     expect(within(footer).getByText('Verify provider evidence before purchasing.')).toBeInTheDocument();
+  });
+
+  it('renders a useful six-link recovery page for an unknown route', () => {
+    renderAt('/not-a-published-route/');
+
+    expect(screen.getByRole('heading', { name: /Page not found/i })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Primary recovery links' })).toBeInTheDocument();
+  });
+
+  it('keeps shared compare selections visible in a direct hydration entrypoint', () => {
+    window.history.replaceState({}, '', '/llm-price-performance/?compare=alpha,beta');
+    render(<PricePerformanceRoute />);
+
+    expect(screen.getByRole('complementary', { name: 'Comparison tray' })).toHaveTextContent('alpha');
   });
 
   it('makes the tools directory link to the subscription versus API calculator', () => {

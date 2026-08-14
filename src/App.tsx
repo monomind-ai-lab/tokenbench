@@ -32,6 +32,9 @@ import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
 import { ModelProfilePage } from './pages/model-profile-page';
 import { ModelLifecycleApp } from './pages/model-lifecycle-page';
+import { CompareProvider } from './frontend/compare-state';
+import { ComparisonTray } from './frontend/comparison-tray';
+import { NotFoundPage } from './pages/not-found-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
@@ -61,6 +64,7 @@ function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalo
       onRetry={catalogState?.retry}
     >
       {children}
+      <ComparisonTray />
     </AppShell>
   );
 }
@@ -340,23 +344,23 @@ function ModelsRoute() {
 
 /** Shared by the price-performance Pages Function response and browser hydration. */
 export function PricePerformanceRoute({ initialEnvelope }: { readonly initialEnvelope?: PricePerformanceEnvelope }) {
-  return <PageFrame activePage="pricePerformance">
+  return <CompareProvider><PageFrame activePage="pricePerformance">
     <PricePerformanceApp initialEnvelope={initialEnvelope} />
-  </PageFrame>;
+  </PageFrame></CompareProvider>;
 }
 
 
 /** Shared by the Pages Function SSR response and browser hydration. */
 export function ComparisonDetailApp({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
-  return <PageFrame activePage="compare"><ComparisonPage viewModel={viewModel} /></PageFrame>;
+  return <CompareProvider><PageFrame activePage="compare"><ComparisonPage viewModel={viewModel} /></PageFrame></CompareProvider>;
 }
 
 /** Shared by each durable model Pages Function response and browser hydration. */
 export function ModelProfileApp({ viewModel }: { readonly viewModel: ModelProfileViewModel }) {
-  return <PageFrame activePage="models"><ModelProfilePage viewModel={viewModel} /></PageFrame>;
+  return <CompareProvider><PageFrame activePage="models"><ModelProfilePage viewModel={viewModel} /></PageFrame></CompareProvider>;
 }
 
-export default function App() {
+function RoutedApp() {
   const route = matchRoute(window.location.pathname);
 
   if (route.kind === 'home') return <HomeRoute />;
@@ -368,6 +372,7 @@ export default function App() {
   if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
+  if (route.kind === 'leaderboardCategory' || route.kind === 'leaderboardSla' || route.kind === 'leaderboardCustom') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
   if (route.kind === 'models') return <ModelsRoute />;
   if (route.kind === 'modelLifecycle') return <ModelLifecycleApp />;
@@ -375,5 +380,9 @@ export default function App() {
     window.location.replace(route.to);
     return null;
   }
-  return null;
+  return <PageFrame><NotFoundPage /></PageFrame>;
+}
+
+export default function App() {
+  return <CompareProvider><RoutedApp /></CompareProvider>;
 }
