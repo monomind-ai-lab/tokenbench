@@ -27,7 +27,8 @@ import { parseModelDirectoryEnvelope, type ModelDirectoryEnvelope } from './fron
 import { ModelsPage } from './pages/models-page';
 import { HomePage } from './pages/home-page';
 import { CompareHubPage } from './pages/compare-hub-page';
-import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
+import { LeaderboardDirectoryPage, LeaderboardPage, V21LeaderboardPage } from './pages/leaderboards-page';
+import { v21Leaderboard } from './benchmarks/v21-leaderboards';
 import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
 import { ModelProfilePage } from './pages/model-profile-page';
@@ -336,6 +337,24 @@ function LeaderboardsRoute() {
 function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
   return <PageFrame activePage="leaderboards"><LeaderboardPage keyName={keyName} /></PageFrame>;
 }
+
+function V21LeaderboardRoute({ category }: { readonly category: string }) {
+  const definition = v21Leaderboard(category);
+  return <PageFrame activePage="leaderboards">
+    {definition ? <V21LeaderboardPage category={definition} /> : <LeaderboardDirectoryPage />}
+  </PageFrame>;
+}
+
+/** Shared by the category Pages Function response and its browser hydration. */
+export function V21LeaderboardApp({
+  category,
+  initialEnvelope,
+}: {
+  readonly category: NonNullable<ReturnType<typeof v21Leaderboard>>;
+  readonly initialEnvelope?: import('./frontend/use-benchmarks').BenchmarkApiEnvelope<import('./frontend/use-benchmarks').LeaderboardPageResult>;
+}) {
+  return <CompareProvider><PageFrame activePage="leaderboards"><V21LeaderboardPage category={category} initialEnvelope={initialEnvelope} /></PageFrame></CompareProvider>;
+}
 function ModelsRoute() {
   const [envelope, setEnvelope] = useState<ModelDirectoryEnvelope | null>(null);
 
@@ -389,7 +408,9 @@ function RoutedApp() {
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'comparison') return <ComparisonPendingRoute pair={route.pair} />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
-  if (route.kind === 'leaderboardCategory' || route.kind === 'leaderboardSla' || route.kind === 'leaderboardCustom') return <LeaderboardsRoute />;
+  if (route.kind === 'leaderboardCategory') return <V21LeaderboardRoute category={route.category} />;
+  if (route.kind === 'leaderboardSla') return <V21LeaderboardRoute category="sla" />;
+  if (route.kind === 'leaderboardCustom') return <V21LeaderboardRoute category="custom" />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
   if (route.kind === 'models') return <ModelsRoute />;
   if (route.kind === 'modelLifecycle') return <ModelLifecycleApp />;

@@ -137,21 +137,24 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/cost/calculator/index.html',
       '/generated-tokenbench/cost/index.html',
       '/generated-tokenbench/index.html',
+      '/generated-tokenbench/leaderboards/agentic/index.html',
+      '/generated-tokenbench/leaderboards/coding/index.html',
+      '/generated-tokenbench/leaderboards/custom/index.html',
       '/generated-tokenbench/leaderboards/index.html',
-      '/generated-tokenbench/leaderboards/llm/agentic/index.html',
-      '/generated-tokenbench/leaderboards/llm/coding/index.html',
       '/generated-tokenbench/leaderboards/llm/human-preference/index.html',
       '/generated-tokenbench/leaderboards/llm/knowledge/index.html',
-      '/generated-tokenbench/leaderboards/llm/overall/index.html',
       '/generated-tokenbench/leaderboards/llm/pricing-context/index.html',
-      '/generated-tokenbench/leaderboards/llm/reasoning/index.html',
       '/generated-tokenbench/leaderboards/llm/value/index.html',
+      '/generated-tokenbench/leaderboards/math/index.html',
       '/generated-tokenbench/leaderboards/media/image-editing/index.html',
       '/generated-tokenbench/leaderboards/media/image-to-video/index.html',
       '/generated-tokenbench/leaderboards/media/text-to-image/index.html',
       '/generated-tokenbench/leaderboards/media/text-to-video/index.html',
       '/generated-tokenbench/leaderboards/media/video-editing/index.html',
-      '/generated-tokenbench/leaderboards/multimodal/vision-documents/index.html',
+      '/generated-tokenbench/leaderboards/multimodal/index.html',
+      '/generated-tokenbench/leaderboards/overall/index.html',
+      '/generated-tokenbench/leaderboards/reasoning/index.html',
+      '/generated-tokenbench/leaderboards/sla/index.html',
       '/generated-tokenbench/llm-price-performance/index.html',
       '/generated-tokenbench/methodology/benchalign/index.html',
        '/generated-tokenbench/models/index.html',
@@ -163,6 +166,8 @@ describe('TokenBench route registry', () => {
     ]);
     expect(inputs.home).toBe('/generated-tokenbench/index.html');
     expect(Object.values(inputs)).not.toContain('/generated-tokenbench/compare/claude-4-vs-gpt-5/index.html');
+    expect(Object.values(inputs)).toContain('/generated-tokenbench/leaderboards/math/index.html');
+    expect(Object.values(inputs)).toContain('/generated-tokenbench/leaderboards/sla/index.html');
   });
 
   it('keeps human-readable navigation labels on the single leaderboard registry', () => {

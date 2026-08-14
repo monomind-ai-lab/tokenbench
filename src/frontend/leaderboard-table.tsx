@@ -5,6 +5,7 @@ import { formatDateTime } from './ui';
 import type { BenchmarkAttribution, BenchmarkFreshness } from './use-benchmarks';
 import type { LeaderboardQueryCapabilities } from './leaderboard-filter-state';
 import { ProviderMark } from './provider-mark';
+import { addCompareModel, useCompareState } from './compare-state';
 
 interface LeaderboardTableProps {
   readonly keyName: LeaderboardKey;
@@ -154,6 +155,22 @@ function ProviderIdentity({ entry }: { readonly entry: LeaderboardEntry }) {
   return <span className="leaderboard-provider"><ProviderMark providerId={entry.model.creator} providerName={entry.model.creator} decorative size={20} /><span>{entry.model.creator}</span></span>;
 }
 
+function CompareAction({ entry }: { readonly entry: LeaderboardEntry }) {
+  const { selection, setSelection } = useCompareState();
+  const label = `Compare ${entry.model.name}`;
+  const selected = selection.ids.includes(entry.model.modelKey);
+  const add = () => {
+    const result = addCompareModel(selection, entry.model.modelKey);
+    if (result.kind === 'added') setSelection(result.state);
+  };
+  return <button
+    type="button"
+    className="button button-secondary button-small leaderboard-compare-action"
+    onClick={add}
+    disabled={selected}
+  >{selected ? 'Added to compare' : label}</button>;
+}
+
 function Card({ keyName, entry, position, showModalities }: { readonly keyName: LeaderboardKey; readonly entry: LeaderboardEntry; readonly position: number | null; readonly showModalities: boolean; readonly key?: string }) {
   const estimated = isEstimated(entry);
   return <li className={`leaderboard-card${estimated ? ' leaderboard-card-estimated' : ''}`}>
@@ -166,6 +183,7 @@ function Card({ keyName, entry, position, showModalities }: { readonly keyName: 
       <div><dt>Context</dt><dd>{estimated ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</dd></div>
       <div><dt>Source rank</dt><dd>{estimated || !usesPublishedSourceRank(keyName) || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</dd></div>
     </dl>
+    <CompareAction entry={entry} />
   </li>;
 }
 
@@ -198,6 +216,7 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
             {showModalities ? <th scope="col">Supported Modalities</th> : null}
             <th scope="col" aria-sort={canSort('context-desc') ? sortDirection(sort, 'context-desc') : 'none'}>{canSort('context-desc') ? <button className="leaderboard-sort-button" type="button" onClick={() => onSortChange('context-desc')} aria-label="Sort by context window">Context</button> : 'Context'}</th>
             <th scope="col">Source rank</th>
+            <th scope="col">Compare</th>
           </tr>
         </thead>
         <tbody>
@@ -208,6 +227,7 @@ export function LeaderboardTable({ keyName, entries, rankOffset = 0, sort, onSor
             {showModalities ? <td><ModalitiesValue entry={entry} /></td> : null}
             <td>{isEstimated(entry) ? 'Unavailable' : formatContext(entry.contextWindowTokens)}</td>
             <td>{isEstimated(entry) || !sourceRanked || entry.sourceRank === null ? 'Unavailable' : entry.sourceRank}</td>
+            <td><CompareAction entry={entry} /></td>
           </tr>)}
         </tbody>
       </table>

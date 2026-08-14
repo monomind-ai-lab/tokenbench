@@ -5,6 +5,7 @@ import type { BenchmarkApiEnvelope, BenchmarkSummaryData, LeaderboardPageResult 
 import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
 import type { BenchmarkMetric, BenchmarkModel } from '../benchmarks/contracts';
 import type { LeaderboardEntry } from '../benchmarks/leaderboards';
+import { v21Leaderboard } from '../benchmarks/v21-leaderboards';
 import {
   LeaderboardDirectoryPage,
   LeaderboardPage,
@@ -280,6 +281,19 @@ afterEach(() => {
 });
 
 describe('LeaderboardDirectoryPage', () => {
+  it('renders the seven required V2.1 overview cards in category order', async () => {
+    respondWithSummary();
+
+    render(<LeaderboardDirectoryPage />);
+
+    const overview = await screen.findByRole('region', { name: 'V2.1 leaderboard overview' });
+    expect(within(overview).getAllByRole('heading', { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      'Overall', 'Coding', 'Agentic', 'Math', 'Reasoning', 'Multimodal', 'SLA',
+    ]);
+    expect(within(overview).getByRole('link', { name: 'Open Coding leaderboard' })).toHaveAttribute('href', '/leaderboards/coding/');
+    expect(within(overview).getAllByText('Unavailable until comparable published evidence is available.')).toHaveLength(2);
+  });
+
   it('uses canonical route H1s for directory cards instead of navigation labels', () => {
     respondWithSummary();
 
@@ -465,6 +479,26 @@ describe('LeaderboardDirectoryPage', () => {
     const multimodalArticle = multimodalHeading.closest('article')!;
     expect(within(multimodalArticle).getByText(/BenchLM/)).toBeInTheDocument();
     expect(within(multimodalArticle).getByText(/LMArena/)).toBeInTheDocument();
+  });
+});
+
+describe('V2.1 category hydration', () => {
+  it('reuses the embedded category envelope without a second initial request', () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<LeaderboardPage
+      keyName="llm-coding"
+      category={v21Leaderboard('coding')!}
+      initialEnvelope={{
+        ...codingLeaderboardEnvelope(),
+        data: { ...codingLeaderboardEnvelope().data, pagination: { limit: 20, total: 1, nextCursor: null } },
+      }}
+    />);
+
+    expect(screen.getByRole('heading', { name: 'Coding', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

@@ -627,17 +627,8 @@ export function useBenchmarkLeaderboard(
   cursor?: string,
   includeEstimated = false,
   filters?: LeaderboardQueryState,
+  initialEnvelope?: BenchmarkApiEnvelope<LeaderboardPageResult>,
 ): BenchmarkLeaderboardState {
-  const [state, setState] = useState<Omit<BenchmarkLeaderboardState, 'retry'>>({
-    phase: 'loading',
-    envelope: null,
-    error: null,
-    statusCode: null,
-    fallback: 'none',
-  });
-  const [retryVersion, setRetryVersion] = useState(0);
-  const requestVersion = useRef(0);
-  const retry = useCallback(() => setRetryVersion((version) => version + 1), []);
   const normalizedLimit = normalizeLimit(limit);
   const requestIncludesEstimated = includeEstimated && supportsEstimatedModels(key);
   const endpoint = leaderboardEndpoint(
@@ -650,12 +641,38 @@ export function useBenchmarkLeaderboard(
   );
   const cacheKey = benchmarkCacheKey(endpoint);
   const requireCompletePage = filters !== undefined;
+  const validInitialEnvelope = initialEnvelope !== undefined && isLeaderboardEnvelope(
+    initialEnvelope,
+    key,
+    profile,
+    requestIncludesEstimated,
+    normalizedLimit,
+    requireCompletePage,
+  );
+  const [state, setState] = useState<Omit<BenchmarkLeaderboardState, 'retry'>>({
+    phase: validInitialEnvelope ? initialEnvelope.freshness.status === 'fresh' ? 'ready' : 'stale' : 'loading',
+    envelope: validInitialEnvelope ? initialEnvelope : null,
+    error: validInitialEnvelope && initialEnvelope.freshness.status === 'stale'
+      ? initialEnvelope.freshness.message ?? 'Published benchmark data is stale.'
+      : null,
+    statusCode: null,
+    fallback: 'none',
+  });
+  const [retryVersion, setRetryVersion] = useState(0);
+  const requestVersion = useRef(0);
+  const retry = useCallback(() => setRetryVersion((version) => version + 1), []);
+  const initialEnvelopeRef = useRef(validInitialEnvelope ? { endpoint, envelope: initialEnvelope } : null);
   const lastValidEnvelope = useRef<{
     readonly cacheKey: string;
     readonly envelope: BenchmarkApiEnvelope<LeaderboardPageResult>;
   } | null>(null);
 
   useEffect(() => {
+    const embedded = initialEnvelopeRef.current;
+    if (retryVersion === 0 && embedded?.endpoint === endpoint) {
+      lastValidEnvelope.current = { cacheKey, envelope: embedded.envelope };
+      return undefined;
+    }
     const controller = new AbortController();
     const version = ++requestVersion.current;
     let active = true;

@@ -232,14 +232,24 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'welcome', pathname: ROUTE_PATHS.welcome, route: { kind: 'welcome' } },
   { id: 'privacy', pathname: ROUTE_PATHS.privacy, route: { kind: 'privacy' } },
   { id: 'leaderboards', pathname: ROUTE_PATHS.leaderboards, route: { kind: 'leaderboards' } },
+  ...LEADERBOARD_CATEGORIES.map((category) => ({
+    id: `leaderboard-category-${category}`,
+    pathname: `${ROUTE_PATHS.leaderboards}${category}/`,
+    route: { kind: 'leaderboardCategory' as const, category },
+  })),
+  { id: 'leaderboard-sla', pathname: ROUTE_PATHS.leaderboardSla, route: { kind: 'leaderboardSla' } },
+  { id: 'leaderboard-custom', pathname: ROUTE_PATHS.leaderboardCustom, route: { kind: 'leaderboardCustom' } },
   { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
 ];
 
-const leaderboardFixedRoutes: readonly FixedRouteDefinition[] = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[]).map((key) => ({
-  id: `leaderboard-${key}`,
-  pathname: LEADERBOARD_ROUTES[key].pathname,
-  route: { kind: 'leaderboard', key },
-}));
+/** Canonical V2.1 categories are static entries; exact non-equivalent source lenses remain support routes. */
+const leaderboardFixedRoutes: readonly FixedRouteDefinition[] = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
+  .filter((key) => legacyLeaderboardCategory(key) === null)
+  .map((key) => ({
+    id: `leaderboard-${key}`,
+    pathname: LEADERBOARD_ROUTES[key].pathname,
+    route: { kind: 'leaderboard' as const, key },
+  }));
 
 export const FIXED_ROUTES: readonly FixedRouteDefinition[] = [
   ...basicFixedRoutes,

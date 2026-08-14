@@ -134,6 +134,7 @@ function apiEnvelope(
   freshness: { status: 'fresh' | 'stale'; checkedAt: string; message?: string } = { status: 'fresh', checkedAt: ISO_TIME },
   completeEntries: readonly LeaderboardEntry[] = entries,
   total = entries.length,
+  limit = 50,
 ) {
   const definitions: Partial<Record<LeaderboardKey, Record<string, unknown>>> = {
     'llm-coding': { kind: 'benchlm', sourceId: 'benchlm', metricKeys: ['benchlm:category:coding'], defaultSort: 'score-desc' },
@@ -161,7 +162,7 @@ function apiEnvelope(
       definition: definitions[key] ?? definitions['llm-coding'],
       entries,
       capabilities: leaderboardFilterCapabilities(key, completeEntries),
-      pagination: { limit: 50, total, nextCursor: null },
+      pagination: { limit, total, nextCursor: null },
     },
   };
 }
@@ -190,6 +191,7 @@ function leaderboardApiResponse(
     freshness,
     completeEntries,
     filtered.length,
+    limit,
   ));
 }
 
@@ -219,6 +221,14 @@ it('groups repeated sources into one attribution entry', () => {
   expect(grouped[0]).toMatchObject({ sourceId: 'benchlm', updatedAt: '2026-08-12T19:00:00.000Z' });
   expect(grouped[0].urls).toHaveLength(2);
   expect(grouped[1].sourceId).toBe('openrouter');
+});
+
+describe('LeaderboardTable compare controls', () => {
+  it('offers the same model compare action in the table and card presentations', () => {
+    renderTable('llm-coding', 'score-desc', [entry()]);
+
+    expect(screen.getAllByRole('button', { name: 'Compare Model A', hidden: true })).toHaveLength(2);
+  });
 });
 
 describe('LeaderboardTable', () => {
@@ -985,14 +995,14 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     const entries = [entry()];
     const fetchMock = vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', entries)));
     vi.stubGlobal('fetch', fetchMock);
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=outputHeavy&sort=price-asc&q=provider&estimated=1');
+    window.history.replaceState({}, '', '/leaderboards/coding/?profile=outputHeavy&sort=price-asc&q=provider&estimated=1');
 
     render(<App />);
 
-    expect(await screen.findByRole('heading', { name: 'Coding benchmark', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Coding', level: 1 })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('checkbox', { name: 'Include estimated models' })).toBeChecked();
-    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&q=provider&estimated=1&limit=50');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/benchmarks/leaderboards/llm-coding?profile=balanced&sort=score-desc&q=provider&estimated=1&limit=20');
     expect(within(screen.getByLabelText('Published leaderboard evidence')).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('heading', { name: 'Related leaderboards', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Talk to MonoMind' })).toHaveAttribute('href', 'https://monomind.one/');
@@ -1012,7 +1022,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       blendedCostPerMillion: null,
     });
     vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [alpha, beta]))));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/?utm_source=newsletter&profile=outputHeavy&provider=Provider+B');
+    window.history.replaceState({}, '', '/leaderboards/coding/?utm_source=newsletter&profile=outputHeavy&provider=Provider+B');
     const replaceState = vi.spyOn(window.history, 'replaceState');
 
     render(<App />);
@@ -1051,7 +1061,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
         resolveResponse = resolve;
       });
     }));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=balanced&sort=context-desc');
+    window.history.replaceState({}, '', '/leaderboards/coding/?profile=balanced&sort=context-desc');
 
     const firstRender = render(<App />);
 
@@ -1130,7 +1140,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
 
   it('removes its popstate listener when the leaderboard page unmounts', async () => {
     vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [entry()]))));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/');
+    window.history.replaceState({}, '', '/leaderboards/coding/');
     const addEventListener = vi.spyOn(window, 'addEventListener');
     const removeEventListener = vi.spyOn(window, 'removeEventListener');
 
@@ -1155,13 +1165,13 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       metric: { ...entry().metric!, modelKey: 'other', sourceModelId: 'other' },
     });
     vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [incorporated, other]))));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
+    window.history.replaceState({}, '', '/leaderboards/coding/?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
 
     render(<App />);
 
     expect(await screen.findByRole('button', { name: 'Provider, Inc.' })).toHaveAttribute('aria-pressed', 'true');
-    // The table row, the responsive card, and the score chart's axis label.
-    await waitFor(() => expect(screen.getAllByText('Incorporated Model')).toHaveLength(3));
+    // The table row, responsive card, semantic chart table, and index key.
+    await waitFor(() => expect(screen.getAllByText('Incorporated Model')).toHaveLength(4));
     await waitFor(() => expect(screen.queryAllByText('Other Model')).toHaveLength(0));
     expect(window.location.search).toBe('?profile=balanced&sort=score-desc&provider=Provider%2C+Inc.');
   });
@@ -1173,14 +1183,14 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       [entry()],
       { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue.' },
     ))));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/');
+    window.history.replaceState({}, '', '/leaderboards/coding/');
 
     render(<App />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Stale benchmark data');
+    expect(await screen.findByText('Stale benchmark data')).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
-    // The table row, the responsive card, and the score chart's axis label.
-    expect(screen.getAllByText('Model A')).toHaveLength(3);
+    // The table row, responsive card, semantic chart table, and index key.
+    expect(screen.getAllByText('Model A')).toHaveLength(4);
   });
 
   it('keeps stale envelope metadata, source links, and cached rows visible together', async () => {
@@ -1190,7 +1200,7 @@ describe('leaderboard routes and the Home decision snapshot', () => {
       [entry()],
       { status: 'stale', checkedAt: '2026-08-01T00:00:00.000Z', message: 'Refresh overdue.' },
     ))));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/');
+    window.history.replaceState({}, '', '/leaderboards/coding/');
 
     render(<App />);
 
@@ -1201,17 +1211,17 @@ describe('leaderboard routes and the Home decision snapshot', () => {
     expect(evidence).toHaveTextContent('2026');
     expect(within(evidence).getByRole('link', { name: 'Data from BenchLM.ai' })).toHaveAttribute('href', 'https://benchlm.ai/data');
     expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
-    // The table row, the responsive card, and the score chart's axis label.
-    expect(screen.getAllByText('Model A')).toHaveLength(3);
+    // The table row, responsive card, semantic chart table, and index key.
+    expect(screen.getAllByText('Model A')).toHaveLength(4);
   });
 
   it('keeps ready revision evidence visible when filters match zero rows', async () => {
     vi.stubGlobal('fetch', vi.fn((input: string) => Promise.resolve(leaderboardApiResponse(input, 'llm-coding', [entry()]))));
-    window.history.replaceState({}, '', '/leaderboards/llm/coding/?q=no-such-model');
+    window.history.replaceState({}, '', '/leaderboards/coding/?q=no-such-model');
 
     render(<App />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('No published entries match these filters');
+    expect(await screen.findByText('No published entries match these filters')).toBeInTheDocument();
     const evidence = screen.getByLabelText('Published leaderboard evidence');
     expect(evidence).toHaveTextContent('Published');
     expect(evidence).toHaveTextContent('Checked');

@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react';
 import { LEADERBOARD_NAVIGATION, LEADERBOARD_ROUTES, ROUTE_PATHS, type LeaderboardKey } from '../routing/routes';
 import { DECISION_PICK_CATEGORIES, type DecisionPickEntry, type DecisionPickGroup } from '../benchmarks/decision-picks';
 import { LEADERBOARD_DEFINITIONS } from '../benchmarks/leaderboards';
+import { categoryViewFor, V21_OVERVIEW_LEADERBOARDS, type V21LeaderboardDefinition } from '../benchmarks/v21-leaderboards';
 import { EmptyState, Skeleton, formatDateTime } from '../frontend/ui';
 import {
   LeaderboardFilters,
@@ -19,13 +20,14 @@ import {
 } from '../frontend/leaderboard-filter-state';
 import { LeaderboardEvidence, LeaderboardTable } from '../frontend/leaderboard-table';
 import { ScoreBarChart, type ScoreBarChartDatum } from '../frontend/charts/score-bar-chart';
+import { LeaderboardVerticalChart } from '../frontend/charts/leaderboard-vertical-chart';
 import { CostScoreScatter, type CostScorePoint } from '../frontend/charts/cost-score-scatter';
 import { PriceHistogram, priceBuckets } from '../frontend/charts/price-histogram';
 import { modelPath } from '../benchmarks/model-directory';
 import type { LeaderboardEntry } from '../benchmarks/leaderboards';
 import { ProviderMark } from '../frontend/provider-mark';
 import { ShareAction } from '../frontend/share-action';
-import { useBenchmarkLeaderboard, useDecisionPicks } from '../frontend/use-benchmarks';
+import { useBenchmarkLeaderboard, useDecisionPicks, type BenchmarkApiEnvelope, type LeaderboardPageResult } from '../frontend/use-benchmarks';
 import { SITE_CONFIG } from '../brand/site-config';
 
 const UNRANKED_LENS_KEYS = new Set<LeaderboardKey>(['llm-reasoning', 'llm-knowledge']);
@@ -323,8 +325,27 @@ function LeaderboardPriceHistogram({
   </section>;
 }
 
-export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey }) {
+function embeddedLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardPageResult> | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const payload = document.getElementById('leaderboards-initial-data');
+  if (!(payload instanceof HTMLScriptElement) || payload.type !== 'application/json' || !payload.textContent) return undefined;
+  try { return JSON.parse(payload.textContent) as BenchmarkApiEnvelope<LeaderboardPageResult>; } catch { return undefined; }
+}
+
+export function LeaderboardPage({
+  keyName,
+  category,
+  initialEnvelope,
+}: {
+  readonly keyName: LeaderboardKey;
+  readonly category?: V21LeaderboardDefinition;
+  readonly initialEnvelope?: BenchmarkApiEnvelope<LeaderboardPageResult>;
+}) {
   const route = LEADERBOARD_ROUTES[keyName];
+  const title = category?.label ?? route.seo.h1;
+  const summary = category?.definition ?? route.seo.summary;
+  const initialCategoryEnvelope = initialEnvelope ?? (category ? embeddedLeaderboardEnvelope() : undefined);
+  const requestedLimit = category ? 20 : 50;
   const [filters, setFilters] = useLeaderboardFilters(keyName);
   const [knownCapabilities, setKnownCapabilities] = useState<{
     readonly keyName: LeaderboardKey;
@@ -344,10 +365,11 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   const state = useBenchmarkLeaderboard(
     keyName,
     requestFilters.profile,
-    50,
+    requestedLimit,
     activePage.cursor ?? undefined,
     requestFilters.includeEstimated,
     requestFilters,
+    initialCategoryEnvelope,
   );
   const publishedEntries = state.envelope?.data.entries;
   const responseCapabilities = state.envelope?.data.capabilities;
@@ -402,7 +424,9 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     window.history.replaceState(window.history.state, '', `${window.location.pathname}?${query}${window.location.hash}`);
   }, [capabilities, filterQuery, filters, keyName, publishedEntries]);
 
-  const entries = publishedEntries ?? [];
+  const entries = category && publishedEntries
+    ? categoryViewFor(category.slug, publishedEntries).entries
+    : publishedEntries ?? [];
   const pagination = state.envelope?.data.pagination;
   const rankOffset = pagination ? activePage.previousCursors.length * pagination.limit : 0;
   const csvQuery = filterQuery;
@@ -411,7 +435,8 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
   if (shareParameters.get('profile') === capabilities.defaultProfile) shareParameters.delete('profile');
   if (shareParameters.get('sort') === capabilities.defaultSort) shareParameters.delete('sort');
   const shareQuery = shareParameters.toString();
-  const shareUrl = `${SITE_CONFIG.origin}${route.pathname}${shareQuery ? `?${shareQuery}` : ''}`;
+  const canonicalPath = category ? `${ROUTE_PATHS.leaderboards}${category.slug}/` : route.pathname;
+  const shareUrl = `${SITE_CONFIG.origin}${canonicalPath}${shareQuery ? `?${shareQuery}` : ''}`;
   const goToNextPage = () => {
     const nextCursor = pagination?.nextCursor;
     if (!nextCursor) return;
@@ -439,11 +464,11 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     });
   };
 
-  return <div className="content-stack leaderboard-page">
+  return <div className={`content-stack leaderboard-page${category ? ' leaderboard-v21-category-page' : ''}`}>
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
-      <span className="eyebrow">TokenBench leaderboard</span>
-      <h1 id="leaderboard-heading">{route.seo.h1}</h1>
-      <p>{route.seo.summary}</p>
+      <span className="eyebrow">{category ? `${category.version} category` : 'TokenBench leaderboard'}</span>
+      <h1 id="leaderboard-heading">{title}</h1>
+      <p>{summary}</p>
       <div className="leaderboard-actions" role="group" aria-label="Leaderboard actions">
         <ShareAction label="Share Leaderboard" canonicalUrl={shareUrl} variant="secondary" />
         <a className="button button-secondary" href={csvHref}>Download CSV</a>
@@ -451,7 +476,9 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
     </section>
 
     {state.phase === 'ready' || state.phase === 'stale'
-      ? <LeaderboardScoreChart keyName={keyName} entries={entries} />
+      ? category
+        ? <LeaderboardVerticalChart title={title} entries={entries} />
+        : <LeaderboardScoreChart keyName={keyName} entries={entries} />
       : null}
 
     {state.phase === 'ready' || state.phase === 'stale'
@@ -467,7 +494,7 @@ export function LeaderboardPage({ keyName }: { readonly keyName: LeaderboardKey 
       <LeaderboardFilters keyName={keyName} filters={filters} onChange={setFilters} capabilities={capabilities} />
     </section>
 
-    <section aria-label={`${route.seo.h1} results`}>
+    <section aria-label={`${title} results`}>
       {recoveryNoticeVisible
         ? <p className="leaderboard-recovery-notice" role="status">Leaderboard revision changed. Showing the first page of the latest results.</p>
         : null}
@@ -609,6 +636,65 @@ function DecisionReadyPicks() {
   </section>;
 }
 
+function v21CategoryPath(category: V21LeaderboardDefinition): string {
+  return `${ROUTE_PATHS.leaderboards}${category.slug}/`;
+}
+
+/** The directory is a compact, source-aware overview rather than a second ranking. */
+function V21LeaderboardOverview() {
+  const state = useDecisionPicks();
+  const groups = new Map((state.decisionPicks ?? []).map((group) => [group.key, group]));
+  return <section className="v21-leaderboard-overview" aria-label="V2.1 leaderboard overview">
+    <div className="panel-heading"><div><span className="eyebrow">V2.1 overview</span><h2>Compare by decision lens</h2><p>Each card links to one canonical category and preserves the published source evidence behind it.</p></div></div>
+    <div className="v21-leaderboard-overview-grid">
+      {V21_OVERVIEW_LEADERBOARDS.map((category) => {
+        const group = category.legacyKey ? groups.get(category.legacyKey) : undefined;
+        const entries = group?.entries ?? [];
+        const evidenceState = group?.status === 'benchalign' ? 'BenchAlign ranking' : group ? 'Evidence lens' : null;
+        return <article className="panel v21-leaderboard-overview-card" key={category.slug}>
+          <div className="v21-leaderboard-overview-card-heading"><div><span className="eyebrow">{category.version}</span><h3>{category.label}</h3></div>{evidenceState ? <span className="leaderboard-directory-card-status">{evidenceState}</span> : null}</div>
+          <p>{category.definition}</p>
+          {entries.length > 0 ? <ol className="v21-leaderboard-overview-list">
+            {entries.slice(0, 10).map((entry) => <li key={entry.modelKey}>
+              <a href={modelPath(entry.slug)}>{entry.name}</a>
+              <span><ProviderMark providerId={entry.provider} providerName={entry.provider} decorative size={20} />{entry.provider}</span>
+              <time dateTime={entry.updatedAt}>{formatDateTime(entry.updatedAt)}</time>
+            </li>)}
+          </ol> : <p className="leaderboard-evidence-unavailable">{category.unavailableMessage}</p>}
+          <a href={v21CategoryPath(category)} aria-label={`Open ${category.label} leaderboard`}>Open category <ArrowRight aria-hidden="true" size={14} /></a>
+        </article>;
+      })}
+    </div>
+  </section>;
+}
+
+export function V21LeaderboardPage({
+  category,
+  initialEnvelope,
+}: {
+  readonly category: V21LeaderboardDefinition;
+  readonly initialEnvelope?: BenchmarkApiEnvelope<LeaderboardPageResult>;
+}) {
+  if (category.legacyKey !== null) {
+    return <LeaderboardPage keyName={category.legacyKey} category={category} initialEnvelope={initialEnvelope} />;
+  }
+  return <div className="content-stack leaderboard-page leaderboard-v21-category-page">
+    <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
+      <span className="eyebrow">{category.version} category</span>
+      <h1 id="leaderboard-heading">{category.label}</h1>
+      <p>{category.definition}</p>
+    </section>
+    <section className="panel leaderboard-state" aria-label={`${category.label} availability`}>
+      <h2>Unavailable</h2>
+      <p>{category.unavailableMessage}</p>
+      <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Browse available categories</a>
+    </section>
+    <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
+      <div className="panel-heading"><div><span className="eyebrow">Methodology</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>TokenBench does not substitute another category score when this category has no comparable published metric.</p></div></div>
+    </section>
+  </div>;
+}
+
 function LeaderboardDirectory() {
   return <section className="leaderboard-directory" aria-labelledby="leaderboard-directory-list-heading">
     <div className="panel-heading"><div><span className="eyebrow">All published views</span><h2 id="leaderboard-directory-list-heading">Full leaderboard directory</h2><p>Choose the evidence lens that matches your decision, then inspect its source and methodology.</p></div></div>
@@ -647,6 +733,7 @@ export function LeaderboardDirectoryPage() {
       <p className="leaderboard-methodology"><strong>Method:</strong> Overall, Agent, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge remain clearly labeled evidence lenses. <a href={ROUTE_PATHS.methodologyBenchAlign}>How BenchAlign rankings work</a>.</p>
     </section>
 
+    <V21LeaderboardOverview />
     <DecisionReadyPicks />
     <LeaderboardDirectory />
 
