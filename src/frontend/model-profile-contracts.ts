@@ -9,6 +9,19 @@ export interface ModelProfileAttribution {
   readonly updatedAt: string;
 }
 
+/**
+ * Endpoint measurements are intentionally route-scoped. `native` identifies
+ * direct provider evidence; host rows never become native facts by inference.
+ */
+export interface EndpointEvidenceRow {
+  readonly endpointId: string; readonly hostId: string; readonly native: boolean;
+  readonly availability: string | null; readonly inputPrice: number | null;
+  readonly outputPrice: number | null; readonly cacheReadPrice: number | null;
+  readonly cacheWritePrice: number | null; readonly longContextRule: string | null;
+  readonly ttft: number | null; readonly throughput: number | null;
+  readonly conditions: string | null; readonly effectiveAt: string | null;
+}
+
 export interface ModelProfileViewModel {
   readonly revision: string;
   readonly publishedAt: string;
@@ -23,6 +36,7 @@ export interface ModelProfileViewModel {
   readonly selectedRevision: string;
   readonly fallback: 'none' | 'prior-profile';
   readonly aliasFrom: string | null;
+  readonly endpointEvidence?: readonly EndpointEvidenceRow[];
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -54,6 +68,53 @@ function parseAttribution(value: unknown): readonly ModelProfileAttribution[] | 
   return result;
 }
 
+function nullableText(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && value.trim().length > 0);
+}
+
+function nullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function parseEndpointEvidence(value: unknown): readonly EndpointEvidenceRow[] | null {
+  if (!Array.isArray(value)) return null;
+  const rows: EndpointEvidenceRow[] = [];
+  for (const candidate of value) {
+    const row = record(candidate);
+    const effectiveAt = row?.effectiveAt;
+    if (!row
+      || typeof row.endpointId !== 'string' || row.endpointId.trim().length === 0
+      || typeof row.hostId !== 'string' || row.hostId.trim().length === 0
+      || typeof row.native !== 'boolean'
+      || !nullableText(row.availability)
+      || !nullableNumber(row.inputPrice)
+      || !nullableNumber(row.outputPrice)
+      || !nullableNumber(row.cacheReadPrice)
+      || !nullableNumber(row.cacheWritePrice)
+      || !nullableText(row.longContextRule)
+      || !nullableNumber(row.ttft)
+      || !nullableNumber(row.throughput)
+      || !nullableText(row.conditions)
+      || !(effectiveAt === null || timestamp(effectiveAt))) return null;
+    rows.push({
+      endpointId: row.endpointId,
+      hostId: row.hostId,
+      native: row.native,
+      availability: row.availability,
+      inputPrice: row.inputPrice,
+      outputPrice: row.outputPrice,
+      cacheReadPrice: row.cacheReadPrice,
+      cacheWritePrice: row.cacheWritePrice,
+      longContextRule: row.longContextRule,
+      ttft: row.ttft,
+      throughput: row.throughput,
+      conditions: row.conditions,
+      effectiveAt,
+    });
+  }
+  return rows;
+}
+
 /** Strictly validates the only profile shape allowed to hydrate SSR markup. */
 export function parseModelProfileViewModel(value: unknown): ModelProfileViewModel | null {
   const row = record(value);
@@ -62,7 +123,8 @@ export function parseModelProfileViewModel(value: unknown): ModelProfileViewMode
   const profile = parseModelProfileSnapshotData(row.profile);
   const freshness = record(row.freshness);
   const attribution = parseAttribution(row.attribution);
-  if (!directory || !profile || !freshness || !attribution) return null;
+  const endpointEvidence = row.endpointEvidence === undefined ? undefined : parseEndpointEvidence(row.endpointEvidence);
+  if (!directory || !profile || !freshness || !attribution || endpointEvidence === null) return null;
   if (typeof row.revision !== 'string' || row.revision.length === 0 || !timestamp(row.publishedAt)) return null;
   if ((freshness.status !== 'fresh' && freshness.status !== 'stale') || !timestamp(freshness.checkedAt)) return null;
   if (freshness.message !== undefined && (typeof freshness.message !== 'string' || freshness.message.trim().length === 0)) return null;
@@ -87,5 +149,6 @@ export function parseModelProfileViewModel(value: unknown): ModelProfileViewMode
     selectedRevision: row.selectedRevision,
     fallback: row.fallback,
     aliasFrom: row.aliasFrom as string | null,
+    ...(endpointEvidence === undefined ? {} : { endpointEvidence }),
   };
 }

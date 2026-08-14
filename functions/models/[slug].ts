@@ -5,7 +5,7 @@ import { SITE_CONFIG } from '../../src/brand/site-config';
 import { FRONTEND_ASSETS } from '../../src/routing/frontend-assets';
 import { themeBootstrapMarkup } from '../../src/brand/theme-bootstrap';
 import { isModelSlugRouteSafe, modelPath } from '../../src/benchmarks/model-directory';
-import type { ModelProfileViewModel } from '../../src/frontend/model-profile-contracts';
+import type { EndpointEvidenceRow, ModelProfileViewModel } from '../../src/frontend/model-profile-contracts';
 import { escapeHtmlAttribute, escapeHtmlText, serializeJsonForScript } from '../_shared/html';
 import type { BenchmarkApiEnv } from '../_shared/benchmark-db';
 import { readDurableModelProfile, type ModelProfileReadResult } from '../_shared/model-directory-db';
@@ -54,7 +54,27 @@ function viewModelFor(result: ModelProfileReadResult, now: number): ModelProfile
     selectedRevision: result.selectedRevision,
     fallback: result.fallback,
     aliasFrom: result.aliasFrom,
+    endpointEvidence: endpointEvidenceFor(result.profile),
   };
+}
+
+function endpointEvidenceFor(profile: ModelProfileReadResult['profile']): readonly EndpointEvidenceRow[] {
+  return profile.priceRoutes.map((route) => ({
+    endpointId: route.routeId,
+    hostId: route.providerId,
+    // A route source is host evidence. It is never promoted to a native fact.
+    native: false,
+    availability: null,
+    inputPrice: route.inputUsdPerMillion,
+    outputPrice: route.outputUsdPerMillion,
+    cacheReadPrice: route.cachedInputUsdPerMillion,
+    cacheWritePrice: null,
+    longContextRule: route.contextWindowTokens === null ? null : `Published route context: ${route.contextWindowTokens.toLocaleString('en-US')} tokens.`,
+    ttft: null,
+    throughput: null,
+    conditions: null,
+    effectiveAt: route.observedAt,
+  }));
 }
 
 function scoreLabel(value: number | null): string {
@@ -157,7 +177,16 @@ export function renderModelProfileDocument(viewModel: ModelProfileViewModel): st
 </html>\n`;
 }
 
-export function renderModelProfileStatusDocument(status: 404 | 503, slug: string | null): string {
+export interface SafeModelMatch {
+  readonly slug: string;
+  readonly displayName: string;
+}
+
+export function renderModelProfileStatusDocument(
+  status: 404 | 503,
+  slug: string | null,
+  matches: readonly SafeModelMatch[] = [],
+): string {
   const unavailable = status === 503;
   const title = `${unavailable ? 'Model profile temporarily unavailable' : 'Model profile not found'} | ${SITE_CONFIG.name}`;
   const description = unavailable
@@ -165,11 +194,14 @@ export function renderModelProfileStatusDocument(status: 404 | 503, slug: string
     : `The requested ${SITE_CONFIG.name} model profile is not available. Browse the durable model directory for current and retained benchmark evidence.`;
   const canonical = unavailable && slug ? `${SITE_CONFIG.origin}${modelPath(slug)}` : `${SITE_CONFIG.origin}/models/`;
   const heading = unavailable ? 'Model profile temporarily unavailable' : 'Model profile not found';
-  return `<!doctype html><html lang="en" data-theme="${SITE_CONFIG.defaultTheme}"><head>${headMarkup(title, description, canonical, 'noindex,follow', heading)}</head><body><main class="model-profile-status"><h1>${heading}</h1><p>${escapeHtmlText(description)}</p><p><a href="/models/">Browse popular models</a></p></main><script type="module" src="${FRONTEND_ASSETS.script}"></script></body></html>\n`;
+  const safeMatches = status === 404 ? matches.filter((match) => isModelSlugRouteSafe(match.slug) && match.displayName.trim().length > 0).slice(0, 4) : [];
+  const matchMarkup = safeMatches.length === 0 ? '' : `<section aria-labelledby="profile-close-matches"><h2 id="profile-close-matches">Close profile matches</h2><ul>${safeMatches.map((match) => `<li><a href="${escapeHtmlAttribute(modelPath(match.slug))}">${escapeHtmlText(match.displayName)}</a></li>`).join('')}</ul></section>`;
+  const primaryLinks = '<nav aria-label="Model profile recovery"><a href="/models/">Browse models</a><a href="/models/lifecycle/">Lifecycle radar</a><a href="/compare/">Compare models</a><a href="/leaderboards/">Browse leaderboards</a></nav>';
+  return `<!doctype html><html lang="en" data-theme="${SITE_CONFIG.defaultTheme}"><head>${headMarkup(title, description, canonical, 'noindex,follow', heading)}</head><body><main class="model-profile-status"><h1>${heading}</h1><p>${escapeHtmlText(description)}</p>${matchMarkup}${primaryLinks}</main><script type="module" src="${FRONTEND_ASSETS.script}"></script></body></html>\n`;
 }
 
-function statusResponse(status: 404 | 503, slug: string | null): Response {
-  return new Response(renderModelProfileStatusDocument(status, slug), {
+function statusResponse(status: 404 | 503, slug: string | null, matches: readonly SafeModelMatch[] = []): Response {
+  return new Response(renderModelProfileStatusDocument(status, slug, matches), {
     status,
     headers: {
       'Cache-Control': status === 503 ? 'no-store' : 'public, max-age=300',
@@ -177,6 +209,30 @@ function statusResponse(status: 404 | 503, slug: string | null): Response {
       'X-Robots-Tag': 'noindex, follow',
     },
   });
+}
+
+async function closeSafeMatches(env: BenchmarkApiEnv, slug: string): Promise<readonly SafeModelMatch[]> {
+  if (!env.CATALOG_DB) return [];
+  const query = slug.replace(/[%_]/gu, '').replace(/[-_]+/gu, ' ').trim();
+  if (query.length < 2) return [];
+  try {
+    const result = await env.CATALOG_DB.prepare(`
+      SELECT canonical_slug, display_name
+      FROM benchmark_model_directory
+      WHERE lower(canonical_slug) LIKE lower(?) OR lower(display_name) LIKE lower(?)
+      ORDER BY lower(display_name) ASC, canonical_slug ASC
+      LIMIT 4
+    `).bind(`%${query}%`, `%${query}%`).all();
+    return result.results.flatMap((candidate): SafeModelMatch[] => {
+      if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+      const row = candidate as Record<string, unknown>;
+      return typeof row.canonical_slug === 'string' && typeof row.display_name === 'string' && isModelSlugRouteSafe(row.canonical_slug) && row.display_name.trim().length > 0
+        ? [{ slug: row.canonical_slug, displayName: row.display_name }]
+        : [];
+    });
+  } catch {
+    return [];
+  }
 }
 
 export async function onRequestGet({ request, env, params, next }: {
@@ -193,7 +249,7 @@ export async function onRequestGet({ request, env, params, next }: {
   if (!env.CATALOG_DB) return statusResponse(503, slug);
   try {
     const result = await readDurableModelProfile(env.CATALOG_DB, slug);
-    if (!result) return statusResponse(404, slug);
+    if (!result) return statusResponse(404, slug, await closeSafeMatches(env, slug));
     if (result.aliasFrom !== null || slug !== result.directory.canonicalSlug || !new URL(request.url).pathname.endsWith('/')) {
       return new Response(null, { status: 308, headers: { Location: modelPath(result.directory.canonicalSlug) } });
     }

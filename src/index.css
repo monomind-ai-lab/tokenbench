@@ -1420,3 +1420,29 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .percentile-bar-track { display: block; flex: 0 0 auto; }
 .percentile-bar-value { color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
 .percentile-bar-unavailable { color: var(--muted); }
+
+/* Lifecycle controls and endpoint evidence remain legible without turning
+   independent native/host records into a single comparison claim. */
+.lifecycle-ledger-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .85rem; align-items: end; }
+.lifecycle-ledger-toolbar > label { display: grid; gap: .35rem; color: var(--muted); font-size: .78rem; font-weight: 700; }
+.lifecycle-ledger-toolbar input, .lifecycle-ledger-toolbar select { min-height: 42px; padding: .5rem .65rem; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); }
+.lifecycle-ledger-toolbar fieldset { min-width: 0; margin: 0; padding: .55rem; border: 1px solid var(--border); border-radius: 10px; }
+.lifecycle-ledger-toolbar fieldset label { display: inline-flex; gap: .35rem; margin-right: .6rem; }
+.lifecycle-ledger-toolbar > p { margin: 0; color: var(--muted); font-size: .82rem; }
+.lifecycle-groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 1rem 0; }
+.lifecycle-group { min-width: 0; padding: .65rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); }
+.lifecycle-group-toggle { width: 100%; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 750; text-align: left; text-transform: capitalize; cursor: pointer; }
+.lifecycle-group p { margin: .45rem 0 0; color: var(--muted); font-size: .75rem; }
+.model-endpoint-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; }
+.model-endpoint-scroll table { width: 100%; min-width: 1440px; border-collapse: collapse; }
+.model-endpoint-scroll th, .model-endpoint-scroll td { padding: .75rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; white-space: nowrap; }
+.model-endpoint-scroll th { background: var(--surface-raised); color: var(--muted); font-size: .72rem; text-transform: uppercase; }
+.model-evidence-empty { margin: 0; padding: .85rem; border: 1px dashed var(--border); border-radius: 12px; color: var(--muted); }
+.model-related-links, .model-history-list { display: grid; gap: .55rem; margin: 1rem 0 0; padding-left: 1.2rem; }
+.model-related-links li, .model-history-list li { overflow-wrap: anywhere; }
+.model-profile-compare-action { display: grid; gap: .5rem; align-items: start; }
+.model-profile-compare-action .button { width: fit-content; }
+.model-profile-compare-action p { min-height: 1.25rem; margin: 0; color: var(--muted); }
+.model-profile-status nav { display: flex; flex-wrap: wrap; gap: .85rem; margin-top: 1.25rem; }
+.model-profile-status section { margin-top: 1.5rem; }
+@media (max-width: 760px) { .lifecycle-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lifecycle-ledger-toolbar { grid-template-columns: minmax(0, 1fr); } }

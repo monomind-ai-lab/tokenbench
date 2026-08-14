@@ -7,7 +7,7 @@ vi.mock('../_shared/model-directory-db', async (importOriginal) => ({
   readDurableModelProfile: read,
 }));
 
-import { onRequestGet } from './[slug]';
+import { onRequestGet, renderModelProfileStatusDocument } from './[slug]';
 
 function context(slug = 'gpt-5-6-sol') {
   return {
@@ -50,6 +50,32 @@ describe('server-rendered model profile', () => {
     expect(html).toContain('<meta name="description"');
     expect(html).toContain('property="og:title"');
     expect(html).toContain('name="twitter:title"');
+  });
+
+  it('renders safe close matches and primary recovery links for an unknown profile', () => {
+    const html = renderModelProfileStatusDocument(404, 'gpt-5-6', [{
+      slug: 'gpt-5-6-sol', displayName: 'GPT-5.6 Sol',
+    }]);
+
+    expect(html).toContain('href="/models/gpt-5-6-sol/"');
+    expect(html).toContain('GPT-5.6 Sol');
+    expect(html).toContain('href="/models/"');
+    expect(html).toContain('href="/models/lifecycle/"');
+    expect(html).toContain('href="/compare/"');
+  });
+
+  it('renders explicit missing endpoint dimensions for a valid partial profile', async () => {
+    const fixture = modelProfileViewModelFixture();
+    read.mockResolvedValue({
+      directory: fixture.directory, profile: fixture.profile, selectedRevision: fixture.selectedRevision,
+      fallback: fixture.fallback, aliasFrom: fixture.aliasFrom,
+    });
+
+    const html = await (await onRequestGet(context())).text();
+    expect(html).toContain('Endpoint evidence');
+    expect(html).toContain('Hosted endpoint facts');
+    expect(html).toContain('Cache write / 1M');
+    expect(html).toContain('Unavailable');
   });
 
   it('redirects an alias to the one canonical profile path', async () => {

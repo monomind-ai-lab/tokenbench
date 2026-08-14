@@ -101,6 +101,8 @@ describe('crawlable static-page generator', () => {
     expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
     expect(lifecycle).toContain('<h1>Model Lifecycle Radar</h1>');
     expect(lifecycle).toContain('No validated lifecycle records are embedded in this static shell.');
+    expect(lifecycle).toContain('<dt>Announcement date</dt>');
+    expect(lifecycle).toContain('<dt>Deprecation date</dt>');
     expect(lifecycle).not.toContain('opencodex/gpt-5.6-terra');
     expect(lifecycle).toContain('<body>\n    <!-- THESIS: Evidence before prediction. OWN-WORLD: TokenBench model lifecycle ledger. STORY: Current and archived records with explicit unknowns. FIRST VIEWPORT: Status, evidence dates, and catalog path. FORM: lifecycle-ledger-extension; semantic table with equivalent mobile cards. FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md. -->');
     expect(lifecycle).not.toContain('<dt>Release date</dt>');

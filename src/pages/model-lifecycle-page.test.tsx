@@ -26,8 +26,10 @@ describe('Model Lifecycle Radar', () => {
     expect(screen.getAllByText('Current Model')).toHaveLength(2);
     expect(screen.getAllByText('Archived Model')).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: 'View model profile' })[0]).toHaveAttribute('href', '/models/current-model/');
+    expect(screen.getAllByText('Announcement date')).toHaveLength(4);
+    expect(screen.getAllByText('Deprecation date')).toHaveLength(4);
     expect(screen.getAllByText('Retirement date')).toHaveLength(4);
-    expect(screen.getAllByText('Unavailable')).toHaveLength(16);
+    expect(screen.getAllByText('Unavailable')).toHaveLength(28);
     expect(screen.queryByText('Release date')).not.toBeInTheDocument();
     expect(screen.queryByText('opencodex/gpt-5.6-terra')).not.toBeInTheDocument();
   });
@@ -37,8 +39,8 @@ describe('Model Lifecycle Radar', () => {
 
     const table = within(screen.getByTestId('lifecycle-desktop-table'));
     const cards = within(screen.getByTestId('lifecycle-mobile-cards'));
-    expect(table.getAllByText('Current vs archived')).toHaveLength(2);
-    expect(cards.getAllByText('Current vs archived')).toHaveLength(2);
+    expect(table.getAllByText('Announcement date')).toHaveLength(2);
+    expect(cards.getAllByText('Announcement date')).toHaveLength(2);
     expect(table.getAllByText('Migration target')).toHaveLength(2);
     expect(cards.getAllByText('Migration target')).toHaveLength(2);
   });
@@ -81,9 +83,18 @@ describe('Model Lifecycle Radar', () => {
     expect(fetch).toHaveBeenCalledWith('/api/benchmarks/models?status=all&limit=100', expect.objectContaining({ headers: { accept: 'application/json' } }));
   });
 
-  it('keeps an explicit unavailable state when lifecycle evidence cannot be validated', async () => {
+  it('keeps an explicit error state when lifecycle evidence cannot be validated', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
     render(<ModelLifecycleApp />);
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Lifecycle evidence is temporarily unavailable'));
+  });
+
+  it('keeps a valid empty lifecycle envelope distinct from a request error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      revision: 'r2', publishedAt: '2026-08-10T00:00:00.000Z', freshness: { status: 'fresh', checkedAt: '2026-08-10T00:00:00.000Z' }, attribution: [], data: { week: null, models: [], nextCursor: null },
+    }), { status: 200 })));
+    render(<ModelLifecycleApp />);
     await waitFor(() => expect(screen.getByText('No validated lifecycle records are available.')).toBeInTheDocument());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
