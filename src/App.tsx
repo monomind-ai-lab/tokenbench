@@ -4,10 +4,12 @@ import { redistributeModelMix } from './catalog/calculator';
 import type { ModelOffer, PlanOffer } from './catalog/contracts';
 import { CalculatorControls } from './frontend/calculator-controls';
 import { BreakevenDashboard } from './frontend/breakeven-dashboard';
-import { decodeCalculatorShareState, encodeCalculatorShareState, type CalculatorShareState } from './frontend/calculator-share-state';
+import type { BreakevenScenario } from './frontend/breakeven-state';
+import { decodeBreakevenShareState, decodeCalculatorShareState, encodeBreakevenShareState, encodeCalculatorShareState, type CalculatorShareState } from './frontend/calculator-share-state';
 import {
   buildCalculatorSnapshot,
   toggleModelSelection,
+  type CalculatorCostUsage,
   type InitialSelection,
 } from './frontend/calculator-state';
 import type { ConversationWorkload } from './catalog/subscription-api-calculator';
@@ -38,6 +40,7 @@ import { ComparisonTray } from './frontend/comparison-tray';
 import { NotFoundPage } from './pages/not-found-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
 import { CostPage, type CostHubSharedState, type CostHubSourceCoverage } from './pages/cost-page';
+import { trackTokenBenchEvent } from './frontend/analytics';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
 interface PageFrameProps {
@@ -79,6 +82,29 @@ const DEFAULT_WORKLOAD: ConversationWorkload = {
   activeDaysPerMonth: 25,
 };
 
+export interface CostInitialState {
+  readonly mode: 'calculator' | 'breakeven';
+  readonly calculator?: {
+    readonly workload: ConversationWorkload;
+    readonly providerId: string | null;
+    readonly planId: string | null;
+    readonly modelIds: readonly string[];
+  };
+  readonly breakeven?: BreakevenScenario;
+}
+
+interface BreakevenSettings {
+  readonly seats: number;
+  readonly feePerSeat: number;
+  readonly maxTokensMillions: number;
+  readonly inputShare: number | null;
+  readonly inputPricePerMillion: number | null;
+  readonly outputPricePerMillion: number | null;
+  readonly cacheReadBasisPoints: number;
+  readonly cacheWriteTokens: number;
+  readonly longContextTokens: number;
+}
+
 function defaultOfferForProvider(catalog: NonNullable<CatalogState['catalog']>, providerId: string, planId: string): ModelOffer | null {
   const plan = catalog.plans.find((candidate) => candidate.id === planId && candidate.providerId === providerId);
   if (plan) return defaultApiEquivalentForPlan(plan, catalog.modelOffers);
@@ -97,15 +123,31 @@ function selectionsMatch(left: InitialSelection, right: InitialSelection): boole
       && left.modelMixBasisPoints[id] === right.modelMixBasisPoints[id]);
 }
 
-function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' | 'breakeven' }) {
+function CalculatorPage({ mode = 'calculator', initialCostState }: { readonly mode?: 'calculator' | 'breakeven'; readonly initialCostState?: CostInitialState }) {
   const catalogState = useCatalog();
   const { catalog, phase } = catalogState;
   const [selectedProviderId, setSelectedProviderId] = useState('');
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [selection, setSelection] = useState<InitialSelection>({ selectedModelIds: [], modelMixBasisPoints: {} });
-  const [workload, setWorkload] = useState<ConversationWorkload>(DEFAULT_WORKLOAD);
+  const [workload, setWorkload] = useState<ConversationWorkload>(() => initialCostState?.mode === 'calculator'
+    ? initialCostState.calculator?.workload ?? DEFAULT_WORKLOAD
+    : DEFAULT_WORKLOAD);
   const [mappingMode, setMappingMode] = useState<'default' | 'override'>('default');
-  const [breakevenSettings, setBreakevenSettings] = useState({ seats: 1, feePerSeat: 20, maxTokensMillions: 300 });
+  const [costUsage, setCostUsage] = useState<CalculatorCostUsage>({ characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 });
+  const [breakevenSettings, setBreakevenSettings] = useState<BreakevenSettings>(() => {
+    const scenario = initialCostState?.mode === 'breakeven' ? initialCostState.breakeven : undefined;
+    return {
+      seats: scenario?.seats ?? 1,
+      feePerSeat: scenario?.feePerSeat ?? 20,
+      maxTokensMillions: scenario?.maxTokensMillions ?? 300,
+      inputShare: scenario?.inputShare ?? null,
+      inputPricePerMillion: scenario?.inputPricePerMillion ?? null,
+      outputPricePerMillion: scenario?.outputPricePerMillion ?? null,
+      cacheReadBasisPoints: 0,
+      cacheWriteTokens: 0,
+      longContextTokens: 0,
+    };
+  });
   const appliedSharedStateRef = useRef(false);
   const hydratedSharedStateRef = useRef(false);
   const skipSharedStateReconciliationRef = useRef(false);
@@ -122,25 +164,44 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
     if (!catalog || phase !== 'ready' || appliedSharedStateRef.current) return;
     appliedSharedStateRef.current = true;
 
-    const decoded = decodeCalculatorShareState(new URLSearchParams(window.location.search), catalog);
+    const params = new URLSearchParams(window.location.search);
+    const decodedBreakeven = mode === 'breakeven' ? decodeBreakevenShareState(params, catalog) : null;
+    const decoded = decodedBreakeven?.state.calculator ?? decodeCalculatorShareState(params, catalog)?.state;
     if (!decoded) return;
 
     hydratedSharedStateRef.current = true;
     skipSharedStateReconciliationRef.current = true;
-    setSelectedProviderId(decoded.state.providerId);
-    setSelectedPlanId(decoded.state.planId);
+    setSelectedProviderId(decoded.providerId);
+    setSelectedPlanId(decoded.planId);
     setSelection({
-      selectedModelIds: [...decoded.state.selectedModelIds],
-      modelMixBasisPoints: { ...decoded.state.modelMixBasisPoints },
+      selectedModelIds: [...decoded.selectedModelIds],
+      modelMixBasisPoints: { ...decoded.modelMixBasisPoints },
     });
-    setWorkload(decoded.state.workload);
-    setMappingMode(decoded.state.mappingMode);
+    setWorkload(decoded.workload);
+    setMappingMode(decoded.mappingMode);
+    if (decoded.costUsage) setCostUsage(decoded.costUsage);
+    if (decodedBreakeven) {
+      const scenario = decodedBreakeven.state;
+      setBreakevenSettings({
+        seats: scenario.seats,
+        feePerSeat: scenario.feePerSeat,
+        maxTokensMillions: scenario.maxTokensMillions,
+        inputShare: scenario.inputShareBasisPoints / 10_000,
+        inputPricePerMillion: scenario.inputPricePerMillion,
+        outputPricePerMillion: scenario.outputPricePerMillion,
+        cacheReadBasisPoints: scenario.cacheReadBasisPoints,
+        cacheWriteTokens: scenario.cacheWriteTokens,
+        longContextTokens: scenario.longContextTokens,
+      });
+    }
 
-    if (decoded.wasNormalized) {
+    if (decodedBreakeven?.wasNormalized) {
+      window.history.replaceState(window.history.state, '', `${ROUTE_PATHS.breakeven}?${encodeBreakevenShareState(decodedBreakeven.state)}${window.location.hash}`);
+    } else if (mode !== 'breakeven' && decodeCalculatorShareState(params, catalog)?.wasNormalized) {
       window.history.replaceState(
         window.history.state,
         '',
-        `${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(decoded.state)}${window.location.hash}`,
+        `${ROUTE_PATHS.calculator}?${encodeCalculatorShareState(decoded)}${window.location.hash}`,
       );
     }
   }, [catalog, phase]);
@@ -196,10 +257,11 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
     selectedModelIds: selection.selectedModelIds,
     modelMixBasisPoints: selection.modelMixBasisPoints,
     workload,
+    costUsage,
     mappingMode,
     selectedPlan,
     catalogFreshness: catalog?.freshness,
-  }), [catalog?.freshness, mappingMode, providerModels, selectedPlan, selection.modelMixBasisPoints, selection.selectedModelIds, workload]);
+  }), [catalog?.freshness, costUsage, mappingMode, providerModels, selectedPlan, selection.modelMixBasisPoints, selection.selectedModelIds, workload]);
   const recommendation = recommendationForResult(selectedPlan, snapshot);
   const canShare = selectedProviderId.length > 0
     && selection.selectedModelIds.length > 0
@@ -211,6 +273,18 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
     selectedModelIds: selection.selectedModelIds,
     modelMixBasisPoints: selection.modelMixBasisPoints,
     mappingMode,
+  };
+  const breakevenShareState = {
+    calculator: shareState,
+    seats: breakevenSettings.seats,
+    feePerSeat: breakevenSettings.feePerSeat,
+    maxTokensMillions: breakevenSettings.maxTokensMillions,
+    inputShareBasisPoints: Math.round((breakevenSettings.inputShare ?? 0.5) * 10_000),
+    inputPricePerMillion: breakevenSettings.inputPricePerMillion,
+    outputPricePerMillion: breakevenSettings.outputPricePerMillion,
+    cacheReadBasisPoints: breakevenSettings.cacheReadBasisPoints,
+    cacheWriteTokens: breakevenSettings.cacheWriteTokens,
+    longContextTokens: breakevenSettings.longContextTokens,
   };
 
   const handleProviderChange = (providerId: string) => {
@@ -278,11 +352,13 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
               selectedModelIds={selection.selectedModelIds}
               modelMixBasisPoints={selection.modelMixBasisPoints}
               workload={workload}
+              costUsage={costUsage}
               onProviderChange={handleProviderChange}
               onPlanChange={handlePlanChange}
               onModelToggle={handleModelToggle}
               onModelShareChange={handleModelShareChange}
               onWorkloadChange={setWorkload}
+              onCostUsageChange={setCostUsage}
               onMappingModeChange={setMappingMode}
             />
             <div className="calculator-guided-results">
@@ -290,11 +366,14 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
                  ? <BreakevenDashboard
                    snapshot={snapshot}
                    hasAvailableModels={providerModels.length > 0}
-                   {...breakevenSettings}
-                   onScenarioChange={setBreakevenSettings}
+                   seats={breakevenSettings.seats}
+                   feePerSeat={breakevenSettings.feePerSeat}
+                   maxTokensMillions={breakevenSettings.maxTokensMillions}
+                   scenarioOverride={breakevenSettings}
+                   onScenarioChange={(next) => setBreakevenSettings((current) => ({ ...current, ...next }))}
                  />
                  : <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} hasAvailableModels={providerModels.length > 0} catalog={catalog} />}
-                {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" url={`${location.origin}${mode === 'breakeven' ? ROUTE_PATHS.breakeven : ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
+                {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" url={`${location.origin}${mode === 'breakeven' ? ROUTE_PATHS.breakeven : ROUTE_PATHS.calculator}?${mode === 'breakeven' ? encodeBreakevenShareState(breakevenShareState) : encodeCalculatorShareState(shareState)}`} onShared={() => trackTokenBenchEvent(mode === 'breakeven' ? 'breakeven_share_created' : 'cost_share_created', { route: mode === 'breakeven' ? ROUTE_PATHS.breakeven : ROUTE_PATHS.calculator })} /> : null}
             </div>
           </div>
           <Comparison catalog={catalog} selectedProviderId={selectedProviderId} selectedModelIds={selection.selectedModelIds} selectedPlanId={selectedPlanId} workload={workload} modelMixBasisPoints={selection.modelMixBasisPoints} />
@@ -437,14 +516,14 @@ export function ModelProfileApp({ viewModel }: { readonly viewModel: ModelProfil
   return <CompareProvider><PageFrame activePage="models"><ModelProfilePage viewModel={viewModel} /></PageFrame></CompareProvider>;
 }
 
-function RoutedApp() {
+function RoutedApp({ initialCostState }: { readonly initialCostState?: CostInitialState }) {
   const route = matchRoute(window.location.pathname);
 
   if (route.kind === 'home') return <HomeRoute />;
   if (route.kind === 'cost') return <CostHubRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
-  if (route.kind === 'calculator') return <CalculatorPage />;
-  if (route.kind === 'breakeven') return <CalculatorPage mode="breakeven" />;
+  if (route.kind === 'calculator') return <CalculatorPage initialCostState={initialCostState?.mode === 'calculator' ? initialCostState : undefined} />;
+  if (route.kind === 'breakeven') return <CalculatorPage mode="breakeven" initialCostState={initialCostState?.mode === 'breakeven' ? initialCostState : undefined} />;
   if (route.kind === 'pricePerformance') return <PricePerformanceRoute />;
   if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;
@@ -463,6 +542,6 @@ function RoutedApp() {
   return <PageFrame><NotFoundPage /></PageFrame>;
 }
 
-export default function App() {
-  return <CompareProvider><RoutedApp /></CompareProvider>;
+export default function App({ initialCostState }: { readonly initialCostState?: CostInitialState } = {}) {
+  return <CompareProvider><RoutedApp initialCostState={initialCostState} /></CompareProvider>;
 }

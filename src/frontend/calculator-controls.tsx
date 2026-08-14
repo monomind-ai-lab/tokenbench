@@ -1,12 +1,13 @@
 import { Boxes, CircleCheck, CreditCard, GitBranch, SlidersHorizontal } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
 import { UI_COPY } from '../data/mockData';
-import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints } from './calculator-state';
+import { basisLabel, entitlementLabel, formatCurrencyMicroDollars, formatPercentBasisPoints, resolveMonthlyTokenEstimate, type CalculatorCostUsage } from './calculator-state';
 import type { ConversationWorkload } from '../catalog/subscription-api-calculator';
 import { isApiOnlyProvider, paidIndividualPlans } from './plan-filter';
 import type { CalculatorControlsProps } from './types';
 import { EmptyState, providerLabel } from './ui';
 import { ModelMark, ProviderMark } from './provider-mark';
+import { trackTokenBenchEvent } from './analytics';
 
 function inputId(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '-');
@@ -41,9 +42,10 @@ interface NumberFieldProps {
   readonly min: number;
   readonly max: number;
   readonly onChange: (value: number) => void;
+  readonly onInvalid?: () => void;
 }
 
-function NumberField({ id, label, value, min, max, onChange }: NumberFieldProps) {
+function NumberField({ id, label, value, min, max, onChange, onInvalid }: NumberFieldProps) {
   return (
     <div className="workload-field">
       <label htmlFor={id}>{label}</label>
@@ -59,6 +61,7 @@ function NumberField({ id, label, value, min, max, onChange }: NumberFieldProps)
         onChange={(event) => {
           const parsed = Number(event.target.value);
           if (Number.isSafeInteger(parsed)) onChange(Math.min(max, Math.max(min, parsed)));
+          else onInvalid?.();
         }}
       />
     </div>
@@ -126,18 +129,29 @@ export function CalculatorControls({
   selectedModelIds,
   modelMixBasisPoints,
   workload,
+  costUsage = { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
   onProviderChange,
   onPlanChange,
   onModelToggle,
   onModelShareChange,
   onWorkloadChange,
+  onCostUsageChange,
   onMappingModeChange,
 }: CalculatorControlsProps) {
   const plans = paidIndividualPlans(catalog.plans, selectedProviderId);
   const models = catalog.modelOffers.filter((model) => model.providerId === selectedProviderId);
   const selectedModels = models.filter((model) => selectedModelIds.includes(model.id));
 
-  const changeWorkload = (key: keyof ConversationWorkload, value: number) => onWorkloadChange(updateWorkload(workload, key, value));
+  const changeWorkload = (key: keyof ConversationWorkload, value: number) => {
+    trackTokenBenchEvent('cost_input_changed', { field: 'workload', route: '/cost/calculator/' });
+    onWorkloadChange(updateWorkload(workload, key, value));
+  };
+  const changeCostUsage = (patch: Partial<CalculatorCostUsage>) => {
+    trackTokenBenchEvent('cost_input_changed', { field: patch.characterCount !== undefined || patch.charactersPerToken !== undefined || patch.manualMonthlyTokens !== undefined ? 'estimate' : 'cache', route: '/cost/calculator/' });
+    onCostUsageChange?.({ ...costUsage, ...patch });
+  };
+  const tokenEstimate = resolveMonthlyTokenEstimate(costUsage);
+  const reportInvalid = () => trackTokenBenchEvent('cost_validation_failed', { reason: 'invalid', route: '/cost/calculator/' });
 
   return (
     <section className="controls-panel" aria-label="Calculator controls">
@@ -199,13 +213,27 @@ export function CalculatorControls({
         <fieldset className="control-block usage-block" aria-describedby="usage-help">
           <legend><span className="control-legend"><SlidersHorizontal size={18} aria-hidden="true" />{UI_COPY.workloadUsage}</span></legend>
           <div className="workload-input-grid">
-            <NumberField id="conversations-per-day" label="Conversations per day" value={workload.conversationsPerDay} min={0} max={10_000} onChange={(value) => changeWorkload('conversationsPerDay', value)} />
-            <NumberField id="messages-per-conversation" label="Messages per conversation" value={workload.messagesPerConversation} min={0} max={1_000} onChange={(value) => changeWorkload('messagesPerConversation', value)} />
-            <NumberField id="input-tokens-per-message" label="Average input tokens per message" value={workload.inputTokensPerMessage} min={0} max={1_000_000} onChange={(value) => changeWorkload('inputTokensPerMessage', value)} />
-            <NumberField id="output-tokens-per-message" label="Average output tokens per message" value={workload.outputTokensPerMessage} min={0} max={1_000_000} onChange={(value) => changeWorkload('outputTokensPerMessage', value)} />
-            <NumberField id="active-days-per-month" label="Active days per month" value={workload.activeDaysPerMonth} min={0} max={31} onChange={(value) => changeWorkload('activeDaysPerMonth', value)} />
+            <NumberField id="conversations-per-day" label="Conversations per day" value={workload.conversationsPerDay} min={0} max={10_000} onChange={(value) => changeWorkload('conversationsPerDay', value)} onInvalid={reportInvalid} />
+            <NumberField id="messages-per-conversation" label="Messages per conversation" value={workload.messagesPerConversation} min={0} max={1_000} onChange={(value) => changeWorkload('messagesPerConversation', value)} onInvalid={reportInvalid} />
+            <NumberField id="input-tokens-per-message" label="Average input tokens per message" value={workload.inputTokensPerMessage} min={0} max={1_000_000} onChange={(value) => changeWorkload('inputTokensPerMessage', value)} onInvalid={reportInvalid} />
+            <NumberField id="output-tokens-per-message" label="Average output tokens per message" value={workload.outputTokensPerMessage} min={0} max={1_000_000} onChange={(value) => changeWorkload('outputTokensPerMessage', value)} onInvalid={reportInvalid} />
+            <NumberField id="active-days-per-month" label="Active days per month" value={workload.activeDaysPerMonth} min={0} max={31} onChange={(value) => changeWorkload('activeDaysPerMonth', value)} onInvalid={reportInvalid} />
           </div>
           <p id="usage-help" className="field-help">Zero usage and zero active days are valid. Efficiency and breakeven are shown only when their arithmetic denominator is positive.</p>
+          <section className="cost-dimension-controls" aria-labelledby="cost-dimension-heading">
+            <h3 id="cost-dimension-heading">Cache, long-context, and token estimate</h3>
+            <p className="field-help">Cache-read, cache-write, and long-context quantities are applied only when their selected route publishes that price dimension. Missing dimensions remain excluded.</p>
+            <div className="workload-input-grid">
+              <NumberField id="character-count" label="Text or code characters per month" value={costUsage.characterCount} min={0} max={1_000_000_000} onChange={(value) => changeCostUsage({ characterCount: value })} />
+              <NumberField id="characters-per-token" label="Characters per token estimate" value={costUsage.charactersPerToken} min={1} max={32} onChange={(value) => changeCostUsage({ charactersPerToken: value })} />
+              <NumberField id="manual-monthly-tokens" label="Manual monthly token override" value={costUsage.manualMonthlyTokens ?? 0} min={0} max={1_000_000_000} onChange={(value) => changeCostUsage({ manualMonthlyTokens: value })} />
+              <NumberField id="cache-read-share" label="Cached-input share (basis points)" value={costUsage.cacheReadBasisPoints} min={0} max={10_000} onChange={(value) => changeCostUsage({ cacheReadBasisPoints: value })} />
+              <NumberField id="cache-write-tokens" label="Cache-write tokens per month" value={costUsage.cacheWriteTokens} min={0} max={1_000_000_000} onChange={(value) => changeCostUsage({ cacheWriteTokens: value })} />
+              <NumberField id="long-context-tokens" label="Long-context tokens per month" value={costUsage.longContextTokens} min={0} max={1_000_000_000} onChange={(value) => changeCostUsage({ longContextTokens: value })} />
+            </div>
+            <p className="field-help">{tokenEstimate.source === 'manual' ? `Manual override: ${tokenEstimate.tokens.toLocaleString()} tokens/month.` : `Estimated at ${costUsage.charactersPerToken} characters per token: ${tokenEstimate.tokens.toLocaleString()} tokens/month.`}</p>
+            <button className="button button-secondary button-small" type="button" onClick={() => changeCostUsage({ manualMonthlyTokens: null })}>Reset manual token override</button>
+          </section>
         </fieldset>
       </section>
     </section>

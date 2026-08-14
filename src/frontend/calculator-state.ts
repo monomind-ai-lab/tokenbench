@@ -44,17 +44,6 @@ export interface ChartPoint {
   readonly valueMicroDollars: number;
 }
 
-export interface BreakevenSeriesPoint {
-  readonly tokens: number;
-  readonly apiCostMicroDollars: number;
-  readonly planFeeMicroDollars: number;
-  readonly differenceMicroDollars: number;
-}
-
-export type BreakevenSeries =
-  | { readonly status: 'available'; readonly points: BreakevenSeriesPoint[] }
-  | { readonly status: 'unavailable'; readonly reason: string; readonly points: [] };
-
 export interface CapacityEvidenceResult {
   readonly status: 'verified-covered' | 'verified-not-covered' | 'projected' | 'not-verified';
   readonly explanation: string;
@@ -68,6 +57,7 @@ export interface ApiMappingDisclosure {
 
 export interface CalculatorSnapshot {
   readonly workload: ConversationWorkload;
+  readonly costUsage: CalculatorCostUsage;
   readonly derivedWorkload: DerivedConversationWorkload;
   readonly selectedOffers: ModelOffer[];
   readonly mixEntries: ModelMixEntry[];
@@ -86,6 +76,8 @@ export interface CalculatorSnapshot {
   readonly breakEvenTokens: number | null;
   readonly maximumPlanValueMicroDollars: number | null;
   readonly monthlyTokens: number;
+  /** Only a separately verified fixed-token entitlement can populate this. */
+  readonly publishedCapacityTokens: number | null;
   readonly chartPoints: ChartPoint[];
 }
 
@@ -95,6 +87,45 @@ export interface CalculatorEvidenceLineItem {
   readonly valueMicroDollars: number | null;
   readonly priceEffectiveAt: string | null;
   readonly assumption: string | null;
+}
+
+export interface MonthlyTokenEstimate {
+  readonly tokens: number;
+  readonly source: 'estimate' | 'manual';
+}
+
+export interface CalculatorCostUsage {
+  readonly characterCount: number;
+  readonly charactersPerToken: number;
+  readonly manualMonthlyTokens: number | null;
+  readonly cacheReadBasisPoints: number;
+  readonly cacheWriteTokens: number;
+  readonly longContextTokens: number;
+}
+
+const DEFAULT_COST_USAGE: CalculatorCostUsage = {
+  characterCount: 0,
+  charactersPerToken: 4,
+  manualMonthlyTokens: null,
+  cacheReadBasisPoints: 0,
+  cacheWriteTokens: 0,
+  longContextTokens: 0,
+};
+
+/** Manual input wins until it is explicitly reset; the character factor stays disclosed. */
+export function resolveMonthlyTokenEstimate({
+  characterCount,
+  charactersPerToken,
+  manualMonthlyTokens,
+}: {
+  readonly characterCount: number;
+  readonly charactersPerToken: number;
+  readonly manualMonthlyTokens: number | null;
+}): MonthlyTokenEstimate {
+  if (Number.isSafeInteger(manualMonthlyTokens) && manualMonthlyTokens >= 0) return { tokens: manualMonthlyTokens, source: 'manual' };
+  const safeCharacters = Number.isFinite(characterCount) && characterCount >= 0 ? characterCount : 0;
+  const safeFactor = Number.isFinite(charactersPerToken) && charactersPerToken > 0 ? charactersPerToken : 4;
+  return { tokens: Math.floor(safeCharacters / safeFactor), source: 'estimate' };
 }
 
 type ModelPricingBasis = ModelOffer['pricingBasis'];
@@ -239,6 +270,7 @@ export function buildCalculatorSnapshot({
   monthlyTokens,
   catalogFreshness,
   calculationTimestamp,
+  costUsage,
 }: {
   modelOffers: ModelOffer[];
   selectedModelIds: string[];
@@ -250,7 +282,9 @@ export function buildCalculatorSnapshot({
   monthlyTokens?: number;
   catalogFreshness?: CatalogFreshness;
   calculationTimestamp?: string;
+  costUsage?: CalculatorCostUsage;
 }): CalculatorSnapshot {
+  const resolvedCostUsage = costUsage ?? DEFAULT_COST_USAGE;
   const snapshotWorkload = workload ?? legacyWorkload(inputShareBasisPoints ?? 5_000, monthlyTokens ?? 10_000_000);
   const derivedWorkload = deriveConversationWorkload(snapshotWorkload);
   const selectedOffers = selectedModelIds
@@ -289,9 +323,14 @@ export function buildCalculatorSnapshot({
     tokens: Math.round(totalMonthlyTokens * multiplier),
     valueMicroDollars: Math.round(apiEquivalentValueMicroDollars * multiplier),
   }));
+  const publishedCapacityTokens = selectedPlan?.entitlement.kind === 'fixed_tokens'
+    && selectedPlan.entitlementEvidence.status === 'verified'
+    ? selectedPlan.entitlement.monthlyTokens
+    : null;
 
   return {
     workload: snapshotWorkload,
+    costUsage: resolvedCostUsage,
     derivedWorkload,
     selectedOffers,
     mixEntries: selectedMixEntries,
@@ -310,40 +349,8 @@ export function buildCalculatorSnapshot({
     breakEvenTokens,
     maximumPlanValueMicroDollars: null,
     monthlyTokens: totalMonthlyTokens,
+    publishedCapacityTokens,
     chartPoints,
-  };
-}
-
-export function buildBreakevenSeries(snapshot: CalculatorSnapshot): BreakevenSeries {
-  if (!snapshot.selectedOffers.length) return { status: 'unavailable', reason: 'Select a model with published API pricing.', points: [] };
-  if (!snapshot.apiEquivalentCost) return { status: 'unavailable', reason: 'The selected model mix does not provide complete published API pricing.', points: [] };
-  if (snapshot.monthlyTokens <= 0) return { status: 'unavailable', reason: 'A positive workload is required before calculating breakeven.', points: [] };
-  if (!snapshot.comparison) return { status: 'unavailable', reason: 'Select a paid individual plan with a published monthly fee.', points: [] };
-  if (snapshot.capacityEvidence.status !== 'verified-covered' && snapshot.capacityEvidence.status !== 'verified-not-covered') {
-    return { status: 'unavailable', reason: snapshot.capacityEvidence.explanation, points: [] };
-  }
-  if (snapshot.breakEvenTokens === null) return { status: 'unavailable', reason: 'The selected plan does not publish verified fixed-token capacity.', points: [] };
-  if (snapshot.apiEquivalentCost.apiCostMicroDollars <= 0) {
-    return { status: 'unavailable', reason: 'Published API pricing does not provide a positive denominator for breakeven.', points: [] };
-  }
-  const planFeeMicroDollars = snapshot.comparison.apiCostMicroDollars - snapshot.comparison.differenceMicroDollars;
-  const breakeven = snapshot.breakEvenTokens;
-  const tokenVolumes = [0, Math.floor(breakeven / 2), breakeven, Math.ceil(breakeven * 1.5), breakeven * 2];
-  const costAtTokens = (tokens: number) => Number(
-    (BigInt(snapshot.apiEquivalentCost!.apiCostMicroDollars) * BigInt(tokens) + BigInt(snapshot.monthlyTokens / 2))
-      / BigInt(snapshot.monthlyTokens),
-  );
-  return {
-    status: 'available',
-    points: tokenVolumes.map((tokens) => {
-      const apiCostMicroDollars = costAtTokens(tokens);
-      return {
-        tokens,
-        apiCostMicroDollars,
-        planFeeMicroDollars,
-        differenceMicroDollars: apiCostMicroDollars - planFeeMicroDollars,
-      };
-    }),
   };
 }
 
@@ -411,13 +418,60 @@ export function buildCalculatorEvidenceLineItems(
       priceEffectiveAt,
       assumption: null,
     },
+    ...(typeof offer.cachedInputMicroDollarsPerMillion === 'number' ? [{
+      kind: 'source_price' as const,
+      label: 'Published cached-input price',
+      valueMicroDollars: offer.cachedInputMicroDollarsPerMillion,
+      priceEffectiveAt,
+      assumption: null,
+    }] : []),
+    ...(typeof offer.cacheWriteMicroDollarsPerMillion === 'number' ? [{
+      kind: 'source_price' as const,
+      label: 'Published cache-write price',
+      valueMicroDollars: offer.cacheWriteMicroDollarsPerMillion,
+      priceEffectiveAt,
+      assumption: null,
+    }] : []),
+    ...(typeof offer.longContextInputMicroDollarsPerMillion === 'number' && typeof offer.longContextOutputMicroDollarsPerMillion === 'number' ? [
+      {
+        kind: 'source_price' as const,
+        label: 'Published long-context input price',
+        valueMicroDollars: offer.longContextInputMicroDollarsPerMillion,
+        priceEffectiveAt,
+        assumption: null,
+      },
+      {
+        kind: 'source_price' as const,
+        label: 'Published long-context output price',
+        valueMicroDollars: offer.longContextOutputMicroDollarsPerMillion,
+        priceEffectiveAt,
+        assumption: null,
+      },
+    ] : []),
   ];
+  const cachedInputTokens = offer === null
+    ? 0
+    : Math.floor(snapshot.derivedWorkload.monthlyInputTokens * snapshot.costUsage.cacheReadBasisPoints / 10_000);
+  const uncachedInputTokens = Math.max(0, snapshot.derivedWorkload.monthlyInputTokens - cachedInputTokens);
   const inputCost = offer === null
     ? null
-    : Math.round((snapshot.derivedWorkload.monthlyInputTokens / 1_000_000) * offer.inputMicroDollarsPerMillion);
+    : Math.round((uncachedInputTokens / 1_000_000) * offer.inputMicroDollarsPerMillion);
   const outputCost = offer === null
     ? null
     : Math.round((snapshot.derivedWorkload.monthlyOutputTokens / 1_000_000) * offer.outputMicroDollarsPerMillion);
+  const cachedInputCost = offer?.cachedInputMicroDollarsPerMillion === undefined
+    ? null
+    : Math.round((cachedInputTokens / 1_000_000) * offer.cachedInputMicroDollarsPerMillion);
+  const cacheWriteCost = offer?.cacheWriteMicroDollarsPerMillion === undefined
+    ? null
+    : Math.round((snapshot.costUsage.cacheWriteTokens / 1_000_000) * offer.cacheWriteMicroDollarsPerMillion);
+  const totalWorkloadTokens = Math.max(1, snapshot.derivedWorkload.monthlyInputTokens + snapshot.derivedWorkload.monthlyOutputTokens);
+  const longContextInputCost = offer?.longContextInputMicroDollarsPerMillion === undefined || offer?.longContextOutputMicroDollarsPerMillion === undefined
+    ? null
+    : Math.round((snapshot.costUsage.longContextTokens * snapshot.derivedWorkload.monthlyInputTokens / totalWorkloadTokens / 1_000_000) * offer.longContextInputMicroDollarsPerMillion);
+  const longContextOutputCost = offer?.longContextInputMicroDollarsPerMillion === undefined || offer?.longContextOutputMicroDollarsPerMillion === undefined
+    ? null
+    : Math.round((snapshot.costUsage.longContextTokens * snapshot.derivedWorkload.monthlyOutputTokens / totalWorkloadTokens / 1_000_000) * offer.longContextOutputMicroDollarsPerMillion);
   return [
     ...sourceItems,
     {
@@ -427,6 +481,36 @@ export function buildCalculatorEvidenceLineItems(
       priceEffectiveAt,
       assumption: 'Monthly input tokens × published input price per million tokens.',
     },
+    ...(cachedInputCost === null ? [] : [{
+      kind: 'derived_cost' as const,
+      label: 'Scenario cached-input cost',
+      valueMicroDollars: cachedInputCost,
+      priceEffectiveAt,
+      assumption: 'Configured cached-input tokens × published cached-input price per million tokens.',
+    }]),
+    ...(cacheWriteCost === null ? [] : [{
+      kind: 'derived_cost' as const,
+      label: 'Scenario cache-write cost',
+      valueMicroDollars: cacheWriteCost,
+      priceEffectiveAt,
+      assumption: 'Configured cache-write tokens × published cache-write price per million tokens.',
+    }]),
+    ...(longContextInputCost === null || longContextOutputCost === null ? [] : [
+      {
+        kind: 'derived_cost' as const,
+        label: 'Scenario long-context input cost',
+        valueMicroDollars: longContextInputCost,
+        priceEffectiveAt,
+        assumption: 'Configured long-context tokens are split by the workload input/output mix and priced by the published long-context tier.',
+      },
+      {
+        kind: 'derived_cost' as const,
+        label: 'Scenario long-context output cost',
+        valueMicroDollars: longContextOutputCost,
+        priceEffectiveAt,
+        assumption: 'Configured long-context tokens are split by the workload input/output mix and priced by the published long-context tier.',
+      },
+    ]),
     {
       kind: 'derived_cost',
       label: 'Scenario output cost',
@@ -441,6 +525,27 @@ export function buildCalculatorEvidenceLineItems(
       priceEffectiveAt,
       assumption: 'Published input and output price dimensions are applied independently; missing price dimensions are not zero.',
     },
+    ...(offer?.cachedInputMicroDollarsPerMillion === undefined ? [{
+      kind: 'assumption' as const,
+      label: 'Cached-input price',
+      valueMicroDollars: null,
+      priceEffectiveAt,
+      assumption: 'Cached-input price is unavailable and excluded from the scenario; it is not treated as zero.',
+    }] : []),
+    ...(offer?.cacheWriteMicroDollarsPerMillion === undefined ? [{
+      kind: 'assumption' as const,
+      label: 'Cache-write price',
+      valueMicroDollars: null,
+      priceEffectiveAt,
+      assumption: 'Cache-write price is unavailable and excluded from the scenario; it is not treated as zero.',
+    }] : []),
+    ...(offer?.longContextInputMicroDollarsPerMillion === undefined || offer?.longContextOutputMicroDollarsPerMillion === undefined ? [{
+      kind: 'assumption' as const,
+      label: 'Long-context tier',
+      valueMicroDollars: null,
+      priceEffectiveAt,
+      assumption: 'Long-context tier price is unavailable and excluded from the scenario; it is not treated as zero.',
+    }] : []),
   ];
 }
 

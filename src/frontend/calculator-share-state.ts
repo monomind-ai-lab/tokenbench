@@ -3,9 +3,13 @@ import type { CatalogResponse } from '../catalog/contracts';
 import { defaultApiEquivalentForPlan } from '../catalog/plan-api-equivalent';
 import type { ConversationWorkload } from '../catalog/subscription-api-calculator';
 import { isPaidIndividualPlan } from './plan-filter';
+import type { CalculatorCostUsage } from './calculator-state';
 
+const SHARE_VERSION = '2';
 const SHARE_KEYS = ['c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan'] as const;
+const BREAKEVEN_KEYS = ['mode', 'seats', 'fee', 'volume', 'input_share', 'input_price', 'output_price', 'be_cache_read', 'be_cache_write', 'be_long_context'] as const;
 const LEGACY_KEYS = ['input', 'tokens'] as const;
+const COST_USAGE_KEYS = ['chars', 'factor', 'manual', 'cache_read', 'cache_write', 'long_context'] as const;
 type ShareKey = (typeof SHARE_KEYS)[number];
 
 export interface CalculatorShareState {
@@ -15,10 +19,34 @@ export interface CalculatorShareState {
   readonly selectedModelIds: readonly string[];
   readonly modelMixBasisPoints: Readonly<Record<string, number>>;
   readonly mappingMode: 'default' | 'override';
+  readonly costUsage?: CalculatorCostUsage;
 }
 
 export interface DecodedCalculatorShareState {
   readonly state: CalculatorShareState;
+  readonly wasNormalized: boolean;
+}
+
+/**
+ * A bounded, non-sensitive result state. Numeric scenario inputs are accepted
+ * only inside the same UI limits as the controls; free text and arbitrary URLs
+ * are never part of a share link.
+ */
+export interface BreakevenShareState {
+  readonly calculator: CalculatorShareState;
+  readonly seats: number;
+  readonly feePerSeat: number;
+  readonly maxTokensMillions: number;
+  readonly inputShareBasisPoints: number;
+  readonly inputPricePerMillion: number | null;
+  readonly outputPricePerMillion: number | null;
+  readonly cacheReadBasisPoints: number;
+  readonly cacheWriteTokens: number;
+  readonly longContextTokens: number;
+}
+
+export interface DecodedBreakevenShareState {
+  readonly state: BreakevenShareState;
   readonly wasNormalized: boolean;
 }
 
@@ -31,6 +59,12 @@ function parseInteger(value: string, minimum: number, maximum: number): number |
   if (!/^(?:0|[1-9]\d*)$/u.test(value)) return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
+function parseDecimal(value: string, minimum: number, maximum: number): number | null {
+  if (!/^(?:0|[1-9]\d*)(?:\.\d{1,6})?$/u.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
 }
 
 function parseList(value: string): string[] | null {
@@ -94,6 +128,7 @@ function inferredMappingMode(
 
 export function encodeCalculatorShareState(state: CalculatorShareState): URLSearchParams {
   const params = new URLSearchParams();
+  params.set('v', SHARE_VERSION);
   params.set('c', String(state.workload.conversationsPerDay));
   params.set('m', String(state.workload.messagesPerConversation));
   params.set('i', String(state.workload.inputTokensPerMessage));
@@ -103,10 +138,20 @@ export function encodeCalculatorShareState(state: CalculatorShareState): URLSear
   params.set('weights', state.selectedModelIds.map((id) => state.modelMixBasisPoints[id]).join(','));
   params.set('provider', state.providerId);
   params.set('plan', state.planId);
+  if (state.costUsage) {
+    params.set('chars', String(state.costUsage.characterCount));
+    params.set('factor', String(state.costUsage.charactersPerToken));
+    params.set('manual', state.costUsage.manualMonthlyTokens === null ? 'none' : String(state.costUsage.manualMonthlyTokens));
+    params.set('cache_read', String(state.costUsage.cacheReadBasisPoints));
+    params.set('cache_write', String(state.costUsage.cacheWriteTokens));
+    params.set('long_context', String(state.costUsage.longContextTokens));
+  }
   return params;
 }
 
 export function decodeCalculatorShareState(params: URLSearchParams, catalog: CatalogResponse): DecodedCalculatorShareState | null {
+  const version = readSingleStateValue(params, 'v');
+  if (params.has('v') && version !== SHARE_VERSION) return null;
   const values = SHARE_KEYS.map((key) => readSingleStateValue(params, key));
   const [encodedConversations, encodedMessages, encodedInputTokens, encodedOutputTokens, encodedDays, encodedModelIds, encodedWeights, providerId, planId] = values;
   if (providerId === null || planId === null || encodedModelIds === null || encodedWeights === null) return null;
@@ -167,6 +212,21 @@ export function decodeCalculatorShareState(params: URLSearchParams, catalog: Cat
     || normalizedModelIds.some((id, index) => id !== selectedModelIds[index])
     || normalizedModelIds.some((id, index) => modelMixBasisPoints[id] !== weights[index]);
   const mappingMode = inferredMappingMode(providerId, normalizedPlanId, normalizedModelIds, modelMixBasisPoints, catalog);
+  const costValues = Object.fromEntries(COST_USAGE_KEYS.map((key) => [key, readSingleStateValue(params, key)]));
+  const hasCostUsage = COST_USAGE_KEYS.some((key) => params.has(key));
+  let costUsage: CalculatorCostUsage | undefined;
+  if (hasCostUsage) {
+    if (costValues.chars === null || costValues.factor === null || costValues.manual === null || costValues.cache_read === null || costValues.cache_write === null || costValues.long_context === null) return null;
+    const characterCount = parseInteger(costValues.chars, 0, 1_000_000_000);
+    const charactersPerToken = parseInteger(costValues.factor, 1, 32);
+    const manualMonthlyTokens = costValues.manual === 'none' ? null : parseInteger(costValues.manual, 0, 1_000_000_000);
+    const cacheReadBasisPoints = parseInteger(costValues.cache_read, 0, 10_000);
+    const cacheWriteTokens = parseInteger(costValues.cache_write, 0, 1_000_000_000);
+    const longContextTokens = parseInteger(costValues.long_context, 0, 1_000_000_000);
+    if (characterCount === null || charactersPerToken === null || manualMonthlyTokens === null && costValues.manual !== 'none'
+      || cacheReadBasisPoints === null || cacheWriteTokens === null || longContextTokens === null) return null;
+    costUsage = { characterCount, charactersPerToken, manualMonthlyTokens, cacheReadBasisPoints, cacheWriteTokens, longContextTokens };
+  }
 
   return {
     state: {
@@ -176,7 +236,60 @@ export function decodeCalculatorShareState(params: URLSearchParams, catalog: Cat
       selectedModelIds: normalizedModelIds,
       modelMixBasisPoints,
       mappingMode,
+      ...(costUsage ? { costUsage } : {}),
     },
-    wasNormalized: hasLegacy || normalizedPlanId !== planId || modelsChanged,
+    wasNormalized: version !== SHARE_VERSION || hasLegacy || normalizedPlanId !== planId || modelsChanged,
+  };
+}
+
+export function encodeBreakevenShareState(state: BreakevenShareState): URLSearchParams {
+  const params = encodeCalculatorShareState(state.calculator);
+  params.set('mode', 'breakeven');
+  params.set('seats', String(state.seats));
+  params.set('fee', String(state.feePerSeat));
+  params.set('volume', String(state.maxTokensMillions));
+  params.set('input_share', String(state.inputShareBasisPoints));
+  if (state.inputPricePerMillion !== null) params.set('input_price', String(state.inputPricePerMillion));
+  if (state.outputPricePerMillion !== null) params.set('output_price', String(state.outputPricePerMillion));
+  params.set('be_cache_read', String(state.cacheReadBasisPoints));
+  params.set('be_cache_write', String(state.cacheWriteTokens));
+  params.set('be_long_context', String(state.longContextTokens));
+  return params;
+}
+
+/** Decodes only the allowlisted bounded state produced by encodeBreakevenShareState. */
+export function decodeBreakevenShareState(params: URLSearchParams, catalog: CatalogResponse): DecodedBreakevenShareState | null {
+  const calculator = decodeCalculatorShareState(params, catalog);
+  if (!calculator || readSingleStateValue(params, 'mode') !== 'breakeven') return null;
+  const values = Object.fromEntries(BREAKEVEN_KEYS.map((key) => [key, readSingleStateValue(params, key)]));
+  if (values.seats === null || values.fee === null || values.volume === null || values.input_share === null
+    || values.be_cache_read === null || values.be_cache_write === null || values.be_long_context === null) return null;
+  const seats = parseInteger(values.seats, 1, 50);
+  const feePerSeat = parseDecimal(values.fee, 0, 100_000);
+  const maxTokensMillions = parseDecimal(values.volume, 0, 300);
+  const inputShareBasisPoints = parseInteger(values.input_share, 0, 10_000);
+  const cacheReadBasisPoints = parseInteger(values.be_cache_read, 0, 10_000);
+  const cacheWriteTokens = parseInteger(values.be_cache_write, 0, 1_000_000_000);
+  const longContextTokens = parseInteger(values.be_long_context, 0, 1_000_000_000);
+  const inputPricePerMillion = values.input_price === null ? null : parseDecimal(values.input_price, 0, 100_000);
+  const outputPricePerMillion = values.output_price === null ? null : parseDecimal(values.output_price, 0, 100_000);
+  if (seats === null || feePerSeat === null || maxTokensMillions === null || inputShareBasisPoints === null
+    || cacheReadBasisPoints === null || cacheWriteTokens === null || longContextTokens === null
+    || (values.input_price !== null && inputPricePerMillion === null)
+    || (values.output_price !== null && outputPricePerMillion === null)) return null;
+  return {
+    state: {
+      calculator: calculator.state,
+      seats,
+      feePerSeat,
+      maxTokensMillions,
+      inputShareBasisPoints,
+      inputPricePerMillion,
+      outputPricePerMillion,
+      cacheReadBasisPoints,
+      cacheWriteTokens,
+      longContextTokens,
+    },
+    wasNormalized: calculator.wasNormalized,
   };
 }

@@ -13,6 +13,7 @@ import { trackTokenBenchEvent } from './analytics';
 import { isPaidIndividualPlan } from './plan-filter';
 import type { ResultsDashboardProps } from './types';
 import { EmptyState } from './ui';
+import { EditorialCta } from './editorial-cta';
 
 interface TrendChartProps {
   readonly snapshot: CalculatorSnapshot;
@@ -200,6 +201,8 @@ export function ResultsDashboard({ selectedPlan, snapshot, hasAvailableModels, c
           </article>
         </div>
         <AuditLedger snapshot={snapshot} catalog={catalog} />
+        <button className="button button-secondary" type="button" onClick={() => trackTokenBenchEvent('cost_simulated', { route: '/cost/calculator/' })}>Update simulation</button>
+        <EditorialCta eligible route="/cost/calculator/" precedingAction="scenario" subjectId={snapshot.apiMapping.selectedOffers[0]?.id} />
       </>}
       {snapshot.monthlyTokens > 20_000_000 ? (
         <aside className="panel agency-routing-notice" role="status" aria-label="High-volume optimization guidance">

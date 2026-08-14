@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlanOffer } from '../catalog/contracts';
+import * as shareCodec from './calculator-share-state';
 import { decodeCalculatorShareState, encodeCalculatorShareState, type CalculatorShareState } from './calculator-share-state';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 
@@ -42,11 +43,69 @@ describe('calculator share state', () => {
   it('round trips every primary input and explicit weighted override', () => {
     const params = encodeCalculatorShareState(validState);
 
-    expect([...params.keys()]).toEqual(['c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan']);
+    expect([...params.keys()]).toEqual(['v', 'c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan']);
+    expect(params.get('v')).toBe('2');
     expect(params.get('c')).toBe('12');
     expect(params.get('models')).toBe(modelIds.join(','));
     expect(params.get('weights')).toBe('3334,3333,3333');
     expect(decodeCalculatorShareState(params, FRONTEND_TEST_CATALOG)).toEqual({ state: validState, wasNormalized: false });
+  });
+
+  it('round trips a versioned bounded breakeven scenario without exposing arbitrary query data', () => {
+    const codec = shareCodec as unknown as {
+      encodeBreakevenShareState: (state: {
+        calculator: CalculatorShareState;
+        seats: number;
+        feePerSeat: number;
+        maxTokensMillions: number;
+        inputShareBasisPoints: number;
+        inputPricePerMillion: number | null;
+        outputPricePerMillion: number | null;
+        cacheReadBasisPoints: number;
+        cacheWriteTokens: number;
+        longContextTokens: number;
+      }) => URLSearchParams;
+      decodeBreakevenShareState: (params: URLSearchParams, catalog: typeof FRONTEND_TEST_CATALOG) => unknown;
+    };
+    const scenario = {
+      calculator: validState,
+      seats: 10,
+      feePerSeat: 20,
+      maxTokensMillions: 300,
+      inputShareBasisPoints: 7500,
+      inputPricePerMillion: 0.27,
+      outputPricePerMillion: 1.1,
+      cacheReadBasisPoints: 1000,
+      cacheWriteTokens: 250000,
+      longContextTokens: 0,
+    } as const;
+
+    const params = codec.encodeBreakevenShareState(scenario);
+
+    expect(params.get('v')).toBe('2');
+    expect(params.get('mode')).toBe('breakeven');
+    expect(params.get('seats')).toBe('10');
+    expect(params.has('email')).toBe(false);
+    expect(codec.decodeBreakevenShareState(params, FRONTEND_TEST_CATALOG)).toEqual({ state: scenario, wasNormalized: false });
+  });
+
+  it('keeps supported cache, long-context, character estimate, and manual override inputs in a calculator v2 link', () => {
+    const calculator = {
+      ...validState,
+      costUsage: { characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: 8_500, cacheReadBasisPoints: 1_000, cacheWriteTokens: 250_000, longContextTokens: 0 },
+    } as unknown as CalculatorShareState;
+
+    const params = encodeCalculatorShareState(calculator);
+
+    expect(params.get('chars')).toBe('40000');
+    expect(params.get('factor')).toBe('4');
+    expect(params.get('manual')).toBe('8500');
+    expect(params.get('cache_read')).toBe('1000');
+    expect(params.get('cache_write')).toBe('250000');
+    expect(params.get('long_context')).toBe('0');
+    expect(decodeCalculatorShareState(params, FRONTEND_TEST_CATALOG)).toMatchObject({
+      state: { costUsage: { characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: 8_500, cacheReadBasisPoints: 1_000, cacheWriteTokens: 250_000, longContextTokens: 0 } },
+    });
   });
 
   it('ignores unrelated campaign parameters without changing a valid state', () => {

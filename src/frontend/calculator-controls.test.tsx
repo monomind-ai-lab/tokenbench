@@ -63,4 +63,41 @@ describe('calculator controls', () => {
     expect(screen.getByRole('group', { name: 'Model usage mix' })).toBeInTheDocument();
     expect(screen.getByText('100% total')).toBeInTheDocument();
   });
+
+  it('discloses character estimation and keeps a manual monthly-token override until reset', () => {
+    const onCostUsageChange = vi.fn();
+    renderControls({
+      costUsage: { characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
+      onCostUsageChange,
+    });
+
+    expect(screen.getByRole('spinbutton', { name: 'Text or code characters per month' })).toHaveValue(40_000);
+    expect(screen.getByText(/estimated at 4 characters per token/i)).toBeVisible();
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Manual monthly token override' }), { target: { value: '8500' } });
+    expect(onCostUsageChange).toHaveBeenCalledWith(expect.objectContaining({ manualMonthlyTokens: 8_500 }));
+    expect(screen.getByRole('button', { name: 'Reset manual token override' })).toBeInTheDocument();
+  });
+
+  it('emits one bounded cost input event at the field interaction point', () => {
+    const listener = vi.fn();
+    window.addEventListener('tokenbench:analytics', listener);
+    renderControls();
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Conversations per day' }), { target: { value: '12' } });
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect((listener.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ name: 'cost_input_changed', field: 'workload', route: '/cost/calculator/' });
+    window.removeEventListener('tokenbench:analytics', listener);
+  });
+
+  it('reports only a bounded validation reason when a numeric field is invalid', () => {
+    const listener = vi.fn();
+    window.addEventListener('tokenbench:analytics', listener);
+    renderControls();
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Conversations per day' }), { target: { value: '1.5' } });
+
+    expect((listener.mock.calls[0]?.[0] as CustomEvent).detail).toEqual({ name: 'cost_validation_failed', reason: 'invalid', route: '/cost/calculator/' });
+    window.removeEventListener('tokenbench:analytics', listener);
+  });
 });

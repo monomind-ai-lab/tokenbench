@@ -49,6 +49,7 @@ function calculatorPath({
   activeDaysPerMonth = 25,
 }: CalculatorPathOptions = {}) {
   const params = new URLSearchParams({
+    v: '2',
     c: String(conversationsPerDay),
     m: String(messagesPerConversation),
     i: String(inputTokensPerMessage),

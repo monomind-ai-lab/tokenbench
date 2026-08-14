@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
+import * as calculatorState from './calculator-state';
 import {
   buildCalculatorEvidenceLineItems,
   breakEvenTokensForMonthlyCost,
-  buildBreakevenSeries,
   buildCalculatorSnapshot,
   calculatorCsv,
   createEvenMix,
@@ -160,60 +160,45 @@ describe('frontend calculator state', () => {
     expect(snapshot.breakEvenTokens).toBeNull();
   });
 
-  it('derives the breakeven chart and exact table from one verified snapshot series', () => {
-    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
-    const snapshot = buildCalculatorSnapshot({
-      modelOffers: [directOffer],
-      selectedModelIds: [directOffer.id],
-      modelMixBasisPoints: { [directOffer.id]: 10_000 },
-      workload,
-      selectedPlan: { ...FRONTEND_TEST_CATALOG.plans[1], supportedModelIds: [directOffer.modelId] },
-    });
-
-    const series = buildBreakevenSeries(snapshot);
-    expect(series.status).toBe('available');
-    if (series.status !== 'available') throw new Error('Expected an available breakeven series');
-    expect(series.points).toHaveLength(5);
-    expect(series.points[2].tokens).toBe(snapshot.breakEvenTokens);
-    expect(series.points[0].tokens).toBe(0);
-    expect(series.points.every((point) => point.planFeeMicroDollars === series.points[0].planFeeMicroDollars)).toBe(true);
-  });
-
-  it('does not create a false crossover when the denominator or evidence is unavailable', () => {
-    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
-    const snapshot = buildCalculatorSnapshot({
-      modelOffers: [directOffer],
-      selectedModelIds: [directOffer.id],
-      modelMixBasisPoints: { [directOffer.id]: 10_000 },
-      workload: { ...workload, conversationsPerDay: 0 },
-      selectedPlan: { ...FRONTEND_TEST_CATALOG.plans[1], supportedModelIds: [directOffer.modelId] },
-    });
-
-    expect(buildBreakevenSeries(snapshot)).toEqual({
-      status: 'unavailable',
-      reason: expect.stringMatching(/positive workload/i),
-      points: [],
-    });
-  });
-
-  it('keeps variable plan capacity unavailable instead of graphing an invented crossover', () => {
-    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
-    const variablePlan = {
-      ...FRONTEND_TEST_CATALOG.plans[0],
-      supportedModelIds: [directOffer.modelId],
+  it('keeps cache and long-context price dimensions explicit when only cached-input evidence is published', () => {
+    const offer = {
+      ...FRONTEND_TEST_CATALOG.modelOffers[0],
+      cachedInputMicroDollarsPerMillion: 250_000,
     };
     const snapshot = buildCalculatorSnapshot({
-      modelOffers: [directOffer],
-      selectedModelIds: [directOffer.id],
-      modelMixBasisPoints: { [directOffer.id]: 10_000 },
-      workload,
-      selectedPlan: variablePlan,
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload,
     });
 
-    expect(buildBreakevenSeries(snapshot)).toEqual({
-      status: 'unavailable',
-      reason: expect.stringMatching(/does not publish a numeric cap/i),
-      points: [],
+    const rows = buildCalculatorEvidenceLineItems(snapshot, offer, '2026-08-14T00:00:00.000Z');
+
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'source_price', label: 'Published cached-input price', valueMicroDollars: 250_000 }),
+      expect.objectContaining({ kind: 'assumption', label: 'Cache-write price', valueMicroDollars: null, assumption: expect.stringMatching(/unavailable.*excluded/i) }),
+      expect.objectContaining({ kind: 'assumption', label: 'Long-context tier', valueMicroDollars: null, assumption: expect.stringMatching(/unavailable.*excluded/i) }),
+    ]));
+  });
+
+  it('applies the published cached-input rate only to the configured cache-read token share', () => {
+    const offer = { ...FRONTEND_TEST_CATALOG.modelOffers[0], cachedInputMicroDollarsPerMillion: 250_000 };
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload,
+      costUsage: { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 1_000, cacheWriteTokens: 0, longContextTokens: 0 },
     });
+
+    const rows = buildCalculatorEvidenceLineItems(snapshot, offer, '2026-08-14T00:00:00.000Z');
+
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'derived_cost', label: 'Scenario input cost', valueMicroDollars: 2_700_000 }),
+      expect.objectContaining({ kind: 'derived_cost', label: 'Scenario cached-input cost', valueMicroDollars: 37_500 }),
+    ]));
+  });
+
+  it('keeps a manual token override authoritative over a disclosed character estimate until reset', () => {
+    const estimator = calculatorState as unknown as {
+      resolveMonthlyTokenEstimate: (input: { characterCount: number; charactersPerToken: number; manualMonthlyTokens: number | null }) => { tokens: number; source: 'estimate' | 'manual' };
+    };
+
+    expect(estimator.resolveMonthlyTokenEstimate({ characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: null })).toEqual({ tokens: 10_000, source: 'estimate' });
+    expect(estimator.resolveMonthlyTokenEstimate({ characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: 8_500 })).toEqual({ tokens: 8_500, source: 'manual' });
   });
 });

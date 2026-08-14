@@ -1,6 +1,6 @@
 import {StrictMode} from 'react';
 import {createRoot, hydrateRoot} from 'react-dom/client';
-import App, { ComparisonDetailApp, ModelProfileApp, PricePerformanceRoute } from './App.tsx';
+import App, { ComparisonDetailApp, ModelProfileApp, PricePerformanceRoute, type CostInitialState } from './App.tsx';
 import GuidesApp from './GuidesApp.tsx';
 import { parseComparisonViewModel } from './frontend/comparison-contracts';
 import { parseModelProfileViewModel } from './frontend/model-profile-contracts';
@@ -46,6 +46,67 @@ function initialModelProfileViewModel() {
   const payload = document.getElementById('model-profile-initial-data');
   if (!(payload instanceof HTMLScriptElement) || payload.type !== 'application/json' || !payload.textContent) return null;
   try { return parseModelProfileViewModel(JSON.parse(payload.textContent)); } catch { return null; }
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function finite(value: unknown, minimum: number, maximum: number, integer = false): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= minimum && value <= maximum && (!integer || Number.isInteger(value)) ? value : null;
+}
+
+function initialCostState(kind: 'calculator' | 'breakeven'): CostInitialState | null {
+  const id = kind === 'calculator' ? 'cost-calculator-initial-data' : 'cost-breakeven-initial-data';
+  const payload = document.getElementById(id);
+  if (!(payload instanceof HTMLScriptElement) || payload.type !== 'application/json' || !payload.textContent) return null;
+  try {
+    const value = record(JSON.parse(payload.textContent));
+    if (!value) return null;
+    if (kind === 'calculator') {
+      const query = record(value.query);
+      const workload = record(query?.workload);
+      const conversationsPerDay = finite(workload?.conversationsPerDay, 0, 10_000, true);
+      const messagesPerConversation = finite(workload?.messagesPerConversation, 0, 1_000, true);
+      const inputTokensPerMessage = finite(workload?.inputTokensPerMessage, 0, 1_000_000, true);
+      const outputTokensPerMessage = finite(workload?.outputTokensPerMessage, 0, 1_000_000, true);
+      const activeDaysPerMonth = finite(workload?.activeDaysPerMonth, 0, 31, true);
+      const providerId = query?.providerId;
+      const planId = query?.planId;
+      const modelIds = query?.modelIds;
+      const validProviderId = providerId === null || typeof providerId === 'string';
+      const validPlanId = planId === null || typeof planId === 'string';
+      if ([conversationsPerDay, messagesPerConversation, inputTokensPerMessage, outputTokensPerMessage, activeDaysPerMonth].some((item) => item === null)
+        || !validProviderId || !validPlanId
+        || !Array.isArray(modelIds) || modelIds.length > 3 || !modelIds.every((modelId) => typeof modelId === 'string' && /^[A-Za-z0-9:_-]{1,160}$/u.test(modelId))) return null;
+      return {
+        mode: 'calculator',
+        calculator: {
+          workload: { conversationsPerDay, messagesPerConversation, inputTokensPerMessage, outputTokensPerMessage, activeDaysPerMonth },
+          providerId: providerId as string | null,
+          planId: planId as string | null,
+          modelIds,
+        },
+      };
+    }
+    const seats = finite(value.seats, 1, 50, true);
+    const feePerSeat = finite(value.feePerSeat, 0, 100_000);
+    const maxTokensMillions = finite(value.maxTokensMillions, 0, 300);
+    const inputShare = finite(value.inputShare, 0, 1);
+    const inputPricePerMillion = value.inputPricePerMillion === null ? null : finite(value.inputPricePerMillion, 0, 100_000);
+    const outputPricePerMillion = value.outputPricePerMillion === null ? null : finite(value.outputPricePerMillion, 0, 100_000);
+    const capacityTokens = value.capacityTokens === null ? null : finite(value.capacityTokens, 0, Number.MAX_SAFE_INTEGER, true);
+    if (seats === null || feePerSeat === null || maxTokensMillions === null || inputShare === null
+      || inputPricePerMillion === null && value.inputPricePerMillion !== null
+      || outputPricePerMillion === null && value.outputPricePerMillion !== null
+      || capacityTokens === null && value.capacityTokens !== null) return null;
+    return {
+      mode: 'breakeven',
+      breakeven: { seats, feePerSeat, maxTokensMillions, inputShare, inputPricePerMillion, outputPricePerMillion, capacityTokens },
+    };
+  } catch {
+    return null;
+  }
 }
 
 const route = matchRoute(window.location.pathname);
@@ -105,6 +166,21 @@ if (route.kind === 'modelProfile') {
         <App />
       </StrictMode>,
     );
+  }
+} else if (route.kind === 'calculator' || route.kind === 'breakeven') {
+  const root = document.getElementById('root')!;
+  const initial = initialCostState(route.kind);
+  const payloadId = route.kind === 'calculator' ? 'cost-calculator-initial-data' : 'cost-breakeven-initial-data';
+  // Cost SSR deliberately uses a client replacement rather than hydration: its
+  // static form and the interactive calculator have different control trees.
+  // The validated bounded scenario is transferred before the replacement so a
+  // submitted GET result is never covered by client defaults.
+  if (initial) {
+    root.replaceChildren();
+    createRoot(root).render(<StrictMode><App initialCostState={initial} /></StrictMode>);
+  } else if (!document.getElementById(payloadId)) {
+    root.replaceChildren();
+    createRoot(root).render(<StrictMode><App /></StrictMode>);
   }
 } else if (RootApp) {
   const root = document.getElementById('root')!;

@@ -3,6 +3,7 @@ import { trackTokenBenchEvent } from './analytics';
 import { BreakevenChart } from './breakeven-chart';
 import { buildBreakevenResult, type BreakevenScenario } from './breakeven-state';
 import { formatCurrencyMicroDollars, type CalculatorSnapshot } from './calculator-state';
+import { EditorialCta } from './editorial-cta';
 
 export interface BreakevenDashboardProps {
   readonly snapshot: CalculatorSnapshot;
@@ -10,6 +11,11 @@ export interface BreakevenDashboardProps {
   readonly seats?: number;
   readonly feePerSeat?: number;
   readonly maxTokensMillions?: number;
+  readonly scenarioOverride?: {
+    readonly inputShare?: number | null;
+    readonly inputPricePerMillion?: number | null;
+    readonly outputPricePerMillion?: number | null;
+  };
   readonly onScenarioChange?: (scenario: Pick<BreakevenScenario, 'seats' | 'feePerSeat' | 'maxTokensMillions'>) => void;
 }
 
@@ -36,27 +42,27 @@ export function breakevenScenarioFromSnapshot(
   seats: number,
   feePerSeat: number,
   maxTokensMillions: number,
+  scenarioOverride?: BreakevenDashboardProps['scenarioOverride'],
 ): BreakevenScenario {
   const totalTokens = snapshot.derivedWorkload.monthlyInputTokens + snapshot.derivedWorkload.monthlyOutputTokens;
   return {
     seats,
     feePerSeat,
     maxTokensMillions,
-    inputShare: totalTokens > 0 ? snapshot.derivedWorkload.monthlyInputTokens / totalTokens : 0.5,
-    inputPricePerMillion: weightedPrice(snapshot, 'inputMicroDollarsPerMillion'),
-    outputPricePerMillion: weightedPrice(snapshot, 'outputMicroDollarsPerMillion'),
+    inputShare: scenarioOverride?.inputShare ?? (totalTokens > 0 ? snapshot.derivedWorkload.monthlyInputTokens / totalTokens : 0.5),
+    inputPricePerMillion: scenarioOverride?.inputPricePerMillion ?? weightedPrice(snapshot, 'inputMicroDollarsPerMillion'),
+    outputPricePerMillion: scenarioOverride?.outputPricePerMillion ?? weightedPrice(snapshot, 'outputMicroDollarsPerMillion'),
     // A verified current-workload coverage result is not the same as a published token entitlement.
-    capacityTokens: null,
+    capacityTokens: snapshot.publishedCapacityTokens,
     currentVolumeMillions: Math.min(maxTokensMillions, totalTokens / 1_000_000),
   };
 }
 
-function CapacityPanel({ snapshot }: { readonly snapshot: CalculatorSnapshot }) {
-  const isVerified = snapshot.capacityEvidence.status === 'verified-covered' || snapshot.capacityEvidence.status === 'verified-not-covered';
+function CapacityPanel({ result }: { readonly result: Extract<ReturnType<typeof buildBreakevenResult>, { readonly kind: 'available' }> }) {
   return <section className="breakeven-capacity-panel" aria-labelledby="breakeven-capacity-heading">
     <h2 id="breakeven-capacity-heading">Subscription capacity evidence</h2>
-    <p><strong>{isVerified ? 'Current-workload coverage reported' : 'Unavailable'}</strong></p>
-    <p>{snapshot.capacityEvidence.explanation}</p>
+    <p><strong>{result.capacity.kind === 'available' ? 'Published capacity reported' : 'Unavailable'}</strong></p>
+    <p>{result.capacityMessage}</p>
     <p>Capacity evidence is separate from the seat-fee crossover and is never inferred from it.</p>
   </section>;
 }
@@ -90,11 +96,12 @@ export function BreakevenDashboard({
   seats = 1,
   feePerSeat = 20,
   maxTokensMillions = 300,
+  scenarioOverride,
   onScenarioChange,
 }: BreakevenDashboardProps) {
   const scenario = useMemo(
-    () => breakevenScenarioFromSnapshot(snapshot, seats, feePerSeat, maxTokensMillions),
-    [feePerSeat, maxTokensMillions, seats, snapshot],
+    () => breakevenScenarioFromSnapshot(snapshot, seats, feePerSeat, maxTokensMillions, scenarioOverride),
+    [feePerSeat, maxTokensMillions, scenarioOverride, seats, snapshot],
   );
   const result = buildBreakevenResult(scenario);
   const sourceEffectiveAt = snapshot.catalogFreshness?.checkedAt ?? 'Unavailable';
@@ -106,13 +113,20 @@ export function BreakevenDashboard({
         : { seats, feePerSeat, maxTokensMillions: next };
     trackTokenBenchEvent('breakeven_input_changed', { field, route: '/cost/breakeven/' });
     trackTokenBenchEvent('breakeven_calculated', { route: '/cost/breakeven/' });
+    const nextResult = buildBreakevenResult(breakevenScenarioFromSnapshot(
+      snapshot,
+      nextScenario.seats,
+      nextScenario.feePerSeat,
+      nextScenario.maxTokensMillions,
+      scenarioOverride,
+    ));
+    if (nextResult.kind === 'unavailable') trackTokenBenchEvent('breakeven_unavailable', { reason: nextResult.reason, route: '/cost/breakeven/' });
     onScenarioChange?.(nextScenario);
   };
 
-  if (!hasAvailableModels) return <section className="results-panel" aria-label="Breakeven analysis"><h2>Breakeven evidence</h2><p><strong>Unavailable</strong></p><p>No verified models are available for this comparison.</p><CapacityPanel snapshot={snapshot} /></section>;
+  if (!hasAvailableModels) return <section className="results-panel" aria-label="Breakeven analysis"><h2>Breakeven evidence</h2><p><strong>Unavailable</strong></p><p>No verified models are available for this comparison.</p><p>Capacity evidence remains separate and unavailable until a published entitlement is selected.</p></section>;
   if (result.kind === 'unavailable') {
-    trackTokenBenchEvent('breakeven_unavailable', { reason: result.reason, route: '/cost/breakeven/' });
-    return <section className="results-panel" aria-label="Breakeven analysis"><h2>Breakeven evidence</h2><p><strong>Unavailable</strong></p><p>{result.reason === 'partial_prices' ? 'Complete published input and output API price dimensions are required; missing prices are not treated as zero.' : 'Seats, fee, input/output mix, or the displayed 0–300M domain is invalid.'}</p><CapacityPanel snapshot={snapshot} /></section>;
+    return <section className="results-panel" aria-label="Breakeven analysis"><h2>Breakeven evidence</h2><p><strong>Unavailable</strong></p><p>{result.reason === 'partial_prices' ? 'Complete published input and output API price dimensions are required; missing prices are not treated as zero.' : 'Seats, fee, input/output mix, or the displayed 0–300M domain is invalid.'}</p><p>Capacity evidence remains separate and unavailable until a published entitlement is selected.</p></section>;
   }
 
   return <section className="results-panel breakeven-dashboard" aria-label="Breakeven analysis">
@@ -145,7 +159,8 @@ export function BreakevenDashboard({
       </dl>
       <p>Selected native and hosted route records remain distinct in the calculator controls; this scenario uses the selected route mix.</p>
     </section>
-    <BreakevenChart result={result} />
-    <CapacityPanel snapshot={snapshot} />
+    <BreakevenChart result={result} onCrossoverInspected={() => trackTokenBenchEvent('breakeven_crossover_inspected', { route: '/cost/breakeven/' })} />
+    <CapacityPanel result={result} />
+    <EditorialCta eligible route="/cost/breakeven/" precedingAction="scenario" subjectId={snapshot.apiMapping.selectedOffers[0]?.id} />
   </section>;
 }

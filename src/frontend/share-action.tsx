@@ -7,6 +7,7 @@ interface UrlPopupShareActionProps {
   readonly label?: string;
   readonly canonicalUrl?: never;
   readonly variant?: never;
+  readonly onShared?: () => void;
 }
 
 interface DialogShareActionProps {
@@ -16,6 +17,7 @@ interface DialogShareActionProps {
   readonly url?: never;
   readonly title?: never;
   readonly text?: never;
+  readonly onShared?: () => void;
 }
 
 export type ShareActionProps = UrlPopupShareActionProps | DialogShareActionProps;
@@ -27,7 +29,7 @@ type ShareFeedback =
 const COPY_FAILURE_MESSAGE = 'Unable to copy the link. Please copy the URL from your browser.';
 const COPY_FAILED_MESSAGE = 'Copy failed. Select the URL and copy it manually.';
 
-function UrlPopupShareAction({ url, title, label = 'Share result' }: UrlPopupShareActionProps) {
+function UrlPopupShareAction({ url, title, label = 'Share result', onShared }: UrlPopupShareActionProps) {
   const [open, setOpen] = useState(false);
   const [feedback, setFeedback] = useState<ShareFeedback | null>(null);
 
@@ -52,7 +54,10 @@ function UrlPopupShareAction({ url, title, label = 'Share result' }: UrlPopupSha
 
   const toggle = () => {
     setFeedback(null);
-    setOpen((current) => !current);
+    setOpen((current) => {
+      if (!current) onShared?.();
+      return !current;
+    });
   };
 
   return <div className="share-action">
@@ -90,6 +95,7 @@ function DialogShareAction({
   canonicalUrl,
   variant,
   label = 'Share Leaderboard',
+  onShared,
 }: DialogShareActionProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<ShareFeedback | null>(null);
@@ -147,7 +153,7 @@ function DialogShareAction({
       ref={triggerRef}
       className={`button ${variant === 'secondary' ? 'button-secondary ' : ''}button-small share-dialog-trigger`}
       type="button"
-      onClick={() => { setCopyStatus(null); setIsOpen(true); }}
+      onClick={() => { setCopyStatus(null); setIsOpen(true); onShared?.(); }}
     >
       <Share2 aria-hidden="true" size={16} />
       {label}
@@ -200,7 +206,8 @@ export function ShareAction(props: ShareActionProps) {
       canonicalUrl={props.canonicalUrl}
       variant={props.variant}
       label={props.label}
+      onShared={props.onShared}
     />;
   }
-  return <UrlPopupShareAction url={props.url} title={props.title} label={props.label} />;
+  return <UrlPopupShareAction url={props.url} title={props.title} label={props.label} onShared={props.onShared} />;
 }

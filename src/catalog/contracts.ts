@@ -89,7 +89,13 @@ export interface ModelOffer {
   unit: PriceUnit;
   inputMicroDollarsPerMillion: number;
   cachedInputMicroDollarsPerMillion?: number;
+  /** Published cache-write price when the source exposes it; absent is not zero. */
+  cacheWriteMicroDollarsPerMillion?: number;
   outputMicroDollarsPerMillion: number;
+  /** Published long-context tier dimensions; absent means the tier is excluded. */
+  longContextInputMicroDollarsPerMillion?: number;
+  longContextOutputMicroDollarsPerMillion?: number;
+  longContextMinimumTokens?: number;
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   availability?: 'available' | 'limited' | 'deprecated';

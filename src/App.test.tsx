@@ -27,9 +27,9 @@ describe('calculator application flow', () => {
     window.history.replaceState({}, '', '/cost/');
     const { unmount } = render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'AI cost decision tools' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /open subscription vs. api calculator/i })).toHaveAttribute('href', '/cost/calculator/');
-    expect(screen.getByRole('link', { name: /open breakeven analysis/i })).toHaveAttribute('href', '/cost/breakeven/');
+    expect(screen.getByRole('heading', { name: 'Choose the right cost question' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Cost Simulator' })).toHaveAttribute('href', '/cost/calculator/');
+    expect(screen.getByRole('link', { name: 'Open Breakeven Calculator' })).toHaveAttribute('href', '/cost/breakeven/');
     unmount();
 
     window.history.replaceState({}, '', '/cost/breakeven/');
@@ -42,8 +42,7 @@ describe('calculator application flow', () => {
   it('mounts the model lifecycle radar at its canonical route', () => {
     window.history.replaceState({}, '', '/models/lifecycle/');
     render(<App />);
-    expect(screen.getByRole('heading', { name: 'Model Lifecycle Radar' })).toBeInTheDocument();
-    expect(screen.getByText('No validated lifecycle records are available.')).toBeInTheDocument();
+    expect(screen.getByText('Loading validated lifecycle records.')).toBeInTheDocument();
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 

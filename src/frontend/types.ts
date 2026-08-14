@@ -1,6 +1,6 @@
 import type { CatalogResponse, PlanOffer } from '../catalog/contracts';
 import type { ConversationWorkload } from '../catalog/subscription-api-calculator';
-import type { CalculatorSnapshot, InitialSelection } from './calculator-state';
+import type { CalculatorCostUsage, CalculatorSnapshot, InitialSelection } from './calculator-state';
 
 export interface CalculatorControlsProps {
   readonly catalog: CatalogResponse;
@@ -10,11 +10,13 @@ export interface CalculatorControlsProps {
   readonly selectedModelIds: string[];
   readonly modelMixBasisPoints: Record<string, number>;
   readonly workload: ConversationWorkload;
+  readonly costUsage?: CalculatorCostUsage;
   readonly onProviderChange: (providerId: string) => void;
   readonly onPlanChange: (planId: string) => void;
   readonly onModelToggle: (modelId: string) => void;
   readonly onModelShareChange: (modelId: string, shareBasisPoints: number) => void;
   readonly onWorkloadChange: (workload: ConversationWorkload) => void;
+  readonly onCostUsageChange?: (usage: CalculatorCostUsage) => void;
   readonly onMappingModeChange: (mode: 'default' | 'override') => void;
 }
 

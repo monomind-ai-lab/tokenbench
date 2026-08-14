@@ -12,7 +12,10 @@ function million(value: number): string {
 }
 
 /** Chart.js enhancement over the exact cost-sample table rendered beside it. */
-export function BreakevenChart({ result }: { readonly result: Extract<BreakevenResult, { kind: 'available' }> }) {
+export function BreakevenChart({ result, onCrossoverInspected }: {
+  readonly result: Extract<BreakevenResult, { kind: 'available' }>;
+  readonly onCrossoverInspected?: () => void;
+}) {
   const labels = result.points.map((point) => million(point.tokensMillions));
   const configuration: ChartConfiguration<'line'> = {
     type: 'line',
@@ -49,5 +52,10 @@ export function BreakevenChart({ result }: { readonly result: Extract<BreakevenR
       table={table}
       title="Breakeven API cost and subscription fee"
     />
+    {result.crossoverInDomain && result.crossoverMillions !== null ? <div className="breakeven-crossover-annotation" role="note">
+      <p>Crossover annotation: {result.crossoverMillions.toFixed(6)}M tokens/month.</p>
+      <p>Lower-cost regions: API below crossover; subscription above crossover.</p>
+      <button className="button button-secondary button-small" type="button" onClick={onCrossoverInspected}>Inspect crossover details</button>
+    </div> : null}
   </section>;
 }

@@ -86,4 +86,11 @@ describe('calculator results dashboard', () => {
     expect(screen.getByText('Scenario input cost')).toBeVisible();
     expect(screen.getByText('Calculation assumptions')).toBeVisible();
   });
+
+  it('places the contextual editorial CTA after a valid result and source ledger', () => {
+    render(<ResultsDashboard catalog={FRONTEND_TEST_CATALOG} hasAvailableModels selectedPlan={FRONTEND_TEST_CATALOG.plans[1]} snapshot={snapshot()} />);
+
+    expect(screen.getByRole('heading', { name: 'Published source prices' }).compareDocumentPosition(screen.getByLabelText('MonoMind AI Lab editorial CTA'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.getByRole('button', { name: 'Update simulation' })).toBeInTheDocument();
+  });
 });

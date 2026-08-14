@@ -17,6 +17,16 @@ describe('ShareAction', () => {
     expect(screen.getByLabelText('Shareable link')).toHaveValue('https://tokenbench.monomind.one/compare/a-vs-b');
   });
 
+  it('reports one explicit share creation without exposing the URL to its callback', () => {
+    const onShared = vi.fn();
+    render(<ShareAction url="https://tokenbench.monomind.one/cost/breakeven/?v=2" title="Breakeven" onShared={onShared} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
+
+    expect(onShared).toHaveBeenCalledTimes(1);
+    expect(onShared).toHaveBeenCalledWith();
+  });
+
   it('copies the URL from the popup and announces success', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });

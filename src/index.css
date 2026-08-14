@@ -1547,3 +1547,53 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .comparison-radar-figure canvas, .comparison-scenarios, .comparison-contextual-cta, .comparison-quick-switch, .comparison-header-topline .share-action { display: none !important; }
   .comparison-radar-table { display: table !important; }
 }
+
+/* Task 9 cost decision surfaces: source evidence and derived scenario output
+   remain readable from 320px without turning the page into a wide table. */
+.cost-page { max-width: 1040px; }
+.cost-page-intro, .cost-tool-comparison, .cost-source-coverage, .cost-shared-state { display: grid; gap: 14px; padding: clamp(20px, 4vw, 34px); border: 1px solid var(--outline); border-radius: 14px; background: var(--surface); }
+.cost-page-intro h1, .cost-tool-comparison h2, .cost-source-coverage h2, .cost-shared-state h2 { margin: 0; font-family: var(--font-display); letter-spacing: -0.035em; }
+.cost-page-intro p, .cost-tool-comparison p, .cost-source-coverage p, .cost-shared-state p { margin: 0; color: var(--muted); line-height: 1.6; }
+.cost-evidence-note { padding: 12px 14px; border-left: 3px solid var(--primary); background: var(--surface-low); color: var(--text) !important; }
+.cost-tool-grid { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cost-tool-card { min-width: 0; display: grid; align-content: start; gap: 14px; padding: clamp(20px, 3vw, 28px); border: 1px solid color-mix(in srgb, var(--primary) 36%, var(--outline)); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.cost-tool-card h2, .cost-tool-card p { margin: 0; }
+.cost-tool-card h2 { font-family: var(--font-display); letter-spacing: -0.025em; }
+.cost-tool-card p, .cost-tool-card dd { color: var(--muted); line-height: 1.55; }
+.cost-tool-card dl, .cost-tool-comparison dl { display: grid; gap: 9px; margin: 0; }
+.cost-tool-card dl > div, .cost-tool-comparison dl > div { min-width: 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-low); }
+.cost-tool-card dt, .cost-tool-comparison dt { color: var(--muted); font-family: var(--font-label); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.cost-tool-card dd, .cost-tool-comparison dd { margin: 5px 0 0; overflow-wrap: anywhere; }
+.cost-tool-card .button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; width: fit-content; margin-top: auto; }
+.cost-shared-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.cost-shared-actions .button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+.cost-dimension-controls { display: grid; gap: 12px; padding-top: 16px; border-top: 1px solid var(--outline); }
+.cost-dimension-controls h3 { margin: 0; font-family: var(--font-display); font-size: 1rem; }
+.breakeven-dashboard { display: grid; gap: 20px; }
+.breakeven-controls, .breakeven-source-prices, .breakeven-capacity-panel, .breakeven-chart-panel { min-width: 0; display: grid; gap: 12px; padding: 18px; border: 1px solid var(--outline); border-radius: 12px; background: var(--surface); }
+.breakeven-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.breakeven-controls legend { grid-column: 1 / -1; font-family: var(--font-label); font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.breakeven-number-control { min-width: 0; display: grid; gap: 6px; color: var(--muted); font-size: .72rem; font-weight: 700; }
+.breakeven-number-control input { min-width: 0; min-height: 44px; }
+.breakeven-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.breakeven-summary > div { min-width: 0; padding: 12px; border-radius: 9px; background: var(--surface-low); }
+.breakeven-summary dt { color: var(--muted); font-family: var(--font-label); font-size: .65rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+.breakeven-summary dd { margin: 6px 0 0; overflow-wrap: anywhere; font-family: var(--font-label); font-weight:800; }
+.breakeven-chart { min-height: 260px; }
+.breakeven-chart canvas { min-height: 260px; }
+.breakeven-crossover-annotation { display: grid; gap: 8px; padding: 12px; border: 1px dashed color-mix(in srgb, var(--primary) 55%, var(--outline)); border-radius: 9px; background: var(--surface-low); }
+.breakeven-crossover-annotation p { margin: 0; color: var(--muted); line-height: 1.5; }
+.breakeven-dashboard > .editorial-cta, .results-panel > .editorial-cta { order: 20; }
+
+@media (min-width: 1024px) {
+  .calculator-guided-results { position: sticky; top: calc(var(--header-height) + 18px); }
+}
+
+@media (max-width: 767px) {
+  .cost-tool-grid { grid-template-columns: minmax(0, 1fr); }
+  .cost-tool-card .button, .cost-shared-actions .button { width: 100%; }
+  .cost-tool-comparison dl > div { display: grid; gap: 5px; }
+  .breakeven-controls, .breakeven-summary { grid-template-columns: minmax(0, 1fr); }
+  .breakeven-chart, .breakeven-chart canvas { min-height: 220px; }
+  .calculator-guided-results { position: static; }
+}

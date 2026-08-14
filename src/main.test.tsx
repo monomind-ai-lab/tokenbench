@@ -162,7 +162,7 @@ describe('browser entrypoint', () => {
     ['/cost/breakeven/', 'Cost experience'],
     ['/articles/', 'Articles experience'],
     ['/articles/insights/', 'Insights experience'],
-    ['/models/lifecycle/', 'Model Lifecycle Radar'],
+    ['/models/lifecycle/', 'Loading validated lifecycle records.'],
   ])('mounts the intended experience at %s', async (pathname, expectedExperience) => {
       window.history.replaceState({}, '', pathname);
 
@@ -173,6 +173,33 @@ describe('browser entrypoint', () => {
       const rendered = (rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode;
       expect(renderToStaticMarkup(rendered)).toContain(expectedExperience);
     });
+
+  it.each([
+    ['/cost/calculator/', 'cost-calculator-initial-data', '{"query":{"workload":{"conversationsPerDay":12,"messagesPerConversation":6,"inputTokensPerMessage":900,"outputTokensPerMessage":300,"activeDaysPerMonth":22},"providerId":"provider-a","planId":"provider-a:starter","modelIds":["provider-a:alpha:direct_provider"],"submitted":true},"revision":"published-r1","effectiveAt":"2026-08-14T00:00:00.000Z"}', 'calculator'],
+    ['/cost/breakeven/', 'cost-breakeven-initial-data', '{"seats":10,"feePerSeat":20,"maxTokensMillions":300,"inputShare":0.75,"inputPricePerMillion":0.27,"outputPricePerMillion":1.1,"capacityTokens":null}', 'breakeven'],
+  ] as const)('transfers validated %s SSR state before replacing its static cost tree', async (pathname, payloadId, payload, expectedMode) => {
+    document.body.innerHTML = `<div id="root"><main data-server-cost>Server cost result</main></div><script id="${payloadId}" type="application/json">${payload}</script>`;
+    window.history.replaceState({}, '', pathname);
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    const strictMode = (rootRenderer.mock.calls[0] ?? [null])[0] as { readonly props: { readonly children: { readonly props: { readonly initialCostState?: { readonly mode?: string } } } } };
+    expect(strictMode.props.children.props.initialCostState?.mode).toBe(expectedMode);
+  });
+
+  it('preserves the server cost result when its serialized scenario is malformed', async () => {
+    document.body.innerHTML = '<div id="root"><main data-server-cost>Server cost result</main></div><script id="cost-breakeven-initial-data" type="application/json">{"seats":"bad"}</script>';
+    window.history.replaceState({}, '', '/cost/breakeven/');
+
+    await import('./main.tsx');
+
+    expect(document.querySelector('[data-server-cost]')).toBeInTheDocument();
+    expect(createRootMock).not.toHaveBeenCalled();
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+  });
 
   it('hydrates the models directory from its validated server payload without refetching', async () => {
     document.body.innerHTML = '<div id="root"><main data-server-models>Popular models</main></div><script id="models-initial-data" type="application/json">{"revision":"benchlm-r1"}</script>';
