@@ -1,6 +1,6 @@
 # TokenBench V2.1 Interactive Revamp Design
 
-**Status:** Revised; awaiting written-spec review
+**Status:** Approved
 **Branch:** `ui-revamp-2`  
 **Base:** preserved `ui-revamp` commit `096bc7f`  
 **Mode:** Operate  
