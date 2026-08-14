@@ -53,6 +53,24 @@ function context(path = 'coding', search = '') {
 }
 
 describe('V2.1 leaderboard SSR', () => {
+  it('serves the existing V2.1 leaderboard directory for the optional catch-all root', async () => {
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.monomind.one/leaderboards/'),
+      env: { CATALOG_DB: {} as never },
+      params: {},
+    });
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-robots-tag')).toBe('index, follow');
+    expect(html).toContain('<h1 id="leaderboard-directory-heading">Model leaderboards</h1>');
+    expect(html).toContain('aria-label="V2.1 leaderboard overview"');
+    expect(html).toContain('Full leaderboard directory');
+    expect(html).toContain('href="/leaderboards/llm/coding/"');
+    expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/leaderboards/">');
+    expect(html).not.toContain('Leaderboard data is temporarily unavailable');
+  });
+
   it('renders the canonical Top 20 snapshot and hydration payload before JavaScript', async () => {
     readActiveBenchmarkSnapshot.mockResolvedValue(snapshot());
 

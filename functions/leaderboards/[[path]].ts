@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { V21LeaderboardApp } from '../../src/App';
+import { LeaderboardDirectoryPage } from '../../src/pages/leaderboards-page';
 import { buildLeaderboard, LEADERBOARD_DEFINITIONS, type LeaderboardEntry } from '../../src/benchmarks/leaderboards';
 import { DEFAULT_CUSTOM_WEIGHTS, normalizeCustomWeights, type CustomWeights } from '../../src/benchmarks/custom-leaderboard';
 import type { BenchmarkMetric } from '../../src/benchmarks/contracts';
@@ -10,7 +11,7 @@ import { leaderboardFilterCapabilities } from '../../src/frontend/leaderboard-fi
 import type { BenchmarkApiEnvelope, LeaderboardPageResult } from '../../src/frontend/use-benchmarks';
 import { FRONTEND_ASSETS } from '../../src/routing/frontend-assets';
 import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../src/routing/routes';
-import type { PageMetadata } from '../../src/seo/metadata';
+import { metadataForRoute, type PageMetadata } from '../../src/seo/metadata';
 import { headMarkup, staticChrome } from '../../src/seo/static-page';
 import { benchmarkEnvelope, freshnessFor, readActiveBenchmarkSnapshot, type BenchmarkApiEnv } from '../_shared/benchmark-db';
 import { escapeHtmlText, serializeJsonForScript } from '../_shared/html';
@@ -175,6 +176,34 @@ export function renderLeaderboardDocument(
 </html>\n`;
 }
 
+/** The optional catch-all also receives /leaderboards/, so render the existing directory rather than treating its empty segment as a missing category. */
+function leaderboardDirectoryDocument(): string {
+  const metadata = metadataForRoute({ kind: 'leaderboards' });
+  const content = staticChrome(renderToString(createElement(LeaderboardDirectoryPage)), 'leaderboards');
+  return `<!doctype html>
+<html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
+  <head>
+    ${headMarkup(metadata, [])}
+    <link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">
+  </head>
+  <body>
+    <div id="google_translate_element"></div>
+    <div id="root">${content}</div>
+    <script type="module" src="${FRONTEND_ASSETS.script}"></script>
+  </body>
+</html>\n`;
+}
+
+function leaderboardDirectoryResponse(): Response {
+  return new Response(leaderboardDirectoryDocument(), {
+    headers: {
+      'Cache-Control': 'public, max-age=0, must-revalidate',
+      'Content-Type': 'text/html; charset=utf-8',
+      'X-Robots-Tag': 'index, follow',
+    },
+  });
+}
+
 function unavailableDocument(category: V21LeaderboardDefinition | null): string {
   const fallback = category ?? {
     slug: 'overall', label: 'Leaderboard', definition: 'Published model leaderboard evidence.', version: 'TokenBench', legacyKey: null,
@@ -276,6 +305,7 @@ export async function onRequestGet({
   const pathname = new URL(request.url).pathname;
   const url = new URL(request.url);
   const rawCategory = pathParameter(params) ?? pathname.replace(/^\/leaderboards\/?/u, '').replace(/\/$/u, '');
+  if (!rawCategory) return leaderboardDirectoryResponse();
   const category = v21Leaderboard(rawCategory);
   if (!category) {
     const legacyKey = legacyKeyForPath(rawCategory);
