@@ -646,7 +646,8 @@ function V21LeaderboardOverview() {
   const groups = new Map((state.decisionPicks ?? []).map((group) => [group.key, group]));
   return <section className="v21-leaderboard-overview" aria-label="V2.1 leaderboard overview">
     <div className="panel-heading"><div><span className="eyebrow">V2.1 overview</span><h2>Compare by decision lens</h2><p>Each card links to one canonical category and preserves the published source evidence behind it.</p></div></div>
-    <div className="v21-leaderboard-overview-grid">
+    {state.phase === 'loading' ? <Skeleton label="Loading leaderboard overview" /> : null}
+    {state.phase === 'ready' || state.phase === 'stale' ? <div className="v21-leaderboard-overview-grid">
       {V21_OVERVIEW_LEADERBOARDS.map((category) => {
         const group = category.legacyKey ? groups.get(category.legacyKey) : undefined;
         const entries = group?.entries ?? [];
@@ -664,7 +665,7 @@ function V21LeaderboardOverview() {
           <a href={v21CategoryPath(category)} aria-label={`Open ${category.label} leaderboard`}>Open category <ArrowRight aria-hidden="true" size={14} /></a>
         </article>;
       })}
-    </div>
+    </div> : null}
   </section>;
 }
 

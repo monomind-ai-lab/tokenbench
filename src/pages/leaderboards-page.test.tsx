@@ -428,6 +428,16 @@ describe('LeaderboardDirectoryPage', () => {
     await screen.findByRole('region', { name: 'Decision-ready picks' });
   });
 
+  it('shows an overview loading skeleton without unavailable category copy before the summary resolves', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => {})));
+
+    render(<LeaderboardDirectoryPage />);
+
+    const overview = screen.getByRole('region', { name: 'V2.1 leaderboard overview' });
+    expect(within(overview).getByLabelText('Loading leaderboard overview')).toHaveAttribute('aria-busy', 'true');
+    expect(within(overview).queryByText('Unavailable until comparable published evidence is available.')).not.toBeInTheDocument();
+  });
+
   it('labels each directory card with its evidence status so the index does not read as a universal composite', () => {
     respondWithSummary();
 
