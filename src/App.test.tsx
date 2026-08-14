@@ -46,4 +46,14 @@ describe('calculator application flow', () => {
     expect(screen.getByText('No validated lifecycle records are available.')).toBeInTheDocument();
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
+
+  it('renders an explicit interim state for a canonical comparison route', () => {
+    window.history.replaceState({}, '', '/models/compare/model-a-vs-model-b/');
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'Comparison result not yet available' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Compare hub' })).toHaveAttribute('href', '/compare/');
+    expect(screen.getByRole('link', { name: 'Browse models' })).toHaveAttribute('href', '/models/');
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).not.toBeInTheDocument();
+  });
 });

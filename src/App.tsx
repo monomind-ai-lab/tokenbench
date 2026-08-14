@@ -313,6 +313,22 @@ function CompareHubRoute() {
   return <PageFrame activePage="compare"><CompareHubPage /></PageFrame>;
 }
 
+function ComparisonPendingRoute({ pair }: { readonly pair: string }) {
+  return <PageFrame activePage="compare">
+    <section className="content-stack static-page-content" aria-labelledby="comparison-pending-heading">
+      <header>
+        <p className="eyebrow">Comparison pending</p>
+        <h1 id="comparison-pending-heading">Comparison result not yet available</h1>
+        <p>{`The published result for ${pair} is not available yet. TokenBench is not presenting evidence or a winner for this pair.`}</p>
+      </header>
+      <nav className="static-page-links" aria-label="Comparison next steps">
+        <a className="button" href={ROUTE_PATHS.compareHub}>Go to Compare hub</a>
+        <a className="button button-secondary" href={ROUTE_PATHS.models}>Browse models</a>
+      </nav>
+    </section>
+  </PageFrame>;
+}
+
 function LeaderboardsRoute() {
   return <PageFrame activePage="leaderboards"><LeaderboardDirectoryPage /></PageFrame>;
 }
@@ -371,6 +387,7 @@ function RoutedApp() {
   if (route.kind === 'pricePerformance') return <PricePerformanceRoute />;
   if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;
+  if (route.kind === 'comparison') return <ComparisonPendingRoute pair={route.pair} />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboardCategory' || route.kind === 'leaderboardSla' || route.kind === 'leaderboardCustom') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;

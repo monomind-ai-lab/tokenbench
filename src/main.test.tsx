@@ -56,6 +56,17 @@ describe('browser entrypoint', () => {
     expect(renderToStaticMarkup((rootRenderer.mock.calls[0] ?? [null])[0] as ReactNode)).toContain('Cost experience');
   });
 
+  it.each(['/privacy/', '/welcome/'])('leaves the published static page intact at %s', async (pathname) => {
+    window.history.replaceState({}, '', pathname);
+    document.body.innerHTML = '<div id="root"><main data-static-page>Published static content</main></div>';
+
+    await import('./main.tsx');
+
+    expect(document.querySelector('[data-static-page]')).toBeInTheDocument();
+    expect(createRootMock).not.toHaveBeenCalled();
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+  });
+
   it('hydrates a comparison detail from its validated server payload without refetching or clearing HTML', async () => {
     document.body.innerHTML = '<div id="root"><article data-server-detail>Server comparison</article></div><script id="comparison-initial-data" type="application/json">{"revision":"published-r1"}</script>';
     window.history.replaceState({}, '', '/models/compare/model-a-vs-model-b/');
@@ -70,6 +81,17 @@ describe('browser entrypoint', () => {
     expect(hydrateRootMock).toHaveBeenCalledWith(root, expect.anything());
     expect(createRootMock).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('mounts the canonical comparison interim route when no server payload exists', async () => {
+    window.history.replaceState({}, '', '/models/compare/model-a-vs-model-b/');
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
 
   it('hydrates a durable model profile from validated server data without clearing the SSR evidence', async () => {

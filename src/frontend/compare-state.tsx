@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 
 export interface CompareSelection {
   readonly ids: readonly string[];
@@ -47,8 +47,14 @@ export function decodeCompareSearch(search: string): CompareSelection {
 }
 
 export function CompareProvider({ children }: { readonly children: ReactNode }) {
-  const [selection, setSelection] = useState<CompareSelection>(() =>
-    typeof window === 'undefined' ? EMPTY_SELECTION : decodeCompareSearch(window.location.search));
+  // Keep the server and first client render identical. The URL-derived tray
+  // selection is intentionally restored only after hydration completes.
+  const [selection, setSelection] = useState<CompareSelection>(EMPTY_SELECTION);
+
+  useEffect(() => {
+    setSelection(decodeCompareSearch(window.location.search));
+  }, []);
+
   const value = useMemo(() => ({ selection, setSelection }), [selection]);
   return <CompareContext.Provider value={value}>{children}</CompareContext.Provider>;
 }

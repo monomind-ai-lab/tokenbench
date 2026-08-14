@@ -51,7 +51,9 @@ function initialModelProfileViewModel() {
 const route = matchRoute(window.location.pathname);
 const RootApp = route.kind === 'articles' || route.kind === 'guides' || route.kind === 'insights'
   ? GuidesApp
-  : route.kind === 'newsletterConfirmed' ? null : App;
+  : route.kind === 'newsletterConfirmed' || route.kind === 'privacy' || route.kind === 'welcome'
+    ? null
+    : App;
 
 if (route.kind === 'modelProfile') {
   const viewModel = initialModelProfileViewModel();
@@ -87,13 +89,20 @@ if (route.kind === 'modelProfile') {
   createRoot(root).render(<StrictMode><ModelLifecycleApp /></StrictMode>);
 } else if (route.kind === 'comparison') {
   const viewModel = initialComparisonViewModel();
+  const root = document.getElementById('root')!;
   // A malformed payload must never erase the crawlable server response or
   // prompt a replacement request; the browser can simply leave it intact.
   if (viewModel) {
-    const root = document.getElementById('root')!;
     hydrateRoot(root,
       <StrictMode>
         <ComparisonDetailApp viewModel={viewModel} />
+      </StrictMode>,
+    );
+  } else if (!document.getElementById('comparison-initial-data')) {
+    root.replaceChildren();
+    createRoot(root).render(
+      <StrictMode>
+        <App />
       </StrictMode>,
     );
   }
@@ -117,6 +126,4 @@ if (route.kind === 'modelProfile') {
       <NewsletterConfirmedPage />
     </StrictMode>,
   );
-} else if (route.kind === 'redirect') {
-  window.location.replace(route.to);
 }

@@ -195,6 +195,37 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('complementary', { name: 'Comparison tray' })).toHaveTextContent('alpha');
   });
 
+  it.each([
+    ['alpha,beta', 'alpha'],
+    ['alpha,beta,gamma', 'gamma'],
+  ] as const)('hydrates a direct entrypoint without a compare-tray markup mismatch for %s', async (ids, expectedId) => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+    const browserWindow = window;
+    vi.stubGlobal('window', undefined);
+    let serverMarkup = '';
+    try {
+      serverMarkup = renderToString(createElement(PricePerformanceRoute));
+    } finally {
+      vi.stubGlobal('window', browserWindow);
+    }
+    document.body.innerHTML = `<div id="root">${serverMarkup}</div>`;
+    window.history.replaceState({}, '', `/llm-price-performance/?compare=${ids}`);
+    const root = document.getElementById('root')!;
+    const recoverableError = vi.fn();
+    let hydrationRoot: Root | undefined;
+
+    try {
+      await act(async () => {
+        hydrationRoot = hydrateRoot(root, createElement(StrictMode, null, createElement(PricePerformanceRoute)), { onRecoverableError: recoverableError });
+      });
+
+      expect(recoverableError).not.toHaveBeenCalled();
+      expect(screen.getByRole('complementary', { name: 'Comparison tray' })).toHaveTextContent(expectedId);
+    } finally {
+      hydrationRoot?.unmount();
+    }
+  });
+
   it('makes the tools directory link to the subscription versus API calculator', () => {
     renderAt('/tools/');
 
