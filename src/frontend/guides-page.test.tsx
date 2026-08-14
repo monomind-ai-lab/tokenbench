@@ -22,9 +22,10 @@ describe('guides experience', () => {
   });
 
   it('renders a single-heading hub with every published guide', () => {
-    render(<GuidesHub />);
+    const { container } = render(<GuidesHub />);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: 'AI cost optimization guides' })).toBeInTheDocument();
+    expect(container.querySelector('.eyebrow')).toBeNull();
     for (const guide of GUIDES) expect(screen.getByRole('link', { name: guide.title })).toHaveAttribute('href', `/articles/guides/${guide.slug}/`);
   });
 

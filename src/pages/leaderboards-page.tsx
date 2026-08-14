@@ -188,7 +188,7 @@ function LeaderboardPagination({
 function RelatedLeaderboards({ keyName }: { readonly keyName?: LeaderboardKey }) {
   const links = LEADERBOARD_NAVIGATION.filter((item) => item.key !== keyName);
   return <section className="leaderboard-related" aria-labelledby="related-leaderboards-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Explore by lens</span><h2 id="related-leaderboards-heading">Related leaderboards</h2></div></div>
+    <div className="panel-heading"><div><h2 id="related-leaderboards-heading">Related leaderboards</h2></div></div>
     <nav aria-label="Related leaderboards">
       {links.map((item) => <a key={item.key} href={item.pathname}>{item.label} <ArrowRight aria-hidden="true" size={14} /></a>)}
     </nav>
@@ -197,7 +197,6 @@ function RelatedLeaderboards({ keyName }: { readonly keyName?: LeaderboardKey })
 
 function MonoMindCta() {
   return <aside className="panel leaderboard-monomind-cta" aria-label="MonoMind optimization services">
-    <span className="eyebrow">MonoMind AI Lab</span>
     <h2>Need a workload-specific model decision?</h2>
     <p>MonoMind can review routing, caching, evaluation design, and agent architecture against the evidence and operating constraints that matter to your team.</p>
     <a className="button" href="https://monomind.one/">Talk to MonoMind <ArrowRight aria-hidden="true" size={16} /></a>
@@ -256,7 +255,7 @@ function LeaderboardScoreChart({
   if (chartData.length === 0) return null;
 
   return <section className="panel leaderboard-score-chart-panel" aria-labelledby="leaderboard-score-chart-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-score-chart-heading">Score comparison</h2><p>The published score for each model in this view. Exact values stay in the table below.</p></div></div>
+    <div className="panel-heading"><div><h2 id="leaderboard-score-chart-heading">Score comparison</h2><p>The published score for each model in this view. Exact values stay in the table below.</p></div></div>
     <ScoreBarChart data={chartData} ariaLabel={`${LEADERBOARD_ROUTES[keyName].seo.h1} score by model`} />
   </section>;
 }
@@ -300,7 +299,7 @@ function LeaderboardCostScoreChart({
 
   const frontierCount = chartData.filter((point) => point.frontier).length;
   return <section className="panel leaderboard-cost-score-panel" aria-labelledby="leaderboard-cost-score-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-cost-score-heading">Cost versus score</h2><p>Each point pairs a published score with its published workload price. {frontierCount > 0 ? `The connected line marks the ${frontierCount} value-frontier models: no cheaper published route scores higher.` : 'No value-frontier model is published for this view.'}</p></div></div>
+    <div className="panel-heading"><div><h2 id="leaderboard-cost-score-heading">Cost versus score</h2><p>Each point pairs a published score with its published workload price. {frontierCount > 0 ? `The connected line marks the ${frontierCount} value-frontier models: no cheaper published route scores higher.` : 'No value-frontier model is published for this view.'}</p></div></div>
     <CostScoreScatter data={chartData} ariaLabel={`${LEADERBOARD_ROUTES[keyName].seo.h1} cost versus score`} />
   </section>;
 }
@@ -324,7 +323,7 @@ function LeaderboardPriceHistogram({
   if (total < 2) return null;
 
   return <section className="panel leaderboard-price-histogram-panel" aria-labelledby="leaderboard-price-histogram-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-price-histogram-heading">Price distribution</h2><p>How the {total} published workload prices in this view are spread across the observed range.</p></div></div>
+    <div className="panel-heading"><div><h2 id="leaderboard-price-histogram-heading">Price distribution</h2><p>How the {total} published workload prices in this view are spread across the observed range.</p></div></div>
     <PriceHistogram buckets={buckets} ariaLabel={`${LEADERBOARD_ROUTES[keyName].seo.h1} price distribution`} />
   </section>;
 }
@@ -470,7 +469,6 @@ export function LeaderboardPage({
 
   return <div className={`content-stack leaderboard-page${category ? ' leaderboard-v21-category-page' : ''}`}>
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
-      <span className="eyebrow">{category ? `${category.version} category` : 'TokenBench leaderboard'}</span>
       <h1 id="leaderboard-heading">{title}</h1>
       <p>{summary}</p>
       <div className="leaderboard-actions" role="group" aria-label="Leaderboard actions">
@@ -494,7 +492,7 @@ export function LeaderboardPage({
       : null}
 
     <section className="panel leaderboard-filter-panel" aria-labelledby="leaderboard-filters-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Review the published revision</span><h2 id="leaderboard-filters-heading">Filter and sort</h2><p>Use the filters supported by this route’s published evidence. Estimated records remain visibly separate from ranked evidence.</p></div></div>
+      <div className="panel-heading"><div><h2 id="leaderboard-filters-heading">Filter and sort</h2><p>Use the filters supported by this route’s published evidence. Estimated records remain visibly separate from ranked evidence.</p></div></div>
       <LeaderboardFilters keyName={keyName} filters={filters} onChange={setFilters} capabilities={capabilities} />
     </section>
 
@@ -528,7 +526,7 @@ export function LeaderboardPage({
     </section>
 
     <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p><p className="muted">{positionNoteFor(keyName)}</p></div></div>
+      <div className="panel-heading"><div><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>{methodologySummary(keyName)}</p><p className="muted">{positionNoteFor(keyName)}</p></div></div>
       {state.envelope
         ? <LeaderboardEvidence publishedAt={state.envelope.publishedAt} freshness={state.envelope.freshness} attribution={state.envelope.attribution} label="Published leaderboard evidence" compact />
         : <p className="leaderboard-evidence-unavailable">No published source record is available for this view yet. TokenBench will show source links, publication time, and freshness here when a valid revision is available.</p>}
@@ -613,7 +611,7 @@ function DecisionPickCard({ group }: { readonly group: DecisionPickGroup; readon
     aria-label={`${title} leaders`}
   >
     <div className="decision-pick-card-heading">
-      <div><span className="eyebrow">{statusText}</span><h3 id={headingId}>{title}</h3></div>
+      <div><span className="leaderboard-directory-card-status">{statusText}</span><h3 id={headingId}>{title}</h3></div>
       <a href={group.entries[0]?.routePath ?? LEADERBOARD_ROUTES[group.key].pathname}>View full leaderboard <ArrowRight aria-hidden="true" size={14} /></a>
     </div>
     {group.entries.length > 0
@@ -628,7 +626,7 @@ function DecisionPickCard({ group }: { readonly group: DecisionPickGroup; readon
 function DecisionReadyPicks() {
   const state = useDecisionPicks();
   return <section className="decision-picks" aria-labelledby="decision-picks-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Start with the supported signal</span><h2 id="decision-picks-heading">Decision-ready picks</h2><p>Each preview is limited to source-supported results from the current published summary.</p></div></div>
+    <div className="panel-heading"><div><h2 id="decision-picks-heading">Decision-ready picks</h2><p>Each preview is limited to source-supported results from the current published summary.</p></div></div>
     {state.phase === 'loading' ? <Skeleton label="Loading decision-ready picks" /> : null}
     {state.phase === 'stale' ? <LeaderboardState phase="stale" error={state.error} onRetry={state.retry} /> : null}
     {state.phase === 'ready' || state.phase === 'stale'
@@ -760,7 +758,7 @@ function V21LeaderboardOverview() {
   const state = useDecisionPicks();
   const groups = new Map((state.decisionPicks ?? []).map((group) => [group.key, group]));
   return <section className="v21-leaderboard-overview" aria-label="V2.1 leaderboard overview">
-    <div className="panel-heading"><div><span className="eyebrow">V2.1 overview</span><h2>Compare by decision lens</h2><p>Each card links to one canonical category and preserves the published source evidence behind it.</p></div></div>
+    <div className="panel-heading"><div><h2>Compare by decision lens</h2><p>Each card links to one canonical category and preserves the published source evidence behind it.</p></div></div>
     {state.phase === 'loading' ? <Skeleton label="Loading leaderboard overview" /> : null}
     {state.phase === 'ready' || state.phase === 'stale' ? <div className="v21-leaderboard-overview-grid">
       {V21_OVERVIEW_LEADERBOARDS.map((category) => {
@@ -768,7 +766,7 @@ function V21LeaderboardOverview() {
         const entries = group?.entries ?? [];
         const evidenceState = group?.status === 'benchalign' ? 'BenchAlign ranking' : group ? 'Evidence lens' : null;
         return <article className="panel v21-leaderboard-overview-card" key={category.slug}>
-          <div className="v21-leaderboard-overview-card-heading"><div><span className="eyebrow">{category.version}</span><h3>{category.label}</h3></div>{evidenceState ? <span className="leaderboard-directory-card-status">{evidenceState}</span> : null}</div>
+          <div className="v21-leaderboard-overview-card-heading"><div><span className="leaderboard-directory-card-status">{category.version}</span><h3>{category.label}</h3></div>{evidenceState ? <span className="leaderboard-directory-card-status">{evidenceState}</span> : null}</div>
           <p>{category.definition}</p>
           {entries.length > 0 ? <ol className="v21-leaderboard-overview-list">
             {entries.slice(0, 10).map((entry) => <li key={entry.modelKey}>
@@ -811,13 +809,12 @@ export function V21LeaderboardPage({
       />;
     return <div className="content-stack leaderboard-page leaderboard-v21-category-page">
       <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
-        <span className="eyebrow">{category.version} category</span>
         <h1 id="leaderboard-heading">{category.label}</h1>
         <p>{category.definition}</p>
       </section>
       {content}
       <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
-        <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>Only source-published values are eligible. Incomplete endpoint and category evidence remains visible or excluded under the stated policy; it is never converted to zero.</p></div></div>
+        <div className="panel-heading"><div><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>Only source-published values are eligible. Incomplete endpoint and category evidence remains visible or excluded under the stated policy; it is never converted to zero.</p></div></div>
         {initialEnvelope
           ? <LeaderboardEvidence publishedAt={initialEnvelope.publishedAt} freshness={initialEnvelope.freshness} attribution={initialEnvelope.attribution} label="Published leaderboard evidence" compact />
           : <p className="leaderboard-evidence-unavailable">No published source record is available for this view yet. TokenBench will show source links, publication time, and freshness here when a valid revision is available.</p>}
@@ -828,7 +825,6 @@ export function V21LeaderboardPage({
   }
   return <div className="content-stack leaderboard-page leaderboard-v21-category-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
-      <span className="eyebrow">{category.version} category</span>
       <h1 id="leaderboard-heading">{category.label}</h1>
       <p>{category.definition}</p>
     </section>
@@ -838,14 +834,14 @@ export function V21LeaderboardPage({
       <a className="button button-secondary" href={ROUTE_PATHS.leaderboards}>Browse available categories</a>
     </section>
     <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Methodology</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>TokenBench does not substitute another category score when this category has no comparable published metric.</p></div></div>
+      <div className="panel-heading"><div><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>TokenBench does not substitute another category score when this category has no comparable published metric.</p></div></div>
     </section>
   </div>;
 }
 
 function LeaderboardDirectory() {
   return <section className="leaderboard-directory" aria-labelledby="leaderboard-directory-list-heading">
-    <div className="panel-heading"><div><span className="eyebrow">All published views</span><h2 id="leaderboard-directory-list-heading">Full leaderboard directory</h2><p>Choose the evidence lens that matches your decision, then inspect its source and methodology.</p></div></div>
+    <div className="panel-heading"><div><h2 id="leaderboard-directory-list-heading">Full leaderboard directory</h2><p>Choose the evidence lens that matches your decision, then inspect its source and methodology.</p></div></div>
     {DIRECTORY_GROUPS.map((group) => {
       const headingId = `leaderboard-directory-${group.title.toLowerCase().replace(/\s+/g, '-')}`;
       return <section className="leaderboard-directory-group" aria-labelledby={headingId} key={group.title}>
@@ -875,7 +871,6 @@ function LeaderboardDirectory() {
 export function LeaderboardDirectoryPage() {
   return <div className="content-stack leaderboard-page leaderboard-directory-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-directory-heading">
-      <span className="eyebrow">TokenBench directory</span>
       <h1 id="leaderboard-directory-heading">Model leaderboards</h1>
       <p>Explore current model leaders by capability, workload, cost, and human preference.</p>
       <p className="leaderboard-methodology"><strong>Method:</strong> Overall, Agent, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge remain clearly labeled evidence lenses. <a href={ROUTE_PATHS.methodologyBenchAlign}>How BenchAlign rankings work</a>.</p>

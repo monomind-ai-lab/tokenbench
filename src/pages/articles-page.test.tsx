@@ -13,4 +13,12 @@ describe('ArticlesPage', () => {
     expect(screen.getByRole('link', { name: /Hybrid Routers/i })).toHaveAttribute('href', '/articles/guides/hybrid-routers/');
     expect(screen.getAllByRole('link', { name: /LLM insights/i }).every((link) => link.getAttribute('href') === '/articles/insights/')).toBe(true);
   });
+
+  it('uses its headings and factual card metadata rather than decorative eyebrow scaffolding', () => {
+    const { container } = render(<ArticlesPage />);
+
+    expect(container.querySelector('.eyebrow')).toBeNull();
+    expect(screen.queryByText('Evergreen practical decisions')).toBeNull();
+    expect(screen.queryByText('Time-sensitive evidence records')).toBeNull();
+  });
 });

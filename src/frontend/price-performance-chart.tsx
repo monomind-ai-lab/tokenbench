@@ -178,7 +178,7 @@ function PointDetails({
   }, []);
   return <div ref={dialogRef} className="price-performance-point-details" role="dialog" aria-modal="true" aria-labelledby="price-performance-details-heading">
     <div className="price-performance-details-heading">
-      <div><span className="eyebrow">Selected point</span><h2 id="price-performance-details-heading">{point.displayName} details</h2></div>
+      <div><h2 id="price-performance-details-heading">{point.displayName} details</h2></div>
       <button ref={closeButtonRef} className="button button-secondary" type="button" onClick={onClose} aria-label="Close model details">Close</button>
     </div>
     <dl className="price-performance-details-facts">

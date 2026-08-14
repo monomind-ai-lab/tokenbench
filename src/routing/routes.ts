@@ -248,9 +248,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
 ];
 
-/** Canonical V2.1 categories are static entries; exact non-equivalent source lenses remain support routes. */
 const leaderboardFixedRoutes: readonly FixedRouteDefinition[] = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
-  .filter((key) => legacyLeaderboardCategory(key) === null)
   .map((key) => ({
     id: `leaderboard-${key}`,
     pathname: LEADERBOARD_ROUTES[key].pathname,

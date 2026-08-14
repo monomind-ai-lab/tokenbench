@@ -13,6 +13,13 @@ describe('InsightsPage', () => {
     expect(screen.getByText(/results for pricing-changes/i)).toBeInTheDocument();
   });
 
+  it('keeps insight status in metadata instead of decorative eyebrow scaffolding', () => {
+    const { container } = render(<InsightsPage />);
+
+    expect(container.querySelector('.eyebrow')).toBeNull();
+    expect(screen.getByText(/Factual review:/i)).toBeInTheDocument();
+  });
+
   it('renders a factual brief, evidence timeline, interpretation, corrections, and related decision links', () => {
     render(<InsightDetailPage insight={INSIGHTS[0]} />);
     expect(screen.getByRole('heading', { name: 'Factual brief' })).toBeInTheDocument();

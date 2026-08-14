@@ -440,7 +440,7 @@ function ComparisonPendingRoute({ pair }: { readonly pair: string }) {
   return <PageFrame activePage="compare">
     <section className="content-stack static-page-content" aria-labelledby="comparison-pending-heading">
       <header>
-        <p className="eyebrow">Comparison pending</p>
+        <p className="article-status" role="status">Comparison pending</p>
         <h1 id="comparison-pending-heading">Comparison result not yet available</h1>
         <p>{`The published result for ${pair} is not available yet. TokenBench is not presenting evidence or a winner for this pair.`}</p>
       </header>
@@ -495,7 +495,7 @@ function ModelsRoute() {
   return <PageFrame activePage="models">
     {envelope
       ? <ModelsPage envelope={envelope} />
-      : <section className="content-stack models-page" data-server-models><section className="models-hero panel" aria-labelledby="models-heading"><span className="eyebrow">Weekly model directory</span><h1 id="models-heading">Popular AI models</h1><p>Loading the latest validated model directory.</p><Skeleton label="Loading popular models" /></section></section>}
+      : <section className="content-stack models-page" data-server-models><section className="models-hero panel" aria-labelledby="models-heading"><h1 id="models-heading">Popular AI models</h1><p>Loading the latest validated model directory.</p><Skeleton label="Loading popular models" /></section></section>}
   </PageFrame>;
 }
 

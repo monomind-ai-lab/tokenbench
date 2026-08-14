@@ -206,7 +206,7 @@ export function ModelDirectoryPareto({ models, attribution = [], onCompare }: Mo
   }), [scale, visible]);
 
   return <section className="models-pareto panel" aria-labelledby="models-pareto-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Decision finding</span><h2 id="models-pareto-heading">Model price–performance frontier</h2><p>Lower 3:1 blended input/output cost and higher composite quality define the visible Pareto frontier. Missing scores or either price axis remain listed below, never plotted at zero.</p></div><p className="models-pareto-count">{rows.plotted.length} plotted · {rows.excluded.length} excluded</p></div>
+    <div className="panel-heading"><div><h2 id="models-pareto-heading">Model price–performance frontier</h2><p>Lower 3:1 blended input/output cost and higher composite quality define the visible Pareto frontier. Missing scores or either price axis remain listed below, never plotted at zero.</p></div><p className="models-pareto-count">{rows.plotted.length} plotted · {rows.excluded.length} excluded</p></div>
     <div className="models-pareto-controls" role="group" aria-label="Pareto display controls">
       <button className="button button-secondary button-small" type="button" aria-pressed={frontierOnly} onClick={() => setFrontierOnly((current) => !current)}>Frontier only</button>
       <button className="button button-secondary button-small" type="button" aria-pressed={logScale && canUseLogScale} disabled={!canUseLogScale} onClick={() => setLogScale((current) => !current)}>Log cost scale</button>

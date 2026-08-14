@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, ChevronRight, Clock, ExternalLink } from 'lucide-react';
+import { ArrowRight, ChevronRight, Clock, ExternalLink } from 'lucide-react';
 import { useEffect } from 'react';
 import { SITE_CONFIG } from '../brand/site-config';
 import { EditorialCta } from './editorial-cta';
@@ -67,13 +67,12 @@ export function GuidesHub({ isInsights = false }: { readonly isInsights?: boolea
   const validTopic = topic === 'all' || GUIDES.some((guide) => guideTopicKey(guide) === topic);
   return <main id="guide-content" className="guides-main" tabIndex={-1}>
     <section className="guides-hero" aria-labelledby="guides-heading">
-      <span className="eyebrow"><BookOpen aria-hidden="true" size={16} /> AI decision guides</span>
       <h1 id="guides-heading">AI cost optimization guides</h1>
       <p>Practical, source-backed guides for routing, cost, lifecycle, and production model decisions. Evidence that lacks a durable source date remains visibly undated.</p>
       <div className="guides-hero-actions"><a className="button guide-primary-action" href={`${ROUTE_PATHS.calculator}#calculator`}>Open the calculator</a><span>{GUIDES.length} field guides · editorial index reviewed {formatGuideDate(GUIDES[0].updatedAt)}</span></div>
     </section>
     <section className="guide-index" aria-labelledby="all-guides-heading">
-      <div className="guide-index-heading"><div><span className="eyebrow">Guides</span><h2 id="all-guides-heading">Start with the decision you need to make</h2></div><p>Featured and recent are editorial views, not implicit recency claims. <a href={ROUTE_PATHS.insights}>Browse LLM insights</a>.</p></div>
+      <div className="guide-index-heading"><div><h2 id="all-guides-heading">Start with the decision you need to make</h2></div><p>Featured and recent are editorial views, not implicit recency claims. <a href={ROUTE_PATHS.insights}>Browse LLM insights</a>.</p></div>
       <GuideFilters topic={topic} view={view} />
       <p role="status">{visible.length} results for {validTopic ? topic : 'an unavailable topic'} · {view}</p>
       {!validTopic ? <p className="article-status">This topic is unavailable. The complete guide inventory remains linked below.</p> : null}
@@ -111,7 +110,6 @@ function EvidenceBlocks({ guide }: { readonly guide: GuideArticle }) {
 
 function GuideContextualLinks({ guide }: { readonly guide: GuideArticle }) {
   return <section className="guide-callout decision-context" aria-labelledby="decision-context-heading">
-    <span className="eyebrow">Decision context</span>
     <h2 id="decision-context-heading">Related decision links</h2>
     <ul>{guide.contextualLinks.map((link) => <li key={link.leaderboard}><a href={LEADERBOARD_ROUTES[link.leaderboard].pathname} onClick={() => tracker('article_tool_opened', guide, 'leaderboard')}>{link.label}</a><span> — {link.description}</span></li>)}{guide.relatedDecisionLinks.map((link) => <li key={link.href}><a href={link.href} onClick={() => tracker('article_tool_opened', guide, link.href.includes('cost') ? 'cost' : link.href.includes('lifecycle') ? 'lifecycle' : 'compare')}>{link.label}</a></li>)}</ul>
   </section>;
@@ -124,15 +122,14 @@ export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
     <nav className="breadcrumbs" aria-label="Breadcrumb"><a href={ROUTE_PATHS.articles}>Articles</a><ChevronRight aria-hidden="true" size={14} /><a href={ROUTE_PATHS.guides}>Guides</a><ChevronRight aria-hidden="true" size={14} /><span aria-current="page">{guide.title}</span></nav>
     <article className="guide-article">
       <header className="article-header">
-        <span className="eyebrow">Guide · {guide.category}</span>
         <h1>{guide.title}</h1>
         <p className="article-dek">{guide.dek}</p>
-        <div className="article-byline"><span>Published {formatGuideDate(guide.publishedAt)}</span><span>Updated {formatGuideDate(guide.updatedAt)}</span><span>Factual review: {guide.factualReview}</span><span>Author: {guide.author.name ?? 'Unavailable'}</span><span>Reviewer: {guide.reviewer.name ?? 'Unavailable'}</span>{guide.readMinutes ? <span><Clock aria-hidden="true" size={15} />{guide.readMinutes} min read</span> : null}</div>
+        <div className="article-byline"><span>Guide: {guide.category}</span><span>Published {formatGuideDate(guide.publishedAt)}</span><span>Updated {formatGuideDate(guide.updatedAt)}</span><span>Factual review: {guide.factualReview}</span><span>Author: {guide.author.name ?? 'Unavailable'}</span><span>Reviewer: {guide.reviewer.name ?? 'Unavailable'}</span>{guide.readMinutes ? <span><Clock aria-hidden="true" size={15} />{guide.readMinutes} min read</span> : null}</div>
         {guide.factualReview === 'stale' || guide.factualReview === 'partial' ? <p className="article-status" role="status">Evidence review state: {guide.factualReview}. Undated or incomplete source claims are not treated as current facts.</p> : null}
       </header>
       <div className="article-layout">
         <div className="article-body">
-          <section className="takeaways"><span className="eyebrow">Decision</span><h2>Decision question</h2><p>{guide.decisionQuestion}</p><h2>Concise answer</h2><p>{guide.answer}</p></section>
+          <section className="takeaways"><h2>Decision question</h2><p>{guide.decisionQuestion}</p><h2>Concise answer</h2><p>{guide.answer}</p></section>
           <section className="article-section"><h2>Assumptions</h2><ul>{guide.assumptions.map((item) => <li key={item}>{item}</li>)}</ul></section>
           <section className="article-section"><h2>Reproducible framework</h2><ol>{guide.framework.map((item) => <li key={item}>{item}</li>)}</ol></section>
           <EvidenceBlocks guide={guide} />
@@ -142,7 +139,7 @@ export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
         <details className="article-toc" onToggle={(event) => { if (event.currentTarget.open) trackTokenBenchEvent('guide_toc_opened', { articleId: guide.id, route: window.location.pathname }); }}><summary>On this page</summary><ol>{guide.sections.map((section) => <li key={section.id}><a href={`#${section.id}`}>{section.title.replace(/^\d+\.\s*/, '')}</a></li>)}</ol></details>
       </div>
     </article>
-    <section className="related-guides" aria-labelledby="related-guides-heading"><div className="guide-index-heading"><div><span className="eyebrow">Keep evaluating</span><h2 id="related-guides-heading">Related guides</h2></div><a href={ROUTE_PATHS.guides}>View all guides</a></div><div className="related-grid">{recommendations.map((related) => <GuideCard guide={related} relatedTo={guide} key={related.slug} />)}</div></section>
+    <section className="related-guides" aria-labelledby="related-guides-heading"><div className="guide-index-heading"><div><h2 id="related-guides-heading">Related guides</h2></div><a href={ROUTE_PATHS.guides}>View all guides</a></div><div className="related-grid">{recommendations.map((related) => <GuideCard guide={related} relatedTo={guide} key={related.slug} />)}</div></section>
     <GuideContextualLinks guide={guide} />
     <EditorialCta eligible={guide.ctaEligible} route={guidePath(guide.slug)} precedingAction="article" subjectId={guide.id} />
   </main>;

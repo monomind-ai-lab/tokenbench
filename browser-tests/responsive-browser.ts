@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import type { CatalogResponse } from '../src/catalog/contracts';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
+import { PRICE_PERFORMANCE_SCORE_LANES } from '../src/benchmarks/price-performance-contracts';
 import { themeBootstrapMarkup } from '../src/brand/theme-bootstrap';
 import { buildBlankTestCheatsheetPdf } from '../src/newsletter/test-cheatsheet';
 import {
@@ -50,9 +51,38 @@ function contrastRatio(left: string, right: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
+const CALCULATOR_PATH = '/cost/calculator/';
 const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
 const CATALOG_FIXTURE_IDENTITY_HEADER = 'x-tokenbench-browser-catalog-fixture';
+
+const BROWSER_PRICE_PERFORMANCE_ENVELOPE = {
+  revision: 'browser-price-performance-r1',
+  publishedAt: '2099-01-01T00:00:00.000Z',
+  freshness: { status: 'fresh', checkedAt: '2099-01-01T00:00:00.000Z' },
+  attribution: [{ sourceId: 'openrouter', label: 'OpenRouter', url: 'https://openrouter.ai/models', updatedAt: '2099-01-01T00:00:00.000Z' }],
+  data: {
+    scoreMethodology: Object.fromEntries(PRICE_PERFORMANCE_SCORE_LANES.map((lane) => [lane, `${lane} score`])),
+    costDefinitions: { output: 'Published output USD per one million tokens', blended3To1: '(3 × input USD/M + output USD/M) / 4' },
+    capabilities: {
+      scoreLanes: [...PRICE_PERFORMANCE_SCORE_LANES],
+      costBases: ['output', 'blended-3-1'],
+      creators: ['OpenAI'],
+      sourceTypes: ['Proprietary', 'Open Weight', 'Unknown'],
+      evidenceStatuses: ['supported', 'estimated', 'source_only'],
+      statuses: ['current', 'archived'],
+    },
+    points: [{
+      modelKey: 'gpt-5-6-sol', slug: 'gpt-5-6-sol', displayName: 'GPT-5.6 Sol', creator: 'OpenAI', familyId: 'gpt-5',
+      status: 'current', sourceType: 'Proprietary', evidenceStatus: 'supported',
+      scores: Object.fromEntries(PRICE_PERFORMANCE_SCORE_LANES.map((lane) => [lane, lane === 'overall' ? 81.48 : 77.95])),
+      route: {
+        sourceId: 'openrouter', providerId: 'openai', routeId: 'openai:gpt-5-6-sol', sourceModelId: 'openai/gpt-5.6-sol', canonicalSlug: 'gpt-5-6-sol', sourceArtifactId: 'browser-price-artifact',
+        inputUsdPerMillion: 2, cachedInputUsdPerMillion: null, outputUsdPerMillion: 8, contextWindowTokens: 200_000, verificationStatus: 'primary',
+        maxInputTokens: null, maxOutputTokens: null, inputModalities: ['text'], outputModalities: ['text'], supportedParameters: null,
+      },
+    }],
+  },
+};
 
 interface CatalogFixture {
   expectNextDelivery: () => Promise<void>;
@@ -162,7 +192,21 @@ async function assertNoHorizontalOverflow(page: Page): Promise<void> {
     clientWidth: document.documentElement.clientWidth,
     scrollWidth: document.documentElement.scrollWidth,
   }));
-  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+  const overflowing = await page.locator('body *').evaluateAll((elements) => elements
+    .map((element) => {
+      const rect = element.getBoundingClientRect();
+      const ancestors: string[] = [];
+      let parent = element.parentElement;
+      while (parent && ancestors.length < 4) {
+        ancestors.push(`${parent.tagName.toLowerCase()}.${parent.className}`);
+        parent = parent.parentElement;
+      }
+      return { selector: `${element.tagName.toLowerCase()}.${element.className}`, ancestors, right: Math.ceil(rect.right) };
+    })
+    .filter((element) => element.right > document.documentElement.clientWidth)
+    .sort((left, right) => right.right - left.right)
+    .slice(0, 3));
+  expect(dimensions.scrollWidth, JSON.stringify(overflowing)).toBeLessThanOrEqual(dimensions.clientWidth);
 }
 
 const INTERNAL_FIXTURE_REVISIONS = ['browser-benchmark-r1', 'browser-catalog-r1', 'test-revision'] as const;
@@ -185,18 +229,23 @@ async function assertFirstViewportOmitsInternalRevisions(page: Page): Promise<vo
   for (const revision of INTERNAL_FIXTURE_REVISIONS) expect(visibleText).not.toContain(revision);
 }
 
-async function installInteractiveRouteStubs(page: Page): Promise<CatalogFixture> {
+async function installInteractiveRouteStubs(
+  page: Page,
+  { includeHandlerComparison = true }: { readonly includeHandlerComparison?: boolean } = {},
+): Promise<CatalogFixture> {
   const origin = previewOrigin();
   await resetCatalogFixtureLifecycle(page);
   await blockExternalRequests(page, origin);
+  await stubStaticPageThirdPartyAssets(page);
   const catalogFixture = await installCatalogFixture(page, FRONTEND_TEST_CATALOG);
   await stubBenchmarkDirectory(page, origin);
   await page.route((url) => url.origin === origin && url.pathname.startsWith('/api/benchmarks/leaderboards/'), (route) => fulfillJson(route, {
     error: 'Published benchmark data is unavailable for this fixture route.',
   }, 503));
+  await page.route((url) => url.origin === origin && url.pathname === '/api/benchmarks/price-performance', (route) => fulfillJson(route, BROWSER_PRICE_PERFORMANCE_ENVELOPE));
   await stubLeaderboard(page, origin, 'llm-coding', readyCodingLeaderboard());
   await stubLeaderboard(page, origin, 'media-text-to-image', readyMediaLeaderboard());
-  await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
+  if (includeHandlerComparison) await stubHandlerBackedComparison(page, origin, { assetMode: handlerBackedAssetMode() });
   return catalogFixture;
 }
 
@@ -290,14 +339,14 @@ interface HydrationMatrixRoute {
 const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/', heading: 'Transparent AI Costs. Verified Benchmarks.', hydratedClientMarker: '.home-page' },
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
-  { path: '/tools/subscriptions-vs-apis/', heading: 'Should you subscribe or pay as you go?', hydratedClientMarker: '.calculator-page' },
+  { path: '/cost/calculator/', heading: 'Should you subscribe or pay as you go?', hydratedClientMarker: '.calculator-page' },
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
   { path: '/leaderboards/llm/coding/', heading: 'Coding benchmark', hydratedClientMarker: '.leaderboard-results[aria-label="Coding benchmark"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text to image', hydratedClientMarker: '.leaderboard-results[aria-label="Text to image"]' },
   { path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page' },
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
-  { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
-  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
+  { path: '/articles/guides/', heading: 'AI cost optimization guides', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
+  { path: '/articles/guides/hybrid-routers/', heading: 'Hybrid Routers', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
 ];
 
 const hydrationThemes = ['dark', 'light'] as const;
@@ -790,7 +839,7 @@ test.describe('responsive calculator browser harness', () => {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FRONTEND_TEST_CATALOG) });
     });
-    await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
+    await page.goto('/cost/calculator/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'API-equivalent monthly cost' })).toBeVisible({ timeout: 15_000 });
 
@@ -1355,8 +1404,8 @@ test.describe('motion and named call-to-action coverage', () => {
   test('respects reduced-motion preferences for animated and transitional UI', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await blockExternalRequests(page);
-    await page.goto('/guides/');
-    await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
+    await page.goto('/articles/guides/');
+    await expect(page.getByRole('heading', { name: 'AI cost optimization guides', level: 1 })).toBeVisible();
     const motion = await page.locator('.guide-card').first().evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -1420,10 +1469,10 @@ test.describe('guides browser harness', () => {
     test(`${width}px guide hub stays readable without horizontal overflow`, async ({ page }) => {
       await page.setViewportSize({ width, height: 1000 });
       await blockExternalRequests(page);
-      await page.goto('/guides/');
+      await page.goto('/articles/guides/');
 
-      await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
-      await expect(page.locator('.guide-card')).toHaveCount(5);
+      await expect(page.getByRole('heading', { name: 'AI cost optimization guides', level: 1 })).toBeVisible();
+      await expect(page.locator('.guide-card')).toHaveCount(8);
       const menu = page.getByRole('button', { name: 'Open navigation' });
       if (await menu.isVisible()) {
         await menu.focus();
@@ -1441,29 +1490,29 @@ test.describe('guides browser harness', () => {
   }
 
   test('article ships crawlable body, unique metadata, structured data, and cross-links', async ({ page, request }) => {
-    const path = '/guides/track-claude-code-usage/';
+    const path = '/articles/guides/hybrid-routers/';
     const response = await request.get(path);
     const rawHtml = await response.text();
-    expect(rawHtml).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
-    expect(rawHtml).toContain('Official references');
+    expect(rawHtml).toContain('<h1>Hybrid Routers</h1>');
+    expect(rawHtml).toContain('Sources and effective dates');
     expect(rawHtml).toContain('application/ld+json');
 
     await page.setViewportSize({ width: 1440, height: 1000 });
     await blockExternalRequests(page);
     await page.goto(path);
-    await expect(page.getByRole('heading', { name: 'How to Track Claude Code Usage, Tokens, and Spend', level: 1 })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Hybrid Routers', level: 1 })).toBeVisible();
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://tokenbench.monomind.one${path}`);
-    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /subscription limits differ from API billing/i);
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /explain each route choice/i);
     await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(2);
-    await expect(page.getByRole('link', { name: /Models, usage, and limits/i })).toHaveAttribute('href', /^https:\/\/support\.claude\.com/);
+    await expect(page.getByRole('link', { name: /OpenRouter routing documentation/i })).toHaveAttribute('href', /^https:\/\/openrouter\.ai/);
     await expect(page.getByRole('heading', { name: 'Related guides' })).toBeVisible();
   });
 
   test('guide theme control defaults dark and persists both theme choices', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await blockExternalRequests(page);
-    await page.goto('/guides/openrouter-guide-model-routing-cost-controls/');
+    await page.goto('/articles/guides/hybrid-routers/');
 
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await page.getByRole('button', { name: 'Toggle light theme' }).click();
@@ -1476,6 +1525,77 @@ test.describe('guides browser harness', () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  });
+});
+
+test.describe('V2.1 release contract', () => {
+  const releaseRoutes = [
+    ['/articles/', 'Guides'],
+    ['/articles/guides/', 'AI cost optimization guides'],
+    ['/articles/guides/hybrid-routers/', 'Hybrid Routers'],
+    ['/articles/insights/', 'LLM insights'],
+    ['/articles/insights/pricing-effective-date-check/', 'Pricing notices need announcement and effective-date separation'],
+    ['/cost/calculator/', 'Should you subscribe or pay as you go?'],
+    ['/cost/breakeven/', 'Subscription breakeven analysis'],
+    ['/llm-price-performance/', 'LLM Price vs. Performance Benchmark'],
+    ['/models/', 'Popular AI models'],
+    ['/leaderboards/', 'Model leaderboards'],
+    ['/compare/', 'Compare models side by side'],
+    // The Vite preview does not manufacture pair evidence without the Pages
+    // handler fixture, so this canonical route must expose its honest fallback.
+    [HANDLER_COMPARISON_PATH, 'Comparison result not yet available'],
+  ] as const;
+
+  test('keeps the representative V2.1 decision routes accessible and contained across every required viewport and theme', async ({ page }) => {
+    test.setTimeout(300_000);
+    const errors = captureBrowserErrors(page);
+    await installInteractiveRouteStubs(page, { includeHandlerComparison: false });
+
+    for (const viewport of viewports) {
+      await page.setViewportSize({ width: viewport.width, height: 1000 });
+      for (const theme of ['light', 'dark'] as const) {
+        await setStoredTheme(page, theme);
+        for (const [path, heading] of releaseRoutes) {
+          await page.goto(path, { waitUntil: 'domcontentloaded' });
+          await expect(page.getByRole('heading', { level: 1, name: heading })).toHaveCount(1);
+          await expect(page.locator('main')).toHaveCount(1);
+          await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+          await assertNoHorizontalOverflow(page);
+          if (viewport.width <= 768) await assertCompactMenuPresence(page);
+        }
+      }
+    }
+
+    await page.setViewportSize({ width: 375, height: 1000 });
+    await page.goto('/articles/');
+    const filter = page.locator('.article-filters a').first();
+    await expect(filter).toBeVisible();
+    await expect(filter.evaluate((element) => element.getBoundingClientRect().height)).resolves.toBeGreaterThanOrEqual(44);
+    await filter.focus();
+    await expect(filter).toBeFocused();
+
+    await page.goto('/articles/insights/pricing-effective-date-check/');
+    const evidenceLink = page.locator('.evidence-timeline a').first();
+    await expect(evidenceLink.evaluate((element) => element.getBoundingClientRect().height)).resolves.toBeGreaterThanOrEqual(44);
+    await evidenceLink.focus();
+    await expect(evidenceLink).toBeFocused();
+    await expect(page.getByText(/No corrections have been published/i)).toBeVisible();
+
+    expect(errors.consoleErrors, JSON.stringify(errors.failedRequests)).toEqual([]);
+    expect(errors.pageErrors).toEqual([]);
+  });
+
+  test('preserves article sources and table evidence in print without printing chrome or interactive controls', async ({ page }) => {
+    await installInteractiveRouteStubs(page, { includeHandlerComparison: false });
+    await page.setViewportSize({ width: 1024, height: 1000 });
+    await page.goto('/articles/insights/pricing-effective-date-check/');
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.locator('.article-source, .evidence-timeline a').first()).toBeVisible();
+    await expect(page.locator('.top-header')).toBeHidden();
+
+    await page.goto('/llm-price-performance/');
+    await expect(page.getByRole('table', { name: 'Price versus performance values' })).toBeVisible();
+    await expect(page.locator('.price-performance-filter-panel')).toBeHidden();
   });
 });
 
@@ -1688,7 +1808,7 @@ test.describe('home and tools route runtime', () => {
         await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
         const heroActions = page.locator('.home-hero-actions');
         await expect(heroActions.getByRole('link', { name: 'Compare models', exact: true })).toHaveAttribute('href', '/compare/');
-        await expect(heroActions.getByRole('link', { name: 'Review Your Subscriptions', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+        await expect(heroActions.getByRole('link', { name: 'Review Your Subscriptions', exact: true })).toHaveAttribute('href', '/cost/calculator/');
         await expect(heroActions.getByRole('link', { name: 'Browse leaderboards', exact: true })).toHaveAttribute('href', '/leaderboards/');
         await expect(page.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeVisible();
 
@@ -1727,7 +1847,7 @@ test.describe('home and tools route runtime', () => {
     await expect(page.locator('.static-page-shell')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Available TokenBench tools' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/cost/calculator/');
   });
 });
 
@@ -2409,7 +2529,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
     });
 
     try {
-      await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
+      await page.goto('/cost/calculator/', { waitUntil: 'domcontentloaded' });
       await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
       await activateSkipLinkAndAssertTarget(page, 'calculator');
     } finally {
@@ -2418,8 +2538,8 @@ test.describe('keyboard and chart accessibility regressions', () => {
   });
 
   for (const guide of [
-    { path: '/guides/', heading: 'Spend smarter on AI', name: 'guide hub' },
-    { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', name: 'guide article' },
+    { path: '/articles/guides/', heading: 'AI cost optimization guides', name: 'guide hub' },
+    { path: '/articles/guides/hybrid-routers/', heading: 'Hybrid Routers', name: 'guide article' },
   ]) {
     test(`moves focus to guide content when the ${guide.name} skip link is activated`, async ({ page }) => {
       await page.setViewportSize({ width: 390, height: 1000 });

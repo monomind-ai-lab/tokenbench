@@ -1,7 +1,7 @@
 import { HOME_PAGE_COPY, SITE_CONFIG } from '../brand/site-config';
 import { INSIGHT_BY_SLUG, insightPath } from '../articles/content';
 import { GUIDE_BY_SLUG, guidePath } from '../guides/content';
-import { LEADERBOARD_ROUTES, ROUTE_PATHS, pathnameForRoute, type AppRoute } from '../routing/routes';
+import { LEADERBOARD_CATEGORIES, LEADERBOARD_ROUTES, ROUTE_PATHS, pathnameForRoute, type AppRoute, type LeaderboardCategory } from '../routing/routes';
 
 export interface PageMetadata {
   readonly title: string;
@@ -174,6 +174,27 @@ const pageDefinitions = {
   },
 } as const;
 
+function leaderboardCategoryDefinition(category: LeaderboardCategory): MetadataDefinition {
+  const title = `${category[0].toUpperCase()}${category.slice(1)} leaderboard`;
+  return {
+    title: `${title} | ${SITE_CONFIG.name}`,
+    description: `Review ${category} model evidence with source attribution, explicit unavailable states, and ${SITE_CONFIG.name}'s documented methodology context.`,
+    h1: title,
+  };
+}
+
+const leaderboardSlaDefinition: MetadataDefinition = {
+  title: `Latency and throughput SLA | ${SITE_CONFIG.name}`,
+  description: `Review available latency and throughput evidence with explicit source coverage and unavailable states on ${SITE_CONFIG.name}.`,
+  h1: 'Latency and throughput SLA',
+};
+
+const leaderboardCustomDefinition: MetadataDefinition = {
+  title: `Custom model leaderboard | ${SITE_CONFIG.name}`,
+  description: `Explore a transparent custom model leaderboard with visible evidence boundaries and workload-relevant category controls on ${SITE_CONFIG.name}.`,
+  h1: 'Custom model leaderboard',
+};
+
 export function metadataForRoute(route: AppRoute): PageMetadata {
   switch (route.kind) {
     case 'home': return makeMetadata('/', pageDefinitions.home);
@@ -190,6 +211,9 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'welcome': return makeMetadata(ROUTE_PATHS.welcome, pageDefinitions.welcome);
     case 'privacy': return makeMetadata(ROUTE_PATHS.privacy, pageDefinitions.privacy);
     case 'leaderboards': return makeMetadata('/leaderboards/', pageDefinitions.leaderboards);
+    case 'leaderboardCategory': return makeMetadata(pathnameForRoute(route)!, leaderboardCategoryDefinition(route.category));
+    case 'leaderboardSla': return makeMetadata(ROUTE_PATHS.leaderboardSla, leaderboardSlaDefinition);
+    case 'leaderboardCustom': return makeMetadata(ROUTE_PATHS.leaderboardCustom, leaderboardCustomDefinition);
     case 'leaderboard': {
       const definition = LEADERBOARD_ROUTES[route.key];
       return makeMetadata(definition.pathname, definition.seo);

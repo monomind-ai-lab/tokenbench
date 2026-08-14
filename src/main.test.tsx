@@ -174,6 +174,17 @@ describe('browser entrypoint', () => {
       expect(renderToStaticMarkup(rendered)).toContain(expectedExperience);
     });
 
+  it.each(['/articles/', '/articles/guides/', '/articles/insights/'])('replaces the non-isomorphic static article shell at %s instead of hydrating it', async (pathname) => {
+    window.history.replaceState({}, '', pathname);
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+  });
+
   it.each([
     ['/cost/calculator/', 'cost-calculator-initial-data', '{"query":{"workload":{"conversationsPerDay":12,"messagesPerConversation":6,"inputTokensPerMessage":900,"outputTokensPerMessage":300,"activeDaysPerMonth":22},"providerId":"provider-a","planId":"provider-a:starter","modelIds":["provider-a:alpha:direct_provider"],"submitted":true},"revision":"published-r1","effectiveAt":"2026-08-14T00:00:00.000Z"}', 'calculator'],
     ['/cost/breakeven/', 'cost-breakeven-initial-data', '{"seats":10,"feePerSeat":20,"maxTokensMillions":300,"inputShare":0.75,"inputPricePerMillion":0.27,"outputPricePerMillion":1.1,"capacityTokens":null}', 'breakeven'],

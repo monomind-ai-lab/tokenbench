@@ -38,6 +38,9 @@ describe('crawlable static-page generator', () => {
     const compareHub = await readFile(join(root, 'compare/index.html'), 'utf8');
     const leaderboardDirectory = await readFile(join(root, 'leaderboards/index.html'), 'utf8');
     const leaderboard = await readFile(join(root, 'leaderboards/llm/overall/index.html'), 'utf8');
+    const leaderboardCategory = await readFile(join(root, 'leaderboards/overall/index.html'), 'utf8');
+    const leaderboardSla = await readFile(join(root, 'leaderboards/sla/index.html'), 'utf8');
+    const leaderboardCustom = await readFile(join(root, 'leaderboards/custom/index.html'), 'utf8');
     const coding = await readFile(join(root, 'leaderboards/llm/coding/index.html'), 'utf8');
     const reasoning = await readFile(join(root, 'leaderboards/llm/reasoning/index.html'), 'utf8');
     const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
@@ -90,6 +93,10 @@ describe('crawlable static-page generator', () => {
     expect(leaderboard).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/overall/">');
     expect(coding).toContain('<title>Coding benchmark | TokenBench</title>');
     expect(multimodal).toContain('<title>Multimodal | TokenBench</title>');
+    for (const html of [leaderboardCategory, leaderboardSla, leaderboardCustom]) {
+      expect(html).toContain('Awaiting a published benchmark revision');
+      expect(html).toContain('<main id="page-content"');
+    }
 
     expect(reasoning).toContain('<h1>Reasoning</h1>');
     expect(reasoning).toContain('not a validated BenchAlign ranking');
@@ -121,12 +128,14 @@ describe('crawlable static-page generator', () => {
     expect(guide).toContain(`https://tokenbench.monomind.one${guidePath(GUIDES[0].slug)}`);
     expect(guide).toContain('Decision question');
     expect(guide).toContain('Sources and effective dates');
+    expect(guide).not.toContain('class="eyebrow"');
     expect(insight).toContain(`<h1>${INSIGHTS[0].title}</h1>`);
     expect(insight).toContain('Factual brief');
     expect(insight).toContain('Evidence timeline');
     expect(insight).toContain('TokenBench interpretation');
     expect(insight).toContain('"@type":"Article"');
     expect(insight).toContain('"@type":"BreadcrumbList"');
+    expect(insight).not.toContain('class="eyebrow"');
 
     expect(tools).toContain('href="/cost/calculator/"');
     expect(tools).not.toContain('href="/cost/breakeven/"');
@@ -276,13 +285,15 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(47);
+    expect(FIXED_ROUTES).toHaveLength(52);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES
-      .filter(({ pathname }) => pathname !== '/' && !/^\/articles\/(guides\/[^/]+|insights\/[^/]+)\/$/u.test(pathname))
-      .map(({ pathname }) => `${pathname.slice(1)}index.html`);
+      .filter(({ pathname }) => pathname !== '/')
+      .map(({ pathname }) => `${pathname.slice(1)}index.html`)
+      .concat('404.html');
     const unownedPages = [
+      'articles/insights/drafts/index.html',
       'guides/drafts/index.html',
       'leaderboards/llm/research-notes/index.html',
       'leaderboards/media/drafts/index.html',

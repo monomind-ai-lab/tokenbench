@@ -187,7 +187,11 @@ if (route.kind === 'modelProfile') {
   const root = document.getElementById('root')!;
   if (route.kind === 'articles' || route.kind === 'guides' || route.kind === 'insights' || route.kind === 'insightDetail'
     || route.kind === 'notFound' && window.location.pathname.startsWith('/articles/')) {
-    hydrateRoot(root, <StrictMode><RootApp /></StrictMode>);
+    // Editorial static markup is a complete no-JS fallback, but its shell and
+    // landmark ids intentionally differ from the interactive application.
+    // Replace it rather than triggering a hydration mismatch and client retry.
+    root.replaceChildren();
+    createRoot(root).render(<StrictMode><RootApp /></StrictMode>);
   } else {
   // These static shells remain for no-JavaScript crawlers. Once their
   // interactive route mounts, clear the fallback so it cannot duplicate UI.

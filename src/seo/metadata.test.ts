@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INSIGHTS, insightPath } from '../articles/content';
 import { GUIDES, guidePath } from '../guides/content';
-import type { AppRoute, LeaderboardKey } from '../routing/routes';
+import { LEADERBOARD_CATEGORIES, type AppRoute, type LeaderboardKey } from '../routing/routes';
 import { metadataForRoute } from './metadata';
 
 const origin = 'https://tokenbench.monomind.one';
@@ -42,6 +42,12 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'welcome' }, canonical: `${origin}/welcome/` },
   { route: { kind: 'privacy' }, canonical: `${origin}/privacy/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
+  ...LEADERBOARD_CATEGORIES.map((category) => ({
+    route: { kind: 'leaderboardCategory' as const, category },
+    canonical: `${origin}/leaderboards/${category}/`,
+  })),
+  { route: { kind: 'leaderboardSla' }, canonical: `${origin}/leaderboards/sla/` },
+  { route: { kind: 'leaderboardCustom' }, canonical: `${origin}/leaderboards/custom/` },
   { route: { kind: 'models' }, canonical: `${origin}/models/` },
   { route: { kind: 'modelLifecycle' }, canonical: `${origin}/models/lifecycle/` },
   { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },

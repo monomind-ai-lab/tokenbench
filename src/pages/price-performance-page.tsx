@@ -241,7 +241,7 @@ function latestAttributionBySource(attribution: readonly PricePerformanceAttribu
 
 function Evidence({ envelope }: { readonly envelope: PricePerformanceEnvelope }) {
   return <section className="panel price-performance-evidence" aria-labelledby="price-performance-evidence-heading">
-    <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="price-performance-evidence-heading">Method and freshness</h2><p>Scores are source-published benchmark lanes. Missing score or price facts are unavailable and excluded; published zero prices remain visible without a finite score-per-dollar value.</p></div></div>
+    <div className="panel-heading"><div><h2 id="price-performance-evidence-heading">Method and freshness</h2><p>Scores are source-published benchmark lanes. Missing score or price facts are unavailable and excluded; published zero prices remain visible without a finite score-per-dollar value.</p></div></div>
     <dl className="price-performance-evidence-facts"><div><dt>Revision</dt><dd>{envelope.revision}</dd></div><div><dt>Published</dt><dd>{envelope.publishedAt}</dd></div><div><dt>Checked</dt><dd>{envelope.freshness.checkedAt}</dd></div></dl>
     <ul className="price-performance-source-list" aria-label="Price-performance sources">{latestAttributionBySource(envelope.attribution).map((source) => <li key={source.sourceId}><a href={source.url} target="_blank" rel="noreferrer">{source.label}</a><span>Updated {source.updatedAt}</span></li>)}</ul>
   </section>;
@@ -299,7 +299,6 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
 
   return <div className="content-stack price-performance-page">
     <section className="panel price-performance-hero" aria-labelledby="price-performance-heading">
-      <span className="eyebrow">TokenBench decision surface</span>
       <h1 id="price-performance-heading">LLM Price vs. Performance Benchmark</h1>
       <p>Compare real-time LLM API pricing against verified benchmark scores. Track Pareto frontier models to identify the optimal balance of intelligence and cost for your workload.</p>
       <div className="price-performance-facts"><span className={stale ? 'price-performance-freshness stale' : 'price-performance-freshness'}>{stale ? 'Stale evidence' : 'Fresh evidence'}</span><span>Output USD / 1M default</span></div>
@@ -308,12 +307,12 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
     {stale ? <div className="price-performance-stale" role="status"><strong>Stale benchmark data</strong><span>{envelope.freshness.message ?? 'Showing the last valid published revision while refresh is unavailable.'}</span></div> : null}
 
     <section className="panel price-performance-filter-panel" aria-labelledby="price-performance-filters-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Decision controls</span><h2 id="price-performance-filters-heading">Filter Models &amp; Data Parameters</h2><p>Customize the score lane, pricing range, vendor filters to update the scatter plot and data tables below.</p></div></div>
+      <div className="panel-heading"><div><h2 id="price-performance-filters-heading">Filter Models &amp; Data Parameters</h2><p>Customize the score lane, pricing range, vendor filters to update the scatter plot and data tables below.</p></div></div>
       <PricePerformanceFilters state={state} envelope={envelope} displayedCosts={displayedCosts} onChange={setState} />
     </section>
 
     <section className="panel price-performance-chart-panel" aria-labelledby="price-performance-chart-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Analytical view</span><h2 id="price-performance-chart-heading">Price–Performance Pareto Frontier</h2><p>Models on the dotted line represent the best performance available at their given price point (Pareto frontier). Click any point to inspect exact scores and token costs.</p></div></div>
+      <div className="panel-heading"><div><h2 id="price-performance-chart-heading">Price–Performance Pareto Frontier</h2><p>Models on the dotted line represent the best performance available at their given price point (Pareto frontier). Click any point to inspect exact scores and token costs.</p></div></div>
       {chartAvailable
         ? noMatches
           ? <p className="price-performance-chart-empty-note">No chart points are available for this category.</p>
@@ -322,7 +321,7 @@ export function PricePerformancePage({ envelope, chartAvailable = true, initialS
     </section>
 
     <section className="panel price-performance-results" aria-labelledby="price-performance-results-heading">
-      <div className="panel-heading"><div><span className="eyebrow">Equivalent values</span><h2 id="price-performance-results-heading">Model Performance &amp; Value Leaderboard</h2><p>Compare efficiency metrics, including score-per-dollar values, across all current models.</p></div></div>
+      <div className="panel-heading"><div><h2 id="price-performance-results-heading">Model Performance &amp; Value Leaderboard</h2><p>Compare efficiency metrics, including score-per-dollar values, across all current models.</p></div></div>
       {noMatches ? <div className="price-performance-category-empty" role="status" aria-label="No eligible models match these filters"><strong>No eligible models match these filters</strong><p>Try another score lane, creator, evidence state, status, or price band.</p></div> : null}
       <PricePerformanceTable points={summary} attribution={envelope.attribution} label={tableLabel} showEmptyState={false} />
       {!noMatches && views.length > summary.length ? <details className="price-performance-full-table"><summary>View all {views.length} filtered models</summary><PricePerformanceTable points={views} attribution={envelope.attribution} label="All filtered price versus performance values" showEmptyState={false} /></details> : null}
