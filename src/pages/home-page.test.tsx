@@ -205,6 +205,35 @@ describe('HomePage', () => {
     expect(document.querySelectorAll('[data-home-preview] div[role="button"]')).toHaveLength(0);
   });
 
+  it('exposes Articles channel links inside the Articles preview', () => {
+    renderWithHomeSummary();
+
+    const articlesPreview = screen.getByRole('region', { name: 'Articles preview' });
+    expect(within(articlesPreview).getByRole('link', { name: 'Guides' })).toHaveAttribute('href', '/articles/guides/');
+    expect(within(articlesPreview).getByRole('link', { name: 'LLM insights' })).toHaveAttribute('href', '/articles/insights/');
+    expect(within(articlesPreview).getByRole('link', { name: 'Inspect articles' })).toHaveAttribute('href', '/articles/');
+  });
+
+  it('uses clean preview heading IDs and exact aria-labelledby references', () => {
+    renderWithHomeSummary();
+
+    const expectedIds = [
+      'home-preview-models',
+      'home-preview-leaderboards',
+      'home-preview-compare',
+      'home-preview-cost-calculator',
+      'home-preview-articles',
+    ];
+    const previews = [...document.querySelectorAll<HTMLElement>('[data-home-preview]')];
+
+    expect(previews.map((preview) => preview.getAttribute('aria-labelledby'))).toEqual(expectedIds);
+    expect(previews.map((preview) => preview.querySelector('h2')?.id)).toEqual(expectedIds);
+    expect(previews.every((preview) => {
+      const heading = preview.querySelector('h2');
+      return heading !== null && preview.getAttribute('aria-labelledby') === heading.id;
+    })).toBe(true);
+  });
+
   it('explains the product and exposes the three primary decisions', () => {
     renderWithHomeSummary();
 

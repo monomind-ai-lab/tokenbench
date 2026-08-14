@@ -145,6 +145,11 @@ const HOME_PREVIEWS = [
   { title: 'Articles preview', description: 'Read source-backed guides for practical AI operating decisions.', href: ROUTE_PATHS.articles, action: 'Inspect articles' },
 ] as const;
 
+function homePreviewHeadingId(href: string): string {
+  const slug = href.replaceAll(/[^a-z0-9]+/giu, '-').replace(/^-+|-+$/g, '');
+  return `home-preview-${slug}`;
+}
+
 function HomeMetricsStrip({ metrics }: { readonly metrics: HomeMetrics }) {
   return <section className="home-metrics panel" aria-label="Home metrics">
     <p className="eyebrow">Evidence snapshot · 50/50 input/output mix</p>
@@ -161,11 +166,14 @@ function HomePreviewGrid() {
   return <section className="home-preview-section" aria-labelledby="home-previews-heading">
     <div className="panel-heading"><div><span className="eyebrow">Decision surfaces</span><h2 id="home-previews-heading">Inspect the evidence before you act</h2></div></div>
     <div className="home-preview-grid">
-      {HOME_PREVIEWS.map((preview) => <section className="panel home-preview" data-home-preview key={preview.href} aria-labelledby={`home-preview-${preview.href.replaceAll(/[^a-z0-9]+/giu, '-')}`}>
-        <h2 id={`home-preview-${preview.href.replaceAll(/[^a-z0-9]+/giu, '-')}`}>{preview.title}</h2>
-        <p>{preview.description}</p>
-        <a className="button button-secondary" href={preview.href}>{preview.action}<ArrowRight aria-hidden="true" size={14} /></a>
-      </section>)}
+      {HOME_PREVIEWS.map((preview) => {
+        const headingId = homePreviewHeadingId(preview.href);
+        return <section className="panel home-preview" data-home-preview key={preview.href} aria-labelledby={headingId}>
+          <h2 id={headingId}>{preview.title}</h2>
+          <p>{preview.description}{preview.title === 'Articles preview' ? <> <a href={ROUTE_PATHS.guides}>Guides</a> and <a href={ROUTE_PATHS.insights}>LLM insights</a>.</> : null}</p>
+          <a className="button button-secondary" href={preview.href}>{preview.action}<ArrowRight aria-hidden="true" size={14} /></a>
+        </section>;
+      })}
     </div>
   </section>;
 }
