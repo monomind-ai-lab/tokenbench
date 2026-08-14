@@ -22,7 +22,8 @@ function envelope(): ModelDirectoryEnvelope {
         modelKey: 'benchlm:openai:gpt-5-6-sol', canonicalSlug: 'gpt-5-6-sol', displayName: 'GPT-5.6 Sol', creator: 'OpenAI', sourceType: 'Proprietary', reasoningType: null,
         familyId: null, variantId: null, firstSeenRevision: 'benchlm-r1', firstSeenAt: UPDATED_AT, lastSeenRevision: 'benchlm-r1', lastSeenAt: UPDATED_AT,
         latestProfileRevision: 'benchlm-r1', status: 'current', sourceId: 'benchlm', sourceModelId: 'gpt-5.6-sol', updatedAt: UPDATED_AT,
-        weeklyRank: 1, overallScore: 81.48, overallRank: 1, strongestCategory: null, representativePrice: null, evidenceStatus: 'supported',
+        weeklyRank: 1, overallScore: 81.48, overallRank: 1, strongestCategory: null,
+        representativePrice: { sourceId: 'openrouter', providerId: 'openai', routeId: 'openrouter:gpt-5-6-sol', sourceModelId: 'gpt-5-6-sol', canonicalSlug: 'gpt-5-6-sol', inputUsdPerMillion: 1, cachedInputUsdPerMillion: null, outputUsdPerMillion: 4, contextWindowTokens: 128000, maxInputTokens: null, maxOutputTokens: 16000, inputModalities: ['text'], outputModalities: ['text'], supportedParameters: ['tools'], verificationStatus: 'primary', sourceArtifactId: 'openrouter-models', sourceUrl: 'https://openrouter.ai/models', observedAt: UPDATED_AT }, evidenceStatus: 'supported',
         profileRevision: 'benchlm-r1', profileFallback: 'none', profilePublishedAt: UPDATED_AT, profileCheckedAt: UPDATED_AT,
       }], nextCursor: null,
     },
@@ -41,6 +42,10 @@ describe('popular models SSR handler', () => {
     expect(html).toContain('<h1>Popular AI models</h1>');
     expect(html).toContain('GPT-5.6 Sol');
     expect(html).toContain('81.48');
+    expect(html).toContain('Model price–performance frontier');
+    expect(html).toContain('Pareto values');
+    expect(html).toContain('Catalog pagination');
+    expect(html).toContain(UPDATED_AT);
     expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/models/">');
     expect(html).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/models/">');
     expect(html).toContain('"@type":"CollectionPage"');
@@ -58,6 +63,18 @@ describe('popular models SSR handler', () => {
     expect(readModelDirectory).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ q: 'retained', status: 'archived', limit: 100 }));
     const html = await response.text();
     expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/models/">');
+  });
+
+  it('accepts client catalog view state while preserving a crawlable page link', async () => {
+    readModelDirectory.mockResolvedValue(envelope());
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.monomind.one/models/?view=table&page=1&sort=cost&provider=openai&modality=text'),
+      env: { CATALOG_DB: {} as never },
+    });
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('data-catalog-view="table"');
+    expect(html).toContain('Catalog pagination');
   });
   it('searches retained records by default when the SSR URL omits status', async () => {
     readModelDirectory.mockResolvedValue(envelope());

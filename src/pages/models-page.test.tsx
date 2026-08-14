@@ -1,7 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { CompareProvider } from '../frontend/compare-state';
 import { parseModelDirectoryEnvelope, type ModelDirectoryEnvelope } from '../frontend/model-directory-contracts';
 import { ModelsPage, ModelsApp } from './models-page';
+
+vi.mock('../frontend/charts/chart-js', () => ({ createTokenBenchChart: vi.fn(() => ({ destroy: vi.fn() })) }));
 
 const UPDATED_AT = '2026-08-10T01:00:00.000Z';
 
@@ -29,16 +32,19 @@ function directoryEnvelope(rows = [model('gpt-5-6-sol', 'GPT-5.6 Sol')]): ModelD
 describe('popular models directory', () => {
   it('keeps table and mobile cards fact-equivalent', () => {
     render(<ModelsPage envelope={directoryEnvelope()} />);
-    expect(screen.getAllByRole('link', { name: 'GPT-5.6 Sol' })).toHaveLength(2);
-    expect(screen.getAllByText('81.48')).toHaveLength(2);
-    expect(screen.getAllByText('Coding · 77.95')).toHaveLength(2);
+    const cards = screen.getByTestId('models-mobile-cards');
+    expect(within(cards).getAllByRole('link', { name: 'GPT-5.6 Sol' })).toHaveLength(1);
+    expect(within(cards).getAllByText('81.48')).toHaveLength(1);
+    expect(within(cards).getAllByText('Coding · 77.95')).toHaveLength(1);
   });
 
   it('links every model row and card to the model profile page', () => {
-    render(<ModelsPage envelope={directoryEnvelope([model('gpt-5-6-sol', 'GPT-5.6 Sol'), model('claude-sonnet-5', 'Claude Sonnet 5')])} />);
-    const links = screen.getAllByRole('link', { name: /GPT-5.6 Sol|Claude Sonnet 5/ });
-    expect(links).toHaveLength(4);
+    const firstRender = render(<ModelsPage envelope={directoryEnvelope([model('gpt-5-6-sol', 'GPT-5.6 Sol'), model('claude-sonnet-5', 'Claude Sonnet 5')])} />);
+    const links = within(screen.getByTestId('models-mobile-cards')).getAllByRole('link').filter((link) => link.classList.contains('model-name-link'));
+    expect(links).toHaveLength(2);
     expect(links.every((link) => link.getAttribute('href')?.startsWith('/models/'))).toBe(true);
+    firstRender.unmount();
+    render(<ModelsPage envelope={directoryEnvelope([model('gpt-5-6-sol', 'GPT-5.6 Sol'), model('claude-sonnet-5', 'Claude Sonnet 5')])} query={{ q: '', creator: null, provider: null, modality: null, sourceType: null, evidenceStatus: null, status: 'current', sort: 'rank', view: 'table', page: 1 }} />);
     const table = screen.getByTestId('models-desktop-table');
     expect(within(table).getByRole('link', { name: 'GPT-5.6 Sol' })).toHaveAttribute('href', '/models/gpt-5-6-sol/');
     expect(within(table).getByRole('link', { name: 'Claude Sonnet 5' })).toHaveAttribute('href', '/models/claude-sonnet-5/');
@@ -47,9 +53,25 @@ describe('popular models directory', () => {
   });
 
   it('renders retained records with an explicit archived state', () => {
-    render(<ModelsPage envelope={directoryEnvelope([model('retained-model', 'Retained Model', { status: 'archived', weeklyRank: null, overallScore: null, overallRank: null })])} />);
-    expect(screen.getAllByText('Archived', { selector: '.model-status' })).toHaveLength(2);
-    expect(screen.getAllByText('Not in current top 100')).toHaveLength(2);
+    render(<ModelsPage envelope={directoryEnvelope([model('retained-model', 'Retained Model', { status: 'archived', weeklyRank: null, overallScore: null, overallRank: null })])} query={{ q: '', creator: null, provider: null, modality: null, sourceType: null, evidenceStatus: null, status: 'archived', sort: 'rank', view: 'cards', page: 1 }} />);
+    expect(screen.getAllByText('Archived', { selector: '.model-status' })).toHaveLength(1);
+    expect(screen.getAllByText('Not in current top 100')).toHaveLength(1);
+  });
+
+  it('keeps compare selection explicit when a fourth catalog model is requested', () => {
+    render(<CompareProvider><ModelsPage envelope={directoryEnvelope([
+      model('alpha', 'Alpha'), model('beta', 'Beta'), model('gamma', 'Gamma'), model('delta', 'Delta'),
+    ])} /></CompareProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Compare Alpha from catalog' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Compare Beta from catalog' }));
+    expect(screen.getByRole('complementary', { name: 'Model comparator' })).toHaveTextContent('2 models selected');
+    expect(screen.getByRole('img', { name: 'Six-axis comparison radar' })).toBeInTheDocument();
+    expect(screen.getByText(/Score delta/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Compare Gamma from catalog' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Compare Delta from catalog' }));
+    expect(screen.getByRole('dialog', { name: 'Choose a model to replace' })).toHaveTextContent('Alpha');
+    fireEvent.click(screen.getByRole('button', { name: 'Replace Alpha with Delta' }));
+    expect(screen.getByRole('complementary', { name: 'Model comparator' })).toHaveTextContent('Delta');
   });
 
   it('preserves the visible envelope when a filtered search fails', async () => {
@@ -59,8 +81,8 @@ describe('popular models directory', () => {
     render(<ModelsApp initialEnvelope={directoryEnvelope()} />);
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search retained models' }), { target: { value: 'missing' } });
     fireEvent.submit(screen.getByRole('searchbox', { name: 'Search retained models' }).closest('form')!);
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    expect(screen.getAllByRole('link', { name: 'GPT-5.6 Sol' })).toHaveLength(2);
-    expect(screen.getByRole('status')).toHaveTextContent('Search unavailable');
+    await waitFor(() => expect(screen.getAllByRole('status').some((status) => status.textContent?.includes('Search unavailable'))).toBe(true));
+    expect(within(screen.getByTestId('models-mobile-cards')).getAllByRole('link', { name: 'GPT-5.6 Sol' })).toHaveLength(1);
+    expect(screen.getByText('Search unavailable. Showing the last validated model list.')).toBeInTheDocument();
   });
 });

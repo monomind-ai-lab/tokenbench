@@ -1,6 +1,7 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { ModelsApp } from '../../src/pages/models-page';
+import { modelDirectoryQueryFromSearch } from '../../src/frontend/model-directory-state';
 import { SITE_CONFIG } from '../../src/brand/site-config';
 import { FRONTEND_ASSETS } from '../../src/routing/frontend-assets';
 import type { ModelDirectoryQueryState } from '../../src/frontend/model-directory-state';
@@ -21,7 +22,7 @@ import type { ModelDirectoryStatus } from '../../src/benchmarks/model-directory'
 import { metadataForRoute } from '../../src/seo/metadata';
 import type { BenchmarkApiEnv } from '../_shared/benchmark-db';
 
-const ALLOWED_PARAMETERS = new Set(['q', 'creator', 'sourceType', 'evidenceStatus', 'status', 'limit', 'cursor']);
+const ALLOWED_PARAMETERS = new Set(['q', 'creator', 'provider', 'modality', 'sourceType', 'evidenceStatus', 'status', 'sort', 'view', 'page', 'limit', 'cursor']);
 const MODELS_PATH = '/models/';
 
 function optionalBounded(value: string | null, maximum: number): string | null {
@@ -60,6 +61,14 @@ function parseQuery(request: Request): ModelDirectoryQuery {
   if (!/^\d{1,3}$/.test(limitValue ?? '100') || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new ModelDirectoryRequestError('invalid model directory limit');
   const cursor = url.searchParams.get('cursor');
   if (cursor !== null && (cursor.length > 1_024 || !/^[A-Za-z0-9_-]+$/.test(cursor))) throw new ModelDirectoryRequestError('invalid model directory cursor');
+  optionalBounded(url.searchParams.get('provider'), 80);
+  optionalBounded(url.searchParams.get('modality'), 40);
+  const sort = url.searchParams.get('sort');
+  if (sort !== null && sort !== 'rank' && sort !== 'score' && sort !== 'cost' && sort !== 'name') throw new ModelDirectoryRequestError('invalid model directory sort');
+  const view = url.searchParams.get('view');
+  if (view !== null && view !== 'cards' && view !== 'table') throw new ModelDirectoryRequestError('invalid model directory view');
+  const page = url.searchParams.get('page');
+  if (page !== null && (!/^\d{1,4}$/.test(page) || Number(page) < 1 || Number(page) > 1_000)) throw new ModelDirectoryRequestError('invalid model directory page');
   return { q, creator, sourceType, evidenceStatus, status, limit, cursor };
 }
 
@@ -95,14 +104,15 @@ function structuredData(envelope: ModelDirectoryEnvelope, canonical: string, tit
   ];
 }
 
-function browserQuery(query: ModelDirectoryQuery): ModelDirectoryQueryState {
-  return { q: query.q, creator: query.creator, sourceType: query.sourceType, evidenceStatus: query.evidenceStatus, status: query.status };
+function browserQuery(query: ModelDirectoryQuery, search = ''): ModelDirectoryQueryState {
+  const parsed = modelDirectoryQueryFromSearch(search);
+  return { ...parsed, q: query.q, creator: query.creator, sourceType: query.sourceType, evidenceStatus: query.evidenceStatus, status: query.status };
 }
 
 /** Shared with the local preview harness so browser tests exercise production SSR markup. */
-export function renderModelDirectoryDocument(envelope: ModelDirectoryEnvelope, query: ModelDirectoryQuery): string {
+export function renderModelDirectoryDocument(envelope: ModelDirectoryEnvelope, query: ModelDirectoryQuery, initialQuery = browserQuery(query)): string {
   const metadata = metadataForRoute({ kind: 'models' });
-  const root = renderToString(createElement(ModelsApp, { initialEnvelope: envelope, initialQuery: browserQuery(query) }));
+  const root = renderToString(createElement(ModelsApp, { initialEnvelope: envelope, initialQuery }));
   const scripts = structuredData(envelope, metadata.canonical, metadata.title, metadata.description)
     .map((value) => `<script type="application/ld+json">${serializeJsonForScript(value)}</script>`)
     .join('\n    ');
@@ -177,7 +187,7 @@ export async function onRequestGet({ request, env }: { request: Request; env: Be
   }
   try {
     const envelope = await readModelDirectory(env.CATALOG_DB, query);
-    return new Response(renderModelDirectoryDocument(envelope, query), {
+    return new Response(renderModelDirectoryDocument(envelope, query, browserQuery(query, url.search)), {
       headers: { 'Cache-Control': 'public, max-age=0, must-revalidate', 'Content-Type': 'text/html; charset=utf-8', 'X-Robots-Tag': 'index, follow' },
     });
   } catch {
