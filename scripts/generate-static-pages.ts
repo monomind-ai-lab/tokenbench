@@ -41,13 +41,32 @@ function pageIntro(metadata: PageMetadata, body: string, h1Override?: string): s
   return `<main id="page-content" class="page-main" tabindex="-1"><section class="content-stack static-page-content"><span class="eyebrow">${SITE_CONFIG.name}</span><h1>${h1}</h1>${body}</section></main>`;
 }
 
+function staticNewsletterForm(): string {
+  return `<section class="home-newsletter panel" aria-labelledby="home-newsletter-heading"><h2 id="home-newsletter-heading">Get the monthly TokenBench cheatsheet</h2><p>Receive source-backed model pricing, context windows, and benchmark updates. We use your address only to deliver the requested email.</p><form action="/api/newsletter/subscribe" method="post"><label for="static-newsletter-first-name">First name</label><input id="static-newsletter-first-name" name="firstName" autocomplete="given-name" required><label for="static-newsletter-company">Company</label><input id="static-newsletter-company" name="company" autocomplete="organization" required><label for="static-newsletter-email">Email address</label><input id="static-newsletter-email" name="email" type="email" autocomplete="email" required aria-describedby="static-newsletter-consent"><label class="static-newsletter-consent"><input name="monthlyCheatsheet" type="checkbox" value="true" required> <span id="static-newsletter-consent">I agree to receive the monthly TokenBench cheatsheet.</span></label><input name="modelAndPriceAlerts" type="hidden" value="false"><input name="context" type="hidden" value="footer"><button type="submit">Download Free Cheatsheet</button></form></section>`;
+}
+
+function staticHomeMetrics(): string {
+  return `<section class="home-metrics panel" aria-label="Home metrics"><p class="eyebrow">Evidence snapshot · 50/50 input/output mix</p><dl class="home-metrics-grid"><div><dt>Models tracked</dt><dd>Not reported</dd></div><div><dt>Max savings</dt><dd>Not reported</dd></div><div><dt>Top throughput</dt><dd>Not reported</dd></div><div><dt>Effective at</dt><dd>Not reported</dd></div></dl></section>`;
+}
+
+function staticHomePreviews(): string {
+  const previews = [
+    ['Models preview', 'Browse current and archived model records with route-level evidence.', ROUTE_PATHS.models, 'Inspect models'],
+    ['Leaderboards preview', 'Review published benchmark lanes and evidence lenses.', ROUTE_PATHS.leaderboards, 'Inspect leaderboards'],
+    ['Compare preview', 'Put two models side by side with comparable facts.', ROUTE_PATHS.compareHub, 'Inspect comparisons'],
+    ['Subscribe vs API preview', 'Compare observed workload cost with supported subscription evidence.', ROUTE_PATHS.calculator, 'Inspect subscription costs'],
+    ['Articles preview', 'Read source-backed guides for practical AI operating decisions.', ROUTE_PATHS.articles, 'Inspect articles'],
+  ] as const;
+  return `<section class="home-preview-section" aria-labelledby="home-previews-heading"><div class="panel-heading"><div><span class="eyebrow">Decision surfaces</span><h2 id="home-previews-heading">Inspect the evidence before you act</h2></div></div><div class="home-preview-grid">${previews.map(([title, description, href, action]) => `<section class="panel home-preview" data-home-preview><h2>${title}</h2><p>${title === 'Articles preview' ? `${description} <a href="${ROUTE_PATHS.guides}">Guides</a> and <a href="${ROUTE_PATHS.insights}">LLM insights</a>.` : description}</p><a class="button button-secondary" href="${href}">${action}</a></section>`).join('')}</div></section>`;
+}
+
 function fixedPageContent(
   route: Exclude<AppRoute, { kind: 'guides' } | { kind: 'comparison' } | { kind: 'redirect' } | { kind: 'notFound' }>,
   metadata: PageMetadata,
 ): string {
   switch (route.kind) {
     case 'home':
-      return pageIntro(metadata, `<p>${escapeHtml(metadata.description)}</p><div class="static-page-links"><a class="button" href="/compare/">Compare models</a><a class="button" href="${ROUTE_PATHS.calculator}">Review Your Subscriptions</a><a class="button" href="/leaderboards/">Browse leaderboards</a></div><section><h2>Make an evidence-aware decision</h2><p>Compare direct API pricing, paid subscriptions, workload context, and benchmark categories without treating missing measurements as zero or presenting estimates as facts.</p></section>`);
+      return pageIntro(metadata, `<p>${escapeHtml(metadata.description)}</p><div class="static-page-links"><a class="button" href="/compare/">Compare models</a><a class="button" href="${ROUTE_PATHS.calculator}">Review Your Subscriptions</a><a class="button" href="/leaderboards/">Browse leaderboards</a><a class="button button-secondary" href="${ROUTE_PATHS.pricePerformance}">Review price vs performance</a></div>${staticHomeMetrics()}${staticHomePreviews()}<section><h2>Make an evidence-aware decision</h2><p>Compare direct API pricing, paid subscriptions, workload context, and benchmark categories without treating missing measurements as zero or presenting estimates as facts.</p></section>${staticNewsletterForm()}`);
     case 'cost':
       return pageIntro(metadata, `<p>Choose a workload-aware cost decision tool, with source-backed provider evidence and explicit treatment of variable limits.</p><section><h2>Available tools</h2><article><h3><a href="${ROUTE_PATHS.calculator}">Subscription vs API cost calculator</a></h3><p>Estimate API-equivalent cost and compare it with a paid individual plan for your observed workload.</p></article><article><h3><a href="${ROUTE_PATHS.breakeven}">Subscription breakeven analysis</a></h3><p>Plot the crossover between a published plan fee and supported API pricing only when fixed-token plan evidence is verified.</p></article></section>`);
     case 'tools':

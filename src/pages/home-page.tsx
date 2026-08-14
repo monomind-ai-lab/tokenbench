@@ -42,6 +42,134 @@ const CURATED_GUIDE_SLUGS = [
   'track-claude-code-usage',
 ] as const;
 
+export interface HomeMetrics {
+  readonly trackedModels: number | null;
+  readonly maxSavingsPercent: number | null;
+  readonly topThroughput: number | null;
+  readonly effectiveAt: string | null;
+}
+
+export interface HomeMetricModel {
+  readonly modelKey: string;
+  readonly current?: boolean;
+  readonly status?: 'current' | 'archived';
+  readonly updatedAt?: string;
+}
+
+export interface HomeMetricPrice {
+  readonly modelKey: string;
+  readonly inputUsdPerMillion: number | null;
+  readonly outputUsdPerMillion: number | null;
+  readonly current?: boolean;
+  readonly compatible?: boolean;
+  readonly status?: 'current' | 'archived';
+  readonly updatedAt?: string;
+}
+
+export interface HomeMetricPerformance {
+  readonly modelKey: string;
+  readonly throughputTokensPerSecond?: number | null;
+  readonly throughput?: number | null;
+  readonly value?: number | null;
+  readonly unit?: string;
+  readonly evidenceStatus?: 'supported' | 'estimated' | 'source_only';
+  readonly current?: boolean;
+  readonly status?: 'current' | 'archived';
+  readonly updatedAt?: string;
+}
+
+export interface HomeMetricsInput {
+  readonly models: readonly HomeMetricModel[];
+  readonly prices: readonly HomeMetricPrice[];
+  readonly performance: readonly HomeMetricPerformance[];
+}
+
+const HOME_WORKLOAD_MIX = { inputShare: 0.5, outputShare: 0.5 } as const;
+
+function isCurrentHomeEvidence(record: { readonly current?: boolean; readonly status?: 'current' | 'archived' }): boolean {
+  return record.current !== false && record.status !== 'archived';
+}
+
+function finiteNonNegative(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
+export function formatHomeMetric(value: number | null, unit = ''): string {
+  return value === null ? 'Not reported' : `${value}${unit}`;
+}
+
+/** Builds only metrics backed by current, compatible records. */
+export function buildHomeMetrics({ models, prices, performance }: HomeMetricsInput): HomeMetrics {
+  const currentModels = models.filter(isCurrentHomeEvidence);
+  const trackedModels = currentModels.length > 0
+    ? new Set(currentModels.map((model) => model.modelKey)).size
+    : null;
+  const currentPrices = prices.filter((price) => isCurrentHomeEvidence(price) && price.compatible !== false
+    && finiteNonNegative(price.inputUsdPerMillion) && finiteNonNegative(price.outputUsdPerMillion));
+  const costsByModel = new Map<string, number>();
+  currentPrices.forEach((price) => {
+    const cost = price.inputUsdPerMillion * HOME_WORKLOAD_MIX.inputShare
+      + price.outputUsdPerMillion * HOME_WORKLOAD_MIX.outputShare;
+    const previous = costsByModel.get(price.modelKey);
+    if (previous === undefined || cost < previous) costsByModel.set(price.modelKey, cost);
+  });
+  const costs = [...costsByModel.values()];
+  const highestCost = costs.length > 1 ? Math.max(...costs) : null;
+  const lowestCost = costs.length > 1 ? Math.min(...costs) : null;
+  const maxSavingsPercent = highestCost !== null && lowestCost !== null
+    ? Math.round(((highestCost - lowestCost) / highestCost) * 100)
+    : null;
+  const throughputs = performance
+    .filter(isCurrentHomeEvidence)
+    .filter((record) => record.evidenceStatus === undefined || record.evidenceStatus === 'supported')
+    .map((record) => record.throughputTokensPerSecond ?? record.throughput
+      ?? (record.unit === 'tokens_per_second' ? record.value : null))
+    .filter(finiteNonNegative);
+  const effectiveDates = [...currentModels, ...currentPrices, ...performance.filter(isCurrentHomeEvidence)]
+    .map((record) => record.updatedAt)
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .sort();
+  return {
+    trackedModels,
+    maxSavingsPercent,
+    topThroughput: throughputs.length > 0 ? Math.max(...throughputs) : null,
+    effectiveAt: effectiveDates.at(-1) ?? null,
+  };
+}
+
+const HOME_PREVIEWS = [
+  { title: 'Models preview', description: 'Browse current and archived model records with route-level evidence.', href: ROUTE_PATHS.models, action: 'Inspect models' },
+  { title: 'Leaderboards preview', description: 'Review published benchmark lanes and evidence lenses.', href: ROUTE_PATHS.leaderboards, action: 'Inspect leaderboards' },
+  { title: 'Compare preview', description: 'Put two models side by side with comparable facts.', href: ROUTE_PATHS.compareHub, action: 'Inspect comparisons' },
+  { title: 'Subscribe vs API preview', description: 'Compare observed workload cost with supported subscription evidence.', href: ROUTE_PATHS.calculator, action: 'Inspect subscription costs' },
+  { title: 'Articles preview', description: 'Read source-backed guides for practical AI operating decisions.', href: ROUTE_PATHS.articles, action: 'Inspect articles' },
+] as const;
+
+function HomeMetricsStrip({ metrics }: { readonly metrics: HomeMetrics }) {
+  return <section className="home-metrics panel" aria-label="Home metrics">
+    <p className="eyebrow">Evidence snapshot · 50/50 input/output mix</p>
+    <dl className="home-metrics-grid">
+      <div><dt>Models tracked</dt><dd>{formatHomeMetric(metrics.trackedModels)}</dd></div>
+      <div><dt>Max savings</dt><dd>{formatHomeMetric(metrics.maxSavingsPercent, '%')}</dd></div>
+      <div><dt>Top throughput</dt><dd>{formatHomeMetric(metrics.topThroughput, ' tokens/s')}</dd></div>
+      <div><dt>Effective at</dt><dd>{metrics.effectiveAt ?? 'Not reported'}</dd></div>
+    </dl>
+  </section>;
+}
+
+function HomePreviewGrid() {
+  return <section className="home-preview-section" aria-labelledby="home-previews-heading">
+    <div className="panel-heading"><div><span className="eyebrow">Decision surfaces</span><h2 id="home-previews-heading">Inspect the evidence before you act</h2></div></div>
+    <div className="home-preview-grid">
+      {HOME_PREVIEWS.map((preview) => <section className="panel home-preview" data-home-preview key={preview.href} aria-labelledby={`home-preview-${preview.href.replaceAll(/[^a-z0-9]+/giu, '-')}`}>
+        <h2 id={`home-preview-${preview.href.replaceAll(/[^a-z0-9]+/giu, '-')}`}>{preview.title}</h2>
+        <p>{preview.description}</p>
+        <a className="button button-secondary" href={preview.href}>{preview.action}<ArrowRight aria-hidden="true" size={14} /></a>
+      </section>)}
+    </div>
+  </section>;
+}
+
 /**
  * The market section republishes leaders for the five decision routes. Cards
  * are omitted when the active revision has no supported leader, so the page
@@ -139,6 +267,15 @@ function MarketAtAGlance() {
   const envelope = state.envelope;
   const cards = marketLeaderCards(state.decisionPicks);
   const comparisons = envelope?.data.representativeComparisons ?? [];
+  const metrics = buildHomeMetrics({
+    models: (state.decisionPicks ?? []).flatMap((group) => group.entries).map((entry) => ({
+      modelKey: entry.modelKey,
+      current: true,
+      updatedAt: entry.updatedAt,
+    })),
+    prices: [],
+    performance: [],
+  });
 
   return <>
     <section className="panel home-snapshot-section" aria-label="Market at a glance">
@@ -164,6 +301,7 @@ function MarketAtAGlance() {
         <a className="home-snapshot-method" href={ROUTE_PATHS.leaderboards}>Explore more leaderboards <ArrowRight aria-hidden="true" size={14} /></a>
       </div>
     </section>
+    <HomeMetricsStrip metrics={metrics} />
     {comparisons.length > 0 ? <section className="panel home-comparison-section" aria-label="Representative comparisons">
       <div className="panel-heading">
         <div><span className="eyebrow">Representative comparisons</span><h3 id="home-comparison-heading">Compare best models</h3><p>Each card pairs two models from the active source revision and names the category where the published evidence actually differs — priced and scored as the source published them.</p></div>
@@ -193,6 +331,8 @@ export function HomePage() {
       </section>
 
       <MarketAtAGlance />
+
+      <HomePreviewGrid />
 
       <section className="panel home-calculator-banner" aria-labelledby="home-calculator-heading">
         <div><span className="eyebrow">Subscribe vs API</span><h2 id="home-calculator-heading">Should you subscribe or pay as you go?</h2><p>Choose your model mix, describe the monthly workload, and inspect the resulting cost and coverage implication without assuming unpublished capacity.</p></div>

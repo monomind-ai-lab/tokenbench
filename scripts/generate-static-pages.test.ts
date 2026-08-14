@@ -58,6 +58,19 @@ describe('crawlable static-page generator', () => {
     expect(home).toContain('<link rel="canonical" href="https://tokenbench.monomind.one">');
     expect(home).toContain('<script type="application/ld+json">');
     expect(home).toContain('TokenBench');
+    expect(home).toContain('Models preview');
+    expect(home).toContain('Leaderboards preview');
+    expect(home).toContain('Compare preview');
+    expect(home).toContain('Subscribe vs API preview');
+    expect(home).toContain('Articles preview');
+    expect(home).toContain('Models tracked');
+    expect(home).toContain('Max savings');
+    expect(home).toContain('Top throughput');
+    expect(home).toContain('Effective at');
+    expect(home).toContain('Not reported');
+    expect(home).toContain('<form action="/api/newsletter/subscribe" method="post"');
+    expect(home).toContain('I agree to receive the monthly TokenBench cheatsheet.');
+    expect(home).not.toContain('384');
 
     expect(compareHub).toContain('<h1>Compare models<br/> side by side</h1>');
     expect(compareHub).toContain('Compare evidence, not a fabricated universal score');

@@ -18,6 +18,15 @@ function fillProfile() {
 }
 
 describe('NewsletterSignup', () => {
+  it('starts idle and associates consent guidance with the email control', () => {
+    renderSignup(<NewsletterSignup context="footer" />);
+
+    const email = screen.getByLabelText('Email address');
+    expect(email).toHaveAttribute('aria-describedby', expect.stringContaining('newsletter-signup-helper-footer'));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('leaves alerts unchecked and explains double opt in', () => {
     renderSignup(<NewsletterSignup context="footer" />);
 
@@ -77,6 +86,22 @@ describe('NewsletterSignup', () => {
       modelAndPriceAlerts: true,
       monthlyCheatsheet: true,
     });
+  });
+
+  it('announces a successful subscription without exposing the email to analytics', async () => {
+    const fetchSignup = vi.fn().mockResolvedValue(new Response('{"status":"confirmation-required"}', {
+      status: 202,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchSignup);
+    renderSignup(<NewsletterSignup context="footer" />);
+
+    fillProfile();
+    fireEvent.change(screen.getByLabelText('Email address'), { target: { value: 'private@example.com' } });
+    fireEvent.submit(screen.getByRole('form', { name: 'Newsletter signup' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Check your email to confirm your subscription.');
+    expect(document.body.textContent).not.toContain('private@example.com');
   });
 
   it('moves focus from the disabled submit button to a delayed confirmation status', async () => {

@@ -8,7 +8,10 @@ export interface NewsletterSignupProps {
 
 export const MODEL_PRICE_ALERT_LABEL = 'Notify me when new models are added to TokenBench.';
 
-type SignupFeedback = 'idle' | 'invalid-profile' | 'invalid-email' | 'confirmation-required' | 'retry';
+export type NewsletterSignupState = {
+  readonly phase: 'idle' | 'submitting' | 'success' | 'error';
+  readonly message: string;
+};
 type PostSubmissionFocus = 'email' | 'confirmation-status';
 
 const MAX_EMAIL_LENGTH = 254;
@@ -52,8 +55,7 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
   const [company, setCompany] = useState('');
   const [email, setEmail] = useState('');
   const [honeypot, setHoneypot] = useState('');
-  const [feedback, setFeedback] = useState<SignupFeedback>('idle');
-  const [submitting, setSubmitting] = useState(false);
+  const [state, setState] = useState<NewsletterSignupState>({ phase: 'idle', message: '' });
   const activeRequest = useRef<AbortController | null>(null);
   const submissionInFlight = useRef(false);
   const emailInput = useRef<HTMLInputElement | null>(null);
@@ -61,16 +63,9 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
   const postSubmissionFocus = useRef<PostSubmissionFocus | null>(null);
   const isCompact = compact ?? context === 'compare';
   const showForm = !isCompact || modelAndPriceAlerts;
-  const invalidEmail = feedback === 'invalid-email';
-  const feedbackCopy = feedback === 'invalid-email'
-    ? 'Enter a valid email address.'
-    : feedback === 'invalid-profile'
-      ? 'Enter your first name and company.'
-    : feedback === 'confirmation-required'
-      ? 'Check your email to confirm your subscription.'
-      : feedback === 'retry'
-        ? 'We couldn’t complete that signup. Please try again.'
-        : null;
+  const submitting = state.phase === 'submitting';
+  const invalidEmail = state.phase === 'error' && state.message === 'Enter a valid email address.';
+  const feedbackCopy = state.message || null;
 
   useEffect(() => {
     if (submitting || postSubmissionFocus.current === null) return;
@@ -78,7 +73,7 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
     postSubmissionFocus.current = null;
     if (focusTarget === 'confirmation-status') confirmationStatus.current?.focus();
     else emailInput.current?.focus();
-  }, [feedback, submitting]);
+  }, [state.phase, submitting]);
 
   useEffect(() => () => {
     const controller = activeRequest.current;
@@ -95,18 +90,17 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
     const normalizedFirstName = firstName.trim();
     const normalizedCompany = company.trim();
     if (!normalizedFirstName || !normalizedCompany) {
-      setFeedback('invalid-profile');
+      setState({ phase: 'error', message: 'Enter your first name and company.' });
       return;
     }
     if (!isValidNewsletterEmailAddress(normalizedEmail)) {
-      setFeedback('invalid-email');
+      setState({ phase: 'error', message: 'Enter a valid email address.' });
       return;
     }
     const controller = new AbortController();
     submissionInFlight.current = true;
     activeRequest.current = controller;
-    setFeedback('idle');
-    setSubmitting(true);
+    setState({ phase: 'submitting', message: '' });
     try {
       const response = await fetch('/api/newsletter/subscribe', {
         method: 'POST',
@@ -127,21 +121,23 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
         setEmail('');
         setFirstName('');
         setCompany('');
-        setFeedback('confirmation-required');
+        setState({ phase: 'success', message: 'Check your email to confirm your subscription.' });
         return;
       }
     } catch (error) {
-      if (controller.signal.aborted || isAbortError(error)) return;
+      if (controller.signal.aborted || isAbortError(error)) {
+        setState({ phase: 'idle', message: '' });
+        return;
+      }
       // The browser receives the same retry guidance for network and service failures.
     } finally {
       if (activeRequest.current === controller) {
         activeRequest.current = null;
         submissionInFlight.current = false;
-        setSubmitting(false);
       }
     }
     postSubmissionFocus.current = 'email';
-    setFeedback('retry');
+    setState({ phase: 'error', message: 'We couldn’t complete that signup. Please try again.' });
   };
 
   return <section className="newsletter-signup" data-compact={isCompact} data-context={context}>
@@ -152,19 +148,19 @@ export function NewsletterSignup({ context, compact, alertLabel = MODEL_PRICE_AL
     {!isCompact ? null : <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label>}
     {showForm ? <form aria-busy={submitting} aria-label="Newsletter signup" noValidate onSubmit={submitSignup}>
       <label htmlFor={`newsletter-first-name-${context}`}>First name</label>
-      <input autoComplete="given-name" disabled={submitting} id={`newsletter-first-name-${context}`} maxLength={120} name="firstName" onChange={(event) => { setFirstName(event.target.value); setFeedback('idle'); }} required type="text" value={firstName} />
+      <input autoComplete="given-name" disabled={submitting} id={`newsletter-first-name-${context}`} maxLength={120} name="firstName" onChange={(event) => { setFirstName(event.target.value); setState({ phase: 'idle', message: '' }); }} required type="text" value={firstName} />
       <label htmlFor={`newsletter-company-${context}`}>Company</label>
-      <input autoComplete="organization" disabled={submitting} id={`newsletter-company-${context}`} maxLength={120} name="company" onChange={(event) => { setCompany(event.target.value); setFeedback('idle'); }} required type="text" value={company} />
+      <input autoComplete="organization" disabled={submitting} id={`newsletter-company-${context}`} maxLength={120} name="company" onChange={(event) => { setCompany(event.target.value); setState({ phase: 'idle', message: '' }); }} required type="text" value={company} />
       <label htmlFor={`newsletter-email-${context}`}>Email address</label>
-      <input aria-describedby={invalidEmail ? `newsletter-email-error-${context}` : undefined} aria-invalid={invalidEmail || undefined} disabled={submitting} id={`newsletter-email-${context}`} name="email" onChange={(event) => { setEmail(event.target.value); setFeedback('idle'); }} ref={emailInput} required type="email" value={email} />
+      <input aria-describedby={[`newsletter-signup-helper-${context}`, ...(invalidEmail ? [`newsletter-email-error-${context}`] : [])].join(' ')} aria-invalid={invalidEmail || undefined} disabled={submitting} id={`newsletter-email-${context}`} name="email" onChange={(event) => { setEmail(event.target.value); setState({ phase: 'idle', message: '' }); }} ref={emailInput} required type="email" value={email} />
       {!isCompact ? <label className="newsletter-signup-alert-control"><input checked={modelAndPriceAlerts} disabled={submitting} onChange={(event) => setModelAndPriceAlerts(event.target.checked)} type="checkbox" />{alertLabel}</label> : null}
-      <p className="newsletter-signup-helper">Check your inbox to confirm your email and access your instant download.</p>
+      <p className="newsletter-signup-helper" id={`newsletter-signup-helper-${context}`}>Check your inbox to confirm your email and access your instant download.</p>
       <div aria-hidden="true" className="newsletter-signup-honeypot">
         <label htmlFor={`newsletter-website-${context}`}>Website</label>
         <input autoComplete="off" disabled={submitting} id={`newsletter-website-${context}`} name="website" onChange={(event) => setHoneypot(event.target.value)} tabIndex={-1} type="text" value={honeypot} />
       </div>
       <button disabled={submitting} type="submit">{isCompact ? 'Notify me' : 'Download Free Cheatsheet'}</button>
-      {feedbackCopy ? <p id={invalidEmail ? `newsletter-email-error-${context}` : undefined} ref={feedback === 'confirmation-required' ? confirmationStatus : undefined} role={feedback === 'confirmation-required' ? 'status' : 'alert'} tabIndex={feedback === 'confirmation-required' ? -1 : undefined}>{feedbackCopy}</p> : null}
+      {feedbackCopy ? <p id={invalidEmail ? `newsletter-email-error-${context}` : undefined} ref={state.phase === 'success' ? confirmationStatus : undefined} role={state.phase === 'success' ? 'status' : 'alert'} tabIndex={state.phase === 'success' ? -1 : undefined}>{feedbackCopy}</p> : null}
     </form> : null}
   </section>;
 }

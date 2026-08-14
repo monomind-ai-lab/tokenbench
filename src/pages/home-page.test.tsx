@@ -8,7 +8,7 @@ import type {
 import type { RepresentativeComparison } from '../benchmarks/api-projections';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
 import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
-import { HomePage } from './home-page';
+import { buildHomeMetrics, HomePage } from './home-page';
 
 const UPDATED_AT = '2026-08-06T12:00:00.000Z';
 
@@ -153,6 +153,58 @@ afterEach(() => {
 });
 
 describe('HomePage', () => {
+  it('returns unavailable home metrics when no evidence records exist', () => {
+    expect(buildHomeMetrics({ models: [], prices: [], performance: [] })).toEqual({
+      trackedModels: null,
+      maxSavingsPercent: null,
+      topThroughput: null,
+      effectiveAt: null,
+    });
+  });
+
+  it('calculates savings and throughput only from current compatible evidence', () => {
+    expect(buildHomeMetrics({
+      models: [
+        { modelKey: 'a', current: true, updatedAt: '2026-08-10T00:00:00.000Z' },
+        { modelKey: 'b', current: true, updatedAt: '2026-08-11T00:00:00.000Z' },
+        { modelKey: 'archived', current: false, updatedAt: '2026-08-12T00:00:00.000Z' },
+      ],
+      prices: [
+        { modelKey: 'a', inputUsdPerMillion: 2, outputUsdPerMillion: 6, current: true, compatible: true, updatedAt: '2026-08-10T00:00:00.000Z' },
+        { modelKey: 'b', inputUsdPerMillion: 1, outputUsdPerMillion: 3, current: true, compatible: true, updatedAt: '2026-08-11T00:00:00.000Z' },
+        { modelKey: 'archived', inputUsdPerMillion: 0, outputUsdPerMillion: 0, current: false, compatible: true, updatedAt: '2026-08-12T00:00:00.000Z' },
+      ],
+      performance: [
+        { modelKey: 'a', throughputTokensPerSecond: 120, current: true, evidenceStatus: 'supported', updatedAt: '2026-08-10T00:00:00.000Z' },
+        { modelKey: 'b', throughputTokensPerSecond: 240, current: true, evidenceStatus: 'supported', updatedAt: '2026-08-11T00:00:00.000Z' },
+        { modelKey: 'archived', throughputTokensPerSecond: 999, current: false, evidenceStatus: 'supported', updatedAt: '2026-08-12T00:00:00.000Z' },
+      ],
+    })).toEqual({
+      trackedModels: 2,
+      maxSavingsPercent: 50,
+      topThroughput: 240,
+      effectiveAt: '2026-08-11T00:00:00.000Z',
+    });
+  });
+
+  it('renders exactly five route previews with sibling inspection links', () => {
+    renderWithHomeSummary();
+
+    const previews = document.querySelectorAll('[data-home-preview]');
+    expect(previews).toHaveLength(5);
+    expect(screen.getByRole('heading', { name: 'Models preview', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Leaderboards preview', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Compare preview', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Subscribe vs API preview', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Articles preview', level: 2 })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Inspect models' })).toHaveAttribute('href', '/models/');
+    expect(screen.getByRole('link', { name: 'Inspect leaderboards' })).toHaveAttribute('href', '/leaderboards/');
+    expect(screen.getByRole('link', { name: 'Inspect comparisons' })).toHaveAttribute('href', '/compare/');
+    expect(screen.getByRole('link', { name: 'Inspect subscription costs' })).toHaveAttribute('href', '/cost/calculator/');
+    expect(screen.getByRole('link', { name: 'Inspect articles' })).toHaveAttribute('href', '/articles/');
+    expect(document.querySelectorAll('[data-home-preview] div[role="button"]')).toHaveLength(0);
+  });
+
   it('explains the product and exposes the three primary decisions', () => {
     renderWithHomeSummary();
 
