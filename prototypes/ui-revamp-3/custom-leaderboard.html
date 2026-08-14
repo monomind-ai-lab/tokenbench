@@ -1,0 +1,76 @@
+<!-- Direction contract: prototype-faithful quantitative decision terminal, not generic marketing cards. -->
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Custom leaderboard — TokenBench REBUILD</title><link rel="stylesheet" href="styles.css"><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script></head><body><header class="topbar"><div class="shell"><a class="brand" href="index.html"><span class="mark">TB</span>TokenBench <span class="fixture">REBUILD</span></a><nav class="nav"></nav><div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle dark theme">◐</button></div></div></header><main class="shell page"><section><h1 class="headline">Custom leaderboard</h1><p class="lede">Make the ranking reflect a deployment priority. Six weights normalize into one score; operational thresholds remain independent, visible constraints.</p><p class="fixture">Illustrative prototype data · ranking, quality and SLA values are fixtures, not factual claims</p></section><hr class="rule"><section class="panel"><div class="toolbar"><div><h2 class="section-title">Capability weighting matrix</h2><p class="lede">Composite = Σ(domain score × weight) / Σ(weights). Throughput is normalized as min(100, raw TPS ÷ 120 × 100); raw TPS remains visible in SLA results.</p></div><button class="toggle" id="reset">Reset equal weights</button></div><div class="slider-grid" id="sliders" style="grid-template-columns:repeat(3,minmax(0,1fr));margin-top:16px"></div><p id="zero" class="error" aria-live="polite" hidden>All weights are zero. Ranking is paused; set a weight or reset equal weights to recover.</p></section><section class="grid-2" style="margin-top:24px"><div class="panel"><h2 class="section-title">Weighted ranking</h2><p class="fixture">Illustrative prototype data</p><div class="chart-wrap"><canvas id="ranking" role="img" aria-label="Horizontal provider colored model ranking"></canvas></div><details><summary>Semantic ranking table</summary><div id="rank-alt"></div></details></div><div class="panel"><div class="toolbar"><div><h2 class="section-title">Service-level filter</h2><p class="fixture">Illustrative prototype data</p></div><strong id="pass" class="status">—</strong></div><label><span class="label">Maximum TTFT <b id="ttftv"></b></span><input id="ttft" type="range" min=".2" max="1.2" step=".05" value=".80"></label><label><span class="label">Minimum throughput <b id="tpsv"></b></span><input id="tps" type="range" min="20" max="120" step="5" value="60"></label><div class="grid-2" style="margin-top:12px"><div><h3 class="subhead">TTFT (seconds)</h3><div class="chart-wrap short"><canvas id="ttft-chart"></canvas></div></div><div><h3 class="subhead">Output speed (tok/s)</h3><div class="chart-wrap short"><canvas id="tps-chart"></canvas></div></div></div></div></section><section style="margin-top:24px"><div class="toolbar"><div><h2 class="section-title">Ranked output</h2><p class="fixture">Illustrative prototype data</p></div><div class="control-row"><button id="cards" class="toggle">Cards</button><button id="rows" class="toggle">Table</button></div></div><div id="output" style="margin-top:12px"></div></section></main><script src="data.js"></script><script src="common.js"></script><script>
+setupShell();let view='cards',ttft=.8,tps=60;const domains=['agentic','coding','reasoning','math','multimodal','throughput'];const sum=()=>Object.values(TB.weights).reduce((a,b)=>a+b,0),ranked=()=>[...TB_MODELS].sort((a,b)=>score(b)-score(a));function initSliders(){if($('#sliders').children.length)return;$('#sliders').innerHTML=domains.map(k=>`<label><span class="toolbar"><span class="label">${k}</span><b id="v-${k}"></b></span><input data-k="${k}" type="range" min="0" max="100"></label>`).join('');$$('#sliders input').forEach(x=>x.oninput=()=>{TB.weights[x.dataset.k]=+x.value;renderPage(false)})}function syncSliders(){domains.forEach(k=>{let x=$(`[data-k=${k}]`);if(x!==document.activeElement)x.value=TB.weights[k];$(`#v-${k}`).textContent=`${Math.round(TB.weights[k])}%`})}function horizontal(id,ms,get,label,pass){let c=colors(),el=$('#'+id);if(!el)return;chart(el,{type:'bar',data:{labels:ms.map(m=>m.name),datasets:[{label,data:ms.map(get),backgroundColor:ms.map(m=>pass(m)?m.color:'#cbd5e1'),borderRadius:4}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{color:c.muted},grid:{color:c.line}},y:{ticks:{color:c.muted,font:{size:10}},grid:{display:false}}}}})}function output(ms){let o=$('#output');o.innerHTML=view==='rows'?table(ms):`<div class="grid-3">${ms.map((m,i)=>`<article class="panel"><span class="tag">#${i+1} · ${m.provider}</span><h3 class="subhead" style="margin-top:12px">${link(m)}</h3><div class="metrics" style="margin-top:12px"><div class="metric"><span class="label">Score</span><b>${score(m).toFixed(1)}</b></div><div class="metric"><span class="label">TTFT</span><b>${m.ttft}s</b></div><div class="metric"><span class="label">TPS</span><b>${m.tps}</b></div></div></article>`).join('')}</div>`}window.renderPage=(first=true)=>{initSliders();syncSliders();let valid=sum()>0,ms=valid?ranked():[];$('#zero').hidden=valid;if(valid){horizontal('ranking',ms,m=>score(m),'Composite',()=>true);$('#rank-alt').innerHTML=table(ms);output(ms)}else{Chart.getChart($('#ranking'))?.destroy();$('#rank-alt').innerHTML='<p class="empty">Ranking paused until at least one weight is above zero.</p>';$('#output').innerHTML='<p class="empty">Set a capability weight or use Reset equal weights.</p>'}let pass=m=>m.ttft<=ttft&&m.tps>=tps;$('#pass').textContent=`${TB_MODELS.filter(pass).length} / ${TB_MODELS.length} pass`;horizontal('ttft-chart',[...TB_MODELS].sort((a,b)=>a.ttft-b.ttft),m=>m.ttft,'TTFT',m=>m.ttft<=ttft);horizontal('tps-chart',[...TB_MODELS].sort((a,b)=>b.tps-a.tps),m=>m.tps,'TPS',m=>m.tps>=tps);$('#ttftv').textContent=`≤ ${ttft.toFixed(2)}s`;$('#tpsv').textContent=`≥ ${tps} tok/s`};$('#ttft').oninput=e=>{ttft=+e.target.value;renderPage(false)};$('#tps').oninput=e=>{tps=+e.target.value;renderPage(false)};$('#reset').onclick=()=>{domains.forEach(k=>TB.weights[k]=100/6);renderPage()};$('#cards').onclick=()=>{view='cards';renderPage()};$('#rows').onclick=()=>{view='rows';renderPage()};renderPage();
+</script>
+<script>
+  document.querySelector('main').insertAdjacentHTML('beforeend', `<aside id="tray" class="compare-tray panel"><div class="toolbar"><div><strong>Compare ranked candidates</strong><p id="compare-summary" class="fixture">Select two or three models from Cards or Table.</p><div class="compare-list" id="selected-names"></div></div><button class="toggle" id="clear">Clear selection</button></div><div id="comparison" class="grid-2" style="margin-top:12px"></div></aside>`);
+  $('#ranking').closest('.panel').querySelector('.fixture').insertAdjacentHTML('afterend', '<p id="rank-status" class="fixture" aria-live="polite"></p><p id="weight-summary" class="weight-summary" aria-label="Current capability weights"></p>');
+  $('#pass').insertAdjacentHTML('beforebegin', '<label class="toggle"><input id="show-excluded" type="checkbox"> Show outside SLA</label>');
+  $('#ttft-chart').setAttribute('role', 'img');
+  $('#ttft-chart').setAttribute('aria-label', 'Horizontal time-to-first-token measurements by model');
+  $('#tps-chart').setAttribute('role', 'img');
+  $('#tps-chart').setAttribute('aria-label', 'Horizontal output-throughput measurements by model');
+  $('#tps-chart').closest('.grid-2').insertAdjacentHTML('afterend', '<details><summary>Exact SLA measurements</summary><div id="sla-table"></div></details>');
+  let showExcluded = false;
+  const meetsSla = model => model.ttft <= ttft && model.tps >= tps;
+  function renderLeaderboardCompare() {
+    const models = TB.selected.map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
+    const show = models.length >= 2;
+    $('#tray').classList.toggle('show', show);
+    $('#selected-names').innerHTML = models.map(model => `<span class="tag">${model.name}</span>`).join('');
+    $('#compare-summary').textContent = show ? `${models.length} candidates selected · ranking weights stay visible above` : 'Select two or three models from Cards or Table.';
+    if (show) {
+      if (typeof Chart !== 'undefined') Chart.getChart($('#leaderboard-radar'))?.destroy();
+      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short"><canvas id="leaderboard-radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><h3 class="subhead">Decision deltas</h3><dl class="data-list">${models.map(model => `<div><dt>${model.name}</dt><dd>${score(model).toFixed(1)} composite · ${model.ttft}s TTFT · ${model.tps} tok/s · ${model.lifecycle}</dd></div>`).join('')}</dl></div>`;
+      radar($('#leaderboard-radar'), models);
+    }
+  }
+  const baseLeaderboardOutput = output;
+  output = function(models) {
+    baseLeaderboardOutput(models);
+    if (view === 'cards') {
+      $$('#output article').forEach((card, index) => {
+        const model = models[index];
+        card.querySelector('h3').insertAdjacentHTML('afterend', `<button class="toggle compare" aria-pressed="${TB.selected.includes(model.id)}" data-id="${model.id}" style="margin-top:12px">${TB.selected.includes(model.id) ? 'Selected' : 'Compare'}</button>`);
+      });
+    }
+    bindCompare($('#output'));
+    bindCompare($('#rank-alt'));
+  };
+  window.renderPage = (first = true) => {
+    initSliders();
+    syncSliders();
+    const valid = sum() > 0;
+    const allModels = valid ? ranked() : [];
+    const slaQualified = TB_MODELS.filter(meetsSla);
+    const qualified = allModels.filter(meetsSla);
+    const models = showExcluded ? allModels : qualified;
+    $('#zero').hidden = valid;
+    if (valid && models.length) {
+      horizontal('ranking', models, model => score(model), 'Composite', meetsSla);
+      $('#rank-alt').innerHTML = table(models);
+      output(models);
+    } else {
+      if (typeof Chart !== 'undefined') Chart.getChart($('#ranking'))?.destroy();
+      $('#rank-alt').innerHTML = valid ? '<p class="empty">No models meet both SLA thresholds. Loosen a threshold or show models outside SLA.</p>' : '<p class="empty">Ranking paused until at least one weight is above zero.</p>';
+      $('#output').innerHTML = valid ? '<p class="empty">No eligible ranked cards. Loosen a threshold or use Show outside SLA.</p>' : '<p class="empty">Set a capability weight or use Reset equal weights.</p>';
+    }
+    $('#pass').textContent = `${slaQualified.length} / ${TB_MODELS.length} pass`;
+    horizontal('ttft-chart', [...TB_MODELS].sort((a,b) => a.ttft-b.ttft), model => model.ttft, 'TTFT', model => model.ttft <= ttft);
+    horizontal('tps-chart', [...TB_MODELS].sort((a,b) => b.tps-a.tps), model => model.tps, 'TPS', model => model.tps >= tps);
+    $('#ttftv').textContent = `≤ ${ttft.toFixed(2)}s`;
+    $('#tpsv').textContent = `≥ ${tps} tok/s`;
+    $('#sla-table').innerHTML = `<div class="table-wrap" role="region" aria-label="Exact SLA measurements" tabindex="0"><table><thead><tr><th>Model</th><th>TTFT</th><th>TTFT result</th><th>Throughput</th><th>Throughput result</th><th>Eligibility</th></tr></thead><tbody>${TB_MODELS.map(model => `<tr><td>${link(model)}</td><td>${model.ttft.toFixed(2)}s</td><td>${model.ttft <= ttft ? 'Pass' : 'Outside threshold'}</td><td>${model.tps} tok/s</td><td>${model.tps >= tps ? 'Pass' : 'Outside threshold'}</td><td>${meetsSla(model) ? 'Eligible' : 'Excluded from default rank'}</td></tr>`).join('')}</tbody></table></div><p class="fixture">Representative hosted-route fixtures · p50 · streaming · 1× concurrency · observed 15 Aug 2026</p>`;
+    $('#rank-status').textContent = !valid ? 'Live result paused because all six weights are zero.' : models.length ? `Live result: ${models[0].name} leads at ${score(models[0]).toFixed(1)}. ${qualified.length} meet both SLA thresholds; ${allModels.length-qualified.length} excluded${showExcluded ? ' but shown in gray' : ' from the default rank'}.` : `No models meet both SLA thresholds; ${allModels.length} excluded from the default rank.`;
+    $('#weight-summary').textContent = domains.map(domain => `${domain} ${Number(TB.weights[domain]).toFixed(Number.isInteger(TB.weights[domain]) ? 0 : 1)}`).join(' · ');
+    $('#cards').setAttribute('aria-pressed', String(view === 'cards'));
+    $('#rows').setAttribute('aria-pressed', String(view === 'rows'));
+    renderLeaderboardCompare();
+  };
+  $('#cards').onclick = () => { view = 'cards'; window.renderPage(false); };
+  $('#rows').onclick = () => { view = 'rows'; window.renderPage(false); };
+  $('#show-excluded').onchange = event => { showExcluded = event.target.checked; window.renderPage(false); };
+  $('#clear').addEventListener('click', () => { TB.selected = []; window.renderPage(false); });
+  window.renderPage();
+</script>
+</body></html>

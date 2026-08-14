@@ -1,0 +1,113 @@
+<!-- Direction contract: lifecycle evidence is a first-class decision surface, not a decorative catalog footer. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Model lifecycle radar — TokenBench REBUILD</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="index.html"><span class="mark">TB</span>TokenBench <span class="fixture">REBUILD</span></a>
+      <nav class="nav" aria-label="Primary"></nav>
+      <div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle color theme">Theme</button></div>
+    </div>
+  </header>
+
+  <main class="shell page">
+    <section class="toolbar" style="align-items:end">
+      <div>
+        <p class="fixture"><a href="index.html">Models</a> / Lifecycle radar</p>
+        <h1 class="headline">Production model lifecycle & retirement radar</h1>
+        <p class="lede">See retirement deadlines, sourced replacement paths and the operational delta before an endpoint disappears.</p>
+        <p class="fixture">Illustrative staging fixtures · dates, deltas and notices below are not production claims</p>
+      </div>
+      <div class="metrics panel soft">
+        <div class="metric"><span class="label">Open alerts</span><b id="alert-count">2</b></div>
+        <div class="metric"><span class="label">Next sunset</span><b id="nearest-sunset">46d</b></div>
+        <div class="metric"><span class="label">Observed</span><b>15 Aug</b></div>
+      </div>
+    </section>
+
+    <hr class="rule">
+
+    <section>
+      <div class="toolbar">
+        <div>
+          <h2 class="section-title">Retirement watchlist</h2>
+          <p class="lede">A replacement is a sourced route, not an automatic recommendation. Verify workload compatibility before migration.</p>
+        </div>
+        <div class="control-row">
+          <label class="toggle" for="horizon">Horizon</label>
+          <select id="horizon">
+            <option value="all">All notices</option>
+            <option value="90">Next 90 days</option>
+            <option value="60">Next 60 days</option>
+          </select>
+          <div class="control-row" role="group" aria-label="Lifecycle view">
+            <button class="toggle" id="cards" aria-pressed="true">Cards</button>
+            <button class="toggle" id="rows" aria-pressed="false">Table</button>
+          </div>
+        </div>
+      </div>
+      <p id="result-count" class="fixture" aria-live="polite"></p>
+      <div id="lifecycle-output" style="margin-top:12px"></div>
+    </section>
+
+    <section class="grid-2" style="margin-top:24px">
+      <div class="panel">
+        <h2 class="section-title">Release timeline</h2>
+        <p class="lede">Release records and retirement events stay separate so absence from a benchmark snapshot never becomes a false sunset.</p>
+        <ol id="release-timeline" class="timeline"></ol>
+      </div>
+      <div class="panel soft">
+        <h2 class="section-title">Evidence boundary</h2>
+        <dl class="data-list">
+          <div><dt>Lifecycle authority</dt><dd>Provider announcement or changelog snapshot</dd></div>
+          <div><dt>Freshness</dt><dd>Per-event observed timestamp, not page-build time</dd></div>
+          <div><dt>Unknown values</dt><dd>Shown as “Not reported”; never inferred from disappearance</dd></div>
+          <div><dt>Migration deltas</dt><dd>Recomputed from route-matched price and SLA evidence</dd></div>
+        </dl>
+        <p class="fixture">Production target: revision-scoped lifecycle sources and append-only events in isolated staging D1.</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="common.js"></script>
+  <script>
+    setupShell();
+    let lifecycleView = 'cards';
+    const proofNow = new Date('2026-08-15T00:00:00Z');
+    const daysUntil = date => Math.ceil((new Date(date + 'T00:00:00Z') - proofNow) / 86400000);
+    const replacementLink = event => {
+      const model = TB_MODELS.find(item => item.id === event.replacementId);
+      return model ? link(model) : event.replacement;
+    };
+    function lifecycleRows(events) {
+      return `<div class="table-wrap" role="region" aria-label="Lifecycle events" tabindex="0"><table><thead><tr><th>Model</th><th>Status</th><th>Announced</th><th>Sunset</th><th>Replacement</th><th>Cost delta</th><th>Speed delta</th><th>Evidence</th></tr></thead><tbody>${events.map(event => `<tr><td class="model-name">${event.name}</td><td>${event.status}</td><td>${event.announced}</td><td>${event.sunset}</td><td>${replacementLink(event)}</td><td>${event.costDelta}</td><td>${event.speedDelta}</td><td>${event.source}<br><span class="fixture">Observed ${event.observed}</span></td></tr>`).join('')}</tbody></table></div>`;
+    }
+    function lifecycleCards(events) {
+      return `<div class="grid-2">${events.map(event => `<article class="panel retirement-card"><div class="toolbar"><span class="tag warning">${event.status}</span><span class="fixture">${event.provider}</span></div><h3 class="subhead" style="margin-top:12px">${event.name}</h3><div class="metrics" style="margin-top:12px"><div class="metric"><span class="label">Announced</span><b>${event.announced.slice(5)}</b></div><div class="metric"><span class="label">Sunset</span><b>${event.sunset.slice(5)}</b></div><div class="metric"><span class="label">Time left</span><b>${daysUntil(event.sunset)}d</b></div></div><div class="migration"><span class="label">Direct migration fixture</span><strong>${replacementLink(event)}</strong><span>${event.costDelta} · ${event.speedDelta}</span></div><p class="fixture">${event.source} · observed ${event.observed}</p></article>`).join('')}</div>`;
+    }
+    function renderLifecycle() {
+      const horizon = $('#horizon').value;
+      const events = TB_LIFECYCLE.filter(event => horizon === 'all' || daysUntil(event.sunset) <= Number(horizon));
+      $('#alert-count').textContent = TB_LIFECYCLE.length;
+      $('#nearest-sunset').textContent = Math.min(...TB_LIFECYCLE.map(event => daysUntil(event.sunset))) + 'd';
+      $('#result-count').textContent = `${events.length} of ${TB_LIFECYCLE.length} source-backed fixture notices shown`;
+      $('#lifecycle-output').innerHTML = events.length ? (lifecycleView === 'cards' ? lifecycleCards(events) : lifecycleRows(events)) : '<div class="panel empty">No fixture notices fall inside this horizon. Choose All notices to recover.</div>';
+      $('#cards').setAttribute('aria-pressed', String(lifecycleView === 'cards'));
+      $('#rows').setAttribute('aria-pressed', String(lifecycleView === 'rows'));
+      $('#release-timeline').innerHTML = TB_RELEASES.map(item => `<li><time datetime="${item.date}">${item.date}</time><div><strong>${link(TB_MODELS.find(model => model.id === item.id))}</strong><p>${item.summary}</p><span class="fixture">${item.source}</span></div></li>`).join('');
+    }
+    window.renderPage = renderLifecycle;
+    $('#horizon').addEventListener('change', renderLifecycle);
+    $('#cards').addEventListener('click', () => { lifecycleView = 'cards'; renderLifecycle(); });
+    $('#rows').addEventListener('click', () => { lifecycleView = 'rows'; renderLifecycle(); });
+    renderLifecycle();
+  </script>
+</body>
+</html>

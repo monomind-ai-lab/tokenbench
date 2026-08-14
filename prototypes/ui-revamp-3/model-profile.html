@@ -1,0 +1,59 @@
+<!-- Direction contract: model profiles combine capability, economics, SLA and lifecycle evidence without hiding missing data. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Model profile — TokenBench REBUILD</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="index.html"><span class="mark">TB</span>TokenBench <span class="fixture">REBUILD</span></a>
+      <nav class="nav" aria-label="Primary"></nav>
+      <div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle color theme">Theme</button></div>
+    </div>
+  </header>
+
+  <main class="shell page">
+    <div id="profile"></div>
+  </main>
+
+  <script src="data.js"></script>
+  <script src="common.js"></script>
+  <script>
+    setupShell();
+    const profileId = new URLSearchParams(location.search).get('model') || 'gpt-4o';
+    const profileModel = TB_MODELS.find(model => model.id === profileId);
+    function singleHorizontal(canvas, label, value, maximum, color) {
+      const theme = colors();
+      chart(canvas, {type:'bar',data:{labels:[profileModel.name],datasets:[{label,data:[value],backgroundColor:[color],borderRadius:4}]},options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,suggestedMax:maximum,ticks:{color:theme.muted},grid:{color:theme.line}},y:{ticks:{color:theme.muted},grid:{display:false}}}}});
+    }
+    function renderProfile() {
+      if (!profileModel) {
+        $('#profile').innerHTML = '<section class="panel empty"><h1 class="headline">Model not found</h1><p>This staging fixture does not contain that model. Return to the <a href="index.html#catalog">model catalog</a>.</p></section>';
+        return;
+      }
+      document.title = `${profileModel.name} profile — TokenBench REBUILD`;
+      const replacementFor = TB_LIFECYCLE.filter(event => event.replacementId === profileModel.id);
+      $('#profile').innerHTML = `<section class="toolbar profile-hero" style="align-items:end"><div><p class="fixture"><a href="index.html">Models</a> / ${profileModel.provider}</p><h1 class="headline"><span class="provider-dot" style="background:${profileModel.color}"></span>${profileModel.name}</h1><p class="lede">Capability, route economics, service-level measurements and lifecycle evidence in one model-specific decision record.</p><p class="fixture">Illustrative staging fixtures · observed 15 Aug 2026 · not a production factual profile</p></div><div class="control-row"><span class="tag">${profileModel.lifecycle}</span><a class="button" href="custom-leaderboard.html">Reweight ranking</a><a class="button primary" href="index.html#catalog">Add to comparison</a></div></section><hr class="rule"><section class="metrics panel soft"><div class="metric"><span class="label">Composite</span><b>${score(profileModel).toFixed(1)}</b></div><div class="metric"><span class="label">Blended $/1M</span><b>$${profileModel.cost.toFixed(2)}</b></div><div class="metric"><span class="label">TTFT p50</span><b>${profileModel.ttft}s</b></div></section><section class="grid-2" style="margin-top:24px"><div class="panel"><h2 class="section-title">Six-domain capability</h2><p class="fixture">Normalized fixture scores · weighted composite uses the current default weights</p><div class="chart-wrap"><canvas id="profile-radar" role="img" aria-label="Six-domain capability radar"></canvas></div><details><summary>Exact capability values</summary><dl class="data-list">${['agentic','coding','reasoning','math','multimodal','throughput'].map(key => `<div><dt>${key}</dt><dd>${domainScore(profileModel,key).toFixed(1)}</dd></div>`).join('')}</dl></details></div><div class="panel"><h2 class="section-title">Runtime SLA evidence</h2><p class="fixture">Representative hosted route · p50 · streaming · 1× concurrency · staging fixture</p><h3 class="subhead">Time to first token (seconds)</h3><div class="chart-wrap short"><canvas id="profile-ttft" role="img" aria-label="Horizontal TTFT bar"></canvas></div><h3 class="subhead">Output throughput (tokens/second)</h3><div class="chart-wrap short"><canvas id="profile-tps" role="img" aria-label="Horizontal throughput bar"></canvas></div><table class="compact-table"><tbody><tr><th>TTFT</th><td>${profileModel.ttft}s</td><th>Throughput</th><td>${profileModel.tps} tok/s</td></tr><tr><th>Measured</th><td>2026-08-15 fixture</td><th>Region</th><td>US East fixture</td></tr></tbody></table></div></section><section class="grid-2" style="margin-top:24px"><div class="panel"><h2 class="section-title">Identity, limits & route</h2><dl class="data-list"><div><dt>Provider</dt><dd>${profileModel.provider}</dd></div><div><dt>Access</dt><dd>${profileModel.access}</dd></div><div><dt>Context</dt><dd>${profileModel.context}</dd></div><div><dt>Modalities</dt><dd>${profileModel.modalities}</dd></div><div><dt>Representative route</dt><dd>${profileModel.provider} native · fixture</dd></div><div><dt>Price source</dt><dd>Route snapshot · observed 2026-08-15 fixture</dd></div></dl></div><div class="panel soft"><h2 class="section-title">Lifecycle & sunset</h2><dl class="data-list"><div><dt>Release</dt><dd>${profileModel.released || 'Not reported'}</dd></div><div><dt>Status</dt><dd>${profileModel.lifecycle || 'Not reported'}</dd></div><div><dt>Sunset</dt><dd>${profileModel.sunset || 'Not reported'}</dd></div><div><dt>Replacement</dt><dd>${replacementFor.length ? replacementFor.map(event => `${event.name} → ${profileModel.name}`).join(', ') : 'Not reported'}</dd></div></dl>${replacementFor.map(event => `<div class="migration"><span class="label">Replacement evidence</span><strong>${event.name} → ${profileModel.name}</strong><span>${event.costDelta} · ${event.speedDelta}</span><span class="fixture">${event.source} · observed ${event.observed}</span></div>`).join('')}<p><a href="model-lifecycle.html">Open the full lifecycle radar</a></p></div></section><aside class="cta"><div><strong>Continue with a decision, not a winner claim.</strong><p class="lede">Reweight the six domains, compare a pair, or inspect the source conditions before choosing a route.</p></div><a href="custom-leaderboard.html" class="button primary">Build my ranking</a></aside>`;
+      radar($('#profile-radar'), [profileModel]);
+      singleHorizontal($('#profile-ttft'), 'TTFT seconds', profileModel.ttft, 1.2, profileModel.color);
+      singleHorizontal($('#profile-tps'), 'Output tokens/second', profileModel.tps, 140, profileModel.color);
+    }
+    function renderProfileExtensions() {
+      if (!profileModel) return;
+      const compareAction = document.querySelector('.profile-hero .button.primary');
+      if (compareAction) compareAction.href = `index.html?compare=${encodeURIComponent(profileModel.id)}#catalog`;
+      const workloadCost = profileModel.inputPrice * 10 + profileModel.outputPrice * 2;
+      const routerInput = profileModel.inputPrice * 1.05;
+      const routerOutput = profileModel.outputPrice * 1.05;
+      document.querySelector('#profile .cta').insertAdjacentHTML('beforebegin', `<section class="panel" style="margin-top:24px"><div class="toolbar"><div><h2 class="section-title">Endpoint & itemized price matrix</h2><p class="lede">Source-shaped price fields stay separate from the blended scenario above.</p></div><span class="fixture">Route snapshot · observed 15 Aug 2026 · staging fixture</span></div><div class="table-wrap" role="region" aria-label="Endpoint and itemized price matrix" tabindex="0" style="margin-top:12px"><table><thead><tr><th>Host / route</th><th>Input $/1M</th><th>Output $/1M</th><th>Cache read</th><th>Cache write</th><th>Long context</th><th>Max output</th><th>Availability</th></tr></thead><tbody><tr><td>${profileModel.provider} native · fixture</td><td>$${profileModel.inputPrice.toFixed(2)}</td><td>$${profileModel.outputPrice.toFixed(2)}</td><td>${profileModel.cacheRead == null ? 'Not reported' : '$'+profileModel.cacheRead.toFixed(2)}</td><td>${profileModel.cacheWrite == null ? 'Not reported' : '$'+profileModel.cacheWrite.toFixed(2)}</td><td>Not reported</td><td>${profileModel.maxOutput}</td><td>Available fixture</td></tr><tr><td>Representative router · estimated fixture</td><td>$${routerInput.toFixed(2)}</td><td>$${routerOutput.toFixed(2)}</td><td>Not reported</td><td>Not reported</td><td>Not reported</td><td>${profileModel.maxOutput}</td><td>Route not verified</td></tr></tbody></table></div></section><section class="grid-2" style="margin-top:24px"><div class="panel soft"><h2 class="section-title">Workload-aware cost example</h2><p class="fixture">Derived scenario · 10M input + 2M output tokens / month</p><dl class="data-list"><div><dt>Source input price</dt><dd>$${profileModel.inputPrice.toFixed(2)} / 1M</dd></div><div><dt>Source output price</dt><dd>$${profileModel.outputPrice.toFixed(2)} / 1M</dd></div><div><dt>Derived monthly cost</dt><dd><strong>$${workloadCost.toFixed(2)}</strong></dd></div><div><dt>Formula</dt><dd>10 × input price + 2 × output price</dd></div></dl><p class="fixture">Excludes cache, retries, tool calls and long-context tiers where they are Not reported.</p></div><div class="panel"><h2 class="section-title">History, conflicts & limitations</h2><ol class="timeline"><li><time datetime="${profileModel.released}">${profileModel.released}</time><div><strong>Release fixture</strong><p>Identity record added to the lifecycle stream.</p></div></li><li><time datetime="2026-08-15">2026-08-15</time><div><strong>Price and SLA fixture observed</strong><p>One route and one condition set; regional and percentile variance remain Not reported.</p></div></li></ol><ul><li>Router availability is unverified and excluded from source-backed conclusions.</li><li>Cache write and long-context pricing display as Not reported when absent.</li><li>Capability scores and runtime measurements are illustrative staging fixtures.</li></ul></div></section>`);
+    }
+    window.renderPage = () => { renderProfile(); renderProfileExtensions(); };
+    window.renderPage();
+  </script>
+</body>
+</html>
