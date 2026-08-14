@@ -553,6 +553,25 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .section-sources { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 16px; margin-top: 22px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, var(--outline) 60%, transparent); }
 .section-sources > span { color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .section-sources a { min-height: 44px; display: inline-flex; align-items: center; gap: 5px; font-size: 0.68rem; font-weight: 700; }
+.section-sources summary, .article-toc summary { min-height: 44px; display: flex; align-items: center; color: var(--primary-strong); font-family: var(--font-label); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.055em; cursor: pointer; }
+.section-sources[open] summary { margin-bottom: 8px; }
+.article-source { min-height: 44px; display: flex; align-items: center; gap: 5px; margin-top: 8px; font-size: 0.78rem; font-weight: 700; overflow-wrap: anywhere; }
+.article-status { color: var(--muted); font-family: var(--font-label); font-size: 0.7rem; line-height: 1.55; }
+.article-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 20px 0 12px; }
+.article-filters span { color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.055em; text-transform: uppercase; }
+.article-filters a { min-height: 38px; display: inline-flex; align-items: center; padding: 0 10px; border: 1px solid var(--outline); border-radius: 999px; color: var(--primary-strong); font-size: 0.72rem; font-weight: 800; text-decoration: none; text-transform: capitalize; }
+.article-filters a[aria-current='page'] { border-color: var(--primary); background: var(--primary-soft); color: var(--text); }
+.articles-channel-split, .article-channel-index { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.articles-channel-split { margin-bottom: 28px; }
+.articles-channel-split > section { display: grid; align-content: start; gap: 13px; min-width: 0; padding: clamp(22px, 3vw, 34px); border: 1px solid var(--outline); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.articles-channel-split h1, .articles-channel-split h2 { margin: 0; font-family: var(--font-display); font-size: clamp(1.8rem, 3.2vw, 2.7rem); letter-spacing: -0.045em; }
+.articles-channel-split p { margin: 0; color: var(--muted); line-height: 1.6; }
+.article-channel-index > section { min-width: 0; }
+.article-channel-index > section > h2 { margin: 0 0 14px; font-family: var(--font-display); font-size: 1.25rem; letter-spacing: -0.025em; }
+.evidence-timeline { display: grid; gap: 14px; margin: 0; padding: 0 0 0 24px; border-left: 2px solid var(--outline); }
+.evidence-timeline li { min-width: 0; padding-left: 10px; }
+.evidence-timeline p { margin: 5px 0; color: var(--muted); }
+.evidence-timeline a { min-height: 40px; display: inline-flex; align-items: center; gap: 5px; overflow-wrap: anywhere; font-size: .78rem; font-weight: 800; }
 .guide-table-wrap { width: 100%; margin: 22px 0; overflow-x: auto; }
 .guide-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
 .guide-table th, .guide-table td { padding: 13px 15px; border: 1px solid var(--outline); text-align: left; vertical-align: top; line-height: 1.55; }
@@ -916,7 +935,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .article-header { padding-bottom: 28px; }
   .article-header h1 { font-size: clamp(2.15rem, 12vw, 3.3rem); }
   .article-layout { grid-template-columns: minmax(0, 1fr); margin-top: 30px; }
-  .article-toc { display: none; }
+  .articles-channel-split, .article-channel-index { grid-template-columns: minmax(0, 1fr); }
+  .article-toc { position: static; display: block; margin: 22px 0; padding: 0 0 0 14px; }
   .takeaways { margin-bottom: 42px; padding: 22px; }
   .article-section { margin-top: 44px; }
   .calculator-cta { align-items: flex-start; flex-direction: column; padding: 24px; }

@@ -6,25 +6,6 @@ import { GUIDES } from '../guides/content';
 import { ROUTE_PATHS } from '../routing/routes';
 import { GuideArticlePage, GuidesHub } from './guides-page';
 
-const expectedLeaderboardLinks = {
-  'track-claude-code-usage': [
-    { label: 'Review AI model pricing and context', href: '/leaderboards/llm/pricing-context/' },
-  ],
-  'monitor-openai-codex-usage': [
-    { label: 'Review AI model pricing and context', href: '/leaderboards/llm/pricing-context/' },
-  ],
-  'openrouter-guide-model-routing-cost-controls': [
-    { label: 'Review AI model pricing and context', href: '/leaderboards/llm/pricing-context/' },
-  ],
-  'legitimate-free-ai-api-access-credits': [
-    { label: 'Review AI model pricing and context', href: '/leaderboards/llm/pricing-context/' },
-  ],
-  'reduce-llm-api-costs-caching-batch-output-limits': [
-    { label: 'Review AI coding model benchmarks', href: '/leaderboards/llm/coding/' },
-    { label: 'Explore the LLM value frontier', href: '/leaderboards/llm/value/' },
-  ],
-} as const;
-
 describe('guides experience', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -43,8 +24,17 @@ describe('guides experience', () => {
   it('renders a single-heading hub with every published guide', () => {
     render(<GuidesHub />);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getByRole('heading', { name: 'Spend smarter on AI' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'AI cost optimization guides' })).toBeInTheDocument();
     for (const guide of GUIDES) expect(screen.getByRole('link', { name: guide.title })).toHaveAttribute('href', `/articles/guides/${guide.slug}/`);
+  });
+
+  it('shows URL-backed filters, editorial views, counts, and review status on the eight-guide index', () => {
+    window.history.replaceState({}, '', '/articles/guides/?topic=hybrid-routing&view=featured');
+    render(<GuidesHub />);
+    expect(screen.getByRole('link', { name: 'Featured' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Recent' })).toBeInTheDocument();
+    expect(screen.getByText(/results for hybrid-routing/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/factual review/i).length).toBeGreaterThan(0);
   });
 
   it('renders article navigation, official sources, and valid related guides', () => {
@@ -52,30 +42,34 @@ describe('guides experience', () => {
     render(<GuideArticlePage guide={guide} />);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { name: guide.title })).toBeInTheDocument();
-    const toc = screen.getByRole('complementary', { name: 'On this page' });
-    for (const section of guide.sections) expect(within(toc).getByRole('link', { name: section.title.replace(/^\d+\.\s*/, '') })).toHaveAttribute('href', `#${section.id}`);
-    expect(screen.getAllByRole('link', { name: /Claude Code/i }).some((link) => link.getAttribute('href')?.startsWith('https://'))).toBe(true);
+    expect(screen.getByRole('heading', { name: 'Decision question' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Assumptions' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Reproducible framework' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Observed facts' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Sources and effective dates' })).toBeInTheDocument();
+    const toc = screen.getByText('On this page').closest('details');
+    expect(toc).not.toBeNull();
+    for (const section of guide.sections) expect(within(toc!).getByRole('link', { name: section.title.replace(/^\d+\.\s*/, '') })).toHaveAttribute('href', `#${section.id}`);
+    expect(screen.getAllByRole('link').some((link) => link.getAttribute('href')?.startsWith('https://'))).toBe(true);
     expect(screen.getByRole('heading', { name: 'Related guides' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open calculator/i })).toHaveAttribute('href', `${ROUTE_PATHS.calculator}#calculator`);
+    expect(screen.getByRole('link', { name: /Estimate API costs/i })).toHaveAttribute('href', ROUTE_PATHS.calculator);
   });
 
   it('renders a relevant checked-in leaderboard context link for every article', () => {
     for (const guide of GUIDES) {
       const view = render(<GuideArticlePage guide={guide} />);
 
-      expect(screen.getByRole('heading', { name: 'Related decision context' })).toBeInTheDocument();
-      for (const link of expectedLeaderboardLinks[guide.slug as keyof typeof expectedLeaderboardLinks]) {
-        expect(screen.getByRole('link', { name: link.label })).toHaveAttribute('href', link.href);
-      }
+      expect(screen.getByRole('heading', { name: 'Related decision links' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Review AI model pricing and context' })).toHaveAttribute('href', '/leaderboards/llm/pricing-context/');
 
       view.unmount();
     }
   });
 
-  it('marks the insights channel as not yet separately populated', () => {
+  it('links the guides index to its populated Insights peer channel', () => {
     render(<GuidesHub isInsights />);
 
-    expect(screen.getByRole('heading', { name: /Not yet separately populated/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'LLM insights' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Browse all guides' })).toHaveAttribute('href', ROUTE_PATHS.guides);
   });
 
@@ -83,7 +77,6 @@ describe('guides experience', () => {
     window.history.replaceState({}, '', ROUTE_PATHS.insights);
     render(<GuidesApp />);
 
-    expect(screen.getByRole('heading', { name: /Not yet separately populated/ })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Browse all guides' })).toHaveAttribute('href', ROUTE_PATHS.guides);
+    expect(screen.getByRole('heading', { name: 'LLM insights' })).toBeInTheDocument();
   });
 });

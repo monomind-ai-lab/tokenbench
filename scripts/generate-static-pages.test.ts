@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
+import { INSIGHTS, insightPath } from '../src/articles/content';
+import { GUIDES, guidePath } from '../src/guides/content';
 import { FIXED_ROUTES } from '../src/routing/routes';
 import { generateStaticPages } from './generate-static-pages';
 
@@ -42,7 +44,8 @@ describe('crawlable static-page generator', () => {
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
     const lifecycle = await readFile(join(root, 'models/lifecycle/index.html'), 'utf8');
-    const guide = await readFile(join(root, 'articles/guides/track-claude-code-usage/index.html'), 'utf8');
+    const guide = await readFile(join(root, `${guidePath(GUIDES[0].slug)}index.html`), 'utf8');
+    const insight = await readFile(join(root, `${insightPath(INSIGHTS[0].slug)}index.html`), 'utf8');
     const cost = await readFile(join(root, 'cost/index.html'), 'utf8');
     const calculator = await readFile(join(root, 'cost/calculator/index.html'), 'utf8');
     const breakeven = await readFile(join(root, 'cost/breakeven/index.html'), 'utf8');
@@ -110,12 +113,20 @@ describe('crawlable static-page generator', () => {
     expect(home).toContain('<a href="/methodology/benchalign/">Methodology</a>');
     expect(home).not.toContain('href="/sources/"');
 
-    expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
+    expect(guide).toContain(`<h1>${GUIDES[0].title}</h1>`);
     expect(guide).toContain('<html lang="en" data-theme="light">');
     expect(guide).toContain(THEME_BOOTSTRAP);
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
-    expect(guide).toContain('https://tokenbench.monomind.one/articles/guides/track-claude-code-usage/');
+    expect(guide).toContain(`https://tokenbench.monomind.one${guidePath(GUIDES[0].slug)}`);
+    expect(guide).toContain('Decision question');
+    expect(guide).toContain('Sources and effective dates');
+    expect(insight).toContain(`<h1>${INSIGHTS[0].title}</h1>`);
+    expect(insight).toContain('Factual brief');
+    expect(insight).toContain('Evidence timeline');
+    expect(insight).toContain('TokenBench interpretation');
+    expect(insight).toContain('"@type":"Article"');
+    expect(insight).toContain('"@type":"BreadcrumbList"');
 
     expect(tools).toContain('href="/cost/calculator/"');
     expect(tools).not.toContain('href="/cost/breakeven/"');
@@ -265,11 +276,11 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(36);
+    expect(FIXED_ROUTES).toHaveLength(47);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES
-      .filter(({ pathname }) => pathname !== '/')
+      .filter(({ pathname }) => pathname !== '/' && !/^\/articles\/(guides\/[^/]+|insights\/[^/]+)\/$/u.test(pathname))
       .map(({ pathname }) => `${pathname.slice(1)}index.html`);
     const unownedPages = [
       'guides/drafts/index.html',

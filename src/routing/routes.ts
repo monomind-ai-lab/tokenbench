@@ -1,4 +1,5 @@
 import { SITE_CONFIG } from '../brand/site-config';
+import { INSIGHT_BY_SLUG, INSIGHTS, insightPath } from '../articles/content';
 import { GUIDE_BY_SLUG, GUIDES, guidePath } from '../guides/content';
 
 export const ROUTE_PATHS = {
@@ -202,7 +203,7 @@ export type AppRoute =
   | { kind: 'redirect'; to: string }
   | { kind: 'notFound' };
 
-export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'modelProfile' } | { kind: 'insightDetail' } | { kind: 'redirect' } | { kind: 'notFound' }>;
+export type FixedAppRoute = Exclude<AppRoute, { kind: 'comparison' } | { kind: 'modelProfile' } | { kind: 'redirect' } | { kind: 'notFound' }>;
 
 export interface FixedRouteDefinition {
   readonly id: string;
@@ -222,6 +223,11 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
     id: `guide-${guide.slug}`,
     pathname: guidePath(guide.slug),
     route: { kind: 'guides' as const, slug: guide.slug },
+  })),
+  ...INSIGHTS.map((insight) => ({
+    id: `insight-${insight.slug}`,
+    pathname: insightPath(insight.slug),
+    route: { kind: 'insightDetail' as const, slug: insight.slug },
   })),
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
   { id: 'price-performance', pathname: ROUTE_PATHS.pricePerformance, route: { kind: 'pricePerformance' } },
@@ -365,7 +371,10 @@ export function matchRoute(pathname: string): AppRoute {
 
   const insightMatch = normalizedPathname.match(/^\/articles\/insights\/([^/]+)\/$/);
   if (insightMatch) {
-    try { return { kind: 'insightDetail', slug: decodeURIComponent(insightMatch[1]) }; } catch { return { kind: 'notFound' }; }
+    try {
+      const slug = decodeURIComponent(insightMatch[1]);
+      return INSIGHT_BY_SLUG.has(slug) ? { kind: 'insightDetail', slug } : { kind: 'notFound' };
+    } catch { return { kind: 'notFound' }; }
   }
 
   const modelMatch = normalizedPathname.match(/^\/models\/([^/]+)\/$/);

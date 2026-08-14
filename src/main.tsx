@@ -110,7 +110,8 @@ function initialCostState(kind: 'calculator' | 'breakeven'): CostInitialState | 
 }
 
 const route = matchRoute(window.location.pathname);
-const RootApp = route.kind === 'articles' || route.kind === 'guides' || route.kind === 'insights'
+const RootApp = route.kind === 'articles' || route.kind === 'guides' || route.kind === 'insights' || route.kind === 'insightDetail'
+  || (route.kind === 'notFound' && window.location.pathname.startsWith('/articles/'))
   ? GuidesApp
   : route.kind === 'newsletterConfirmed' || route.kind === 'privacy' || route.kind === 'welcome'
     ? null
@@ -184,6 +185,10 @@ if (route.kind === 'modelProfile') {
   }
 } else if (RootApp) {
   const root = document.getElementById('root')!;
+  if (route.kind === 'articles' || route.kind === 'guides' || route.kind === 'insights' || route.kind === 'insightDetail'
+    || route.kind === 'notFound' && window.location.pathname.startsWith('/articles/')) {
+    hydrateRoot(root, <StrictMode><RootApp /></StrictMode>);
+  } else {
   // These static shells remain for no-JavaScript crawlers. Once their
   // interactive route mounts, clear the fallback so it cannot duplicate UI.
   if (route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
@@ -193,6 +198,7 @@ if (route.kind === 'modelProfile') {
       <RootApp />
     </StrictMode>,
   );
+  }
 } else if (route.kind === 'newsletterConfirmed') {
   // The transactional confirmation page mounts directly without AppShell so
   // no navigation or footer actions are ever exposed here.

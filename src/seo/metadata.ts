@@ -1,4 +1,5 @@
 import { HOME_PAGE_COPY, SITE_CONFIG } from '../brand/site-config';
+import { INSIGHT_BY_SLUG, insightPath } from '../articles/content';
 import { GUIDE_BY_SLUG, guidePath } from '../guides/content';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS, pathnameForRoute, type AppRoute } from '../routing/routes';
 
@@ -206,6 +207,16 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     }
     case 'articles': return makeMetadata(ROUTE_PATHS.articles, pageDefinitions.articles);
     case 'insights': return makeMetadata(ROUTE_PATHS.insights, pageDefinitions.insights);
+    case 'insightDetail': {
+      const insight = INSIGHT_BY_SLUG.get(route.slug);
+      if (!insight) return makeMetadata(ROUTE_PATHS.insights, pageDefinitions.notFound);
+      return makeMetadata(insightPath(insight.slug), {
+        title: `${insight.title} | ${SITE_CONFIG.name}`,
+        description: insight.factualBrief,
+        h1: insight.title,
+        type: 'article',
+      });
+    }
     case 'comparison': return makeMetadata(pathnameForRoute(route) ?? ROUTE_PATHS.comparison, {
       ...pageDefinitions.comparison,
       title: `${route.pair.replaceAll('-', ' ')}: evidence-qualified comparison | ${SITE_CONFIG.name}`,

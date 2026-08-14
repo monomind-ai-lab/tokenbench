@@ -2,6 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_CONFIG } from '../src/brand/site-config';
+import { INSIGHT_CATEGORIES, INSIGHTS, insightPath, type InsightRecord } from '../src/articles/content';
+import { GUIDES, guidePath } from '../src/guides/content';
 import {
   FIXED_ROUTES,
   LEADERBOARD_ROUTES,
@@ -60,6 +62,44 @@ function staticHomePreviews(): string {
   return `<section class="home-preview-section" aria-labelledby="home-previews-heading"><div class="panel-heading"><div><span class="eyebrow">Decision surfaces</span><h2 id="home-previews-heading">Inspect the evidence before you act</h2></div></div><div class="home-preview-grid">${previews.map(([title, description, href, action]) => `<section class="panel home-preview" data-home-preview><h2>${title}</h2><p>${title === 'Articles preview' ? `${description} <a href="${ROUTE_PATHS.guides}">Guides</a> and <a href="${ROUTE_PATHS.insights}">LLM insights</a>.` : description}</p><a class="button button-secondary" href="${href}">${action}</a></section>`).join('')}</div></section>`;
 }
 
+function editorialDate(value: string): string {
+  return new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(value));
+}
+
+function staticArticlesHub(): string {
+  const guides = GUIDES.map((guide) => `<article class="guide-card"><p class="guide-card-meta">Guide · Updated ${editorialDate(guide.updatedAt)}</p><h3><a href="${guidePath(guide.slug)}">${escapeHtml(guide.title)}</a></h3><p>${escapeHtml(guide.dek)}</p><a href="${escapeHtml(guide.relatedDecisionLinks[0].href)}">Related decision tool</a></article>`).join('');
+  const insights = INSIGHTS.map((insight) => `<article class="guide-card"><p class="guide-card-meta">Insight · ${escapeHtml(insight.category)} · Updated ${editorialDate(insight.updatedAt)}</p><h3><a href="${insightPath(insight.slug)}">${escapeHtml(insight.title)}</a></h3><p>${escapeHtml(insight.factualBrief)}</p><a href="${escapeHtml(insight.relatedDecisionLinks[0].href)}">Related decision tool</a></article>`).join('');
+  return `<main id="page-content" class="guides-main articles-hub" tabindex="-1"><section class="articles-channel-split" aria-label="Article channels"><section aria-labelledby="articles-guides-heading"><span class="eyebrow">Evergreen practical decisions</span><h1 id="articles-guides-heading">Guides</h1><p>Source-aware frameworks for routing, cost, lifecycle, and production model selection.</p><a class="button" href="${ROUTE_PATHS.guides}">Browse guides</a></section><section aria-labelledby="articles-insights-heading"><span class="eyebrow">Time-sensitive evidence records</span><h2 id="articles-insights-heading">Insights</h2><p>Factual briefs and clearly labeled TokenBench interpretation for releases, benchmarks, pricing, lifecycle, and ecosystem updates.</p><a class="button" href="${ROUTE_PATHS.insights}">Browse LLM insights</a></section></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Article index</span><h2>Featured and recent reading</h2></div><p>Topic links have URL state and work without JavaScript.</p></div><nav class="article-filters" aria-label="Article filters"><a href="?topic=all&amp;view=featured">Featured</a><a href="?topic=all&amp;view=recent">Recent</a><a href="?topic=all&amp;view=recent">All topics</a><a href="?topic=hybrid-routing&amp;view=recent">Hybrid routing</a></nav><p role="status">${GUIDES.length + INSIGHTS.length} results for all · recent</p><div class="article-channel-index"><section><h2>Guides</h2><div class="guide-grid">${guides}</div></section><section><h2>Insights</h2><div class="guide-grid">${insights}</div></section></div><p class="article-status">If live editorial metadata cannot load, both authored channel entry links and evidence states remain available.</p></section></main>`;
+}
+
+function insightIndexContent(): string {
+  const categoryLinks = INSIGHT_CATEGORIES.map((category) => `<a href="?topic=${escapeHtml(category.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-').replace(/-$/u, ''))}&amp;date=all&amp;view=recent">${escapeHtml(category)}</a>`).join('');
+  const cards = INSIGHTS.map((insight) => `<article class="guide-card"><div class="guide-card-meta"><span>Insight · ${escapeHtml(insight.category)}</span><span>Published ${editorialDate(insight.publishedAt)}</span></div><h3><a href="${insightPath(insight.slug)}">${escapeHtml(insight.title)}</a></h3><p>${escapeHtml(insight.factualBrief)}</p><p class="article-status">Factual review: ${escapeHtml(insight.factualReview)}</p></article>`).join('');
+  return `<main id="page-content" class="guides-main" tabindex="-1"><section class="guides-hero"><span class="eyebrow">LLM insights</span><h1>LLM insights</h1><p>Factual primary-source briefs with TokenBench interpretation clearly separated from observed evidence.</p><p><a href="${ROUTE_PATHS.guides}">Browse all guides</a></p></section><section class="guide-index"><div class="guide-index-heading"><div><span class="eyebrow">Insights</span><h2>Five evidence channels</h2></div><p>Each record has one primary category, publication/update dates, and factual-review status.</p></div><nav class="article-filters" aria-label="Insight filters"><a href="?topic=all&amp;date=all&amp;view=featured">Featured</a><a href="?topic=all&amp;date=all&amp;view=recent">Recent</a>${categoryLinks}</nav><p role="status">${INSIGHTS.length} results for all · all date filter · recent</p><div class="guide-grid">${cards}</div><p class="article-status">If live metadata fails, this authored index and each crawlable detail remain available.</p></section></main>`;
+}
+
+function sourceLink(label: string, url: string, effectiveAt: string | null, status: string): string {
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(label)} — ${escapeHtml(effectiveAt ? `effective ${editorialDate(effectiveAt)}` : `effective date ${status}`)} ↗</a>`;
+}
+
+function insightDetailContent(insight: InsightRecord): string {
+  const facts = insight.factBlocks.map((block) => `<section class="article-section" data-article-block="${escapeHtml(block.kind)}"><h2>${escapeHtml(block.heading)}</h2><p>${escapeHtml(block.body)}</p></section>`).join('');
+  const interpretation = insight.interpretationBlocks.map((block) => `<section class="article-section" data-article-block="${escapeHtml(block.kind)}"><h2>${escapeHtml(block.heading)}</h2><p>${escapeHtml(block.body)}</p></section>`).join('');
+  const timeline = insight.evidenceTimeline.map((entry) => `<li><strong>${escapeHtml(entry.dateLabel)}</strong><p>${escapeHtml(entry.detail)}</p>${sourceLink(entry.label, entry.url, entry.effectiveAt, entry.evidenceStatus)}</li>`).join('');
+  const corrections = insight.corrections.length ? insight.corrections.map((correction) => `<details><summary id="${escapeHtml(correction.id)}">Correction published ${editorialDate(correction.publishedAt)}</summary><p>${escapeHtml(correction.detail)}</p></details>`).join('') : '<p>No corrections have been published for this record.</p>';
+  const related = insight.relatedDecisionLinks.map((link) => `<li><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a></li>`).join('');
+  const cta = insight.ctaEligible ? '<aside class="editorial-cta panel" aria-label="MonoMind AI Lab editorial CTA"><p class="eyebrow">MonoMind AI Lab</p><h2>Turn this evidence into a deployment plan</h2><p>Get a focused review of model, cost, and evaluation trade-offs for your production constraints.</p><a class="button" href="https://monomind.ai/">Talk to MonoMind AI Lab</a></aside>' : '';
+  return `<main id="page-content" class="guides-main article-main" tabindex="-1"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="${ROUTE_PATHS.articles}">Articles</a><span>›</span><a href="${ROUTE_PATHS.insights}">Insights</a><span>›</span><span aria-current="page">${escapeHtml(insight.title)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">Insight · ${escapeHtml(insight.category)}</span><h1>${escapeHtml(insight.title)}</h1><div class="article-byline"><span>Published ${editorialDate(insight.publishedAt)}</span><span>Updated ${editorialDate(insight.updatedAt)}</span><span>Factual review: ${escapeHtml(insight.factualReview)}</span><span>Author: ${escapeHtml(insight.author.name ?? 'Unavailable')}</span><span>Reviewer: ${escapeHtml(insight.reviewer.name ?? 'Unavailable')}</span></div><p class="article-status">Evidence state: ${escapeHtml(insight.factualReview)}. This record does not silently substitute a current claim for incomplete or undated evidence.</p></header><div class="article-body"><section class="article-section"><h2>Factual brief</h2><p>${escapeHtml(insight.factualBrief)}</p></section><section class="article-section"><h2>What changed</h2><p>${escapeHtml(insight.whatChanged)}</p></section><section class="article-section"><h2>Evidence timeline</h2><ol class="evidence-timeline">${timeline}</ol></section>${facts}${interpretation}<section class="article-section"><h2>Affected models and hosts</h2><p>No verified profile or host mapping is available for this record.</p></section><section class="article-section"><h2>Practical implications</h2><ul>${insight.implications.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul></section><section class="article-section"><h2>Corrections</h2>${corrections}</section></div></article><section class="guide-callout decision-context"><h2>Related decision links</h2><ul>${related}</ul></section>${cta}</main>`;
+}
+
+function insightStructuredData(insight: InsightRecord): unknown[] {
+  const metadata = metadataForRoute({ kind: 'insightDetail', slug: insight.slug });
+  return [
+    { '@context': 'https://schema.org', '@type': 'Article', headline: insight.title, description: insight.factualBrief, datePublished: insight.publishedAt, dateModified: insight.updatedAt, image: metadata.openGraph.image, mainEntityOfPage: metadata.canonical, author: { '@type': 'Organization', name: insight.author.name ?? SITE_CONFIG.parentName, url: SITE_CONFIG.parentUrl }, publisher: { '@type': 'Organization', name: SITE_CONFIG.parentName, url: SITE_CONFIG.parentUrl } },
+    { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: SITE_CONFIG.name, item: SITE_CONFIG.origin }, { '@type': 'ListItem', position: 2, name: 'Insights', item: `${SITE_CONFIG.origin}${ROUTE_PATHS.insights}` }, { '@type': 'ListItem', position: 3, name: insight.title, item: metadata.canonical }] },
+  ];
+}
+
 function fixedPageContent(
   route: Exclude<AppRoute, { kind: 'guides' } | { kind: 'comparison' } | { kind: 'redirect' } | { kind: 'notFound' }>,
   metadata: PageMetadata,
@@ -96,9 +136,13 @@ function fixedPageContent(
     case 'leaderboards':
       return pageIntro(metadata, `<p>Explore current model leaders by capability, workload, cost, and human preference.</p><section><h2>Leaderboard categories</h2><p>Each leaderboard shows its source, methodology, timestamp, and unavailable-data treatment with the published revision.</p><ul>${Object.values(LEADERBOARD_ROUTES).map((route) => `<li><a href="${route.pathname}">${escapeHtml(route.seo.h1)}</a></li>`).join('')}</ul></section>`);
     case 'articles':
-      return pageIntro(metadata, `<p>Browse technical AI cost guides and evidence-aware articles for practical model and workload decisions.</p><section><h2>Article channels</h2><ul><li><a href="${ROUTE_PATHS.guides}">Guides</a></li><li><a href="${ROUTE_PATHS.insights}">LLM insights</a></li></ul></section>`);
+      return staticArticlesHub();
     case 'insights':
-      return pageIntro(metadata, `<p>This channel is not separately populated yet. Follow the current technical guides while TokenBench publishes evidence-aware AI ecosystem updates and benchmark analysis.</p>`);
+      return insightIndexContent();
+    case 'insightDetail': {
+      const insight = INSIGHTS.find((record) => record.slug === route.slug);
+      return insight ? insightDetailContent(insight) : pageIntro(metadata, '<p>The requested insight is not published. Browse the available evidence records.</p>');
+    }
     case 'leaderboard': {
       const definition = LEADERBOARD_ROUTES[route.key];
       return pageIntro(metadata, `<p>${escapeHtml(definition.seo.summary)}</p><section class="empty-state"><strong>Awaiting a published benchmark revision</strong><p>Live ranking data is not embedded in this static shell. When a supported revision is available, ${SITE_CONFIG.name} will show the source metric, publication timestamp, methodology, and any unavailable measurements instead of inventing a ranking.</p></section><section><h2>Evidence and methodology</h2><p>This page will attribute its displayed data to the applicable source, including BenchLM, LMArena, OpenRouter, or ${SITE_CONFIG.name}-derived calculations. Source availability and methodology remain visible with the results.</p></section>`);
@@ -109,6 +153,10 @@ function fixedPageContent(
 }
 
 function structuredDataFor(route: AppRoute, metadata: PageMetadata): unknown[] {
+  if (route.kind === 'insightDetail') {
+    const insight = INSIGHTS.find((record) => record.slug === route.slug);
+    return insight ? insightStructuredData(insight) : [];
+  }
   const type = route.kind === 'home' || route.kind === 'calculator' || route.kind === 'breakeven'
     ? 'WebApplication'
     : route.kind === 'tools' || route.kind === 'cost' || route.kind === 'articles' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'models' || route.kind === 'modelLifecycle'
@@ -168,6 +216,10 @@ export async function generateStaticPages(rootDir: string): Promise<void> {
     }));
 
   await generateGuidePages(resolve(rootDir, 'articles', 'guides'));
+
+  const notFoundMetadata = metadataForRoute({ kind: 'notFound' });
+  const notFoundContent = `<main id="page-content" class="page-main" tabindex="-1"><section class="content-stack static-page-content not-found-page" aria-labelledby="not-found-heading"><header><p class="eyebrow">404</p><h1 id="not-found-heading">Page not found</h1><p>The requested identity is unavailable or unpublished. Try a close, safe decision page instead.</p></header><nav class="static-page-links" aria-label="Primary recovery links"><a class="button button-secondary" href="${ROUTE_PATHS.home}">Home</a><a class="button button-secondary" href="${ROUTE_PATHS.models}">Models</a><a class="button button-secondary" href="${ROUTE_PATHS.leaderboards}">Leaderboards</a><a class="button button-secondary" href="${ROUTE_PATHS.compareHub}">Compare</a><a class="button button-secondary" href="${ROUTE_PATHS.cost}">Cost</a><a class="button button-secondary" href="${ROUTE_PATHS.articles}">Articles</a></nav></section></main>`;
+  await writeFile(resolve(rootDir, '404.html'), documentHtml(headMarkup(notFoundMetadata, structuredDataFor({ kind: 'notFound' }, notFoundMetadata)), staticChrome(notFoundContent, undefined)));
 
   const sitemapPath = resolve(rootDir, 'public', 'sitemaps', 'static.xml');
   await mkdir(dirname(sitemapPath), { recursive: true });

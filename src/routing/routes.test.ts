@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { LEADERBOARD_ROUTES, matchRoute, pathnameForRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
+import { INSIGHTS, insightPath } from '../articles/content';
+import { GUIDES, guidePath } from '../guides/content';
+import { FIXED_ROUTES, LEADERBOARD_ROUTES, matchRoute, pathnameForRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
 
 const APPROVED_LEADERBOARD_TITLES = {
   'llm-overall': 'Overall benchmarks',
@@ -18,16 +20,13 @@ const APPROVED_LEADERBOARD_TITLES = {
   'media-video-editing': 'Video editing',
 } as const satisfies Record<LeaderboardKey, string>;
 
-const fixedRouteCases = [
+const fixedRouteCases: Array<readonly [string, object]> = [
   ['/', { kind: 'home' }],
   ['/articles', { kind: 'articles' }],
   ['/articles/guides', { kind: 'guides' }],
   ['/articles/insights', { kind: 'insights' }],
-  ['/articles/guides/track-claude-code-usage', { kind: 'guides', slug: 'track-claude-code-usage' }],
-  ['/articles/guides/monitor-openai-codex-usage', { kind: 'guides', slug: 'monitor-openai-codex-usage' }],
-  ['/articles/guides/openrouter-guide-model-routing-cost-controls', { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }],
-  ['/articles/guides/legitimate-free-ai-api-access-credits', { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }],
-  ['/articles/guides/reduce-llm-api-costs-caching-batch-output-limits', { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }],
+  ...GUIDES.map((guide) => [guidePath(guide.slug).slice(0, -1), { kind: 'guides', slug: guide.slug }] as const),
+  ...INSIGHTS.map((insight) => [insightPath(insight.slug).slice(0, -1), { kind: 'insightDetail', slug: insight.slug }] as const),
   ['/tools', { kind: 'tools' }],
   ['/cost', { kind: 'cost' }],
   ['/cost/calculator', { kind: 'calculator' }],
@@ -54,7 +53,7 @@ const fixedRouteCases = [
   ['/leaderboards/media/text-to-video', { kind: 'leaderboard', key: 'media-text-to-video' }],
   ['/leaderboards/media/image-to-video', { kind: 'leaderboard', key: 'media-image-to-video' }],
   ['/leaderboards/media/video-editing', { kind: 'leaderboard', key: 'media-video-editing' }],
-] as const;
+];
 
 describe('TokenBench route registry', () => {
   it('matches every fixed route with and without its trailing slash', () => {
@@ -91,7 +90,8 @@ describe('TokenBench route registry', () => {
   });
 
   it('keeps insight detail paths distinct from the insight index', () => {
-    expect(matchRoute('/articles/insights/benchmark-update/')).toEqual({ kind: 'insightDetail', slug: 'benchmark-update' });
+    expect(matchRoute(insightPath(INSIGHTS[0].slug))).toEqual({ kind: 'insightDetail', slug: INSIGHTS[0].slug });
+    expect(matchRoute('/articles/insights/benchmark-update/')).toEqual({ kind: 'notFound' });
     expect(pathnameForRoute({ kind: 'insightDetail', slug: 'benchmark update' }))
       .toBe('/articles/insights/benchmark%20update/');
   });
@@ -123,47 +123,9 @@ describe('TokenBench route registry', () => {
   it('derives every Vite input from the fixed registry without a dynamic comparison page', () => {
     const inputs = staticHtmlEntries('/generated-tokenbench');
 
-    expect(Object.values(inputs).sort()).toEqual([
-      '/generated-tokenbench/articles/guides/index.html',
-      '/generated-tokenbench/articles/guides/legitimate-free-ai-api-access-credits/index.html',
-      '/generated-tokenbench/articles/guides/monitor-openai-codex-usage/index.html',
-      '/generated-tokenbench/articles/guides/openrouter-guide-model-routing-cost-controls/index.html',
-      '/generated-tokenbench/articles/guides/reduce-llm-api-costs-caching-batch-output-limits/index.html',
-      '/generated-tokenbench/articles/guides/track-claude-code-usage/index.html',
-      '/generated-tokenbench/articles/index.html',
-      '/generated-tokenbench/articles/insights/index.html',
-      '/generated-tokenbench/compare/index.html',
-      '/generated-tokenbench/cost/breakeven/index.html',
-      '/generated-tokenbench/cost/calculator/index.html',
-      '/generated-tokenbench/cost/index.html',
-      '/generated-tokenbench/index.html',
-      '/generated-tokenbench/leaderboards/agentic/index.html',
-      '/generated-tokenbench/leaderboards/coding/index.html',
-      '/generated-tokenbench/leaderboards/custom/index.html',
-      '/generated-tokenbench/leaderboards/index.html',
-      '/generated-tokenbench/leaderboards/llm/human-preference/index.html',
-      '/generated-tokenbench/leaderboards/llm/knowledge/index.html',
-      '/generated-tokenbench/leaderboards/llm/pricing-context/index.html',
-      '/generated-tokenbench/leaderboards/llm/value/index.html',
-      '/generated-tokenbench/leaderboards/math/index.html',
-      '/generated-tokenbench/leaderboards/media/image-editing/index.html',
-      '/generated-tokenbench/leaderboards/media/image-to-video/index.html',
-      '/generated-tokenbench/leaderboards/media/text-to-image/index.html',
-      '/generated-tokenbench/leaderboards/media/text-to-video/index.html',
-      '/generated-tokenbench/leaderboards/media/video-editing/index.html',
-      '/generated-tokenbench/leaderboards/multimodal/index.html',
-      '/generated-tokenbench/leaderboards/overall/index.html',
-      '/generated-tokenbench/leaderboards/reasoning/index.html',
-      '/generated-tokenbench/leaderboards/sla/index.html',
-      '/generated-tokenbench/llm-price-performance/index.html',
-      '/generated-tokenbench/methodology/benchalign/index.html',
-       '/generated-tokenbench/models/index.html',
-       '/generated-tokenbench/models/lifecycle/index.html',
-      '/generated-tokenbench/newsletter/confirmed/index.html',
-      '/generated-tokenbench/privacy/index.html',
-      '/generated-tokenbench/tools/index.html',
-      '/generated-tokenbench/welcome/index.html',
-    ]);
+    expect(Object.keys(inputs).sort()).toEqual(FIXED_ROUTES.map((route) => route.id).sort());
+    for (const guide of GUIDES) expect(Object.values(inputs)).toContain(`/generated-tokenbench${guidePath(guide.slug)}index.html`);
+    for (const insight of INSIGHTS) expect(Object.values(inputs)).toContain(`/generated-tokenbench${insightPath(insight.slug)}index.html`);
     expect(inputs.home).toBe('/generated-tokenbench/index.html');
     expect(Object.values(inputs)).not.toContain('/generated-tokenbench/compare/claude-4-vs-gpt-5/index.html');
     expect(Object.values(inputs)).toContain('/generated-tokenbench/leaderboards/math/index.html');

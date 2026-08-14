@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { INSIGHTS, insightPath } from '../articles/content';
+import { GUIDES, guidePath } from '../guides/content';
 import type { AppRoute, LeaderboardKey } from '../routing/routes';
 import { metadataForRoute } from './metadata';
 
@@ -31,11 +33,8 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'articles' }, canonical: `${origin}/articles/` },
   { route: { kind: 'guides' }, canonical: `${origin}/articles/guides/` },
   { route: { kind: 'insights' }, canonical: `${origin}/articles/insights/` },
-  { route: { kind: 'guides', slug: 'track-claude-code-usage' }, canonical: `${origin}/articles/guides/track-claude-code-usage/` },
-  { route: { kind: 'guides', slug: 'monitor-openai-codex-usage' }, canonical: `${origin}/articles/guides/monitor-openai-codex-usage/` },
-  { route: { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }, canonical: `${origin}/articles/guides/openrouter-guide-model-routing-cost-controls/` },
-  { route: { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }, canonical: `${origin}/articles/guides/legitimate-free-ai-api-access-credits/` },
-  { route: { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }, canonical: `${origin}/articles/guides/reduce-llm-api-costs-caching-batch-output-limits/` },
+  ...GUIDES.map((guide) => ({ route: { kind: 'guides' as const, slug: guide.slug }, canonical: `${origin}${guidePath(guide.slug)}` })),
+  ...INSIGHTS.map((insight) => ({ route: { kind: 'insightDetail' as const, slug: insight.slug }, canonical: `${origin}${insightPath(insight.slug)}` })),
   { route: { kind: 'tools' }, canonical: `${origin}/tools/` },
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
   { route: { kind: 'pricePerformance' }, canonical: `${origin}/llm-price-performance/` },
@@ -98,11 +97,21 @@ describe('route metadata registry', () => {
   });
 
   it('uses article metadata for guide articles without losing their topical H1s', () => {
-    const page = metadataForRoute({ kind: 'guides', slug: 'track-claude-code-usage' });
+    const guide = GUIDES[0];
+    const page = metadataForRoute({ kind: 'guides', slug: guide.slug });
 
     expect(page.openGraph.type).toBe('article');
-    expect(page.h1).toBe('How to Track Claude Code Usage, Tokens, and Spend');
-    expect(page.canonical).toBe(`${origin}/articles/guides/track-claude-code-usage/`);
+    expect(page.h1).toBe(guide.title);
+    expect(page.canonical).toBe(`${origin}${guidePath(guide.slug)}`);
+  });
+
+  it('uses article metadata for every insight detail with its canonical record path', () => {
+    for (const insight of INSIGHTS) {
+      const page = metadataForRoute({ kind: 'insightDetail', slug: insight.slug });
+      expect(page.openGraph.type).toBe('article');
+      expect(page.h1).toBe(insight.title);
+      expect(page.canonical).toBe(`${origin}${insightPath(insight.slug)}`);
+    }
   });
 
   it('keeps the crawlable leaderboard heading aligned with the interactive directory', () => {

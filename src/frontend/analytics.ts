@@ -26,6 +26,19 @@ export interface TokenBenchEventDetail {
   readonly breakeven_crossover_inspected: { readonly route: string };
   readonly breakeven_share_created: { readonly route: string };
   readonly breakeven_unavailable: { readonly reason: 'invalid_seats' | 'invalid_domain' | 'invalid_mix' | 'partial_prices' | 'stale' | 'conflict'; readonly route: string };
+  readonly articles_channel_opened: { readonly channel: 'guides' | 'insights'; readonly route: string };
+  readonly articles_topic_filtered: { readonly topic: string; readonly route: string };
+  readonly article_opened: { readonly articleId: string; readonly route: string };
+  readonly article_tool_opened: { readonly tool: 'compare' | 'cost' | 'lifecycle' | 'profile' | 'leaderboard'; readonly route: string; readonly subjectId: string };
+  readonly guide_viewed: { readonly articleId: string; readonly route: string };
+  readonly guide_toc_opened: { readonly articleId: string; readonly route: string };
+  readonly guide_source_opened: { readonly articleId: string; readonly route: string };
+  readonly guide_related_opened: { readonly articleId: string; readonly route: string };
+  readonly insight_viewed: { readonly articleId: string; readonly route: string };
+  readonly insight_topic_filtered: { readonly topic: string; readonly route: string };
+  readonly insight_source_opened: { readonly articleId: string; readonly route: string };
+  readonly insight_affected_model_opened: { readonly articleId: string; readonly route: string };
+  readonly insight_correction_opened: { readonly articleId: string; readonly route: string };
 }
 
 export type TokenBenchEventName = keyof TokenBenchEventDetail;
@@ -49,6 +62,14 @@ function isStablePairId(value: unknown): value is string {
 
 function isSafeRoute(value: unknown): value is string {
   return typeof value === 'string' && /^\/[A-Za-z0-9._~%\-/]*$/u.test(value);
+}
+
+function isStableArticleId(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z][a-z0-9-]{1,199}$/u.test(value);
+}
+
+function isArticleTopic(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-z][a-z0-9-]{0,79}$/u.test(value);
 }
 
 function isCostInputField(value: unknown): value is TokenBenchEventDetail['cost_input_changed']['field'] {
@@ -140,6 +161,29 @@ function payloadForEvent(name: string, detail: Record<string, unknown>): Record<
     return (detail.reason === 'invalid_seats' || detail.reason === 'invalid_domain' || detail.reason === 'invalid_mix'
       || detail.reason === 'partial_prices' || detail.reason === 'stale' || detail.reason === 'conflict') && isSafeRoute(detail.route)
       ? { reason: detail.reason, route: detail.route }
+      : null;
+  }
+  if (name === 'articles_channel_opened') {
+    return (detail.channel === 'guides' || detail.channel === 'insights') && isSafeRoute(detail.route)
+      ? { channel: detail.channel, route: detail.route }
+      : null;
+  }
+  if (name === 'articles_topic_filtered' || name === 'insight_topic_filtered') {
+    return isArticleTopic(detail.topic) && isSafeRoute(detail.route)
+      ? { topic: detail.topic, route: detail.route }
+      : null;
+  }
+  if (name === 'article_opened' || name === 'guide_viewed' || name === 'guide_toc_opened' || name === 'guide_source_opened'
+    || name === 'guide_related_opened' || name === 'insight_viewed' || name === 'insight_source_opened'
+    || name === 'insight_affected_model_opened' || name === 'insight_correction_opened') {
+    return isStableArticleId(detail.articleId) && isSafeRoute(detail.route)
+      ? { articleId: detail.articleId, route: detail.route }
+      : null;
+  }
+  if (name === 'article_tool_opened') {
+    return (detail.tool === 'compare' || detail.tool === 'cost' || detail.tool === 'lifecycle' || detail.tool === 'profile' || detail.tool === 'leaderboard')
+      && isStableArticleId(detail.subjectId) && isSafeRoute(detail.route)
+      ? { tool: detail.tool, subjectId: detail.subjectId, route: detail.route }
       : null;
   }
   return null;
