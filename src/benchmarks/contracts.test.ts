@@ -579,6 +579,30 @@ describe('benchmark contracts', () => {
     expect(constructions).toBe(1);
     expect(resolutions).toBe(pairs.length);
   });
+
+  it('uses stable-slug ordering for the public pair while retaining modelKey-ordered persisted records', () => {
+    const template = validBatch.models[0] as BenchmarkModel;
+    const models: BenchmarkModel[] = [
+      { ...template, modelKey: 'provider:alpha', slug: 'zeta', sourceModelId: 'provider/alpha' },
+      { ...template, modelKey: 'provider:beta', slug: 'alpha', sourceModelId: 'provider/beta' },
+    ];
+    const persisted = validateBenchmarkComparisonPair({
+      pairSlug: 'alpha-vs-zeta',
+      modelAKey: 'provider:alpha',
+      modelBKey: 'provider:beta',
+      indexable: true,
+      eligibilityReason: 'eligible',
+      featuredRank: 1,
+      sharedMetricCount: 2,
+    });
+
+    expect(resolveComparisonPairSlug(models, 'zeta-vs-alpha')).toMatchObject({
+      canonicalPairSlug: 'alpha-vs-zeta',
+      modelA: { modelKey: 'provider:beta', slug: 'alpha' },
+      modelB: { modelKey: 'provider:alpha', slug: 'zeta' },
+    });
+    expect(() => validateIndexableComparisonPairRoute(models, persisted)).not.toThrow();
+  });
   it('validates optional family and variant identities without allowing prohibited source text', () => {
     const withFamily = {
       ...validBatch,

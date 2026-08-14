@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compareFormState, CompareHubPage } from './compare-hub-page';
+import { comparisonPath, compareFormState, CompareHubPage } from './compare-hub-page';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
 
@@ -30,6 +30,10 @@ function respondWithDirectory(payload = directoryEnvelope()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('CompareHubPage', () => {
+  it('derives its route from the stable-slug pair alone', () => {
+    expect(comparisonPath({ slug: 'zeta' } as never, { slug: 'alpha' } as never)).toBe('/models/compare/alpha-vs-zeta/');
+  });
+
   it('requires exactly two distinct model identifiers before comparison', () => {
     expect(compareFormState(['a'])).toMatchObject({ valid: false, reason: 'Choose two models' });
     expect(compareFormState(['a', 'a'])).toMatchObject({ valid: false, reason: 'Choose two different models' });
@@ -60,6 +64,32 @@ describe('CompareHubPage', () => {
     const form = screen.getByRole('button', { name: 'Compare selected models' }).closest('form');
     expect(form).toHaveAttribute('method', 'get');
     expect(form).toHaveAttribute('action', '/models/compare/model-a-vs-model-b/');
+  });
+
+  it('renders reviewed featured copy only for an allowlisted popular pair', async () => {
+    respondWithDirectory(directoryEnvelope({
+      data: {
+        compareDirectory: {
+          models: [
+            { slug: 'claude-opus-5', name: 'Claude Opus 5', creator: 'Anthropic', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding', 'reasoning'] },
+            { slug: 'gpt-5-6-sol', name: 'GPT-5.6 Sol', creator: 'OpenAI', sourceType: 'Proprietary', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding', 'reasoning'] },
+            { slug: 'neutral', name: 'Neutral', creator: 'Example', sourceType: 'Open Weight', evidenceStatus: 'supported', utilitySelectable: true, metricCategories: ['coding'] },
+          ],
+          indexablePairs: [
+            { pairSlug: 'claude-opus-5-vs-gpt-5-6-sol', modelASlug: 'claude-opus-5', modelBSlug: 'gpt-5-6-sol', featuredRank: 1, sharedMetricCount: 4 },
+            { pairSlug: 'gpt-5-6-sol-vs-neutral', modelASlug: 'gpt-5-6-sol', modelBSlug: 'neutral', featuredRank: 2, sharedMetricCount: 2 },
+          ],
+        },
+      },
+    }));
+    render(<CompareHubPage />);
+
+    expect(await screen.findByText('Reviewed editorial comparison')).toBeVisible();
+    expect(screen.getByText('Reviewed comparison of Claude Opus 5 and GPT-5.6 Sol.')).toBeVisible();
+    expect(screen.getByText('Effective 14 Aug 2026')).toBeVisible();
+    expect(screen.getByText('Source coverage: 4 shared published metrics')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Use GPT-5.6 Sol vs Neutral' })).toBeVisible();
+    expect(screen.queryByText(/Neutral.*recommended/i)).not.toBeInTheDocument();
   });
 
   it('places a compact general alert opt-in beside model selection in one tools group', async () => {

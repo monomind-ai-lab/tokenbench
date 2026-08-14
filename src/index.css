@@ -988,6 +988,10 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .comparison-reviewed-list .comparison-matchup-link strong { font-family: var(--font-display); font-size: 1.02rem; font-weight: 700; letter-spacing: -0.02em; }
 .comparison-reviewed-list .comparison-matchup-link span { color: var(--primary-strong); font-size: 1.05rem; transition: transform 0.15s ease; }
 .comparison-reviewed-list .comparison-matchup-link:hover span { transform: translateX(3px); }
+.comparison-reviewed-feature { width: 100%; display: grid; gap: 4px; padding: 0 18px 16px; border-top: 1px solid var(--outline); }
+.comparison-reviewed-feature strong { padding-top: 11px; color: var(--primary-strong); font-family: var(--font-label); font-size: 0.68rem; letter-spacing: 0.055em; text-transform: uppercase; }
+.comparison-reviewed-feature p { margin: 0; color: var(--text); font-size: 0.78rem; line-height: 1.45; }
+.comparison-reviewed-list .comparison-reviewed-feature span { display: block; color: var(--muted); text-align: left; }
 .comparison-reviewed-list a, .comparison-related-list a { min-width: 0; min-height: 44px; display: inline-flex; align-items: center; color: var(--text); font-size: 0.78rem; font-weight: 800; overflow-wrap: anywhere; text-decoration: none; }
 .comparison-reviewed-list a:hover, .comparison-related-list a:hover { color: var(--primary-strong); }
 .comparison-reviewed-list span, .comparison-related-list span { color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; text-align: right; }

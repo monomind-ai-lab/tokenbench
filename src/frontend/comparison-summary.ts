@@ -45,7 +45,9 @@ function titleCase(value: string): string {
 /** Uses the published category when available, never exposing implementation prefixes to readers. */
 export function friendlyMetricLabel(metricKey: string, category: string): string {
   const fallback = metricKey.split(':').filter(Boolean).at(-1) ?? metricKey;
-  return titleCase(category || fallback);
+  const value = category || fallback;
+  if (value.toLocaleLowerCase() === 'ttft') return 'TTFT';
+  return titleCase(value);
 }
 
 function formatMetricValue(value: number): string {
@@ -143,6 +145,51 @@ function compatibleScoreRows(viewModel: ComparisonViewModel): readonly Compariso
     .filter((row) => isSupportedBenchLmComparisonMetric(row, viewModel.models))
     .slice()
     .sort(compareMetricRowsForSummary);
+}
+
+/** A published fact is comparable only when both source observations agree on provenance. */
+function sourceCompatibleMetricRows(viewModel: ComparisonViewModel): readonly ComparisonMetricRow[] {
+  return viewModel.metricRows
+    .filter((row) => {
+      const a = row.modelA;
+      const b = row.modelB;
+      return a !== null
+        && b !== null
+        && Number.isFinite(a.value)
+        && Number.isFinite(b.value)
+        && a.sourceId === row.sourceId
+        && b.sourceId === row.sourceId
+        && a.sourceArtifactId === b.sourceArtifactId
+        && a.methodology === row.methodology
+        && b.methodology === row.methodology
+        && a.unit === row.unit
+        && b.unit === row.unit;
+    })
+    .slice()
+    .sort(compareMetricRowsForSummary);
+}
+
+function isLowerBetterMetric(row: ComparisonMetricRow): boolean {
+  const identity = `${row.metricKey} ${row.category}`.toLocaleLowerCase();
+  return identity.includes('ttft')
+    || identity.includes('latency')
+    || identity.includes('time-to-first-token')
+    || identity.includes('time_to_first_token');
+}
+
+function observedMetricFact(row: ComparisonMetricRow, models: readonly [BenchmarkModel, BenchmarkModel]): string {
+  const a = row.modelA!;
+  const b = row.modelB!;
+  const label = friendlyMetricLabel(row.metricKey, row.category);
+  const firstValue = formatMetricValue(a.value);
+  const secondValue = formatMetricValue(b.value);
+  if (!isLowerBetterMetric(row) || a.value === b.value || firstValue === secondValue) {
+    return `${label}: ${firstValue} vs ${secondValue} ${row.unit}.`;
+  }
+  const lowerIndex: 0 | 1 = a.value < b.value ? 0 : 1;
+  const lowerValue = lowerIndex === 0 ? firstValue : secondValue;
+  const higherValue = lowerIndex === 0 ? secondValue : firstValue;
+  return `${label}: ${summaryModelLabel(models, lowerIndex)} has the lower published value (${lowerValue} ${row.unit} vs ${higherValue} ${row.unit}; lower is better).`;
 }
 
 function publishedRate(route: BenchmarkPriceCheck | null, dimension: 'inputUsdPerMillion' | 'outputUsdPerMillion'): number | null {
@@ -361,14 +408,11 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
  */
 export function buildComparisonSynthesis(viewModel: ComparisonViewModel): ComparisonSynthesis {
   const compatibleRows = compatibleScoreRows(viewModel);
+  const sourceCompatibleRows = sourceCompatibleMetricRows(viewModel);
   const routes = viewModel.priceChecks.map(selectedComparisonPriceCheck) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
   const inputRates = routes.map((route) => publishedRate(route, 'inputUsdPerMillion')) as [number | null, number | null];
   const outputRates = routes.map((route) => publishedRate(route, 'outputUsdPerMillion')) as [number | null, number | null];
-  const observedFacts = compatibleRows.map((row) => {
-    const a = row.modelA!;
-    const b = row.modelB!;
-    return `${friendlyMetricLabel(row.metricKey, row.category)}: ${formatMetricValue(a.value)} vs ${formatMetricValue(b.value)} ${row.unit}.`;
-  });
+  const observedFacts = sourceCompatibleRows.map((row) => observedMetricFact(row, viewModel.models));
   const calculations: string[] = [];
   for (const [label, rates] of [['Input API price', inputRates], ['Output API price', outputRates]] as const) {
     const [left, right] = rates;

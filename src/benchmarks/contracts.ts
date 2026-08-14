@@ -235,7 +235,7 @@ export function createComparisonPairSlugResolver(models: readonly BenchmarkModel
     if (candidates.length !== 1) return null;
 
     const candidate = candidates[0];
-    const [modelA, modelB] = compareUtf8Binary(candidate.left.modelKey, candidate.right.modelKey) < 0
+    const [modelA, modelB] = compareUtf8Binary(candidate.left.slug, candidate.right.slug) < 0
       ? [candidate.left, candidate.right]
       : [candidate.right, candidate.left];
     return {
@@ -269,8 +269,10 @@ export function validateIndexableComparisonPairRoute(
   }
   const resolved = resolvePairSlug(pair.pairSlug);
   if (!resolved) fail(`indexable comparison pair ${pair.pairSlug} must resolve uniquely through the comparison route`);
-  if (resolved.modelA.modelKey !== pair.modelAKey
-    || resolved.modelB.modelKey !== pair.modelBKey
+  const persistedModelKeys = new Set([pair.modelAKey, pair.modelBKey]);
+  if (!persistedModelKeys.has(resolved.modelA.modelKey)
+    || !persistedModelKeys.has(resolved.modelB.modelKey)
+    || persistedModelKeys.size !== 2
     || resolved.canonicalPairSlug !== pair.pairSlug) {
     fail(`indexable comparison pair ${pair.pairSlug} must use its active models' canonical route`);
   }

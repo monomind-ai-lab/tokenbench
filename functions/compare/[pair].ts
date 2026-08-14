@@ -146,9 +146,11 @@ function priceChecks(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair):
 
 function exactCanonicalPair(resolvePairSlug: ComparisonPairSlugResolver, pair: BenchmarkComparisonPair, route: ComparisonRouteConfig): ResolvedPair | null {
   const resolved = resolvePairSlug(pair.pairSlug);
+  const persistedModelKeys = new Set([pair.modelAKey, pair.modelBKey]);
   if (!resolved
-    || resolved.modelA.modelKey !== pair.modelAKey
-    || resolved.modelB.modelKey !== pair.modelBKey
+    || !persistedModelKeys.has(resolved.modelA.modelKey)
+    || !persistedModelKeys.has(resolved.modelB.modelKey)
+    || persistedModelKeys.size !== 2
     || resolved.canonicalPairSlug !== pair.pairSlug) return null;
   return { ...resolved, canonicalPath: encodedPairPath(resolved.canonicalPairSlug, route) };
 }
@@ -208,8 +210,10 @@ function attribution(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair, 
 }
 
 function persistedPair(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair): BenchmarkComparisonPair | null {
-  return snapshot.comparisonPairs.find((pair) => pair.modelAKey === resolved.modelA.modelKey
-    && pair.modelBKey === resolved.modelB.modelKey
+  const resolvedModelKeys = new Set([resolved.modelA.modelKey, resolved.modelB.modelKey]);
+  return snapshot.comparisonPairs.find((pair) => resolvedModelKeys.has(pair.modelAKey)
+    && resolvedModelKeys.has(pair.modelBKey)
+    && pair.modelAKey !== pair.modelBKey
     && pair.pairSlug === resolved.canonicalPairSlug) ?? null;
 }
 

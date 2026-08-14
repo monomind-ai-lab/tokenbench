@@ -265,6 +265,25 @@ describe('buildComparisonSynthesis', () => {
 
     expect(buildComparisonSynthesis(missingPrice).winner).toBeNull();
   });
+
+  it('uses lower-is-better wording for published TTFT-like source metrics without treating them as a winner', () => {
+    const models = pair();
+    const metricKey = 'benchlm:runtime:ttft';
+    const ttft = {
+      metricKey,
+      category: 'ttft',
+      sourceId: 'benchlm' as const,
+      unit: 'tokens' as const,
+      methodology: 'benchlm_raw_composite' as const,
+      modelA: metric(models[0], metricKey, 'ttft', 120, { unit: 'tokens' }),
+      modelB: metric(models[1], metricKey, 'ttft', 200, { unit: 'tokens' }),
+    } satisfies ComparisonMetricRow;
+
+    const synthesis = buildComparisonSynthesis(comparisonWith(models, [ttft]));
+
+    expect(synthesis.observedFacts).toContain('TTFT: Alpha has the lower published value (120 tokens vs 200 tokens; lower is better).');
+    expect(synthesis.winner).toBeNull();
+  });
 });
 
 describe('comparisonSummary', () => {

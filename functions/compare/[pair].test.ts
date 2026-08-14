@@ -8,6 +8,7 @@ import type {
   BenchmarkPriceCheck,
   BenchmarkSourceRecord,
 } from '../../src/benchmarks/contracts';
+import { parseComparisonViewModel } from '../../src/frontend/comparison-contracts';
 
 const readActiveComparisonSnapshot = vi.hoisted(() => vi.fn());
 
@@ -16,7 +17,7 @@ vi.mock('../_shared/benchmark-db', async () => {
   return { ...actual, readActiveComparisonSnapshot };
 });
 
-import { onRequestGet as legacyRedirect, renderLegacyComparisonRequest as onRequestGet } from './[pair]';
+import { CANONICAL_COMPARISON_ROUTE, onRequestGet as legacyRedirect, renderComparisonRequest, renderLegacyComparisonRequest as onRequestGet } from './[pair]';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
 const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
@@ -107,9 +108,9 @@ function source(sourceId: BenchmarkSourceRecord['sourceId'], artifactId: string,
 
 function pair(indexable: boolean): BenchmarkComparisonPair {
   return {
-    // Model-key binary ordering is alpha then beta, even though the displayed
-    // slugs intentionally order as zeta then alpha.
-    pairSlug: 'zeta-vs-alpha',
+    // Persisted model keys remain alpha then beta, while public slugs are
+    // independently canonicalized as alpha then zeta.
+    pairSlug: 'alpha-vs-zeta',
     modelAKey: 'provider:alpha',
     modelBKey: 'provider:beta',
     indexable,
@@ -189,7 +190,8 @@ function renderedRoot(html: string): HTMLElement {
   }
   const shell = document.createElement('div');
   shell.innerHTML = html.slice(rootStart, payloadStart);
-  const root = shell.querySelector<HTMLElement>('#root');
+  document.body.replaceChildren(shell);
+  const root = document.getElementById('root');
   if (!root) throw new Error('Expected rendered comparison root');
   return root;
 }
@@ -228,10 +230,10 @@ describe('dynamic comparison Pages Function', () => {
     readActiveComparisonSnapshot.mockResolvedValue(snapshot());
   });
 
-  it('renders the model-key canonical pair as complete crawlable HTML without upstream access', async () => {
+  it('renders the stable-slug canonical pair as complete crawlable HTML without upstream access', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const html = await response.text();
     const root = renderedRoot(html);
     const rendered = within(root);
@@ -242,7 +244,7 @@ describe('dynamic comparison Pages Function', () => {
 
     expect(response.status).toBe(200);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(rendered.getByRole('heading', { level: 1, name: 'Model A vs Model B' })).toBeTruthy();
+    expect(rendered.getByRole('heading', { level: 1, name: 'Model B vs Model A' })).toBeTruthy();
     expect(rendered.getByRole('heading', { name: 'Key implications' })).toBeTruthy();
     expect(rendered.queryByRole('heading', { name: 'Evidence highlights' })).toBeNull();
     expect(within(rendered.getByRole('table', { name: 'Source metric comparison' })).getByRole('rowheader', { name: 'Coding' })).toBeTruthy();
@@ -259,10 +261,10 @@ describe('dynamic comparison Pages Function', () => {
     expect(rootWithoutProvenance.textContent).not.toMatch(/\bbenchlm\b/);
     expect(rootWithoutProvenance.textContent).toContain('Workload scenario');
     expect(data.metricRows[0]).toMatchObject({ metricKey: 'benchlm:category:coding', sourceId: 'benchlm', methodology: 'benchlm_raw_composite' });
-    expect(html).toContain('<title>Model A vs Model B: Cost, Coding &amp; Benchmarks | TokenBench</title>');
+    expect(html).toContain('<title>Model B vs Model A: Cost, Coding &amp; Benchmarks | TokenBench</title>');
     expect(html).toContain('<html lang="en" data-theme="light">');
     expect(html).toContain(THEME_BOOTSTRAP);
-    expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/compare/zeta-vs-alpha">');
+    expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/compare/alpha-vs-zeta">');
     expect(html).toContain('<meta name="robots" content="index,follow">');
     expect(rendered.getByRole('heading', { name: 'Switch model pair' })).toBeTruthy();
     expect(html).not.toContain('No verified subscription match');
@@ -275,17 +277,17 @@ describe('dynamic comparison Pages Function', () => {
     expect(html).not.toContain('Review');
   });
 
-  it('redirects a reverse pair and a trailing slash to the slashless canonical model-key path', async () => {
-    const reverse = await request('alpha-vs-zeta');
-    const trailing = await request('zeta-vs-alpha', '/compare/zeta-vs-alpha/');
+  it('redirects a reverse pair and a trailing slash to the slashless canonical stable-slug path', async () => {
+    const reverse = await request('zeta-vs-alpha');
+    const trailing = await request('alpha-vs-zeta', '/compare/alpha-vs-zeta/');
 
     expect(reverse.status).toBe(301);
-    expect(reverse.headers.get('location')).toBe('/compare/zeta-vs-alpha');
+    expect(reverse.headers.get('location')).toBe('/compare/alpha-vs-zeta');
     expect(trailing.status).toBe(301);
-    expect(trailing.headers.get('location')).toBe('/compare/zeta-vs-alpha');
+    expect(trailing.headers.get('location')).toBe('/compare/alpha-vs-zeta');
   });
 
-  it('uses the shared UTF-8 binary canonical ordering for model keys that disagree with JavaScript UTF-16 order', async () => {
+  it('uses stable-slug ordering when persisted model keys disagree with JavaScript UTF-16 order', async () => {
     // U+10000 has a leading surrogate that sorts before U+E000 in JS, while
     // SQLite BINARY and the shared comparator order U+E000 before U+10000.
     const utf8First = 'provider:\uE000';
@@ -296,7 +298,7 @@ describe('dynamic comparison Pages Function', () => {
     readActiveComparisonSnapshot.mockResolvedValue(snapshot({
       models: [...base.models, privateUse, astral],
       comparisonPairs: [{
-        pairSlug: 'private-use-vs-astral',
+        pairSlug: 'astral-vs-private-use',
         modelAKey: utf8First,
         modelBKey: utf16First,
         indexable: true,
@@ -306,20 +308,20 @@ describe('dynamic comparison Pages Function', () => {
       }],
     }));
 
-    const reverse = await request('astral-vs-private-use');
-    const canonical = await request('private-use-vs-astral');
+    const reverse = await request('private-use-vs-astral');
+    const canonical = await request('astral-vs-private-use');
 
     expect(reverse.status).toBe(301);
-    expect(reverse.headers.get('location')).toBe('/compare/private-use-vs-astral');
+    expect(reverse.headers.get('location')).toBe('/compare/astral-vs-private-use');
     expect(canonical.status).toBe(200);
-    expect((await canonical.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Private use model vs<br/> Astral model</h1>');
+    expect((await canonical.text()).replaceAll('<!-- -->', '')).toContain('<h1 id="comparison-detail-heading">Astral model vs<br/> Private use model</h1>');
   });
 
   it('accepts the raw percent-encoded Pages parameter exactly once, including literal percent, Unicode, spaces, query, and fragment markers', async () => {
     const base = snapshot();
     const modelA = model('provider:unicode-a', '模型 %25 ?#', 'Unicode A');
     const modelB = model('provider:unicode-b', 'b#eta', 'Unicode B');
-    const pairSlug = `${modelA.slug}-vs-${modelB.slug}`;
+    const pairSlug = `${modelB.slug}-vs-${modelA.slug}`;
     readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({ models: [...base.models, modelA, modelB] }));
 
     const response = await request(pairSlug, `/compare/${encodeURIComponent(pairSlug)}`);
@@ -337,8 +339,8 @@ describe('dynamic comparison Pages Function', () => {
     readActiveComparisonSnapshot.mockResolvedValue(snapshot({ models: [...base.models, slashModel, plainModel] }));
 
     const malformed = await request('ignored', '/compare/zeta%ZZ-vs-alpha');
-    const mismatched = await request('zeta-vs-alpha', '/compare/zeta-vs-alpha', 'alpha-vs-zeta');
-    const doubleDecoded = await request('zeta-vs-alpha', '/compare/zeta-vs-alpha', 'zeta%2Dvs%2Dalpha');
+    const mismatched = await request('alpha-vs-zeta', '/compare/alpha-vs-zeta', 'zeta-vs-alpha');
+    const doubleDecoded = await request('alpha-vs-zeta', '/compare/alpha-vs-zeta', 'alpha%2Dvs%2Dzeta');
     const encodedSlash = await request(
       `${slashModel.slug}-vs-${plainModel.slug}`,
       `/compare/${encodeURIComponent(`${slashModel.slug}-vs-${plainModel.slug}`)}`,
@@ -367,7 +369,7 @@ describe('dynamic comparison Pages Function', () => {
   it('migrates bare legacy dark storage to the light default in every non-hydrated error shell while preserving explicit dark', async () => {
     const notFound = await request('missing-vs-zeta');
     readActiveComparisonSnapshot.mockResolvedValueOnce(null);
-    const unavailable = await request('zeta-vs-alpha');
+    const unavailable = await request('alpha-vs-zeta');
 
     for (const response of [notFound, unavailable]) {
       const html = await response.text();
@@ -398,10 +400,10 @@ describe('dynamic comparison Pages Function', () => {
 
   it('keeps valid persisted nonindexable and unpersisted pairs useful but noindex', async () => {
     readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({ comparisonPairs: [pair(false)] }));
-    const nonindexable = await request('zeta-vs-alpha');
+    const nonindexable = await request('alpha-vs-zeta');
 
     readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({ comparisonPairs: [] }));
-    const unpersisted = await request('zeta-vs-alpha');
+    const unpersisted = await request('alpha-vs-zeta');
 
     expect(nonindexable.status).toBe(200);
     expect((await nonindexable.text())).toContain('<meta name="robots" content="noindex,follow">');
@@ -411,13 +413,28 @@ describe('dynamic comparison Pages Function', () => {
 
   it('requires the exact canonical persisted pair record before marking a utility page indexable', async () => {
     readActiveComparisonSnapshot.mockResolvedValueOnce(snapshot({
-      comparisonPairs: [{ ...pair(true), pairSlug: 'alpha-vs-zeta' }],
+      comparisonPairs: [{ ...pair(true), pairSlug: 'zeta-vs-alpha' }],
     }));
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
 
     expect(response.status).toBe(200);
     expect((await response.text())).toContain('<meta name="robots" content="noindex,follow">');
+  });
+
+  it('emits a canonical SSR payload that the browser hydration validator accepts', async () => {
+    const requestObject = new Request('https://tokenbench.monomind.one/models/compare/alpha-vs-zeta/');
+    const response = await renderComparisonRequest({
+      request: requestObject,
+      env: { CATALOG_DB: {} as never },
+      params: { pair: 'alpha-vs-zeta' },
+    }, CANONICAL_COMPARISON_ROUTE);
+    const html = await response.text();
+    const serialized = html.match(/<script id="comparison-initial-data" type="application\/json">([\s\S]*?)<\/script>/)?.[1];
+
+    expect(response.status).toBe(200);
+    expect(serialized).toBeTruthy();
+    expect(parseComparisonViewModel(JSON.parse(serialized ?? 'null'))).not.toBeNull();
   });
 
   it('keeps related comparisons to a small deterministic set that shares a displayed model', async () => {
@@ -426,7 +443,7 @@ describe('dynamic comparison Pages Function', () => {
     const delta = model('provider:delta', 'delta', 'Delta');
     const epsilon = model('provider:epsilon', 'epsilon', 'Epsilon');
     const connectedPairs = extraModels.map((related, index) => ({
-      pairSlug: index % 2 === 0 ? `zeta-vs-${related.slug}` : `alpha-vs-${related.slug}`,
+      pairSlug: index % 2 === 0 ? `${related.slug}-vs-zeta` : `alpha-vs-${related.slug}`,
       modelAKey: index % 2 === 0 ? 'provider:alpha' : 'provider:beta',
       modelBKey: related.modelKey,
       indexable: true,
@@ -451,7 +468,7 @@ describe('dynamic comparison Pages Function', () => {
       ],
     }));
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const data = initialViewModel(await response.text());
     const currentKeys = new Set(['provider:alpha', 'provider:beta']);
 
@@ -468,7 +485,7 @@ describe('dynamic comparison Pages Function', () => {
       sources: [...base.sources, source('benchlm', 'unrelated-benchlm', 'https://benchlm.example/unrelated', 'Unrelated BenchLM record')],
     }));
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const data = initialViewModel(await response.text());
 
     expect(response.status).toBe(200);
@@ -509,7 +526,7 @@ describe('dynamic comparison Pages Function', () => {
       ],
     }));
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const data = initialViewModel(await response.text());
     const alphaPrices = data.priceChecks.find((group) => group.modelKey === 'provider:alpha');
 
@@ -559,15 +576,16 @@ describe('dynamic comparison Pages Function', () => {
       ],
     }));
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const data = initialViewModel(await response.text());
 
     expect(response.status).toBe(200);
-    expect(data.priceChecks[0]).toMatchObject({
+    const alphaPrices = data.priceChecks.find((group) => group.modelKey === 'provider:alpha');
+    expect(alphaPrices).toMatchObject({
       modelKey: 'provider:alpha',
       selectedRouteId: null,
     });
-    expect(data.priceChecks[0].checks.map((check) => [check.routeId, check.providerId])).toEqual([
+    expect(alphaPrices?.checks.map((check) => [check.routeId, check.providerId])).toEqual([
       ['direct:shared', 'a-provider'],
       ['direct:shared', 'z-provider'],
       ['openrouter:provider:alpha', 'openrouter'],
@@ -589,7 +607,7 @@ describe('dynamic comparison Pages Function', () => {
     });
     readActiveComparisonSnapshot.mockResolvedValueOnce(malicious);
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -605,7 +623,7 @@ describe('dynamic comparison Pages Function', () => {
   it('returns a safe noindex 503 when there is no publication-pointer-selected revision', async () => {
     readActiveComparisonSnapshot.mockResolvedValueOnce(null);
 
-    const response = await request('zeta-vs-alpha');
+    const response = await request('alpha-vs-zeta');
     const html = await response.text();
 
     expect(response.status).toBe(503);
@@ -620,14 +638,14 @@ describe('dynamic comparison Pages Function', () => {
 
   it('returns an explicit noindex 503 for snapshot and SSR failures without mislabelling them as absent pairs', async () => {
     readActiveComparisonSnapshot.mockRejectedValueOnce(new Error('D1 temporarily unavailable'));
-    const snapshotFailure = await request('zeta-vs-alpha');
+    const snapshotFailure = await request('alpha-vs-zeta');
 
     const invalidPublication = snapshot();
     readActiveComparisonSnapshot.mockResolvedValueOnce({
       ...invalidPublication,
       revision: { ...invalidPublication.revision, publishedAt: null },
     });
-    const renderFailure = await request('zeta-vs-alpha');
+    const renderFailure = await request('alpha-vs-zeta');
 
     for (const response of [snapshotFailure, renderFailure]) {
       const html = await response.text();

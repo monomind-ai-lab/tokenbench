@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { editorialComparisonFor } from '../benchmarks/comparison-allowlist';
 import { compareUtf8Binary } from '../benchmarks/contracts';
+import { trackTokenBenchEvent } from '../frontend/analytics';
 import { useCompareState } from '../frontend/compare-state';
 import { ModelPairPicker, type CompareDirectoryEnvelope, type DirectoryModel, type DirectoryPair, type EvidenceStatus, type SourceType } from '../frontend/model-pair-picker';
 import { NewsletterSignup } from '../frontend/newsletter-signup';
@@ -148,9 +150,19 @@ export function compareFormState(ids: readonly string[], publishedIds?: Readonly
 }
 
 /** Presentation order may swap, but pair URLs always use binary stable-slug order. */
-export function comparisonPath(first: DirectoryModel, second: DirectoryModel, _pairs: readonly DirectoryPair[] = []): string {
+function canonicalPairId(first: DirectoryModel, second: DirectoryModel): string {
   const [left, right] = [first.slug, second.slug].sort(compareUtf8Binary);
-  return `${ROUTE_PATHS.comparison}${encodeURIComponent(`${left}-vs-${right}`)}/`;
+  return `${left}-vs-${right}`;
+}
+
+export function comparisonPath(first: DirectoryModel, second: DirectoryModel): string {
+  return `${ROUTE_PATHS.comparison}${encodeURIComponent(canonicalPairId(first, second))}/`;
+}
+
+function featuredEffectiveDate(value: string): string {
+  const [year, month, day] = value.split('-');
+  const monthName = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][Number(month) - 1];
+  return monthName ? `${Number(day)} ${monthName} ${year}` : value;
 }
 
 function useCompareDirectory(): DirectoryState {
@@ -209,11 +221,33 @@ export function CompareHubPage() {
     : initialState;
   const first = selectableModelsBySlug.get(firstModelSlug) ?? null;
   const second = selectableModelsBySlug.get(secondModelSlug) ?? null;
-  const comparisonHref = formState.valid && first && second ? comparisonPath(first, second, pairs) : null;
+  const comparisonHref = formState.valid && first && second ? comparisonPath(first, second) : null;
   const popularPairs = pairs.slice(0, 12);
   const selectionMessage = formState.valid && (first?.evidenceStatus !== 'supported' || second?.evidenceStatus !== 'supported')
     ? 'This pair has partial evidence. Unavailable fields will stay visible in the result.'
     : formState.reason;
+
+  const validationFailure = (ids: readonly [string, string]): 'missing' | 'duplicate' | 'unknown' | 'retired' | null => {
+    if (ids.some((slug) => slug !== '' && !modelsBySlug.has(slug))) return 'unknown';
+    if (ids.some((slug) => slug !== '' && modelsBySlug.has(slug) && !selectableModelsBySlug.has(slug))) return 'retired';
+    if (ids.some((slug) => slug === '')) return 'missing';
+    if (ids[0] === ids[1]) return 'duplicate';
+    return null;
+  };
+  const trackValidationFailure = (ids: readonly [string, string]) => {
+    const reason = validationFailure(ids);
+    if (reason !== null) trackTokenBenchEvent('compare_validation_failed', { reason, route: ROUTE_PATHS.compareHub });
+  };
+  const updateFirstModel = (slug: string) => {
+    setFirstModelSlug(slug);
+    if (selectableModelsBySlug.has(slug)) trackTokenBenchEvent('compare_selector_changed', { modelId: slug, route: ROUTE_PATHS.compareHub, slot: 'first' });
+    trackValidationFailure([slug, secondModelSlug]);
+  };
+  const updateSecondModel = (slug: string) => {
+    setSecondModelSlug(slug);
+    if (selectableModelsBySlug.has(slug)) trackTokenBenchEvent('compare_selector_changed', { modelId: slug, route: ROUTE_PATHS.compareHub, slot: 'second' });
+    trackValidationFailure([firstModelSlug, slug]);
+  };
 
   useEffect(() => {
     if (state.phase !== 'ready' || firstModelSlug || secondModelSlug || selection.ids.length < 2) return;
@@ -222,6 +256,7 @@ export function CompareHubPage() {
       setFirstModelSlug(usable[0]!);
       setSecondModelSlug(usable[1]!);
       setPrefillNotice(selection.ids.length > 2 ? 'The first two valid shared models were prefilled; the third remains in the comparison tray.' : 'Your shared model pair was prefilled.');
+      trackTokenBenchEvent('compare_prefill_used', { count: usable.length === 3 ? '3' : '2', route: ROUTE_PATHS.compareHub });
     } else {
       setPrefillNotice('A shared model selection could not be used because one or more published IDs are unavailable.');
     }
@@ -236,12 +271,22 @@ export function CompareHubPage() {
       <div aria-label="Comparison tools" className="comparison-tool-grid" role="group">
         <section className="comparison-panel comparison-selector-panel" aria-labelledby="comparison-select-heading">
           <div className="comparison-section-heading"><h2 id="comparison-select-heading">Choose a model pair</h2><p>Popular models appear first. Search to browse every selectable model in the published directory.</p></div>
-          <form action={comparisonHref ?? ROUTE_PATHS.comparison} method="get">
-            <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={setFirstModelSlug} onSecondModelChange={setSecondModelSlug} pairs={pairs} secondModelSlug={secondModelSlug} />
+          <form action={comparisonHref ?? ROUTE_PATHS.comparison} method="get" onSubmit={() => {
+            if (!formState.valid || !first || !second) {
+              trackValidationFailure(selectedIds);
+              return;
+            }
+            trackTokenBenchEvent('comparison_started', { pairId: canonicalPairId(first, second), route: ROUTE_PATHS.compareHub });
+          }}>
+            <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={updateFirstModel} onSecondModelChange={updateSecondModel} pairs={pairs} secondModelSlug={secondModelSlug} />
             <div className="comparison-selection-action">
               {prefillNotice ? <p role="status">{prefillNotice}</p> : null}
               <p aria-live="polite" id="compare-validation-message">{selectionMessage}</p>
-              <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstModelSlug(secondModelSlug); setSecondModelSlug(firstModelSlug); }} type="button">Swap selected models</button>
+              <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => {
+                if (first && second) trackTokenBenchEvent('compare_pair_swapped', { pairId: canonicalPairId(first, second), route: ROUTE_PATHS.compareHub });
+                setFirstModelSlug(secondModelSlug);
+                setSecondModelSlug(firstModelSlug);
+              }} type="button">Swap selected models</button>
               <button aria-describedby="compare-validation-message" aria-disabled={!formState.valid} className="button" disabled={!formState.valid} type="submit">Compare selected models</button>
               <button className="button button-secondary" disabled={!firstModelSlug && !secondModelSlug} onClick={() => { setFirstModelSlug(''); setSecondModelSlug(''); setPrefillNotice(''); }} type="button">Clear model selection</button>
             </div>
@@ -254,7 +299,19 @@ export function CompareHubPage() {
       <section className="comparison-panel comparison-section" aria-labelledby="comparison-reviewed-heading">
         <div className="comparison-section-heading"><h2 id="comparison-reviewed-heading">Popular model pairs</h2><p>These published pair shortcuts fill the selector first, so you can review the evidence status before comparing.</p></div>
         {popularPairs.length === 0 ? <div className="comparison-empty-state"><strong>No reviewed matchups published yet</strong><p>This directory remains honest when the active revision contains models but no indexable pair records.</p></div> : <ol className="comparison-reviewed-list">
-          {popularPairs.map((pair) => <li key={pair.pairSlug}><button className="comparison-matchup-link" onClick={() => { setFirstModelSlug(pair.modelASlug); setSecondModelSlug(pair.modelBSlug); setPrefillNotice('Popular pair selected. Review the validation message, then compare.'); }} type="button"><strong>Use {modelPairLabel(pair, modelsBySlug)}</strong><span aria-hidden="true">→</span></button></li>)}
+          {popularPairs.map((pair) => {
+            const featured = editorialComparisonFor(pair.pairSlug);
+            return <li key={pair.pairSlug}>
+              <button className="comparison-matchup-link" onClick={() => {
+                const pairModels = [modelsBySlug.get(pair.modelASlug), modelsBySlug.get(pair.modelBSlug)] as const;
+                if (pairModels[0] && pairModels[1]) trackTokenBenchEvent('compare_popular_pair_selected', { pairId: canonicalPairId(pairModels[0], pairModels[1]), route: ROUTE_PATHS.compareHub });
+                setFirstModelSlug(pair.modelASlug);
+                setSecondModelSlug(pair.modelBSlug);
+                setPrefillNotice('Popular pair selected. Review the validation message, then compare.');
+              }} type="button"><strong>Use {modelPairLabel(pair, modelsBySlug)}</strong><span aria-hidden="true">→</span></button>
+              {featured ? <div className="comparison-reviewed-feature" role="note"><strong>Reviewed editorial comparison</strong><p>{featured.claim}</p><span>Effective {featuredEffectiveDate(featured.effectiveDate)}</span><span>Source coverage: {featured.sourceCoverage}</span></div> : null}
+            </li>;
+          })}
         </ol>}
       </section>
     </> : null}

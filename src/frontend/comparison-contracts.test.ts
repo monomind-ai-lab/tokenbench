@@ -58,7 +58,7 @@ const viewModel = {
   revision: 'published-r1',
   publishedAt: '2026-08-05T12:00:00.000Z',
   freshness: { status: 'fresh', checkedAt: '2026-08-05T12:00:00.000Z' },
-  canonicalPath: '/compare/model-a-vs-model-b',
+  canonicalPath: '/models/compare/model-a-vs-model-b/',
   models: [
     {
       modelKey: 'provider:model-a', slug: 'model-a', name: 'Model A', creator: 'Provider', sourceType: 'Proprietary', reasoningType: null,
@@ -217,6 +217,13 @@ describe('comparison SSR hydration contract', () => {
     expect(parseComparisonViewModel(JSON.parse(JSON.stringify(viewModel)))).toEqual(viewModel);
   });
 
+  it('accepts only the canonical trailing-slash comparison route in hydrated SSR data', () => {
+    expect(parseComparisonViewModel(JSON.parse(JSON.stringify(viewModel)))).toEqual(viewModel);
+    expect(parseComparisonViewModel({ ...viewModel, canonicalPath: '/compare/model-a-vs-model-b' })).toBeNull();
+    expect(parseComparisonViewModel({ ...viewModel, canonicalPath: '/models/compare/model-a-vs-model-b' })).toBeNull();
+    expect(parseComparisonViewModel({ ...viewModel, canonicalPath: '/models/compare/model-a-vs-model-b//' })).toBeNull();
+  });
+
   it('rejects missing required detail data so the browser preserves the server HTML', () => {
     expect(parseComparisonViewModel({ ...viewModel, models: [viewModel.models[0]] })).toBeNull();
     expect(parseComparisonViewModel({ ...viewModel, canonicalPath: '/compare/model-a-vs-model-b/' })).toBeNull();
@@ -283,7 +290,7 @@ describe('comparison SSR hydration contract', () => {
   });
 
   it('binds canonical and related paths to the exact ordered model slugs', () => {
-    const wrongCanonical = { ...viewModel, canonicalPath: '/compare/model-b-vs-model-a' };
+    const wrongCanonical = { ...viewModel, canonicalPath: '/models/compare/model-b-vs-model-a/' };
     const wrongRelated = JSON.parse(JSON.stringify(viewModel)) as Record<string, any>;
     wrongRelated.relatedPairs = [{
       pairSlug: 'other-vs-model-b',
@@ -566,19 +573,23 @@ describe('comparison SSR hydration contract', () => {
     const canonical = {
       ...viewModel,
       models: [utf8First, utf16First],
-      canonicalPath: '/compare/private-use-vs-astral',
+      canonicalPath: '/models/compare/astral-vs-private-use/',
       priceChecks: [
-        { ...viewModel.priceChecks[0], modelKey: utf8First.modelKey, checks: [] },
         { ...viewModel.priceChecks[1], modelKey: utf16First.modelKey, checks: [] },
+        { ...viewModel.priceChecks[0], modelKey: utf8First.modelKey, checks: [] },
       ],
     };
 
-    expect(parseComparisonViewModel(canonical)).toEqual(canonical);
     expect(parseComparisonViewModel({
       ...canonical,
       models: [utf16First, utf8First],
-      canonicalPath: '/compare/astral-vs-private-use',
-      priceChecks: [canonical.priceChecks[1], canonical.priceChecks[0]],
+    })).toEqual({
+      ...canonical,
+      models: [utf16First, utf8First],
+    });
+    expect(parseComparisonViewModel({
+      ...canonical,
+      canonicalPath: '/models/compare/private-use-vs-astral/',
     })).toBeNull();
   });
 });

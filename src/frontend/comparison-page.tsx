@@ -14,6 +14,7 @@ import {
 import { ModelPairPicker, type DirectoryModel, type DirectoryPair } from './model-pair-picker';
 import { ProviderMark } from './provider-mark';
 import { ShareAction } from './share-action';
+import { trackTokenBenchEvent } from './analytics';
 
 type SelectedRouteState =
   | { readonly status: 'selected'; readonly route: BenchmarkPriceCheck }
@@ -289,6 +290,14 @@ function Summary({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
 type WorkloadScenario = 'balanced' | 'low-latency' | 'long-context';
 type HostScenario = 'published' | 'direct-only';
 
+function isWorkloadScenario(value: string): value is WorkloadScenario {
+  return value === 'balanced' || value === 'low-latency' || value === 'long-context';
+}
+
+function isHostScenario(value: string): value is HostScenario {
+  return value === 'published' || value === 'direct-only';
+}
+
 function ScenarioControls({
   host,
   onHostChange,
@@ -303,8 +312,8 @@ function ScenarioControls({
   return <section className="comparison-panel comparison-section comparison-scenarios" aria-labelledby="comparison-scenario-heading">
     <div className="comparison-section-heading"><h2 id="comparison-scenario-heading">Scenario controls</h2><p>These bounded presets update only compatible derived interpretation. Published source facts and exact tables remain unchanged.</p></div>
     <div className="comparison-route-picker-grid">
-      <label className="comparison-route-picker"><span>Workload scenario</span><select aria-label="Workload scenario" onChange={(event) => onWorkloadChange(event.currentTarget.value as WorkloadScenario)} value={workload}><option value="balanced">Balanced default</option><option value="low-latency">Low latency</option><option value="long-context">Long context</option></select></label>
-      <label className="comparison-route-picker"><span>Host availability scenario</span><select aria-label="Host availability scenario" onChange={(event) => onHostChange(event.currentTarget.value as HostScenario)} value={host}><option value="published">Published host routes</option><option value="direct-only">Direct routes only</option></select></label>
+      <label className="comparison-route-picker"><span>Workload scenario</span><select aria-label="Workload scenario" onChange={(event) => { const value = event.currentTarget.value; if (isWorkloadScenario(value)) onWorkloadChange(value); }} value={workload}><option value="balanced">Balanced default</option><option value="low-latency">Low latency</option><option value="long-context">Long context</option></select></label>
+      <label className="comparison-route-picker"><span>Host availability scenario</span><select aria-label="Host availability scenario" onChange={(event) => { const value = event.currentTarget.value; if (isHostScenario(value)) onHostChange(value); }} value={host}><option value="published">Published host routes</option><option value="direct-only">Direct routes only</option></select></label>
     </div>
     <p className="comparison-empty-copy">Scenario state is stored as a bounded URL fragment; raw workload quantities are never collected or sent to analytics.</p>
   </section>;
@@ -492,7 +501,13 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
   return <div className="comparison-page comparison-detail-page" data-client-hydrated={clientHydrated ? 'true' : 'false'}>
     <PairHeader scenarioFragment={scenarioFragment} viewModel={viewModel} />
     <Summary viewModel={summaryViewModel} />
-    <ScenarioControls host={host} onHostChange={(nextHost) => updateScenario(workload, nextHost)} onWorkloadChange={(nextWorkload) => updateScenario(nextWorkload, host)} workload={workload} />
+    <ScenarioControls host={host} onHostChange={(nextHost) => {
+      trackTokenBenchEvent('comparison_host_changed', { host: nextHost, route: viewModel.canonicalPath });
+      updateScenario(workload, nextHost);
+    }} onWorkloadChange={(nextWorkload) => {
+      trackTokenBenchEvent('comparison_workload_changed', { scenario: nextWorkload, route: viewModel.canonicalPath });
+      updateScenario(nextWorkload, host);
+    }} workload={workload} />
     <SharedMetricView viewModel={viewModel} />
     <SourceMetrics models={viewModel.models} rows={viewModel.metricRows} />
     <PricingContext groups={viewModel.priceChecks} models={viewModel.models} onRouteChange={(index, routeId) => setSelectedRouteIds((current) => index === 0 ? [routeId, current[1]] : [current[0], routeId])} selectedRouteIds={selectedRouteIds} />

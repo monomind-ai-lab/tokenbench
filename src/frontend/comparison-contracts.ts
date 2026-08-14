@@ -411,7 +411,7 @@ function isRelatedComparison(
   return isText(value.pairSlug)
     && isComparisonPairRouteSafe(value.pairSlug as string)
     && value.modelA.modelKey !== value.modelB.modelKey
-    && compareUtf8Binary(value.modelA.modelKey, value.modelB.modelKey) < 0
+    && compareUtf8Binary(value.modelA.slug, value.modelB.slug) < 0
     && value.pairSlug === `${value.modelA.slug}-vs-${value.modelB.slug}`
     && value.pairSlug !== currentPairSlug
     && intersectingCurrentModels.length === 1
@@ -433,7 +433,7 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
     || !isCanonicalIsoTimestamp(value.freshness.checkedAt)
     || (value.freshness.message !== undefined && !isText(value.freshness.message))
     || !isText(value.canonicalPath)
-    || !/^\/compare\/[^/]+$/.test(value.canonicalPath)
+    || !/^\/models\/compare\/[^/]+\/$/.test(value.canonicalPath)
     || !Array.isArray(value.models)
     || value.models.length !== 2
     || !isModel(value.models[0])
@@ -450,9 +450,9 @@ export function parseComparisonViewModel(value: unknown): ComparisonViewModel | 
 
   const models = value.models as unknown as readonly [BenchmarkModel, BenchmarkModel];
   const currentPairSlug = `${models[0].slug}-vs-${models[1].slug}`;
-  if (compareUtf8Binary(models[0].modelKey, models[1].modelKey) >= 0
+  if (compareUtf8Binary(models[0].slug, models[1].slug) >= 0
     || !isComparisonPairRouteSafe(currentPairSlug)) return null;
-  const expectedCanonicalPath = `/compare/${encodeURIComponent(currentPairSlug)}`;
+  const expectedCanonicalPath = `/models/compare/${encodeURIComponent(currentPairSlug)}/`;
   if (value.canonicalPath !== expectedCanonicalPath) return null;
   if (!value.metricRows.every((row) => isMetricRow(row, models))) return null;
   if (!value.priceChecks.every((group, index) => isRecord(group)
