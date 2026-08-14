@@ -3,7 +3,7 @@ import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck } from '../be
 import { modelPath } from '../benchmarks/model-directory';
 import { SITE_CONFIG } from '../brand/site-config';
 import { ComparisonRadar, radarAxes } from './comparison-radar';
-import { comparisonSummary, friendlyMetricLabel } from './comparison-summary';
+import { buildComparisonSynthesis, comparisonSummary, friendlyMetricLabel } from './comparison-summary';
 import {
   comparisonMetricRowIdentity,
   type ComparisonMetricRow,
@@ -161,7 +161,7 @@ function modelDirectoryRecord(model: BenchmarkModel): DirectoryModel {
 
 function quickPairRecords(viewModel: ComparisonViewModel): readonly QuickPair[] {
   const currentPair: QuickPair = {
-    pairSlug: viewModel.canonicalPath.slice('/compare/'.length),
+    pairSlug: `${viewModel.models[0].slug}-vs-${viewModel.models[1].slug}`,
     modelASlug: viewModel.models[0].slug,
     modelBSlug: viewModel.models[1].slug,
     featuredRank: 0,
@@ -176,7 +176,7 @@ function quickPairRecords(viewModel: ComparisonViewModel): readonly QuickPair[] 
       modelBSlug: pair.modelB.slug,
       featuredRank: pair.featuredRank,
       sharedMetricCount: pair.sharedMetricCount,
-      href: `/compare/${encodeURIComponent(pair.pairSlug)}`,
+      href: `/models/compare/${encodeURIComponent(pair.pairSlug)}/`,
     })),
   ];
   const unique = new Map<string, QuickPair>();
@@ -246,16 +246,17 @@ function QuickPairSwitch({ viewModel }: { readonly viewModel: ComparisonViewMode
   </section>;
 }
 
-function PairHeader({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
+function PairHeader({ scenarioFragment, viewModel }: { readonly scenarioFragment: string; readonly viewModel: ComparisonViewModel }) {
   const models = viewModel.models;
   const title = `${modelDisplayLabel(models, 0)} vs ${modelDisplayLabel(models, 1)}`;
   return <section className="comparison-intro comparison-result-header" aria-labelledby="comparison-detail-heading">
     <div className="comparison-header-topline">
       <nav className="comparison-breadcrumb" aria-label="Breadcrumb"><a href="/compare/">Compare</a><span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav>
-      <ShareAction title={`${title} comparison`} url={`${SITE_CONFIG.origin}${viewModel.canonicalPath}`} />
+      <ShareAction title={`${title} comparison`} url={`${SITE_CONFIG.origin}${viewModel.canonicalPath}${scenarioFragment}`} />
     </div>
     <h1 id="comparison-detail-heading">{modelDisplayLabel(models, 0)} vs<br /> {modelDisplayLabel(models, 1)}</h1>
     <p>Read the published evidence, route context, and missing facts before making a local decision. This page does not name a universal winner.</p>
+    <p><a className="button button-secondary button-small" href={`/compare/?compare=${encodeURIComponent(`${models[0].slug},${models[1].slug}`)}`}>Edit this comparison</a></p>
     <section className="comparison-model-pair" aria-labelledby="comparison-model-pair-heading">
       <div className="comparison-section-heading"><h2 id="comparison-model-pair-heading">Models in this comparison</h2><p>Provider identity and evidence state stay balanced across the pair.</p></div>
       <div className="comparison-model-pair-grid"><ModelIdentity index={0} models={models} /><span className="comparison-versus-marker" aria-label="versus">VS</span><ModelIdentity index={1} models={models} /></div>
@@ -265,6 +266,7 @@ function PairHeader({ viewModel }: { readonly viewModel: ComparisonViewModel }) 
 
 function Summary({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
   const summary = comparisonSummary(viewModel);
+  const synthesis = buildComparisonSynthesis(viewModel);
   const coverage = summary.coverage === 'strong'
     ? 'Broad shared-metric coverage'
     : summary.coverage === 'limited'
@@ -275,6 +277,36 @@ function Summary({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
     {summary.sentences.length === 0
       ? <p className="comparison-empty-copy">No decision-relevant implication can be verified for this pair yet.</p>
       : <ol className="comparison-highlights-list">{summary.sentences.map((sentence) => <li key={sentence}>{sentence}</li>)}</ol>}
+    <section className="comparison-synthesis" aria-labelledby="comparison-synthesis-heading">
+      <h3 id="comparison-synthesis-heading">Evidence-qualified conclusion</h3>
+      <div><h4>Observed source facts</h4>{synthesis.observedFacts.length === 0 ? <p>No compatible score facts are published for this pair.</p> : <ul>{synthesis.observedFacts.map((fact) => <li key={fact}>{fact}</li>)}</ul>}</div>
+      <div><h4>TokenBench calculations</h4>{synthesis.calculations.length === 0 ? <p>Comparable primary-route price calculations are unavailable.</p> : <ul>{synthesis.calculations.map((fact) => <li key={fact}>{fact}</li>)}</ul>}</div>
+      <div><h4>Editorial conclusion</h4><p>{synthesis.conclusion}</p></div>
+    </section>
+  </section>;
+}
+
+type WorkloadScenario = 'balanced' | 'low-latency' | 'long-context';
+type HostScenario = 'published' | 'direct-only';
+
+function ScenarioControls({
+  host,
+  onHostChange,
+  onWorkloadChange,
+  workload,
+}: {
+  readonly host: HostScenario;
+  readonly onHostChange: (value: HostScenario) => void;
+  readonly onWorkloadChange: (value: WorkloadScenario) => void;
+  readonly workload: WorkloadScenario;
+}) {
+  return <section className="comparison-panel comparison-section comparison-scenarios" aria-labelledby="comparison-scenario-heading">
+    <div className="comparison-section-heading"><h2 id="comparison-scenario-heading">Scenario controls</h2><p>These bounded presets update only compatible derived interpretation. Published source facts and exact tables remain unchanged.</p></div>
+    <div className="comparison-route-picker-grid">
+      <label className="comparison-route-picker"><span>Workload scenario</span><select aria-label="Workload scenario" onChange={(event) => onWorkloadChange(event.currentTarget.value as WorkloadScenario)} value={workload}><option value="balanced">Balanced default</option><option value="low-latency">Low latency</option><option value="long-context">Long context</option></select></label>
+      <label className="comparison-route-picker"><span>Host availability scenario</span><select aria-label="Host availability scenario" onChange={(event) => onHostChange(event.currentTarget.value as HostScenario)} value={host}><option value="published">Published host routes</option><option value="direct-only">Direct routes only</option></select></label>
+    </div>
+    <p className="comparison-empty-copy">Scenario state is stored as a bounded URL fragment; raw workload quantities are never collected or sent to analytics.</p>
   </section>;
 }
 
@@ -282,7 +314,7 @@ function SharedMetricView({ viewModel }: { readonly viewModel: ComparisonViewMod
   const axes = radarAxes(viewModel.metricRows, viewModel.models);
   const models = viewModel.models;
   return <section className="comparison-panel comparison-section" aria-labelledby="comparison-shared-metric-heading">
-    <div className="comparison-section-heading"><h2 id="comparison-shared-metric-heading">Shared metric view</h2><p>{axes.length === 0 ? 'A radar is shown only when at least four compatible supported score metrics are published.' : 'The radar is a per-axis relative view; exact values and units remain available in its adjacent table.'}</p></div>
+    <div className="comparison-section-heading"><h2 id="comparison-shared-metric-heading">Shared metric view</h2><p>{axes.length === 0 ? 'A radar is shown only when six compatible supported score metrics are published.' : 'The six-axis radar and exact table use the same published selector.'}</p></div>
     {axes.length === 0 ? <div className="comparison-radar-fallback">
       <h3>Comparable metric detail</h3>
       {viewModel.metricRows.length === 0 ? <p className="comparison-empty-copy">No source metric detail is published for this active revision.</p> : <ul>
@@ -413,7 +445,7 @@ function EvidenceProvenance({
 function RelatedComparisonBanner({ pair }: { readonly pair: RelatedComparison }) {
   const title = `${pair.modelA.name} vs ${pair.modelB.name}`;
   return <>
-    <a href={`/compare/${encodeURIComponent(pair.pairSlug)}`}>{title}</a>
+    <a href={`/models/compare/${encodeURIComponent(pair.pairSlug)}/`}>{title}</a>
     <span>{pair.sharedMetricCount} shared source metrics</span>
   </>;
 }
@@ -432,6 +464,8 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
     viewModel.priceChecks[0].selectedRouteId,
     viewModel.priceChecks[1].selectedRouteId,
   ]);
+  const [workload, setWorkload] = useState<WorkloadScenario>('balanced');
+  const [host, setHost] = useState<HostScenario>('published');
   const selectedRoutes = [
     selectedRoute(viewModel.priceChecks[0], selectedRouteIds[0]),
     selectedRoute(viewModel.priceChecks[1], selectedRouteIds[1]),
@@ -448,14 +482,22 @@ export function ComparisonPage({ viewModel }: { readonly viewModel: ComparisonVi
   useEffect(() => {
     setSelectedRouteIds([viewModel.priceChecks[0].selectedRouteId, viewModel.priceChecks[1].selectedRouteId]);
   }, [viewModel.canonicalPath, viewModel.priceChecks]);
+  const scenarioFragment = workload === 'balanced' && host === 'published' ? '' : `#scenario=${workload}.${host}`;
+  const updateScenario = (nextWorkload: WorkloadScenario, nextHost: HostScenario) => {
+    setWorkload(nextWorkload);
+    setHost(nextHost);
+    if (typeof window !== 'undefined') window.history.replaceState(null, '', `${viewModel.canonicalPath}${nextWorkload === 'balanced' && nextHost === 'published' ? '' : `#scenario=${nextWorkload}.${nextHost}`}`);
+  };
 
   return <div className="comparison-page comparison-detail-page" data-client-hydrated={clientHydrated ? 'true' : 'false'}>
-    <PairHeader viewModel={viewModel} />
+    <PairHeader scenarioFragment={scenarioFragment} viewModel={viewModel} />
     <Summary viewModel={summaryViewModel} />
+    <ScenarioControls host={host} onHostChange={(nextHost) => updateScenario(workload, nextHost)} onWorkloadChange={(nextWorkload) => updateScenario(nextWorkload, host)} workload={workload} />
     <SharedMetricView viewModel={viewModel} />
     <SourceMetrics models={viewModel.models} rows={viewModel.metricRows} />
     <PricingContext groups={viewModel.priceChecks} models={viewModel.models} onRouteChange={(index, routeId) => setSelectedRouteIds((current) => index === 0 ? [routeId, current[1]] : [current[0], routeId])} selectedRouteIds={selectedRouteIds} />
     <EvidenceProvenance selectedRoutes={selectedRoutes} viewModel={viewModel} />
+    <section className="comparison-panel comparison-section comparison-contextual-cta" aria-labelledby="comparison-cta-heading"><h2 id="comparison-cta-heading">Use this comparison in your decision</h2><p>Carry the source-backed evidence into a cost and workload decision without turning missing fields into a recommendation.</p><a className="button" href="/tools/">Open TokenBench decision tools</a></section>
     <RelatedComparisons viewModel={viewModel} />
     <QuickPairSwitch viewModel={viewModel} />
   </div>;

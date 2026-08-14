@@ -147,11 +147,11 @@ describe('route metadata registry', () => {
     expect(page.twitter.title).toBe(page.title);
   });
 
-  it('keeps dynamic comparison canonical and Open Graph URLs slashless', () => {
+  it('keeps dynamic comparison metadata on the canonical trailing-slash model route', () => {
     const page = metadataForRoute({ kind: 'comparison', pair: 'a-vs-b' });
 
-    expect(page.canonical).toBe(`${origin}/compare/a-vs-b`);
-    expect(page.openGraph.url).toBe(`${origin}/compare/a-vs-b`);
+    expect(page.canonical).toBe(`${origin}/models/compare/a-vs-b/`);
+    expect(page.openGraph.url).toBe(`${origin}/models/compare/a-vs-b/`);
   });
 
   it('gives dynamic model profiles a unique canonical and complete social metadata', () => {

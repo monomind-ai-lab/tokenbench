@@ -33,7 +33,7 @@ function viewModel(): ComparisonViewModel {
     revision: 'published-r1',
     publishedAt: UPDATED_AT,
     freshness: { status: 'fresh', checkedAt: UPDATED_AT },
-    canonicalPath: '/compare/model-a-vs-model-b',
+    canonicalPath: '/models/compare/model-a-vs-model-b/',
     models: [modelA, modelB],
     metricRows: [{
       metricKey: 'benchlm:category:coding', category: 'coding', unit: 'score', sourceId: 'benchlm', methodology: 'benchlm_raw_composite',
@@ -171,7 +171,7 @@ function directoryEnvelope(overrides: Record<string, unknown> = {}) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('comparison detail page', () => {
-  it('renders the approved result hierarchy without repeated source fields or workload controls', async () => {
+  it('renders evidence-qualified synthesis and bounded workload and host scenario controls', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal('navigator', { clipboard: { writeText } });
 
@@ -180,11 +180,13 @@ describe('comparison detail page', () => {
     const sourceMetrics = screen.getByRole('table', { name: 'Source metric comparison' });
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
     expect(screen.getByRole('heading', { name: 'Key implications' })).toBeVisible();
-    expect(screen.getByRole('img', { name: /shared metric radar/i })).toBeVisible();
+    expect(screen.queryByRole('img', { name: /shared metric radar/i })).not.toBeInTheDocument();
     expect(within(sourceMetrics).getByRole('rowheader', { name: 'Coding' })).toBeVisible();
     expect(within(sourceMetrics).queryByText('benchlm:category:coding')).not.toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Source' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Workload view' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Workload scenario')).toBeVisible();
+    expect(screen.getByLabelText('Host availability scenario')).toBeVisible();
+    expect(screen.getAllByText('The available evidence does not support one overall winner.')).toHaveLength(1);
     expect(screen.getAllByText('Not verified').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('heading', { name: 'Evidence provenance' })).toHaveLength(1);
     expect(screen.getAllByRole('link', { name: 'Model A' }).every((link) => link.getAttribute('href') === '/models/model-a/')).toBe(true);
@@ -196,7 +198,7 @@ describe('comparison detail page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/models/compare/model-a-vs-model-b/'));
   });
 
   it('places the pair switch and related comparison banners after the provenance panel and breaks the title at vs', () => {
@@ -212,7 +214,7 @@ describe('comparison detail page', () => {
     const relatedList = screen.getByRole('heading', { name: 'Keep comparing' }).closest('section')!.querySelector('ul');
     expect(relatedList).not.toBeNull();
     expect(relatedList!.querySelectorAll('li')).toHaveLength(1);
-    expect(screen.getByRole('link', { name: 'Model B vs Other' })).toHaveAttribute('href', '/compare/model-b-vs-other');
+    expect(screen.getByRole('link', { name: 'Model B vs Other' })).toHaveAttribute('href', '/models/compare/model-b-vs-other/');
     const intro = document.querySelector('.comparison-intro')!;
     expect(intro.querySelector('.comparison-quick-switch')).toBeNull();
   });
@@ -259,7 +261,7 @@ describe('comparison detail page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/compare/model-a-vs-model-b'));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('https://tokenbench.monomind.one/models/compare/model-a-vs-model-b/'));
   });
 
   it('updates sparse-pair pricing claims when the controlled route changes', () => {
@@ -407,7 +409,7 @@ describe('comparison detail page', () => {
     fireEvent.change(second, { target: { value: 'other' } });
 
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(screen.getByRole('link', { name: 'View selected comparison' })).toHaveAttribute('href', '/compare/model-b-vs-other');
+    expect(screen.getByRole('link', { name: 'View selected comparison' })).toHaveAttribute('href', '/models/compare/model-b-vs-other/');
   });
 
   it('omits the source records ledger and renders exactly one provenance disclosure', () => {
@@ -453,11 +455,11 @@ describe('compare hub', () => {
 
     fireEvent.change(first, { target: { value: 'model-a' } });
     fireEvent.change(second, { target: { value: 'model-b' } });
-    expect(screen.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
+    expect(screen.getByRole('button', { name: 'Compare selected models' }).closest('form')).toHaveAttribute('action', '/models/compare/model-a-vs-model-b/');
     fireEvent.click(screen.getByRole('button', { name: 'Swap selected models' }));
     expect(first).toHaveValue('model-b');
     expect(second).toHaveValue('model-a');
-    expect(screen.getByRole('link', { name: 'Model A vs Model B' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
+    expect(screen.getByRole('button', { name: 'Use Model A vs Model B' })).toBeVisible();
   });
 
   it('keeps duplicate display names distinct with canonical slugs and evidence state', async () => {
@@ -478,7 +480,7 @@ describe('compare hub', () => {
     fireEvent.change(first, { target: { value: 'zeta-model' } });
     fireEvent.change(second, { target: { value: 'alpha-model' } });
 
-    expect(screen.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/alpha-model-vs-zeta-model');
+    expect(screen.getByRole('button', { name: 'Compare selected models' }).closest('form')).toHaveAttribute('action', '/models/compare/alpha-model-vs-zeta-model/');
   });
 
   it('follows the combobox listbox keyboard pattern with complete option names', async () => {
@@ -497,7 +499,7 @@ describe('compare hub', () => {
     fireEvent.keyDown(second, { key: 'ArrowDown' });
     fireEvent.keyDown(second, { key: 'Enter' });
     expect(second).toHaveValue('model-b');
-    expect(screen.getByRole('link', { name: 'Compare selected models' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
+    expect(screen.getByRole('button', { name: 'Compare selected models' }).closest('form')).toHaveAttribute('action', '/models/compare/model-a-vs-model-b/');
     fireEvent.focus(first);
     expect(screen.getByRole('option', { name: 'Model A · Provider A · Supported evidence' }).querySelector('button')).toBeNull();
     fireEvent.focus(second);
@@ -514,8 +516,8 @@ describe('compare hub', () => {
     fireEvent.change(first, { target: { value: 'model-a' } });
     fireEvent.change(second, { target: { value: 'model-a' } });
 
-    expect(screen.queryByRole('link', { name: 'Compare selected models' })).not.toBeInTheDocument();
-    expect(screen.getByText('Choose two different known models to continue.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Compare selected models' })).toBeDisabled();
+    expect(screen.getByText('Choose two different models')).toBeVisible();
   });
 
   it('retains a reviewed complex-slug pair without exposing that model as a utility selection', async () => {
@@ -533,11 +535,11 @@ describe('compare hub', () => {
     const second = screen.getByRole('combobox', { name: 'Second model' });
     fireEvent.focus(first);
     expect(screen.queryByRole('option', { name: /Complex/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Complex vs D' })).toHaveAttribute('href', '/compare/a-vs-b-vs-d');
+    expect(screen.getByRole('button', { name: 'Use Complex vs D' })).toBeVisible();
 
     fireEvent.change(first, { target: { value: 'a-vs-b' } });
     fireEvent.change(second, { target: { value: 'd' } });
-    expect(screen.queryByRole('link', { name: 'Compare selected models' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Compare selected models' })).toBeDisabled();
   });
 
   it('rejects malformed directory timestamps and pair identities instead of creating links', async () => {
@@ -579,8 +581,8 @@ describe('compare hub', () => {
     render(<CompareHubPage />);
 
     await screen.findByRole('combobox', { name: 'First model' });
-    expect(screen.getAllByRole('link', { name: /Model \d+ vs Model \d+/ })).toHaveLength(12);
-    expect(screen.queryByRole('link', { name: 'Model 0 vs Model 12' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Use Model \d+ vs Model \d+/ })).toHaveLength(12);
+    expect(screen.queryByRole('button', { name: 'Use Model 0 vs Model 12' })).not.toBeInTheDocument();
   });
 
   it('keeps loading, no-reviewed-pairs, stale, and unavailable states explicit', async () => {

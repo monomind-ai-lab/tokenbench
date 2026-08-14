@@ -10,6 +10,14 @@ import {
 
 export type { ComparisonSummary } from './comparison-contracts';
 
+export interface ComparisonSynthesis {
+  readonly observedFacts: readonly string[];
+  readonly calculations: readonly string[];
+  readonly facts: readonly string[];
+  readonly conclusion: string;
+  readonly winner: 0 | 1 | null;
+}
+
 const COMPACT_SCORE_CATEGORIES_PER_MODEL = 3;
 const COMPACT_SCORE_MODEL_LABEL_UTF8_BYTES = 32;
 const COMPACT_SCORE_CATEGORY_LABEL_UTF8_BYTES = 32;
@@ -344,4 +352,48 @@ export function comparisonSummary(viewModel: ComparisonViewModel): ComparisonSum
   const sentences = evidenceClaims.map(summarySentence);
 
   return { heading: 'Key implications', sentences, coverage };
+}
+
+/**
+ * Keeps observed source facts, TokenBench arithmetic, and editorial language
+ * separate. This deliberately requires compatible score evidence and complete
+ * primary price evidence before it can identify a pair-level winner.
+ */
+export function buildComparisonSynthesis(viewModel: ComparisonViewModel): ComparisonSynthesis {
+  const compatibleRows = compatibleScoreRows(viewModel);
+  const routes = viewModel.priceChecks.map(selectedComparisonPriceCheck) as [BenchmarkPriceCheck | null, BenchmarkPriceCheck | null];
+  const inputRates = routes.map((route) => publishedRate(route, 'inputUsdPerMillion')) as [number | null, number | null];
+  const outputRates = routes.map((route) => publishedRate(route, 'outputUsdPerMillion')) as [number | null, number | null];
+  const observedFacts = compatibleRows.map((row) => {
+    const a = row.modelA!;
+    const b = row.modelB!;
+    return `${friendlyMetricLabel(row.metricKey, row.category)}: ${formatMetricValue(a.value)} vs ${formatMetricValue(b.value)} ${row.unit}.`;
+  });
+  const calculations: string[] = [];
+  for (const [label, rates] of [['Input API price', inputRates], ['Output API price', outputRates]] as const) {
+    const [left, right] = rates;
+    if (left === null || right === null || left === right) continue;
+    const lowerIndex: 0 | 1 = left < right ? 0 : 1;
+    const lower = lowerIndex === 0 ? left : right;
+    const higher = lowerIndex === 0 ? right : left;
+    const percentage = Math.round(((higher - lower) / higher) * 100);
+    calculations.push(`Price calculation (${label}): ${summaryModelLabel(viewModel.models, lowerIndex)} is ${percentage}% lower than the other selected primary route.`);
+  }
+
+  const facts = [...observedFacts, ...calculations];
+  const scoreEvidence = scoreLeads(compatibleRows);
+  const priceComplete = inputRates.every((rate) => rate !== null) && outputRates.every((rate) => rate !== null);
+  const allScoresAgree = compatibleRows.length >= 4
+    && scoreEvidence.length === compatibleRows.length
+    && scoreEvidence.every((lead) => lead.winnerIndex === scoreEvidence[0]?.winnerIndex);
+  const priceWinner = priceComplete && inputRates[0] !== inputRates[1] && outputRates[0] !== outputRates[1]
+    && (inputRates[0]! < inputRates[1]! ? 0 : 1) === (outputRates[0]! < outputRates[1]! ? 0 : 1)
+    ? (inputRates[0]! < inputRates[1]! ? 0 : 1) as 0 | 1
+    : null;
+  const winner = allScoresAgree && priceWinner !== null && scoreEvidence[0]!.winnerIndex === priceWinner ? priceWinner : null;
+  const conclusion = winner === null
+    ? 'The available evidence does not support one overall winner.'
+    : `${summaryModelLabel(viewModel.models, winner)} leads on the compatible published evidence for this pair.`;
+
+  return { observedFacts, calculations, facts, conclusion, winner };
 }

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { compareUtf8Binary } from '../benchmarks/contracts';
+import { useCompareState } from '../frontend/compare-state';
 import { ModelPairPicker, type CompareDirectoryEnvelope, type DirectoryModel, type DirectoryPair, type EvidenceStatus, type SourceType } from '../frontend/model-pair-picker';
 import { NewsletterSignup } from '../frontend/newsletter-signup';
+import { ROUTE_PATHS } from '../routing/routes';
 
 interface DirectoryState {
   readonly phase: 'loading' | 'ready' | 'unavailable';
@@ -131,12 +134,23 @@ function CompareHubHero() {
   </section>;
 }
 
-/** Exact reviewed records take precedence; other known pairs remain server-canonicalized. */
-export function comparisonPath(first: DirectoryModel, second: DirectoryModel, pairs: readonly DirectoryPair[]): string {
-  const reviewedPair = pairs.find((pair) => (pair.modelASlug === first.slug && pair.modelBSlug === second.slug)
-    || (pair.modelASlug === second.slug && pair.modelBSlug === first.slug));
-  const pairSlug = reviewedPair?.pairSlug ?? `${first.slug}-vs-${second.slug}`;
-  return `/compare/${encodeURIComponent(pairSlug)}`;
+export interface CompareFormState {
+  readonly valid: boolean;
+  readonly reason: string;
+}
+
+/** The landing action accepts two distinct published stable IDs and nothing else. */
+export function compareFormState(ids: readonly string[], publishedIds?: ReadonlySet<string>): CompareFormState {
+  if (ids.length !== 2 || ids.some((id) => id.trim().length === 0)) return { valid: false, reason: 'Choose two models' };
+  if (ids[0] === ids[1]) return { valid: false, reason: 'Choose two different models' };
+  if (publishedIds && ids.some((id) => !publishedIds.has(id))) return { valid: false, reason: 'Choose two known published models' };
+  return { valid: true, reason: 'Two distinct published models are selected.' };
+}
+
+/** Presentation order may swap, but pair URLs always use binary stable-slug order. */
+export function comparisonPath(first: DirectoryModel, second: DirectoryModel, _pairs: readonly DirectoryPair[] = []): string {
+  const [left, right] = [first.slug, second.slug].sort(compareUtf8Binary);
+  return `${ROUTE_PATHS.comparison}${encodeURIComponent(`${left}-vs-${right}`)}/`;
 }
 
 function useCompareDirectory(): DirectoryState {
@@ -178,24 +192,40 @@ function useCompareDirectory(): DirectoryState {
 
 export function CompareHubPage() {
   const state = useCompareDirectory();
+  const { selection } = useCompareState();
   const [firstModelSlug, setFirstModelSlug] = useState('');
   const [secondModelSlug, setSecondModelSlug] = useState('');
+  const [prefillNotice, setPrefillNotice] = useState('');
   const directory = state.envelope?.data.compareDirectory;
   const models = directory?.models ?? [];
   const pairs = directory?.indexablePairs ?? [];
   const modelsBySlug = useMemo(() => new Map(models.map((model) => [model.slug, model])), [models]);
   const selectableModelsBySlug = useMemo(() => new Map(models.filter((model) => model.utilitySelectable).map((model) => [model.slug, model])), [models]);
+  const selectedIds = [firstModelSlug, secondModelSlug] as const;
+  const initialState = compareFormState(selectedIds, new Set(selectableModelsBySlug.keys()));
+  const hasRetiredSelection = selectedIds.some((slug) => slug !== '' && modelsBySlug.has(slug) && !selectableModelsBySlug.has(slug));
+  const formState = hasRetiredSelection
+    ? { valid: false, reason: 'That model is retired or unavailable for comparison.' }
+    : initialState;
   const first = selectableModelsBySlug.get(firstModelSlug) ?? null;
   const second = selectableModelsBySlug.get(secondModelSlug) ?? null;
-  const comparisonHref = first && second && first.slug !== second.slug ? comparisonPath(first, second, pairs) : null;
+  const comparisonHref = formState.valid && first && second ? comparisonPath(first, second, pairs) : null;
   const popularPairs = pairs.slice(0, 12);
-  const selectionMessage = !firstModelSlug && !secondModelSlug
-    ? 'Select two distinct models to continue.'
-    : first && second && first.slug === second.slug
-      ? 'Choose two different known models to continue.'
-      : !first || !second
-        ? 'Choose two known models to continue.'
-        : 'Two distinct known models are selected.';
+  const selectionMessage = formState.valid && (first?.evidenceStatus !== 'supported' || second?.evidenceStatus !== 'supported')
+    ? 'This pair has partial evidence. Unavailable fields will stay visible in the result.'
+    : formState.reason;
+
+  useEffect(() => {
+    if (state.phase !== 'ready' || firstModelSlug || secondModelSlug || selection.ids.length < 2) return;
+    const usable = selection.ids.filter((id) => selectableModelsBySlug.has(id));
+    if (usable.length >= 2) {
+      setFirstModelSlug(usable[0]!);
+      setSecondModelSlug(usable[1]!);
+      setPrefillNotice(selection.ids.length > 2 ? 'The first two valid shared models were prefilled; the third remains in the comparison tray.' : 'Your shared model pair was prefilled.');
+    } else {
+      setPrefillNotice('A shared model selection could not be used because one or more published IDs are unavailable.');
+    }
+  }, [firstModelSlug, secondModelSlug, selectableModelsBySlug, selection.ids, state.phase]);
 
   return <div className="comparison-page comparison-hub-page">
     <CompareHubHero />
@@ -206,21 +236,25 @@ export function CompareHubPage() {
       <div aria-label="Comparison tools" className="comparison-tool-grid" role="group">
         <section className="comparison-panel comparison-selector-panel" aria-labelledby="comparison-select-heading">
           <div className="comparison-section-heading"><h2 id="comparison-select-heading">Choose a model pair</h2><p>Popular models appear first. Search to browse every selectable model in the published directory.</p></div>
-          <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={setFirstModelSlug} onSecondModelChange={setSecondModelSlug} pairs={pairs} secondModelSlug={secondModelSlug} />
-          <div className="comparison-selection-action">
-            <p aria-live="polite">{selectionMessage}</p>
-            <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstModelSlug(secondModelSlug); setSecondModelSlug(firstModelSlug); }} type="button">Swap selected models</button>
-            {comparisonHref ? <a className="button" href={comparisonHref}>Compare selected models</a> : <button className="button" disabled type="button">Compare selected models</button>}
-          </div>
+          <form action={comparisonHref ?? ROUTE_PATHS.comparison} method="get">
+            <ModelPairPicker firstModelSlug={firstModelSlug} idPrefix="comparison" models={models} onFirstModelChange={setFirstModelSlug} onSecondModelChange={setSecondModelSlug} pairs={pairs} secondModelSlug={secondModelSlug} />
+            <div className="comparison-selection-action">
+              {prefillNotice ? <p role="status">{prefillNotice}</p> : null}
+              <p aria-live="polite" id="compare-validation-message">{selectionMessage}</p>
+              <button className="button button-secondary comparison-swap" disabled={!first || !second} onClick={() => { setFirstModelSlug(secondModelSlug); setSecondModelSlug(firstModelSlug); }} type="button">Swap selected models</button>
+              <button aria-describedby="compare-validation-message" aria-disabled={!formState.valid} className="button" disabled={!formState.valid} type="submit">Compare selected models</button>
+              <button className="button button-secondary" disabled={!firstModelSlug && !secondModelSlug} onClick={() => { setFirstModelSlug(''); setSecondModelSlug(''); setPrefillNotice(''); }} type="button">Clear model selection</button>
+            </div>
+          </form>
         </section>
 
         <aside aria-label="Model and price alerts" className="comparison-newsletter-signup"><NewsletterSignup compact context="compare" /></aside>
       </div>
 
       <section className="comparison-panel comparison-section" aria-labelledby="comparison-reviewed-heading">
-        <div className="comparison-section-heading"><h2 id="comparison-reviewed-heading">Popular reviewed matchups</h2><p>Only source-backed, indexable pairs are listed as published matchup links.</p></div>
+        <div className="comparison-section-heading"><h2 id="comparison-reviewed-heading">Popular model pairs</h2><p>These published pair shortcuts fill the selector first, so you can review the evidence status before comparing.</p></div>
         {popularPairs.length === 0 ? <div className="comparison-empty-state"><strong>No reviewed matchups published yet</strong><p>This directory remains honest when the active revision contains models but no indexable pair records.</p></div> : <ol className="comparison-reviewed-list">
-          {popularPairs.map((pair) => <li key={pair.pairSlug}><a className="comparison-matchup-link" href={`/compare/${encodeURIComponent(pair.pairSlug)}`}><strong>{modelPairLabel(pair, modelsBySlug)}</strong><span aria-hidden="true">→</span></a></li>)}
+          {popularPairs.map((pair) => <li key={pair.pairSlug}><button className="comparison-matchup-link" onClick={() => { setFirstModelSlug(pair.modelASlug); setSecondModelSlug(pair.modelBSlug); setPrefillNotice('Popular pair selected. Review the validation message, then compare.'); }} type="button"><strong>Use {modelPairLabel(pair, modelsBySlug)}</strong><span aria-hidden="true">→</span></button></li>)}
         </ol>}
       </section>
     </> : null}

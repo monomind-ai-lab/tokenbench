@@ -206,11 +206,12 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     }
     case 'articles': return makeMetadata(ROUTE_PATHS.articles, pageDefinitions.articles);
     case 'insights': return makeMetadata(ROUTE_PATHS.insights, pageDefinitions.insights);
-    case 'comparison': return makeMetadata(pathnameForRoute(route) ?? '/compare/', {
+    case 'comparison': return makeMetadata(pathnameForRoute(route) ?? ROUTE_PATHS.comparison, {
       ...pageDefinitions.comparison,
-      title: `${route.pair.replaceAll('-', ' ')} comparison | ${SITE_CONFIG.name}`,
+      title: `${route.pair.replaceAll('-', ' ')}: evidence-qualified comparison | ${SITE_CONFIG.name}`,
+      description: `Compare ${route.pair.replaceAll('-vs-', ' and ').replaceAll('-', ' ')} with published benchmark, route-price, and evidence-coverage context from ${SITE_CONFIG.name}.`,
       h1: `${route.pair.replaceAll('-', ' ')} comparison`,
-    }, false);
+    });
     case 'modelProfile': return makeMetadata(pathnameForRoute(route) ?? ROUTE_PATHS.models, {
       ...pageDefinitions.modelProfile,
       title: `${route.slug.replaceAll('-', ' ')} model evidence | ${SITE_CONFIG.name}`,

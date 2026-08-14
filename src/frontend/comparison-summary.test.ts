@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BenchmarkMetric, BenchmarkModel, BenchmarkPriceCheck } from '../benchmarks/contracts';
 import type { ComparisonMetricRow, ComparisonViewModel } from './comparison-contracts';
-import { comparisonSummary, friendlyMetricLabel } from './comparison-summary';
+import { buildComparisonSynthesis, comparisonSummary, friendlyMetricLabel } from './comparison-summary';
 
 const COMPACT_LABEL_BYTE_CAP = 32;
 const COMPACT_CLAIM_BYTE_CAP = 448;
@@ -240,6 +240,30 @@ describe('friendlyMetricLabel', () => {
   it('removes source prefixes from metric titles', () => {
     expect(friendlyMetricLabel('benchlm:category:coding', 'coding')).toBe('Coding');
     expect(friendlyMetricLabel('lmarena:text_style_control:overall', 'overall')).toBe('Overall');
+  });
+});
+
+describe('buildComparisonSynthesis', () => {
+  it('does not select an overall winner from incompatible benchmark evidence', () => {
+    expect(buildComparisonSynthesis(comparisonWithRows(mismatchedSourceRows())).conclusion)
+      .toBe('The available evidence does not support one overall winner.');
+  });
+
+  it('does not express a higher route price as savings', () => {
+    const models = pair();
+    const pricierSecondModel = comparisonWith(models, [sharedRow(models[0], models[1], 'coding', 90, 80)], [
+      [price(models[0], 1, 3)],
+      [price(models[1], 2, 4)],
+    ]);
+
+    expect(buildComparisonSynthesis(pricierSecondModel).facts.join(' ')).not.toMatch(/-\d+% savings/);
+  });
+
+  it('does not select a winner when either model lacks a comparable price', () => {
+    const models = pair();
+    const missingPrice = comparisonWith(models, [sharedRow(models[0], models[1], 'coding', 90, 80)]);
+
+    expect(buildComparisonSynthesis(missingPrice).winner).toBeNull();
   });
 });
 

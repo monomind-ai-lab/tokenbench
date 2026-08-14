@@ -16,7 +16,7 @@ vi.mock('../_shared/benchmark-db', async () => {
   return { ...actual, readActiveComparisonSnapshot };
 });
 
-import { onRequestGet } from './[pair]';
+import { onRequestGet as legacyRedirect, renderLegacyComparisonRequest as onRequestGet } from './[pair]';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
 const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='light'}}catch(e){document.documentElement.dataset.theme='light'}</script>";
@@ -257,7 +257,7 @@ describe('dynamic comparison Pages Function', () => {
     expect(rootWithoutProvenance.textContent).not.toContain('benchlm_raw_composite');
     expect(rootWithoutProvenance.textContent).not.toContain('benchlm-models');
     expect(rootWithoutProvenance.textContent).not.toMatch(/\bbenchlm\b/);
-    expect(rootWithoutProvenance.textContent).not.toContain('Workload');
+    expect(rootWithoutProvenance.textContent).toContain('Workload scenario');
     expect(data.metricRows[0]).toMatchObject({ metricKey: 'benchlm:category:coding', sourceId: 'benchlm', methodology: 'benchlm_raw_composite' });
     expect(html).toContain('<title>Model A vs Model B: Cost, Coding &amp; Benchmarks | TokenBench</title>');
     expect(html).toContain('<html lang="en" data-theme="light">');
@@ -641,5 +641,19 @@ describe('dynamic comparison Pages Function', () => {
       expect(html).not.toContain('rel="canonical"');
       expect(html).not.toContain('application/ld+json');
     }
+  });
+});
+
+
+describe('legacy redirect compatibility', () => {
+  it('permanently redirects the legacy pair path while preserving only bounded scenario state', async () => {
+    const response = await legacyRedirect({
+      request: new Request('https://tokenbench.monomind.one/compare/zeta-vs-alpha?host=published&scenario=low-latency&tokens=999999'),
+      env: { CATALOG_DB: {} as never },
+      params: { pair: 'zeta-vs-alpha' },
+    });
+
+    expect(response.status).toBe(301);
+    expect(response.headers.get('location')).toBe('/models/compare/zeta-vs-alpha/?host=published&scenario=low-latency');
   });
 });

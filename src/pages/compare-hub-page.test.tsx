@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CompareHubPage } from './compare-hub-page';
+import { compareFormState, CompareHubPage } from './compare-hub-page';
 
 const UPDATED_AT = '2026-08-05T12:00:00.000Z';
 
@@ -30,6 +30,11 @@ function respondWithDirectory(payload = directoryEnvelope()) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('CompareHubPage', () => {
+  it('requires exactly two distinct model identifiers before comparison', () => {
+    expect(compareFormState(['a'])).toMatchObject({ valid: false, reason: 'Choose two models' });
+    expect(compareFormState(['a', 'a'])).toMatchObject({ valid: false, reason: 'Choose two different models' });
+  });
+
   it('offers popular models immediately and omits internal metadata and category filters', async () => {
     respondWithDirectory();
     render(<CompareHubPage />);
@@ -44,11 +49,17 @@ describe('CompareHubPage', () => {
     expect(screen.queryByText(/Published revision:/)).not.toBeInTheDocument();
   });
 
-  it('keeps reviewed model pairs as canonical one-click shortcuts', async () => {
+  it('fills a popular pair without navigating and submits the canonical model route', async () => {
     respondWithDirectory();
     render(<CompareHubPage />);
 
-    expect(await screen.findByRole('link', { name: 'Model A vs Model B' })).toHaveAttribute('href', '/compare/model-a-vs-model-b');
+    fireEvent.click(await screen.findByRole('button', { name: 'Use Model A vs Model B' }));
+
+    expect(screen.getByRole('combobox', { name: 'First model' })).toHaveValue('model-a');
+    expect(screen.getByRole('combobox', { name: 'Second model' })).toHaveValue('model-b');
+    const form = screen.getByRole('button', { name: 'Compare selected models' }).closest('form');
+    expect(form).toHaveAttribute('method', 'get');
+    expect(form).toHaveAttribute('action', '/models/compare/model-a-vs-model-b/');
   });
 
   it('places a compact general alert opt-in beside model selection in one tools group', async () => {

@@ -38,7 +38,13 @@ import {
   type BenchmarkApiEnv,
 } from '../_shared/benchmark-db';
 
-const COMPARE_PREFIX = '/compare/';
+export interface ComparisonRouteConfig {
+  readonly prefix: string;
+  readonly trailingSlash: boolean;
+}
+
+const LEGACY_ROUTE: ComparisonRouteConfig = { prefix: '/compare/', trailingSlash: false };
+export const CANONICAL_COMPARISON_ROUTE: ComparisonRouteConfig = { prefix: '/models/compare/', trailingSlash: true };
 const RELATED_PAIR_LIMIT = 6;
 
 interface RequestedPair {
@@ -53,20 +59,20 @@ interface ResolvedPair {
   readonly canonicalPath: string;
 }
 
-function encodedPairPath(pairSlug: string): string {
-  return `${COMPARE_PREFIX}${encodeURIComponent(pairSlug)}`;
+function encodedPairPath(pairSlug: string, route: ComparisonRouteConfig): string {
+  return `${route.prefix}${encodeURIComponent(pairSlug)}${route.trailingSlash ? '/' : ''}`;
 }
 
 /** Decodes exactly one path segment instead of trusting an arbitrary route parameter. */
-function requestedPair(request: Request, parameter: unknown): RequestedPair | null {
+function requestedPair(request: Request, parameter: unknown, route: ComparisonRouteConfig): RequestedPair | null {
   let url: URL;
   try {
     url = new URL(request.url);
   } catch {
     return null;
   }
-  if (!url.pathname.startsWith(COMPARE_PREFIX)) return null;
-  const remainder = url.pathname.slice(COMPARE_PREFIX.length);
+  if (!url.pathname.startsWith(route.prefix)) return null;
+  const remainder = url.pathname.slice(route.prefix.length);
   const hasTrailingSlash = remainder.endsWith('/');
   const encodedSegment = hasTrailingSlash ? remainder.slice(0, -1) : remainder;
   if (encodedSegment.length === 0 || encodedSegment.includes('/')) return null;
@@ -83,12 +89,12 @@ function requestedPair(request: Request, parameter: unknown): RequestedPair | nu
   return { pairSlug: decoded, hasTrailingSlash };
 }
 
-function resolvePair(resolvePairSlug: ComparisonPairSlugResolver, pairSlug: string): ResolvedPair | null {
+function resolvePair(resolvePairSlug: ComparisonPairSlugResolver, pairSlug: string, route: ComparisonRouteConfig): ResolvedPair | null {
   const resolved = resolvePairSlug(pairSlug);
   if (!resolved) return null;
   return {
     ...resolved,
-    canonicalPath: encodedPairPath(resolved.canonicalPairSlug),
+    canonicalPath: encodedPairPath(resolved.canonicalPairSlug, route),
   };
 }
 
@@ -138,25 +144,26 @@ function priceChecks(snapshot: ActiveBenchmarkSnapshot, resolved: ResolvedPair):
   return [checksFor(resolved.modelA.modelKey), checksFor(resolved.modelB.modelKey)];
 }
 
-function exactCanonicalPair(resolvePairSlug: ComparisonPairSlugResolver, pair: BenchmarkComparisonPair): ResolvedPair | null {
+function exactCanonicalPair(resolvePairSlug: ComparisonPairSlugResolver, pair: BenchmarkComparisonPair, route: ComparisonRouteConfig): ResolvedPair | null {
   const resolved = resolvePairSlug(pair.pairSlug);
   if (!resolved
     || resolved.modelA.modelKey !== pair.modelAKey
     || resolved.modelB.modelKey !== pair.modelBKey
     || resolved.canonicalPairSlug !== pair.pairSlug) return null;
-  return { ...resolved, canonicalPath: encodedPairPath(resolved.canonicalPairSlug) };
+  return { ...resolved, canonicalPath: encodedPairPath(resolved.canonicalPairSlug, route) };
 }
 
 function relatedPairs(
   snapshot: ActiveBenchmarkSnapshot,
   current: ResolvedPair,
   resolvePairSlug: ComparisonPairSlugResolver,
+  route: ComparisonRouteConfig,
 ): readonly RelatedComparison[] {
   const currentModelKeys = new Set([current.modelA.modelKey, current.modelB.modelKey]);
   return snapshot.comparisonPairs
     .filter((pair) => pair.indexable)
     .flatMap((pair) => {
-      const resolved = exactCanonicalPair(resolvePairSlug, pair);
+      const resolved = exactCanonicalPair(resolvePairSlug, pair, route);
       const sharedModelCount = resolved
         ? [resolved.modelA, resolved.modelB].filter((model) => currentModelKeys.has(model.modelKey)).length
         : 0;
@@ -210,6 +217,7 @@ function buildViewModel(
   snapshot: ActiveBenchmarkSnapshot,
   resolved: ResolvedPair,
   resolvePairSlug: ComparisonPairSlugResolver,
+  route: ComparisonRouteConfig,
 ): ComparisonViewModel {
   const rows = metricRows(snapshot, resolved);
   const prices = priceChecks(snapshot, resolved);
@@ -226,7 +234,7 @@ function buildViewModel(
     attribution: attribution(snapshot, resolved, rows, prices),
     indexable: savedPair?.indexable === true,
     methodology: methodologies(rows),
-    relatedPairs: relatedPairs(snapshot, resolved, resolvePairSlug),
+    relatedPairs: relatedPairs(snapshot, resolved, resolvePairSlug, route),
     subscriptionMatch: null,
   };
 }
@@ -359,7 +367,7 @@ function unavailableResponse(): Response {
   });
 }
 
-export async function onRequestGet({
+export async function renderComparisonRequest({
   request,
   env,
   params,
@@ -367,8 +375,8 @@ export async function onRequestGet({
   request: Request;
   env: BenchmarkApiEnv;
   params?: { pair?: string };
-}): Promise<Response> {
-  const requested = requestedPair(request, params?.pair);
+}, route: ComparisonRouteConfig): Promise<Response> {
+  const requested = requestedPair(request, params?.pair, route);
   if (!requested) return notFoundResponse();
   if (!env.CATALOG_DB) return unavailableResponse();
 
@@ -376,15 +384,15 @@ export async function onRequestGet({
     const snapshot = await readActiveComparisonSnapshot(env.CATALOG_DB, requested.pairSlug);
     if (!snapshot) return unavailableResponse();
     const resolvePairSlug = createComparisonPairSlugResolver(snapshot.models);
-    const resolved = resolvePair(resolvePairSlug, requested.pairSlug);
+    const resolved = resolvePair(resolvePairSlug, requested.pairSlug, route);
     if (!resolved) return notFoundResponse();
-    if (requested.hasTrailingSlash || requested.pairSlug !== resolved.canonicalPairSlug) {
+    if (requested.hasTrailingSlash !== route.trailingSlash || requested.pairSlug !== resolved.canonicalPairSlug) {
       return new Response(null, {
         status: 301,
         headers: { Location: resolved.canonicalPath },
       });
     }
-    const viewModel = buildViewModel(snapshot, resolved, resolvePairSlug);
+    const viewModel = buildViewModel(snapshot, resolved, resolvePairSlug, route);
     return new Response(shellDocument(viewModel), {
       headers: {
         'Cache-Control': 'public, max-age=0, must-revalidate',
@@ -395,4 +403,43 @@ export async function onRequestGet({
   } catch {
     return unavailableResponse();
   }
+}
+
+/** Retained as the regression-test seam for the legacy SSR renderer. */
+export async function renderLegacyComparisonRequest(args: {
+  request: Request;
+  env: BenchmarkApiEnv;
+  params?: { pair?: string };
+}): Promise<Response> {
+  return renderComparisonRequest(args, LEGACY_ROUTE);
+}
+
+function legacyRedirect(request: Request, parameter: unknown): Response {
+  const requested = requestedPair(request, parameter, LEGACY_ROUTE);
+  if (!requested) return notFoundResponse();
+  const url = new URL(request.url);
+  const query = new URLSearchParams();
+  // Scenario controls are deliberately bounded; raw workload values and arbitrary
+  // query payloads never cross the compatibility redirect.
+  for (const key of ['host', 'scenario']) {
+    const value = url.searchParams.get(key);
+    if (value && /^[A-Za-z0-9._:-]{1,80}$/u.test(value)) query.set(key, value);
+  }
+  const search = query.size > 0 ? `?${query.toString()}` : '';
+  return new Response(null, {
+    status: 301,
+    headers: { Location: `${encodedPairPath(requested.pairSlug, CANONICAL_COMPARISON_ROUTE)}${search}` },
+  });
+}
+
+/** Permanent compatibility path; canonical validation happens on the target route. */
+export async function onRequestGet({
+  request,
+  params,
+}: {
+  request: Request;
+  env: BenchmarkApiEnv;
+  params?: { pair?: string };
+}): Promise<Response> {
+  return legacyRedirect(request, params?.pair);
 }
