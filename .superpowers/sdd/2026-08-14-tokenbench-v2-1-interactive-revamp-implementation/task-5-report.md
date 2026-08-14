@@ -27,3 +27,27 @@ npm run lint
 - Replacement language requires a replacement ID with a source URL and observed date.
 - Native endpoint rows are not inferred from hosted route entries; host and native facts are rendered in separate tables.
 - Migration deltas require matching source host and measurement conditions.
+
+## Fix Round 1 — Lifecycle Group Controls
+
+### RED
+
+```text
+npx vitest run src/benchmarks/lifecycle-view.test.ts src/pages/model-lifecycle-page.test.tsx
+# 2 new group-control tests failed: selector labels were rebuilt as lowercase
+# IDs and Action required was a no-op button.
+```
+
+### GREEN
+
+```text
+npx vitest run src/benchmarks/lifecycle-view.test.ts src/pages/model-lifecycle-page.test.tsx
+# 2 files passed, 11 tests passed
+
+npm run lint
+# tsc --noEmit passed
+```
+
+- `Action required` is now permanent non-interactive text; later groups remain buttons with `aria-expanded` state.
+- Group text now uses the selector-supplied labels exactly, and the CSS no longer applies capitalization transformation.
+- Lint also required a post-validation `effectiveAt` type assertion in the existing endpoint-envelope parser; runtime validation and behavior remain unchanged.

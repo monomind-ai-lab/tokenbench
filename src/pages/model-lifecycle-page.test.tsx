@@ -45,6 +45,27 @@ describe('Model Lifecycle Radar', () => {
     expect(cards.getAllByText('Migration target')).toHaveLength(2);
   });
 
+  it('renders exact selector group labels and leaves the permanent action group non-interactive', () => {
+    render(<ModelLifecyclePage records={records} />);
+
+    const groups = within(screen.getByLabelText('Lifecycle groups'));
+    expect(groups.getByText('Action required (0)')).toBeInTheDocument();
+    expect(groups.getByText('Upcoming changes (0)')).toBeInTheDocument();
+    expect(groups.getByText('Monitoring (1)')).toBeInTheDocument();
+    expect(groups.getByText('Archived (1)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Action required (0)' })).not.toBeInTheDocument();
+  });
+
+  it('keeps later lifecycle groups as collapsible buttons with their current expansion state', () => {
+    render(<ModelLifecyclePage records={records} />);
+
+    for (const name of ['Upcoming changes (0)', 'Monitoring (1)', 'Archived (1)']) {
+      expect(screen.getByRole('button', { name })).toHaveAttribute('aria-expanded', 'false');
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Upcoming changes (0)' }));
+    expect(screen.getByRole('button', { name: 'Upcoming changes (0)' })).toHaveAttribute('aria-expanded', 'true');
+  });
+
   it('bounds long ledgers and filters current or archived records without losing the full count', () => {
     const longRecords = Array.from({ length: 24 }, (_, index): ModelDirectoryRecord => ({
       ...records[index % records.length]!,

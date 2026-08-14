@@ -94,10 +94,6 @@ function LifecycleCards({ records }: { readonly records: readonly LifecycleRecor
   </li>)}</ul>;
 }
 
-function groupLabel(id: LifecycleGroupId, count: number): string {
-  return `${id.replaceAll('_', ' ')} (${count})`;
-}
-
 export function ModelLifecyclePage({ records }: { readonly records: readonly (ModelDirectoryRecord & Partial<LifecycleRecord>)[] }) {
   const [controls, setControls] = useState<LifecycleControls>(controlsFromLocation);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -143,15 +139,20 @@ export function ModelLifecyclePage({ records }: { readonly records: readonly (Mo
         <label>Change horizon<select value={controls.horizon} onChange={(event) => setNextControls({ ...controls, horizon: event.target.value as Horizon })}><option value="30">30 days</option><option value="90">90 days</option><option value="180">180 days</option><option value="all">All future dates</option></select></label>
         <p aria-live="polite">Showing {visibleRecords.length} of {filteredRecords.length} {filterLabel}</p>
       </form>
-      <div className="lifecycle-groups" aria-label="Lifecycle groups">{groups.map((group) => <section key={group.id} className={`lifecycle-group lifecycle-group-${group.id}`}>
-        <button className="lifecycle-group-toggle" type="button" aria-expanded={group.id === 'action_required' || expandedGroups.has(group.id)} onClick={() => setExpandedGroups((current) => {
-          if (group.id === 'action_required') return current;
-          const next = new Set(current);
-          if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
-          return next;
-        })}>{groupLabel(group.id, group.records.length)}</button>
-        {group.id === 'action_required' || expandedGroups.has(group.id) ? <p>{group.records.length ? `${group.records.length} record${group.records.length === 1 ? '' : 's'} in this evidence group.` : 'No records in this evidence group.'}</p> : null}
-      </section>)}</div>
+      <div className="lifecycle-groups" aria-label="Lifecycle groups">{groups.map((group) => {
+        const label = `${group.label} (${group.records.length})`;
+        const permanentlyOpen = group.id === 'action_required';
+        return <section key={group.id} className={`lifecycle-group lifecycle-group-${group.id}`}>
+          {permanentlyOpen
+            ? <p className="lifecycle-group-label">{label}</p>
+            : <button className="lifecycle-group-toggle" type="button" aria-expanded={expandedGroups.has(group.id)} onClick={() => setExpandedGroups((current) => {
+              const next = new Set(current);
+              if (next.has(group.id)) next.delete(group.id); else next.add(group.id);
+              return next;
+            })}>{label}</button>}
+          {permanentlyOpen || expandedGroups.has(group.id) ? <p>{group.records.length ? `${group.records.length} record${group.records.length === 1 ? '' : 's'} in this evidence group.` : 'No records in this evidence group.'}</p> : null}
+        </section>;
+      })}</div>
       <LifecycleTable records={visibleRecords} /><LifecycleCards records={visibleRecords} />
       {remainingCount > 0 ? <div className="lifecycle-load-more"><button className="button button-secondary" type="button" onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}>Show {Math.min(PAGE_SIZE, remainingCount)} more records</button></div> : null}
     </>}</section>

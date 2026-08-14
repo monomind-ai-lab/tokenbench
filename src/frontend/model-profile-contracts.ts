@@ -109,7 +109,7 @@ function parseEndpointEvidence(value: unknown): readonly EndpointEvidenceRow[] |
       ttft: row.ttft,
       throughput: row.throughput,
       conditions: row.conditions,
-      effectiveAt,
+      effectiveAt: effectiveAt as string | null,
     });
   }
   return rows;

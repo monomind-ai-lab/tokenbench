@@ -1431,7 +1431,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .lifecycle-ledger-toolbar > p { margin: 0; color: var(--muted); font-size: .82rem; }
 .lifecycle-groups { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; margin: 1rem 0; }
 .lifecycle-group { min-width: 0; padding: .65rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-raised); }
-.lifecycle-group-toggle { width: 100%; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 750; text-align: left; text-transform: capitalize; cursor: pointer; }
+.lifecycle-group-toggle, .lifecycle-group-label { width: 100%; margin: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 750; text-align: left; }
+.lifecycle-group-toggle { cursor: pointer; }
 .lifecycle-group p { margin: .45rem 0 0; color: var(--muted); font-size: .75rem; }
 .model-endpoint-scroll { max-width: 100%; overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; }
 .model-endpoint-scroll table { width: 100%; min-width: 1440px; border-collapse: collapse; }
