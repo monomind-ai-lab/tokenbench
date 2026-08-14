@@ -2,11 +2,14 @@ import { TrendingUp } from 'lucide-react';
 import type { ModelOffer, PlanOffer } from '../catalog/contracts';
 import { UI_COPY } from '../data/mockData';
 import {
+  buildCalculatorEvidenceLineItems,
+  calculatorCsv,
   formatCurrencyMicroDollars,
   formatSignedPercentBasisPoints,
   formatTokens,
   type CalculatorSnapshot,
 } from './calculator-state';
+import { trackTokenBenchEvent } from './analytics';
 import { isPaidIndividualPlan } from './plan-filter';
 import type { ResultsDashboardProps } from './types';
 import { EmptyState } from './ui';
@@ -68,6 +71,39 @@ function Metric({ label, value, detail }: { readonly label: string; readonly val
       {detail ? <span>{detail}</span> : null}
     </div>
   );
+}
+
+/** The audit view preserves published price evidence separately from derived scenario costs. */
+function AuditLedger({ snapshot, catalog }: Pick<ResultsDashboardProps, 'snapshot' | 'catalog'>) {
+  const offer = snapshot.apiMapping.defaultOffer ?? snapshot.apiMapping.selectedOffers[0] ?? null;
+  const source = offer && catalog ? catalog.provenance.find((entry) => entry.id === offer.sourceId) : undefined;
+  const lineItems = buildCalculatorEvidenceLineItems(snapshot, offer, source?.observedAt ?? null);
+  const csv = calculatorCsv(lineItems);
+
+  return <section className="calculator-audit-ledger" aria-labelledby="calculator-audit-heading">
+    <h2 id="calculator-audit-heading">Published source prices</h2>
+    <dl className="calculator-audit-rows">
+      {lineItems.filter((row) => row.kind !== 'assumption').map((row) => <div className={`calculator-audit-row calculator-audit-${row.kind}`} key={row.label}>
+        <dt>{row.label}</dt>
+        <dd>{row.valueMicroDollars === null ? 'Unavailable' : formatCurrencyMicroDollars(row.valueMicroDollars)}{row.kind === 'source_price' ? ' per 1M tokens' : ''}</dd>
+        {row.priceEffectiveAt ? <dd className="calculator-audit-effective">Effective {row.priceEffectiveAt}</dd> : null}
+      </div>)}
+    </dl>
+    <p className="calculator-audit-missing">Cache read, cache write, and long-context dimensions appear only when their route-specific source price is published; unavailable dimensions are excluded rather than priced at zero.</p>
+    {source ? <p><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open published pricing source</a></p> : <p>Pricing source: <strong>Unavailable</strong></p>}
+    <section aria-labelledby="calculator-assumptions-heading">
+      <h2 id="calculator-assumptions-heading">Calculation assumptions</h2>
+      <ul>{lineItems.filter((row) => row.kind === 'assumption').map((row) => <li key={row.label}>{row.assumption}</li>)}</ul>
+      <p>Calculation timestamp: {snapshot.calculationTimestamp}</p>
+    </section>
+    <div className="calculator-audit-actions">
+      <a className="button button-secondary" download="tokenbench-cost-scenario.csv" href={`data:text/csv;charset=utf-8,${encodeURIComponent(csv)}`} onClick={() => trackTokenBenchEvent('cost_csv_exported', { route: '/cost/calculator/' })}>Download CSV audit rows</a>
+      <button className="button button-secondary" type="button" onClick={() => {
+        trackTokenBenchEvent('cost_printed', { route: '/cost/calculator/' });
+        window.print();
+      }}>Print scenario</button>
+    </div>
+  </section>;
 }
 
 function evidenceStatusLabel(plan: PlanOffer): string {
@@ -149,7 +185,7 @@ export function ResultsDashboard({ selectedPlan, snapshot, hasAvailableModels, c
         hasAvailableModels
           ? <EmptyState title="Select a verified model" description="Choose one or more models to calculate API-equivalent value, cost difference, breakeven, and efficiency." />
           : <EmptyState title="No verified models are available for this provider" description="Choose another provider or retry catalog refresh." />
-      ) : (
+      ) : <>
         <div className="results-grid">
           <ValueSummary selectedPlan={selectedPlan} snapshot={snapshot} catalog={catalog} />
           <article className="trend-panel">
@@ -163,7 +199,8 @@ export function ResultsDashboard({ selectedPlan, snapshot, hasAvailableModels, c
             <TrendChart snapshot={snapshot} />
           </article>
         </div>
-      )}
+        <AuditLedger snapshot={snapshot} catalog={catalog} />
+      </>}
       {snapshot.monthlyTokens > 20_000_000 ? (
         <aside className="panel agency-routing-notice" role="status" aria-label="High-volume optimization guidance">
           <strong>High-volume optimization guidance</strong>

@@ -121,9 +121,12 @@ describe('crawlable static-page generator', () => {
     expect(tools).not.toContain('href="/cost/breakeven/"');
     expect(cost).toContain('href="/cost/calculator/"');
     expect(cost).toContain('href="/cost/breakeven/"');
-    expect(cost).toContain('fixed-token plan evidence is verified');
-    expect(calculator).toContain('Estimate how a paid individual AI subscription compares with direct API pricing.');
-    expect(breakeven).toContain('Variable or unavailable plan limits remain explicit');
+    expect(cost).toContain('Choose the right cost question');
+    expect(cost).toContain('Fee crossover is not subscription-capacity evidence');
+    expect(calculator).toContain('Published source prices');
+    expect(calculator).toContain('Calculation assumptions');
+    expect(breakeven).toContain('Breakeven cost samples');
+    expect(breakeven).toContain('Subscription capacity evidence');
 
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/cost/calculator/</loc>');
     expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');

@@ -12,6 +12,20 @@ export interface TokenBenchEventDetail {
   readonly comparison_started: { readonly pairId: string; readonly route: string };
   readonly comparison_workload_changed: { readonly scenario: 'balanced' | 'low-latency' | 'long-context'; readonly route: string };
   readonly comparison_host_changed: { readonly host: 'published' | 'direct-only'; readonly route: string };
+  readonly cost_hub_tool_opened: { readonly route: string; readonly tool: 'calculator' | 'breakeven' };
+  readonly cost_hub_start_clean: { readonly route: string };
+  readonly cost_hub_shared_state_continued: { readonly route: string };
+  readonly cost_input_changed: { readonly field: 'subscription' | 'model' | 'host' | 'workload' | 'mix' | 'cache' | 'long_context' | 'estimate'; readonly route: string };
+  readonly cost_simulated: { readonly route: string };
+  readonly cost_share_created: { readonly route: string };
+  readonly cost_printed: { readonly route: string };
+  readonly cost_csv_exported: { readonly route: string };
+  readonly cost_validation_failed: { readonly reason: 'invalid' | 'incomplete' | 'unsupported' | 'missing_price' | 'partial_price' | 'stale' | 'conflict'; readonly route: string };
+  readonly breakeven_input_changed: { readonly field: 'seats' | 'fee' | 'volume' | 'model' | 'host' | 'workload' | 'mix' | 'cache' | 'long_context'; readonly route: string };
+  readonly breakeven_calculated: { readonly route: string };
+  readonly breakeven_crossover_inspected: { readonly route: string };
+  readonly breakeven_share_created: { readonly route: string };
+  readonly breakeven_unavailable: { readonly reason: 'invalid_seats' | 'invalid_domain' | 'invalid_mix' | 'partial_prices' | 'stale' | 'conflict'; readonly route: string };
 }
 
 export type TokenBenchEventName = keyof TokenBenchEventDetail;
@@ -35,6 +49,16 @@ function isStablePairId(value: unknown): value is string {
 
 function isSafeRoute(value: unknown): value is string {
   return typeof value === 'string' && /^\/[A-Za-z0-9._~%\-/]*$/u.test(value);
+}
+
+function isCostInputField(value: unknown): value is TokenBenchEventDetail['cost_input_changed']['field'] {
+  return value === 'subscription' || value === 'model' || value === 'host' || value === 'workload'
+    || value === 'mix' || value === 'cache' || value === 'long_context' || value === 'estimate';
+}
+
+function isBreakevenInputField(value: unknown): value is TokenBenchEventDetail['breakeven_input_changed']['field'] {
+  return value === 'seats' || value === 'fee' || value === 'volume' || value === 'model'
+    || value === 'host' || value === 'workload' || value === 'mix' || value === 'cache' || value === 'long_context';
 }
 
 function payloadForEvent(name: string, detail: Record<string, unknown>): Record<string, string> | null {
@@ -84,6 +108,38 @@ function payloadForEvent(name: string, detail: Record<string, unknown>): Record<
   if (name === 'comparison_host_changed') {
     return (detail.host === 'published' || detail.host === 'direct-only') && isSafeRoute(detail.route)
       ? { host: detail.host, route: detail.route }
+      : null;
+  }
+  if (name === 'cost_hub_tool_opened') {
+    return (detail.tool === 'calculator' || detail.tool === 'breakeven') && isSafeRoute(detail.route)
+      ? { tool: detail.tool, route: detail.route }
+      : null;
+  }
+  if (name === 'cost_hub_start_clean' || name === 'cost_hub_shared_state_continued'
+    || name === 'cost_simulated' || name === 'cost_share_created' || name === 'cost_printed' || name === 'cost_csv_exported'
+    || name === 'breakeven_calculated' || name === 'breakeven_crossover_inspected' || name === 'breakeven_share_created') {
+    return isSafeRoute(detail.route) ? { route: detail.route } : null;
+  }
+  if (name === 'cost_input_changed') {
+    return isCostInputField(detail.field) && isSafeRoute(detail.route)
+      ? { field: detail.field, route: detail.route }
+      : null;
+  }
+  if (name === 'cost_validation_failed') {
+    return (detail.reason === 'invalid' || detail.reason === 'incomplete' || detail.reason === 'unsupported'
+      || detail.reason === 'missing_price' || detail.reason === 'partial_price' || detail.reason === 'stale' || detail.reason === 'conflict') && isSafeRoute(detail.route)
+      ? { reason: detail.reason, route: detail.route }
+      : null;
+  }
+  if (name === 'breakeven_input_changed') {
+    return isBreakevenInputField(detail.field) && isSafeRoute(detail.route)
+      ? { field: detail.field, route: detail.route }
+      : null;
+  }
+  if (name === 'breakeven_unavailable') {
+    return (detail.reason === 'invalid_seats' || detail.reason === 'invalid_domain' || detail.reason === 'invalid_mix'
+      || detail.reason === 'partial_prices' || detail.reason === 'stale' || detail.reason === 'conflict') && isSafeRoute(detail.route)
+      ? { reason: detail.reason, route: detail.route }
       : null;
   }
   return null;

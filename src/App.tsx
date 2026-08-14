@@ -37,6 +37,7 @@ import { CompareProvider } from './frontend/compare-state';
 import { ComparisonTray } from './frontend/comparison-tray';
 import { NotFoundPage } from './pages/not-found-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
+import { CostPage, type CostHubSharedState, type CostHubSourceCoverage } from './pages/cost-page';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
 interface PageFrameProps {
@@ -104,6 +105,7 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
   const [selection, setSelection] = useState<InitialSelection>({ selectedModelIds: [], modelMixBasisPoints: {} });
   const [workload, setWorkload] = useState<ConversationWorkload>(DEFAULT_WORKLOAD);
   const [mappingMode, setMappingMode] = useState<'default' | 'override'>('default');
+  const [breakevenSettings, setBreakevenSettings] = useState({ seats: 1, feePerSeat: 20, maxTokensMillions: 300 });
   const appliedSharedStateRef = useRef(false);
   const hydratedSharedStateRef = useRef(false);
   const skipSharedStateReconciliationRef = useRef(false);
@@ -285,7 +287,12 @@ function CalculatorPage({ mode = 'calculator' }: { readonly mode?: 'calculator' 
             />
             <div className="calculator-guided-results">
                {mode === 'breakeven'
-                 ? <BreakevenDashboard snapshot={snapshot} hasAvailableModels={providerModels.length > 0} />
+                 ? <BreakevenDashboard
+                   snapshot={snapshot}
+                   hasAvailableModels={providerModels.length > 0}
+                   {...breakevenSettings}
+                   onScenarioChange={setBreakevenSettings}
+                 />
                  : <ResultsDashboard selectedPlan={selectedPlan} snapshot={snapshot} hasAvailableModels={providerModels.length > 0} catalog={catalog} />}
                 {canShare ? <ShareAction label="Share result" title="TokenBench subscription vs API result" url={`${location.origin}${mode === 'breakeven' ? ROUTE_PATHS.breakeven : ROUTE_PATHS.calculator}?${encodeCalculatorShareState(shareState)}`} /> : null}
             </div>
@@ -304,6 +311,41 @@ function HomeRoute() {
 
 function ToolsRoute() {
   return <PageFrame><ToolsPage /></PageFrame>;
+}
+
+function sharedCostState(): CostHubSharedState {
+  const params = new URLSearchParams(window.location.search);
+  const carriedFields: Array<CostHubSharedState['carriedFields'][number]> = [];
+  if (params.has('provider') || params.has('models')) carriedFields.push('model');
+  if (params.has('host') || params.has('route')) carriedFields.push('host');
+  if (params.has('weights')) carriedFields.push('mix');
+  if (params.has('c') || params.has('m') || params.has('i') || params.has('o') || params.has('d')) carriedFields.push('workload');
+  return { present: carriedFields.length > 0, carriedFields };
+}
+
+function CostHubRoute() {
+  const catalogState = useCatalog();
+  const coverage = useMemo<CostHubSourceCoverage>(() => {
+    const catalog = catalogState.catalog;
+    if (!catalog) return { completePriceRoutes: 0, effectiveAt: null, freshness: 'unavailable' };
+    const completePriceRoutes = catalog.modelOffers.filter((offer) => Number.isFinite(offer.inputMicroDollarsPerMillion)
+      && Number.isFinite(offer.outputMicroDollarsPerMillion)).length;
+    const sourceIds = new Set(catalog.modelOffers.map((offer) => offer.sourceId));
+    const effectiveAt = catalog.provenance
+      .filter((source) => sourceIds.has(source.id))
+      .map((source) => source.observedAt)
+      .filter((value) => Number.isFinite(Date.parse(value)))
+      .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null;
+    return {
+      completePriceRoutes,
+      effectiveAt,
+      freshness: catalog.freshness.status === 'stale' ? 'stale' : completePriceRoutes > 0 ? 'fresh' : 'unavailable',
+    };
+  }, [catalogState.catalog]);
+
+  return <PageFrame activePage="calculator" catalogState={catalogState} skipLinkTarget="cost-page-content" skipLinkLabel="Skip to cost tools">
+    <CostPage sourceCoverage={coverage} sharedState={sharedCostState()} />
+  </PageFrame>;
 }
 
 function BenchAlignMethodologyRoute() {
@@ -399,7 +441,7 @@ function RoutedApp() {
   const route = matchRoute(window.location.pathname);
 
   if (route.kind === 'home') return <HomeRoute />;
-  if (route.kind === 'cost') return <ToolsRoute />;
+  if (route.kind === 'cost') return <CostHubRoute />;
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
   if (route.kind === 'breakeven') return <CalculatorPage mode="breakeven" />;

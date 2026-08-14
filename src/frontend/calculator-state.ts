@@ -89,6 +89,14 @@ export interface CalculatorSnapshot {
   readonly chartPoints: ChartPoint[];
 }
 
+export interface CalculatorEvidenceLineItem {
+  readonly kind: 'source_price' | 'derived_cost' | 'assumption';
+  readonly label: string;
+  readonly valueMicroDollars: number | null;
+  readonly priceEffectiveAt: string | null;
+  readonly assumption: string | null;
+}
+
 type ModelPricingBasis = ModelOffer['pricingBasis'];
 const BASIS_KEYS: ModelPricingBasis[] = ['direct_provider_api', 'openrouter', 'opencode_zen'];
 const SAFE_INTEGER_MAX = BigInt(Number.MAX_SAFE_INTEGER);
@@ -377,4 +385,79 @@ export function basisLabel(basis: ModelPricingBasis): string {
 
 export function basisKeys(): ModelPricingBasis[] {
   return BASIS_KEYS;
+}
+
+/**
+ * Keeps published price inputs distinct from TokenBench's scenario arithmetic.
+ * Missing dimensions are represented as null rather than a zero-value cost.
+ */
+export function buildCalculatorEvidenceLineItems(
+  snapshot: CalculatorSnapshot,
+  offer: ModelOffer | null,
+  priceEffectiveAt: string | null,
+): readonly CalculatorEvidenceLineItem[] {
+  const sourceItems: CalculatorEvidenceLineItem[] = offer === null ? [] : [
+    {
+      kind: 'source_price',
+      label: 'Published input price',
+      valueMicroDollars: offer.inputMicroDollarsPerMillion,
+      priceEffectiveAt,
+      assumption: null,
+    },
+    {
+      kind: 'source_price',
+      label: 'Published output price',
+      valueMicroDollars: offer.outputMicroDollarsPerMillion,
+      priceEffectiveAt,
+      assumption: null,
+    },
+  ];
+  const inputCost = offer === null
+    ? null
+    : Math.round((snapshot.derivedWorkload.monthlyInputTokens / 1_000_000) * offer.inputMicroDollarsPerMillion);
+  const outputCost = offer === null
+    ? null
+    : Math.round((snapshot.derivedWorkload.monthlyOutputTokens / 1_000_000) * offer.outputMicroDollarsPerMillion);
+  return [
+    ...sourceItems,
+    {
+      kind: 'derived_cost',
+      label: 'Scenario input cost',
+      valueMicroDollars: inputCost,
+      priceEffectiveAt,
+      assumption: 'Monthly input tokens × published input price per million tokens.',
+    },
+    {
+      kind: 'derived_cost',
+      label: 'Scenario output cost',
+      valueMicroDollars: outputCost,
+      priceEffectiveAt,
+      assumption: 'Monthly output tokens × published output price per million tokens.',
+    },
+    {
+      kind: 'assumption',
+      label: 'Calculation assumptions',
+      valueMicroDollars: null,
+      priceEffectiveAt,
+      assumption: 'Published input and output price dimensions are applied independently; missing price dimensions are not zero.',
+    },
+  ];
+}
+
+function csvCell(value: string | number | null): string {
+  const text = value === null ? '' : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+/** CSV mirrors the displayed audit rows without serializing an undefined field. */
+export function calculatorCsv(lineItems: readonly CalculatorEvidenceLineItem[]): string {
+  const header = ['kind', 'label', 'value_micro_dollars', 'price_effective_at', 'assumption'];
+  const rows = lineItems.map((item) => [
+    item.kind,
+    item.label,
+    item.valueMicroDollars,
+    item.priceEffectiveAt,
+    item.assumption,
+  ].map(csvCell).join(','));
+  return [header.join(','), ...rows].join('\n');
 }

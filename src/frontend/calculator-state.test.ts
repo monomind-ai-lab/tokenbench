@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { FRONTEND_TEST_CATALOG } from './test-fixtures';
 import {
+  buildCalculatorEvidenceLineItems,
   breakEvenTokensForMonthlyCost,
   buildBreakevenSeries,
   buildCalculatorSnapshot,
+  calculatorCsv,
   createEvenMix,
   createInitialSelection,
   groupOffersByBasis,
@@ -18,6 +20,22 @@ const workload = {
 };
 
 describe('frontend calculator state', () => {
+  it('keeps source-price and derived-cost rows distinct in CSV-safe audit output', () => {
+    const offer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 },
+      workload, selectedPlan: FRONTEND_TEST_CATALOG.plans[1], calculationTimestamp: '2026-08-14T00:00:00.000Z',
+    });
+
+    const lineItems = buildCalculatorEvidenceLineItems(snapshot, offer, '2026-08-14T00:00:00.000Z');
+    const csv = calculatorCsv(lineItems);
+
+    expect(lineItems.find((row) => row.kind === 'source_price')?.label).toBe('Published input price');
+    expect(lineItems.find((row) => row.kind === 'derived_cost')?.label).toBe('Scenario input cost');
+    expect(csv).toContain('price_effective_at');
+    expect(csv).toContain('assumption');
+    expect(csv).not.toContain('undefined');
+  });
   it('initializes an explicit model selection with a complete mix', () => {
     const offers = [FRONTEND_TEST_CATALOG.modelOffers[0]];
     const selection = createInitialSelection(offers);
