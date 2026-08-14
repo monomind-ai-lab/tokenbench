@@ -1478,3 +1478,54 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .model-profile-status nav { display: flex; flex-wrap: wrap; gap: .85rem; margin-top: 1.25rem; }
 .model-profile-status section { margin-top: 1.5rem; }
 @media (max-width: 760px) { .lifecycle-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lifecycle-ledger-toolbar { grid-template-columns: minmax(0, 1fr); } }
+
+/* SLA and custom leaderboard controls keep source evidence, local previews,
+   and exact result tables together without requiring JavaScript. */
+.sla-leaderboard, .custom-leaderboard { min-width: 0; }
+.sla-controls, .custom-controls, .sla-results, .sla-metric-panel, .custom-results, .custom-contributions, .custom-methodology, .custom-empty { display: grid; gap: 18px; padding: clamp(20px, 3vw, 28px); }
+.sla-control-grid, .custom-weight-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 14px; }
+.sla-control-grid label, .custom-weight-grid label, .sla-share-url, .custom-share-url { min-width: 0; display: grid; gap: 7px; color: var(--muted); font-family: var(--font-label); font-size: 0.7rem; font-weight: 800; letter-spacing: 0.055em; text-transform: uppercase; }
+.sla-control-grid input, .custom-weight-grid input, .sla-share-url input, .custom-share-url input { width: 100%; min-height: 44px; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--field-outline); border-radius: 8px; background: var(--surface-low); color: var(--text); font: inherit; letter-spacing: normal; text-transform: none; }
+.sla-control-grid input[type='range'] { min-height: 44px; padding: 0; accent-color: var(--primary); }
+.sla-control-actions, .custom-control-actions, .sla-row-actions, .custom-row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.sla-preview, .custom-weight-sum { margin: 0; color: var(--primary-strong); font-family: var(--font-label); font-size: 0.74rem; font-weight: 800; }
+.sla-share-url, .custom-share-url { padding-top: 12px; border-top: 1px solid var(--outline); }
+.sla-share-url input, .custom-share-url input { color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; }
+.sla-summary { display: grid; gap: 6px; padding: 18px 22px; border-color: color-mix(in srgb, var(--primary) 42%, var(--outline)); background: color-mix(in srgb, var(--primary-soft) 32%, var(--surface)); }
+.sla-summary strong { color: var(--primary-strong); font-family: var(--font-display); font-size: clamp(1.3rem, 3vw, 1.8rem); letter-spacing: -0.03em; }
+.sla-summary p, .custom-methodology p { margin: 0; color: var(--muted); font-size: 0.78rem; line-height: 1.6; }
+.sla-card-grid, .custom-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr)); gap: 14px; }
+.sla-card, .custom-card { min-width: 0; display: grid; gap: 15px; padding: 20px; }
+.sla-card h3, .custom-card h3 { margin: 5px 0; overflow-wrap: anywhere; font-family: var(--font-display); font-size: 1.2rem; letter-spacing: -0.025em; }
+.sla-card p, .custom-card p { margin: 0; color: var(--muted); font-size: 0.76rem; }
+.sla-card dl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.sla-card dl > div { min-width: 0; padding: 9px; border-radius: 8px; background: var(--surface-low); }
+.sla-card dt { color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; font-weight: 800; letter-spacing: .055em; text-transform: uppercase; }
+.sla-card dd { min-width: 0; margin: 4px 0 0; overflow-wrap: anywhere; font-size: .73rem; font-weight: 800; }
+.sla-pass { border-color: color-mix(in srgb, var(--primary) 52%, var(--outline)); }
+.sla-incomplete { border-style: dashed; }
+.sla-fail { border-color: color-mix(in srgb, var(--warning) 54%, var(--outline)); }
+.sla-table-wrap, .custom-table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; border: 1px solid var(--outline); border-radius: 9px; }
+.sla-table-wrap table, .custom-table-wrap table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: .75rem; }
+.sla-table-wrap th, .sla-table-wrap td, .custom-table-wrap th, .custom-table-wrap td { padding: 12px 13px; border-bottom: 1px solid color-mix(in srgb, var(--outline) 72%, transparent); text-align: left; vertical-align: top; }
+.sla-table-wrap thead, .custom-table-wrap thead { background: var(--surface-container); }
+.sla-table-wrap thead th, .custom-table-wrap thead th { color: var(--muted); font-family: var(--font-label); font-size: .64rem; font-weight: 800; letter-spacing: .065em; text-transform: uppercase; white-space: nowrap; }
+.sla-table-wrap tbody tr:last-child > *, .custom-table-wrap tbody tr:last-child > * { border-bottom: 0; }
+.sla-table-wrap tbody th, .custom-table-wrap tbody th { overflow-wrap: anywhere; font-weight: 800; }
+.sla-table-wrap small, .custom-table-wrap small { display: block; margin-top: 4px; color: var(--muted); font-size: .66rem; font-weight: 500; }
+.sla-metric-panel .score-bar-chart { margin: 4px 0 8px; }
+.custom-methodology { border-style: dashed; background: var(--surface-low); }
+.custom-card { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }
+.custom-card > strong { color: var(--primary-strong); font-family: var(--font-display); font-size: 1.45rem; letter-spacing: -0.04em; }
+.custom-row-actions { grid-column: 1 / -1; }
+.custom-contributions > p { margin: -8px 0 0; color: var(--muted); font-size: .76rem; }
+.custom-contributions h3 { margin: 0; padding: 12px 13px; border-bottom: 1px solid var(--outline); font-family: var(--font-display); font-size: 1rem; }
+.custom-empty { justify-items: start; }
+.custom-empty h2, .sla-results h2, .sla-metric-panel h2, .custom-results h2, .custom-contributions h2 { margin: 0; font-family: var(--font-display); font-size: 1.3rem; letter-spacing: -0.03em; }
+
+@media (max-width: 700px) {
+  .sla-controls, .custom-controls, .sla-results, .sla-metric-panel, .custom-results, .custom-contributions, .custom-methodology, .custom-empty { padding: 19px; }
+  .sla-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sla-card dl > div:last-child { grid-column: 1 / -1; }
+  .sla-control-actions .button, .custom-control-actions .button { flex: 1 1 170px; justify-content: center; }
+}

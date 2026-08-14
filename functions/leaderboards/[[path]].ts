@@ -1,7 +1,9 @@
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
 import { V21LeaderboardApp } from '../../src/App';
-import { buildLeaderboard } from '../../src/benchmarks/leaderboards';
+import { buildLeaderboard, LEADERBOARD_DEFINITIONS, type LeaderboardEntry } from '../../src/benchmarks/leaderboards';
+import { DEFAULT_CUSTOM_WEIGHTS, normalizeCustomWeights, type CustomWeights } from '../../src/benchmarks/custom-leaderboard';
+import type { BenchmarkMetric } from '../../src/benchmarks/contracts';
 import { buildTopEntries, v21Leaderboard, v21LeaderboardForLegacyKey, type V21LeaderboardDefinition } from '../../src/benchmarks/v21-leaderboards';
 import { SITE_CONFIG } from '../../src/brand/site-config';
 import { leaderboardFilterCapabilities } from '../../src/frontend/leaderboard-filter-state';
@@ -12,6 +14,75 @@ import type { PageMetadata } from '../../src/seo/metadata';
 import { headMarkup, staticChrome } from '../../src/seo/static-page';
 import { benchmarkEnvelope, freshnessFor, readActiveBenchmarkSnapshot, type BenchmarkApiEnv } from '../_shared/benchmark-db';
 import { escapeHtmlText, serializeJsonForScript } from '../_shared/html';
+
+interface SlaSearchState {
+  readonly maxTtft: number;
+  readonly minThroughput: number;
+}
+
+interface SpecialLeaderboardState {
+  readonly sla: SlaSearchState;
+  readonly custom: CustomWeights;
+}
+
+const DEFAULT_SLA_SEARCH: SlaSearchState = { maxTtft: 0.8, minThroughput: 60 };
+const SPECIAL_SSR_MODEL_LIMIT = 200;
+const SPECIAL_METRIC_CATEGORIES = new Set(['agentic', 'coding', 'reasoning', 'math', 'multimodalGrounded', 'ttft', 'throughput']);
+
+function boundedFiniteSearchValue(value: string | null, minimum: number, maximum: number): number | null {
+  if (value === null || value.length === 0 || value.length > 16) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= minimum && parsed <= maximum ? parsed : null;
+}
+
+/** Accepts only bounded GET values; invalid or partial vectors fall back to a safe default. */
+function specialLeaderboardState(search: URLSearchParams): SpecialLeaderboardState {
+  const maxTtft = boundedFiniteSearchValue(search.get('maxTtft'), 0.01, 60);
+  const minThroughput = boundedFiniteSearchValue(search.get('minThroughput'), 0, 100_000);
+  const suppliedWeights = Object.fromEntries(Object.entries(DEFAULT_CUSTOM_WEIGHTS).map(([domain, fallback]) => {
+    const raw = search.get(domain);
+    const parsed = boundedFiniteSearchValue(raw, 0, 100);
+    return [domain, raw === null || parsed === null || !Number.isSafeInteger(parsed) ? fallback : parsed];
+  }));
+  const custom = normalizeCustomWeights(suppliedWeights);
+  return {
+    sla: maxTtft === null || minThroughput === null ? DEFAULT_SLA_SEARCH : { maxTtft, minThroughput },
+    custom: custom.ok ? custom.weights : DEFAULT_CUSTOM_WEIGHTS,
+  };
+}
+
+function specialMetric(metric: BenchmarkMetric): boolean {
+  return SPECIAL_METRIC_CATEGORIES.has(metric.category) && Number.isFinite(metric.value);
+}
+
+/**
+ * Special leaderboards use a bounded read-only source projection. Metrics stay
+ * verbatim and no source value is manufactured for missing evidence.
+ */
+function specialEntries(snapshot: NonNullable<Awaited<ReturnType<typeof readActiveBenchmarkSnapshot>>>): readonly LeaderboardEntry[] {
+  const metricsByModel = new Map<string, BenchmarkMetric[]>();
+  for (const metric of snapshot.metrics) {
+    if (!specialMetric(metric)) continue;
+    const entries = metricsByModel.get(metric.modelKey);
+    if (entries) entries.push(metric);
+    else metricsByModel.set(metric.modelKey, [metric]);
+  }
+  return snapshot.models
+    .filter((model) => (metricsByModel.get(model.modelKey)?.length ?? 0) > 0)
+    .slice()
+    .sort((left, right) => left.modelKey.localeCompare(right.modelKey))
+    .slice(0, SPECIAL_SSR_MODEL_LIMIT)
+    .map((model) => ({
+      model,
+      metric: null,
+      metrics: (metricsByModel.get(model.modelKey) ?? []).slice().sort((left, right) => right.sourceUpdatedAt.localeCompare(left.sourceUpdatedAt)),
+      primaryPrice: null,
+      blendedCostPerMillion: null,
+      contextWindowTokens: model.contextWindowTokens,
+      sourceRank: null,
+      onValueFrontier: false,
+    }));
+}
 
 function categoryPath(category: V21LeaderboardDefinition): string {
   return `/leaderboards/${category.slug}/`;
@@ -38,8 +109,28 @@ function categoryMetadata(category: V21LeaderboardDefinition, robots: PageMetada
 function categoryEnvelope(
   category: V21LeaderboardDefinition,
   snapshot: Awaited<ReturnType<typeof readActiveBenchmarkSnapshot>> & {},
+  state: SpecialLeaderboardState,
 ): BenchmarkApiEnvelope<LeaderboardPageResult> | undefined {
-  if (category.legacyKey === null || snapshot === null) return undefined;
+  if (snapshot === null) return undefined;
+  if (category.legacyKey === null) {
+    if (category.slug !== 'sla' && category.slug !== 'custom') return undefined;
+    const entries = specialEntries(snapshot);
+    const result: LeaderboardPageResult & { readonly v21State: SpecialLeaderboardState } = {
+      key: 'llm-overall',
+      profile: 'balanced',
+      definition: LEADERBOARD_DEFINITIONS['llm-overall'],
+      entries,
+      pagination: { limit: SPECIAL_SSR_MODEL_LIMIT, total: entries.length, nextCursor: null },
+      capabilities: leaderboardFilterCapabilities('llm-overall', entries),
+      v21State: state,
+    };
+    return benchmarkEnvelope(snapshot, freshnessFor(snapshot.revision, Date.now()), snapshot.sources.map((source) => ({
+      sourceId: source.sourceId,
+      label: source.attributionText,
+      url: source.sourceUrl,
+      updatedAt: source.observedAt,
+    })), result);
+  }
   const result = buildLeaderboard(
     category.legacyKey,
     snapshot.models,
@@ -126,7 +217,7 @@ function unavailableResponse(category: V21LeaderboardDefinition | null): Respons
 
 function pathParameter(params: { path?: string | readonly string[] } | undefined): string | null {
   const raw = params?.path;
-  const path = Array.isArray(raw) ? raw.join('/') : raw;
+  const path = typeof raw === 'string' ? raw : raw?.join('/');
   if (!path || !/^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/u.test(path)) return null;
   return path;
 }
@@ -183,6 +274,7 @@ export async function onRequestGet({
   params?: { path?: string | readonly string[] };
 }): Promise<Response> {
   const pathname = new URL(request.url).pathname;
+  const url = new URL(request.url);
   const rawCategory = pathParameter(params) ?? pathname.replace(/^\/leaderboards\/?/u, '').replace(/\/$/u, '');
   const category = v21Leaderboard(rawCategory);
   if (!category) {
@@ -197,7 +289,7 @@ export async function onRequestGet({
   try {
     const snapshot = await readActiveBenchmarkSnapshot(env.CATALOG_DB);
     if (!snapshot) return unavailableResponse(category);
-    const initialEnvelope = categoryEnvelope(category, snapshot);
+    const initialEnvelope = categoryEnvelope(category, snapshot, specialLeaderboardState(url.searchParams));
     return new Response(renderLeaderboardDocument(category, initialEnvelope), {
       headers: {
         'Cache-Control': 'public, max-age=0, must-revalidate',

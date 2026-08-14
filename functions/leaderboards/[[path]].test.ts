@@ -44,9 +44,9 @@ function snapshot(): ActiveBenchmarkSnapshot {
   };
 }
 
-function context(path = 'coding') {
+function context(path = 'coding', search = '') {
   return {
-    request: new Request(`https://tokenbench.monomind.one/leaderboards/${path}/`),
+    request: new Request(`https://tokenbench.monomind.one/leaderboards/${path}/${search}`),
     env: { CATALOG_DB: {} as never },
     params: { path },
   };
@@ -97,5 +97,34 @@ describe('V2.1 leaderboard SSR', () => {
     expect(support.status).toBe(200);
     expect(support.headers.get('x-robots-tag')).toContain('noindex');
     expect(await support.text()).toContain('Knowledge evidence support route');
+  });
+
+  it('server-renders bounded SLA and custom form results without changing their canonical base paths', async () => {
+    readActiveBenchmarkSnapshot.mockResolvedValue({
+      ...snapshot(),
+      metrics: [
+        ...snapshot().metrics,
+        { ...snapshot().metrics[0]!, metricKey: 'benchlm:category:agentic', category: 'agentic', value: 80 },
+        { ...snapshot().metrics[0]!, metricKey: 'benchlm:category:reasoning', category: 'reasoning', value: 70 },
+        { ...snapshot().metrics[0]!, metricKey: 'benchlm:category:math', category: 'math', value: 75 },
+        { ...snapshot().metrics[0]!, metricKey: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded', value: 60 },
+        { ...snapshot().metrics[0]!, metricKey: 'benchlm:runtime:ttft', category: 'ttft', value: 0.7 },
+        { ...snapshot().metrics[0]!, metricKey: 'benchlm:runtime:throughput', category: 'throughput', value: 80 },
+      ],
+    });
+
+    const sla = await onRequestGet(context('sla', '?maxTtft=0.7&minThroughput=80'));
+    const slaHtml = await sla.text();
+    expect(sla.status).toBe(200);
+    expect(slaHtml).toContain('<h1 id="leaderboard-heading">SLA</h1>');
+    expect(slaHtml.replaceAll('<!-- -->', '')).toContain('1 pass · 0 incomplete');
+    expect(slaHtml).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/leaderboards/sla/">');
+
+    const custom = await onRequestGet(context('custom', '?agentic=25&coding=25&reasoning=20&math=10&multimodal=10&throughput=10'));
+    const customHtml = await custom.text();
+    expect(custom.status).toBe(200);
+    expect(customHtml).toContain('<h1 id="leaderboard-heading">Custom</h1>');
+    expect(customHtml).toContain('Custom leaderboard results');
+    expect(customHtml).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/leaderboards/custom/">');
   });
 });

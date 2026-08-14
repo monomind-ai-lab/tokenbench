@@ -23,8 +23,12 @@ import { ScoreBarChart, type ScoreBarChartDatum } from '../frontend/charts/score
 import { LeaderboardVerticalChart } from '../frontend/charts/leaderboard-vertical-chart';
 import { CostScoreScatter, type CostScorePoint } from '../frontend/charts/cost-score-scatter';
 import { PriceHistogram, priceBuckets } from '../frontend/charts/price-histogram';
+import { SlaLeaderboard, DEFAULT_SLA_THRESHOLDS, type SlaEvidenceRow, type SlaThresholds } from '../frontend/sla-leaderboard';
+import { CustomLeaderboard, type CustomLeaderboardModel } from '../frontend/custom-leaderboard';
+import { CUSTOM_DOMAINS, DEFAULT_CUSTOM_WEIGHTS, normalizeCustomWeights, type CustomDomain, type CustomWeights } from '../benchmarks/custom-leaderboard';
 import { modelPath } from '../benchmarks/model-directory';
 import type { LeaderboardEntry } from '../benchmarks/leaderboards';
+import type { BenchmarkMetric } from '../benchmarks/contracts';
 import { ProviderMark } from '../frontend/provider-mark';
 import { ShareAction } from '../frontend/share-action';
 import { useBenchmarkLeaderboard, useDecisionPicks, type BenchmarkApiEnvelope, type LeaderboardPageResult } from '../frontend/use-benchmarks';
@@ -640,6 +644,117 @@ function v21CategoryPath(category: V21LeaderboardDefinition): string {
   return `${ROUTE_PATHS.leaderboards}${category.slug}/`;
 }
 
+interface SpecialLeaderboardState {
+  readonly sla: SlaThresholds;
+  readonly custom: CustomWeights;
+}
+
+interface SerializedSpecialLeaderboardState {
+  readonly sla?: unknown;
+  readonly custom?: unknown;
+}
+
+const CUSTOM_CATEGORY_BY_DOMAIN: Readonly<Record<Exclude<CustomDomain, 'throughput'>, string>> = {
+  agentic: 'agentic',
+  coding: 'coding',
+  reasoning: 'reasoning',
+  math: 'math',
+  multimodal: 'multimodalGrounded',
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function validSlaThresholds(value: unknown): value is SlaThresholds {
+  if (!isRecord(value)) return false;
+  return typeof value.maxTtft === 'number' && Number.isFinite(value.maxTtft) && value.maxTtft > 0 && value.maxTtft <= 60
+    && typeof value.minThroughput === 'number' && Number.isFinite(value.minThroughput) && value.minThroughput >= 0 && value.minThroughput <= 100_000;
+}
+
+/** Reads only bounded, prevalidated SSR state; direct client navigation falls back to safe defaults. */
+function specialLeaderboardState(initialEnvelope: BenchmarkApiEnvelope<LeaderboardPageResult> | undefined): SpecialLeaderboardState {
+  const data = initialEnvelope?.data as (LeaderboardPageResult & { readonly v21State?: SerializedSpecialLeaderboardState }) | undefined;
+  const state = data?.v21State;
+  const custom = normalizeCustomWeights(isRecord(state?.custom) ? state.custom : DEFAULT_CUSTOM_WEIGHTS);
+  return {
+    sla: validSlaThresholds(state?.sla) ? state!.sla : DEFAULT_SLA_THRESHOLDS,
+    custom: custom.ok ? custom.weights : DEFAULT_CUSTOM_WEIGHTS,
+  };
+}
+
+function latestMetric(metrics: readonly BenchmarkMetric[], category: string): BenchmarkMetric | null {
+  return metrics
+    .filter((metric) => metric.category === category && Number.isFinite(metric.value))
+    .slice()
+    .sort((left, right) => right.sourceUpdatedAt.localeCompare(left.sourceUpdatedAt)
+      || right.sourceArtifactId.localeCompare(left.sourceArtifactId)
+      || right.sourceModelId.localeCompare(left.sourceModelId))[0] ?? null;
+}
+
+function sourceForMetric(
+  metric: BenchmarkMetric | null,
+  attribution: readonly BenchmarkApiEnvelope<LeaderboardPageResult>['attribution'][number][],
+): { readonly label: string; readonly url: string } {
+  const source = attribution.find((candidate) => candidate.sourceId === metric?.sourceId) ?? attribution[0];
+  return source
+    ? { label: source.label, url: source.url }
+    : { label: 'Source attribution unavailable', url: SITE_CONFIG.origin };
+}
+
+/** Projects only exact published runtime measurements; absent TTFT or throughput remains null. */
+export function slaEvidenceFromEntries(
+  entries: readonly LeaderboardEntry[],
+  attribution: readonly BenchmarkApiEnvelope<LeaderboardPageResult>['attribution'][number][],
+  publishedAt: string | null,
+): readonly SlaEvidenceRow[] {
+  return entries.map((entry) => {
+    const ttftMetric = latestMetric(entry.metrics, 'ttft');
+    const throughputMetric = latestMetric(entry.metrics, 'throughput');
+    const source = sourceForMetric(ttftMetric ?? throughputMetric, attribution);
+    return {
+      id: entry.model.modelKey,
+      slug: entry.model.slug,
+      name: entry.model.name,
+      provider: entry.model.creator,
+      ttft: ttftMetric?.value ?? null,
+      throughput: throughputMetric?.value ?? null,
+      conditions: null,
+      observedAt: ttftMetric?.sourceUpdatedAt ?? throughputMetric?.sourceUpdatedAt ?? publishedAt,
+      sourceLabel: source.label,
+      sourceUrl: source.url,
+      evidenceStatus: entry.model.evidenceStatus,
+    };
+  });
+}
+
+/** Uses the precise category keys and leaves an unavailable Math source unset. */
+export function customModelsFromEntries(
+  entries: readonly LeaderboardEntry[],
+  attribution: readonly BenchmarkApiEnvelope<LeaderboardPageResult>['attribution'][number][],
+  publishedAt: string | null,
+): readonly CustomLeaderboardModel[] {
+  return entries.map((entry) => {
+    const metrics = Object.fromEntries((CUSTOM_DOMAINS.filter((domain) => domain !== 'throughput') as readonly Exclude<CustomDomain, 'throughput'>[])
+      .map((domain) => [domain, latestMetric(entry.metrics, CUSTOM_CATEGORY_BY_DOMAIN[domain])?.value ?? null])) as Record<Exclude<CustomDomain, 'throughput'>, number | null>;
+    const throughputMetric = latestMetric(entry.metrics, 'throughput');
+    const sourceMetric = throughputMetric ?? entry.metrics.find((metric) => Number.isFinite(metric.value)) ?? null;
+    const source = sourceForMetric(sourceMetric, attribution);
+    return {
+      id: entry.model.modelKey,
+      slug: entry.model.slug,
+      name: entry.model.name,
+      provider: entry.model.creator,
+      scores: metrics,
+      throughput: throughputMetric?.value ?? null,
+      observedAt: sourceMetric?.sourceUpdatedAt ?? publishedAt,
+      sourceLabel: source.label,
+      sourceUrl: source.url,
+      evidenceStatus: entry.model.evidenceStatus,
+    };
+  });
+}
+
 /** The directory is a compact, source-aware overview rather than a second ranking. */
 function V21LeaderboardOverview() {
   const state = useDecisionPicks();
@@ -678,6 +793,38 @@ export function V21LeaderboardPage({
 }) {
   if (category.legacyKey !== null) {
     return <LeaderboardPage keyName={category.legacyKey} category={category} initialEnvelope={initialEnvelope} />;
+  }
+  if (category.slug === 'sla' || category.slug === 'custom') {
+    const initialState = specialLeaderboardState(initialEnvelope);
+    const canonicalUrl = `${SITE_CONFIG.origin}${v21CategoryPath(category)}`;
+    const entries = initialEnvelope?.data.entries ?? [];
+    const content = category.slug === 'sla'
+      ? <SlaLeaderboard
+        evidence={slaEvidenceFromEntries(entries, initialEnvelope?.attribution ?? [], initialEnvelope?.publishedAt ?? null)}
+        canonicalUrl={canonicalUrl}
+        initialThresholds={initialState.sla}
+      />
+      : <CustomLeaderboard
+        models={customModelsFromEntries(entries, initialEnvelope?.attribution ?? [], initialEnvelope?.publishedAt ?? null)}
+        canonicalUrl={canonicalUrl}
+        initialWeights={initialState.custom}
+      />;
+    return <div className="content-stack leaderboard-page leaderboard-v21-category-page">
+      <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">
+        <span className="eyebrow">{category.version} category</span>
+        <h1 id="leaderboard-heading">{category.label}</h1>
+        <p>{category.definition}</p>
+      </section>
+      {content}
+      <section className="panel leaderboard-evidence-panel" aria-labelledby="leaderboard-evidence-heading">
+        <div className="panel-heading"><div><span className="eyebrow">Published evidence</span><h2 id="leaderboard-evidence-heading">Evidence and methodology</h2><p>Only source-published values are eligible. Incomplete endpoint and category evidence remains visible or excluded under the stated policy; it is never converted to zero.</p></div></div>
+        {initialEnvelope
+          ? <LeaderboardEvidence publishedAt={initialEnvelope.publishedAt} freshness={initialEnvelope.freshness} attribution={initialEnvelope.attribution} label="Published leaderboard evidence" compact />
+          : <p className="leaderboard-evidence-unavailable">No published source record is available for this view yet. TokenBench will show source links, publication time, and freshness here when a valid revision is available.</p>}
+      </section>
+      <RelatedLeaderboards />
+      <MonoMindCta />
+    </div>;
   }
   return <div className="content-stack leaderboard-page leaderboard-v21-category-page">
     <section className="panel leaderboard-hero" aria-labelledby="leaderboard-heading">

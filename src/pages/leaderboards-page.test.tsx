@@ -9,6 +9,7 @@ import { v21Leaderboard } from '../benchmarks/v21-leaderboards';
 import {
   LeaderboardDirectoryPage,
   LeaderboardPage,
+  V21LeaderboardPage,
   costScoreChartData,
   positionNoteFor,
   scoreChartData,
@@ -274,6 +275,29 @@ function codingLeaderboardEnvelope(): BenchmarkApiEnvelope<LeaderboardPageResult
   };
 }
 
+function specialEvidenceEnvelope(): BenchmarkApiEnvelope<LeaderboardPageResult> {
+  const base = codingLeaderboardEnvelope();
+  const entry = base.data.entries[0]!;
+  const metric = entry.metric!;
+  const metrics = [
+    { ...metric, metricKey: 'benchlm:category:agentic', category: 'agentic', value: 80 },
+    { ...metric, metricKey: 'benchlm:category:coding', category: 'coding', value: 90 },
+    { ...metric, metricKey: 'benchlm:category:reasoning', category: 'reasoning', value: 70 },
+    { ...metric, metricKey: 'benchlm:category:math', category: 'math', value: 75 },
+    { ...metric, metricKey: 'benchlm:category:multimodalGrounded', category: 'multimodalGrounded', value: 60 },
+    { ...metric, metricKey: 'benchlm:runtime:ttft', category: 'ttft', value: 0.8 },
+    { ...metric, metricKey: 'benchlm:runtime:throughput', category: 'throughput', value: 60 },
+  ];
+  return {
+    ...base,
+    data: {
+      ...base.data,
+      entries: [{ ...entry, metric: null, metrics }],
+      pagination: { limit: 20, total: 1, nextCursor: null },
+    },
+  };
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   localStorage.clear();
@@ -509,6 +533,18 @@ describe('V2.1 category hydration', () => {
     expect(screen.getByRole('heading', { name: 'Coding', level: 1 })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Coding benchmark' })).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('renders SLA and custom results from the source values embedded for canonical SSR', () => {
+    const initialEnvelope = specialEvidenceEnvelope();
+
+    const { rerender } = render(<V21LeaderboardPage category={v21Leaderboard('sla')!} initialEnvelope={initialEnvelope} />);
+    expect(screen.getByRole('table', { name: 'SLA eligibility' })).toHaveTextContent('Alpha');
+    expect(screen.getByText('1 pass · 0 incomplete')).toBeInTheDocument();
+
+    rerender(<V21LeaderboardPage category={v21Leaderboard('custom')!} initialEnvelope={initialEnvelope} />);
+    expect(screen.getByRole('table', { name: 'Custom leaderboard results' })).toHaveTextContent('Alpha');
+    expect(screen.getByLabelText('Custom throughput normalization')).toHaveTextContent('Throughput normalization: 1 eligible published model, min 60 tok/s, max 60 tok/s.');
   });
 });
 
