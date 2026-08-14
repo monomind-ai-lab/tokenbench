@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { FRONTEND_TEST_CATALOG } from './frontend/test-fixtures';
@@ -54,5 +54,26 @@ describe('calculator application flow', () => {
     expect(screen.getByRole('link', { name: 'Go to Compare hub' })).toHaveAttribute('href', '/compare/');
     expect(screen.getByRole('link', { name: 'Browse models' })).toHaveAttribute('href', '/models/');
     expect(screen.queryByRole('heading', { name: 'Page not found' })).not.toBeInTheDocument();
+  });
+
+  it('shares and reloads the authoritative manual-token scenario', async () => {
+    const { unmount } = render(<App />);
+    const manualTokens = await screen.findByRole('spinbutton', { name: 'Manual monthly token override' });
+
+    fireEvent.change(manualTokens, { target: { value: '12000000' } });
+    expect(await screen.findByText('Subscription is cheaper on a token-equivalent basis.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Share result' }));
+
+    const shareableUrl = screen.getByLabelText('Shareable link') as HTMLInputElement;
+    expect(shareableUrl.value).toContain('manual=12000000');
+    expect(shareableUrl.value).toContain('cache_read=0');
+
+    const shared = new URL(shareableUrl.value);
+    unmount();
+    window.history.replaceState({}, '', `${shared.pathname}${shared.search}`);
+    render(<App />);
+
+    expect(await screen.findByText('$42.00')).toBeInTheDocument();
+    expect(screen.getByText('Subscription is cheaper on a token-equivalent basis.')).toBeInTheDocument();
   });
 });

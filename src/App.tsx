@@ -273,6 +273,7 @@ function CalculatorPage({ mode = 'calculator', initialCostState }: { readonly mo
     selectedModelIds: selection.selectedModelIds,
     modelMixBasisPoints: selection.modelMixBasisPoints,
     mappingMode,
+    costUsage,
   };
   const breakevenShareState = {
     calculator: shareState,

@@ -493,7 +493,7 @@ describe('responsive calculator app shell', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}${pathname}`);
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}${pathname}&chars=0&factor=4&manual=none&cache_read=0&cache_write=0&long_context=0`);
     expect(`${window.location.pathname}${window.location.search}`).toBe(pathname);
   });
 

@@ -93,4 +93,27 @@ describe('calculator results dashboard', () => {
     expect(screen.getByRole('heading', { name: 'Published source prices' }).compareDocumentPosition(screen.getByLabelText('MonoMind AI Lab editorial CTA'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     expect(screen.getByRole('button', { name: 'Update simulation' })).toBeInTheDocument();
   });
+
+  it('renders every selected route contribution in the audit ledger for a weighted selector total', () => {
+    const direct = {
+      ...directOffer,
+      cachedInputMicroDollarsPerMillion: 250_000,
+      cacheWriteMicroDollarsPerMillion: 400_000,
+      longContextInputMicroDollarsPerMillion: 4_000_000,
+      longContextOutputMicroDollarsPerMillion: 16_000_000,
+    };
+    const hosted = FRONTEND_TEST_CATALOG.modelOffers[1];
+    const weightedSnapshot = buildCalculatorSnapshot({
+      modelOffers: [direct, hosted], selectedModelIds: [direct.id, hosted.id], modelMixBasisPoints: { [direct.id]: 5_000, [hosted.id]: 5_000 },
+      mappingMode: 'override', workload,
+      costUsage: { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 10_000, cacheWriteTokens: 1_000_000, longContextTokens: 1_000_000 },
+    });
+
+    render(<ResultsDashboard catalog={FRONTEND_TEST_CATALOG} hasAvailableModels selectedPlan={FRONTEND_TEST_CATALOG.plans[1]} snapshot={weightedSnapshot} />);
+
+    expect(screen.getAllByText('Published input price')).toHaveLength(2);
+    expect(screen.getAllByText('Scenario input cost')).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Open published pricing source' })).toHaveLength(2);
+    expect(screen.getByText('$10.01')).toBeVisible();
+  });
 });

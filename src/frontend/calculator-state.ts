@@ -1,5 +1,4 @@
 import {
-  calculateApiEquivalentCost,
   compareSubscriptionWithApi,
   deriveConversationWorkload,
   type ApiEquivalentCost,
@@ -62,6 +61,8 @@ export interface CalculatorSnapshot {
   readonly selectedOffers: ModelOffer[];
   readonly mixEntries: ModelMixEntry[];
   readonly apiEquivalentCost: ApiEquivalentCost | null;
+  /** Selector-owned, source-qualified costs that sum to the API-equivalent total. */
+  readonly costContributions: readonly CalculatorCostContribution[];
   readonly comparison: SubscriptionApiComparison | null;
   readonly apiMapping: ApiMappingDisclosure;
   readonly capacityEvidence: CapacityEvidenceResult;
@@ -103,6 +104,15 @@ export interface CalculatorCostUsage {
   readonly longContextTokens: number;
 }
 
+export type CalculatorCostDimension = 'input' | 'cached_input' | 'cache_write' | 'long_context_input' | 'long_context_output' | 'output';
+
+export interface CalculatorCostContribution {
+  readonly offerId: string;
+  readonly dimension: CalculatorCostDimension;
+  readonly tokens: number;
+  readonly valueMicroDollars: number;
+}
+
 const DEFAULT_COST_USAGE: CalculatorCostUsage = {
   characterCount: 0,
   charactersPerToken: 4,
@@ -122,7 +132,10 @@ export function resolveMonthlyTokenEstimate({
   readonly charactersPerToken: number;
   readonly manualMonthlyTokens: number | null;
 }): MonthlyTokenEstimate {
-  if (Number.isSafeInteger(manualMonthlyTokens) && manualMonthlyTokens >= 0) return { tokens: manualMonthlyTokens, source: 'manual' };
+  if (manualMonthlyTokens !== null) {
+    if (!Number.isSafeInteger(manualMonthlyTokens) || manualMonthlyTokens < 0) throw new Error('Manual monthly tokens must be a non-negative safe integer');
+    return { tokens: manualMonthlyTokens, source: 'manual' };
+  }
   const safeCharacters = Number.isFinite(characterCount) && characterCount >= 0 ? characterCount : 0;
   const safeFactor = Number.isFinite(charactersPerToken) && charactersPerToken > 0 ? charactersPerToken : 4;
   return { tokens: Math.floor(safeCharacters / safeFactor), source: 'estimate' };
@@ -173,20 +186,133 @@ export function groupOffersByBasis(offers: ModelOffer[]): Record<ModelPricingBas
   return grouped;
 }
 
-function weightedRate(entries: readonly ModelMixEntry[], direction: 'inputMicroDollarsPerMillion' | 'outputMicroDollarsPerMillion'): number {
-  const numerator = entries.reduce(
-    (total, entry) => total + BigInt(entry.model[direction]) * BigInt(entry.shareBasisPoints),
-    0n,
-  );
-  const value = (numerator + 5_000n) / 10_000n;
-  if (value > SAFE_INTEGER_MAX) throw new Error(`${direction} weighted rate exceeds the safe integer range`);
-  return Number(value);
-}
-
 function safeAdd(left: number, right: number, label: string): number {
   const sum = BigInt(left) + BigInt(right);
   if (sum > SAFE_INTEGER_MAX) throw new Error(`${label} exceeds the safe integer range`);
   return Number(sum);
+}
+
+function costForTokens(tokens: number, rateMicroDollarsPerMillion: number, label: string): number {
+  if (!Number.isSafeInteger(tokens) || tokens < 0) throw new Error(`${label} tokens must be a non-negative safe integer`);
+  if (!Number.isSafeInteger(rateMicroDollarsPerMillion) || rateMicroDollarsPerMillion < 0) throw new Error(`${label} rate must be a non-negative safe integer`);
+  const value = (BigInt(tokens) * BigInt(rateMicroDollarsPerMillion) + 500_000n) / 1_000_000n;
+  if (value > SAFE_INTEGER_MAX) throw new Error(`${label} exceeds the safe integer range`);
+  return Number(value);
+}
+
+/** Splits a bounded token count exactly across weighted selected routes. */
+function allocateTokens(total: number, weights: readonly number[]): number[] {
+  if (!Number.isSafeInteger(total) || total < 0) throw new Error('Allocated tokens must be a non-negative safe integer');
+  if (weights.some((weight) => !Number.isSafeInteger(weight) || weight < 0)) throw new Error('Allocation weights must be non-negative safe integers');
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  if (totalWeight === 0) return weights.map(() => 0);
+  const denominator = BigInt(totalWeight);
+  const shares = weights.map((weight, index) => {
+    const numerator = BigInt(total) * BigInt(weight);
+    return { index, tokens: Number(numerator / denominator), remainder: numerator % denominator };
+  });
+  let remaining = total - shares.reduce((sum, share) => sum + share.tokens, 0);
+  for (const share of [...shares].sort((left, right) => right.remainder > left.remainder ? 1 : right.remainder < left.remainder ? -1 : left.index - right.index)) {
+    if (remaining === 0) break;
+    share.tokens += 1;
+    remaining -= 1;
+  }
+  return shares.sort((left, right) => left.index - right.index).map((share) => share.tokens);
+}
+
+function splitLongContextTokens(tokens: number, workload: DerivedConversationWorkload): readonly [number, number] {
+  const total = safeAdd(workload.monthlyInputTokens, workload.monthlyOutputTokens, 'Monthly workload');
+  if (total === 0) {
+    const input = Math.floor(tokens / 2);
+    return [input, tokens - input];
+  }
+  const [input] = allocateTokens(tokens, [workload.monthlyInputTokens, workload.monthlyOutputTokens]);
+  return [input, tokens - input];
+}
+
+function contribution(
+  offer: ModelOffer,
+  dimension: CalculatorCostDimension,
+  tokens: number,
+  rateMicroDollarsPerMillion: number,
+): CalculatorCostContribution {
+  return {
+    offerId: offer.id,
+    dimension,
+    tokens,
+    valueMicroDollars: costForTokens(tokens, rateMicroDollarsPerMillion, `${offer.displayName} ${dimension}`),
+  };
+}
+
+function buildCostContributions(
+  entries: readonly ModelMixEntry[],
+  workload: DerivedConversationWorkload,
+  costUsage: CalculatorCostUsage,
+): readonly CalculatorCostContribution[] {
+  const weights = entries.map((entry) => entry.shareBasisPoints);
+  const inputTokens = allocateTokens(workload.monthlyInputTokens, weights);
+  const outputTokens = allocateTokens(workload.monthlyOutputTokens, weights);
+  const cachedTarget = Math.floor(workload.monthlyInputTokens * costUsage.cacheReadBasisPoints / 10_000);
+  const cachedTokens = allocateTokens(cachedTarget, inputTokens);
+  const cacheWriteTokens = allocateTokens(costUsage.cacheWriteTokens, weights);
+  const [longContextInputTokens, longContextOutputTokens] = splitLongContextTokens(costUsage.longContextTokens, workload);
+  const longInputTokens = allocateTokens(longContextInputTokens, weights);
+  const longOutputTokens = allocateTokens(longContextOutputTokens, weights);
+
+  return entries.flatMap((entry, index) => {
+    const { model } = entry;
+    const hasCachedInputPrice = typeof model.cachedInputMicroDollarsPerMillion === 'number';
+    const applicableCachedTokens = hasCachedInputPrice ? cachedTokens[index] : 0;
+    const rows: CalculatorCostContribution[] = [
+      contribution(model, 'input', inputTokens[index] - applicableCachedTokens, model.inputMicroDollarsPerMillion),
+      contribution(model, 'output', outputTokens[index], model.outputMicroDollarsPerMillion),
+    ];
+    if (hasCachedInputPrice) rows.splice(1, 0, contribution(model, 'cached_input', applicableCachedTokens, model.cachedInputMicroDollarsPerMillion));
+    if (typeof model.cacheWriteMicroDollarsPerMillion === 'number') rows.splice(-1, 0, contribution(model, 'cache_write', cacheWriteTokens[index], model.cacheWriteMicroDollarsPerMillion));
+    if (typeof model.longContextInputMicroDollarsPerMillion === 'number' && typeof model.longContextOutputMicroDollarsPerMillion === 'number') {
+      rows.splice(-1, 0,
+        contribution(model, 'long_context_input', longInputTokens[index], model.longContextInputMicroDollarsPerMillion),
+        contribution(model, 'long_context_output', longOutputTokens[index], model.longContextOutputMicroDollarsPerMillion),
+      );
+    }
+    return rows;
+  });
+}
+
+function totalContributionCost(
+  contributions: readonly CalculatorCostContribution[],
+  dimensions: readonly CalculatorCostDimension[],
+): number {
+  const dimensionSet = new Set(dimensions);
+  return contributions
+    .filter((contribution) => dimensionSet.has(contribution.dimension))
+    .reduce((total, contribution) => safeAdd(total, contribution.valueMicroDollars, 'API-equivalent cost'), 0);
+}
+
+function costPerMillion(totalCostMicroDollars: number, monthlyTokens: number): number {
+  if (monthlyTokens === 0) return 0;
+  const value = (BigInt(totalCostMicroDollars) * 1_000_000n + BigInt(monthlyTokens) / 2n) / BigInt(monthlyTokens);
+  if (value > SAFE_INTEGER_MAX) throw new Error('Cost per million exceeds the safe integer range');
+  return Number(value);
+}
+
+/** Allocates an authoritative token total by the disclosed workload ratio. */
+function workloadForMonthlyTokenTotal(
+  workload: DerivedConversationWorkload,
+  monthlyTokens: number,
+): DerivedConversationWorkload {
+  if (!Number.isSafeInteger(monthlyTokens) || monthlyTokens < 0) throw new Error('Monthly token total must be a non-negative safe integer');
+  const currentTotal = safeAdd(workload.monthlyInputTokens, workload.monthlyOutputTokens, 'Monthly workload');
+  if (currentTotal === monthlyTokens) return workload;
+  if (currentTotal === 0) {
+    const monthlyInputTokens = Math.floor(monthlyTokens / 2);
+    return { ...workload, monthlyInputTokens, monthlyOutputTokens: monthlyTokens - monthlyInputTokens };
+  }
+  const inputNumerator = BigInt(monthlyTokens) * BigInt(workload.monthlyInputTokens);
+  const inputTokens = inputNumerator / BigInt(currentTotal);
+  if (inputTokens > SAFE_INTEGER_MAX) throw new Error('Monthly input tokens exceed the safe integer range');
+  const monthlyInputTokens = Number(inputTokens);
+  return { ...workload, monthlyInputTokens, monthlyOutputTokens: monthlyTokens - monthlyInputTokens };
 }
 
 function legacyWorkload(inputShareBasisPoints: number, monthlyTokens: number): ConversationWorkload {
@@ -286,7 +412,13 @@ export function buildCalculatorSnapshot({
 }): CalculatorSnapshot {
   const resolvedCostUsage = costUsage ?? DEFAULT_COST_USAGE;
   const snapshotWorkload = workload ?? legacyWorkload(inputShareBasisPoints ?? 5_000, monthlyTokens ?? 10_000_000);
-  const derivedWorkload = deriveConversationWorkload(snapshotWorkload);
+  const conversationWorkload = deriveConversationWorkload(snapshotWorkload);
+  const conversationMonthlyTokens = safeAdd(conversationWorkload.monthlyInputTokens, conversationWorkload.monthlyOutputTokens, 'Monthly workload');
+  const tokenEstimate = resolveMonthlyTokenEstimate(resolvedCostUsage);
+  const authoritativeMonthlyTokens = tokenEstimate.source === 'manual' || tokenEstimate.tokens > 0
+    ? tokenEstimate.tokens
+    : conversationMonthlyTokens;
+  const derivedWorkload = workloadForMonthlyTokenTotal(conversationWorkload, authoritativeMonthlyTokens);
   const selectedOffers = selectedModelIds
     .map((id) => modelOffers.find((offer) => offer.id === id))
     .filter((offer): offer is ModelOffer => Boolean(offer));
@@ -301,20 +433,23 @@ export function buildCalculatorSnapshot({
     ? [{ model: defaultOffer, shareBasisPoints: 10_000 }]
     : selectedMixEntries;
   const hasCompleteMix = isCompleteMix(arithmeticEntries);
+  const costContributions = hasCompleteMix ? buildCostContributions(arithmeticEntries, derivedWorkload, resolvedCostUsage) : [];
   const apiEquivalentCost = hasCompleteMix
-    ? calculateApiEquivalentCost(derivedWorkload, {
-      inputMicroDollarsPerMillion: weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion'),
-      outputMicroDollarsPerMillion: weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion'),
-    })
+    ? (() => {
+      const inputCostMicroDollars = totalContributionCost(costContributions, ['input', 'cached_input', 'cache_write', 'long_context_input']);
+      const outputCostMicroDollars = totalContributionCost(costContributions, ['output', 'long_context_output']);
+      return {
+        inputCostMicroDollars,
+        outputCostMicroDollars,
+        apiCostMicroDollars: safeAdd(inputCostMicroDollars, outputCostMicroDollars, 'API-equivalent cost'),
+      };
+    })()
     : null;
   const comparison = apiEquivalentCost && selectedPlan
     ? compareSubscriptionWithApi(selectedPlan.monthlyCostMicroDollars, derivedWorkload, apiEquivalentCost, snapshotWorkload.activeDaysPerMonth)
     : null;
   const totalMonthlyTokens = safeAdd(derivedWorkload.monthlyInputTokens, derivedWorkload.monthlyOutputTokens, 'Monthly workload');
-  const blendedCostPerMillion = hasCompleteMix
-    ? Math.round((weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion') * (derivedWorkload.monthlyInputTokens / Math.max(1, totalMonthlyTokens)))
-      + (weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion') * (derivedWorkload.monthlyOutputTokens / Math.max(1, totalMonthlyTokens))))
-    : 0;
+  const blendedCostPerMillion = apiEquivalentCost ? costPerMillion(apiEquivalentCost.apiCostMicroDollars, totalMonthlyTokens) : 0;
   const apiEquivalentValueMicroDollars = apiEquivalentCost?.apiCostMicroDollars ?? 0;
   const breakEvenTokens = selectedPlan?.entitlement.kind === 'fixed_tokens' && apiEquivalentCost && totalMonthlyTokens > 0
     ? breakEvenTokensForMonthlyCost(selectedPlan.monthlyCostMicroDollars, apiEquivalentCost.apiCostMicroDollars, totalMonthlyTokens)
@@ -335,6 +470,7 @@ export function buildCalculatorSnapshot({
     selectedOffers,
     mixEntries: selectedMixEntries,
     apiEquivalentCost,
+    costContributions,
     comparison,
     apiMapping: { mode: inferredMode, defaultOffer, selectedOffers: arithmeticEntries.map((entry) => entry.model) },
     capacityEvidence: capacityEvidenceFor(selectedPlan, derivedWorkload, arithmeticEntries.map((entry) => entry.model), hasCompleteMix),
@@ -449,29 +585,23 @@ export function buildCalculatorEvidenceLineItems(
       },
     ] : []),
   ];
-  const cachedInputTokens = offer === null
-    ? 0
-    : Math.floor(snapshot.derivedWorkload.monthlyInputTokens * snapshot.costUsage.cacheReadBasisPoints / 10_000);
-  const uncachedInputTokens = Math.max(0, snapshot.derivedWorkload.monthlyInputTokens - cachedInputTokens);
-  const inputCost = offer === null
-    ? null
-    : Math.round((uncachedInputTokens / 1_000_000) * offer.inputMicroDollarsPerMillion);
-  const outputCost = offer === null
-    ? null
-    : Math.round((snapshot.derivedWorkload.monthlyOutputTokens / 1_000_000) * offer.outputMicroDollarsPerMillion);
-  const cachedInputCost = offer?.cachedInputMicroDollarsPerMillion === undefined
-    ? null
-    : Math.round((cachedInputTokens / 1_000_000) * offer.cachedInputMicroDollarsPerMillion);
-  const cacheWriteCost = offer?.cacheWriteMicroDollarsPerMillion === undefined
-    ? null
-    : Math.round((snapshot.costUsage.cacheWriteTokens / 1_000_000) * offer.cacheWriteMicroDollarsPerMillion);
-  const totalWorkloadTokens = Math.max(1, snapshot.derivedWorkload.monthlyInputTokens + snapshot.derivedWorkload.monthlyOutputTokens);
+  const contributionCost = (dimension: CalculatorCostDimension): number | null => {
+    if (offer === null) return null;
+    const contributions = snapshot.costContributions.filter((item) => item.offerId === offer.id && item.dimension === dimension);
+    return contributions.length === 0
+      ? null
+      : contributions.reduce((total, item) => safeAdd(total, item.valueMicroDollars, 'Audit ledger cost'), 0);
+  };
+  const inputCost = contributionCost('input');
+  const outputCost = contributionCost('output');
+  const cachedInputCost = offer?.cachedInputMicroDollarsPerMillion === undefined ? null : contributionCost('cached_input');
+  const cacheWriteCost = offer?.cacheWriteMicroDollarsPerMillion === undefined ? null : contributionCost('cache_write');
   const longContextInputCost = offer?.longContextInputMicroDollarsPerMillion === undefined || offer?.longContextOutputMicroDollarsPerMillion === undefined
     ? null
-    : Math.round((snapshot.costUsage.longContextTokens * snapshot.derivedWorkload.monthlyInputTokens / totalWorkloadTokens / 1_000_000) * offer.longContextInputMicroDollarsPerMillion);
+    : contributionCost('long_context_input');
   const longContextOutputCost = offer?.longContextInputMicroDollarsPerMillion === undefined || offer?.longContextOutputMicroDollarsPerMillion === undefined
     ? null
-    : Math.round((snapshot.costUsage.longContextTokens * snapshot.derivedWorkload.monthlyOutputTokens / totalWorkloadTokens / 1_000_000) * offer.longContextOutputMicroDollarsPerMillion);
+    : contributionCost('long_context_output');
   return [
     ...sourceItems,
     {
@@ -523,7 +653,7 @@ export function buildCalculatorEvidenceLineItems(
       label: 'Calculation assumptions',
       valueMicroDollars: null,
       priceEffectiveAt,
-      assumption: 'Published input and output price dimensions are applied independently; missing price dimensions are not zero.',
+      assumption: 'Sourced cached-input tokens replace their standard input share; separately configured cache-write and long-context tokens are added only when their published route price dimension is complete. Missing price dimensions are not zero.',
     },
     ...(offer?.cachedInputMicroDollarsPerMillion === undefined ? [{
       kind: 'assumption' as const,

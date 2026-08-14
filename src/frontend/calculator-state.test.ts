@@ -19,6 +19,12 @@ const workload = {
   activeDaysPerMonth: 25,
 };
 
+function derivedCostTotal(rows: readonly { readonly kind: string; readonly valueMicroDollars: number | null }[]): number {
+  return rows
+    .filter((row) => row.kind === 'derived_cost')
+    .reduce((total, row) => total + (row.valueMicroDollars ?? 0), 0);
+}
+
 describe('frontend calculator state', () => {
   it('keeps source-price and derived-cost rows distinct in CSV-safe audit output', () => {
     const offer = FRONTEND_TEST_CATALOG.modelOffers[0];
@@ -200,5 +206,123 @@ describe('frontend calculator state', () => {
 
     expect(estimator.resolveMonthlyTokenEstimate({ characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: null })).toEqual({ tokens: 10_000, source: 'estimate' });
     expect(estimator.resolveMonthlyTokenEstimate({ characterCount: 40_000, charactersPerToken: 4, manualMonthlyTokens: 8_500 })).toEqual({ tokens: 8_500, source: 'manual' });
+  });
+
+  it('uses a manual monthly-token override, including zero, for the selector total until it is reset', () => {
+    const offer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const plan = { ...FRONTEND_TEST_CATALOG.plans[1], monthlyCostMicroDollars: 20_000_000, supportedModelIds: [offer.modelId] };
+    const manual = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 40_000_000, charactersPerToken: 4, manualMonthlyTokens: 12_000_000, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
+    });
+    const reset = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 40_000_000, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
+    });
+    const zeroManual = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 40_000_000, charactersPerToken: 4, manualMonthlyTokens: 0, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
+    });
+
+    expect(manual.derivedWorkload).toEqual({ monthlyMessages: 2_000, monthlyInputTokens: 9_000_000, monthlyOutputTokens: 3_000_000 });
+    expect(manual.monthlyTokens).toBe(12_000_000);
+    expect(manual.apiEquivalentCost?.apiCostMicroDollars).toBe(42_000_000);
+    expect(manual.comparison).toMatchObject({ differenceMicroDollars: 22_000_000, cheaper: 'subscription' });
+    expect(manual.capacityEvidence.status).toBe('verified-not-covered');
+    expect(reset.monthlyTokens).toBe(10_000_000);
+    expect(reset.apiEquivalentCost?.apiCostMicroDollars).toBe(35_000_000);
+    expect(zeroManual).toMatchObject({ monthlyTokens: 0, apiEquivalentCost: { apiCostMicroDollars: 0 } });
+  });
+
+  it('uses a positive character estimate for the same selector arithmetic while a zero estimate preserves conversation workload', () => {
+    const offer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const plan = { ...FRONTEND_TEST_CATALOG.plans[0], monthlyCostMicroDollars: 20_000_000, supportedModelIds: [offer.modelId] };
+    const estimated = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 4_000_000, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
+    });
+    const unchanged = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 0, longContextTokens: 0 },
+    });
+
+    expect(estimated.derivedWorkload).toEqual({ monthlyMessages: 2_000, monthlyInputTokens: 750_000, monthlyOutputTokens: 250_000 });
+    expect(estimated.apiEquivalentCost?.apiCostMicroDollars).toBe(3_500_000);
+    expect(estimated.comparison).toMatchObject({ differenceMicroDollars: -16_500_000, cheaper: 'api' });
+    expect(unchanged.derivedWorkload).toEqual({ monthlyMessages: 2_000, monthlyInputTokens: 1_500_000, monthlyOutputTokens: 500_000 });
+    expect(unchanged.apiEquivalentCost?.apiCostMicroDollars).toBe(7_000_000);
+  });
+
+  it('replaces only the sourced cached-input share in the headline total, chart, and audit ledger', () => {
+    const offer = { ...FRONTEND_TEST_CATALOG.modelOffers[0], cachedInputMicroDollarsPerMillion: 250_000 };
+    const plan = { ...FRONTEND_TEST_CATALOG.plans[1], monthlyCostMicroDollars: 20_000_000, supportedModelIds: [offer.modelId] };
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 1_000, cacheWriteTokens: 0, longContextTokens: 0 },
+    });
+    const rows = buildCalculatorEvidenceLineItems(snapshot, offer, '2026-08-14T00:00:00.000Z');
+
+    expect(snapshot.apiEquivalentCost?.apiCostMicroDollars).toBe(6_737_500);
+    expect(snapshot.comparison?.differenceMicroDollars).toBe(-13_262_500);
+    expect(snapshot.chartPoints[3]).toEqual({ tokens: 2_000_000, valueMicroDollars: 6_737_500 });
+    expect(derivedCostTotal(rows)).toBe(6_737_500);
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Scenario input cost', valueMicroDollars: 2_700_000 }),
+      expect.objectContaining({ label: 'Scenario cached-input cost', valueMicroDollars: 37_500 }),
+      expect.objectContaining({ label: 'Scenario output cost', valueMicroDollars: 4_000_000 }),
+    ]));
+  });
+
+  it('includes sourced cache-write and long-context costs in the same headline and breakeven arithmetic as the ledger', () => {
+    const offer = {
+      ...FRONTEND_TEST_CATALOG.modelOffers[0],
+      cacheWriteMicroDollarsPerMillion: 400_000,
+      longContextInputMicroDollarsPerMillion: 4_000_000,
+      longContextOutputMicroDollarsPerMillion: 16_000_000,
+    };
+    const plan = { ...FRONTEND_TEST_CATALOG.plans[1], monthlyCostMicroDollars: 20_000_000, supportedModelIds: [offer.modelId] };
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [offer], selectedModelIds: [offer.id], modelMixBasisPoints: { [offer.id]: 10_000 }, workload, selectedPlan: plan,
+      costUsage: { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 0, cacheWriteTokens: 200_000, longContextTokens: 400_000 },
+    });
+    const rows = buildCalculatorEvidenceLineItems(snapshot, offer, '2026-08-14T00:00:00.000Z');
+
+    expect(snapshot.apiEquivalentCost?.apiCostMicroDollars).toBe(9_880_000);
+    expect(snapshot.comparison?.differenceMicroDollars).toBe(-10_120_000);
+    expect(snapshot.breakEvenTokens).toBe(4_048_583);
+    expect(snapshot.chartPoints[3]).toEqual({ tokens: 2_000_000, valueMicroDollars: 9_880_000 });
+    expect(derivedCostTotal(rows)).toBe(9_880_000);
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Scenario cache-write cost', valueMicroDollars: 80_000 }),
+      expect.objectContaining({ label: 'Scenario long-context input cost', valueMicroDollars: 1_200_000 }),
+      expect.objectContaining({ label: 'Scenario long-context output cost', valueMicroDollars: 1_600_000 }),
+    ]));
+  });
+
+  it('keeps partially published route dimensions excluded without dropping their standard input from a weighted selector total', () => {
+    const direct = {
+      ...FRONTEND_TEST_CATALOG.modelOffers[0],
+      cachedInputMicroDollarsPerMillion: 250_000,
+      cacheWriteMicroDollarsPerMillion: 400_000,
+      longContextInputMicroDollarsPerMillion: 4_000_000,
+      longContextOutputMicroDollarsPerMillion: 16_000_000,
+    };
+    const hosted = FRONTEND_TEST_CATALOG.modelOffers[1];
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [direct, hosted], selectedModelIds: [direct.id, hosted.id], modelMixBasisPoints: { [direct.id]: 5_000, [hosted.id]: 5_000 }, workload,
+      mappingMode: 'override',
+      costUsage: { characterCount: 0, charactersPerToken: 4, manualMonthlyTokens: null, cacheReadBasisPoints: 10_000, cacheWriteTokens: 1_000_000, longContextTokens: 1_000_000 },
+    });
+    const directRows = buildCalculatorEvidenceLineItems(snapshot, direct, '2026-08-14T00:00:00.000Z');
+    const hostedRows = buildCalculatorEvidenceLineItems(snapshot, hosted, '2026-08-14T00:00:00.000Z');
+
+    expect(snapshot.apiEquivalentCost?.apiCostMicroDollars).toBe(10_012_500);
+    expect(derivedCostTotal([...directRows, ...hostedRows])).toBe(10_012_500);
+    expect(hostedRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'derived_cost', label: 'Scenario input cost', valueMicroDollars: 1_875_000 }),
+      expect.objectContaining({ kind: 'assumption', label: 'Cached-input price', assumption: expect.stringMatching(/unavailable.*excluded/i) }),
+      expect.objectContaining({ kind: 'assumption', label: 'Cache-write price', assumption: expect.stringMatching(/unavailable.*excluded/i) }),
+      expect.objectContaining({ kind: 'assumption', label: 'Long-context tier', assumption: expect.stringMatching(/unavailable.*excluded/i) }),
+    ]));
   });
 });

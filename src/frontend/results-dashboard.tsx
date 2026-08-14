@@ -76,22 +76,29 @@ function Metric({ label, value, detail }: { readonly label: string; readonly val
 
 /** The audit view preserves published price evidence separately from derived scenario costs. */
 function AuditLedger({ snapshot, catalog }: Pick<ResultsDashboardProps, 'snapshot' | 'catalog'>) {
-  const offer = snapshot.apiMapping.defaultOffer ?? snapshot.apiMapping.selectedOffers[0] ?? null;
-  const source = offer && catalog ? catalog.provenance.find((entry) => entry.id === offer.sourceId) : undefined;
-  const lineItems = buildCalculatorEvidenceLineItems(snapshot, offer, source?.observedAt ?? null);
+  const offers = snapshot.apiMapping.selectedOffers;
+  const sources = offers.map((offer) => ({
+    offer,
+    source: catalog?.provenance.find((entry) => entry.id === offer.sourceId),
+  }));
+  const lineItems = offers.flatMap(({ id }) => {
+    const offer = offers.find((candidate) => candidate.id === id) ?? null;
+    const source = offer && catalog ? catalog.provenance.find((entry) => entry.id === offer.sourceId) : undefined;
+    return buildCalculatorEvidenceLineItems(snapshot, offer, source?.observedAt ?? null);
+  });
   const csv = calculatorCsv(lineItems);
 
   return <section className="calculator-audit-ledger" aria-labelledby="calculator-audit-heading">
     <h2 id="calculator-audit-heading">Published source prices</h2>
     <dl className="calculator-audit-rows">
-      {lineItems.filter((row) => row.kind !== 'assumption').map((row) => <div className={`calculator-audit-row calculator-audit-${row.kind}`} key={row.label}>
+      {lineItems.filter((row) => row.kind !== 'assumption').map((row, index) => <div className={`calculator-audit-row calculator-audit-${row.kind}`} key={`${row.label}-${index}`}>
         <dt>{row.label}</dt>
         <dd>{row.valueMicroDollars === null ? 'Unavailable' : formatCurrencyMicroDollars(row.valueMicroDollars)}{row.kind === 'source_price' ? ' per 1M tokens' : ''}</dd>
         {row.priceEffectiveAt ? <dd className="calculator-audit-effective">Effective {row.priceEffectiveAt}</dd> : null}
       </div>)}
     </dl>
     <p className="calculator-audit-missing">Cache read, cache write, and long-context dimensions appear only when their route-specific source price is published; unavailable dimensions are excluded rather than priced at zero.</p>
-    {source ? <p><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open published pricing source</a></p> : <p>Pricing source: <strong>Unavailable</strong></p>}
+    {sources.some(({ source }) => source) ? <ul>{sources.map(({ offer, source }) => source ? <li key={offer.id}><a href={source.sourceUrl} target="_blank" rel="noreferrer">Open published pricing source</a> <span>for {offer.displayName}</span></li> : <li key={offer.id}>Pricing source for {offer.displayName}: <strong>Unavailable</strong></li>)}</ul> : <p>Pricing source: <strong>Unavailable</strong></p>}
     <section aria-labelledby="calculator-assumptions-heading">
       <h2 id="calculator-assumptions-heading">Calculation assumptions</h2>
       <ul>{lineItems.filter((row) => row.kind === 'assumption').map((row) => <li key={row.label}>{row.assumption}</li>)}</ul>
@@ -126,7 +133,7 @@ function ValueSummary({ selectedPlan, snapshot, catalog }: Pick<ResultsDashboard
     <article className="value-summary-card">
       <p className="result-recommendation">{recommendation}</p>
       <dl className="value-summary-main">
-        <Metric label="API-equivalent monthly cost" value={formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)} detail="Directional input and output rates for this message-level workload." />
+        <Metric label="API-equivalent monthly cost" value={formatCurrencyMicroDollars(snapshot.apiEquivalentValueMicroDollars)} detail="Authoritative monthly tokens use a manual override, then character estimate, then message workload." />
         <Metric label="Subscription monthly fee" value={selectedPlan ? formatCurrencyMicroDollars(selectedPlan.monthlyCostMicroDollars) : 'No plan selected'} detail={selectedPlan?.displayName ?? 'Select a paid individual plan to compare.'} />
         <Metric label="Monthly messages" value={snapshot.derivedWorkload.monthlyMessages.toLocaleString()} detail={`${snapshot.derivedWorkload.monthlyInputTokens.toLocaleString()} input tokens · ${snapshot.derivedWorkload.monthlyOutputTokens.toLocaleString()} output tokens`} />
         <Metric label="Monthly difference" value={difference === null ? 'Unavailable' : formatCurrencyMicroDollars(difference)} detail="API-equivalent cost minus subscription fee." />
