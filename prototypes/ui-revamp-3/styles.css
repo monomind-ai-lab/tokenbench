@@ -395,6 +395,13 @@ input[type=range] {
   min-width: 0;
 }
 
+.compare-tray-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .models-compare-tray #compare-more {
   margin-left: auto;
   text-align: right;
@@ -1088,6 +1095,10 @@ button:disabled {
     transform: translateX(-50%);
   }
 
+  .compare-tray {
+    scroll-margin-top: 120px;
+  }
+
   .mega-panel {
     top: 108px;
     width: calc(100vw - 24px);
@@ -1139,10 +1150,6 @@ button:disabled {
 @media (max-width: 600px) {
   .header-actions {
     gap: 4px;
-  }
-
-  .header-actions > .button {
-    display: none;
   }
 
   .language-panel {
