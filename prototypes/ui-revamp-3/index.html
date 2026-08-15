@@ -4,11 +4,27 @@ setupShell();let view='cards';function filtered(){let q=$('#search').value.toLow
 </script>
 <script>
   const modelsTray = $('#tray');
+  modelsTray.classList.add('models-compare-tray');
   const requestedCompareModel = new URLSearchParams(location.search).get('compare');
   if (requestedCompareModel && TB_MODELS.some(model => model.id === requestedCompareModel)) TB.selected = [requestedCompareModel];
-  modelsTray.insertAdjacentHTML('beforebegin', `<section id="lifecycle" class="grid-2" style="margin-top:24px"><div class="panel"><div class="toolbar"><div><h2 class="section-title">Lifecycle & retirement watch</h2><p class="lede">Sunset deadlines and replacement routes stay beside catalog decisions.</p></div><a class="button" href="model-lifecycle.html">Open lifecycle radar</a></div><div id="lifecycle-preview" style="margin-top:12px"></div></div><div class="panel soft"><h2 class="section-title">Recent release timeline</h2><p class="fixture">Illustrative staging fixtures</p><ol id="release-preview" class="timeline"></ol></div></section>`);
+  modelsTray.insertAdjacentHTML('beforebegin', `<section id="lifecycle" class="grid-2" style="margin-top:24px"><div class="panel"><div class="lifecycle-head"><div><h2 class="section-title">Lifecycle & retirement watch</h2><p class="lede">Sunset deadlines and replacement routes stay beside catalog decisions.</p></div><a class="text-link" href="model-lifecycle.html">Lifecycle radar →</a></div><div id="lifecycle-preview" style="margin-top:12px"></div></div><div class="panel soft"><h2 class="section-title">Recent release timeline</h2><p class="fixture">Illustrative staging fixtures</p><ol id="release-preview" class="timeline"></ol></div></section>`);
+  $('#catalog').insertAdjacentElement('beforebegin', modelsTray);
+  $('#clear')?.remove();
+  const compareMore = document.createElement('a');
+  compareMore.id = 'compare-more';
+  compareMore.className = 'text-link';
+  compareMore.textContent = 'Compare more →';
+  modelsTray.querySelector(':scope > .toolbar').append(compareMore);
   $('#search').setAttribute('aria-label', 'Search models or providers');
   $('#access').setAttribute('aria-label', 'Filter by access type');
+  const catalogView = $('#cards').parentElement;
+  catalogView.classList.add('view-toggle');
+  $('#cards').innerHTML = shellIcons.grid;
+  $('#cards').setAttribute('aria-label', 'Grid view');
+  $('#cards').title = 'Grid view';
+  $('#rows').innerHTML = shellIcons.list;
+  $('#rows').setAttribute('aria-label', 'List view');
+  $('#rows').title = 'List view';
   $('#cards').parentElement.insertAdjacentHTML('beforebegin', '<select id="sort" aria-label="Sort model catalog"><option value="score">Composite: high to low</option><option value="cost">Cost: low to high</option><option value="tps">Throughput: high to low</option><option value="name">Model name</option></select><button class="toggle" id="reset-catalog">Reset</button>');
   $('#catalog > .toolbar').insertAdjacentHTML('afterend', '<p id="catalog-count" class="fixture" aria-live="polite"></p>');
   filtered = function() {
@@ -26,6 +42,25 @@ setupShell();let view='cards';function filtered(){let q=$('#search').value.toLow
   function updateCatalogCount() {
     $('#catalog-count').textContent = `${filtered().length} of ${TB_MODELS.length} fixture models · sorted by ${$('#sort').selectedOptions[0].textContent.toLowerCase()} · one proof page`;
   }
+  let comparisonWasVisible = false;
+  compare = function() {
+    const models = TB.selected.map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
+    const show = models.length >= 2;
+    const shouldReveal = show && !comparisonWasVisible;
+    modelsTray.classList.toggle('show', show);
+    $('#selection-count').textContent = `${TB.selected.length}/3`;
+    $('#selected-names').innerHTML = models.map(model => `<a class="tag model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${model.name}</a>`).join('');
+    compareMore.href = `compare.html?${new URLSearchParams({models: models.slice(0, 2).map(model => model.id).join(',')})}`;
+    if (show) {
+      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short"><canvas id="radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><div class="comparison-table-head"><h3 class="subhead">Delta table</h3><button class="text-action" id="clear" type="button">clear</button></div>${table(models)}</div>`;
+      radar($('#radar'), models);
+      $('#clear').addEventListener('click', () => { TB.selected = []; window.renderPage(); });
+    } else {
+      $('#comparison').innerHTML = '';
+    }
+    comparisonWasVisible = show;
+    if (shouldReveal) requestAnimationFrame(() => modelsTray.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}));
+  };
   const baseModelsRender = window.renderPage;
   window.renderPage = () => {
     if (typeof Chart !== 'undefined') Chart.getChart($('#radar'))?.destroy();

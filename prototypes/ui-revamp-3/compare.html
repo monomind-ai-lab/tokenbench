@@ -1,0 +1,177 @@
+<!-- Direction contract: prototype-faithful quantitative decision terminal, not generic marketing cards. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Compare models — TokenBench REBUILD</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="index.html"><span class="mark">TB</span>TokenBench <span class="fixture">REBUILD</span></a>
+      <nav class="nav"></nav>
+      <div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle dark theme">◐</button></div>
+    </div>
+  </header>
+  <main class="shell page">
+    <section>
+      <h1 class="headline">Compare models</h1>
+      <p class="lede">Choose exactly two models, then inspect capability, runtime, cost, context and lifecycle differences without collapsing unlike evidence.</p>
+      <p class="fixture">Illustrative staging fixtures · not production factual profiles</p>
+    </section>
+    <hr class="rule">
+    <section class="panel" id="compare-selector">
+      <div>
+        <h2 class="section-title">Select a pair</h2>
+        <p class="lede">Selections from the Models workbench arrive here prefilled.</p>
+      </div>
+      <div class="compare-controls" style="margin-top:16px">
+        <label><span class="label">First model</span><select id="left-model" aria-label="First model"></select></label>
+        <span class="compare-versus" aria-hidden="true">vs</span>
+        <label><span class="label">Second model</span><select id="right-model" aria-label="Second model"></select></label>
+      </div>
+      <div class="selector-actions">
+        <p id="selector-status" class="fixture" aria-live="polite">Choose two different models to compare.</p>
+        <button class="button primary" id="run-compare" type="button" disabled>Compare</button>
+      </div>
+      <div class="popular-pairs">
+        <span class="label">Popular fixture pairs</span>
+        <button class="pair-shortcut" type="button" data-left="gpt-4o" data-right="claude-3-5-sonnet">GPT-4o vs Claude 3.5 Sonnet</button>
+        <button class="pair-shortcut" type="button" data-left="deepseek-v3" data-right="llama-3-3-70b">DeepSeek V3 vs Llama 3.3 70B</button>
+      </div>
+    </section>
+
+    <section id="compare-result" hidden>
+      <div class="toolbar compare-result-head">
+        <div>
+          <h2 class="section-title" id="result-title"></h2>
+          <div class="compare-list" id="result-model-links"></div>
+        </div>
+        <a class="text-link" href="index.html#catalog">Back to model catalog →</a>
+      </div>
+
+      <div class="grid-2" style="margin-top:16px">
+        <div class="panel soft">
+          <h3 class="subhead">Six-domain capability overlay</h3>
+          <p class="fixture">Normalized fixture scores · identical axes</p>
+          <div class="chart-wrap"><canvas id="compare-radar" role="img" aria-label="Two-model capability radar"></canvas></div>
+        </div>
+        <div class="panel">
+          <h3 class="subhead">Decision deltas</h3>
+          <dl class="data-list" id="compare-deltas"></dl>
+        </div>
+      </div>
+
+      <section class="panel" style="margin-top:16px">
+        <div class="toolbar">
+          <div>
+            <h3 class="subhead">Runtime and route economics</h3>
+            <p class="fixture">Representative hosted-route fixtures · p50 · streaming · 1× concurrency</p>
+          </div>
+        </div>
+        <div class="grid-3 compare-bars" style="margin-top:12px">
+          <div><span class="label">Blended cost ($ / 1M)</span><div class="chart-wrap short"><canvas id="compare-cost"></canvas></div></div>
+          <div><span class="label">TTFT (seconds)</span><div class="chart-wrap short"><canvas id="compare-ttft"></canvas></div></div>
+          <div><span class="label">Throughput (tok/s)</span><div class="chart-wrap short"><canvas id="compare-tps"></canvas></div></div>
+        </div>
+      </section>
+
+      <section class="panel" style="margin-top:16px">
+        <h3 class="subhead">Itemized specification and evidence</h3>
+        <div id="compare-specs" style="margin-top:12px"></div>
+        <p class="fixture">Sources and freshness · route, benchmark and lifecycle records are staging fixtures observed 15 Aug 2026. Missing evidence must remain unavailable in production.</p>
+      </section>
+    </section>
+  </main>
+  <script src="data.js"></script>
+  <script src="common.js"></script>
+  <script>
+    setupShell();
+    const left = $('#left-model');
+    const right = $('#right-model');
+    const run = $('#run-compare');
+    const result = $('#compare-result');
+    const placeholder = '<option value="">Select model</option>';
+    left.innerHTML = placeholder + modelOptions();
+    right.innerHTML = placeholder + modelOptions();
+
+    const requested = (new URLSearchParams(location.search).get('models') || '').split(',').filter(id => TB_MODELS.some(model => model.id === id));
+    if (requested[0]) left.value = requested[0];
+    if (requested[1]) right.value = requested[1];
+
+    const chosen = () => [TB_MODELS.find(model => model.id === left.value), TB_MODELS.find(model => model.id === right.value)];
+    const validPair = () => Boolean(left.value && right.value && left.value !== right.value);
+
+    function syncSelector() {
+      const valid = validPair();
+      run.disabled = !valid;
+      $('#selector-status').textContent = valid ? 'Valid pair selected. Compare to refresh the evidence view.' : left.value && right.value ? 'Choose two different models.' : 'Choose two different models to compare.';
+    }
+
+    function chartRowModel(instance, event, models) {
+      const area = instance.chartArea;
+      if (!area || event.y < area.top || event.y > area.bottom) return null;
+      return models[Math.min(models.length - 1, Math.floor((event.y - area.top) / ((area.bottom - area.top) / models.length)))] || null;
+    }
+
+    function comparisonBar(canvas, models, label, value) {
+      const palette = colors();
+      chart(canvas, {
+        type: 'bar',
+        data: { labels: models.map(model => model.name), datasets: [{ label, data: models.map(value), backgroundColor: models.map(model => model.color), borderRadius: 4 }] },
+        options: {
+          indexAxis: 'y',
+          onHover: (event, _active, instance) => { if (event.native?.target) event.native.target.style.cursor = chartRowModel(instance, event, models) ? 'pointer' : 'default'; },
+          onClick: (event, _active, instance) => { const model = chartRowModel(instance, event, models); if (model) location.href = `model-profile.html?model=${encodeURIComponent(model.id)}`; },
+          plugins: { legend: { display: false } },
+          scales: { x: { ticks: { color: palette.muted }, grid: { color: palette.line } }, y: { ticks: { color: palette.plum, font: { size: 10, weight: 600 } }, grid: { display: false } } }
+        }
+      });
+    }
+
+    function renderComparison(updateUrl = true, reveal = false) {
+      if (!validPair()) { syncSelector(); return; }
+      const models = chosen();
+      if (updateUrl) history.replaceState(null, '', `compare.html?${new URLSearchParams({models: models.map(model => model.id).join(',')})}`);
+      $('#result-title').textContent = `${models[0].name} vs ${models[1].name}`;
+      $('#result-model-links').innerHTML = models.map(model => `<a class="tag model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${model.name}</a>`).join('');
+      $('#compare-deltas').innerHTML = models.map(model => `<div><dt>${link(model)}</dt><dd>${score(model).toFixed(1)} composite · $${model.inputPrice.toFixed(2)} / $${model.outputPrice.toFixed(2)} input/output · ${model.ttft}s TTFT · ${model.tps} tok/s · ${model.context} context · ${model.lifecycle}</dd></div>`).join('');
+      $('#compare-specs').innerHTML = `<div class="table-wrap" role="region" aria-label="Itemized comparison" tabindex="0"><table><thead><tr><th>Specification</th>${models.map(model => `<th>${link(model)}</th>`).join('')}</tr></thead><tbody>${[
+        ['Provider', model => model.provider],
+        ['Access', model => model.access],
+        ['Input / 1M', model => `$${model.inputPrice.toFixed(2)}`],
+        ['Output / 1M', model => `$${model.outputPrice.toFixed(2)}`],
+        ['Cache read / 1M', model => model.cacheRead == null ? 'Unavailable' : `$${model.cacheRead.toFixed(2)}`],
+        ['Blended cost / 1M', model => `$${model.cost.toFixed(2)}`],
+        ['Context window', model => model.context],
+        ['Maximum output', model => model.maxOutput],
+        ['TTFT p50', model => `${model.ttft}s`],
+        ['Throughput', model => `${model.tps} tok/s`],
+        ['Lifecycle', model => model.lifecycle || 'Unavailable'],
+        ['Sunset', model => model.sunset || 'Not reported']
+      ].map(([label, value]) => `<tr><th>${label}</th>${models.map(model => `<td>${value(model)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      radar($('#compare-radar'), models);
+      comparisonBar($('#compare-cost'), models, 'Blended cost', model => model.cost);
+      comparisonBar($('#compare-ttft'), models, 'TTFT', model => model.ttft);
+      comparisonBar($('#compare-tps'), models, 'Throughput', model => model.tps);
+      result.hidden = false;
+      syncSelector();
+      if (reveal) requestAnimationFrame(() => result.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}));
+    }
+
+    [left, right].forEach(select => select.addEventListener('change', () => { result.hidden = true; syncSelector(); }));
+    run.addEventListener('click', () => renderComparison(true, true));
+    $$('.pair-shortcut').forEach(button => button.addEventListener('click', () => {
+      left.value = button.dataset.left;
+      right.value = button.dataset.right;
+      renderComparison(true, true);
+    }));
+    window.renderPage = () => { if (!result.hidden && validPair()) renderComparison(false, false); };
+    syncSelector();
+    if (validPair()) renderComparison(false, false);
+  </script>
+</body>
+</html>
