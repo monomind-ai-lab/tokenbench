@@ -5,8 +5,29 @@ setupShell();let view='cards',ttft=.8,tps=60;const domains=['agentic','coding','
 <script>
   const rankedOutputSection = $('#output').closest('section');
   rankedOutputSection.insertAdjacentHTML('beforebegin', `<aside id="tray" class="compare-tray panel" aria-label="Selected model comparison"><div class="toolbar"><div><strong>Compare ranked candidates</strong><p id="compare-summary" class="fixture" aria-live="polite">Select two or three models from Cards or Table.</p><div class="compare-list" id="selected-names"></div></div><button class="toggle" id="clear">Clear selection</button></div><div id="comparison" class="grid-2" style="margin-top:12px"></div></aside>`);
-  $('#ranking').closest('.panel').querySelector('.fixture').insertAdjacentHTML('afterend', '<p id="rank-status" class="fixture" aria-live="polite"></p><p id="weight-summary" class="weight-summary" aria-label="Current capability weights"></p>');
-  $('#pass').insertAdjacentHTML('beforebegin', '<label class="toggle sla-toggle"><input id="show-excluded" type="checkbox"> <span>Show outside SLA</span></label>');
+  const rankingPanel = $('#ranking').closest('.ranking-panel');
+  const rankingHeading = rankingPanel.querySelector('.section-title');
+  const rankingFixture = rankingPanel.querySelector('.fixture');
+  const rankingHeader = document.createElement('div');
+  const rankingCopy = document.createElement('div');
+  rankingHeader.className = 'toolbar ranking-header';
+  rankingHeading.before(rankingHeader);
+  rankingCopy.append(rankingHeading, rankingFixture);
+  rankingHeader.append(rankingCopy);
+  rankingHeader.insertAdjacentHTML('beforeend', '<label class="toggle sla-toggle"><input id="show-excluded" type="checkbox"> <span>Show outside SLA</span></label>');
+  rankingHeader.insertAdjacentHTML('afterend', '<p id="rank-status" class="fixture" aria-live="polite"></p><p id="weight-summary" class="weight-summary" aria-label="Current capability weights"></p>');
+  rankingPanel.querySelector('.chart-wrap').classList.add('ranking-chart');
+  $('#pass').closest('.panel').classList.add('service-level-panel');
+  const rankedOutputView = $('#cards').parentElement;
+  rankedOutputView.classList.add('view-toggle');
+  rankedOutputView.setAttribute('role', 'group');
+  rankedOutputView.setAttribute('aria-label', 'Ranked output view');
+  $('#cards').innerHTML = shellIcons.grid;
+  $('#cards').setAttribute('aria-label', 'Grid view');
+  $('#cards').title = 'Grid view';
+  $('#rows').innerHTML = shellIcons.list;
+  $('#rows').setAttribute('aria-label', 'List view');
+  $('#rows').title = 'List view';
   $('#ttft-chart').setAttribute('role', 'img');
   $('#ttft-chart').setAttribute('aria-label', 'Horizontal time-to-first-token measurements by model');
   $('#tps-chart').setAttribute('role', 'img');
@@ -52,7 +73,7 @@ setupShell();let view='cards',ttft=.8,tps=60;const domains=['agentic','coding','
         plugins: { legend: { display: false } },
         scales: {
           x: { ticks: { color: palette.muted }, grid: { color: palette.line } },
-          y: { ticks: { color: palette.plum, font: { size: 10, weight: 600 } }, grid: { display: false } }
+          y: { ticks: { color: palette.accentText, font: { size: 10, weight: 600 } }, grid: { display: false } }
         }
       }
     });

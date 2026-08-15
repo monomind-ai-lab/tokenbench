@@ -336,7 +336,7 @@ input[type=range] {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 9px 0;
   min-width: 0;
-  margin-top: 14px !important;
+  margin-top: 35px !important;
 }
 
 .rank-metrics .metric {
@@ -820,7 +820,7 @@ button:disabled {
 }
 
 .weight-summary {
-  margin: 8px 0 0;
+  margin: 32px 0 0;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: var(--r1);
@@ -860,6 +860,27 @@ button:disabled {
 
 .ranking-panel canvas {
   display: block;
+}
+
+.ranking-header {
+  align-items: flex-start;
+}
+
+.ranking-header > div {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.ranking-header .sla-toggle {
+  margin-left: auto;
+}
+
+.ranking-chart {
+  margin-top: 32px;
+}
+
+.service-level-panel > .toolbar:first-child {
+  margin-bottom: 24px;
 }
 
 .ranking-details {
