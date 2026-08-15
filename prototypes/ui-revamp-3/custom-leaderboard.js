@@ -132,7 +132,7 @@
 
   function renderOutput(models) {
     const outputRoot = $('#output');
-    outputRoot.innerHTML = view === 'rows' ? table(models) : `<div class="grid-3">${models.map((model, index) => modelCard(model, { rank: index + 1 })).join('')}</div>`;
+    outputRoot.innerHTML = view === 'rows' ? table(models, { costMode: 'input-output' }) : `<div class="grid-3">${models.map((model, index) => modelCard(model, { rank: index + 1 })).join('')}</div>`;
     bindCompare(outputRoot);
     bindCompare($('#rank-alt'));
   }
@@ -184,7 +184,7 @@
 
     if (valid && visibleModels.length) {
       horizontal('ranking', visibleModels, model => score(model), 'Composite', meetsSla);
-      $('#rank-alt').innerHTML = table(visibleModels);
+      $('#rank-alt').innerHTML = table(visibleModels, { costMode: 'input-output' });
       renderOutput(visibleModels);
     } else {
       if (typeof Chart !== 'undefined') Chart.getChart($('#ranking'))?.destroy();
