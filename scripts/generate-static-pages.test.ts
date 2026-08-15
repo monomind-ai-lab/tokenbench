@@ -41,6 +41,7 @@ describe('crawlable static-page generator', () => {
     const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
+    const popularModels = await readFile(join(root, 'popular-models/index.html'), 'utf8');
     const guide = await readFile(join(root, 'guides/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
@@ -82,6 +83,10 @@ describe('crawlable static-page generator', () => {
     expect(methodology).toContain('https://benchlm.ai/methodology');
     expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
 
+    expect(popularModels).toContain('<h1>Popular models leaderboard</h1>');
+    expect(popularModels).toContain('Interactive frontend prototype');
+    expect(popularModels).toContain('https://tokenbench.monomind.one/popular-models/');
+
     expect(home).toContain('<a href="/methodology/benchalign/">Methodology</a>');
     expect(home).not.toContain('href="/sources/"');
 
@@ -98,6 +103,7 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/privacy/</loc>');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/popular-models/</loc>');
     expect(sitemap).not.toContain('/welcome/');
     expect(new Set(sitemap.match(/<loc>[^<]+<\/loc>/g)).size).toBe(sitemap.match(/<loc>[^<]+<\/loc>/g)?.length);
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
@@ -228,7 +234,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(31);
+    expect(FIXED_ROUTES).toHaveLength(32);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

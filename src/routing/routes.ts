@@ -9,6 +9,7 @@ export const ROUTE_PATHS = {
   pricePerformance: '/llm-price-performance/',
   compareHub: '/compare/',
   models: '/models/',
+  popularModels: '/popular-models/',
   leaderboards: '/leaderboards/',
   methodologyBenchAlign: '/methodology/benchalign/',
   newsletterConfirmed: '/newsletter/confirmed/',
@@ -16,7 +17,7 @@ export const ROUTE_PATHS = {
   privacy: '/privacy/',
 } as const;
 
-export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'compare' | 'leaderboards' | 'guides';
+export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'popularModels' | 'compare' | 'leaderboards' | 'guides';
 
 export const LEADERBOARD_ROUTES = {
   'llm-overall': {
@@ -172,6 +173,7 @@ export type AppRoute =
   | { kind: 'guides'; slug?: string }
   | { kind: 'compareHub' }
   | { kind: 'models' }
+  | { kind: 'popularModels' }
   | { kind: 'comparison'; pair: string }
   | { kind: 'modelProfile'; slug: string }
   | { kind: 'newsletterConfirmed' }
@@ -203,6 +205,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'price-performance', pathname: ROUTE_PATHS.pricePerformance, route: { kind: 'pricePerformance' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
+  { id: 'popular-models', pathname: ROUTE_PATHS.popularModels, route: { kind: 'popularModels' } },
   { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
   { id: 'welcome', pathname: ROUTE_PATHS.welcome, route: { kind: 'welcome' } },
   { id: 'privacy', pathname: ROUTE_PATHS.privacy, route: { kind: 'privacy' } },
@@ -246,6 +249,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'models': return ROUTE_PATHS.models;
+    case 'popularModels': return ROUTE_PATHS.popularModels;
     case 'comparison': return `${ROUTE_PATHS.compareHub}${route.pair}`;
     case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
@@ -269,6 +273,7 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
+  if (normalizedPathname === ROUTE_PATHS.popularModels) return { kind: 'popularModels' };
   if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
   if (normalizedPathname === ROUTE_PATHS.welcome) return { kind: 'welcome' };
   if (normalizedPathname === ROUTE_PATHS.privacy) return { kind: 'privacy' };

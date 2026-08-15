@@ -40,6 +40,7 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'privacy' }, canonical: `${origin}/privacy/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
   { route: { kind: 'models' }, canonical: `${origin}/models/` },
+  { route: { kind: 'popularModels' }, canonical: `${origin}/popular-models/` },
   { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
   { route: { kind: 'leaderboard', key: 'llm-coding' }, canonical: `${origin}/leaderboards/llm/coding/` },
@@ -118,6 +119,16 @@ describe('route metadata registry', () => {
     expect(page.robots).toBe('index,follow');
     expect(page.openGraph.url).toBe(page.canonical);
     expect(page.twitter.title).toBe(page.title);
+  });
+
+  it('publishes a distinct canonical destination for the interactive popular-model workbench', () => {
+    const page = metadataForRoute({ kind: 'popularModels' });
+
+    expect(page.title).toBe('Popular Models Leaderboard | TokenBench');
+    expect(page.h1).toBe('Popular models leaderboard');
+    expect(page.description).toContain('cost per successful task');
+    expect(page.canonical).toBe(`${origin}/popular-models/`);
+    expect(page.robots).toBe('index,follow');
   });
 
   it('uses every approved succinct leaderboard title for document and social metadata', () => {

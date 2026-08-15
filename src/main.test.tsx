@@ -97,6 +97,17 @@ describe('browser entrypoint', () => {
     expect(createRootMock).toHaveBeenCalledWith(root);
   });
 
+  it('replaces the crawlable Popular Models shell before mounting the interactive workbench', async () => {
+    window.history.replaceState({}, '', '/popular-models/');
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    expect(rootRenderer).toHaveBeenCalledTimes(1);
+  });
+
   it('mounts the standalone confirmation page without an application shell', async () => {
     window.history.replaceState({}, '', '/newsletter/confirmed/');
     document.body.innerHTML = '<div id="root"><div class="transactional-page-shell">Crawlable confirmation</div></div>';

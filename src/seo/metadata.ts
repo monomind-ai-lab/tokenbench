@@ -101,6 +101,11 @@ const pageDefinitions = {
     description: `Browse the current weekly top 100 AI models and search retained model profiles with source-linked benchmark, pricing, and evidence facts from ${SITE_CONFIG.name}.`,
     h1: 'Popular AI models',
   },
+  popularModels: {
+    title: `Popular Models Leaderboard | ${SITE_CONFIG.name}`,
+    description: `Explore an interactive ${SITE_CONFIG.name} prototype for comparing popular AI models across quality, category performance, and cost per successful task.`,
+    h1: 'Popular models leaderboard',
+  },
   newsletterConfirmed: {
     title: `Subscription confirmed | ${SITE_CONFIG.name}`,
     description: `Your ${SITE_CONFIG.name} newsletter subscription is confirmed. The current test cheatsheet PDF will arrive by email; start exploring AI cost and benchmark decision tools.`,
@@ -156,6 +161,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
     case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
     case 'models': return makeMetadata(ROUTE_PATHS.models, pageDefinitions.models);
+    case 'popularModels': return makeMetadata(ROUTE_PATHS.popularModels, pageDefinitions.popularModels);
     case 'newsletterConfirmed': return makeMetadata(ROUTE_PATHS.newsletterConfirmed, pageDefinitions.newsletterConfirmed);
     case 'welcome': return makeMetadata(ROUTE_PATHS.welcome, pageDefinitions.welcome);
     case 'privacy': return makeMetadata(ROUTE_PATHS.privacy, pageDefinitions.privacy);

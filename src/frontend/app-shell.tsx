@@ -77,7 +77,7 @@ export function SiteFooter({ disclaimer }: SiteFooterProps) {
         <strong>Explore</strong>
         <a href={ROUTE_PATHS.calculator}>Subscribe vs API</a>
         <a href={ROUTE_PATHS.pricePerformance}>Price vs performance</a>
-        <a href={ROUTE_PATHS.models}>Popular models</a>
+        <a href={ROUTE_PATHS.popularModels}>Popular models</a>
         <a href={ROUTE_PATHS.compareHub}>Compare models</a>
         <a href={ROUTE_PATHS.leaderboards}>Leaderboards</a>
         <a href={ROUTE_PATHS.guides}>Guides</a>

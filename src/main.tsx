@@ -50,7 +50,7 @@ function initialModelProfileViewModel() {
 const route = matchRoute(window.location.pathname);
 const RootApp = route.kind === 'guides'
   ? GuidesApp
-  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'methodologyBenchAlign' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard'
+  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'methodologyBenchAlign' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard' || route.kind === 'popularModels'
     ? App
     : null;
 
@@ -98,7 +98,7 @@ if (route.kind === 'modelProfile') {
   const root = document.getElementById('root')!;
   // These static shells remain for no-JavaScript crawlers. Once their
   // interactive route mounts, clear the fallback so it cannot duplicate UI.
-  if (route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard') root.replaceChildren();
+  if (route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard' || route.kind === 'popularModels') root.replaceChildren();
   createRoot(root).render(
     <StrictMode>
       <RootApp />

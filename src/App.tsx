@@ -31,6 +31,7 @@ import { ToolsPage } from './pages/tools-page';
 import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
 import { ModelProfilePage } from './pages/model-profile-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
+import { PopularModelsPage } from './pages/popular-models-page';
 import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
 
 interface PageFrameProps {
@@ -309,6 +310,10 @@ function LeaderboardsRoute() {
   return <PageFrame activePage="leaderboards"><LeaderboardDirectoryPage /></PageFrame>;
 }
 
+function PopularModelsRoute() {
+  return <PageFrame activePage="leaderboards"><PopularModelsPage /></PageFrame>;
+}
+
 function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
   return <PageFrame activePage="leaderboards"><LeaderboardPage keyName={keyName} /></PageFrame>;
 }
@@ -363,6 +368,7 @@ export default function App() {
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;
+  if (route.kind === 'popularModels') return <PopularModelsRoute />;
   if (route.kind === 'models') return <ModelsRoute />;
   if (route.kind === 'redirect') {
     window.location.replace(route.to);
