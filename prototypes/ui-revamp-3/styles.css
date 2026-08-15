@@ -1917,7 +1917,7 @@ button:disabled {
 .article-skip-link:focus { transform: translateY(0); }
 
 .article-detail-page {
-  width: min(1120px, calc(100% - 32px));
+  width: min(1280px, calc(100% - 32px));
   padding: 28px 0 72px;
 }
 
@@ -2207,7 +2207,7 @@ button:disabled {
 }
 
 @media (max-width: 800px) {
-  .article-detail-page { width: min(100% - 24px, 1120px); padding-top: 68px; padding-bottom: 56px; }
+  .article-detail-page { width: min(100% - 24px, 1280px); padding-top: 68px; padding-bottom: 56px; }
   .article-detail-breadcrumbs { margin-bottom: 20px; }
   .article-detail-header { padding-bottom: 28px; }
   .article-detail-header h1 { max-width: 14ch; font-size: clamp(36px, 11vw, 50px); }
