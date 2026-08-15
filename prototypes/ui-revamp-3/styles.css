@@ -112,7 +112,9 @@ a {
 }
 
 .mega-panels {
-  position: static;
+  position: absolute;
+  width: 0;
+  height: 0;
 }
 
 .mega-panel {
