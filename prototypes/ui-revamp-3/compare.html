@@ -19,26 +19,46 @@
   <main class="shell page">
     <section>
       <h1 class="headline">Compare models</h1>
-      <p class="lede">Choose exactly two models, then inspect capability, runtime, cost, context and lifecycle differences without collapsing unlike evidence.</p>
+      <p class="lede">Choose 2–4 models, then inspect capability, runtime, cost, context and lifecycle differences without collapsing unlike evidence.</p>
       <p class="fixture">Illustrative staging fixtures · not production factual profiles</p>
     </section>
     <hr class="rule">
-    <section class="panel" id="compare-selector">
-      <div>
-        <h2 class="section-title">Select a pair</h2>
-        <p class="lede">Selections from the Models workbench arrive here prefilled.</p>
+    <section class="panel compare-selector-panel" id="compare-selector" aria-labelledby="compare-selector-title">
+      <div class="compare-selector-head">
+        <span class="compare-step" aria-hidden="true">1</span>
+        <div>
+          <p class="label compare-step-label">Start here</p>
+          <h2 class="section-title" id="compare-selector-title">Choose 2–4 models</h2>
+          <p class="lede">Select the two required models first, then add up to two optional models. Selections from the Models workbench arrive here prefilled.</p>
+        </div>
+        <div class="selection-progress" aria-live="polite"><span class="label">Selected</span><strong id="selection-progress">0 / 4</strong></div>
       </div>
-      <div class="compare-controls" style="margin-top:16px">
-        <label><span class="label">First model</span><select id="left-model" aria-label="First model"></select></label>
-        <span class="compare-versus" aria-hidden="true">vs</span>
-        <label><span class="label">Second model</span><select id="right-model" aria-label="Second model"></select></label>
-      </div>
-      <div class="selector-actions">
-        <p id="selector-status" class="fixture" aria-live="polite">Choose two different models to compare.</p>
-        <button class="button primary" id="run-compare" type="button" disabled>Compare</button>
-      </div>
+      <form id="compare-form">
+        <div class="compare-controls" style="margin-top:20px">
+          <label class="model-slot"><span class="label">Required model 1</span><select id="left-model" class="model-selector" required aria-describedby="selector-status"></select></label>
+          <label class="model-slot"><span class="label">Required model 2</span><select id="right-model" class="model-selector" required aria-describedby="selector-status"></select></label>
+        </div>
+        <div class="compare-optional-controls" id="optional-controls">
+          <div class="optional-model-slot" data-optional-slot="2" hidden>
+            <label class="model-slot"><span class="label">Optional model 3</span><select id="third-model" class="model-selector" aria-describedby="selector-status"></select></label>
+            <button class="text-action optional-remove" type="button" data-remove-slot="2" aria-label="Remove optional model 3">Remove</button>
+          </div>
+          <div class="optional-model-slot" data-optional-slot="3" hidden>
+            <label class="model-slot"><span class="label">Optional model 4</span><select id="fourth-model" class="model-selector" aria-describedby="selector-status"></select></label>
+            <button class="text-action optional-remove" type="button" data-remove-slot="3" aria-label="Remove optional model 4">Remove</button>
+          </div>
+        </div>
+        <div class="compare-add-row">
+          <button class="button" id="add-optional-model" type="button" aria-describedby="selector-status" disabled>Add optional model</button>
+          <span class="fixture">Optional slots unlock after both required models are selected.</span>
+        </div>
+        <div class="selector-actions">
+          <p id="selector-status" class="selector-status" aria-live="polite">Select required model 1 and required model 2 to begin.</p>
+          <button class="button primary" id="run-compare" type="submit" disabled>Compare models</button>
+        </div>
+      </form>
       <div class="popular-pairs">
-        <span class="label">Popular fixture pairs</span>
+        <span class="label">Start with a fixture pair</span>
         <button class="pair-shortcut" type="button" data-left="gpt-4o" data-right="claude-3-5-sonnet">GPT-4o vs Claude 3.5 Sonnet</button>
         <button class="pair-shortcut" type="button" data-left="deepseek-v3" data-right="llama-3-3-70b">DeepSeek V3 vs Llama 3.3 70B</button>
       </div>
@@ -53,15 +73,17 @@
         <a class="text-link" href="index.html#catalog">Back to model catalog →</a>
       </div>
 
-      <div class="grid-2" style="margin-top:16px">
-        <div class="panel soft">
+      <div class="grid-2 compare-summary-grid" style="margin-top:16px">
+        <div class="panel soft compare-radar-panel">
           <h3 class="subhead">Six-domain capability overlay</h3>
           <p class="fixture">Normalized fixture scores · identical axes</p>
-          <div class="chart-wrap"><canvas id="compare-radar" role="img" aria-label="Two-model capability radar"></canvas></div>
+          <div class="chart-wrap compare-radar-wrap"><canvas id="compare-radar" role="img" aria-label="Capability comparison radar"></canvas></div>
+          <details class="compare-capability-details"><summary>Exact capability values</summary><div id="compare-capability-table"></div></details>
         </div>
-        <div class="panel">
+        <div class="panel compare-decision-panel">
           <h3 class="subhead">Decision deltas</h3>
-          <dl class="data-list" id="compare-deltas"></dl>
+          <p class="fixture">Ranked evidence · same format as Compare candidates</p>
+          <div class="compare-decision-table" id="compare-deltas"></div>
         </div>
       </div>
 
@@ -73,9 +95,9 @@
           </div>
         </div>
         <div class="grid-3 compare-bars" style="margin-top:12px">
-          <div><span class="label">Blended cost ($ / 1M)</span><div class="chart-wrap short"><canvas id="compare-cost"></canvas></div></div>
-          <div><span class="label">TTFT (seconds)</span><div class="chart-wrap short"><canvas id="compare-ttft"></canvas></div></div>
-          <div><span class="label">Throughput (tok/s)</span><div class="chart-wrap short"><canvas id="compare-tps"></canvas></div></div>
+          <div><span class="label">Blended cost ($ / 1M)</span><div class="chart-wrap short"><canvas id="compare-cost" role="img" aria-label="Selected model blended cost comparison"></canvas></div></div>
+          <div><span class="label">TTFT (seconds)</span><div class="chart-wrap short"><canvas id="compare-ttft" role="img" aria-label="Selected model time to first token comparison"></canvas></div></div>
+          <div><span class="label">Throughput (tok/s)</span><div class="chart-wrap short"><canvas id="compare-tps" role="img" aria-label="Selected model throughput comparison"></canvas></div></div>
         </div>
       </section>
 
@@ -90,25 +112,70 @@
   <script src="common.js"></script>
   <script>
     setupShell();
-    const left = $('#left-model');
-    const right = $('#right-model');
+    const form = $('#compare-form');
+    const selectors = $$('.model-selector');
+    const [left, right] = selectors;
     const run = $('#run-compare');
+    const addOptional = $('#add-optional-model');
     const result = $('#compare-result');
-    const placeholder = '<option value="">Select model</option>';
-    left.innerHTML = placeholder + modelOptions();
-    right.innerHTML = placeholder + modelOptions();
+    let visibleSlots = 2;
 
-    const requested = (new URLSearchParams(location.search).get('models') || '').split(',').filter(id => TB_MODELS.some(model => model.id === id));
-    if (requested[0]) left.value = requested[0];
-    if (requested[1]) right.value = requested[1];
+    selectors.forEach((select, index) => {
+      const placeholder = index < 2 ? `Select required model ${index + 1}` : `Select optional model ${index + 1}`;
+      select.innerHTML = `<option value="">${placeholder}</option>${modelOptions()}`;
+    });
 
-    const chosen = () => [TB_MODELS.find(model => model.id === left.value), TB_MODELS.find(model => model.id === right.value)];
-    const validPair = () => Boolean(left.value && right.value && left.value !== right.value);
+    const rawRequested = (new URLSearchParams(location.search).get('models') || '').split(',').filter(Boolean);
+    const requested = normalizeModelIds(rawRequested);
+    requested.forEach((id, index) => { selectors[index].value = id; });
+    visibleSlots = Math.max(2, requested.length);
 
-    function syncSelector() {
-      const valid = validPair();
+    const selectedIds = () => normalizeModelIds(selectors.map(select => select.value).filter(Boolean));
+    const chosen = () => selectedIds().map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
+    const requiredReady = () => Boolean(left.value && right.value && left.value !== right.value);
+    const validSelection = () => requiredReady() && selectedIds().length >= 2;
+
+    function setVisibleSlots(count) {
+      visibleSlots = Math.max(2, Math.min(MAX_COMPARE_MODELS, count));
+      $$('.optional-model-slot').forEach(slot => { slot.hidden = Number(slot.dataset.optionalSlot) >= visibleSlots; });
+      addOptional.hidden = visibleSlots >= MAX_COMPARE_MODELS;
+    }
+
+    function persistSelection() {
+      const url = new URL(location.href);
+      const ids = selectedIds();
+      if (ids.length) url.searchParams.set('models', ids.join(','));
+      else url.searchParams.delete('models');
+      history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+
+    function syncOptionAvailability() {
+      const ids = selectedIds();
+      selectors.forEach(select => {
+        [...select.options].forEach(option => {
+          if (option.value) option.disabled = option.value !== select.value && ids.includes(option.value);
+        });
+      });
+    }
+
+    function syncSelector({persist = false} = {}) {
+      const ids = selectedIds();
+      const count = ids.length;
+      const valid = validSelection();
+      syncOptionAvailability();
+      setVisibleSlots(visibleSlots);
+      $('#selection-progress').textContent = `${count} / ${MAX_COMPARE_MODELS}`;
       run.disabled = !valid;
-      $('#selector-status').textContent = valid ? 'Valid pair selected. Compare to refresh the evidence view.' : left.value && right.value ? 'Choose two different models.' : 'Choose two different models to compare.';
+      run.textContent = valid ? `Compare ${count} models` : 'Compare models';
+      addOptional.disabled = !requiredReady() || (visibleSlots > 2 && !selectors[visibleSlots - 1].value);
+      const status = $('#selector-status');
+      status.classList.toggle('ready', valid);
+      if (!left.value && !right.value) status.textContent = 'Select required model 1 and required model 2 to begin.';
+      else if (!requiredReady()) status.textContent = 'Choose both required model slots before comparing.';
+      else if (count === 2) status.textContent = '2 of 4 selected · ready to compare. Add up to 2 optional models if needed.';
+      else if (count === 3) status.textContent = '3 of 4 selected · ready to compare. Add 1 more optional model if needed.';
+      else status.textContent = '4 of 4 selected · ready to compare.';
+      if (persist) persistSelection();
     }
 
     function chartRowModel(instance, event, models) {
@@ -119,6 +186,7 @@
 
     function comparisonBar(canvas, models, label, value) {
       const palette = colors();
+      canvas.parentElement.style.height = `${Math.max(190, 70 + models.length * 38)}px`;
       chart(canvas, {
         type: 'bar',
         data: { labels: models.map(model => model.name), datasets: [{ label, data: models.map(value), backgroundColor: models.map(model => model.color), borderRadius: 4 }] },
@@ -127,19 +195,36 @@
           onHover: (event, _active, instance) => { if (event.native?.target) event.native.target.style.cursor = chartRowModel(instance, event, models) ? 'pointer' : 'default'; },
           onClick: (event, _active, instance) => { const model = chartRowModel(instance, event, models); if (model) location.href = `model-profile.html?model=${encodeURIComponent(model.id)}`; },
           plugins: { legend: { display: false } },
-          scales: { x: { ticks: { color: palette.muted }, grid: { color: palette.line } }, y: { ticks: { color: palette.plum, font: { size: 10, weight: 600 } }, grid: { display: false } } }
+          scales: { x: { ticks: { color: palette.muted }, grid: { color: palette.line } }, y: { ticks: { color: palette.accentText, font: { size: 10, weight: 600 } }, grid: { display: false } } }
         }
       });
     }
 
+    function comparisonMatrix(models, rows, ariaLabel) {
+      return `<div class="table-wrap" role="region" aria-label="${ariaLabel}" tabindex="0"><table><thead><tr><th scope="col">Specification</th>${models.map(model => `<th scope="col">${link(model)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, value]) => `<tr><th scope="row">${label}</th>${models.map(model => `<td>${value(model)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }
+
+    function decisionCards(models) {
+      return `<div class="compare-decision-cards">${models.map((model, index) => `<article class="compare-decision-card"><div class="comparison-table-head"><span class="tag">#${index + 1} · ${model.provider}</span>${link(model)}</div><dl><div><dt>Composite</dt><dd>${score(model).toFixed(1)}</dd></div><div><dt>Blended $/1M</dt><dd>$${model.cost.toFixed(2)}</dd></div><div><dt>TTFT</dt><dd>${model.ttft}s</dd></div><div><dt>Throughput</dt><dd>${model.tps} tok/s</dd></div><div><dt>Lifecycle</dt><dd>${model.lifecycle || 'Not reported'}</dd></div></dl></article>`).join('')}</div>`;
+    }
+
     function renderComparison(updateUrl = true, reveal = false) {
-      if (!validPair()) { syncSelector(); return; }
+      if (!validSelection()) { syncSelector(); return; }
       const models = chosen();
-      if (updateUrl) history.replaceState(null, '', `compare.html?${new URLSearchParams({models: models.map(model => model.id).join(',')})}`);
-      $('#result-title').textContent = `${models[0].name} vs ${models[1].name}`;
+      TB.selected = models.map(model => model.id);
+      if (updateUrl) persistSelection();
+      $('#result-title').textContent = models.length === 2 ? `${models[0].name} vs ${models[1].name}` : `${models.length}-model comparison`;
       $('#result-model-links').innerHTML = models.map(model => `<a class="tag model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${model.name}</a>`).join('');
-      $('#compare-deltas').innerHTML = models.map(model => `<div><dt>${link(model)}</dt><dd>${score(model).toFixed(1)} composite · $${model.inputPrice.toFixed(2)} / $${model.outputPrice.toFixed(2)} input/output · ${model.ttft}s TTFT · ${model.tps} tok/s · ${model.context} context · ${model.lifecycle}</dd></div>`).join('');
-      $('#compare-specs').innerHTML = `<div class="table-wrap" role="region" aria-label="Itemized comparison" tabindex="0"><table><thead><tr><th>Specification</th>${models.map(model => `<th>${link(model)}</th>`).join('')}</tr></thead><tbody>${[
+      $('#compare-deltas').innerHTML = table(models, {showCompare: false, ariaLabel: 'Selected model decision comparison'}) + decisionCards(models);
+      $('#compare-capability-table').innerHTML = comparisonMatrix(models, [
+        ['Agentic', model => domainScore(model, 'agentic').toFixed(0)],
+        ['Coding', model => domainScore(model, 'coding').toFixed(0)],
+        ['Reasoning', model => domainScore(model, 'reasoning').toFixed(0)],
+        ['Math', model => domainScore(model, 'math').toFixed(0)],
+        ['Multimodal', model => domainScore(model, 'multimodal').toFixed(0)],
+        ['Throughput', model => domainScore(model, 'throughput').toFixed(0)]
+      ], 'Exact capability comparison');
+      $('#compare-specs').innerHTML = comparisonMatrix(models, [
         ['Provider', model => model.provider],
         ['Access', model => model.access],
         ['Input / 1M', model => `$${model.inputPrice.toFixed(2)}`],
@@ -152,7 +237,11 @@
         ['Throughput', model => `${model.tps} tok/s`],
         ['Lifecycle', model => model.lifecycle || 'Unavailable'],
         ['Sunset', model => model.sunset || 'Not reported']
-      ].map(([label, value]) => `<tr><th>${label}</th>${models.map(model => `<td>${value(model)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      ], 'Itemized model comparison');
+      $('#compare-radar').setAttribute('aria-label', `Capability radar comparing ${models.map(model => model.name).join(', ')}`);
+      $('#compare-cost').setAttribute('aria-label', `Blended cost comparison for ${models.map(model => model.name).join(', ')}`);
+      $('#compare-ttft').setAttribute('aria-label', `Time to first token comparison for ${models.map(model => model.name).join(', ')}`);
+      $('#compare-tps').setAttribute('aria-label', `Throughput comparison for ${models.map(model => model.name).join(', ')}`);
       radar($('#compare-radar'), models);
       comparisonBar($('#compare-cost'), models, 'Blended cost', model => model.cost);
       comparisonBar($('#compare-ttft'), models, 'TTFT', model => model.ttft);
@@ -162,16 +251,35 @@
       if (reveal) requestAnimationFrame(() => result.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}));
     }
 
-    [left, right].forEach(select => select.addEventListener('change', () => { result.hidden = true; syncSelector(); }));
-    run.addEventListener('click', () => renderComparison(true, true));
+    selectors.forEach(select => select.addEventListener('change', () => { result.hidden = true; syncSelector({persist: true}); }));
+    addOptional.addEventListener('click', () => {
+      if (visibleSlots >= MAX_COMPARE_MODELS) return;
+      result.hidden = true;
+      setVisibleSlots(visibleSlots + 1);
+      syncSelector();
+      selectors[visibleSlots - 1].focus();
+    });
+    $$('.optional-remove').forEach(button => button.addEventListener('click', () => {
+      const index = Number(button.dataset.removeSlot);
+      for (let cursor = index; cursor < visibleSlots - 1; cursor += 1) selectors[cursor].value = selectors[cursor + 1].value;
+      selectors[visibleSlots - 1].value = '';
+      setVisibleSlots(visibleSlots - 1);
+      result.hidden = true;
+      syncSelector({persist: true});
+      addOptional.focus();
+    }));
+    form.addEventListener('submit', event => { event.preventDefault(); renderComparison(true, true); });
     $$('.pair-shortcut').forEach(button => button.addEventListener('click', () => {
       left.value = button.dataset.left;
       right.value = button.dataset.right;
+      selectors.slice(2).forEach(select => { select.value = ''; });
+      setVisibleSlots(2);
       renderComparison(true, true);
     }));
-    window.renderPage = () => { if (!result.hidden && validPair()) renderComparison(false, false); };
-    syncSelector();
-    if (validPair()) renderComparison(false, false);
+    window.renderPage = () => { if (!result.hidden && validSelection()) renderComparison(false, false); };
+    setVisibleSlots(visibleSlots);
+    syncSelector({persist: true});
+    if (validSelection()) renderComparison(false, false);
   </script>
 </body>
 </html>
