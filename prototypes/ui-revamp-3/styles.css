@@ -41,6 +41,14 @@ a {
   text-decoration: none;
 }
 
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 11px;
+  text-align: center;
+}
+
 .topbar .shell {
   position: relative;
 }
@@ -817,6 +825,22 @@ button:disabled {
 
 .profile-hero {
   gap: 24px;
+}
+
+.profile-capability > .chart-wrap {
+  margin-top: 32px;
+}
+
+.profile-capability > details > summary {
+  margin: 32px 0 12px;
+}
+
+.profile-capability > details[open] > .data-list {
+  margin-top: 0;
+}
+
+.profile-runtime-sla > .subhead {
+  margin-top: 24px;
 }
 
 .weight-summary {
