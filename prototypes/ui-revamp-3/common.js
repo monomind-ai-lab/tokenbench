@@ -207,14 +207,19 @@ function setupHeaderTools(){
 }
 
 function enableProofRoutes(){
-  const current=location.pathname.split('/').pop()||'index.html';
+  const current=(location.pathname.split('/').pop()||'index').replace(/\.html$/,'');
   const pendingCompare=$$('.nav-pending').find(item=>item.textContent.trim()==='Compare');
-  if(!pendingCompare)return;
-  const link=document.createElement('a');
-  link.href='compare.html';
-  link.textContent='Compare';
-  if(current==='compare.html')link.setAttribute('aria-current','page');
-  pendingCompare.replaceWith(link);
+  if(pendingCompare){
+    const link=document.createElement('a');
+    link.href='compare.html';
+    link.textContent='Compare';
+    pendingCompare.replaceWith(link);
+  }
+  const activeHref=current==='compare'?'compare.html':current==='custom-leaderboard'?'custom-leaderboard.html':current==='article-hybrid-router'?'article-hybrid-router.html':['index','model-profile','model-lifecycle'].includes(current)?'index.html#catalog':null;
+  $$('.nav a').forEach(link=>{
+    link.removeAttribute('aria-current');
+    if(activeHref&&link.getAttribute('href')===activeHref)link.setAttribute('aria-current','page');
+  });
 }
 
 const shellWithHeaderTools=setupShell;
