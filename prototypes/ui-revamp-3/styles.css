@@ -1062,6 +1062,7 @@ button:disabled {
 }
 
 .compare-summary-grid {
+  margin-top: 32px;
   grid-template-columns: minmax(320px, .65fr) minmax(0, 1.35fr);
 }
 
@@ -1071,19 +1072,20 @@ button:disabled {
 }
 
 .compare-radar-wrap {
+  width: 100%;
+  margin: 32px auto 0;
+}
+
+.compare-capability-panel {
+  min-width: 0;
+}
+
+.compare-capability-panel #compare-capability-table {
   margin-top: 32px;
 }
 
-.compare-capability-details {
-  margin-top: 20px;
-}
-
-.compare-capability-details > summary {
-  margin-bottom: 12px;
-}
-
-.compare-decision-table {
-  margin-top: 12px;
+.compare-decision-panel {
+  margin-top: 16px;
 }
 
 .compare-decision-cards {

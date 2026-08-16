@@ -12,6 +12,7 @@ describe('preview navigation links', () => {
     expect(shell).toContain("modelCatalog:'/models#catalog'");
     expect(shell).toContain("popularModels:'/popular-models/'");
     expect(shell).toContain("compare:'/compare'");
+    expect(shell).not.toContain("compare:'/compare/'");
     expect(shell).toContain("modelProfile:'/model-profile'");
     expect(shell).toContain("makeItYours:'/make-it-yours/'");
     expect(shell).toContain("articles:'/articles'");

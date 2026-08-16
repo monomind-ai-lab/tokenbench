@@ -2140,7 +2140,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }));
     await page.goto('/compare?models=claude-3-5-sonnet,deepseek-v3');
 
-    await expect(page.getByRole('img', { name: /Capability radar comparing/ })).toHaveAttribute('data-legend-padding', '12');
+    await expect(page.getByRole('img', { name: /Capability radar comparing/ })).toHaveAttribute('data-legend-padding', '32');
   });
 });
 
@@ -2190,6 +2190,20 @@ test.describe('ui-revamp-3 article channels', () => {
 });
 
 test.describe('responsive compare hub coverage', () => {
+  test('dedicated compare layout and route', async ({ page }) => {
+    for (const pathname of ['/compare', '/compare/', '/compare/?models=deepseek-v3%2Cllama-3-3-70b']) {
+      const response = await page.goto(pathname, { waitUntil: 'domcontentloaded' });
+      expect(response?.status()).toBe(200);
+      await expect(page.getByRole('heading', { name: 'Compare models' })).toBeVisible();
+    }
+    await page.goto('/compare/?models=deepseek-v3%2Cllama-3-3-70b');
+    await expect(page.getByRole('link', { name: 'Back to model catalog →' })).toHaveCount(0);
+    await expect(page.locator('.compare-summary-grid > :nth-child(2)').getByRole('table', { name: 'Exact capability comparison' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Decision deltas' })).toBeVisible();
+    await expect(page.getByText('Tabulated specs for quick comparison.')).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('models')).toBe('deepseek-v3,llama-3-3-70b');
+  });
+
   test('keeps the approved compare hub readable at 320 and 1440 in both themes', async ({ page }) => {
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
