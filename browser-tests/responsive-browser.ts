@@ -2273,7 +2273,8 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await workspace.getByRole('link', { name: 'More details' }).click();
     await expect(page).toHaveURL(/\/compare\?models=claude-opus-4-1%2Cgpt-5$/u);
     await expect(page.locator('#result-title')).toHaveText('Claude Opus 4.1 vs GPT-5');
-    await expect(page.locator('#result-model-links').getByRole('link').allTextContents()).resolves.toEqual(['Claude Opus 4.1', 'GPT-5']);
+    await expect(page.locator('#result-model-links')).toHaveCount(0);
+    await expect(page.getByText('Review result', { exact: true })).toBeVisible();
     await expect(page.locator('#compare-cost-label')).toHaveText('Cost per successful task');
   });
 
@@ -2364,10 +2365,11 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
 
     await page.goto('/compare?models=claude-3-5-sonnet,deepseek-v3');
-    const dedicatedActions = await page.locator('#result-model-links').evaluate((root) => [...root.querySelectorAll('a, button')].map((action) => {
+    const dedicatedActions = await page.locator('#compare-result .compare-result-actions').evaluate((root) => [...root.querySelectorAll('a, button')].map((action) => {
       const bounds = action.getBoundingClientRect();
       return { width: bounds.width, height: bounds.height };
     }));
+    expect(dedicatedActions).toHaveLength(3);
     expect(dedicatedActions.every((bounds) => bounds.width >= 44 && bounds.height >= 44)).toBe(true);
     await assertNoHorizontalOverflow(page);
   });
@@ -2431,6 +2433,71 @@ test.describe('responsive compare hub coverage', () => {
     await expect(page.getByRole('heading', { name: 'Decision deltas' })).toBeVisible();
     await expect(page.getByText('Tabulated specs for quick comparison.')).toBeVisible();
     expect(new URL(page.url()).searchParams.get('models')).toBe('deepseek-v3,llama-3-3-70b');
+  });
+
+  test('styles the comparison result like the selector panel and exposes review exports', async ({ page }) => {
+    await page.route('https://cdn.jsdelivr.net/**', route => route.abort());
+
+    for (const theme of ['light', 'dark'] as const) {
+      await page.goto('/compare/?models=deepseek-v3%2Cllama-3-3-70b');
+      if (await page.locator('html').getAttribute('data-theme') !== theme) {
+        await page.getByRole('button', { name: `Switch to ${theme === 'dark' ? 'dark' : 'light'} theme` }).click();
+      }
+
+      const panelStyles = await page.evaluate(() => {
+        const selector = getComputedStyle(document.querySelector('.compare-selector-panel')!);
+        const result = getComputedStyle(document.querySelector('#compare-result')!);
+        return {
+          selectorBackground: selector.backgroundColor,
+          resultBackground: result.backgroundColor,
+          selectorBorder: `${selector.borderWidth} ${selector.borderStyle} ${selector.borderColor}`,
+          resultBorder: `${result.borderWidth} ${result.borderStyle} ${result.borderColor}`,
+          selectorRadius: selector.borderRadius,
+          resultRadius: result.borderRadius,
+          resultPadding: [result.paddingTop, result.paddingRight, result.paddingBottom, result.paddingLeft],
+        };
+      });
+      expect(panelStyles.resultBackground).toBe(panelStyles.selectorBackground);
+      expect(panelStyles.resultBorder).toBe(panelStyles.selectorBorder);
+      expect(panelStyles.resultRadius).toBe(panelStyles.selectorRadius);
+      expect(panelStyles.resultPadding).toEqual(['16px', '16px', '16px', '16px']);
+      await expect(page.locator('#result-model-links')).toHaveCount(0);
+      await expect(page.locator('#compare-result-picker-host')).toHaveCount(0);
+      await expect(page.getByText('Review result', { exact: true })).toBeVisible();
+      await expect(page.locator('.compare-result-heading .compare-step')).toHaveText('2');
+      await expect(page.getByRole('button', { name: 'Copy link to comparison' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download comparison image as PNG' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Download comparison data as CSV' })).toBeVisible();
+    }
+  });
+
+  test('exports the dedicated comparison link, chart image, and exact-value CSV', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (value: string) => { (window as any).__comparisonClipboard = value; } },
+      });
+    });
+    await installComparisonChartRegistryStub(page);
+    await page.goto('/compare/?models=deepseek-v3%2Cllama-3-3-70b');
+
+    await page.getByRole('button', { name: 'Copy link to comparison' }).click();
+    await expect.poll(() => page.evaluate(() => (window as any).__comparisonClipboard)).toContain('models=deepseek-v3%2Cllama-3-3-70b');
+
+    const csvDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download comparison data as CSV' }).click();
+    const csv = await csvDownload;
+    expect(csv.suggestedFilename()).toMatch(/^tokenbench-comparison-\d{4}-\d{2}-\d{2}\.csv$/u);
+    const csvPath = await csv.path();
+    if (!csvPath) throw new Error('Expected comparison CSV to have a local download path.');
+    const csvContent = await readFile(csvPath, 'utf8');
+    expect(csvContent).toContain('DeepSeek V3');
+    expect(csvContent).toContain('Llama 3.3 70B');
+
+    const pngDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download comparison image as PNG' }).click();
+    const png = await pngDownload;
+    expect(png.suggestedFilename()).toMatch(/^tokenbench-comparison-\d{4}-\d{2}-\d{2}\.png$/u);
   });
 
   test('keeps the dedicated preview comparison responsive at 320 and 1440 in both themes', async ({ page }) => {

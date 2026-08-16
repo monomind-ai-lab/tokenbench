@@ -968,11 +968,43 @@ button:disabled {
 }
 
 .compare-result-actions {
-  display: flex;
+  display: inline-grid;
+  grid-template-columns: repeat(3, 44px);
+  flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.compare-result-actions .icon-button:hover,
+.compare-result-actions .icon-button:focus-visible {
+  border-color: var(--plum);
+  color: var(--accent-text);
+  background: var(--surface);
+}
+
+.compare-result-heading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.compare-result-heading > div {
+  min-width: 0;
+}
+
+.compare-result-action-status {
+  min-height: 18px;
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+
+.compare-result-action-status.is-error {
+  color: var(--bad);
+  font-weight: 700;
 }
 
 .compare-controls {
@@ -1084,6 +1116,10 @@ button:disabled {
 #compare-result {
   margin-top: 24px;
   scroll-margin-top: 72px;
+  padding: 16px;
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--plum) 38%, var(--line));
+  border-radius: var(--r2);
 }
 
 .compare-summary-grid {

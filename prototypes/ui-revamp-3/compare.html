@@ -53,14 +53,28 @@
       </div>
     </section>
 
-    <section id="compare-result" hidden>
+    <section id="compare-result" class="compare-result-panel" hidden>
       <div class="toolbar compare-result-head">
-        <div>
+        <div class="compare-result-heading">
+          <span class="compare-step" aria-hidden="true">2</span>
+          <div>
+            <p class="label compare-step-label">Review result</p>
           <h2 class="section-title" id="result-title"></h2>
-          <div class="compare-list" id="result-model-links" role="list" aria-label="Models in this comparison"></div>
+          </div>
         </div>
-        <div class="compare-result-actions"><div id="compare-result-picker-host"></div></div>
+        <div class="compare-result-actions" role="group" aria-label="Share and export comparison">
+          <button class="icon-button" id="copy-compare-link" type="button" aria-label="Copy link to comparison" title="Copy link">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 13.5a4 4 0 0 0 5.7.1l2.3-2.3a4 4 0 0 0-5.7-5.7l-1.3 1.3"/><path d="M13.5 10.5a4 4 0 0 0-5.7-.1l-2.3 2.3a4 4 0 0 0 5.7 5.7l1.3-1.3"/></svg>
+          </button>
+          <button class="icon-button" id="download-compare-png" type="button" aria-label="Download comparison image as PNG" title="Download PNG">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="m5 17 4.5-4 3.5 3 2.5-2 3.5 3"/></svg>
+          </button>
+          <button class="icon-button" id="download-compare-csv" type="button" aria-label="Download comparison data as CSV" title="Download CSV">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v14H4zM4 10h16M10 5v14M15 10v9"/></svg>
+          </button>
+        </div>
       </div>
+      <p id="compare-result-action-status" class="compare-result-action-status" role="status" aria-live="polite"></p>
 
       <div class="grid-2 compare-summary-grid">
         <div class="panel soft compare-radar-panel">
@@ -134,7 +148,6 @@
       $('#compare-selected-models').innerHTML = selectedModelChips(models);
       bindComparisonRemovals($('#compare-selected-models'), id => updateSelection(selection.filter(candidate => candidate !== id)));
       mountModelPicker($('#compare-page-picker-host'), {id: 'compare-page-picker', selectedIds: ids, onAdd: id => updateSelection([...selection, id])});
-      mountModelPicker($('#compare-result-picker-host'), {id: 'compare-result-picker', selectedIds: ids, onAdd: id => updateSelection([...selection, id])});
       $('#selection-progress').textContent = `${count} / ${MAX_COMPARE_MODELS}`;
       run.disabled = !valid;
       run.textContent = valid ? `Compare ${count} models` : 'Compare models';
@@ -170,6 +183,88 @@
       });
     }
 
+    function announceCompareAction(message, error = false) {
+      const status = $('#compare-result-action-status');
+      status.textContent = message;
+      status.classList.toggle('is-error', error);
+    }
+
+    function fallbackCopyCompare(text) {
+      const field = document.createElement('textarea');
+      field.value = text;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed';
+      field.style.opacity = '0';
+      document.body.append(field);
+      field.select();
+      const copied = document.execCommand('copy');
+      field.remove();
+      if (!copied) throw new Error('Copy was not available');
+    }
+
+    async function copyCompareLink() {
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(location.href);
+        else fallbackCopyCompare(location.href);
+        announceCompareAction('Comparison link copied.');
+      } catch {
+        announceCompareAction('The comparison link could not be copied. Copy the address from the browser bar instead.', true);
+      }
+    }
+
+    function downloadCompareBlob(blob, filename) {
+      const objectUrl = URL.createObjectURL(blob);
+      const linkElement = document.createElement('a');
+      linkElement.href = objectUrl;
+      linkElement.download = filename;
+      document.body.append(linkElement);
+      linkElement.click();
+      linkElement.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    }
+
+    function compareCsvCell(value) {
+      const text = String(value ?? '');
+      return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function comparePlainText(value) {
+      const template = document.createElement('template');
+      template.innerHTML = String(value ?? '');
+      return template.content.textContent?.trim() || '';
+    }
+
+    function downloadCompareCsv() {
+      const models = chosen();
+      const rows = [...comparisonCapabilityRows(), ...comparisonDecisionRows(models)];
+      const csvRows = [['Metric', ...models.map(model => model.name)], ...rows.map(([label, value]) => [label, ...models.map(model => comparePlainText(value(model)))])];
+      const csv = csvRows.map(row => row.map(compareCsvCell).join(',')).join('\n');
+      downloadCompareBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `tokenbench-comparison-${new Date().toISOString().slice(0, 10)}.csv`);
+      announceCompareAction(`Comparison CSV downloaded for ${models.length} models.`);
+    }
+
+    function downloadComparePng() {
+      const canvas = $('#compare-radar');
+      if (!canvas || canvas.hidden || typeof canvas.toDataURL !== 'function') {
+        announceCompareAction('The comparison image is not ready yet. Use the CSV for exact values instead.', true);
+        return;
+      }
+      try {
+        downloadCompareBlob(dataUrlToBlob(canvas.toDataURL('image/png')), `tokenbench-comparison-${new Date().toISOString().slice(0, 10)}.png`);
+        announceCompareAction('Comparison image downloaded.');
+      } catch {
+        announceCompareAction('The comparison image could not be generated. Use the CSV for exact values instead.', true);
+      }
+    }
+
+    function dataUrlToBlob(dataUrl) {
+      const [header, encoded] = dataUrl.split(',');
+      const binary = atob(encoded);
+      const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+      const mime = header.match(/data:([^;]+)/)?.[1] || 'image/png';
+      return new Blob([bytes], { type: mime });
+    }
+
     function renderCostEvidence(models) {
       const evidence = comparisonCostEvidence(models);
       const root = $('.compare-bars');
@@ -193,8 +288,6 @@
       TB.selected = models.map(model => model.id);
       if (updateUrl) persistSelection();
       $('#result-title').textContent = models.length === 2 ? `${models[0].name} vs ${models[1].name}` : `${models.length}-model comparison`;
-      $('#result-model-links').innerHTML = selectedModelChips(models);
-      bindComparisonRemovals($('#result-model-links'), id => updateSelection(selection.filter(candidate => candidate !== id)));
       const capabilityTable = $('#compare-capability-table');
       capabilityTable.innerHTML = comparisonMatrix(models, comparisonCapabilityRows(), {id: 'compare-capability-matrix', ariaLabel: 'Exact capability comparison'});
       capabilityTable.querySelector('table')?.setAttribute('aria-label', 'Exact capability comparison');
@@ -225,6 +318,9 @@
     }
 
     form.addEventListener('submit', event => { event.preventDefault(); renderComparison(true, true); });
+    $('#copy-compare-link').addEventListener('click', copyCompareLink);
+    $('#download-compare-png').addEventListener('click', downloadComparePng);
+    $('#download-compare-csv').addEventListener('click', downloadCompareCsv);
     $$('.pair-shortcut').forEach(button => button.addEventListener('click', () => {
       updateSelection([button.dataset.left, button.dataset.right], {persist: true, refreshResult: false});
       renderComparison(true, true);
