@@ -27,15 +27,19 @@
 - Modify: `prototypes/ui-revamp-3/common.js`
 - Modify: `prototypes/ui-revamp-3/articles.html`
 - Modify: `prototypes/ui-revamp-3/articles.js`
+- Modify: `src/frontend/app-shell.test.tsx`
+- Modify: `src/frontend/app-shell.tsx`
 
 **Interfaces:**
 
-- Consumes: existing `setupShell()`, article tab markup, `data-channel` card values, and the `channel` URL parameter.
-- Produces: plural channel values `guides | insights | news`, a four-link Articles mega menu, and a directly addressable zero-result News tab.
+- Consumes: existing vanilla `setupShell()`, React `SiteHeader`, article tab markup, `data-channel` card values, and the `channel` URL parameter.
+- Produces: plural channel values `guides | insights | news`, matching four-link Articles mega menus in both shared preview shells, and a directly addressable zero-result News tab.
 
 - [ ] **Step 1: Write the failing browser regression**
 
 Add a Playwright test that opens the Articles mega menu and asserts the exact labels, subtitle, and literal destinations. Then navigate directly to every channel URL and assert the selected tab, result count, News empty state, plural URL updates after a tab click, and no captured browser errors.
+
+Update the existing `SiteHeader` unit test to enforce the same four-link contract in the React preview shell used by Popular Models.
 
 ```ts
 test('keeps the Articles mega menu and index tabs on one channel contract', async ({ page }) => {
@@ -91,7 +95,7 @@ Expected: FAIL because the mega menu still contains `All articles` and `Hybrid m
 
 - [ ] **Step 3: Implement the shared mega-menu contract**
 
-Replace the Articles mega-menu subtitle and destination markup in `common.js` with the four approved links:
+Replace the Articles mega-menu subtitle and destination markup in both `common.js` and `src/frontend/app-shell.tsx` with the four approved links:
 
 ```js
 <div class="mega-section-head"><h2>Articles</h2><span>Everything about AI models</span></div>
@@ -132,6 +136,7 @@ Run:
 
 ```bash
 TOKENBENCH_BROWSER_ASSET_MODE=production npx playwright test --config=playwright.production.config.ts browser-tests/responsive-browser.ts --grep "Articles mega menu and index tabs"
+npx vitest run src/frontend/app-shell.test.tsx
 npm run lint
 npm run build
 ```
@@ -151,7 +156,7 @@ Expected: all Vitest files and tests pass without failures.
 - [ ] **Step 8: Commit the implementation**
 
 ```bash
-git add browser-tests/responsive-browser.ts prototypes/ui-revamp-3/common.js prototypes/ui-revamp-3/articles.html prototypes/ui-revamp-3/articles.js
+git add browser-tests/responsive-browser.ts prototypes/ui-revamp-3/common.js prototypes/ui-revamp-3/articles.html prototypes/ui-revamp-3/articles.js src/frontend/app-shell.test.tsx src/frontend/app-shell.tsx
 git commit -m "Align preview article channel navigation"
 ```
 

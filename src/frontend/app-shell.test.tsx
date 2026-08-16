@@ -513,8 +513,15 @@ describe('responsive calculator app shell', () => {
 
     fireEvent.click(within(navigation).getByRole('button', { name: 'Articles' }));
     const articles = screen.getByRole('region', { name: 'Articles' });
-    expect(within(articles).getByRole('link', { name: /All articles/ })).toHaveAttribute('href', '/articles');
-    expect(within(articles).getByRole('link', { name: /Hybrid model routing/ })).toHaveAttribute('href', '/articles/hybrid-router');
+    expect(within(articles).getByText('Everything about AI models')).toBeInTheDocument();
+    for (const [label, href] of [
+      ['All', '/articles'],
+      ['Guides', '/articles?channel=guides'],
+      ['Insights', '/articles?channel=insights'],
+      ['News', '/articles?channel=news'],
+    ] as const) {
+      expect(within(articles).getByRole('link', { name: label })).toHaveAttribute('href', href);
+    }
 
   });
 

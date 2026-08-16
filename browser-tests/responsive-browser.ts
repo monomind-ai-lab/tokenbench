@@ -1816,17 +1816,19 @@ test.describe('ui-revamp-3 article channels', () => {
       body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
     }));
 
-    await page.goto('/models');
-    await page.getByRole('button', { name: 'Articles' }).click();
-    const menu = page.getByRole('region', { name: 'Articles' });
-    await expect(menu.getByText('Everything about AI models')).toBeVisible();
-    for (const [label, href] of [
-      ['All', '/articles'],
-      ['Guides', '/articles?channel=guides'],
-      ['Insights', '/articles?channel=insights'],
-      ['News', '/articles?channel=news'],
-    ] as const) {
-      await expect(menu.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
+    for (const shellPath of ['/models', '/popular-models/']) {
+      await page.goto(shellPath);
+      await page.getByRole('button', { name: 'Articles' }).click();
+      const menu = page.getByRole('region', { name: 'Articles' });
+      await expect(menu.getByText('Everything about AI models')).toBeVisible();
+      for (const [label, href] of [
+        ['All', '/articles'],
+        ['Guides', '/articles?channel=guides'],
+        ['Insights', '/articles?channel=insights'],
+        ['News', '/articles?channel=news'],
+      ] as const) {
+        await expect(menu.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
+      }
     }
 
     for (const scenario of [

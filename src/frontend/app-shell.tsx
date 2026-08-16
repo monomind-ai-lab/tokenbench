@@ -109,10 +109,12 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
           </div>
         </section>
         <section id="primary-articles-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-articles-menu" hidden={openMenu !== 'articles'}>
-          <div className="primary-nav-mega-heading"><h2>Articles &amp; guides</h2><span>Decision-oriented research</span></div>
+          <div className="primary-nav-mega-heading"><h2>Articles &amp; guides</h2><span>Everything about AI models</span></div>
           <div className="primary-nav-mega-destinations">
-            <a href={PREVIEW_ROUTE_PATHS.articles} onClick={closeNavigation}><strong>All articles</strong><span>Browse the approved article library</span></a>
-            <a href={PREVIEW_ROUTE_PATHS.articleDetail} onClick={closeNavigation}><strong>Hybrid model routing</strong><span>Design a high-stakes agentic routing decision</span></a>
+            <a href={PREVIEW_ROUTE_PATHS.articles} onClick={closeNavigation}><strong>All</strong></a>
+            <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`} onClick={closeNavigation}><strong>Guides</strong></a>
+            <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=insights`} onClick={closeNavigation}><strong>Insights</strong></a>
+            <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=news`} onClick={closeNavigation}><strong>News</strong></a>
           </div>
         </section>
       </div>
