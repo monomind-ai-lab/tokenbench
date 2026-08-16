@@ -1,4 +1,3 @@
-import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type {
   ChartConfiguration,
@@ -8,7 +7,10 @@ import type {
   TooltipItem,
 } from 'chart.js';
 import { PopularChartCanvas } from './chart-canvas';
-import { PopularModelPicker } from './model-picker';
+import {
+  PopularModelComparisonWorkspace,
+  type PopularComparisonMetric,
+} from './comparison-workspace';
 import { useSiteTheme } from '../site-preferences';
 import { POPULAR_CATEGORY_KEYS, POPULAR_CATEGORY_LABELS } from './fixtures';
 import { normalizePopularComparisonSelection } from './scoring';
@@ -57,6 +59,7 @@ const PROVIDER_TOKEN_KEYS = [
 
 const POINT_STYLES: readonly PointStyle[] = ['circle', 'rectRounded', 'triangle', 'rectRot', 'crossRot', 'star', 'rect', 'cross'];
 const MAX_PROFILE_COMPARISON_MODELS = 4;
+const POPULAR_RADAR_LABELS = ['Reasoning', 'Coding', 'Agentic', 'Mathematics', 'Data analysis', 'Language', 'Instruction'] as const;
 
 function cssValue(styles: CSSStyleDeclaration, property: string): string {
   return styles.getPropertyValue(property).trim();
@@ -125,14 +128,21 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
   const siteTheme = useSiteTheme();
   const [activeCategory, setActiveCategory] = useState<InsightCategory>('overall');
   const [selectedModelIds, setSelectedModelIds] = useState<readonly string[]>(() => normalizePopularComparisonSelection([
-    models[0]?.id ?? '',
-    models[3]?.id ?? '',
-  ], models));
+    ...models,
+  ].sort((left, right) => right.overallScore - left.overallScore).slice(0, 2).map((model) => model.id), models));
+  const [compactChartLabels, setCompactChartLabels] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 600px)').matches);
   const [theme, setTheme] = useState<PopularChartTheme>(readChartTheme);
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setTheme(readChartTheme()));
     return () => window.cancelAnimationFrame(frame);
   }, [siteTheme]);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 600px)');
+    const update = () => setCompactChartLabels(media.matches);
+    update();
+    media.addEventListener('change', update);
+    return () => media.removeEventListener('change', update);
+  }, []);
   const organizations = useMemo(() => [...new Set(models.map((model) => model.organization))], [models]);
   const providerStyle = (organization: string) => {
     const index = Math.max(organizations.indexOf(organization), 0);
@@ -221,11 +231,10 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
   }, [activeCategory, frontier, models, organizations, theme]);
 
   const costRankedModels = useMemo(() => [...models].sort((left, right) => left.costPerSuccessfulTask - right.costPerSuccessfulTask), [models]);
-  const compactCostLabels = typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches;
   const costConfiguration = useMemo<ChartConfiguration<'bar'>>(() => ({
     type: 'bar',
     data: {
-      labels: costRankedModels.map((model) => compactCostLabels && model.name.length > 18 ? `${model.name.slice(0, 17)}…` : model.name),
+      labels: costRankedModels.map((model) => compactChartLabels && model.name.length > 18 ? `${model.name.slice(0, 17)}…` : model.name),
       datasets: [{
         label: 'Cost per successful task',
         data: costRankedModels.map((model) => model.costPerSuccessfulTask),
@@ -257,12 +266,12 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
         y: { ticks: chartTextOptions(theme), grid: { display: false } },
       },
     },
-  }), [compactCostLabels, costRankedModels, organizations, theme]);
+  }), [compactChartLabels, costRankedModels, organizations, theme]);
 
   const radarConfiguration = useMemo<ChartConfiguration<'radar'>>(() => ({
     type: 'radar',
     data: {
-      labels: POPULAR_CATEGORY_KEYS.map((category) => POPULAR_CATEGORY_LABELS[category]),
+      labels: POPULAR_RADAR_LABELS,
       datasets: selectedModels.map((model, index) => {
         const style = providerStyle(model.organization);
         const comparisonColors = [theme.primaryStrong, theme.tertiary, theme.warning, theme.danger] as const;
@@ -296,6 +305,82 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
       },
     },
   }), [organizations, selectedModels, theme]);
+
+  const comparisonEconomicsCharts = useMemo(() => {
+    const comparisonColors = [theme.primaryStrong, theme.tertiary, theme.warning, theme.danger] as const;
+    const metrics = [
+      {
+        label: 'Cost / successful task',
+        ariaLabel: `Cost per successful task comparison for ${selectedModels.map((model) => model.name).join(', ')}`,
+        values: selectedModels.map((model) => model.costPerSuccessfulTask),
+        format: formatCost,
+      },
+      {
+        label: 'Output cost / 1M tokens',
+        ariaLabel: `Output cost per million tokens comparison for ${selectedModels.map((model) => model.name).join(', ')}`,
+        values: selectedModels.map((model) => model.outputCostPerMillion),
+        format: formatCost,
+      },
+      {
+        label: 'Median output tokens',
+        ariaLabel: `Median output token comparison for ${selectedModels.map((model) => model.name).join(', ')}`,
+        values: selectedModels.map((model) => model.verbosityTokens),
+        format: (value: number) => `${value.toLocaleString()} tokens`,
+      },
+    ] as const;
+
+    return metrics.map((metric) => ({
+      label: metric.label,
+      ariaLabel: metric.ariaLabel,
+      configuration: {
+        type: 'bar',
+        data: {
+          labels: selectedModels.map((model) => compactChartLabels && model.name.length > 12 ? `${model.name.slice(0, 11)}…` : model.name),
+          datasets: [{
+            label: metric.label,
+            data: metric.values,
+            backgroundColor: selectedModels.map((_model, index) => comparisonColors[index % comparisonColors.length]),
+            borderColor: selectedModels.map((_model, index) => comparisonColors[index % comparisonColors.length]),
+            borderWidth: 1,
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (item) => metric.format(Number(item.raw)) } },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { ...chartTextOptions(theme), maxTicksLimit: 5, callback: (value) => metric.format(Number(value)) }, grid: { color: theme.outline } },
+            y: { ticks: chartTextOptions(theme), grid: { display: false } },
+          },
+        },
+      } satisfies ChartConfiguration<'bar'>,
+    }));
+  }, [compactChartLabels, selectedModels, theme]);
+
+  const comparisonProfileRows = POPULAR_CATEGORY_KEYS.map((category) => ({
+    id: category,
+    label: POPULAR_CATEGORY_LABELS[category],
+    value: (model: PopularModelFixture) => formatScore(model.categoryScores[category]),
+  })) satisfies readonly PopularComparisonMetric[];
+  const comparisonDecisionRows = [
+    { id: 'overall', label: 'Overall score', value: (model: PopularModelFixture) => formatScore(model.overallScore) },
+    { id: 'task-cost', label: 'Cost / successful task', value: (model: PopularModelFixture) => formatCost(model.costPerSuccessfulTask) },
+    { id: 'output-cost', label: 'Output / 1M tokens', value: (model: PopularModelFixture) => formatCost(model.outputCostPerMillion) },
+    { id: 'verbosity', label: 'Median output', value: (model: PopularModelFixture) => `${model.verbosityTokens.toLocaleString()} tokens` },
+    { id: 'access', label: 'Access', value: (model: PopularModelFixture) => model.openWeights ? 'Open weights' : 'Closed' },
+    { id: 'finetune', label: 'Finetuning', value: (model: PopularModelFixture) => model.finetune ? 'Supported' : 'Not in fixture' },
+  ] satisfies readonly PopularComparisonMetric[];
+  const comparisonDetailRows = [
+    ...comparisonProfileRows,
+    { id: 'organization', label: 'Organization', value: (model: PopularModelFixture) => model.organization },
+    ...comparisonDecisionRows,
+    { id: 'fixture-status', label: 'Evidence status', value: () => 'Illustrative UI fixture' },
+  ] satisfies readonly PopularComparisonMetric[];
 
   const addModel = (modelId: string) => {
     if (!modelId || selectedModelIds.length >= MAX_PROFILE_COMPARISON_MODELS || selectedModelIds.includes(modelId)) return;
@@ -333,17 +418,17 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
       </article>
     </div>
 
-    <article className="popular-models-insight-panel popular-models-profile-panel">
-      <div className="popular-models-chart-heading"><div><h3>Category profile comparison</h3><p>Compare two to four models across all seven benchmark categories.</p></div></div>
-      <div className="popular-models-profile-controls">
-        <div className="popular-models-selected-models" aria-label="Selected comparison models">
-          {selectedModels.map((model) => <span className="popular-models-model-tag" key={model.id}><a href={modelHref(model)}>{model.name}</a><button type="button" aria-label={`Remove ${model.name}`} title={selectedModelIds.length <= 2 ? 'Keep at least two models selected' : `Remove ${model.name}`} disabled={selectedModelIds.length <= 2} onClick={() => removeModel(model.id)}><X aria-hidden="true" size={14} /></button></span>)}
-        </div>
-        <PopularModelPicker models={availableModels} selectedCount={selectedModelIds.length} max={MAX_PROFILE_COMPARISON_MODELS} onAdd={addModel} />
-        <p className="popular-models-comparison-status" role="status" aria-live="polite">{selectedModelIds.length} of {MAX_PROFILE_COMPARISON_MODELS} models selected. {selectedModelIds.length >= MAX_PROFILE_COMPARISON_MODELS ? 'Remove a model to add another.' : `Add up to ${MAX_PROFILE_COMPARISON_MODELS - selectedModelIds.length} more.`}</p>
-      </div>
-      <div className="popular-models-chart-wrap popular-models-radar-chart"><PopularChartCanvas ariaLabel={`Seven-category profile comparison for ${selectedModels.map((model) => model.name).join(', ')}`} configuration={radarConfiguration} /></div>
-      <details className="popular-models-chart-data"><summary>Exact category profile values</summary><div className="popular-models-chart-table-wrap popular-models-profile-matrix-table"><table><thead><tr><th scope="col">Category</th>{selectedModels.map((model) => <th scope="col" key={model.id}><a href={modelHref(model)}>{model.name}</a><small>{model.organization}</small></th>)}</tr></thead><tbody>{POPULAR_CATEGORY_KEYS.map((category) => <tr key={category}><th scope="row">{POPULAR_CATEGORY_LABELS[category]}</th>{selectedModels.map((model) => <td key={model.id}>{formatScore(model.categoryScores[category])}</td>)}</tr>)}</tbody></table></div><div className="popular-models-profile-matrix-cards" role="list" aria-label="Category profile values by metric">{POPULAR_CATEGORY_KEYS.map((category) => <section key={category} role="listitem"><h4>{POPULAR_CATEGORY_LABELS[category]}</h4><dl>{selectedModels.map((model) => <div key={model.id}><dt><a href={modelHref(model)}>{model.name}</a></dt><dd>{formatScore(model.categoryScores[category])}</dd></div>)}</dl></section>)}</div></details>
-    </article>
+    <PopularModelComparisonWorkspace
+      availableModels={availableModels}
+      decisionRows={comparisonDecisionRows}
+      detailRows={comparisonDetailRows}
+      economicsCharts={comparisonEconomicsCharts}
+      maxModels={MAX_PROFILE_COMPARISON_MODELS}
+      onAdd={addModel}
+      onRemove={removeModel}
+      profileRows={comparisonProfileRows}
+      radarConfiguration={radarConfiguration}
+      selectedModels={selectedModels}
+    />
   </section>;
 }

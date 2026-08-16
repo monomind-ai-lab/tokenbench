@@ -1378,7 +1378,18 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-chart-table-wrap tbody tr:last-child > * { border-bottom: 0; }
 .popular-models-chart-table-wrap tbody th { font-weight: 750; }
 .popular-models-profile-panel { margin-top: 16px; }
-.popular-models-profile-controls { min-width: 0; display: grid; gap: 12px; }
+.popular-models-comparison-workspace { padding: 24px; border-color: color-mix(in srgb, var(--primary) 38%, var(--outline)); background: color-mix(in srgb, var(--primary-soft) 10%, var(--surface-low)); }
+.popular-models-comparison-heading { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--outline); }
+.popular-models-comparison-heading > div:first-child { min-width: 0; }
+.popular-models-comparison-heading h3, .popular-models-comparison-subpanel h4 { margin: 0; font-family: var(--font-display); letter-spacing: -0.02em; }
+.popular-models-comparison-heading h3 { margin-top: 4px; font-size: clamp(1.35rem, 2.6vw, 1.9rem); }
+.popular-models-comparison-heading p, .popular-models-comparison-subpanel > div:first-child > p { max-width: 720px; margin: 6px 0 0; color: var(--muted); font-size: 0.74rem; line-height: 1.55; }
+.popular-models-comparison-kicker, .popular-models-comparison-label, .popular-models-comparison-progress span { color: var(--primary-strong); font-family: var(--font-label); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.055em; text-transform: uppercase; }
+.popular-models-comparison-progress { min-width: 84px; display: grid; justify-items: end; gap: 6px; }
+.popular-models-comparison-progress strong { font-family: var(--font-label); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.popular-models-comparison-composer { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 16px; margin-top: 20px; padding: 16px; border: 1px solid var(--outline); border-radius: var(--radius); background: var(--surface); }
+.popular-models-comparison-selected-block { min-width: 0; display: grid; gap: 8px; }
+.popular-models-comparison-status { margin-top: 10px; }
 .popular-models-selected-models { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px; }
 .popular-models-model-tag { min-height: 36px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px 3px 10px; border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--outline)); border-radius: 999px; background: color-mix(in srgb, var(--primary-soft) 54%, var(--surface)); font-size: 0.72rem; font-weight: 750; }
 .popular-models-model-tag a { color: var(--text); text-decoration: none; }
@@ -1398,24 +1409,47 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-picker-option small { color: var(--muted); font-size: 0.68rem; }
 .popular-models-picker-option:hover, .popular-models-picker-option[aria-selected='true'] { border-color: color-mix(in srgb, var(--primary) 48%, var(--outline)); background: color-mix(in srgb, var(--primary-soft) 38%, var(--surface)); color: var(--primary-strong); }
 .popular-models-picker-empty, .popular-models-picker-status { margin: 8px 2px 0; color: var(--muted); font-size: 0.68rem; }
-.popular-models-profile-matrix-table thead th { min-width: 150px; white-space: normal; }
-.popular-models-profile-matrix-table thead th:first-child { min-width: 130px; }
-.popular-models-profile-matrix-table thead a { display: block; color: var(--text); overflow-wrap: anywhere; text-transform: none; }
-.popular-models-profile-matrix-table thead small { display: block; margin-top: 4px; color: var(--muted); font-family: var(--font-body); font-size: 0.66rem; font-weight: 500; letter-spacing: normal; text-transform: none; }
-.popular-models-profile-matrix-cards { display: none; }
-.popular-models-profile-matrix-cards > section { min-width: 0; padding: 14px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface); }
-.popular-models-profile-matrix-cards h4 { margin: 0 0 10px; color: var(--muted); font-family: var(--font-label); font-size: 0.66rem; letter-spacing: 0.04em; text-transform: uppercase; }
-.popular-models-profile-matrix-cards dl { display: grid; gap: 8px; margin: 0; }
-.popular-models-profile-matrix-cards dl > div { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 12px; }
-.popular-models-profile-matrix-cards dt, .popular-models-profile-matrix-cards dd { min-width: 0; margin: 0; }
-.popular-models-profile-matrix-cards dt { overflow-wrap: anywhere; }
-.popular-models-profile-matrix-cards dd { font-family: var(--font-label); font-weight: 800; text-align: right; }
+.popular-models-comparison-summary { min-width: 0; display: grid; grid-template-columns: minmax(340px, 0.7fr) minmax(0, 1.3fr); gap: 16px; margin-top: 20px; align-items: stretch; }
+.popular-models-comparison-subpanel { min-width: 0; padding: 18px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface); }
+.popular-models-comparison-subpanel h4 { font-size: 0.95rem; }
+.popular-models-comparison-radar-panel { background: color-mix(in srgb, var(--primary-soft) 13%, var(--surface)); }
+.popular-models-comparison-radar-panel .popular-models-radar-chart { height: 430px; margin-top: 32px; }
+.popular-models-comparison-details { min-width: 0; margin-top: 20px; border-top: 1px solid var(--outline); }
+.popular-models-comparison-details > summary { min-height: 44px; display: flex; align-items: center; margin-bottom: 12px; color: var(--primary-strong); font-size: 0.72rem; font-weight: 800; cursor: pointer; }
+.popular-models-comparison-decision-panel > .popular-models-comparison-matrix { margin-top: 16px; }
+.popular-models-comparison-economics, .popular-models-comparison-evidence { margin-top: 16px; }
+.popular-models-comparison-bars { min-width: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.popular-models-comparison-bars > div { min-width: 0; }
+.popular-models-comparison-bar-chart { height: 240px; margin-top: 8px; }
+.popular-models-comparison-evidence > .popular-models-comparison-matrix { margin-top: 16px; }
+.popular-models-comparison-matrix { min-width: 0; }
+.popular-models-comparison-matrix-table { min-width: 0; width: 100%; overflow: auto; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface); scrollbar-width: thin; }
+.popular-models-comparison-matrix-table table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+.popular-models-comparison-matrix-table th, .popular-models-comparison-matrix-table td { min-width: 0; padding: 10px; border-bottom: 1px solid var(--outline); text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+.popular-models-comparison-matrix-table thead { background: var(--surface-container); }
+.popular-models-comparison-matrix-table thead th { color: var(--muted); font-family: var(--font-label); font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.popular-models-comparison-matrix-table thead th:first-child, .popular-models-comparison-matrix-table tbody th { width: 142px; }
+.popular-models-comparison-matrix-table tbody th { color: var(--muted); background: var(--surface); font-family: var(--font-label); font-size: 0.64rem; letter-spacing: 0.035em; text-transform: uppercase; }
+.popular-models-comparison-matrix-table tbody tr:last-child > * { border-bottom: 0; }
+.popular-models-comparison-matrix-table thead a { display: block; color: var(--text); font-family: var(--font-body); font-size: 0.72rem; letter-spacing: normal; line-height: 1.35; text-decoration: none; text-transform: none; }
+.popular-models-comparison-matrix-table thead a:hover { color: var(--primary-strong); text-decoration: underline; text-underline-offset: 3px; }
+.popular-models-comparison-matrix-table thead small { display: block; margin-top: 4px; color: var(--muted); font-family: var(--font-body); font-size: 0.64rem; font-weight: 500; letter-spacing: normal; text-transform: none; }
+.popular-models-comparison-matrix-cards { display: none; }
+.popular-models-comparison-matrix-cards > section { min-width: 0; padding: 14px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface); }
+.popular-models-comparison-matrix-cards h5 { margin: 0 0 10px; color: var(--muted); font-family: var(--font-label); font-size: 0.66rem; letter-spacing: 0.04em; text-transform: uppercase; }
+.popular-models-comparison-matrix-cards dl { display: grid; gap: 8px; margin: 0; font-size: 0.72rem; line-height: 1.4; }
+.popular-models-comparison-matrix-cards dl > div { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 12px; }
+.popular-models-comparison-matrix-cards dt, .popular-models-comparison-matrix-cards dd { min-width: 0; margin: 0; }
+.popular-models-comparison-matrix-cards dt { overflow-wrap: anywhere; }
+.popular-models-comparison-matrix-cards dd { font-family: var(--font-label); font-size: 0.7rem; font-weight: 800; text-align: right; overflow-wrap: break-word; }
+.popular-models-comparison-fixture-note { margin: 16px 0 0; color: var(--muted); font-size: 0.68rem; line-height: 1.5; }
 
 @media (max-width: 1023px) {
   .popular-models-desktop-table { display: none; }
   .popular-models-mobile-cards { display: grid; }
   .popular-models-insights-grid { grid-template-columns: minmax(0, 1fr); }
   .popular-models-cost-chart { height: 620px; }
+  .popular-models-comparison-summary { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 767px) {
@@ -1437,10 +1471,20 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .popular-models-scatter-chart { height: 430px; }
   .popular-models-cost-chart { height: 600px; }
   .popular-models-radar-chart { height: 420px; }
+  .popular-models-comparison-workspace { padding: 16px; }
+  .popular-models-comparison-heading { grid-template-columns: minmax(0, 1fr); }
+  .popular-models-comparison-progress { width: 100%; grid-template-columns: auto auto; align-items: center; justify-content: space-between; justify-items: start; padding-top: 12px; border-top: 1px solid var(--outline); }
+  .popular-models-comparison-composer { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+  .popular-models-comparison-bars { grid-template-columns: minmax(0, 1fr); }
   .popular-models-picker, .popular-models-picker-toggle { width: 100%; }
   .popular-models-picker-panel { right: 0; left: 0; width: 100%; }
-  .popular-models-profile-matrix-table { display: none; }
-  .popular-models-profile-matrix-cards { display: grid; gap: 8px; }
+}
+
+@media (max-width: 600px) {
+  .popular-models-comparison-matrix-table { display: none; }
+  .popular-models-comparison-matrix-cards { display: grid; gap: 8px; }
+  .popular-models-comparison-matrix-cards dl > div { grid-template-columns: minmax(0, 1fr) minmax(88px, 0.85fr); align-items: start; }
+  .popular-models-comparison-radar-panel .popular-models-radar-chart { height: 380px; }
 }
 
 @media (max-width: 380px) {
@@ -1448,4 +1492,6 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .popular-models-insight-panel { padding: 13px; }
   .popular-models-scatter-chart { height: 390px; }
   .popular-models-radar-chart { height: 380px; }
+  .popular-models-comparison-workspace, .popular-models-comparison-subpanel { padding: 13px; }
+  .popular-models-comparison-radar-panel .popular-models-radar-chart { height: 350px; }
 }

@@ -14,9 +14,19 @@ describe('PopularModelsPage', () => {
     expect(screen.getByRole('heading', { name: '01 Leaderboard', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '02 Insights', level: 2 })).toBeInTheDocument();
     expect(screen.getByText(/Every name, score, cost, verbosity value/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Best Models Compared', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Quality versus cost scatter/ })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Horizontal ranking of models by cost/ })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Seven-category profile comparison/ })).toBeInTheDocument();
+
+    const selected = screen.getByRole('list', { name: 'Selected comparison models' });
+    expect(within(selected).getByRole('link', { name: 'Claude Opus 4.1' })).toBeInTheDocument();
+    expect(within(selected).getByRole('link', { name: 'GPT-5' })).toBeInTheDocument();
+
+    const decisionMatrix = screen.getByRole('region', { name: 'Selected model decision matrix' });
+    expect(within(decisionMatrix).getByRole('columnheader', { name: /Claude Opus 4.1/ })).toBeInTheDocument();
+    expect(within(decisionMatrix).getByRole('columnheader', { name: /GPT-5/ })).toBeInTheDocument();
+    expect(within(decisionMatrix).getByRole('rowheader', { name: 'Overall score' })).toBeInTheDocument();
   });
 
   it('filters in real time and changes the score scope to category subtasks', () => {
@@ -51,11 +61,15 @@ describe('PopularModelsPage', () => {
     expect(screen.getByText('4 of 4 models selected. Remove a model to add another.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a model' })).toBeDisabled();
 
-    const profileDetails = screen.getByText('Exact category profile values').closest('details')!;
-    fireEvent.click(within(profileDetails).getByText('Exact category profile values'));
+    const profileDetails = screen.getByText('Exact capability values').closest('details')!;
+    fireEvent.click(within(profileDetails).getByText('Exact capability values'));
     const matrix = within(profileDetails).getByRole('table');
     expect(within(matrix).getByRole('columnheader', { name: /Claude Opus 4.1/ })).toBeInTheDocument();
     expect(within(matrix).getByRole('columnheader', { name: /DeepSeek V3.2/ })).toBeInTheDocument();
     expect(within(matrix).getByRole('rowheader', { name: 'Reasoning' })).toBeInTheDocument();
+
+    expect(within(profileDetails).getByRole('list', { name: 'Exact capability comparison, metric-first mobile view' })).toBeInTheDocument();
+    const evidenceMatrix = screen.getByRole('region', { name: 'Itemized model comparison' });
+    expect(within(evidenceMatrix).getByRole('rowheader', { name: 'Evidence status' })).toBeInTheDocument();
   });
 });
