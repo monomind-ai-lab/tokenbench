@@ -506,6 +506,17 @@ describe('responsive calculator app shell', () => {
     expect(within(navigation).getAllByRole('button').map((button) => button.textContent?.trim()))
       .toEqual(['Models', 'Leaderboards', 'Articles']);
 
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Models' }));
+    const models = screen.getByRole('region', { name: 'Models' });
+    for (const [label, href] of [
+      ['Models workbench', '/models'],
+      ['Model catalog', '/models#catalog'],
+      ['Lifecycle radar', '/model-lifecycle'],
+    ] as const) {
+      expect(within(models).getByRole('link', { name: new RegExp(label) })).toHaveAttribute('href', href);
+    }
+    expect(within(models).getByText('Live weekly rank · 12 Aug 2026')).toBeInTheDocument();
+
     fireEvent.click(within(navigation).getByRole('button', { name: 'Leaderboards' }));
     const menu = screen.getByRole('region', { name: 'Leaderboards' });
     expect(within(menu).getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
@@ -513,6 +524,7 @@ describe('responsive calculator app shell', () => {
 
     fireEvent.click(within(navigation).getByRole('button', { name: 'Articles' }));
     const articles = screen.getByRole('region', { name: 'Articles' });
+    expect(within(articles).getByRole('heading', { name: 'Articles', level: 2 })).toBeInTheDocument();
     expect(within(articles).getByText('Everything about AI models')).toBeInTheDocument();
     for (const [label, href] of [
       ['All', '/articles'],

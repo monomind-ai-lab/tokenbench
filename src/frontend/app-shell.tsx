@@ -90,13 +90,13 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
             <div className="primary-nav-mega-section">
               <div className="primary-nav-mega-heading"><h2>Explore models</h2><span>Decision surfaces</span></div>
               <div className="primary-nav-mega-destinations">
-                <a href={PREVIEW_ROUTE_PATHS.models} onClick={closeNavigation}><strong>Models workbench</strong><span>Search and compare current model evidence</span></a>
-                <a href={PREVIEW_ROUTE_PATHS.pricePerformance} onClick={closeNavigation}><strong>Price vs performance</strong><span>Inspect the supported value frontier</span></a>
-                <a href={PREVIEW_ROUTE_PATHS.compare} onClick={closeNavigation}><strong>Compare models</strong><span>Build a focused side-by-side decision</span></a>
+                <a href={PREVIEW_ROUTE_PATHS.models} onClick={closeNavigation}><strong>Models workbench</strong><span>Price, performance and catalog filters</span></a>
+                <a href={PREVIEW_ROUTE_PATHS.modelCatalog} onClick={closeNavigation}><strong>Model catalog</strong><span>Search, filter and compare model evidence</span></a>
+                <a href={PREVIEW_ROUTE_PATHS.modelLifecycle} onClick={closeNavigation}><strong>Lifecycle radar</strong><span>Retirements, sunset dates and migration paths</span></a>
               </div>
             </div>
             <div className="primary-nav-mega-section primary-nav-top-models">
-              <div className="primary-nav-mega-heading"><h2>Top Models</h2><span>Illustrative preview order</span></div>
+              <div className="primary-nav-mega-heading"><h2>Top Models</h2><span>Live weekly rank · 12 Aug 2026</span></div>
               <div className="primary-nav-model-grid">{HEADER_TOP_MODELS.map((model, index) => <a className="primary-nav-model-link" href={previewModelProfilePath(model.slug)} onClick={closeNavigation} key={model.id}><span>#{index + 1}</span><span><strong>{model.name}</strong><small>{model.organization}</small></span><span>{model.overallScore.toFixed(1)}</span></a>)}</div>
             </div>
           </div>
@@ -109,7 +109,7 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
           </div>
         </section>
         <section id="primary-articles-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-articles-menu" hidden={openMenu !== 'articles'}>
-          <div className="primary-nav-mega-heading"><h2>Articles &amp; guides</h2><span>Everything about AI models</span></div>
+          <div className="primary-nav-mega-heading"><h2>Articles</h2><span>Everything about AI models</span></div>
           <div className="primary-nav-mega-destinations">
             <a href={PREVIEW_ROUTE_PATHS.articles} onClick={closeNavigation}><strong>All</strong></a>
             <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`} onClick={closeNavigation}><strong>Guides</strong></a>
