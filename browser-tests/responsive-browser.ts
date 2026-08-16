@@ -1807,6 +1807,49 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
   });
 });
 
+test.describe('ui-revamp-3 article channels', () => {
+  test('keeps the Articles mega menu and index tabs on one channel contract', async ({ page }) => {
+    const errors = captureBrowserErrors(page);
+    await page.route('https://cdn.jsdelivr.net/**', route => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
+    }));
+
+    await page.goto('/models');
+    await page.getByRole('button', { name: 'Articles' }).click();
+    const menu = page.getByRole('region', { name: 'Articles' });
+    await expect(menu.getByText('Everything about AI models')).toBeVisible();
+    for (const [label, href] of [
+      ['All', '/articles'],
+      ['Guides', '/articles?channel=guides'],
+      ['Insights', '/articles?channel=insights'],
+      ['News', '/articles?channel=news'],
+    ] as const) {
+      await expect(menu.getByRole('link', { name: label, exact: true })).toHaveAttribute('href', href);
+    }
+
+    for (const scenario of [
+      { url: '/articles', tab: 'All', count: '8 articles shown', empty: false },
+      { url: '/articles?channel=guides', tab: 'Guides', count: '6 articles shown', empty: false },
+      { url: '/articles?channel=insights', tab: 'Insights', count: '2 articles shown', empty: false },
+      { url: '/articles?channel=news', tab: 'News', count: '0 articles shown', empty: true },
+    ] as const) {
+      await page.goto(scenario.url);
+      await expect(page.getByRole('tab', { name: new RegExp(`^${scenario.tab}`) })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByText(scenario.count, { exact: true })).toBeVisible();
+      if (scenario.empty) await expect(page.locator('#article-empty')).toBeVisible();
+      else await expect(page.locator('#article-empty')).toBeHidden();
+    }
+
+    await page.goto('/articles');
+    await page.getByRole('tab', { name: /^Insights/ }).click();
+    await expect(page).toHaveURL(/\/articles\?channel=insights$/u);
+    expect(errors.consoleErrors).toEqual([]);
+    expect(errors.pageErrors).toEqual([]);
+  });
+});
+
 test.describe('responsive compare hub coverage', () => {
   test('keeps the approved compare hub readable at 320 and 1440 in both themes', async ({ page }) => {
     const origin = previewOrigin();

@@ -12,7 +12,8 @@
   const count = document.querySelector('#article-result-count');
 
   const channelFromUrl = new URLSearchParams(location.search).get('channel');
-  if (['guide', 'insight'].includes(channelFromUrl)) state.channel = channelFromUrl;
+  const validChannels = new Set(tabs.map(tab => tab.dataset.channel));
+  if (channelFromUrl && validChannels.has(channelFromUrl)) state.channel = channelFromUrl;
 
   function visibleCards() {
     const query = search.value.trim().toLocaleLowerCase();
