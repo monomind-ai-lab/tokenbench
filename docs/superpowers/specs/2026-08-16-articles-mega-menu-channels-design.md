@@ -2,7 +2,7 @@
 
 ## Outcome
 
-Keep the shared Articles mega menu and the article-index tabs on one channel contract. The mega menu will expose `All`, `Guides`, `Insights`, and `News`, and its supporting description will read `Everything about AI models`.
+Update the `ui-revamp-3` preview screens so the shared Articles mega menu and article-index tabs use one channel contract. The mega menu will expose `All`, `Guides`, `Insights`, and `News`, and its supporting description will read `Everything about AI models`.
 
 ## Navigation contract
 
@@ -23,7 +23,7 @@ Selecting a tab will update the URL without a reload, filter cards by the shared
 
 ## Scope
 
-This change is limited to the shared Articles mega menu, article-index tabs, channel data values, and their browser behavior. It does not create News articles, change article-topic filters, or redesign the mega-menu layout.
+This change is limited to the `ui-revamp-3` branch preview screens, shared preview Articles mega menu, article-index tabs, channel data values, and their browser behavior. It will be deployed only to the `ui-revamp-3` preview and its immutable preview build; it does not change production pages or production routing. It also does not create News articles, change article-topic filters, or redesign the mega-menu layout.
 
 ## Verification
 
