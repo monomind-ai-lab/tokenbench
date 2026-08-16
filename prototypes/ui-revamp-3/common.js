@@ -357,7 +357,7 @@ function setupBrand(){
   if(!brand)return;
   brand.href=PREVIEW_PATHS.home;
   brand.setAttribute('aria-label','TokenBench home');
-  brand.innerHTML='<img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span>';
+  brand.innerHTML='<img class="brand-logo" src="/brand/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span>';
 }
 
 function setupNavigation(){

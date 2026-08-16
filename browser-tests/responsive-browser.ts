@@ -1730,9 +1730,15 @@ test.describe('home and tools route runtime', () => {
 
 test.describe('ui-revamp-3 Make it yours controls', () => {
   test('keeps approved preview navigation and footer destinations on every rebuilt surface', async ({ page }) => {
-    await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+    const browserErrors = captureBrowserErrors(page);
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
+    }));
     for (const pathname of ['/models', '/popular-models/', '/make-it-yours/', '/compare', '/articles', '/articles/hybrid-router']) {
       await page.goto(pathname);
+      expect(new URL(page.url()).pathname, pathname).toBe(pathname);
       await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/models');
       const footer = page.locator('footer');
       await expect(footer.getByRole('link', { name: 'Models workbench' }), pathname).toHaveAttribute('href', '/models');
@@ -1740,6 +1746,8 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       await expect(footer.getByRole('link', { name: 'Make it yours' }), pathname).toHaveAttribute('href', '/make-it-yours/');
       await expect(footer.getByRole('link', { name: 'Compare models' }), pathname).toHaveAttribute('href', '/compare');
       await expect(footer.getByRole('link', { name: 'Articles' }), pathname).toHaveAttribute('href', '/articles');
+      expect(browserErrors.consoleErrors, `console errors on ${pathname}`).toEqual([]);
+      expect(browserErrors.pageErrors, `page errors on ${pathname}`).toEqual([]);
     }
   });
 

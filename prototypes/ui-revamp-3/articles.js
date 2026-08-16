@@ -89,7 +89,8 @@
     tabs[0].focus();
   });
 
-  document.querySelector('#cheatsheet-form').addEventListener('submit', event => {
+  const signupForm = document.querySelector('#cheatsheet-form');
+  signupForm?.addEventListener('submit', event => {
     event.preventDefault();
     const form = event.currentTarget;
     const firstName = new FormData(form).get('firstName').trim();
