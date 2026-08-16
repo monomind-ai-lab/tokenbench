@@ -84,7 +84,7 @@ setupShell();let view='cards';function filtered(){let q=$('#search').value.toLow
     compareMore.setAttribute('aria-label', `More details for ${models.length} selected models`);
     if (show) {
       $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short quick-comparison-radar"><canvas id="radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><h3 class="subhead">Decision matrix</h3>${comparisonMatrix(models, comparisonDecisionRows(models), {id: 'models-decision-matrix', ariaLabel: 'Selected model decision matrix'})}</div>`;
-      radar($('#radar'), models);
+      radar($('#radar'), models, {legendPadding: 32});
     } else {
       $('#comparison').innerHTML = '';
     }

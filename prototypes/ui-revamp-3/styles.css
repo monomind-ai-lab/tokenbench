@@ -773,6 +773,11 @@ input[type=range] {
   text-align: right;
 }
 
+.quick-comparison-footer #compare-more {
+  margin-left: 0;
+  text-align: left;
+}
+
 .text-link {
   display: inline-flex;
   flex: 0 0 auto;

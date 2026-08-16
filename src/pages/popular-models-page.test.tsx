@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { PopularModelsPage } from './popular-models-page';
 
 vi.mock('../frontend/popular-models/chart-canvas', () => ({
-  PopularChartCanvas: ({ ariaLabel }: { readonly ariaLabel: string }) => <div role="img" aria-label={ariaLabel} />,
+  PopularChartCanvas: ({
+    ariaLabel,
+    configuration,
+  }: {
+    readonly ariaLabel: string;
+    readonly configuration: { readonly options?: { readonly plugins?: { readonly legend?: { readonly labels?: { readonly padding?: number } } } } };
+  }) => <div role="img" aria-label={ariaLabel} data-legend-padding={configuration.options?.plugins?.legend?.labels?.padding} />,
 }));
 
 describe('PopularModelsPage', () => {
@@ -71,6 +77,7 @@ describe('PopularModelsPage', () => {
     expect(within(workspace).getByRole('button', { name: 'clear' })).toBeInTheDocument();
     expect(within(workspace).getByRole('button', { name: 'Add a model' })).toBeInTheDocument();
     expect(within(workspace).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/compare?models=claude-opus-4-1%2Cgpt-5');
+    expect(within(workspace).getByRole('img', { name: /Seven-category profile comparison/ })).toHaveAttribute('data-legend-padding', '32');
   });
 
   it('expands inline subtask evidence and compares up to four model columns through search', () => {

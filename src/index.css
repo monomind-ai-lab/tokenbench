@@ -1483,7 +1483,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-comparison-matrix-cards dd { font-family: var(--font-label); font-size: 0.7rem; font-weight: 800; text-align: right; overflow-wrap: break-word; }
 .popular-models-comparison-fixture-note { margin: 16px 0 0; color: var(--muted); font-size: 0.68rem; line-height: 1.5; }
 .popular-models-comparison-footer { display: flex; align-items: center; min-height: 44px; margin-top: 16px; }
-.popular-models-comparison-footer a { color: var(--primary-strong); font-size: 0.74rem; font-weight: 800; text-decoration: none; }
+.popular-models-comparison-footer a { min-height: 44px; display: inline-flex; align-items: center; color: var(--primary-strong); font-size: 0.74rem; font-weight: 800; text-decoration: none; }
 .popular-models-comparison-footer a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 1023px) {

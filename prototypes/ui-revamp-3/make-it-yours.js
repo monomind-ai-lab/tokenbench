@@ -177,7 +177,7 @@
     if (show) {
       if (typeof Chart !== 'undefined') Chart.getChart($('#leaderboard-radar'))?.destroy();
       $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short quick-comparison-radar"><canvas id="leaderboard-radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><h3 class="subhead">Decision matrix</h3>${comparisonMatrix(models, comparisonDecisionRows(models), {id: 'leaderboard-decision-matrix', ariaLabel: 'Ranked candidate decision matrix'})}</div>`;
-      radar($('#leaderboard-radar'), models);
+      radar($('#leaderboard-radar'), models, {legendPadding: 32});
     } else {
       $('#comparison').innerHTML = '';
     }

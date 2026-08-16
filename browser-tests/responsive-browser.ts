@@ -1824,7 +1824,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
       status: 200,
       contentType: 'application/javascript',
-      body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
+      body: 'window.Chart=class Chart{constructor(canvas,configuration){canvas.dataset.legendPadding=String(configuration.options?.plugins?.legend?.labels?.padding??"")}static getChart(){return null}destroy(){}update(){}};',
     }));
     await page.setViewportSize({ width: 1302, height: 1324 });
 
@@ -1836,26 +1836,33 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       const addModel = workspace.getByRole('button', { name: 'Add a model' });
       await expect(addModel).toBeVisible();
 
-      while (await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('listitem').count() < 2) {
+      const selectedCount = await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('listitem').count();
+      for (const modelName of selected.slice(selectedCount)) {
         const picker = workspace.getByRole('dialog', { name: 'Add a model' });
-        if (await picker.isHidden()) await addModel.click();
+        if (await picker.isVisible()) await page.keyboard.press('Escape');
+        await addModel.click();
+        await expect(picker).toBeVisible();
         const search = picker.getByRole('combobox', { name: 'Search models or providers' });
-        const selectedCount = await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('listitem').count();
-        await search.fill(selected[selectedCount]!);
-        await picker.getByRole('option', { name: new RegExp(selected[selectedCount]!) }).click();
+        await search.fill(modelName);
+        await picker.getByRole('option', { name: new RegExp(modelName) }).click();
+        await page.waitForTimeout(50);
       }
 
       const selectedNames = await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('link').allTextContents();
       expect(selectedNames).toEqual(selected);
-      await expect(workspace.getByRole('link', { name: 'More details' })).toHaveAttribute('href', href);
+      const detailsLink = workspace.getByRole('link', { name: 'More details' });
+      await expect(detailsLink).toHaveAttribute('href', href);
       await expect(workspace.getByRole('img', { name: /Selected model capability radar|Seven-category profile comparison/ })).toBeVisible();
+      if (pathname !== '/popular-models/') await expect(workspace.locator('canvas').first()).toHaveAttribute('data-legend-padding', '32');
 
       const layout = await workspace.evaluate((element) => {
         const heading = element.querySelector('h2, h3')!.getBoundingClientRect();
         const clear = element.querySelector('button[aria-label="clear"], button#clear')!.getBoundingClientRect();
         const selected = element.querySelector('[role="list"][aria-label="Selected comparison models"]')!;
         const picker = element.querySelector('.compare-model-picker, .popular-models-picker')!;
-        const details = [...element.querySelectorAll('a')].find((link) => link.textContent?.trim() === 'More details')!.getBoundingClientRect();
+        const detailsLink = [...element.querySelectorAll('a')].find((link) => link.textContent?.trim() === 'More details')!;
+        const details = detailsLink.getBoundingClientRect();
+        const footer = detailsLink.closest('footer')!.getBoundingClientRect();
         const radar = element.querySelector('canvas')!.getBoundingClientRect();
         const radarParent = element.querySelector('canvas')!.parentElement!.getBoundingClientRect();
         return {
@@ -1863,12 +1870,17 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
           headingTop: heading.top,
           pickerAfterSelected: Boolean(selected.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING),
           detailsBelowHeading: details.top > heading.bottom,
+          detailsHeight: details.height,
+          detailsLeft: details.left,
+          footerLeft: footer.left,
           radarCentered: Math.abs((radar.left + radar.right) / 2 - (radarParent.left + radarParent.right) / 2) < 1,
         };
       });
       expect(layout.clearTop).toBeLessThanOrEqual(layout.headingTop + 8);
       expect(layout.pickerAfterSelected).toBe(true);
       expect(layout.detailsBelowHeading).toBe(true);
+      expect(Math.abs(layout.detailsLeft - layout.footerLeft)).toBeLessThanOrEqual(1);
+      expect(layout.detailsHeight).toBeGreaterThanOrEqual(44);
       expect(layout.radarCentered).toBe(true);
 
       await page.setViewportSize({ width: 320, height: 844 });
@@ -1876,6 +1888,17 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       await assertNoHorizontalOverflow(page);
       await page.setViewportSize({ width: 1302, height: 1324 });
     }
+  });
+
+  test('keeps Compare radar legend spacing distinct from quick comparison', async ({ page }) => {
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.Chart=class Chart{constructor(canvas,configuration){canvas.dataset.legendPadding=String(configuration.options?.plugins?.legend?.labels?.padding??"")}static getChart(){return null}destroy(){}update(){}};',
+    }));
+    await page.goto('/compare?models=claude-3-5-sonnet,deepseek-v3');
+
+    await expect(page.getByRole('img', { name: /Capability radar comparing/ })).toHaveAttribute('data-legend-padding', '12');
   });
 });
 
