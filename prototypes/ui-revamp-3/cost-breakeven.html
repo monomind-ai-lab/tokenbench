@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Subscription vs API breakeven — TokenBench</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="/" aria-label="TokenBench home"><img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a>
+      <nav class="nav" aria-label="Primary"></nav>
+      <div class="header-actions"><button class="icon-button" id="theme" type="button" aria-label="Toggle dark theme">◐</button></div>
+    </div>
+  </header>
+  <main class="shell page" id="breakeven-calculator">
+    <section class="toolbar">
+      <div>
+        <p class="label">Cost preview</p>
+        <h1 class="headline">Subscription vs API breakeven</h1>
+        <p class="lede">See the monthly token volume where seat-based SaaS pricing and a selected model’s API pricing meet.</p>
+        <p class="fixture">Interactive planning estimate · fixture prices, not a provider quote</p>
+      </div>
+      <div class="control-row" role="group" aria-label="Calculator actions">
+        <button class="toggle" id="breakeven-copy-link" type="button">Copy link</button>
+        <button class="toggle" id="breakeven-download-csv" type="button">Download CSV</button>
+        <button class="toggle" id="breakeven-print" type="button">Print</button>
+      </div>
+    </section>
+
+    <section class="panel breakeven-controls" aria-labelledby="breakeven-inputs-title">
+      <div class="toolbar">
+        <div>
+          <h2 class="section-title" id="breakeven-inputs-title">Inputs</h2>
+          <p class="lede">Change an input to recalculate the full 0–300M token domain.</p>
+        </div>
+        <p id="breakeven-status" class="fixture" role="status" aria-live="polite"></p>
+      </div>
+      <div class="grid-3">
+        <label class="control-field" for="breakeven-seats"><span class="label">Seats</span><input id="breakeven-seats" name="seats" type="range" min="1" max="50" step="1" value="5"><output id="breakeven-seats-output" for="breakeven-seats">5 seats</output></label>
+        <label class="control-field" for="breakeven-seat-price"><span class="label">Subscription price / seat / month (USD)</span><input id="breakeven-seat-price" name="seatPrice" type="number" min="0" step="1" value="20"></label>
+        <label class="control-field" for="breakeven-model"><span class="label">API model</span><select id="breakeven-model" name="model"></select></label>
+        <label class="control-field" for="breakeven-token-volume"><span class="label">Selected monthly volume (M tokens)</span><input id="breakeven-token-volume" name="tokenVolume" type="range" min="0" max="300" step="1" value="50"><output id="breakeven-token-output" for="breakeven-token-volume">50M tokens</output></label>
+        <label class="control-field" for="breakeven-input-share"><span class="label">Input share (%)</span><input id="breakeven-input-share" name="inputShare" type="number" min="0" max="100" step="1" value="70"></label>
+        <label class="control-field" for="breakeven-cache-reads"><span class="label">Cached input reads (%)</span><input id="breakeven-cache-reads" name="cacheReads" type="number" min="0" max="100" step="1" value="0"></label>
+        <label class="control-field" for="breakeven-cache-writes"><span class="label">Cached input writes (%)</span><input id="breakeven-cache-writes" name="cacheWrites" type="number" min="0" max="100" step="1" value="0"></label>
+        <label class="toggle control-field" for="breakeven-long-context"><input id="breakeven-long-context" name="longContext" type="checkbox"> Apply long-context planning multiplier (1.5× API rate)</label>
+      </div>
+      <fieldset class="breakeven-workload panel soft">
+        <legend class="subhead">Workload token estimate</legend>
+        <p class="fixture">Use a text or code character-to-token estimate to set the selected monthly-volume marker.</p>
+        <div class="grid-3">
+          <label class="control-field" for="breakeven-content-type"><span class="label">Content type</span><select id="breakeven-content-type" name="content"><option value="text">Text · 4 characters / token</option><option value="code">Code · 3 characters / token</option></select></label>
+          <label class="control-field" for="breakeven-requests"><span class="label">Requests / month</span><input id="breakeven-requests" name="requests" type="number" min="0" step="1" value="10000"></label>
+          <label class="control-field" for="breakeven-input-characters"><span class="label">Input characters / request</span><input id="breakeven-input-characters" name="inputChars" type="number" min="0" step="100" value="1200"></label>
+          <label class="control-field" for="breakeven-output-characters"><span class="label">Output characters / request</span><input id="breakeven-output-characters" name="outputChars" type="number" min="0" step="100" value="600"></label>
+        </div>
+        <div class="toolbar">
+          <p class="fixture" id="breakeven-workload-estimate"></p>
+          <button class="toggle" id="breakeven-use-estimate" type="button">Use estimate</button>
+        </div>
+      </fieldset>
+    </section>
+
+    <section class="grid-2 breakeven-results" aria-labelledby="breakeven-results-title">
+      <article class="panel soft">
+        <p class="label">Crossover</p>
+        <h2 class="section-title" id="breakeven-crossover">—</h2>
+        <p id="breakeven-lower-cost" class="lede"></p>
+        <dl class="metrics breakeven-summary">
+          <div class="metric"><dt class="label">SaaS monthly</dt><dd id="breakeven-saas-cost">—</dd></div>
+          <div class="metric"><dt class="label">Effective API rate</dt><dd id="breakeven-effective-rate">—</dd></div>
+          <div class="metric"><dt class="label">At selected volume</dt><dd id="breakeven-selected-cost">—</dd></div>
+        </dl>
+      </article>
+      <article class="panel">
+        <h2 class="section-title" id="breakeven-results-title">Selected model price evidence</h2>
+        <p class="fixture" id="breakeven-source"></p>
+        <div class="table-wrap" role="region" aria-label="Selected model source prices" tabindex="0">
+          <table id="breakeven-price-table"><thead><tr><th scope="col">Model</th><th scope="col">Input / 1M</th><th scope="col">Output / 1M</th><th scope="col">Cache read / 1M</th><th scope="col">Cache write / 1M</th></tr></thead><tbody></tbody></table>
+        </div>
+      </article>
+    </section>
+
+    <section class="panel breakeven-chart-panel" aria-labelledby="breakeven-chart-title">
+      <div class="toolbar">
+        <div><h2 class="section-title" id="breakeven-chart-title">Monthly cost across the full token domain</h2><p class="lede">The dashed crossover line and shaded API region show the less-expensive option.</p></div>
+        <p class="fixture">SaaS is fixed; API cost rises with metered tokens.</p>
+      </div>
+      <div class="chart-wrap"><canvas id="breakeven-chart" role="img" aria-label="SaaS subscription and API monthly cost across zero to 300 million tokens"></canvas></div>
+      <div id="breakeven-table-region" class="table-wrap" role="region" aria-label="Exact SaaS and API cost samples" tabindex="0">
+        <table id="breakeven-table"><thead><tr><th scope="col">Monthly tokens</th><th scope="col">SaaS subscription</th><th scope="col">API usage</th><th scope="col">Lower cost</th></tr></thead><tbody></tbody></table>
+      </div>
+    </section>
+
+    <section class="panel breakeven-disclosures" aria-labelledby="breakeven-disclosure-title">
+      <h2 class="section-title" id="breakeven-disclosure-title">Formula and planning notes</h2>
+      <details open><summary>Formula and rounding</summary><p id="breakeven-formula"></p><p class="fixture">Currency values are rounded to cents for display. Crossover token volume is rounded to two decimals; unrounded values drive the recommendation.</p></details>
+      <details><summary>Assumptions</summary><ul id="breakeven-assumptions"></ul></details>
+      <p class="fixture" id="breakeven-timestamp"></p>
+      <p class="fixture" id="breakeven-action-status" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+  <script src="data.js"></script>
+  <script src="common.js"></script>
+  <script src="cost-breakeven.js"></script>
+</body>
+</html>
