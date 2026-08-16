@@ -16,7 +16,7 @@ function csvRows(models: readonly PopularModelFixture[]): readonly (readonly (st
   return [
     [
       'Model',
-      'Organization',
+      'Provider',
       'Open weights',
       'Overall',
       ...POPULAR_CATEGORY_KEYS.map((category) => POPULAR_CATEGORY_LABELS[category]),

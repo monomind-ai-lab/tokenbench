@@ -42,6 +42,27 @@ describe('PopularModelsPage', () => {
     expect(within(leaderboard).getByRole('columnheader', { name: /Multi-step planning/ })).toBeInTheDocument();
   });
 
+  it('uses provider terminology while filtering the existing organization field', () => {
+    render(<PopularModelsPage />);
+    expect(screen.getByRole('button', { name: 'Providers' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show provider' })).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'Scrollable popular model leaderboard' })).getByRole('columnheader', { name: 'Provider' })).toBeInTheDocument();
+    expect(screen.queryByText('Organization')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Providers' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search providers' }), { target: { value: 'Anthropic' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Anthropic' }));
+    expect(screen.getByText(/models shown/)).toBeInTheDocument();
+  });
+
+  it('keeps exact insight tables as native disclosures', () => {
+    render(<PopularModelsPage />);
+    const disclosure = screen.getByText('Exact quality and cost values').closest('details');
+    expect(disclosure).not.toHaveAttribute('open');
+    fireEvent.click(screen.getByText('Exact quality and cost values'));
+    expect(disclosure).toHaveAttribute('open');
+    expect(within(disclosure!).getByRole('columnheader', { name: 'Provider' })).toBeInTheDocument();
+  });
+
   it('expands inline subtask evidence and compares up to four model columns through search', () => {
     render(<PopularModelsPage />);
 
@@ -50,13 +71,13 @@ describe('PopularModelsPage', () => {
     expect(screen.getAllByText('Constraint synthesis').length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add a model' }));
-    const search = screen.getByRole('combobox', { name: 'Search models or organizations' });
+    const search = screen.getByRole('combobox', { name: 'Search models or providers' });
     fireEvent.change(search, { target: { value: 'Haiku' } });
     fireEvent.click(screen.getByRole('option', { name: /Claude Haiku 4.5/ }));
     expect(screen.getByText('3 of 4 models selected. Add up to 1 more.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Claude Haiku 4.5' })).toBeEnabled();
 
-    fireEvent.change(screen.getByRole('combobox', { name: 'Search models or organizations' }), { target: { value: 'DeepSeek V3.2' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search models or providers' }), { target: { value: 'DeepSeek V3.2' } });
     fireEvent.click(screen.getByRole('option', { name: /DeepSeek V3.2/ }));
     expect(screen.getByText('4 of 4 models selected. Remove a model to add another.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add a model' })).toBeDisabled();

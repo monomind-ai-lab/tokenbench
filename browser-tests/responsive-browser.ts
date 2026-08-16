@@ -2491,6 +2491,41 @@ test.describe('viewport and theme hydration matrix', () => {
   }
 });
 
+test.describe('Popular Models terminology and contrast', () => {
+  test('keeps dark-theme score highlights distinct and table headers centered', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await setStoredTheme(page, 'dark');
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
+    }));
+    await page.goto('/popular-models/', { waitUntil: 'domcontentloaded' });
+
+    const score = page.locator('.popular-models-score-top-five').first();
+    await expect(score).toBeVisible();
+    const styles = await score.evaluate((element) => {
+      const scoreStyles = getComputedStyle(element);
+      const panel = element.closest('.popular-models-desktop-table');
+      return {
+        backgroundColor: scoreStyles.backgroundColor,
+        borderColor: scoreStyles.borderTopColor,
+        borderWidth: scoreStyles.borderTopWidth,
+        color: scoreStyles.color,
+        panelBackgroundColor: panel ? getComputedStyle(panel).backgroundColor : '',
+      };
+    });
+    expect(styles.backgroundColor).not.toBe(styles.panelBackgroundColor);
+    expect(styles.borderWidth).toBe('1px');
+    expect(styles.borderColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(contrastRatio(styles.color, styles.backgroundColor)).toBeGreaterThanOrEqual(4.5);
+
+    const headerVerticalAlignments = await page.locator('.popular-models-desktop-table thead th').evaluateAll((headers) => headers.map((header) => getComputedStyle(header).verticalAlign));
+    expect(headerVerticalAlignments).not.toHaveLength(0);
+    expect(headerVerticalAlignments.every((verticalAlign) => verticalAlign === 'middle')).toBe(true);
+  });
+});
+
 test.describe('keyboard and chart accessibility regressions', () => {
   test('moves focus to the home main landmark when the skip link is activated', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 1000 });

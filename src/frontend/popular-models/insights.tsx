@@ -203,7 +203,7 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
           if (point?.model) window.location.assign(modelHref(point.model));
         },
         plugins: {
-          legend: { position: 'bottom', labels: { ...chartTextOptions(theme), usePointStyle: true, boxWidth: 10 } },
+          legend: { position: 'bottom', labels: { ...chartTextOptions(theme), usePointStyle: true, boxWidth: 10, padding: 32 } },
           tooltip: {
             callbacks: {
               title: (items: TooltipItem<'scatter'>[]) => (items[0]?.raw as FrontierPoint | undefined)?.model.name ?? items[0]?.dataset.label ?? '',
@@ -378,7 +378,7 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
   ] satisfies readonly PopularComparisonMetric[];
   const comparisonDetailRows = [
     ...comparisonProfileRows,
-    { id: 'organization', label: 'Organization', value: (model: PopularModelFixture) => model.organization },
+    { id: 'organization', label: 'Provider', value: (model: PopularModelFixture) => model.organization },
     ...comparisonDecisionRows,
     { id: 'fixture-status', label: 'Evidence status', value: () => 'Illustrative UI fixture' },
   ] satisfies readonly PopularComparisonMetric[];
@@ -408,8 +408,8 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
     <div className="popular-models-insights-grid">
       <article className="popular-models-insight-panel popular-models-scatter-panel">
         <div className="popular-models-chart-heading"><div><h3>Quality vs. cost</h3><p>Logarithmic task cost with the efficiency frontier traced across stronger scores.</p></div><span>Click a point for its profile</span></div>
-        <div className="popular-models-chart-wrap popular-models-scatter-chart"><PopularChartCanvas ariaLabel="Quality versus cost scatter plot with model organizations and a value frontier" configuration={scatterConfiguration} /></div>
-        <details className="popular-models-chart-data"><summary>Exact quality and cost values</summary><div className="popular-models-chart-table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Organization</th><th scope="col">Score</th><th scope="col">Cost / task</th><th scope="col">Frontier</th></tr></thead><tbody>{[...models].sort((left, right) => scoreFor(right, activeCategory) - scoreFor(left, activeCategory)).map((model) => <tr key={model.id}><th scope="row"><a href={modelHref(model)}>{model.name}</a></th><td>{model.organization}</td><td>{formatScore(scoreFor(model, activeCategory))}</td><td>{formatCost(model.costPerSuccessfulTask)}</td><td>{frontier.some((candidate) => candidate.id === model.id) ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div></details>
+        <div className="popular-models-chart-wrap popular-models-scatter-chart"><PopularChartCanvas ariaLabel="Quality versus cost scatter plot with model providers and a value frontier" configuration={scatterConfiguration} /></div>
+        <details className="popular-models-chart-data"><summary>Exact quality and cost values</summary><div className="popular-models-chart-table-wrap"><table><thead><tr><th scope="col">Model</th><th scope="col">Provider</th><th scope="col">Score</th><th scope="col">Cost / task</th><th scope="col">Frontier</th></tr></thead><tbody>{[...models].sort((left, right) => scoreFor(right, activeCategory) - scoreFor(left, activeCategory)).map((model) => <tr key={model.id}><th scope="row"><a href={modelHref(model)}>{model.name}</a></th><td>{model.organization}</td><td>{formatScore(scoreFor(model, activeCategory))}</td><td>{formatCost(model.costPerSuccessfulTask)}</td><td>{frontier.some((candidate) => candidate.id === model.id) ? 'Yes' : 'No'}</td></tr>)}</tbody></table></div></details>
       </article>
 
       <article className="popular-models-insight-panel popular-models-cost-panel">

@@ -231,7 +231,7 @@ export function PopularLeaderboardSection({ models, onCopyLink, onDownloadPng, o
           <th scope="col"><span className="popular-models-sr-only">Expand subtasks</span></th>
           <th scope="col">#</th>
           <th scope="col">Model</th>
-          {showOrganization ? <th scope="col">Organization</th> : null}
+          {showOrganization ? <th scope="col">Provider</th> : null}
           {columns.map((column) => <th key={column.key} scope="col" aria-sort={activeSort === column.key ? sortDirection : 'none'}><SortButton label={column.label} sortKey={column.key} activeSort={activeSort} direction={sortDirection} onSort={chooseSort} /></th>)}
           <th scope="col" aria-sort={activeSort === 'costPerSuccessfulTask' ? sortDirection : 'none'}><SortButton label="Cost / task" sortKey="costPerSuccessfulTask" activeSort={activeSort} direction={sortDirection} onSort={chooseSort} /></th>
         </tr></thead>

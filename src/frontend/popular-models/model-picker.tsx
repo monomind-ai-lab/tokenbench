@@ -97,7 +97,7 @@ export function PopularModelPicker({ models, selectedCount, max = 4, onAdd }: Po
     {open ? <div aria-label="Add a model" className="popular-models-picker-panel" id={panelId} role="dialog">
       <label className="popular-models-picker-search">
         <Search aria-hidden="true" size={16} />
-        <span className="popular-models-sr-only">Search models or organizations</span>
+        <span className="popular-models-sr-only">Search models or providers</span>
         <input
           aria-activedescendant={activeIndex >= 0 ? `${listboxId}-${activeIndex}` : undefined}
           aria-autocomplete="list"
@@ -106,7 +106,7 @@ export function PopularModelPicker({ models, selectedCount, max = 4, onAdd }: Po
           autoComplete="off"
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={onSearchKeyDown}
-          placeholder="Search models or organizations"
+          placeholder="Search models or providers"
           ref={searchRef}
           role="combobox"
           type="search"

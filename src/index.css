@@ -1351,6 +1351,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-desktop-table thead { background: var(--surface-container); }
 .popular-models-desktop-table th, .popular-models-desktop-table td { padding: 9px 11px; border-bottom: 1px solid color-mix(in srgb, var(--outline) 74%, transparent); text-align: left; vertical-align: top; }
 .popular-models-desktop-table thead th { color: var(--muted); font-family: var(--font-label); font-size: 0.64rem; font-weight: 800; letter-spacing: 0.045em; text-transform: uppercase; white-space: nowrap; }
+.popular-models-desktop-table thead th,
+.popular-models-desktop-table thead .popular-models-sort-button { vertical-align: middle; }
 .popular-models-desktop-table tbody tr:last-child > * { border-bottom: 0; }
 .popular-models-desktop-table tbody tr:hover { background: color-mix(in srgb, var(--primary-soft) 22%, var(--surface)); }
 .popular-models-data-row { cursor: pointer; }
@@ -1402,6 +1404,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-radar-chart { height: 500px; margin-top: 24px; }
 .popular-models-chart-data { min-width: 0; margin-top: 20px; border-top: 1px solid var(--outline); }
 .popular-models-chart-data > summary { min-height: 44px; display: flex; align-items: center; color: var(--primary-strong); font-size: 0.72rem; font-weight: 800; cursor: pointer; }
+.popular-models-chart-data > summary::after { content: '▼'; margin-left: auto; color: var(--muted); }
+.popular-models-chart-data[open] > summary::after { content: '▲'; }
 .popular-models-chart-table-wrap { min-width: 0; max-height: 420px; overflow: auto; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface); }
 .popular-models-chart-table-wrap table { width: 100%; min-width: 650px; border-collapse: collapse; font-size: 0.7rem; font-variant-numeric: tabular-nums; }
 .popular-models-chart-table-wrap th, .popular-models-chart-table-wrap td { padding: 9px 10px; border-bottom: 1px solid var(--outline); text-align: left; vertical-align: top; }
@@ -1758,7 +1762,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 }
 
 .app-shell[data-surface='leaderboard-workbench'] .popular-models-score-top-five {
-  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--primary) 58%, var(--outline));
+  background: color-mix(in srgb, var(--primary) 24%, var(--surface-high));
   color: var(--primary-strong);
 }
 

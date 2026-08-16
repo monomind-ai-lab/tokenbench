@@ -68,22 +68,22 @@ function OrganizationFilter({
       aria-controls={panelId}
       onClick={() => setIsOpen((open) => !open)}
     >
-      <span>Organizations{selectedOrganizations.length ? ` (${selectedOrganizations.length})` : ''}</span>
+      <span>Providers{selectedOrganizations.length ? ` (${selectedOrganizations.length})` : ''}</span>
       <ChevronDown aria-hidden="true" size={16} />
     </button>
-    {isOpen ? <div id={panelId} className="popular-models-organization-popover" role="dialog" aria-label="Filter by organization">
+    {isOpen ? <div id={panelId} className="popular-models-organization-popover" role="dialog" aria-label="Filter by provider">
       <label className="popular-models-organization-search-label">
-        <span className="popular-models-sr-only">Search organizations</span>
+        <span className="popular-models-sr-only">Search providers</span>
         <Search aria-hidden="true" size={16} />
         <input
           ref={inputRef}
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search organizations"
+          placeholder="Search providers"
         />
       </label>
-      <div className="popular-models-organization-options" role="group" aria-label="Organizations">
+      <div className="popular-models-organization-options" role="group" aria-label="Providers">
         {visibleOrganizations.map((organization) => {
           const selected = selectedOrganizations.includes(organization);
           return <button
@@ -97,13 +97,13 @@ function OrganizationFilter({
             <span>{organization}</span>
           </button>;
         })}
-        {visibleOrganizations.length === 0 ? <p className="popular-models-empty-organizations">No organizations match.</p> : null}
+        {visibleOrganizations.length === 0 ? <p className="popular-models-empty-organizations">No providers match.</p> : null}
       </div>
       {selectedOrganizations.length ? <button
         className="popular-models-clear-selection popular-models-touch-target"
         type="button"
         onClick={() => onChange([])}
-      ><X aria-hidden="true" size={15} /> Clear organizations</button> : null}
+      ><X aria-hidden="true" size={15} /> Clear providers</button> : null}
     </div> : null}
   </div>;
 }
@@ -158,7 +158,7 @@ export function PopularLeaderboardControls({
       <OrganizationFilter organizations={organizations} selectedOrganizations={selectedOrganizations} onChange={onSelectedOrganizationsChange} />
       <ToggleButton label="Open weights" pressed={openWeightsOnly} onPressedChange={onOpenWeightsOnlyChange} />
       <ToggleButton label="Exclude finetunes" pressed={excludeFinetunes} onPressedChange={onExcludeFinetunesChange} />
-      <ToggleButton label="Show org" pressed={showOrganization} onPressedChange={onShowOrganizationChange} />
+      <ToggleButton label="Show provider" pressed={showOrganization} onPressedChange={onShowOrganizationChange} />
     </div>
     <div className="popular-models-controls-secondary">
       <div className="popular-models-category-tabs" role="group" aria-label="Benchmark categories">
