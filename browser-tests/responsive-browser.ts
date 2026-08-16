@@ -1751,6 +1751,14 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
   });
 
+  test('keeps previously cached trailing-slash preview destinations usable', async ({ page }) => {
+    for (const pathname of ['/models/', '/compare/', '/articles/', '/articles/hybrid-router/']) {
+      await page.goto(pathname);
+      expect(new URL(page.url()).pathname, pathname).toBe(pathname);
+      await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/models');
+    }
+  });
+
   test('reuses the comparison picker pattern for multi-provider filtering and adding models beyond the default top 20', async ({ page }) => {
     await page.setViewportSize({ width: 1302, height: 1324 });
     await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());

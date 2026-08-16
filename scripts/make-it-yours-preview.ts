@@ -15,12 +15,16 @@ interface PreviewPageBundle {
 
 const previewPageBundles: readonly PreviewPageBundle[] = [
   { output: ['models.html'], document: 'index.html' },
+  { output: ['models', 'index.html'], document: 'index.html' },
   { output: ['compare.html'], document: 'compare.html' },
+  { output: ['compare', 'index.html'], document: 'compare.html' },
   { output: ['model-profile', 'index.html'], document: 'model-profile.html' },
   { output: ['model-lifecycle', 'index.html'], document: 'model-lifecycle.html' },
   { output: ['make-it-yours', 'index.html'], document: 'make-it-yours.html' },
   { output: ['articles.html'], document: 'articles.html' },
+  { output: ['articles', 'index.html'], document: 'articles.html' },
   { output: ['articles', 'hybrid-router.html'], document: 'article-hybrid-router.html' },
+  { output: ['articles', 'hybrid-router', 'index.html'], document: 'article-hybrid-router.html' },
 ];
 
 const sharedScripts = ['common.js', 'data.js', 'make-it-yours.js', 'articles.js', 'article-detail.js'] as const;

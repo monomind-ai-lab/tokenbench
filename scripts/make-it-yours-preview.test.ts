@@ -31,11 +31,15 @@ describe('approved preview bundle', () => {
 
     const expectedPages = [
       ['models.html', 'Models workbench'],
+      [join('models', 'index.html'), 'Models workbench'],
       ['compare.html', 'Compare models'],
+      [join('compare', 'index.html'), 'Compare models'],
       [join('model-profile', 'index.html'), 'Model profile'],
       [join('model-lifecycle', 'index.html'), 'Model lifecycle'],
       ['articles.html', 'Articles'],
+      [join('articles', 'index.html'), 'Articles'],
       [join('articles', 'hybrid-router.html'), 'A hybrid router for high-stakes agentic work'],
+      [join('articles', 'hybrid-router', 'index.html'), 'A hybrid router for high-stakes agentic work'],
     ] as const;
     for (const [file, expectedText] of expectedPages) {
       const html = await readFile(join(outputDir, file), 'utf8');
