@@ -1430,7 +1430,7 @@ test.describe('guides browser harness', () => {
         await page.keyboard.press('Enter');
         await expect(page.getByRole('button', { name: 'Close navigation' })).toHaveAttribute('aria-expanded', 'true');
       }
-      await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Guides', exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'Articles', exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
       await expect(page.getByRole('link', { name: 'Sources', exact: true })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Data sources', exact: true })).toHaveCount(0);
@@ -1647,7 +1647,7 @@ test.describe('home and tools route runtime', () => {
     await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Subscribe vs API', exact: true })).not.toHaveAttribute('aria-current', 'page');
   });
 
-  test('navigation exposes the seven approved destinations on compact Home', async ({ page }) => {
+  test('navigation exposes the shared mega-menu destinations on compact Home', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/');
@@ -1656,16 +1656,13 @@ test.describe('home and tools route runtime', () => {
     await page.getByRole('button', { name: 'Open navigation' }).click();
     const navigation = page.getByRole('navigation', { name: 'Primary navigation' });
     await expect(navigation).toBeVisible();
-    expect(await navigation.getByRole('link').allTextContents()).toEqual([
-      'Home',
-      'Subscribe vs API',
-      'Price vs Performance',
-      'Models',
-      'Compare',
-      'Leaderboards',
-      'Guides',
-    ]);
+    expect(await navigation.getByRole('link').allTextContents()).toEqual(['Home', 'Compare', 'Subscribe vs API']);
+    expect((await navigation.getByRole('button').allTextContents()).map((label) => label.trim())).toEqual(['Models', 'Leaderboards', 'Articles']);
     await expect(navigation.getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+    await navigation.getByRole('button', { name: 'Leaderboards', exact: true }).click();
+    const leaderboardMenu = page.getByRole('region', { name: 'Leaderboards' });
+    await expect(leaderboardMenu.getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
+    await expect(leaderboardMenu.getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours/');
     await assertNoHorizontalOverflow(page);
   });
 

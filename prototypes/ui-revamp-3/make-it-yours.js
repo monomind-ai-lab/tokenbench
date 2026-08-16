@@ -1,3 +1,4 @@
+// The route is published as /make-it-yours/; this script stays path-relative so the preview bundle is self-contained.
 (() => {
   setupShell();
 

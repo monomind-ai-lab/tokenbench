@@ -40,9 +40,10 @@ interface PageFrameProps {
   readonly skipLinkTarget?: string;
   readonly skipLinkLabel?: string;
   readonly catalogState?: CatalogState;
+  readonly surface?: 'default' | 'leaderboard-workbench';
 }
 
-function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalogState }: PageFrameProps) {
+function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalogState, surface }: PageFrameProps) {
   const { theme, language, toggleTheme, changeLanguage } = useSitePreferences();
 
   return (
@@ -58,6 +59,7 @@ function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalo
       notice={catalogState?.notice}
       error={catalogState?.error}
       onRetry={catalogState?.retry}
+      surface={surface}
     >
       {children}
     </AppShell>
@@ -311,7 +313,7 @@ function LeaderboardsRoute() {
 }
 
 function PopularModelsRoute() {
-  return <PageFrame activePage="leaderboards"><PopularModelsPage /></PageFrame>;
+  return <PageFrame activePage="leaderboards" surface="leaderboard-workbench"><PopularModelsPage /></PageFrame>;
 }
 
 function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {

@@ -492,15 +492,22 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.queryByText('The Decision Engine for AI Costs & Model Benchmarks')).not.toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent('HomeSubscribe vs APIPrice vs PerformanceModelsCompareLeaderboardsGuides');
+    expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent(/HomeModels\s+Leaderboards\s+CompareSubscribe vs APIArticles/);
   });
 
-  it('renders the seven approved primary navigation destinations', () => {
+  it('renders the approved primary navigation and opens its shared leaderboard menu', () => {
     render(<SiteHeader theme="dark" language="en" activePage="home" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
 
-    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' }))
-      .getAllByRole('link').map((link) => link.textContent))
-      .toEqual(['Home', 'Subscribe vs API', 'Price vs Performance', 'Models', 'Compare', 'Leaderboards', 'Guides']);
+    const navigation = screen.getByRole('navigation', { name: 'Primary navigation' });
+    expect(within(navigation).getAllByRole('link').map((link) => link.textContent))
+      .toEqual(['Home', 'Compare', 'Subscribe vs API']);
+    expect(within(navigation).getAllByRole('button').map((button) => button.textContent?.trim()))
+      .toEqual(['Models', 'Leaderboards', 'Articles']);
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Leaderboards' }));
+    const menu = screen.getByRole('region', { name: 'Leaderboards' });
+    expect(within(menu).getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
+    expect(within(menu).getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours/');
   });
 
   it('defaults a no-storage document to dark and persists both TokenBench theme choices', async () => {

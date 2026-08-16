@@ -4,6 +4,7 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import { versionFrontendAssetReferences } from './src/routing/frontend-assets';
 import { staticHtmlEntries } from './src/routing/routes';
+import { makeItYoursPreviewPlugin } from './scripts/make-it-yours-preview';
 
 const generatedHtmlInputs = staticHtmlEntries(__dirname);
 
@@ -18,6 +19,7 @@ export default defineConfig(async ({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      makeItYoursPreviewPlugin(),
       ...localPreviewPlugins,
       {
         name: 'version-stable-frontend-assets',

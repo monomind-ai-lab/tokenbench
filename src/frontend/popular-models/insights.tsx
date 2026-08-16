@@ -72,7 +72,8 @@ function readChartTheme(): PopularChartTheme {
       tertiary: '', warning: '', danger: '', fieldOutline: '', fontBody: '', fontLabel: '',
     };
   }
-  const styles = getComputedStyle(document.documentElement);
+  const tokenSource = document.querySelector('.popular-models-page') ?? document.documentElement;
+  const styles = getComputedStyle(tokenSource);
   return {
     text: cssValue(styles, '--text'),
     muted: cssValue(styles, '--muted'),

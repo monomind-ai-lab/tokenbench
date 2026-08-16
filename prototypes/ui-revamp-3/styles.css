@@ -2615,3 +2615,19 @@ button:disabled {
   .article-detail-callout,
   .article-detail-cta { padding: 18px; }
 }
+
+/* Shared mobile shell: collapse the latest mega-menu navigation into the same
+   56px header grammar used by the React leaderboard preview. */
+.mobile-nav-toggle { display: none; }
+
+@media (max-width: 800px) {
+  .topbar .shell { gap: 4px; }
+  .mobile-nav-toggle { display: inline-flex; flex: 0 0 auto; margin-left: auto; border: 1px solid var(--line); border-radius: var(--r1); background: var(--panel); }
+  .mobile-nav-toggle svg { width: 20px; height: 20px; }
+  .nav { position: absolute; top: 56px; right: 0; left: 0; width: auto; max-width: none; max-height: calc(100dvh - 68px); display: none; flex-direction: column; align-items: stretch; gap: 0; overflow: auto; padding: 8px 12px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--r2) var(--r2); background: var(--panel); transform: none; }
+  .nav[data-open='true'] { display: flex; }
+  .nav a, .nav-trigger { width: 100%; justify-content: flex-start; }
+  .nav-trigger svg { margin-left: auto; }
+  .mega-panel { top: 56px; max-height: calc(100dvh - 68px); }
+  .page, .article-detail-page { padding-top: 28px; }
+}
