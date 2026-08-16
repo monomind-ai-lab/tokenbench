@@ -1738,7 +1738,7 @@ test.describe('home and tools route runtime', () => {
 });
 
 test.describe('ui-revamp-3 Make it yours controls', () => {
-  const weightedInsightChartStub = `window.Chart=class Chart{static charts=new WeakMap();constructor(canvas,configuration){this.canvas=canvas;this.configuration=configuration;this.data=configuration.data;this.chartArea={top:0,bottom:440};Chart.charts.set(canvas,this)}static getChart(canvas){return Chart.charts.get(canvas)||null}destroy(){Chart.charts.delete(this.canvas)}update(){}};`;
+  const weightedInsightChartStub = `window.Chart=class Chart{static charts=new WeakMap();constructor(canvas,configuration){this.canvas=canvas;this.configuration=configuration;this.data=configuration.data;const height=Number.parseFloat(canvas.parentElement?.style.height||'0');this.chartArea={top:64,bottom:Math.max(64,height-64)};Chart.charts.set(canvas,this)}static getChart(canvas){return Chart.charts.get(canvas)||null}destroy(){Chart.charts.delete(this.canvas)}update(){}};`;
 
   async function installWeightedInsightChartStub(page: Page): Promise<void> {
     await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
@@ -1974,6 +1974,39 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await page.getByRole('button', { name: 'Download weighted score insights as PNG' }).click();
     const png = await pngDownload;
     expect(png.suggestedFilename()).toMatch(/^tokenbench-weighted-score-cost-\d{4}-\d{2}-\d{2}\.png$/u);
+  });
+
+  test('keeps every weighted score insights cost row pointer-reachable above the former height cap', async ({ page }) => {
+    const allModelIds = [
+      'claude-3-5-sonnet', 'deepseek-v3', 'deepseek-r1', 'gpt-4o', 'gemini-1-5-pro', 'llama-3-3-70b',
+      'gpt-5-6-sol', 'claude-mythos-5', 'claude-opus-5', 'gemini-3-6-pro', 'grok-4-5', 'deepseek-v4-pro-0813',
+      'deepseek-v4-flash-0731', 'kimi-k3', 'qwen3-8-max', 'qwen3-5-235b', 'llama-4-maverick', 'mistral-large-3',
+      'command-a', 'glm-5', 'nova-pro', 'phi-4', 'jamba-1-5-large', 'yi-large', 'gemma-3-27b', 'command-r-plus',
+      'mistral-small-3-2', 'llama-3-1-405b', 'qwen-2-5-72b', 'grok-3-mini',
+    ].join(',');
+    await installWeightedInsightChartStub(page);
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.goto(`/make-it-yours/?models=${allModelIds}`);
+
+    const geometry = await page.locator('#weighted-cost-ranking-chart').evaluate((canvas) => {
+      const instance = (window as any).Chart.getChart(canvas);
+      const { top, bottom } = instance.chartArea;
+      const models = instance.configuration.data.labels;
+      return {
+        modelCount: models.length,
+        rowHeight: (bottom - top) / models.length,
+        lastRowCenter: bottom - (bottom - top) / models.length / 2,
+      };
+    });
+    expect(geometry.modelCount).toBe(30);
+    expect(geometry.rowHeight).toBeGreaterThanOrEqual(44);
+    await assertNoHorizontalOverflow(page);
+
+    await page.locator('#weighted-cost-ranking-chart').evaluate((canvas, lastRowCenter) => {
+      const instance = (window as any).Chart.getChart(canvas);
+      instance.configuration.options.onClick({ y: lastRowCenter, native: { target: canvas } }, [], instance);
+    }, geometry.lastRowCenter);
+    await expect(page).toHaveURL(/\/model-profile\/?\?model=claude-opus-5$/u);
   });
 
   test('reuses the comparison picker pattern for multi-provider filtering and adding models beyond the default top 20', async ({ page }) => {

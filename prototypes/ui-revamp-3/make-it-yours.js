@@ -89,9 +89,11 @@
     const rankingChart = canvas.id === 'ranking';
     const weightedCostChart = canvas.id === 'weighted-cost-ranking-chart';
     const perRow = weightedCostChart ? 44 : rankingChart ? 28 : 24;
+    const verticalChartChrome = weightedCostChart ? 176 : 84;
     const minimum = weightedCostChart ? 420 : rankingChart ? 360 : 300;
-    const maximum = weightedCostChart ? 1080 : rankingChart ? 680 : 560;
-    canvas.closest('.chart-wrap').style.height = `${Math.min(maximum, Math.max(minimum, modelCount * perRow + 84))}px`;
+    const maximum = rankingChart ? 680 : 560;
+    const height = Math.max(minimum, modelCount * perRow + verticalChartChrome);
+    canvas.closest('.chart-wrap').style.height = `${weightedCostChart ? height : Math.min(maximum, height)}px`;
   }
 
   function openModelProfile(model) {
