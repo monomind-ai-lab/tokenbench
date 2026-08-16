@@ -15,6 +15,7 @@
   let comparisonWasVisible = false;
   let visibleModels = [];
   let filteredCandidates = [];
+  const chartSelectionControllers = new WeakMap();
 
   const sumWeights = () => Object.values(TB.weights).reduce((total, value) => total + value, 0);
   const isOpenWeight = model => String(model.access).toLowerCase().includes('open');
@@ -86,10 +87,15 @@
 
   function chartHeight(canvas, modelCount) {
     const rankingChart = canvas.id === 'ranking';
-    const perRow = rankingChart ? 28 : 24;
-    const minimum = rankingChart ? 360 : 300;
-    const maximum = rankingChart ? 680 : 560;
+    const weightedCostChart = canvas.id === 'weighted-cost-ranking-chart';
+    const perRow = weightedCostChart ? 44 : rankingChart ? 28 : 24;
+    const minimum = weightedCostChart ? 420 : rankingChart ? 360 : 300;
+    const maximum = weightedCostChart ? 1080 : rankingChart ? 680 : 560;
     canvas.closest('.chart-wrap').style.height = `${Math.min(maximum, Math.max(minimum, modelCount * perRow + 84))}px`;
+  }
+
+  function openModelProfile(model) {
+    if (model) location.href = `/model-profile?model=${encodeURIComponent(model.id)}`;
   }
 
   function modelForChartRow(instance, event, models) {
@@ -130,7 +136,7 @@
         },
         onClick: (event, _active, instance) => {
           const model = modelForChartRow(instance, event, models);
-          if (model) location.href = `/model-profile?model=${encodeURIComponent(model.id)}`;
+          openModelProfile(model);
         },
         plugins: { legend: { display: false } },
         scales: {
@@ -151,6 +157,58 @@
         bestScore = currentScore;
         return true;
       });
+  }
+
+  function mountWeightedChartSelection(id, models, label) {
+    const root = $(`#${id}-selection`);
+    const options = $('.weighted-chart-selection-options', root);
+    const activeCopy = $(`#${id}-selection-active`);
+    chartSelectionControllers.get(root)?.abort();
+    const controller = new AbortController();
+    chartSelectionControllers.set(root, controller);
+
+    if (!models.length) {
+      options.innerHTML = '';
+      root.removeAttribute('aria-activedescendant');
+      root.removeAttribute('data-active-model-id');
+      activeCopy.textContent = '';
+      return;
+    }
+
+    const previousId = root.dataset.activeModelId;
+    let activeIndex = Math.max(0, models.findIndex(model => model.id === previousId));
+    options.innerHTML = models.map(model => `<span id="${id}-option-${escapeHtml(model.id)}" role="option" aria-selected="false">${escapeHtml(model.name)} · ${escapeHtml(model.provider)}</span>`).join('');
+
+    const select = index => {
+      activeIndex = Math.max(0, Math.min(index, models.length - 1));
+      const model = models[activeIndex];
+      root.dataset.activeModelId = model.id;
+      root.setAttribute('aria-activedescendant', `${id}-option-${model.id}`);
+      root.setAttribute('aria-label', `${label} chart model selection. ${model.name} selected. Use Left and Right Arrow to choose a model, then Enter or Space to open its profile.`);
+      $$('[role="option"]', options).forEach((option, optionIndex) => option.setAttribute('aria-selected', String(optionIndex === activeIndex)));
+      activeCopy.textContent = `${model.name} selected.`;
+    };
+
+    root.addEventListener('keydown', event => {
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        event.preventDefault();
+        select(activeIndex + 1);
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        select(activeIndex - 1);
+      } else if (event.key === 'Home') {
+        event.preventDefault();
+        select(0);
+      } else if (event.key === 'End') {
+        event.preventDefault();
+        select(models.length - 1);
+      } else if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openModelProfile(models[activeIndex]);
+      }
+    }, { signal: controller.signal });
+
+    select(activeIndex);
   }
 
   function renderWeightedInsightTable(models, { cheapestFirst = false } = {}) {
@@ -175,7 +233,8 @@
             borderColor: palette.line,
             borderWidth: 1,
             pointRadius: 5,
-            pointHoverRadius: 7
+            pointHoverRadius: 7,
+            pointHitRadius: 22
           },
           {
             label: 'Weighted frontier',
@@ -185,6 +244,7 @@
             borderWidth: 2,
             pointRadius: 4,
             pointHoverRadius: 6,
+            pointHitRadius: 22,
             showLine: true,
             tension: 0
           }
@@ -198,7 +258,7 @@
         onClick: (_event, elements, instance) => {
           const active = elements[0];
           const selected = active && instance.data.datasets[active.datasetIndex]?.data[active.index];
-          if (selected?.modelId) location.href = `/model-profile?model=${encodeURIComponent(selected.modelId)}`;
+          openModelProfile(models.find(model => model.id === selected?.modelId));
         },
         plugins: {
           legend: { labels: { color: palette.muted, usePointStyle: true, boxWidth: 10 } },
@@ -237,6 +297,8 @@
       $('#weighted-score-cost-table').innerHTML = emptyState(message);
       $('#weighted-cost-ranking-table').innerHTML = emptyState(message);
       $('#weighted-insight-status').textContent = 'Weighted score and cost insights are paused until a visible result is available.';
+      mountWeightedChartSelection('weighted-score-cost', [], 'Weighted score versus blended cost');
+      mountWeightedChartSelection('weighted-cost-ranking', [], 'Cheapest-first score ranking');
       return;
     }
 
@@ -245,7 +307,9 @@
     $('#weighted-cost-ranking-table').innerHTML = renderWeightedInsightTable(models, { cheapestFirst: true });
     $('#weighted-insight-status').textContent = `${models.length} visible model${models.length === 1 ? '' : 's'} · ${weightedFrontier(models).length} on the weighted frontier.`;
     renderWeightedScoreCostChart(models);
+    mountWeightedChartSelection('weighted-score-cost', models, 'Weighted score versus blended cost');
     horizontal('weighted-cost-ranking-chart', cheapestFirst, model => score(model), 'Weighted score', () => true);
+    mountWeightedChartSelection('weighted-cost-ranking', cheapestFirst, 'Cheapest-first score ranking');
   }
 
   function emptyState(message) {

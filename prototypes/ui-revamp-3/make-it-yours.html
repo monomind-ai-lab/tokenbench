@@ -130,15 +130,23 @@
         <div class="grid-2 weighted-insights-grid">
           <section class="panel weighted-insight-panel">
             <h3 class="subhead">Score frontier</h3>
-            <p class="fixture">Higher score at a lower cost stays on the weighted frontier. Select a point to open its profile.</p>
-            <div class="chart-wrap weighted-insight-chart"><canvas id="weighted-score-cost-chart" role="img" aria-label="Weighted score versus blended cost for visible models"></canvas></div>
+            <p class="fixture">Higher score at a lower cost stays on the weighted frontier. Select a point or use the chart keyboard controls to open its profile.</p>
+            <div class="chart-wrap weighted-insight-chart weighted-chart-selection" id="weighted-score-cost-selection" role="listbox" tabindex="0" aria-label="Weighted score versus blended cost chart model selection" aria-describedby="weighted-score-cost-selection-help">
+              <canvas id="weighted-score-cost-chart" role="img" aria-label="Weighted score versus blended cost for visible models"></canvas>
+              <span class="sr-only weighted-chart-selection-options"></span>
+            </div>
+            <p class="fixture weighted-chart-selection-note" id="weighted-score-cost-selection-help">Use Left and Right Arrow to choose a model, then Enter or Space to open its profile. <span id="weighted-score-cost-selection-active"></span></p>
             <details class="weighted-insight-details"><summary>Exact weighted score and cost values</summary><div id="weighted-score-cost-table"></div></details>
           </section>
 
           <section class="panel weighted-insight-panel">
             <h3 class="subhead">Cheapest-first score ranking</h3>
-            <p class="fixture">The same visible result set, ordered by blended $ / 1M. Select a row to open its profile.</p>
-            <div class="chart-wrap weighted-insight-chart"><canvas id="weighted-cost-ranking-chart" role="img" aria-label="Weighted score ranking by blended cost"></canvas></div>
+            <p class="fixture">The same visible result set, ordered by blended $ / 1M. Select a row or use the chart keyboard controls to open its profile.</p>
+            <div class="chart-wrap weighted-insight-chart weighted-chart-selection" id="weighted-cost-ranking-selection" role="listbox" tabindex="0" aria-label="Cheapest-first score ranking chart model selection" aria-describedby="weighted-cost-ranking-selection-help">
+              <canvas id="weighted-cost-ranking-chart" role="img" aria-label="Weighted score ranking by blended cost"></canvas>
+              <span class="sr-only weighted-chart-selection-options"></span>
+            </div>
+            <p class="fixture weighted-chart-selection-note" id="weighted-cost-ranking-selection-help">Use Left and Right Arrow to choose a model, then Enter or Space to open its profile. <span id="weighted-cost-ranking-selection-active"></span></p>
             <details class="weighted-insight-details"><summary>Exact cheapest-first weighted score values</summary><div id="weighted-cost-ranking-table"></div></details>
           </section>
         </div>

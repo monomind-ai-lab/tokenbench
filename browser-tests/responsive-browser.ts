@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import type { CatalogResponse } from '../src/catalog/contracts';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
@@ -1737,6 +1738,40 @@ test.describe('home and tools route runtime', () => {
 });
 
 test.describe('ui-revamp-3 Make it yours controls', () => {
+  const weightedInsightChartStub = `window.Chart=class Chart{static charts=new WeakMap();constructor(canvas,configuration){this.canvas=canvas;this.configuration=configuration;this.data=configuration.data;this.chartArea={top:0,bottom:440};Chart.charts.set(canvas,this)}static getChart(canvas){return Chart.charts.get(canvas)||null}destroy(){Chart.charts.delete(this.canvas)}update(){}};`;
+
+  async function installWeightedInsightChartStub(page: Page): Promise<void> {
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: weightedInsightChartStub,
+    }));
+  }
+
+  async function weightedInsightChart(page: Page, canvasId: string) {
+    return page.locator(`#${canvasId}`).evaluate((canvas) => {
+      const instance = (window as any).Chart.getChart(canvas);
+      return {
+        labels: instance.configuration.data.labels || [],
+        datasets: instance.configuration.data.datasets.map((dataset: { label: string; data: Array<{ modelId?: string }> }) => ({
+          label: dataset.label,
+          modelIds: dataset.data.map((point) => point?.modelId || null),
+        })),
+        xScale: instance.configuration.options.scales?.x?.type || null,
+      };
+    });
+  }
+
+  async function weightedInsightModelFacts(page: Page, canvasId: string) {
+    return page.locator(`#${canvasId}`).evaluate((canvas) => {
+      const ids = (window as any).Chart.getChart(canvas).configuration.data.datasets[0].data.map((point: { modelId: string }) => point.modelId);
+      return ids.map((id: string) => {
+        const model = (window as any).TB_MODELS.find((candidate: { id: string }) => candidate.id === id);
+        return { id: model.id, access: model.access, provider: model.provider, ttft: model.ttft, tps: model.tps };
+      });
+    });
+  }
+
   test('keeps approved preview navigation and footer destinations on every rebuilt surface', async ({ page }) => {
     const browserErrors = captureBrowserErrors(page);
     await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
@@ -1767,12 +1802,8 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
   });
 
-  test('keeps weighted score insights synchronized with the visible ranking', async ({ page }) => {
-    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/javascript',
-      body: `window.Chart=class Chart{static charts=new WeakMap();constructor(canvas,configuration){this.canvas=canvas;this.configuration=configuration;Chart.charts.set(canvas,this)}static getChart(canvas){return Chart.charts.get(canvas)||null}destroy(){Chart.charts.delete(this.canvas)}update(){}};`,
-    }));
+  test('keeps weighted score insights accurate and honors an explicit cards override', async ({ page }) => {
+    await installWeightedInsightChartStub(page);
     await page.goto('/make-it-yours/');
 
     await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute('aria-pressed', 'true');
@@ -1785,9 +1816,164 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await disclosure.click();
     const exactTable = disclosure.getByRole('table');
     await expect(exactTable).toBeVisible();
-    const before = await exactTable.innerText();
+    const solScore = exactTable.getByRole('row', { name: /GPT-5\.6 Sol/ }).getByRole('cell').nth(2);
+    await expect(solScore).toHaveText('96.2');
+
+    const scatter = await weightedInsightChart(page, 'weighted-score-cost-chart');
+    const costRanking = await weightedInsightChart(page, 'weighted-cost-ranking-chart');
+    expect(scatter.xScale).toBe('logarithmic');
+    expect(scatter.datasets.find((dataset) => dataset.label === 'Weighted frontier')?.modelIds).toEqual([
+      'gemma-3-27b',
+      'deepseek-v4-flash-0731',
+      'llama-4-maverick',
+      'kimi-k3',
+      'qwen3-8-max',
+      'gemini-3-6-pro',
+      'gpt-5-6-sol',
+    ]);
+    expect(costRanking.labels).toEqual([
+      'Gemma 3 27B',
+      'DeepSeek V4 Flash 0731',
+      'Mistral Small 3.2',
+      'Llama 4 Maverick',
+      'Qwen 3.5 235B',
+      'Command A',
+      'DeepSeek V4 Pro 0813',
+      'GLM-5',
+      'Kimi K3',
+      'Mistral Large 3',
+      'DeepSeek R1',
+      'Qwen 3.8 Max',
+      'Gemini 1.5 Pro',
+      'Gemini 3.6 Pro',
+      'GPT-4o',
+      'Grok 4.5',
+      'GPT-5.6 Sol',
+      'Claude Mythos 5',
+      'Claude 3.5 Sonnet',
+      'Claude Opus 5',
+    ]);
+    const costChartHeight = await page.locator('#weighted-cost-ranking-chart').evaluate((canvas) => Number.parseFloat(canvas.parentElement?.style.height || '0'));
+    expect(costChartHeight).toBeGreaterThanOrEqual(20 * 44);
+
     await page.locator('#weight-agentic').fill('100');
-    await expect(exactTable).not.toHaveText(before);
+    await expect(solScore).toHaveText('96.5');
+
+    await page.goto('/make-it-yours/?view=cards');
+    await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#output .rank-card').first()).toBeVisible();
+  });
+
+  test('synchronizes weighted score insights with access, provider, SLA, and added-model state', async ({ page }) => {
+    await installWeightedInsightChartStub(page);
+    await page.goto('/make-it-yours/');
+
+    await page.getByRole('button', { name: 'Open weight' }).click();
+    expect((await weightedInsightModelFacts(page, 'weighted-score-cost-chart')).every((model) => /open/i.test(model.access))).toBe(true);
+
+    await page.goto('/make-it-yours/');
+    await page.getByRole('button', { name: /Filter by provider/ }).click();
+    await page.getByRole('dialog', { name: 'Filter leaderboard by provider' }).getByRole('option', { name: /Anthropic/ }).click();
+    expect((await weightedInsightModelFacts(page, 'weighted-score-cost-chart')).every((model) => model.provider === 'Anthropic')).toBe(true);
+
+    await page.goto('/make-it-yours/');
+    await page.locator('#show-excluded').uncheck();
+    await page.locator('#tps').fill('110');
+    expect((await weightedInsightModelFacts(page, 'weighted-score-cost-chart')).every((model) => model.ttft <= .8 && model.tps >= 110)).toBe(true);
+
+    await page.goto('/make-it-yours/');
+    const rankingPanel = page.locator('.ranking-panel');
+    await rankingPanel.getByRole('button', { name: 'Add a model' }).click();
+    const picker = rankingPanel.getByRole('dialog', { name: 'Add a model' });
+    await picker.getByRole('combobox', { name: 'Search models or providers' }).fill('Nova Pro');
+    await picker.getByRole('option', { name: /Nova Pro/ }).click();
+    expect((await weightedInsightModelFacts(page, 'weighted-score-cost-chart')).map((model) => model.id)).toContain('nova-pro');
+  });
+
+  test('gives weighted score insights 44px keyboard chart selection and pointer profile navigation', async ({ page }) => {
+    await installWeightedInsightChartStub(page);
+    await page.goto('/make-it-yours/');
+
+    const scatterSelection = page.getByRole('listbox', { name: 'Weighted score versus blended cost chart model selection' });
+    await expect(scatterSelection).toBeVisible();
+    const scatterBounds = await scatterSelection.boundingBox();
+    expect(scatterBounds?.height).toBeGreaterThanOrEqual(44);
+    await scatterSelection.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(scatterSelection).toHaveAttribute('aria-activedescendant', 'weighted-score-cost-option-gemini-3-6-pro');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/model-profile\/?\?model=gemini-3-6-pro$/u);
+
+    await page.goto('/make-it-yours/');
+    const costSelection = page.getByRole('listbox', { name: 'Cheapest-first score ranking chart model selection' });
+    await costSelection.focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(costSelection).toHaveAttribute('aria-activedescendant', 'weighted-cost-ranking-option-deepseek-v4-flash-0731');
+    await page.keyboard.press('Enter');
+    await expect(page).toHaveURL(/\/model-profile\/?\?model=deepseek-v4-flash-0731$/u);
+
+    await page.goto('/make-it-yours/');
+    await page.locator('#weighted-score-cost-chart').evaluate((canvas) => {
+      const instance = (window as any).Chart.getChart(canvas);
+      instance.configuration.options.onClick({ native: { target: canvas } }, [{ datasetIndex: 0, index: 0 }], instance);
+    });
+    await expect(page).toHaveURL(/\/model-profile\/?\?model=gpt-5-6-sol$/u);
+  });
+
+  test('keeps weighted score insights exact when charts are unavailable and clears stale charts when results empty', async ({ page }) => {
+    await installWeightedInsightChartStub(page);
+    await page.goto('/make-it-yours/');
+    await page.locator('#show-excluded').uncheck();
+    await page.locator('#tps').fill('140');
+    await expect.poll(async () => page.locator('#weighted-score-cost-chart').evaluate((canvas) => ({
+      scatter: Boolean((window as any).Chart.getChart(canvas)),
+      cost: Boolean((window as any).Chart.getChart(document.querySelector('#weighted-cost-ranking-chart'))),
+    }))).toEqual({ scatter: false, cost: false });
+    const emptyDisclosure = page.getByText('Exact weighted score and cost values').locator('..');
+    await emptyDisclosure.click();
+    await expect(emptyDisclosure).toContainText('No visible weighted results');
+
+    await page.unroute('https://cdn.jsdelivr.net/**');
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+    await page.goto('/make-it-yours/');
+    const unavailableDisclosure = page.getByText('Exact weighted score and cost values').locator('..');
+    await unavailableDisclosure.click();
+    await expect(unavailableDisclosure.getByRole('table')).toBeVisible();
+    await expect(page.locator('#weighted-score-cost-chart')).toBeHidden();
+    await expect(page.locator('.weighted-insight-panel .chart-failure')).toHaveCount(2);
+  });
+
+  test('exports the current weighted score insights result set through its scoped link, CSV, and PNG actions', async ({ page }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (value: string) => { (window as any).__weightedInsightClipboard = value; } },
+      });
+    });
+    await installWeightedInsightChartStub(page);
+    await page.goto('/make-it-yours/');
+    await page.getByRole('button', { name: /Filter by provider/ }).click();
+    await page.getByRole('dialog', { name: 'Filter leaderboard by provider' }).getByRole('option', { name: /Anthropic/ }).click();
+    await expect(page.locator('#weighted-insight-status')).toContainText('3 visible models');
+
+    await page.getByRole('button', { name: 'Copy link to weighted score insights' }).click();
+    await expect(page).toHaveURL(/#weighted-score-cost$/u);
+    await expect.poll(() => page.evaluate(() => (window as any).__weightedInsightClipboard)).toContain('provider=Anthropic');
+
+    const csvDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download weighted score insights as CSV' }).click();
+    const csv = await csvDownload;
+    expect(csv.suggestedFilename()).toMatch(/^tokenbench-weighted-score-cost-\d{4}-\d{2}-\d{2}\.csv$/u);
+    const csvPath = await csv.path();
+    if (!csvPath) throw new Error('Expected weighted insight CSV to have a local download path.');
+    const csvContent = await readFile(csvPath, 'utf8');
+    expect(csvContent).toContain('Anthropic');
+    expect(csvContent).not.toContain('OpenAI');
+
+    const pngDownload = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download weighted score insights as PNG' }).click();
+    const png = await pngDownload;
+    expect(png.suggestedFilename()).toMatch(/^tokenbench-weighted-score-cost-\d{4}-\d{2}-\d{2}\.png$/u);
   });
 
   test('reuses the comparison picker pattern for multi-provider filtering and adding models beyond the default top 20', async ({ page }) => {

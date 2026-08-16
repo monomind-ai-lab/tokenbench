@@ -1963,6 +1963,20 @@ button:disabled {
   margin-top: 24px;
 }
 
+.weighted-chart-selection {
+  min-height: 44px;
+}
+
+.weighted-chart-selection:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
+
+.weighted-chart-selection-note {
+  min-height: 44px;
+  margin: 10px 0 0;
+}
+
 .weighted-insight-details {
   margin: 20px 0 0;
 }
