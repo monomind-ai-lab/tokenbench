@@ -1864,6 +1864,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
   test('keeps weighted score insights accurate and honors an explicit cards override', async ({ page }) => {
     await installWeightedInsightChartStub(page);
+    await page.addInitScript(() => localStorage.setItem('tbTheme', 'dark'));
     await page.goto('/make-it-yours/');
 
     await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute('aria-pressed', 'true');
@@ -1880,15 +1881,25 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
           const style = getComputedStyle(element);
           return { marginTop: style.marginTop, marginBottom: style.marginBottom, paddingTop: style.paddingTop, borderTop: style.borderTopStyle };
         }),
+        summaries: details.map((element) => {
+          const summary = element.querySelector('summary')!;
+          const style = getComputedStyle(summary);
+          return { marginTop: style.marginTop, marginBottom: style.marginBottom, fontWeight: style.fontWeight, color: style.color };
+        }),
+        weightedMarkers: [...document.querySelectorAll('.weighted-insight-details summary')].map((summary) => getComputedStyle(summary, '::before').content),
         panelHeights: panels.map((element) => Math.round(element.getBoundingClientRect().height)),
       };
     });
     expect(disclosureLayout.details.length).toBe(4);
     expect(disclosureLayout.details.every((layout) => layout.marginTop === '32px' && layout.marginBottom === '12px' && layout.paddingTop === '12px' && layout.borderTop === 'solid')).toBe(true);
+    expect(disclosureLayout.summaries.slice(0, 2).every((layout) => layout.marginTop === '12px' && layout.marginBottom === '12px' && layout.fontWeight === '700' && layout.color === 'rgb(157, 171, 255)')).toBe(true);
+    expect(disclosureLayout.summaries.slice(2).every((layout) => layout.fontWeight === '700' && layout.color === 'rgb(157, 171, 255)')).toBe(true);
+    expect(disclosureLayout.weightedMarkers).toEqual(['"►"', '"►"']);
     expect(new Set(disclosureLayout.panelHeights).size).toBe(1);
 
     const disclosure = page.getByText('Exact weighted score and cost values').locator('..');
     await disclosure.click();
+    await expect.poll(() => disclosure.locator('summary').evaluate((summary) => getComputedStyle(summary, '::before').content)).toBe('"▼"');
     const exactTable = disclosure.getByRole('table');
     await expect(exactTable).toBeVisible();
     const solScore = exactTable.getByRole('row', { name: /GPT-5\.6 Sol/ }).getByRole('cell').nth(2);
@@ -2145,7 +2156,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
   test('reuses quick comparison outside Compare with ordered models and overflow-safe controls', async ({ page }) => {
     const cases = [
       { pathname: '/models', selected: ['Claude 3.5 Sonnet', 'DeepSeek V3'], href: '/compare?models=claude-3-5-sonnet%2Cdeepseek-v3' },
-      { pathname: '/make-it-yours/', selected: ['Claude 3.5 Sonnet', 'DeepSeek V3'], href: '/compare?models=claude-3-5-sonnet%2Cdeepseek-v3' },
+      { pathname: '/make-it-yours/', selected: ['Claude Mythos 5', 'DeepSeek V4 Pro 0813'], href: '/compare?models=claude-mythos-5%2Cdeepseek-v4-pro-0813' },
       { pathname: '/popular-models/', selected: ['Claude Opus 4.1', 'GPT-5'], href: '/compare?models=claude-opus-4-1%2Cgpt-5' },
     ] as const;
 
@@ -2155,6 +2166,12 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     for (const { pathname, selected, href } of cases) {
       await page.goto(pathname);
       const workspace = page.getByRole('region', { name: 'Quick comparison' });
+      if (pathname === '/make-it-yours/') {
+        await expect(workspace).toBeHidden();
+        for (const modelName of selected) {
+          await page.getByRole('row', { name: new RegExp(modelName) }).getByRole('button', { name: 'Compare' }).click();
+        }
+      }
       await expect(workspace.getByRole('heading', { name: 'Quick comparison' })).toBeVisible();
       await expect(workspace.getByRole('button', { name: 'clear' })).toBeVisible();
       const addModel = workspace.getByRole('button', { name: 'Add a model' });
@@ -2231,6 +2248,23 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
   });
 
+  test('hides Make it yours quick comparison until at least two models are selected', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+    await page.goto('/make-it-yours/');
+
+    const workspace = page.getByRole('region', { name: 'Quick comparison' });
+    await expect(workspace).toBeHidden();
+
+    await page.locator('#output .compare').first().click();
+    await expect(workspace).toBeHidden();
+
+    await page.locator('#output .compare').nth(1).click();
+    await expect(workspace).toBeVisible();
+
+    await workspace.getByRole('button', { name: 'clear' }).click();
+    await expect(workspace).toBeHidden();
+  });
+
   test('hands off the default Popular Models selection to the same ordered prototype models', async ({ page }) => {
     await installComparisonChartRegistryStub(page);
     await page.goto('/popular-models/');
@@ -2279,7 +2313,8 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
       await page.getByRole('button', { name: 'clear' }).click();
       await expect.poll(() => page.evaluate(() => [...(window as any).Chart.instances].filter((instance: { type: string }) => instance.type === 'radar').length)).toBe(0);
-      await expect(page.locator(clearSelector)).toBeVisible();
+      if (pathname === '/make-it-yours/') await expect(page.locator(clearSelector)).toBeHidden();
+      else await expect(page.locator(clearSelector)).toBeVisible();
     }
   });
 

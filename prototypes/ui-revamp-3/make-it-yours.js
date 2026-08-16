@@ -333,6 +333,7 @@
     const show = models.length >= 2;
     const shouldReveal = show && !comparisonWasVisible;
     $('#tray').classList.toggle('show', show);
+    $('#tray').hidden = !show;
     $('#selected-names').innerHTML = selectedModelChips(models);
     bindComparisonRemovals($('#selected-names'), id => {
       TB.selected = TB.selected.filter(candidate => candidate !== id);

@@ -406,6 +406,10 @@ input[type=range] {
   display: block;
 }
 
+.leaderboard-quick-comparison[hidden] {
+  display: none !important;
+}
+
 .quick-comparison-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1532,6 +1536,13 @@ button:disabled {
   border-top: 1px solid var(--line);
 }
 
+.ranking-details > summary,
+.sla-details > summary {
+  margin: 12px 0;
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
 .sla-details {
   margin-top: 32px;
   margin-bottom: 12px;
@@ -2026,8 +2037,26 @@ button:disabled {
   align-items: center;
   min-height: 44px;
   color: var(--accent-text);
-  font-weight: 750;
+  font-weight: 700;
   cursor: pointer;
+  list-style: none;
+}
+
+.weighted-insight-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.weighted-insight-details summary::before {
+  content: '►';
+  display: inline-block;
+  flex: 0 0 auto;
+  margin-right: 6px;
+  color: currentColor;
+  font-size: 0.8em;
+}
+
+.weighted-insight-details[open] > summary::before {
+  content: '▼';
 }
 
 .weighted-insight-details > div,
