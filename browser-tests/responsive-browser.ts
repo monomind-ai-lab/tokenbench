@@ -1862,6 +1862,34 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
   });
 
+  test('keeps the model profile hero aligned and routes its comparison action to the selected model', async ({ page }) => {
+    test.skip(!usesProductionPreviewAssets(), 'The approved model profile prototype is served from the production preview bundle.');
+    await page.goto('/model-profile/?model=gpt-4o');
+
+    await expect(page.getByRole('heading', { name: 'GPT-4o', level: 1 })).toBeVisible();
+    await expect(page.locator('.profile-status')).toHaveText('Current');
+    await expect(page.getByRole('link', { name: 'Reweight ranking' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Add to comparison' })).toHaveAttribute('href', '/compare?models=gpt-4o');
+    await expect(page.getByRole('link', { name: 'Build your leaderboard' })).toHaveAttribute('href', '/make-it-yours/');
+
+    const heroLayout = await page.locator('.profile-hero').evaluate((hero) => {
+      const headline = hero.querySelector('.headline');
+      const lede = hero.querySelector('.lede');
+      return {
+        alignItems: getComputedStyle(hero).alignItems,
+        headlineMarginTop: headline ? getComputedStyle(headline).marginTop : null,
+        ledeMarginTop: lede ? getComputedStyle(lede).marginTop : null,
+        statusParent: document.querySelector('.profile-status')?.parentElement?.className || null,
+      };
+    });
+    expect(heroLayout).toEqual({
+      alignItems: 'center',
+      headlineMarginTop: '24px',
+      ledeMarginTop: '24px',
+      statusParent: 'profile-title-row',
+    });
+  });
+
   test('keeps weighted score insights accurate and honors an explicit cards override', async ({ page }) => {
     await installWeightedInsightChartStub(page);
     await page.addInitScript(() => localStorage.setItem('tbTheme', 'dark'));

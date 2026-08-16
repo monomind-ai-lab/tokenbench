@@ -1477,6 +1477,22 @@ button:disabled {
 
 .profile-hero {
   gap: 24px;
+  align-items: center;
+}
+
+.profile-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.profile-hero .headline {
+  margin-top: 24px;
+}
+
+.profile-hero .lede {
+  margin-top: 24px;
 }
 
 .profile-capability > .chart-wrap {
