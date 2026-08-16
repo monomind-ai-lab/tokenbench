@@ -338,7 +338,7 @@ interface HydrationMatrixRoute {
 }
 
 const hydrationMatrix: readonly HydrationMatrixRoute[] = [
-  { path: '/', heading: 'Transparent AI Costs. Verified Benchmarks.', hydratedClientMarker: '.home-page' },
+  ...(usesProductionPreviewAssets() ? [] : [{ path: '/', heading: 'Transparent AI Costs. Verified Benchmarks.', hydratedClientMarker: '.home-page' }]),
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
   { path: '/tools/subscriptions-vs-apis/', heading: 'Should you subscribe or pay as you go?', hydratedClientMarker: '.calculator-page' },
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
@@ -1429,9 +1429,8 @@ test.describe('motion and named call-to-action coverage', () => {
 
     for (const theme of ['dark', 'light'] as const) {
       await setStoredTheme(page, theme);
-      await page.goto('/');
       for (const [path, name] of [
-        ['/', 'Compare models'],
+        ...(usesProductionPreviewAssets() ? [] : [['/', 'Compare models'] as const]),
         ['/leaderboards/llm/coding/', 'Talk to MonoMind'],
       ] as const) {
         await page.goto(path);
@@ -1700,6 +1699,7 @@ test.describe('home and tools route runtime', () => {
   });
 
   test('navigation exposes the shared mega-menu destinations on compact Home', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'React Home navigation is covered by the Vite/source suite; production root redirects to the Models workbench.');
     await page.setViewportSize({ width: 320, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/');
@@ -1719,6 +1719,7 @@ test.describe('home and tools route runtime', () => {
   });
 
   test('keeps the ready Home decision snapshot responsive and overflow-safe', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'React Home decision snapshot is covered by the Vite/source suite; production root redirects to the Models workbench.');
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
     await stubBenchmarkDirectory(page, origin, decisionSummaryEnvelope());
@@ -1822,9 +1823,25 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       contentType: 'application/javascript',
       body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
     }));
-    for (const pathname of ['/models', '/popular-models/', '/make-it-yours/', '/compare', '/articles', '/articles/hybrid-router']) {
+    if (usesProductionPreviewAssets()) {
+      const redirect = await page.request.get('/', { maxRedirects: 0 });
+      expect(redirect.status()).toBe(301);
+      expect(redirect.headers().location).toBe('/models');
+    }
+
+    for (const pathname of [
+      ...(usesProductionPreviewAssets() ? ['/'] : []),
+      '/models',
+      '/popular-models/',
+      '/make-it-yours/',
+      '/compare',
+      '/articles',
+      '/articles/hybrid-router',
+    ]) {
       await page.goto(pathname);
-      expect(new URL(page.url()).pathname, pathname).toBe(pathname);
+      const finalPathname = pathname === '/' ? '/models' : pathname;
+      expect(new URL(page.url()).pathname, pathname).toBe(finalPathname);
+      if (pathname === '/') await expect(page.getByRole('heading', { name: 'Models workbench', level: 1 })).toBeVisible();
       await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/models');
       const footer = page.locator('footer');
       await expect(footer.getByRole('link', { name: 'Models workbench' }), pathname).toHaveAttribute('href', '/models');
@@ -2394,6 +2411,7 @@ test.describe('newsletter and alerts browser coverage', () => {
   test('keeps the footer signup consentful, keyboard-submittable, loading-aware, and overflow-safe at mobile and desktop widths', async ({ page }) => {
     test.setTimeout(120_000);
     const origin = previewOrigin();
+    const footerPath = usesProductionPreviewAssets() ? '/tools/' : '/';
 
     for (const width of [320, 1440]) {
       await page.unrouteAll();
@@ -2404,7 +2422,7 @@ test.describe('newsletter and alerts browser coverage', () => {
         body: { status: 'confirmation-required' },
         delayMs: 200,
       }]);
-      await page.goto('/', { waitUntil: 'domcontentloaded' });
+      await page.goto(footerPath, { waitUntil: 'domcontentloaded' });
 
       const footer = page.getByRole('contentinfo');
       await footer.scrollIntoViewIfNeeded();
@@ -3049,6 +3067,7 @@ test.describe('Popular Models terminology and contrast', () => {
 
 test.describe('keyboard and chart accessibility regressions', () => {
   test('moves focus to the home main landmark when the skip link is activated', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'React Home skip-link behavior is covered by the Vite/source suite; production root redirects to the Models workbench.');
     await page.setViewportSize({ width: 390, height: 1000 });
     await blockExternalRequests(page);
     await page.goto('/');
@@ -3111,7 +3130,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
   test('closes the compact navigation when Escape is pressed from the focused toggle', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
     await blockExternalRequests(page);
-    await page.goto('/');
+    await page.goto(usesProductionPreviewAssets() ? '/tools/' : '/');
     const menu = page.locator('.menu-button');
     await expect(menu).toHaveAccessibleName('Open navigation');
     await menu.focus();

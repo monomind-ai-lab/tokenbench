@@ -45,7 +45,7 @@ function comparisonDecisionRows(models){
     ['Provider',model=>`<span class="provider-dot" style="background:${compareHtml(model.color)}"></span>${compareHtml(model.provider)}`],
     ['Composite',model=>formatComparisonNumber(score(model),1)],
     ['Input / output · $/1M',model=>`${formatComparisonCurrency(model.inputPrice)} / ${formatComparisonCurrency(model.outputPrice)}`],
-    [models.some(model=>model.costBasis)?'Cost per successful task':'Blended cost · $/1M',model=>model.costBasis?`${formatComparisonCurrency(model.cost)} / successful task`:formatComparisonCurrency(model.cost)],
+    ...comparisonCostRows(models,{label:'decision'}),
     ['TTFT',model=>Number.isFinite(model.ttft)?`${model.ttft}s`:'Unavailable'],
     ['Throughput',model=>Number.isFinite(model.tps)?`${model.tps} tok/s`:'Unavailable'],
     ['Context window',model=>compareHtml(model.context)],
@@ -55,6 +55,13 @@ function comparisonDecisionRows(models){
 
 function formatComparisonNumber(value,digits=0){return Number.isFinite(value)?Number(value).toFixed(digits):'Unavailable'}
 function formatComparisonCurrency(value){return Number.isFinite(value)?`$${Number(value).toFixed(2)}`:'Unavailable'}
+const comparisonCostBases=[
+  {id:'blended-per-million',chartLabel:'Blended cost ($ / 1M)',specificationLabel:'Blended cost / 1M',decisionLabel:'Blended cost · $/1M'},
+  {id:'per-successful-task',chartLabel:'Cost per successful task',specificationLabel:'Cost per successful task',decisionLabel:'Cost per successful task'}
+];
+function comparisonCostBasis(model){return model.costBasis==='per-successful-task'?'per-successful-task':'blended-per-million'}
+function comparisonCostEvidence(models){return comparisonCostBases.map(basis=>({...basis,models:models.filter(model=>comparisonCostBasis(model)===basis.id)})).filter(basis=>basis.models.length)}
+function comparisonCostRows(models,{label='specification'}={}){return comparisonCostEvidence(models).map(basis=>[label==='decision'?basis.decisionLabel:basis.specificationLabel,model=>comparisonCostBasis(model)===basis.id?formatComparisonCurrency(model.cost):'Unavailable'])}
 function comparisonCapabilityRows(){return [
   ['Agentic',model=>formatComparisonNumber(domainScore(model,'agentic'))],
   ['Coding',model=>formatComparisonNumber(domainScore(model,'coding'))],
@@ -166,7 +173,7 @@ function mountModelPicker(root,{id,selectedIds,onAdd,max=MAX_COMPARE_MODELS,excl
   document.addEventListener('pointerdown',event=>{if(!picker.contains(event.target)&&!panel.hidden)close()},{signal:controller.signal});
 }
 
-window.TB={...TB,$,$$,domainScore,score,colors,chart,setupShell,link,modelOptions,radar,table,modelCard,bindCompare,normalizeModelIds,comparisonModels,comparisonModelById,previewComparisonHref,comparisonDecisionRows,comparisonCapabilityRows,comparisonMatrix,formatComparisonNumber,formatComparisonCurrency,selectedModelChips,bindComparisonRemovals,mountModelPicker,MAX_COMPARE_MODELS};
+window.TB={...TB,$,$$,domainScore,score,colors,chart,setupShell,link,modelOptions,radar,table,modelCard,bindCompare,normalizeModelIds,comparisonModels,comparisonModelById,previewComparisonHref,comparisonDecisionRows,comparisonCostBasis,comparisonCostEvidence,comparisonCostRows,comparisonCapabilityRows,comparisonMatrix,formatComparisonNumber,formatComparisonCurrency,selectedModelChips,bindComparisonRemovals,mountModelPicker,MAX_COMPARE_MODELS};
 
 const shellIcons={
   moon:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 15.4A8.5 8.5 0 0 1 8.6 3.7 8.5 8.5 0 1 0 20.3 15.4Z"/></svg>',

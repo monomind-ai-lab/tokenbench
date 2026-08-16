@@ -82,9 +82,8 @@
           </div>
         </div>
         <div class="grid-3 compare-bars" style="margin-top:12px">
-          <div><span class="label" id="compare-cost-label">Blended cost ($ / 1M)</span><div class="chart-wrap short"><canvas id="compare-cost" role="img" aria-label="Selected model blended cost comparison"></canvas></div></div>
-          <div><span class="label">TTFT (seconds)</span><div class="chart-wrap short"><canvas id="compare-ttft" role="img" aria-label="Selected model time to first token comparison"></canvas></div></div>
-          <div><span class="label">Throughput (tok/s)</span><div class="chart-wrap short"><canvas id="compare-tps" role="img" aria-label="Selected model throughput comparison"></canvas></div></div>
+          <div class="compare-bar-cell"><span class="label">TTFT (seconds)</span><div class="chart-wrap short"><canvas id="compare-ttft" role="img" aria-label="Selected model time to first token comparison"></canvas></div></div>
+          <div class="compare-bar-cell"><span class="label">Throughput (tok/s)</span><div class="chart-wrap short"><canvas id="compare-tps" role="img" aria-label="Selected model throughput comparison"></canvas></div></div>
         </div>
       </section>
 
@@ -171,6 +170,23 @@
       });
     }
 
+    function renderCostEvidence(models) {
+      const evidence = comparisonCostEvidence(models);
+      const root = $('.compare-bars');
+      const previousCostCells = $$(':scope > [data-cost-basis]', root);
+      if (typeof Chart !== 'undefined') previousCostCells.flatMap(cell => $$('canvas', cell)).forEach(canvas => Chart.getChart(canvas)?.destroy());
+      previousCostCells.forEach(cell => cell.remove());
+      root.classList.toggle('has-mixed-cost-bases', evidence.length > 1);
+      root.insertAdjacentHTML('afterbegin', evidence.map((basis, index) => {
+        const canvasId = index === 0 ? 'compare-cost' : `compare-cost-${basis.id}`;
+        return `<div class="compare-bar-cell compare-cost-chart" data-cost-basis="${basis.id}"><span class="label"${index === 0 ? ' id="compare-cost-label"' : ''}>${basis.chartLabel}</span><div class="chart-wrap short"><canvas id="${canvasId}" role="img" aria-label="${basis.chartLabel} comparison for ${basis.models.map(model => model.name).join(', ')}"></canvas></div></div>`;
+      }).join(''));
+      evidence.forEach((basis, index) => {
+        const canvasId = index === 0 ? 'compare-cost' : `compare-cost-${basis.id}`;
+        comparisonBar($(`#${canvasId}`), basis.models, basis.chartLabel, model => model.cost);
+      });
+    }
+
     function renderComparison(updateUrl = true, reveal = false) {
       if (!validSelection()) { syncSelector(); return; }
       const models = chosen();
@@ -188,7 +204,7 @@
         ['Input / 1M', model => formatComparisonCurrency(model.inputPrice)],
         ['Output / 1M', model => formatComparisonCurrency(model.outputPrice)],
         ['Cache read / 1M', model => formatComparisonCurrency(model.cacheRead)],
-        [models.some(model => model.costBasis) ? 'Cost per successful task' : 'Blended cost / 1M', model => model.costBasis ? `${formatComparisonCurrency(model.cost)} / successful task` : formatComparisonCurrency(model.cost)],
+        ...comparisonCostRows(models),
         ['Context window', model => model.context],
         ['Maximum output', model => model.maxOutput],
         ['TTFT p50', model => Number.isFinite(model.ttft) ? `${model.ttft}s` : 'Unavailable'],
@@ -197,13 +213,10 @@
         ['Sunset', model => model.sunset || 'Not reported']
       ], {id: 'compare-specification-matrix', ariaLabel: 'Itemized model comparison'});
       $('#compare-radar').setAttribute('aria-label', `Capability radar comparing ${models.map(model => model.name).join(', ')}`);
-      const costComparisonLabel = models.some(model => model.costBasis) ? 'Cost per successful task' : 'Blended cost ($ / 1M)';
-      $('#compare-cost-label').textContent = costComparisonLabel;
-      $('#compare-cost').setAttribute('aria-label', `${costComparisonLabel} comparison for ${models.map(model => model.name).join(', ')}`);
       $('#compare-ttft').setAttribute('aria-label', `Time to first token comparison for ${models.map(model => model.name).join(', ')}`);
       $('#compare-tps').setAttribute('aria-label', `Throughput comparison for ${models.map(model => model.name).join(', ')}`);
       radar($('#compare-radar'), models);
-      comparisonBar($('#compare-cost'), models, costComparisonLabel, model => model.cost);
+      renderCostEvidence(models);
       comparisonBar($('#compare-ttft'), models, 'TTFT', model => model.ttft);
       comparisonBar($('#compare-tps'), models, 'Throughput', model => model.tps);
       result.hidden = false;

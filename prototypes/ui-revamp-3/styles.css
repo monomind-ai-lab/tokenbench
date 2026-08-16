@@ -1150,6 +1150,10 @@ button:disabled {
   height: 190px;
 }
 
+.compare-bars.has-mixed-cost-bases {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .language-picker {
   position: relative;
   flex: 0 0 auto;
@@ -1546,6 +1550,10 @@ button:disabled {
 }
 
 @media (max-width: 800px) {
+  .compare-bars.has-mixed-cost-bases {
+    grid-template-columns: 1fr;
+  }
+
   .nav {
     left: 50%;
     right: auto;
