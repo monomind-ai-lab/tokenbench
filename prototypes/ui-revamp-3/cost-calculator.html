@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="An illustrative monthly subscription versus API cost calculator for TokenBench preview data.">
+  <title>Monthly cost calculator — TokenBench</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="/models" aria-label="TokenBench home"><img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a>
+      <nav class="nav" aria-label="Primary"></nav>
+      <div class="header-actions"><button class="icon-button" id="theme" type="button" aria-label="Toggle dark theme">Theme</button></div>
+    </div>
+  </header>
+
+  <main id="monthly-cost-calculator" class="shell page">
+    <section class="toolbar calculator-heading" aria-labelledby="calculator-title">
+      <div>
+        <p class="label">Cost tools / Monthly estimate</p>
+        <h1 id="calculator-title" class="headline">Monthly cost simulator</h1>
+        <p class="lede">Compare an illustrative subscription tier with an API-equivalent workload. Source-rate fixtures and derived estimates stay deliberately separate.</p>
+        <p class="fixture">Illustrative staging fixtures · not a quote, invoice, entitlement, or capacity guarantee</p>
+      </div>
+      <div class="panel soft calculator-summary-note">
+        <span class="label">Calculation basis</span>
+        <strong>Per 1M tokens · USD</strong>
+        <span class="fixture">Rates shown below are model-record fixtures.</span>
+      </div>
+    </section>
+
+    <hr class="rule">
+
+    <form id="cost-calculator-form" class="panel calculator-form" novalidate>
+      <div class="toolbar">
+        <div>
+          <h2 class="section-title">Workload and subscription inputs</h2>
+          <p class="lede">Every control is included in the shareable scenario URL.</p>
+        </div>
+        <p class="fixture">Use scenario inputs, not observed account usage.</p>
+      </div>
+
+      <div class="grid-2 calculator-control-grid">
+        <fieldset class="calculator-fieldset">
+          <legend class="subhead">Subscription and model</legend>
+          <div class="calculator-control-stack">
+            <label for="tier">Subscription tier</label>
+            <select id="tier" name="tier"></select>
+            <p class="fixture">A local SaaS comparison fixture, shown separately from API source rates.</p>
+            <label for="model">Target model</label>
+            <select id="model" name="model"></select>
+          </div>
+        </fieldset>
+
+        <fieldset class="calculator-fieldset">
+          <legend class="subhead">Monthly interaction volume</legend>
+          <div class="grid-3 calculator-number-grid">
+            <div><label for="conversations-per-day">Conversations / day</label><input id="conversations-per-day" name="conversationsPerDay" type="number" min="0" max="10000" step="1" inputmode="numeric"></div>
+            <div><label for="messages-per-conversation">Messages / conversation</label><input id="messages-per-conversation" name="messagesPerConversation" type="number" min="0" max="10000" step="1" inputmode="numeric"></div>
+            <div><label for="active-days">Active days / month</label><input id="active-days" name="activeDays" type="number" min="1" max="31" step="1" inputmode="numeric"></div>
+          </div>
+        </fieldset>
+
+        <fieldset class="calculator-fieldset">
+          <legend class="subhead">Tokens and cache assumptions</legend>
+          <div class="grid-2 calculator-number-grid">
+            <div><label for="input-tokens">Input tokens / message</label><input id="input-tokens" name="inputTokensPerMessage" type="number" min="0" max="1000000" step="1" inputmode="numeric"></div>
+            <div><label for="output-tokens">Output tokens / message</label><input id="output-tokens" name="outputTokensPerMessage" type="number" min="0" max="1000000" step="1" inputmode="numeric"></div>
+            <div><label for="cache-read-share">Cache-read share (%)</label><input id="cache-read-share" name="cacheReadShare" type="number" min="0" max="100" step="1" inputmode="numeric"></div>
+            <div><label for="cache-write-share">Cache-write share (%)</label><input id="cache-write-share" name="cacheWriteShare" type="number" min="0" max="100" step="1" inputmode="numeric"></div>
+          </div>
+          <label class="toggle calculator-toggle" for="long-context"><input id="long-context" name="longContext" type="checkbox"> Long-context workload (+50% input-token scenario buffer)</label>
+          <p class="fixture">The buffer is an explicit scenario assumption; these fixtures do not supply a separate long-context rate.</p>
+        </fieldset>
+
+        <aside class="panel soft calculator-input-note" aria-labelledby="input-note-title">
+          <h2 id="input-note-title" class="subhead">How the estimate is bounded</h2>
+          <p>Cache-read and cache-write shares are portions of adjusted input tokens. If their sum is above 100%, cache-write volume is reduced so the total cannot exceed all input tokens.</p>
+          <p>When a cache-write rate is unavailable in a model fixture, the derived estimate uses that model’s standard input rate and says so in the source table.</p>
+        </aside>
+      </div>
+    </form>
+
+    <section class="calculator-results" aria-labelledby="monthly-summary-title">
+      <div class="toolbar">
+        <div>
+          <h2 id="monthly-summary-title" class="section-title">Monthly API / SaaS summary</h2>
+          <p id="calculator-live-summary" class="lede" aria-live="polite"></p>
+        </div>
+        <span class="tag">Derived estimate</span>
+      </div>
+      <div class="grid-2 calculator-summary-grid">
+        <article class="panel soft calculator-total" aria-labelledby="api-total-title">
+          <span class="label">Derived API-equivalent estimate</span>
+          <strong id="api-monthly-total" data-value="0" aria-labelledby="api-total-title">$0.00</strong>
+          <p id="api-total-title" class="fixture">Monthly estimate from source-rate fixtures and the selected workload.</p>
+        </article>
+        <article class="panel calculator-total" aria-labelledby="saas-total-title">
+          <span class="label">Subscription tier fixture</span>
+          <strong id="saas-monthly-total" data-value="0" aria-labelledby="saas-total-title">$0.00</strong>
+          <p id="saas-total-title" class="fixture">Illustrative monthly SaaS comparison amount; not provider pricing evidence.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid-2 calculator-evidence-grid" aria-label="Price sources and derived monthly lines">
+      <article class="panel">
+        <div class="toolbar"><div><h2 class="section-title">Source price fixtures</h2><p class="fixture">Raw values from the selected <code>TB_MODELS</code> record.</p></div><span class="tag">Source data</span></div>
+        <div class="table-wrap" role="region" aria-label="Selected model source prices" tabindex="0">
+          <table data-evidence="source-price">
+            <caption>Source price fixtures</caption>
+            <thead><tr><th scope="col">Price component</th><th scope="col">Source rate / 1M</th><th scope="col">Fixture status</th></tr></thead>
+            <tbody id="source-price-lines"></tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel">
+        <div class="toolbar"><div><h2 class="section-title">Derived monthly line items</h2><p class="fixture">Exact scenario arithmetic before display rounding.</p></div><span class="tag">Derived</span></div>
+        <div class="table-wrap" role="region" aria-label="Derived monthly API line items" tabindex="0">
+          <table data-evidence="derived-monthly">
+            <caption>Derived monthly line items</caption>
+            <thead><tr><th scope="col">Line item</th><th scope="col">Monthly tokens</th><th scope="col">Rate / 1M</th><th scope="col">Monthly cost</th></tr></thead>
+            <tbody id="derived-monthly-line-items"></tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid-2 calculator-disclosures" aria-label="Formula and assumptions">
+      <details class="panel" open>
+        <summary class="subhead">Formula and rounding</summary>
+        <p id="calculator-formula"></p>
+        <p class="fixture">Each line item is calculated with source rate ÷ 1,000,000 and summed before currency is rounded for display.</p>
+      </details>
+      <aside class="panel soft" aria-labelledby="assumptions-title">
+        <h2 id="assumptions-title" class="subhead">Assumptions and timestamp</h2>
+        <p id="calculator-assumptions"></p>
+        <p class="fixture">Price effective time: Unavailable in the fixture. Model record date: <time id="source-record-date">Unavailable</time>.</p>
+        <p class="fixture">Calculated <time id="calculation-timestamp"></time>.</p>
+      </aside>
+    </section>
+
+    <section class="panel calculator-actions" aria-labelledby="export-title">
+      <div class="toolbar">
+        <div><h2 id="export-title" class="section-title">Export or share this scenario</h2><p class="lede">The URL carries valid input values only.</p></div>
+        <div class="control-row" role="group" aria-label="Calculator actions">
+          <button class="toggle" id="download-csv" type="button">Download CSV</button>
+          <button class="toggle" id="print-calculator" type="button">Print</button>
+          <button class="button primary" id="copy-calculator-link" type="button">Copy link</button>
+        </div>
+      </div>
+      <p id="calculator-action-status" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <noscript><p class="shell page empty">This calculator needs JavaScript to calculate a scenario. Its source price fixtures and final table are available when JavaScript is enabled.</p></noscript>
+
+  <script src="data.js"></script>
+  <script src="common.js"></script>
+  <script src="cost-calculator.js"></script>
+</body>
+</html>
