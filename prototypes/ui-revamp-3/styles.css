@@ -2971,3 +2971,92 @@ button:disabled {
   .mega-panel { top: 56px; max-height: calc(100dvh - 68px); }
   .page, .article-detail-page { padding-top: 28px; }
 }
+
+/* Cost preview surfaces use the same ledger tokens as the approved workbench. */
+.cost-hub-hero { align-items: stretch; }
+.cost-hub-note { display: grid; align-content: center; gap: 8px; max-width: 320px; }
+.cost-hub-note strong { font-size: var(--fs-16); }
+.cost-hub-note span:last-child { color: var(--muted); }
+.cost-tool-grid { margin-top: 16px; }
+.cost-tool-card { display: flex; flex-direction: column; gap: 12px; }
+.cost-tool-card .section-title { margin-top: 4px; }
+.cost-tool-card .lede { margin-top: 0; }
+.cost-tool-card .button { align-self: flex-start; margin-top: auto; }
+.cost-tool-list { color: var(--muted); margin: 0 0 8px; padding-left: 20px; }
+.cost-tool-list li + li { margin-top: 4px; }
+.cost-hub-method { margin-top: 24px; }
+.cost-hub-method .grid-3 { margin-top: 16px; }
+.cost-hub-method p { color: var(--muted); margin: 6px 0 0; }
+@media (max-width: 800px) {
+  .cost-hub-note { max-width: none; }
+  .cost-tool-card .button { align-self: stretch; }
+}
+
+/* Cost calculator controls and evidence surfaces. */
+.calculator-heading { align-items: stretch; }
+.calculator-summary-note { display: grid; align-content: center; gap: 8px; max-width: 320px; }
+.calculator-summary-note strong { font-size: var(--fs-16); }
+.calculator-form { margin-top: 0; }
+.calculator-control-grid { margin-top: 20px; }
+.calculator-fieldset { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--r1); }
+.calculator-fieldset legend { padding: 0 6px; }
+.calculator-control-stack { display: grid; gap: 8px; }
+.calculator-control-stack label,
+.calculator-number-grid label,
+.control-field > .label { color: var(--muted); font-size: var(--fs-12); font-weight: 700; }
+.calculator-control-stack select,
+.calculator-number-grid input,
+.control-field select,
+.control-field input[type=number] { width: 100%; }
+.calculator-number-grid { margin-top: 12px; }
+.calculator-number-grid > div { display: grid; gap: 6px; min-width: 0; }
+.calculator-toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.calculator-toggle input { flex: 0 0 auto; }
+.calculator-input-note { align-self: stretch; }
+.calculator-input-note p { color: var(--muted); margin: 8px 0 0; }
+.calculator-results,
+.calculator-evidence-grid,
+.calculator-disclosures,
+.calculator-actions { margin-top: 24px; }
+.calculator-summary-grid { margin-top: 16px; }
+.calculator-total { min-height: 140px; }
+.calculator-total strong { display: block; margin-top: 8px; font: 700 var(--fs-30) 'JetBrains Mono', ui-monospace, monospace; }
+.calculator-total p { margin-bottom: 0; }
+.calculator-actions .control-row { justify-content: flex-end; }
+.calculator-disclosures details summary,
+.breakeven-disclosures details summary { cursor: pointer; }
+.calculator-disclosures details p,
+.breakeven-disclosures details p { color: var(--muted); }
+.breakeven-controls { margin-top: 0; }
+.breakeven-controls > .grid-3 { margin-top: 20px; }
+.control-field { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.control-field input[type=range] { width: 100%; accent-color: var(--plum); }
+.control-field output { color: var(--accent-text); font: 700 var(--fs-12) 'JetBrains Mono', ui-monospace, monospace; }
+.breakeven-workload { margin-top: 20px; }
+.breakeven-workload legend { padding: 0 6px; }
+.breakeven-workload .toolbar { margin-top: 12px; }
+.breakeven-results,
+.breakeven-chart-panel,
+.breakeven-disclosures { margin-top: 24px; }
+.breakeven-summary { margin-top: 20px; }
+.breakeven-summary dd { margin: 4px 0 0; font: 700 var(--fs-18) 'JetBrains Mono', ui-monospace, monospace; }
+.breakeven-chart-panel .chart-wrap { margin-top: 20px; }
+.breakeven-disclosures details { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 16px; }
+.breakeven-disclosures details:first-of-type { margin-top: 20px; }
+.breakeven-disclosures ul { color: var(--muted); padding-left: 20px; }
+
+@media (max-width: 800px) {
+  .calculator-summary-note { max-width: none; }
+  .calculator-actions .control-row { justify-content: stretch; }
+  .calculator-actions .control-row .button,
+  .calculator-actions .control-row .toggle { flex: 1 1 100%; }
+}
+
+@media print {
+  /* Keep cost evidence headings in printed output while removing only action controls. */
+  .calculator-heading,
+  .calculator-results > .toolbar,
+  .calculator-evidence-grid .toolbar,
+  .calculator-actions .toolbar { display: flex !important; }
+  .calculator-actions .control-row { display: none !important; }
+}

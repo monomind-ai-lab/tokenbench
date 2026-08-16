@@ -17,6 +17,9 @@ describe('preview navigation links', () => {
     expect(shell).toContain("makeItYours:'/make-it-yours/'");
     expect(shell).toContain("articles:'/articles'");
     expect(shell).toContain("articleDetail:'/articles/hybrid-router'");
+    expect(shell).toContain("cost:'/cost'");
+    expect(shell).toContain("costCalculator:'/cost/calculator'");
+    expect(shell).toContain("costBreakeven:'/cost/breakeven'");
     expect(shell).not.toContain('https://tokenbench.monomind.one/models/');
     expect(shell).not.toContain('href="/models/"');
     expect(shell).not.toContain('href="/compare/"');

@@ -7,6 +7,7 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const prototypeDirectory = join(projectRoot, 'prototypes', 'ui-revamp-3');
 const sharedAssetPath = '/ui-revamp-3-assets';
 const sharedAssetDirectoryName = sharedAssetPath.slice(1);
+const chartAssetSource = join(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 
 interface PreviewPageBundle {
   readonly output: readonly string[];
@@ -21,17 +22,23 @@ const previewPageBundles: readonly PreviewPageBundle[] = [
   { output: ['model-profile', 'index.html'], document: 'model-profile.html' },
   { output: ['model-lifecycle', 'index.html'], document: 'model-lifecycle.html' },
   { output: ['make-it-yours', 'index.html'], document: 'make-it-yours.html' },
+  { output: ['cost', 'index.html'], document: 'cost.html' },
+  { output: ['cost.html'], document: 'cost.html' },
+  { output: ['cost', 'calculator', 'index.html'], document: 'cost-calculator.html' },
+  { output: ['cost', 'calculator.html'], document: 'cost-calculator.html' },
+  { output: ['cost', 'breakeven', 'index.html'], document: 'cost-breakeven.html' },
+  { output: ['cost', 'breakeven.html'], document: 'cost-breakeven.html' },
   { output: ['articles.html'], document: 'articles.html' },
   { output: ['articles', 'index.html'], document: 'articles.html' },
   { output: ['articles', 'hybrid-router.html'], document: 'article-hybrid-router.html' },
   { output: ['articles', 'hybrid-router', 'index.html'], document: 'article-hybrid-router.html' },
 ];
 
-const sharedScripts = ['common.js', 'data.js', 'make-it-yours.js', 'articles.js', 'article-detail.js'] as const;
+const sharedScripts = ['common.js', 'data.js', 'make-it-yours.js', 'articles.js', 'article-detail.js', 'cost-calculator.js', 'cost-breakeven.js'] as const;
 
 function withSharedAssetPaths(document: string): string {
   return document
-    .replace(/(src|href)="(styles\.css|data\.js|common\.js|make-it-yours\.js|articles\.js|article-detail\.js)([^"]*)"/gu, (_match, attribute, file, suffix) => `${attribute}="${sharedAssetPath}/${file}${suffix}"`)
+    .replace(/(src|href)="(styles\.css|data\.js|common\.js|make-it-yours\.js|articles\.js|article-detail\.js|cost-calculator\.js|cost-breakeven\.js|chart\.umd\.js)([^"]*)"/gu, (_match, attribute, file, suffix) => `${attribute}="${sharedAssetPath}/${file}${suffix}"`)
     .replaceAll('src="assets/', `src="${sharedAssetPath}/assets/`)
     .replaceAll('href="assets/', `href="${sharedAssetPath}/assets/`);
 }
@@ -48,13 +55,14 @@ async function copySharedAssets(outputDirectory: string): Promise<void> {
   await Promise.all([
     cp(join(prototypeDirectory, 'styles.css'), join(destination, 'styles.css')),
     cp(join(prototypeDirectory, 'assets'), join(destination, 'assets'), { recursive: true }),
+    cp(chartAssetSource, join(destination, 'chart.umd.js')),
     ...sharedScripts.map((script) => cp(join(prototypeDirectory, script), join(destination, script))),
   ]);
 }
 
 /** Copies the approved rebuilt surfaces into their Pages canonical routes. */
 export async function copyMakeItYoursPreview(outputDirectory: string): Promise<void> {
-  await Promise.all(['models', 'compare', 'articles'].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
+  await Promise.all(['models', 'compare', 'articles', 'cost'].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
   await Promise.all([
     copySharedAssets(outputDirectory),
     ...previewPageBundles.map((page) => copyPreviewPage(outputDirectory, page)),

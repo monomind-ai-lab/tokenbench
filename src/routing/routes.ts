@@ -36,7 +36,7 @@ export const PREVIEW_ROUTE_PATHS = {
   guides: '/guides/',
   articles: '/articles',
   articleDetail: '/articles/hybrid-router',
-  calculator: '/tools/subscriptions-vs-apis/',
+  calculator: '/cost',
   pricePerformance: '/llm-price-performance/',
   methodologyBenchAlign: '/methodology/benchalign/',
   privacy: '/privacy/',

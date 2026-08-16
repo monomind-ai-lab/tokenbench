@@ -20,7 +20,7 @@ function renderBreakeven(search = '') {
   if (!existsSync(htmlPath) || !existsSync(scriptPath)) return null;
 
   const html = readFileSync(htmlPath, 'utf8')
-    .replace(/<script src="https:\/\/cdn\.jsdelivr\.net[^>]*><\/script>/u, '<script></script>')
+    .replace(/<script src="(?:https:\/\/cdn\.jsdelivr\.net[^>]*|chart\.umd\.js)"><\/script>/u, '<script></script>')
     .replace(/<script src="data\.js[^>]*><\/script>/u, `<script>${readFileSync(resolve(prototypeRoot, 'data.js'), 'utf8')}</script>`)
     .replace('<script src="common.js"></script>', '<script>function setupShell(){} function colors(){return { accentText: "#6d28d9", ink: "#111827", line: "#d1d5db", muted: "#6b7280", plum: "#6d28d9" };} function chart(canvas, config){if(!canvas)return null;if(typeof Chart === "undefined"){canvas.hidden=true;return null;}const old=Chart.getChart(canvas);if(old)old.destroy();return new Chart(canvas, config);}</script>')
     .replace('<script src="cost-breakeven.js"></script>', `<script>${readFileSync(scriptPath, 'utf8')}</script>`);

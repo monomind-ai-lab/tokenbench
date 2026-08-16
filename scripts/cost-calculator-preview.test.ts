@@ -69,7 +69,7 @@ function resultValue(page: PreviewPage, selector: string) {
 
 function readBlob(window: Window, blob: Blob) {
   return new Promise<string>((resolveText, reject) => {
-    const reader = new window.FileReader();
+    const reader = new (window as unknown as typeof globalThis).FileReader();
     reader.addEventListener('load', () => resolveText(String(reader.result)));
     reader.addEventListener('error', () => reject(reader.error));
     reader.readAsText(blob);

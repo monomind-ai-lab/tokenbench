@@ -101,6 +101,7 @@ describe('TokenBench route registry', () => {
     expect(PREVIEW_ROUTE_PATHS.makeItYours).toBe('/make-it-yours/');
     expect(PREVIEW_ROUTE_PATHS.articles).toBe('/articles');
     expect(PREVIEW_ROUTE_PATHS.articleDetail).toBe('/articles/hybrid-router');
+    expect(PREVIEW_ROUTE_PATHS.calculator).toBe('/cost');
     expect(previewModelProfilePath('GPT 5.6/Sol')).toBe('/model-profile?model=GPT%205.6%2FSol');
   });
 
