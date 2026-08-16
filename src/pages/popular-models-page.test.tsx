@@ -51,7 +51,7 @@ describe('PopularModelsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Providers' }));
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search providers' }), { target: { value: 'Anthropic' } });
     fireEvent.click(screen.getByRole('button', { name: 'Anthropic' }));
-    expect(screen.getByText(/models shown/)).toBeInTheDocument();
+    expect(screen.getByText('3 models shown')).toBeInTheDocument();
   });
 
   it('keeps exact insight tables as native disclosures', () => {

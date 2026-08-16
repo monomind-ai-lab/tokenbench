@@ -50,6 +50,14 @@ function contrastRatio(left: string, right: string): number {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+function colorAlpha(color: string): number {
+  const values = color.match(/[\d.]+/gu);
+  if (!values?.length) throw new Error(`Expected a computed color, received ${color}.`);
+  const alpha = color.startsWith('rgba') || color.includes('/') ? Number(values.at(-1)) : 1;
+  if (!Number.isFinite(alpha)) throw new Error(`Expected a numeric alpha value, received ${color}.`);
+  return alpha;
+}
+
 const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
 const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
 const CATALOG_FIXTURE_IDENTITY_HEADER = 'x-tokenbench-browser-catalog-fixture';
@@ -2506,23 +2514,31 @@ test.describe('Popular Models terminology and contrast', () => {
     await expect(score).toBeVisible();
     const styles = await score.evaluate((element) => {
       const scoreStyles = getComputedStyle(element);
-      const panel = element.closest('.popular-models-desktop-table');
+      const surface = element.closest('.popular-models-section');
       return {
         backgroundColor: scoreStyles.backgroundColor,
         borderColor: scoreStyles.borderTopColor,
         borderWidth: scoreStyles.borderTopWidth,
         color: scoreStyles.color,
-        panelBackgroundColor: panel ? getComputedStyle(panel).backgroundColor : '',
+        surfaceBackgroundColor: surface ? getComputedStyle(surface).backgroundColor : '',
       };
     });
-    expect(styles.backgroundColor).not.toBe(styles.panelBackgroundColor);
+    expect(styles.surfaceBackgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(styles.backgroundColor).not.toBe(styles.surfaceBackgroundColor);
     expect(styles.borderWidth).toBe('1px');
-    expect(styles.borderColor).not.toBe('rgba(0, 0, 0, 0)');
+    expect(colorAlpha(styles.borderColor)).toBeGreaterThan(0);
     expect(contrastRatio(styles.color, styles.backgroundColor)).toBeGreaterThanOrEqual(4.5);
 
     const headerVerticalAlignments = await page.locator('.popular-models-desktop-table thead th').evaluateAll((headers) => headers.map((header) => getComputedStyle(header).verticalAlign));
     expect(headerVerticalAlignments).not.toHaveLength(0);
     expect(headerVerticalAlignments.every((verticalAlign) => verticalAlign === 'middle')).toBe(true);
+
+    const exactValuesDisclosure = page.locator('.popular-models-chart-data').filter({ hasText: 'Exact quality and cost values' }).first();
+    const exactValuesSummary = exactValuesDisclosure.locator('summary');
+    await expect.poll(() => exactValuesSummary.evaluate((element) => getComputedStyle(element, '::after').content)).toBe('"▼"');
+    await exactValuesSummary.click();
+    await expect(exactValuesDisclosure).toHaveAttribute('open', '');
+    await expect.poll(() => exactValuesSummary.evaluate((element) => getComputedStyle(element, '::after').content)).toBe('"▲"');
   });
 });
 
