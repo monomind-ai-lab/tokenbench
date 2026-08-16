@@ -448,7 +448,7 @@
       context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
       context.fillStyle = ink;
       context.font = '800 42px system-ui, sans-serif';
-      context.fillText('TokenBench custom leaderboard', padding, padding + 46);
+      context.fillText('TokenBench — Make it yours', padding, padding + 46);
       context.fillStyle = muted;
       context.font = '600 22px ui-monospace, monospace';
       context.fillText(`${accessLabel()} · ${providerLabel()} · ${visibleModels.length} visible`, padding, padding + 88);
