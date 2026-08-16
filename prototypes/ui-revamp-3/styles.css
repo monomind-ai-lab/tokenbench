@@ -402,6 +402,61 @@ input[type=range] {
   box-shadow: none;
 }
 
+.quick-comparison {
+  display: block;
+}
+
+.quick-comparison-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.quick-comparison-header > div {
+  min-width: 0;
+}
+
+.quick-comparison-header .text-action {
+  justify-self: end;
+}
+
+.quick-comparison-composer {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.quick-comparison-composer > div:first-child {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.quick-comparison-composer .compare-list {
+  margin-top: 8px;
+}
+
+.quick-comparison-footer {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 16px;
+}
+
+.quick-comparison-radar {
+  width: min(100%, 420px);
+  margin: 32px auto 0;
+}
+
+.quick-comparison-radar > canvas {
+  display: block;
+  width: 100% !important;
+}
+
 .models-compare-tray {
   margin-bottom: 0;
 }
@@ -1579,6 +1634,15 @@ button:disabled {
 
   .models-compare-tray > .toolbar {
     flex-wrap: wrap;
+  }
+
+  .quick-comparison-header {
+    grid-template-columns: 1fr auto;
+  }
+
+  .quick-comparison-composer,
+  .quick-comparison-composer > div:first-child {
+    width: 100%;
   }
 
   .compare-tray-actions,

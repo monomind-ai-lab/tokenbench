@@ -31,6 +31,7 @@ interface PopularComparisonWorkspaceProps {
   readonly economicsCharts: readonly PopularComparisonEconomicsChart[];
   readonly maxModels: number;
   readonly onAdd: (modelId: string) => void;
+  readonly onClear: () => void;
   readonly onRemove: (modelId: string) => void;
   readonly profileRows: readonly PopularComparisonMetric[];
   readonly radarConfiguration: ChartConfiguration<'radar'>;
@@ -39,6 +40,10 @@ interface PopularComparisonWorkspaceProps {
 
 function modelHref(model: PopularModelFixture): string {
   return `/model-profile?model=${encodeURIComponent(model.slug)}`;
+}
+
+export function previewComparisonHref(modelIds: readonly string[]): string {
+  return `/compare?${new URLSearchParams({ models: modelIds.join(',') })}`;
 }
 
 /**
@@ -67,6 +72,7 @@ export function PopularModelComparisonWorkspace({
   economicsCharts,
   maxModels,
   onAdd,
+  onClear,
   onRemove,
   profileRows,
   radarConfiguration,
@@ -76,10 +82,10 @@ export function PopularModelComparisonWorkspace({
   const remaining = Math.max(0, maxModels - selectedModels.length);
   const names = selectedModels.map((model) => model.name).join(', ');
 
-  return <article className="popular-models-insight-panel popular-models-profile-panel popular-models-comparison-workspace" id="best-models-compared">
+  return <article className="popular-models-insight-panel popular-models-profile-panel popular-models-comparison-workspace" id="best-models-compared" role="region" aria-labelledby="popular-models-quick-comparison-title">
     <div className="popular-models-comparison-heading">
-      <div><span className="popular-models-comparison-kicker">Comparison workspace</span><h3>Best Models Compared</h3><p>Start with the two highest-ranked Popular Models fixtures, then add up to two more for the same model-column analysis used on Compare.</p></div>
-      <div className="popular-models-comparison-progress" aria-live="polite"><span>Selected</span><strong>{selectedModels.length} / {maxModels}</strong></div>
+      <div><span className="popular-models-comparison-kicker">Comparison workspace</span><h3 id="popular-models-quick-comparison-title">Quick comparison</h3><p>Start with the two highest-ranked Popular Models fixtures, then add up to two more for the same model-column analysis used on Compare.</p></div>
+      <div className="popular-models-comparison-heading-actions"><button className="popular-models-action-button popular-models-touch-target popular-models-comparison-clear" type="button" aria-label="clear" onClick={onClear}>clear</button><div className="popular-models-comparison-progress" aria-live="polite"><span>Selected</span><strong>{selectedModels.length} / {maxModels}</strong></div></div>
     </div>
 
     <div className="popular-models-comparison-composer">
@@ -88,15 +94,15 @@ export function PopularModelComparisonWorkspace({
         <div className="popular-models-selected-models" role="list" aria-label="Selected comparison models">
           {selectedModels.map((model) => <span className="popular-models-model-tag" key={model.id} role="listitem"><a href={modelHref(model)}>{model.name}</a><button type="button" aria-label={`Remove ${model.name}`} title={canRemove ? `Remove ${model.name}` : 'Keep at least two models selected'} disabled={!canRemove} onClick={() => onRemove(model.id)}><X aria-hidden="true" size={14} /></button></span>)}
         </div>
+        <PopularModelPicker models={availableModels} selectedCount={selectedModels.length} max={maxModels} onAdd={onAdd} />
       </div>
-      <PopularModelPicker models={availableModels} selectedCount={selectedModels.length} max={maxModels} onAdd={onAdd} />
     </div>
     <p className="popular-models-comparison-status" role="status" aria-live="polite">{selectedModels.length} of {maxModels} models selected. {remaining === 0 ? 'Remove a model to add another.' : `Add up to ${remaining} more.`}</p>
 
     <div className="popular-models-comparison-summary">
       <section className="popular-models-comparison-subpanel popular-models-comparison-radar-panel" aria-labelledby="popular-models-comparison-radar-title">
         <div><h4 id="popular-models-comparison-radar-title">Seven-category capability overlay</h4><p>Normalized illustrative fixture scores · identical axes</p></div>
-        <div className="popular-models-chart-wrap popular-models-radar-chart"><PopularChartCanvas ariaLabel={`Seven-category profile comparison for ${names}`} configuration={radarConfiguration} /></div>
+        <div className="popular-models-chart-wrap popular-models-radar-chart popular-models-quick-comparison-radar"><PopularChartCanvas ariaLabel={`Seven-category profile comparison for ${names}`} configuration={radarConfiguration} /></div>
         <details className="popular-models-comparison-details"><summary>Exact capability values</summary><PopularComparisonMatrix ariaLabel="Exact capability comparison" id="popular-models-capability-matrix" models={selectedModels} rows={profileRows} /></details>
       </section>
 
@@ -116,5 +122,6 @@ export function PopularModelComparisonWorkspace({
       <PopularComparisonMatrix ariaLabel="Itemized model comparison" id="popular-models-evidence-matrix" models={selectedModels} rows={detailRows} />
       <p className="popular-models-comparison-fixture-note">Illustrative UI fixtures only · not measured benchmark, pricing, release, or availability evidence.</p>
     </section>
+    <footer className="popular-models-comparison-footer"><a href={previewComparisonHref(selectedModels.map((model) => model.id))}>More details</a></footer>
   </article>;
 }

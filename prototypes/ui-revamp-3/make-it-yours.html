@@ -108,12 +108,14 @@
       </div>
     </section>
 
-    <aside id="tray" class="compare-tray panel" aria-label="Selected model comparison">
-      <div class="toolbar">
-        <div><strong>Compare ranked candidates</strong><p id="compare-summary" class="fixture" aria-live="polite">Select two to four models from Cards or Table.</p><div class="compare-list" id="selected-names" role="list"></div></div>
-        <div class="compare-tray-actions"><div id="leaderboard-compare-picker-host"></div><button class="toggle" id="clear" type="button">Clear</button></div>
+    <aside id="tray" class="compare-tray quick-comparison panel" role="region" aria-labelledby="leaderboard-quick-comparison-title">
+      <div class="quick-comparison-header">
+        <div><h2 class="section-title" id="leaderboard-quick-comparison-title">Quick comparison</h2><p id="compare-summary" class="fixture" aria-live="polite">Select two to four models from Cards or Table.</p></div>
+        <button class="text-action" id="clear" type="button" aria-label="clear">clear</button>
       </div>
+      <div class="quick-comparison-composer"><div><span class="label">Selected models</span><div class="compare-list" id="selected-names" role="list" aria-label="Selected comparison models"></div></div><div id="leaderboard-compare-picker-host"></div></div>
       <div id="comparison" class="grid-2 leaderboard-comparison"></div>
+      <footer class="quick-comparison-footer"><a id="compare-more" class="text-link">More details</a></footer>
     </aside>
 
     <section class="leaderboard-output-section">

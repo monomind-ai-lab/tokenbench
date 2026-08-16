@@ -1813,6 +1813,70 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     expect(geometry.right).toBeLessThanOrEqual(geometry.clientWidth);
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
   });
+
+  test('reuses quick comparison outside Compare with ordered models and overflow-safe controls', async ({ page }) => {
+    const cases = [
+      { pathname: '/models', selected: ['Claude 3.5 Sonnet', 'DeepSeek V3'], href: '/compare?models=claude-3-5-sonnet%2Cdeepseek-v3' },
+      { pathname: '/make-it-yours/', selected: ['Claude 3.5 Sonnet', 'DeepSeek V3'], href: '/compare?models=claude-3-5-sonnet%2Cdeepseek-v3' },
+      { pathname: '/popular-models/', selected: ['Claude Opus 4.1', 'GPT-5'], href: '/compare?models=claude-opus-4-1%2Cgpt-5' },
+    ] as const;
+
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
+    }));
+    await page.setViewportSize({ width: 1302, height: 1324 });
+
+    for (const { pathname, selected, href } of cases) {
+      await page.goto(pathname);
+      const workspace = page.getByRole('region', { name: 'Quick comparison' });
+      await expect(workspace.getByRole('heading', { name: 'Quick comparison' })).toBeVisible();
+      await expect(workspace.getByRole('button', { name: 'clear' })).toBeVisible();
+      const addModel = workspace.getByRole('button', { name: 'Add a model' });
+      await expect(addModel).toBeVisible();
+
+      while (await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('listitem').count() < 2) {
+        const picker = workspace.getByRole('dialog', { name: 'Add a model' });
+        if (await picker.isHidden()) await addModel.click();
+        const search = picker.getByRole('combobox', { name: 'Search models or providers' });
+        const selectedCount = await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('listitem').count();
+        await search.fill(selected[selectedCount]!);
+        await picker.getByRole('option', { name: new RegExp(selected[selectedCount]!) }).click();
+      }
+
+      const selectedNames = await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('link').allTextContents();
+      expect(selectedNames).toEqual(selected);
+      await expect(workspace.getByRole('link', { name: 'More details' })).toHaveAttribute('href', href);
+      await expect(workspace.getByRole('img', { name: /Selected model capability radar|Seven-category profile comparison/ })).toBeVisible();
+
+      const layout = await workspace.evaluate((element) => {
+        const heading = element.querySelector('h2, h3')!.getBoundingClientRect();
+        const clear = element.querySelector('button[aria-label="clear"], button#clear')!.getBoundingClientRect();
+        const selected = element.querySelector('[role="list"][aria-label="Selected comparison models"]')!;
+        const picker = element.querySelector('.compare-model-picker, .popular-models-picker')!;
+        const details = [...element.querySelectorAll('a')].find((link) => link.textContent?.trim() === 'More details')!.getBoundingClientRect();
+        const radar = element.querySelector('canvas')!.getBoundingClientRect();
+        const radarParent = element.querySelector('canvas')!.parentElement!.getBoundingClientRect();
+        return {
+          clearTop: clear.top,
+          headingTop: heading.top,
+          pickerAfterSelected: Boolean(selected.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING),
+          detailsBelowHeading: details.top > heading.bottom,
+          radarCentered: Math.abs((radar.left + radar.right) / 2 - (radarParent.left + radarParent.right) / 2) < 1,
+        };
+      });
+      expect(layout.clearTop).toBeLessThanOrEqual(layout.headingTop + 8);
+      expect(layout.pickerAfterSelected).toBe(true);
+      expect(layout.detailsBelowHeading).toBe(true);
+      expect(layout.radarCentered).toBe(true);
+
+      await page.setViewportSize({ width: 320, height: 844 });
+      await expect(workspace).toBeVisible();
+      await assertNoHorizontalOverflow(page);
+      await page.setViewportSize({ width: 1302, height: 1324 });
+    }
+  });
 });
 
 test.describe('ui-revamp-3 article channels', () => {

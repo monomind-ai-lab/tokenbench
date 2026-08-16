@@ -14,7 +14,7 @@ describe('PopularModelsPage', () => {
     expect(screen.getByRole('heading', { name: '01 Leaderboard', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '02 Insights', level: 2 })).toBeInTheDocument();
     expect(screen.getByText(/Every name, score, cost, verbosity value/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Best Models Compared', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Quick comparison', level: 3 })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Quality versus cost scatter/ })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Horizontal ranking of models by cost/ })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Seven-category profile comparison/ })).toBeInTheDocument();
@@ -61,6 +61,16 @@ describe('PopularModelsPage', () => {
     fireEvent.click(screen.getByText('Exact quality and cost values'));
     expect(disclosure).toHaveAttribute('open');
     expect(within(disclosure!).getByRole('columnheader', { name: 'Provider' })).toBeInTheDocument();
+  });
+
+  it('uses the reusable quick comparison action order', () => {
+    render(<PopularModelsPage />);
+
+    const workspace = screen.getByRole('region', { name: 'Quick comparison' });
+    expect(within(workspace).getByRole('heading', { name: 'Quick comparison' })).toBeInTheDocument();
+    expect(within(workspace).getByRole('button', { name: 'clear' })).toBeInTheDocument();
+    expect(within(workspace).getByRole('button', { name: 'Add a model' })).toBeInTheDocument();
+    expect(within(workspace).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/compare?models=claude-opus-4-1%2Cgpt-5');
   });
 
   it('expands inline subtask evidence and compares up to four model columns through search', () => {
