@@ -70,7 +70,7 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
 
   return <header ref={headerRef} className="top-header" onKeyDown={(event) => { if (event.key === 'Escape') closeNavigation(); }}>
     <div className="header-inner">
-      <div className="brand-lockup"><a className="brand-home" href="/" aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span></span></a></div>
+      <div className="brand-lockup"><a className="brand-home" href={PREVIEW_ROUTE_PATHS.home} aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span></span></a></div>
       <button type="button" className="menu-button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => { setMobileMenuOpen((current) => !current); setOpenMenu(null); }}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
       <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
         <a href={PREVIEW_ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={closeNavigation}>Home</a>
@@ -111,8 +111,8 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
         <section id="primary-articles-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-articles-menu" hidden={openMenu !== 'articles'}>
           <div className="primary-nav-mega-heading"><h2>Articles &amp; guides</h2><span>Decision-oriented research</span></div>
           <div className="primary-nav-mega-destinations">
-            <a href={PREVIEW_ROUTE_PATHS.guides} onClick={closeNavigation}><strong>All guides</strong><span>Browse the current article library</span></a>
-            <a href={`${PREVIEW_ROUTE_PATHS.guides}openrouter-guide-model-routing-cost-controls/`} onClick={closeNavigation}><strong>Model routing &amp; cost controls</strong><span>Route workloads with explicit quality and cost boundaries</span></a>
+            <a href={PREVIEW_ROUTE_PATHS.articles} onClick={closeNavigation}><strong>All articles</strong><span>Browse the approved article library</span></a>
+            <a href={PREVIEW_ROUTE_PATHS.articleDetail} onClick={closeNavigation}><strong>Hybrid model routing</strong><span>Design a high-stakes agentic routing decision</span></a>
           </div>
         </section>
       </div>
@@ -135,12 +135,13 @@ export function SiteFooter({ disclaimer }: SiteFooterProps) {
       </section>
       <nav className="footer-links" aria-label="Explore">
         <strong>Explore</strong>
+        <a href={PREVIEW_ROUTE_PATHS.models}>Models workbench</a>
         <a href={PREVIEW_ROUTE_PATHS.calculator}>Subscribe vs API</a>
         <a href={PREVIEW_ROUTE_PATHS.pricePerformance}>Price vs performance</a>
         <a href={PREVIEW_ROUTE_PATHS.popularModels}>Popular models</a>
         <a href={PREVIEW_ROUTE_PATHS.makeItYours}>Make it yours</a>
         <a href={PREVIEW_ROUTE_PATHS.compare}>Compare models</a>
-        <a href={PREVIEW_ROUTE_PATHS.guides}>Guides</a>
+        <a href={PREVIEW_ROUTE_PATHS.articles}>Articles</a>
       </nav>
       <nav className="footer-links" aria-label="Trust">
         <strong>Trust</strong>

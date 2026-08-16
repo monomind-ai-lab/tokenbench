@@ -33,7 +33,7 @@ describe('guides experience', () => {
   it('uses shared TokenBench chrome and the dedicated calculator route', () => {
     render(<GuidesApp />);
 
-    expect(screen.getByRole('link', { name: `${SITE_CONFIG.name} home` })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: `${SITE_CONFIG.name} home` })).toHaveAttribute('href', '/models');
     expect(screen.getByText('Source-aware model, pricing, and workload evidence for practical AI decisions.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/#calculator');
     expect(screen.queryByText(/AI Cost Engine/i)).not.toBeInTheDocument();

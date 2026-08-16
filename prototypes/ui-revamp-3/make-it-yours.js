@@ -10,7 +10,8 @@
   let tps = 60;
   let showExcluded = true;
   let accessFilter = 'all';
-  let providerFilter = 'all';
+  let providerFilters = new Set();
+  let addedModelIds = [];
   let comparisonWasVisible = false;
   let visibleModels = [];
   let filteredCandidates = [];
@@ -20,17 +21,30 @@
   const meetsSla = model => model.ttft <= ttft && model.tps >= tps;
   const ranked = () => [...TB_MODELS].sort((a, b) => score(b) - score(a));
   const matchesAccess = model => accessFilter === 'all' || (accessFilter === 'open' ? isOpenWeight(model) : !isOpenWeight(model));
-  const matchesProvider = model => providerFilter === 'all' || model.provider === providerFilter;
-  const currentCandidates = () => ranked().filter(model => matchesAccess(model) && matchesProvider(model)).slice(0, maxRankedModels);
+  const matchesProvider = model => providerFilters.size === 0 || providerFilters.has(model.provider);
+  const defaultCandidates = () => ranked().filter(model => matchesAccess(model) && matchesProvider(model)).slice(0, maxRankedModels);
+  const currentCandidates = () => {
+    const defaults = defaultCandidates();
+    const defaultIds = new Set(defaults.map(model => model.id));
+    const additions = addedModelIds.map(id => TB_MODELS.find(model => model.id === id)).filter(model => model && matchesAccess(model) && matchesProvider(model) && !defaultIds.has(model.id));
+    return [...defaults, ...additions].sort((a, b) => score(b) - score(a));
+  };
   const accessLabel = () => accessFilter === 'open' ? 'Open weight' : accessFilter === 'closed' ? 'Closed' : 'All access';
-  const providerLabel = () => providerFilter === 'all' ? 'All providers' : providerFilter;
+  const providerLabel = () => {
+    const selected = [...providerFilters];
+    if (!selected.length) return 'All providers';
+    if (selected.length <= 2) return selected.join(' + ');
+    return `${selected.length} providers`;
+  };
   const escapeHtml = value => String(value).replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
   const formatWeight = value => Number(value).toFixed(Number.isInteger(value) ? 0 : 1);
 
   function parseSharedState() {
     const params = new URLSearchParams(location.search);
     if (['all', 'open', 'closed'].includes(params.get('access'))) accessFilter = params.get('access');
-    if (providers.includes(params.get('provider'))) providerFilter = params.get('provider');
+    const sharedProviders = String(params.get('provider') || '').split(',').map(value => value.trim()).filter(value => providers.includes(value));
+    providerFilters = new Set(sharedProviders);
+    addedModelIds = normalizeModelIds(String(params.get('models') || '').split(',').filter(Boolean), TB_MODELS.length);
     if (params.has('outside')) showExcluded = params.get('outside') !== '0';
     if (['cards', 'rows'].includes(params.get('view'))) view = params.get('view');
 
@@ -179,10 +193,31 @@
 
   function renderFilterState() {
     $$('#access-filter [data-access]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.access === accessFilter)));
-    $('#provider-filter-value').textContent = providerFilter === 'all' ? 'All' : providerFilter;
+    $('#provider-filter-value').textContent = providerFilters.size === 0 ? 'All providers' : providerFilters.size === 1 ? [...providerFilters][0] : `${providerFilters.size} selected`;
     $('#provider-filter-toggle').setAttribute('aria-label', `Filter by provider, ${providerLabel()}`);
     $('#cards').setAttribute('aria-pressed', String(view === 'cards'));
     $('#rows').setAttribute('aria-pressed', String(view === 'rows'));
+  }
+
+  function renderRankingModelPicker() {
+    const addedModels = addedModelIds.map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
+    const addedRoot = $('#ranking-added-models');
+    addedRoot.innerHTML = addedModels.length ? `<span class="label ranking-added-models-label">Added models</span>${selectedModelChips(addedModels)}` : '';
+    bindComparisonRemovals(addedRoot, id => {
+      addedModelIds = addedModelIds.filter(candidate => candidate !== id);
+      renderPage(false);
+    });
+    mountModelPicker($('#ranking-model-picker-host'), {
+      id: 'ranking-model-picker',
+      selectedIds: addedModelIds,
+      excludedIds: defaultCandidates().map(model => model.id),
+      max: TB_MODELS.length,
+      reopenAfterAdd: false,
+      onAdd: id => {
+        addedModelIds = normalizeModelIds([...addedModelIds, id], TB_MODELS.length);
+        renderPage(false);
+      }
+    });
   }
 
   function renderPage() {
@@ -195,6 +230,7 @@
     const qualified = filteredCandidates.filter(meetsSla);
     visibleModels = showExcluded ? filteredCandidates : qualified;
     $('#zero').hidden = valid;
+    renderRankingModelPicker();
 
     if (valid && visibleModels.length) {
       horizontal('ranking', visibleModels, model => score(model), 'Composite', meetsSla);
@@ -242,19 +278,27 @@
       ...providers.map(provider => ({ value: provider, label: provider, count: TB_MODELS.filter(model => model.provider === provider).length }))
     ].filter(option => option.label.toLocaleLowerCase().includes(normalizedQuery));
 
-    $('#provider-filter-options').innerHTML = options.length ? options.map(option => `<button class="provider-filter-option" type="button" role="option" aria-selected="${option.value === providerFilter}" data-provider="${escapeHtml(option.value)}"><span>${escapeHtml(option.label)}</span><small>${option.count}</small></button>`).join('') : '<p class="empty provider-filter-empty">No providers match this search.</p>';
-    $('#provider-filter-status').textContent = `${options.length} option${options.length === 1 ? '' : 's'} shown.`;
+    $('#provider-filter-options').innerHTML = options.length ? options.map((option, index) => {
+      const selected = option.value === 'all' ? providerFilters.size === 0 : providerFilters.has(option.value);
+      const modelCopy = `${option.count} model${option.count === 1 ? '' : 's'} available`;
+      return `<button class="provider-filter-option compare-model-picker-option" id="provider-filter-option-${index}" type="button" role="option" aria-selected="${selected}" data-provider="${escapeHtml(option.value)}"><span><strong>${escapeHtml(option.label)}</strong><small>${modelCopy}</small></span><small>${option.count}</small></button>`;
+    }).join('') : '<p class="compare-model-picker-empty provider-filter-empty">No providers match this search.</p>';
+    $('#provider-filter-status').textContent = `${providers.length} providers available · ${providerFilters.size || 'all'} selected.`;
   }
 
   function closeProviderFilter({ restoreFocus = false } = {}) {
     $('#provider-filter-panel').hidden = true;
     $('#provider-filter-toggle').setAttribute('aria-expanded', 'false');
+    $('#provider-filter-search').setAttribute('aria-expanded', 'false');
+    $('#provider-filter-search').removeAttribute('aria-activedescendant');
     if (restoreFocus) $('#provider-filter-toggle').focus();
   }
 
   function selectProvider(value) {
-    providerFilter = value;
-    closeProviderFilter({ restoreFocus: true });
+    if (value === 'all') providerFilters.clear();
+    else if (providerFilters.has(value)) providerFilters.delete(value);
+    else providerFilters.add(value);
+    renderProviderOptions($('#provider-filter-search').value);
     renderPage(false);
   }
 
@@ -268,6 +312,7 @@
       const opening = panel.hidden;
       panel.hidden = !opening;
       toggle.setAttribute('aria-expanded', String(opening));
+      search.setAttribute('aria-expanded', String(opening));
       if (opening) {
         search.value = '';
         renderProviderOptions();
@@ -310,7 +355,8 @@
 
   function resetLeaderboardFilters() {
     accessFilter = 'all';
-    providerFilter = 'all';
+    providerFilters.clear();
+    addedModelIds = [];
     showExcluded = true;
     $('#provider-filter-search').value = '';
     renderProviderOptions();
@@ -321,7 +367,8 @@
   function shareUrl() {
     const url = new URL(location.origin + location.pathname);
     url.searchParams.set('access', accessFilter);
-    if (providerFilter !== 'all') url.searchParams.set('provider', providerFilter);
+    if (providerFilters.size) url.searchParams.set('provider', [...providerFilters].join(','));
+    if (addedModelIds.length) url.searchParams.set('models', addedModelIds.join(','));
     url.searchParams.set('outside', showExcluded ? '1' : '0');
     url.searchParams.set('ttft', ttft.toFixed(2));
     url.searchParams.set('tps', String(tps));

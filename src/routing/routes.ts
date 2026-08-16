@@ -20,23 +20,22 @@ export const ROUTE_PATHS = {
 /**
  * Canonical destinations for the ui-revamp-3 preview surfaces.
  *
- * The production React directory still owns the legacy `/models/` and
- * `/compare/` route contracts. The combined preview, however, publishes the
- * rebuilt workbench and comparison surfaces at the prototype routes below.
- * Keeping these destinations separate prevents shared chrome from sending
- * preview users back to the production directory while preserving the data
- * and API route contracts used by the React application.
+ * The production React application retains its own route contracts. The
+ * approved ui-revamp-3 deployment publishes rebuilt surfaces at the paths
+ * below, so shared chrome must use this map instead of the production routes.
  */
 export const PREVIEW_ROUTE_PATHS = {
-  home: '/',
-  models: '/#catalog',
+  home: '/models',
+  models: '/models',
+  modelCatalog: '/models#catalog',
   compare: '/compare',
   modelProfile: '/model-profile',
   modelLifecycle: '/model-lifecycle',
   popularModels: '/popular-models/',
-  makeItYours: '/make-it-yours',
+  makeItYours: '/make-it-yours/',
   guides: '/guides/',
   articles: '/articles',
+  articleDetail: '/articles/hybrid-router',
   calculator: '/tools/subscriptions-vs-apis/',
   pricePerformance: '/llm-price-performance/',
   methodologyBenchAlign: '/methodology/benchalign/',

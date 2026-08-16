@@ -30,6 +30,21 @@ function envelope(): ModelDirectoryEnvelope {
 }
 
 describe('popular models SSR handler', () => {
+  it('lets the ui-revamp-3 branch serve its rebuilt static models workbench', async () => {
+    const staticPreview = new Response('<h1>Models workbench</h1>', { headers: { 'content-type': 'text/html' } });
+    const next = vi.fn().mockResolvedValue(staticPreview);
+
+    const response = await onRequestGet({
+      request: new Request('https://ui-revamp-3.tokenbench-27t.pages.dev/models'),
+      env: { CF_PAGES_BRANCH: 'ui-revamp-3' },
+      next,
+    });
+
+    expect(response).toBe(staticPreview);
+    expect(next).toHaveBeenCalledOnce();
+    expect(readModelDirectory).not.toHaveBeenCalled();
+  });
+
   it('renders substantive model facts, canonical social metadata, and directory JSON-LD', async () => {
     readModelDirectory.mockResolvedValue(envelope());
     const response = await onRequestGet({

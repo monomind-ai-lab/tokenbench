@@ -171,6 +171,8 @@ describe('responsive calculator app shell', () => {
     expect(within(footer).getByRole('checkbox', { name: /Notify me when new models are added/i })).toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(within(footer).getByRole('link', { name: 'Price vs performance' })).toHaveAttribute('href', '/llm-price-performance/');
+    expect(within(footer).getByRole('link', { name: 'Models workbench' })).toHaveAttribute('href', '/models');
+    expect(within(footer).getByRole('link', { name: 'Articles' })).toHaveAttribute('href', '/articles');
     expect(within(footer).queryByRole('link', { name: 'Data sources' })).not.toBeInTheDocument();
     expect(within(footer).getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy/');
     expect(within(footer).queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
@@ -488,7 +490,7 @@ describe('responsive calculator app shell', () => {
     render(<App />);
 
     await calculatorReadyHeading();
-    expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/models');
     expect(screen.getByRole('img', { name: 'MonoMind monogram' })).toHaveAttribute('src', '/brand/monomind-tokenbench.png');
     expect(screen.queryByText('The Decision Engine for AI Costs & Model Benchmarks')).not.toBeInTheDocument();
     expect(screen.getByText('Powered by MonoMind AI Lab')).toBeInTheDocument();
@@ -507,7 +509,13 @@ describe('responsive calculator app shell', () => {
     fireEvent.click(within(navigation).getByRole('button', { name: 'Leaderboards' }));
     const menu = screen.getByRole('region', { name: 'Leaderboards' });
     expect(within(menu).getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
-    expect(within(menu).getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours');
+    expect(within(menu).getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours/');
+
+    fireEvent.click(within(navigation).getByRole('button', { name: 'Articles' }));
+    const articles = screen.getByRole('region', { name: 'Articles' });
+    expect(within(articles).getByRole('link', { name: /All articles/ })).toHaveAttribute('href', '/articles');
+    expect(within(articles).getByRole('link', { name: /Hybrid model routing/ })).toHaveAttribute('href', '/articles/hybrid-router');
+
   });
 
   it('defaults a no-storage document to dark and persists both TokenBench theme choices', async () => {

@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <header class="topbar"><div class="shell"><a class="brand" href="/" aria-label="TokenBench home"><img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><nav class="nav" aria-label="Primary"></nav><div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle dark theme">◐</button></div></div></header>
+  <header class="topbar"><div class="shell"><a class="brand" href="/models" aria-label="TokenBench home"><img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><nav class="nav" aria-label="Primary"></nav><div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle dark theme">◐</button></div></div></header>
 
   <main class="shell page">
     <section>
@@ -43,18 +43,19 @@
             <button class="toggle" type="button" data-access="closed" aria-pressed="false">Closed</button>
           </div>
 
-          <div class="provider-filter" id="provider-filter">
-            <button class="toggle provider-filter-toggle" id="provider-filter-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="provider-filter-panel">
-              <span class="provider-filter-copy"><strong>Providers</strong><small id="provider-filter-value">All</small></span>
+          <div class="provider-filter compare-model-picker" id="provider-filter">
+            <button class="button compare-model-picker-toggle provider-filter-toggle" id="provider-filter-toggle" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="provider-filter-panel">
+              <span class="provider-filter-copy"><strong>Providers</strong><small id="provider-filter-value">All providers</small></span>
               <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>
             </button>
-            <div class="provider-filter-panel" id="provider-filter-panel" role="dialog" aria-label="Filter leaderboard by provider" hidden>
-              <label class="provider-filter-search">
+            <div class="provider-filter-panel compare-model-picker-panel" id="provider-filter-panel" role="dialog" aria-label="Filter leaderboard by provider" hidden>
+              <label class="provider-filter-search compare-model-picker-search">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
                 <span class="sr-only">Search providers</span>
-                <input id="provider-filter-search" type="search" autocomplete="off" placeholder="Search providers">
+                <input id="provider-filter-search" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="provider-filter-options" autocomplete="off" placeholder="Search providers">
               </label>
-              <div class="provider-filter-options" id="provider-filter-options" role="listbox" aria-label="Providers"></div>
-              <p class="provider-filter-status" id="provider-filter-status" aria-live="polite"></p>
+              <div class="provider-filter-options compare-model-picker-options" id="provider-filter-options" role="listbox" aria-label="Providers" aria-multiselectable="true"></div>
+              <p class="provider-filter-status compare-model-picker-status" id="provider-filter-status" role="status" aria-live="polite"></p>
             </div>
           </div>
         </div>
@@ -78,11 +79,12 @@
           <div class="toolbar ranking-header">
             <div>
               <h2 class="section-title" id="weighted-ranking-title">Weighted ranking</h2>
-              <p class="fixture">Illustrative prototype data · top 20</p>
+              <p class="fixture">Illustrative prototype data · top 20 plus explicitly added models</p>
             </div>
-            <label class="toggle sla-toggle"><input id="show-excluded" type="checkbox" checked> <span>Show outside SLA</span></label>
+            <div class="ranking-header-actions"><div id="ranking-model-picker-host"></div><label class="toggle sla-toggle"><input id="show-excluded" type="checkbox" checked> <span>Show outside SLA</span></label></div>
           </div>
           <p id="rank-status" class="fixture leaderboard-rank-status" aria-live="polite"></p>
+          <div class="ranking-added-models" id="ranking-added-models" role="list" aria-label="Models added to weighted ranking"></div>
           <p id="weight-summary" class="weight-summary" aria-label="Current capability weights"></p>
           <div class="chart-wrap ranking-chart"><canvas id="ranking" role="img" aria-label="Horizontal provider-colored top-20 model ranking"></canvas></div>
           <details class="ranking-details"><summary>Semantic ranking table</summary><div id="rank-alt"></div></details>

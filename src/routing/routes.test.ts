@@ -93,9 +93,14 @@ describe('TokenBench route registry', () => {
   });
 
   it('keeps preview chrome destinations separate from production route contracts', () => {
-    expect(PREVIEW_ROUTE_PATHS.models).toBe('/#catalog');
+    expect(PREVIEW_ROUTE_PATHS.home).toBe('/models');
+    expect(PREVIEW_ROUTE_PATHS.models).toBe('/models');
+    expect(PREVIEW_ROUTE_PATHS.modelCatalog).toBe('/models#catalog');
+    expect(PREVIEW_ROUTE_PATHS.popularModels).toBe('/popular-models/');
     expect(PREVIEW_ROUTE_PATHS.compare).toBe('/compare');
-    expect(PREVIEW_ROUTE_PATHS.makeItYours).toBe('/make-it-yours');
+    expect(PREVIEW_ROUTE_PATHS.makeItYours).toBe('/make-it-yours/');
+    expect(PREVIEW_ROUTE_PATHS.articles).toBe('/articles');
+    expect(PREVIEW_ROUTE_PATHS.articleDetail).toBe('/articles/hybrid-router');
     expect(previewModelProfilePath('GPT 5.6/Sol')).toBe('/model-profile?model=GPT%205.6%2FSol');
   });
 

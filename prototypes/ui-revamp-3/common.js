@@ -2,7 +2,7 @@ const MAX_COMPARE_MODELS=4;
 // Keep the self-contained prototype shell pointed at the combined preview
 // routes. These are intentionally separate from the production React route
 // contracts so a preview click never leaves the preview deployment.
-const PREVIEW_PATHS={home:'/',models:'/#catalog',compare:'/compare',modelProfile:'/model-profile',modelLifecycle:'/model-lifecycle',popularModels:'/popular-models/',makeItYours:'/make-it-yours',guides:'/guides/',articles:'/articles',calculator:'/tools/subscriptions-vs-apis/',pricePerformance:'/llm-price-performance/',methodology:'/methodology/benchalign/',privacy:'/privacy/'};
+const PREVIEW_PATHS={home:'/models',models:'/models',modelCatalog:'/models#catalog',compare:'/compare',modelProfile:'/model-profile',modelLifecycle:'/model-lifecycle',popularModels:'/popular-models/',makeItYours:'/make-it-yours/',guides:'/guides/',articles:'/articles',articleDetail:'/articles/hybrid-router',calculator:'/tools/subscriptions-vs-apis/',pricePerformance:'/llm-price-performance/',methodology:'/methodology/benchalign/',privacy:'/privacy/'};
 const previewModelProfilePath=slug=>`${PREVIEW_PATHS.modelProfile}?model=${encodeURIComponent(slug)}`;
 const TB={charts:[],weights:{agentic:20,coding:20,reasoning:20,math:15,multimodal:15,throughput:10},selected:[],theme:localStorage.tbTheme||'light'};
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -10,8 +10,8 @@ function domainScore(m,key){return key==='throughput'?Math.min(100,m.tps/120*100
 function score(m,w=TB.weights){let sum=Object.values(w).reduce((a,b)=>a+b,0);return sum?Object.entries(w).reduce((n,[k,v])=>n+domainScore(m,k)*v,0)/sum:null}
 function colors(){let s=getComputedStyle(document.documentElement),read=name=>s.getPropertyValue(name).trim();return{ink:read('--ink'),muted:read('--muted'),line:read('--line'),plum:read('--plum'),accentText:read('--accent-text')||read('--plum')}}
 function chart(canvas,config){if(!canvas)return null;if(typeof Chart==='undefined'){canvas.hidden=true;if(!canvas.parentElement.querySelector('.chart-failure'))canvas.insertAdjacentHTML('afterend','<p class="empty chart-failure" role="status">Chart.js did not load. Use the exact evidence table on this page.</p>');return null}canvas.hidden=false;canvas.parentElement.querySelector('.chart-failure')?.remove();let old=Chart.getChart(canvas);if(old)old.destroy();config.options={responsive:true,maintainAspectRatio:false,animation:matchMedia('(prefers-reduced-motion: reduce)').matches?false:{duration:250},...config.options};return new Chart(canvas,config)}
-function setupShell(){document.documentElement.dataset.theme=TB.theme;let current=location.pathname.split('/').pop()||'index.html',theme=$('#theme');if(current==='article-hybrid-router.html'||current==='article-hybrid-router'){let metadata=$('article header .label'),fixture=$('article header .fixture');if(metadata)metadata.textContent='Guide · Published 12 Aug 2026 · Updated 15 Aug 2026 · Review status: current';if(fixture&&!$('#article-evidence-cue'))fixture.insertAdjacentHTML('afterend','<p id="article-evidence-cue" class="fixture">Evidence cue · route-price and SLA fixtures observed 15 Aug 2026 · sources itemized below</p>')}if(theme){let syncTheme=()=>{let dark=TB.theme==='dark';theme.textContent='Theme';theme.setAttribute('aria-pressed',String(dark));theme.setAttribute('aria-label',dark?'Switch to light theme':'Switch to dark theme')};syncTheme();theme.addEventListener('click',()=>{TB.theme=TB.theme==='dark'?'light':'dark';localStorage.tbTheme=TB.theme;document.documentElement.dataset.theme=TB.theme;syncTheme();window.renderPage?.()})}}
-const baseShellSetup=setupShell;setupShell=function(){baseShellSetup();if((location.pathname.endsWith('article-hybrid-router.html')||location.pathname.endsWith('/article-hybrid-router'))&&!$('#mobile-toc')){let header=$('article header');header?.insertAdjacentHTML('afterend','<details id="mobile-toc" class="mobile-toc panel soft"><summary>On this page</summary><nav aria-label="Article sections"><a href="#question">Decision question</a><a href="#recommendation">Recommendation</a><a href="#assumptions">Assumptions</a><a href="#evidence">Evidence framing</a><a href="#cost">Cost comparison</a><a href="#matrix">Decision matrix</a><a href="#next">Internal tools</a></nav></details>')}};function link(m){return `<a class="model-name" href="${previewModelProfilePath(m.id)}">${m.name}</a>`}
+function setupShell(){document.documentElement.dataset.theme=TB.theme;let current=location.pathname.split('/').pop()||'index.html',theme=$('#theme');if(['article-hybrid-router.html','article-hybrid-router','hybrid-router'].includes(current)){let metadata=$('article header .label'),fixture=$('article header .fixture');if(metadata)metadata.textContent='Guide · Published 12 Aug 2026 · Updated 15 Aug 2026 · Review status: current';if(fixture&&!$('#article-evidence-cue'))fixture.insertAdjacentHTML('afterend','<p id="article-evidence-cue" class="fixture">Evidence cue · route-price and SLA fixtures observed 15 Aug 2026 · sources itemized below</p>')}if(theme){let syncTheme=()=>{let dark=TB.theme==='dark';theme.textContent='Theme';theme.setAttribute('aria-pressed',String(dark));theme.setAttribute('aria-label',dark?'Switch to light theme':'Switch to dark theme')};syncTheme();theme.addEventListener('click',()=>{TB.theme=TB.theme==='dark'?'light':'dark';localStorage.tbTheme=TB.theme;document.documentElement.dataset.theme=TB.theme;syncTheme();window.renderPage?.()})}}
+const baseShellSetup=setupShell;setupShell=function(){baseShellSetup();if((location.pathname.endsWith('article-hybrid-router.html')||location.pathname.endsWith('/article-hybrid-router')||location.pathname.endsWith('/articles/hybrid-router'))&&!$('#mobile-toc')){let header=$('article header');header?.insertAdjacentHTML('afterend','<details id="mobile-toc" class="mobile-toc panel soft"><summary>On this page</summary><nav aria-label="Article sections"><a href="#question">Decision question</a><a href="#recommendation">Recommendation</a><a href="#assumptions">Assumptions</a><a href="#evidence">Evidence framing</a><a href="#cost">Cost comparison</a><a href="#matrix">Decision matrix</a><a href="#next">Internal tools</a></nav></details>')}};function link(m){return `<a class="model-name" href="${previewModelProfilePath(m.id)}">${m.name}</a>`}
 function modelOptions(){return TB_MODELS.map(m=>`<option value="${m.id}">${m.name} — ${m.provider}</option>`).join('')}
 function radar(canvas,models){let c=colors(),keys=['agentic','coding','reasoning','math','multimodal','throughput'],series=[{color:c.plum,dash:[],point:'circle'},{color:'#f97316',dash:[7,3],point:'rectRounded'},{color:'#10b981',dash:[2,3],point:'triangle'},{color:'#d946ef',dash:[10,3,2,3],point:'rectRot'}];return chart(canvas,{type:'radar',data:{labels:['Agentic','Coding','Reasoning','Math','Multimodal','Throughput'],datasets:models.map((m,i)=>{let style=series[i%series.length];return{label:m.name,data:keys.map(k=>domainScore(m,k)),borderColor:style.color,backgroundColor:style.color+'20',borderDash:style.dash,pointStyle:style.point,pointRadius:3,borderWidth:2}})},options:{plugins:{legend:{labels:{color:c.muted,font:{size:11},usePointStyle:true,boxWidth:10,padding:12}}},scales:{r:{min:45,max:100,ticks:{display:false},grid:{color:c.line},angleLines:{color:c.line},pointLabels:{color:c.muted,font:{size:10}}}}}})}
 function normalizeModelIds(ids,max=MAX_COMPARE_MODELS){let known=new Set((window.TB_MODELS||[]).map(model=>model.id)),seen=new Set();return (ids||[]).filter(id=>{if(!known.has(id)||seen.has(id))return false;seen.add(id);return true}).slice(0,max)}
@@ -61,12 +61,13 @@ function bindComparisonRemovals(root,onRemove){
 }
 
 const modelPickerControllers=new WeakMap();
-function mountModelPicker(root,{id,selectedIds,onAdd,max=MAX_COMPARE_MODELS}={}){
+function mountModelPicker(root,{id,selectedIds,onAdd,max=MAX_COMPARE_MODELS,excludedIds=[],reopenAfterAdd=true}={}){
   modelPickerControllers.get(root)?.abort();
   const controller=new AbortController();
   modelPickerControllers.set(root,controller);
   const selected=normalizeModelIds(selectedIds,max);
-  const available=TB_MODELS.filter(model=>!selected.includes(model.id));
+  const excluded=new Set(excludedIds);
+  const available=TB_MODELS.filter(model=>!selected.includes(model.id)&&!excluded.has(model.id));
   const atLimit=selected.length>=max;
   const limitCopy=`${selected.length} of ${max} models selected${atLimit?'; remove a model to add another.':'.'}`;
   root.innerHTML=`<div class="compare-model-picker" id="${compareHtml(id)}"><button class="button compare-model-picker-toggle${atLimit?' is-disabled':''}" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="${compareHtml(id)}-panel" aria-disabled="${atLimit}" title="${compareHtml(atLimit?limitCopy:'Search and add a model')}">${shellIcons.plus}<span>Add a model</span></button><div class="compare-model-picker-panel" id="${compareHtml(id)}-panel" role="dialog" aria-label="Add a model" hidden><label class="compare-model-picker-search">${shellIcons.search}<span class="sr-only">Search models or providers</span><input type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${compareHtml(id)}-options" autocomplete="off" placeholder="Search models or providers"></label><div class="compare-model-picker-options" id="${compareHtml(id)}-options" role="listbox" aria-label="Available models"></div><p class="compare-model-picker-status" role="status" aria-live="polite"></p></div><p class="sr-only compare-model-picker-limit" aria-live="polite">${compareHtml(limitCopy)}</p></div>`;
@@ -114,6 +115,7 @@ function mountModelPicker(root,{id,selectedIds,onAdd,max=MAX_COMPARE_MODELS}={})
     if(!modelId||selected.includes(modelId)||selected.length>=max)return;
     close();
     onAdd(modelId);
+    if(!reopenAfterAdd)return;
     requestAnimationFrame(()=>{
       const nextPicker=document.getElementById(id);
       const nextToggle=$('.compare-model-picker-toggle',nextPicker);
@@ -353,6 +355,7 @@ function setupHeaderTools(){
 function setupBrand(){
   const brand=$('.brand');
   if(!brand)return;
+  brand.href=PREVIEW_PATHS.home;
   brand.setAttribute('aria-label','TokenBench home');
   brand.innerHTML='<img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span>';
 }
@@ -363,9 +366,9 @@ function setupNavigation(){
   if(!nav||!shell)return;
 
   const current=location.pathname.replace(/\/+$/, '').split('/').pop()||'index';
-  const modelsActive=['index','model-profile','model-lifecycle'].includes(current);
+  const modelsActive=['index','models','model-profile','model-lifecycle'].includes(current);
   const leaderboardActive=current==='make-it-yours';
-  const articlesActive=['article-hybrid-router','articles'].includes(current);
+  const articlesActive=['article-hybrid-router','articles','hybrid-router'].includes(current);
   const currentAttribute=active=>active?' aria-current="page"':'';
   nav.setAttribute('aria-label','Primary');
   nav.id='primary-navigation';
@@ -400,7 +403,7 @@ function setupNavigation(){
   const topModels=topModelProfiles.slice(0,10).map(model=>`<a class="mega-model-link" href="${previewModelProfilePath(model.slug)}"><span class="mega-rank">#${model.rank}</span><span class="mega-model-copy"><strong>${model.name}</strong><small>${model.provider}</small></span><span class="mega-score">${model.score.toFixed(1)}</span></a>`).join('');
   const panels=document.createElement('div');
   panels.className='mega-panels';
-  panels.innerHTML=`<div class="mega-panel mega-panel-models" id="mega-models" role="region" aria-labelledby="nav-models" data-menu-panel="models" hidden><div class="mega-layout"><section class="mega-section"><div class="mega-section-head"><h2>Explore models</h2><span>Decision surfaces</span></div><div class="mega-destinations"><a href="${PREVIEW_PATHS.models}"><strong>Models workbench</strong><span>Price, performance and catalog filters</span></a><a href="${PREVIEW_PATHS.models}"><strong>Model catalog</strong><span>Search, filter and compare model evidence</span></a><a href="${PREVIEW_PATHS.modelLifecycle}"><strong>Lifecycle radar</strong><span>Retirements, sunset dates and migration paths</span></a></div></section><section class="mega-section mega-top-models"><div class="mega-section-head"><h2>Top Models</h2><span>Live weekly rank · 12 Aug 2026</span></div><div class="mega-model-grid">${topModels}</div></section></div></div><div class="mega-panel mega-panel-compact" id="mega-leaderboards" role="region" aria-labelledby="nav-leaderboards" data-menu-panel="leaderboards" hidden><div class="mega-section-head"><h2>Leaderboards</h2><span>Rank and re-rank models</span></div><div class="mega-destinations"><a href="${PREVIEW_PATHS.popularModels}"><strong>Popular Models</strong><span>Browse top models by quality, performance, and cost.</span></a><a href="${PREVIEW_PATHS.makeItYours}"><strong>Make it yours</strong><span>Adjust six capability weights and SLA thresholds</span></a></div></div><div class="mega-panel mega-panel-compact" id="mega-articles" role="region" aria-labelledby="nav-articles" data-menu-panel="articles" hidden><div class="mega-section-head"><h2>Articles & guides</h2><span>Decision-oriented research</span></div><div class="mega-destinations"><a href="${PREVIEW_PATHS.guides}openrouter-guide-model-routing-cost-controls/"><strong>Model routing guide</strong><span>Route work by capability, cost and operational risk</span></a><a href="${PREVIEW_PATHS.guides}"><strong>All guides</strong><span>Browse the current article library</span></a></div></div>`;
+  panels.innerHTML=`<div class="mega-panel mega-panel-models" id="mega-models" role="region" aria-labelledby="nav-models" data-menu-panel="models" hidden><div class="mega-layout"><section class="mega-section"><div class="mega-section-head"><h2>Explore models</h2><span>Decision surfaces</span></div><div class="mega-destinations"><a href="${PREVIEW_PATHS.models}"><strong>Models workbench</strong><span>Price, performance and catalog filters</span></a><a href="${PREVIEW_PATHS.modelCatalog}"><strong>Model catalog</strong><span>Search, filter and compare model evidence</span></a><a href="${PREVIEW_PATHS.modelLifecycle}"><strong>Lifecycle radar</strong><span>Retirements, sunset dates and migration paths</span></a></div></section><section class="mega-section mega-top-models"><div class="mega-section-head"><h2>Top Models</h2><span>Live weekly rank · 12 Aug 2026</span></div><div class="mega-model-grid">${topModels}</div></section></div></div><div class="mega-panel mega-panel-compact" id="mega-leaderboards" role="region" aria-labelledby="nav-leaderboards" data-menu-panel="leaderboards" hidden><div class="mega-section-head"><h2>Leaderboards</h2><span>Rank and re-rank models</span></div><div class="mega-destinations"><a href="${PREVIEW_PATHS.popularModels}"><strong>Popular Models</strong><span>Browse top models by quality, performance, and cost.</span></a><a href="${PREVIEW_PATHS.makeItYours}"><strong>Make it yours</strong><span>Adjust six capability weights and SLA thresholds</span></a></div></div><div class="mega-panel mega-panel-compact" id="mega-articles" role="region" aria-labelledby="nav-articles" data-menu-panel="articles" hidden><div class="mega-section-head"><h2>Articles</h2><span>Decision-oriented research</span></div><div class="mega-destinations"><a href="${PREVIEW_PATHS.articles}"><strong>All articles</strong><span>Browse the approved article library</span></a><a href="${PREVIEW_PATHS.articleDetail}"><strong>Hybrid model routing</strong><span>Design a high-stakes agentic routing decision</span></a></div></div>`;
   shell.append(panels);
 
   const triggers=$$('.nav-trigger',nav);
@@ -454,15 +457,37 @@ function setupNavigation(){
 }
 
 function setupGlobalFooter(){
-  if($('.articles-footer'))return;
+  $('.articles-footer')?.remove();
   const footer=document.createElement('footer');
   footer.className='articles-footer';
-  footer.innerHTML=`<div class="shell articles-footer-grid"><section class="articles-footer-brand" aria-label="About TokenBench"><a class="brand" href="${PREVIEW_PATHS.home}"><img class="brand-logo" src="/brand/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><p>Source-aware model, pricing, and workload evidence for practical AI decisions.</p><p class="articles-evidence-warning">Verify provider evidence before purchasing.</p></section><nav class="articles-footer-links" aria-label="Explore"><strong>Explore</strong><a href="${PREVIEW_PATHS.calculator}">Subscribe vs API</a><a href="${PREVIEW_PATHS.pricePerformance}">Price vs performance</a><a href="${PREVIEW_PATHS.popularModels}">Popular models</a><a href="${PREVIEW_PATHS.makeItYours}">Make it yours</a><a href="${PREVIEW_PATHS.compare}">Compare models</a><a href="${PREVIEW_PATHS.guides}">Guides</a></nav><nav class="articles-footer-links" aria-label="Trust"><strong>Trust</strong><a href="${PREVIEW_PATHS.methodology}">Methodology</a><a href="${PREVIEW_PATHS.privacy}">Privacy</a></nav><section class="articles-signup" aria-labelledby="global-signup-title"><h2 id="global-signup-title">LLM API Cost &amp; Benchmark Cheatsheet</h2><p>Preview the monthly model-cost and benchmark cheatsheet signup flow. This prototype does not send a request.</p><form><label>First name <input name="firstName" autocomplete="given-name" required></label><label>Company <input name="company" autocomplete="organization" required></label><label>Email <input name="email" type="email" autocomplete="email" required></label><label class="articles-consent"><input name="consent" type="checkbox"> <span>Notify me when new models are added to TokenBench.</span></label><button class="button primary" type="submit">Preview signup</button><p class="articles-signup-status" aria-live="polite"></p></form></section></div><div class="shell articles-footer-meta"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a></div>`;
+  footer.innerHTML=`<div class="shell articles-footer-grid"><section class="articles-footer-brand" aria-label="About TokenBench"><a class="brand" href="${PREVIEW_PATHS.home}"><img class="brand-logo" src="/brand/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><p>Source-aware model, pricing, and workload evidence for practical AI decisions.</p><p class="articles-evidence-warning">Verify provider evidence before purchasing.</p></section><nav class="articles-footer-links" aria-label="Explore"><strong>Explore</strong><a href="${PREVIEW_PATHS.models}">Models workbench</a><a href="${PREVIEW_PATHS.calculator}">Subscribe vs API</a><a href="${PREVIEW_PATHS.pricePerformance}">Price vs performance</a><a href="${PREVIEW_PATHS.popularModels}">Popular models</a><a href="${PREVIEW_PATHS.makeItYours}">Make it yours</a><a href="${PREVIEW_PATHS.compare}">Compare models</a><a href="${PREVIEW_PATHS.articles}">Articles</a></nav><nav class="articles-footer-links" aria-label="Trust"><strong>Trust</strong><a href="${PREVIEW_PATHS.methodology}">Methodology</a><a href="${PREVIEW_PATHS.privacy}">Privacy</a></nav><section class="articles-signup" aria-labelledby="global-signup-title"><h2 id="global-signup-title">LLM API Cost &amp; Benchmark Cheatsheet</h2><p>Preview the monthly model-cost and benchmark cheatsheet signup flow. This prototype does not send a request.</p><form><label>First name <input name="firstName" autocomplete="given-name" required></label><label>Company <input name="company" autocomplete="organization" required></label><label>Email <input name="email" type="email" autocomplete="email" required></label><label class="articles-consent"><input name="consent" type="checkbox"> <span>Notify me when new models are added to TokenBench.</span></label><button class="button primary" type="submit">Preview signup</button><p class="articles-signup-status" aria-live="polite"></p></form></section></div><div class="shell articles-footer-meta"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a></div>`;
   document.body.append(footer);
   const form=$('form',footer),status=$('.articles-signup-status',footer);
   form?.addEventListener('submit',event=>{event.preventDefault();if(!form.reportValidity())return;status.textContent='Preview complete — no information was sent.'});
 }
 
+function setupPreviewLinkRewrites(){
+  if(document.body.dataset.previewLinksReady==='true')return;
+  document.body.dataset.previewLinksReady='true';
+  const canonicalLinks=new Map([
+    ['/',PREVIEW_PATHS.models],
+    ['/#catalog',PREVIEW_PATHS.modelCatalog],
+    ['/make-it-yours',PREVIEW_PATHS.makeItYours],
+    ['/article-hybrid-router',PREVIEW_PATHS.articleDetail],
+  ]);
+  const rewrite=root=>{
+    const links=root.matches?.('a[href]')?[root]:$$('a[href]',root);
+    links.forEach(anchor=>{
+      const canonical=canonicalLinks.get(anchor.getAttribute('href'));
+      if(canonical)anchor.setAttribute('href',canonical);
+    });
+  };
+  rewrite(document);
+  new MutationObserver(records=>records.forEach(record=>record.addedNodes.forEach(node=>{
+    if(node.nodeType===Node.ELEMENT_NODE)rewrite(node);
+  }))).observe(document.body,{childList:true,subtree:true});
+}
+
 const shellWithHeaderTools=setupShell;
-setupShell=function(){shellWithHeaderTools();setupBrand();setupHeaderTools();setupNavigation();setupGlobalFooter()};
+setupShell=function(){shellWithHeaderTools();setupBrand();setupHeaderTools();setupNavigation();setupGlobalFooter();setupPreviewLinkRewrites()};
 window.TB.setupShell=setupShell;

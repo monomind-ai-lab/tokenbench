@@ -1662,7 +1662,7 @@ test.describe('home and tools route runtime', () => {
     await navigation.getByRole('button', { name: 'Leaderboards', exact: true }).click();
     const leaderboardMenu = page.getByRole('region', { name: 'Leaderboards' });
     await expect(leaderboardMenu.getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
-    await expect(leaderboardMenu.getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours');
+    await expect(leaderboardMenu.getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours/');
     await assertNoHorizontalOverflow(page);
   });
 
@@ -1725,6 +1725,69 @@ test.describe('home and tools route runtime', () => {
     await expect(page.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Available TokenBench tools' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+  });
+});
+
+test.describe('ui-revamp-3 Make it yours controls', () => {
+  test('keeps approved preview navigation and footer destinations on every rebuilt surface', async ({ page }) => {
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+    for (const pathname of ['/models', '/popular-models/', '/make-it-yours/', '/compare', '/articles', '/articles/hybrid-router']) {
+      await page.goto(pathname);
+      await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/models');
+      const footer = page.locator('footer');
+      await expect(footer.getByRole('link', { name: 'Models workbench' }), pathname).toHaveAttribute('href', '/models');
+      await expect(footer.getByRole('link', { name: 'Popular models' }), pathname).toHaveAttribute('href', '/popular-models/');
+      await expect(footer.getByRole('link', { name: 'Make it yours' }), pathname).toHaveAttribute('href', '/make-it-yours/');
+      await expect(footer.getByRole('link', { name: 'Compare models' }), pathname).toHaveAttribute('href', '/compare');
+      await expect(footer.getByRole('link', { name: 'Articles' }), pathname).toHaveAttribute('href', '/articles');
+    }
+  });
+
+  test('reuses the comparison picker pattern for multi-provider filtering and adding models beyond the default top 20', async ({ page }) => {
+    await page.setViewportSize({ width: 1302, height: 1324 });
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+    await page.goto('/make-it-yours/');
+
+    const rankingPanel = page.locator('.ranking-panel');
+    const addModel = rankingPanel.getByRole('button', { name: 'Add a model' });
+    await expect(addModel).toBeVisible();
+
+    await page.getByRole('button', { name: /Filter by provider/ }).click();
+    const providerDialog = page.getByRole('dialog', { name: 'Filter leaderboard by provider' });
+    await expect(providerDialog).toHaveClass(/compare-model-picker-panel/);
+    await providerDialog.getByRole('option', { name: /Anthropic/ }).click();
+    await expect(providerDialog).toBeVisible();
+    await providerDialog.getByRole('option', { name: /Meta/ }).click();
+    await expect(page.getByRole('button', { name: /Filter by provider/ })).toContainText('2 selected');
+
+    const providerSearch = providerDialog.getByRole('combobox', { name: 'Search providers' });
+    await providerSearch.fill('Amazon');
+    await providerDialog.getByRole('option', { name: /Amazon/ }).click();
+    await providerSearch.fill('');
+    await providerDialog.getByRole('option', { name: /All providers/ }).click();
+    await page.keyboard.press('Escape');
+
+    await addModel.click();
+    const modelDialog = rankingPanel.getByRole('dialog', { name: 'Add a model' });
+    await modelDialog.getByRole('combobox', { name: 'Search models or providers' }).fill('Nova Pro');
+    await modelDialog.getByRole('option', { name: /Nova Pro/ }).click();
+    await expect(rankingPanel.getByRole('list', { name: 'Models added to weighted ranking' })).toContainText('Nova Pro');
+
+    await rankingPanel.getByText('Semantic ranking table').click();
+    await expect(rankingPanel.getByRole('region', { name: 'Ranked model evidence' }).getByRole('link', { name: 'Nova Pro' })).toBeVisible();
+
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.goto('/make-it-yours/');
+    const compactRanking = page.locator('.ranking-panel');
+    await compactRanking.getByRole('button', { name: 'Add a model' }).click();
+    const compactPanel = compactRanking.getByRole('dialog', { name: 'Add a model' });
+    const geometry = await compactPanel.evaluate((panel) => {
+      const rect = panel.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(geometry.clientWidth);
+    expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
   });
 });
 

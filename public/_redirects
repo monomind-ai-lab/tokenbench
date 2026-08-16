@@ -1,9 +1,11 @@
+/ /models 301
+/article-hybrid-router /articles/hybrid-router 301
 /guides /guides/ 301
 /guides/track-claude-code-usage /guides/track-claude-code-usage/ 301
 /guides/monitor-openai-codex-usage /guides/monitor-openai-codex-usage/ 301
 /guides/openrouter-guide-model-routing-cost-controls /guides/openrouter-guide-model-routing-cost-controls/ 301
 /guides/legitimate-free-ai-api-access-credits /guides/legitimate-free-ai-api-access-credits/ 301
 /guides/reduce-llm-api-costs-caching-batch-output-limits /guides/reduce-llm-api-costs-caching-batch-output-limits/ 301
-/custom-leaderboard.html /make-it-yours 301
-/custom-leaderboard /make-it-yours 301
-/prototypes/ui-revamp-3/custom-leaderboard.html /make-it-yours 301
+/custom-leaderboard.html /make-it-yours/ 301
+/custom-leaderboard /make-it-yours/ 301
+/prototypes/ui-revamp-3/custom-leaderboard.html /make-it-yours/ 301
