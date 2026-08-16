@@ -2204,27 +2204,36 @@ test.describe('responsive compare hub coverage', () => {
     expect(new URL(page.url()).searchParams.get('models')).toBe('deepseek-v3,llama-3-3-70b');
   });
 
-  test('keeps the approved compare hub readable at 320 and 1440 in both themes', async ({ page }) => {
-    const origin = previewOrigin();
-    await blockExternalRequests(page, origin);
-    await stubBenchmarkDirectory(page, origin, comparisonDirectoryEnvelope());
+  test('keeps the dedicated preview comparison responsive at 320 and 1440 in both themes', async ({ page }) => {
+    for (const width of [320, 1440] as const) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto('/compare/?models=deepseek-v3%2Cllama-3-3-70b', { waitUntil: 'domcontentloaded' });
 
-    for (const viewport of [
-      { width: 320, layout: 'compact' },
-      { width: 1440, layout: 'wide' },
-    ] as const) {
-      await page.setViewportSize({ width: viewport.width, height: 1000 });
-      for (const theme of ['dark', 'light'] as const) {
-        await setStoredTheme(page, theme);
-        await page.goto('/compare/', { waitUntil: 'domcontentloaded' });
+      const themeToggle = page.getByRole('button', { name: 'Switch to dark theme' });
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expect(page.getByRole('heading', { name: 'Compare models', level: 1 })).toBeVisible();
+      await expect(page.locator('#compare-result')).toBeVisible();
 
-        await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-        await expect(page.locator('.app-shell')).toHaveAttribute('data-layout', viewport.layout);
-        await expect(page.locator('.comparison-hub-page')).toBeVisible();
-        await expect(page.getByRole('heading', { name: 'Compare models side by side', level: 1 })).toBeVisible();
-        await expect(page.getByText('Choose two models to compare benchmark performance, API pricing, context limits, and evidence coverage.')).toBeVisible();
-        await expect(page.getByText(/Published revision:/)).toHaveCount(0);
+      await themeToggle.click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+      await expect(page.getByRole('button', { name: 'Switch to light theme' })).toBeVisible();
+      await assertNoHorizontalOverflow(page);
+
+      await page.getByRole('button', { name: 'Switch to light theme' }).click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+      if (width === 320) {
+        const summaryPanels = page.locator('.compare-summary-grid > .panel');
+        await expect(summaryPanels).toHaveCount(2);
+        const layout = await summaryPanels.evaluateAll((panels) => {
+          const [radarPanel, capabilityPanel] = panels.map((panel) => panel.getBoundingClientRect());
+          return { radarBottom: radarPanel!.bottom, capabilityTop: capabilityPanel!.top };
+        });
+        expect(layout.capabilityTop).toBeGreaterThanOrEqual(layout.radarBottom);
+        await expect(page.locator('#compare-capability-table').getByRole('list', { name: 'Exact capability comparison by metric' })).toBeVisible();
         await assertNoHorizontalOverflow(page);
+      } else {
+        await expect(page.locator('.compare-capability-panel').getByRole('table', { name: 'Exact capability comparison' })).toBeVisible();
       }
     }
   });
