@@ -6,6 +6,12 @@
   <meta name="description" content="An illustrative monthly subscription versus API cost calculator for TokenBench preview data.">
   <title>Monthly cost calculator — TokenBench</title>
   <link rel="stylesheet" href="styles.css">
+  <style data-calculator-print>
+    @media print {
+      .calculator-print-safe.toolbar { display: flex !important; }
+      .calculator-action-controls { display: none !important; }
+    }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -17,7 +23,7 @@
   </header>
 
   <main id="monthly-cost-calculator" class="shell page">
-    <section class="toolbar calculator-heading" aria-labelledby="calculator-title">
+    <section class="toolbar calculator-heading calculator-print-safe" aria-labelledby="calculator-title">
       <div>
         <p class="label">Cost tools / Monthly estimate</p>
         <h1 id="calculator-title" class="headline">Monthly cost simulator</h1>
@@ -34,7 +40,7 @@
     <hr class="rule">
 
     <form id="cost-calculator-form" class="panel calculator-form" novalidate>
-      <div class="toolbar">
+      <div class="toolbar calculator-print-safe">
         <div>
           <h2 class="section-title">Workload and subscription inputs</h2>
           <p class="lede">Every control is included in the shareable scenario URL.</p>
@@ -81,10 +87,11 @@
           <p>When a cache-write rate is unavailable in a model fixture, the derived estimate uses that model’s standard input rate and says so in the source table.</p>
         </aside>
       </div>
+      <p id="calculator-validation-status" class="error" role="status" aria-live="polite" hidden></p>
     </form>
 
     <section class="calculator-results" aria-labelledby="monthly-summary-title">
-      <div class="toolbar">
+      <div class="toolbar calculator-print-safe">
         <div>
           <h2 id="monthly-summary-title" class="section-title">Monthly API / SaaS summary</h2>
           <p id="calculator-live-summary" class="lede" aria-live="polite"></p>
@@ -107,7 +114,7 @@
 
     <section class="grid-2 calculator-evidence-grid" aria-label="Price sources and derived monthly lines">
       <article class="panel">
-        <div class="toolbar"><div><h2 class="section-title">Source price fixtures</h2><p class="fixture">Raw values from the selected <code>TB_MODELS</code> record.</p></div><span class="tag">Source data</span></div>
+        <div class="toolbar calculator-print-safe"><div><h2 class="section-title">Source price fixtures</h2><p class="fixture">Raw values from the selected <code>TB_MODELS</code> record.</p></div><span class="tag">Source data</span></div>
         <div class="table-wrap" role="region" aria-label="Selected model source prices" tabindex="0">
           <table data-evidence="source-price">
             <caption>Source price fixtures</caption>
@@ -118,7 +125,7 @@
       </article>
 
       <article class="panel">
-        <div class="toolbar"><div><h2 class="section-title">Derived monthly line items</h2><p class="fixture">Exact scenario arithmetic before display rounding.</p></div><span class="tag">Derived</span></div>
+        <div class="toolbar calculator-print-safe"><div><h2 class="section-title">Derived monthly line items</h2><p class="fixture">Exact scenario arithmetic before display rounding.</p></div><span class="tag">Derived</span></div>
         <div class="table-wrap" role="region" aria-label="Derived monthly API line items" tabindex="0">
           <table data-evidence="derived-monthly">
             <caption>Derived monthly line items</caption>
@@ -144,8 +151,10 @@
     </section>
 
     <section class="panel calculator-actions" aria-labelledby="export-title">
-      <div class="toolbar">
+      <div class="toolbar calculator-print-safe">
         <div><h2 id="export-title" class="section-title">Export or share this scenario</h2><p class="lede">The URL carries valid input values only.</p></div>
+      </div>
+      <div class="toolbar calculator-action-controls">
         <div class="control-row" role="group" aria-label="Calculator actions">
           <button class="toggle" id="download-csv" type="button">Download CSV</button>
           <button class="toggle" id="print-calculator" type="button">Print</button>

@@ -44,3 +44,13 @@ Complete. The preview-only monthly cost simulator is implemented in the assigned
 
 - Subscription tier amounts and all `TB_MODELS` prices are illustrative preview fixtures. They must not be treated as current commercial pricing.
 - The root integration must copy the document and script and rewrite asset paths for `/cost/calculator`; this task deliberately left copier/shared-style files untouched.
+
+## Fix round 1
+
+Task review identified three scoped concerns and they are resolved without touching shared CSS:
+
+- Missing or empty URL values no longer parse as numeric zero (`Number(null)`); visible numeric controls reset to their safe defaults before calculation and URL serialization.
+- Invalid numeric edits reset the control, announce the affected labels in `#calculator-validation-status`, and keep derived line items and shared state on the same normalized values.
+- Print-safe heading wrappers override the global `.toolbar` print hide only for required section headings; action controls use a separate scoped toolbar that remains hidden in print. The unused `preciseMoney` helper was removed.
+
+Fix verification: `npm test -- scripts/cost-calculator-preview.test.ts` — 1 test file passed; 7 tests passed.

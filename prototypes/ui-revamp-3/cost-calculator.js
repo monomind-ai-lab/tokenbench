@@ -28,7 +28,6 @@
   };
   const field = name => document.querySelector(`[name="${name}"]`);
   const money = value => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
-  const preciseMoney = value => `$${Number(value).toFixed(6)}`;
   const tokenCount = value => new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
   const finite = value => Number.isFinite(value) ? value : null;
   const hasRate = value => finite(value) !== null && value >= 0;
@@ -37,6 +36,7 @@
   const eligibleModels = () => (window.TB_MODELS || []).filter(model => hasRate(model.inputPrice) && hasRate(model.outputPrice));
 
   function validInteger(value, bounds) {
+    if (value === null || value === undefined || value === '') return null;
     const number = Number(value);
     if (!Number.isFinite(number) || !Number.isInteger(number) || number < bounds.min || number > bounds.max) return null;
     return number;
@@ -56,9 +56,18 @@
   }
 
   function readState() {
-    const state = { tier: field('tier').value, model: field('model').value, longContext: field('longContext').checked };
+    const invalidFields = [];
+    const state = { tier: field('tier').value, model: field('model').value, longContext: field('longContext').checked, invalidFields };
     Object.entries(NUMBER_FIELDS).forEach(([name, bounds]) => {
-      state[name] = validInteger(field(name).value, bounds) ?? DEFAULTS[name];
+      const control = field(name);
+      const value = validInteger(control.value, bounds);
+      if (value === null) {
+        state[name] = DEFAULTS[name];
+        control.value = String(DEFAULTS[name]);
+        invalidFields.push(name);
+      } else {
+        state[name] = value;
+      }
     });
     return state;
   }
@@ -147,6 +156,18 @@
     document.querySelector('#calculation-timestamp').textContent = new Date().toISOString();
   }
 
+  function writeValidation(state) {
+    const status = document.querySelector('#calculator-validation-status');
+    if (!state.invalidFields.length) {
+      status.hidden = true;
+      status.textContent = '';
+      return;
+    }
+    const labels = state.invalidFields.map(name => field(name).labels?.[0]?.textContent?.trim() || name);
+    status.hidden = false;
+    status.textContent = `Invalid values reset to safe defaults: ${labels.join(', ')}.`;
+  }
+
   function writeUrl(state) {
     const params = new URLSearchParams();
     params.set('tier', state.tier);
@@ -210,6 +231,7 @@
   function renderPage() {
     const state = readState();
     const result = calculate(state);
+    writeValidation(state);
     writeSourceRates(result);
     writeItems(result);
     writeSummary(state, result);

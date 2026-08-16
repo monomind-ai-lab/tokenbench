@@ -146,6 +146,19 @@ describe('monthly cost calculator preview', () => {
     expect(second.document.querySelector<HTMLInputElement>('[name="longContext"]')?.checked).toBe(true);
   });
 
+  it('normalizes an invalid numeric input before deriving totals or sharing state', () => {
+    const page = previewPage();
+    const conversations = page.document.querySelector<HTMLInputElement>('[name="conversationsPerDay"]');
+    expect(conversations).not.toBeNull();
+    conversations!.value = '10001';
+    conversations!.dispatchEvent(new page.window.Event('input', { bubbles: true }));
+
+    expect(conversations?.value).toBe('5');
+    expect(page.document.querySelector('#calculator-validation-status')?.textContent).toMatch(/invalid.*reset/i);
+    expect(new URL(page.window.location.href).searchParams.get('conversationsPerDay')).toBe('5');
+    expect(page.document.querySelector('[data-line-item="input-standard"]')?.textContent).toContain('792,000');
+  });
+
   it('exports the current estimate as an accessible CSV download', async () => {
     const page = previewPage();
     page.document.querySelector<HTMLButtonElement>('#download-csv')?.click();
@@ -165,5 +178,13 @@ describe('monthly cost calculator preview', () => {
     expect(page.document.querySelector('#calculator-action-status')?.textContent).toMatch(/copying share link/i);
     expect(page.copy).toHaveBeenCalledWith(expect.stringContaining('model='));
     await vi.waitFor(() => expect(page.document.querySelector('#calculator-action-status')?.textContent).toMatch(/share link copied/i));
+  });
+
+  it('keeps required section headings print-visible while scoping the action toolbar away', () => {
+    const page = previewPage();
+    const printSafeToolbars = page.document.querySelectorAll('.calculator-print-safe.toolbar');
+    expect(printSafeToolbars.length).toBeGreaterThanOrEqual(6);
+    expect(page.document.querySelector('.calculator-action-controls.toolbar')).not.toHaveClass('calculator-print-safe');
+    expect(page.document.querySelector('style[data-calculator-print]')?.textContent).toContain('.calculator-print-safe.toolbar');
   });
 });
