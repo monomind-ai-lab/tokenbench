@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LEADERBOARD_ROUTES, matchRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
+import { LEADERBOARD_ROUTES, matchRoute, PREVIEW_ROUTE_PATHS, previewModelProfilePath, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
 
 const APPROVED_LEADERBOARD_TITLES = {
   'llm-overall': 'Overall benchmarks',
@@ -90,6 +90,13 @@ describe('TokenBench route registry', () => {
     expect(matchRoute('/tools/')).toEqual({ kind: 'tools' });
     expect(LEADERBOARD_ROUTES['llm-overall'].navigationLabel).toBe('Overall benchmarks');
     expect(LEADERBOARD_ROUTES['llm-agentic'].navigationLabel).toBe('Agentic performance');
+  });
+
+  it('keeps preview chrome destinations separate from production route contracts', () => {
+    expect(PREVIEW_ROUTE_PATHS.models).toBe('/#catalog');
+    expect(PREVIEW_ROUTE_PATHS.compare).toBe('/compare');
+    expect(PREVIEW_ROUTE_PATHS.makeItYours).toBe('/make-it-yours');
+    expect(previewModelProfilePath('GPT 5.6/Sol')).toBe('/model-profile?model=GPT%205.6%2FSol');
   });
 
   it('does not turn unknown fixed-path candidates into published pages', () => {

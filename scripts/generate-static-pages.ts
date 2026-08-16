@@ -19,7 +19,7 @@ function activeNavigation(route: AppRoute): StaticNavigationPage {
     case 'home': return 'home';
     case 'compareHub': return 'compare';
     case 'models': return 'models';
-    case 'popularModels': return 'leaderboards';
+    case 'popularModels': return 'popularModels';
     case 'newsletterConfirmed':
     case 'welcome':
     case 'privacy': return undefined;

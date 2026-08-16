@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Languages, Menu, Moon, Sun, X } from 'lucide-react';
 import { SITE_CONFIG } from '../brand/site-config';
-import { ROUTE_PATHS, type SiteNavigationPage } from '../routing/routes';
+import { PREVIEW_ROUTE_PATHS, previewModelProfilePath, type SiteNavigationPage } from '../routing/routes';
 import { LANGUAGES } from '../types';
 import { POPULAR_MODELS_FIXTURE } from './popular-models/fixtures';
 import { getResponsiveLayout } from './responsive';
@@ -73,11 +73,11 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
       <div className="brand-lockup"><a className="brand-home" href="/" aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span></span></a></div>
       <button type="button" className="menu-button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => { setMobileMenuOpen((current) => !current); setOpenMenu(null); }}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
       <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
-        <a href={ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={closeNavigation}>Home</a>
+        <a href={PREVIEW_ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={closeNavigation}>Home</a>
         <button id="primary-models-menu" className="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded={openMenu === 'models'} aria-controls="primary-models-panel" aria-current={activePage === 'models' || activePage === 'pricePerformance' ? 'page' : undefined} onClick={() => toggleMenu('models')}>Models <ChevronDown aria-hidden="true" size={13} /></button>
         <button id="primary-leaderboards-menu" className="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded={openMenu === 'leaderboards'} aria-controls="primary-leaderboards-panel" aria-current={activePage === 'leaderboards' ? 'page' : undefined} onClick={() => toggleMenu('leaderboards')}>Leaderboards <ChevronDown aria-hidden="true" size={13} /></button>
-        <a href={ROUTE_PATHS.compareHub} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={closeNavigation}>Compare</a>
-        <a href={ROUTE_PATHS.calculator} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={closeNavigation}>Subscribe vs API</a>
+        <a href={PREVIEW_ROUTE_PATHS.compare} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={closeNavigation}>Compare</a>
+        <a href={PREVIEW_ROUTE_PATHS.calculator} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={closeNavigation}>Subscribe vs API</a>
         <button id="primary-articles-menu" className="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded={openMenu === 'articles'} aria-controls="primary-articles-panel" aria-current={activePage === 'guides' ? 'page' : undefined} onClick={() => toggleMenu('articles')}>Articles <ChevronDown aria-hidden="true" size={13} /></button>
       </nav>
       <div className="header-actions">
@@ -90,29 +90,29 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
             <div className="primary-nav-mega-section">
               <div className="primary-nav-mega-heading"><h2>Explore models</h2><span>Decision surfaces</span></div>
               <div className="primary-nav-mega-destinations">
-                <a href={ROUTE_PATHS.models} onClick={closeNavigation}><strong>Models workbench</strong><span>Search and compare current model evidence</span></a>
-                <a href={ROUTE_PATHS.pricePerformance} onClick={closeNavigation}><strong>Price vs performance</strong><span>Inspect the supported value frontier</span></a>
-                <a href={ROUTE_PATHS.compareHub} onClick={closeNavigation}><strong>Compare models</strong><span>Build a focused side-by-side decision</span></a>
+                <a href={PREVIEW_ROUTE_PATHS.models} onClick={closeNavigation}><strong>Models workbench</strong><span>Search and compare current model evidence</span></a>
+                <a href={PREVIEW_ROUTE_PATHS.pricePerformance} onClick={closeNavigation}><strong>Price vs performance</strong><span>Inspect the supported value frontier</span></a>
+                <a href={PREVIEW_ROUTE_PATHS.compare} onClick={closeNavigation}><strong>Compare models</strong><span>Build a focused side-by-side decision</span></a>
               </div>
             </div>
             <div className="primary-nav-mega-section primary-nav-top-models">
               <div className="primary-nav-mega-heading"><h2>Top Models</h2><span>Illustrative preview order</span></div>
-              <div className="primary-nav-model-grid">{HEADER_TOP_MODELS.map((model, index) => <a className="primary-nav-model-link" href={`${ROUTE_PATHS.models}${encodeURIComponent(model.slug)}/`} onClick={closeNavigation} key={model.id}><span>#{index + 1}</span><span><strong>{model.name}</strong><small>{model.organization}</small></span><span>{model.overallScore.toFixed(1)}</span></a>)}</div>
+              <div className="primary-nav-model-grid">{HEADER_TOP_MODELS.map((model, index) => <a className="primary-nav-model-link" href={previewModelProfilePath(model.slug)} onClick={closeNavigation} key={model.id}><span>#{index + 1}</span><span><strong>{model.name}</strong><small>{model.organization}</small></span><span>{model.overallScore.toFixed(1)}</span></a>)}</div>
             </div>
           </div>
         </section>
         <section id="primary-leaderboards-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-leaderboards-menu" hidden={openMenu !== 'leaderboards'}>
           <div className="primary-nav-mega-heading"><h2>Leaderboards</h2><span>Rank and re-rank models</span></div>
           <div className="primary-nav-mega-destinations">
-            <a href={ROUTE_PATHS.popularModels} onClick={closeNavigation}><strong>Popular Models</strong><span>Browse top models by quality, performance, and cost.</span></a>
-            <a href="/make-it-yours/" onClick={closeNavigation}><strong>Make it yours</strong><span>Adjust six capability weights and SLA thresholds</span></a>
+            <a href={PREVIEW_ROUTE_PATHS.popularModels} onClick={closeNavigation}><strong>Popular Models</strong><span>Browse top models by quality, performance, and cost.</span></a>
+            <a href={PREVIEW_ROUTE_PATHS.makeItYours} onClick={closeNavigation}><strong>Make it yours</strong><span>Adjust six capability weights and SLA thresholds</span></a>
           </div>
         </section>
         <section id="primary-articles-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-articles-menu" hidden={openMenu !== 'articles'}>
           <div className="primary-nav-mega-heading"><h2>Articles &amp; guides</h2><span>Decision-oriented research</span></div>
           <div className="primary-nav-mega-destinations">
-            <a href={ROUTE_PATHS.guides} onClick={closeNavigation}><strong>All guides</strong><span>Browse the current article library</span></a>
-            <a href="/guides/openrouter-guide-model-routing-cost-controls/" onClick={closeNavigation}><strong>Model routing &amp; cost controls</strong><span>Route workloads with explicit quality and cost boundaries</span></a>
+            <a href={PREVIEW_ROUTE_PATHS.guides} onClick={closeNavigation}><strong>All guides</strong><span>Browse the current article library</span></a>
+            <a href={`${PREVIEW_ROUTE_PATHS.guides}openrouter-guide-model-routing-cost-controls/`} onClick={closeNavigation}><strong>Model routing &amp; cost controls</strong><span>Route workloads with explicit quality and cost boundaries</span></a>
           </div>
         </section>
       </div>
@@ -135,18 +135,17 @@ export function SiteFooter({ disclaimer }: SiteFooterProps) {
       </section>
       <nav className="footer-links" aria-label="Explore">
         <strong>Explore</strong>
-        <a href={ROUTE_PATHS.calculator}>Subscribe vs API</a>
-        <a href={ROUTE_PATHS.pricePerformance}>Price vs performance</a>
-        <a href={ROUTE_PATHS.popularModels}>Popular models</a>
-        <a href="/make-it-yours/">Make it yours</a>
-        <a href={ROUTE_PATHS.compareHub}>Compare models</a>
-        <a href={ROUTE_PATHS.leaderboards}>Leaderboards</a>
-        <a href={ROUTE_PATHS.guides}>Guides</a>
+        <a href={PREVIEW_ROUTE_PATHS.calculator}>Subscribe vs API</a>
+        <a href={PREVIEW_ROUTE_PATHS.pricePerformance}>Price vs performance</a>
+        <a href={PREVIEW_ROUTE_PATHS.popularModels}>Popular models</a>
+        <a href={PREVIEW_ROUTE_PATHS.makeItYours}>Make it yours</a>
+        <a href={PREVIEW_ROUTE_PATHS.compare}>Compare models</a>
+        <a href={PREVIEW_ROUTE_PATHS.guides}>Guides</a>
       </nav>
       <nav className="footer-links" aria-label="Trust">
         <strong>Trust</strong>
-        <a href={ROUTE_PATHS.methodologyBenchAlign}>Methodology</a>
-        <a href="/privacy/">Privacy</a>
+        <a href={PREVIEW_ROUTE_PATHS.methodologyBenchAlign}>Methodology</a>
+        <a href={PREVIEW_ROUTE_PATHS.privacy}>Privacy</a>
       </nav>
       <NewsletterSignup context="footer" />
     </div>

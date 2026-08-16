@@ -1,4 +1,4 @@
-// The route is published as /make-it-yours/; this script stays path-relative so the preview bundle is self-contained.
+// The route is published as /make-it-yours; this script stays path-relative so the preview bundle is self-contained.
 (() => {
   setupShell();
 
@@ -116,7 +116,7 @@
         },
         onClick: (event, _active, instance) => {
           const model = modelForChartRow(instance, event, models);
-          if (model) location.href = `model-profile.html?model=${encodeURIComponent(model.id)}`;
+          if (model) location.href = `/model-profile?model=${encodeURIComponent(model.id)}`;
         },
         plugins: { legend: { display: false } },
         scales: {

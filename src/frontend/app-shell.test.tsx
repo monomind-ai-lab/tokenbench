@@ -160,7 +160,7 @@ describe('responsive calculator app shell', () => {
     renderAt('/');
 
     expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Compare models' })[0]).toHaveAttribute('href', '/compare/');
+    expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare');
     expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('region', { name: 'Market at a glance' })).toBeInTheDocument();
@@ -507,7 +507,7 @@ describe('responsive calculator app shell', () => {
     fireEvent.click(within(navigation).getByRole('button', { name: 'Leaderboards' }));
     const menu = screen.getByRole('region', { name: 'Leaderboards' });
     expect(within(menu).getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
-    expect(within(menu).getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours/');
+    expect(within(menu).getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours');
   });
 
   it('defaults a no-storage document to dark and persists both TokenBench theme choices', async () => {

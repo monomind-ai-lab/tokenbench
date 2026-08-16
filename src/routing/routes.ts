@@ -17,6 +17,36 @@ export const ROUTE_PATHS = {
   privacy: '/privacy/',
 } as const;
 
+/**
+ * Canonical destinations for the ui-revamp-3 preview surfaces.
+ *
+ * The production React directory still owns the legacy `/models/` and
+ * `/compare/` route contracts. The combined preview, however, publishes the
+ * rebuilt workbench and comparison surfaces at the prototype routes below.
+ * Keeping these destinations separate prevents shared chrome from sending
+ * preview users back to the production directory while preserving the data
+ * and API route contracts used by the React application.
+ */
+export const PREVIEW_ROUTE_PATHS = {
+  home: '/',
+  models: '/#catalog',
+  compare: '/compare',
+  modelProfile: '/model-profile',
+  modelLifecycle: '/model-lifecycle',
+  popularModels: '/popular-models/',
+  makeItYours: '/make-it-yours',
+  guides: '/guides/',
+  articles: '/articles',
+  calculator: '/tools/subscriptions-vs-apis/',
+  pricePerformance: '/llm-price-performance/',
+  methodologyBenchAlign: '/methodology/benchalign/',
+  privacy: '/privacy/',
+} as const;
+
+export function previewModelProfilePath(slug: string): string {
+  return `${PREVIEW_ROUTE_PATHS.modelProfile}?model=${encodeURIComponent(slug)}`;
+}
+
 export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'popularModels' | 'compare' | 'leaderboards' | 'guides';
 
 export const LEADERBOARD_ROUTES = {

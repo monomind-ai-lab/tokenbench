@@ -7,5 +7,9 @@ describe('static site chrome', () => {
 
     expect(html).toContain('<a href="/llm-price-performance/" aria-current="page">Price vs Performance</a>');
     expect(html).toContain('<a href="/llm-price-performance/">Price vs performance</a>');
+    expect(html).toContain('<a href="/#catalog">Models</a>');
+    expect(html).toContain('<a href="/compare">Compare</a>');
+    expect(html).toContain('<a href="/make-it-yours">Make it yours</a>');
+    expect(html).not.toContain('href="/leaderboards/"');
   });
 });

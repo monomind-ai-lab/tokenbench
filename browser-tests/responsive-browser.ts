@@ -1662,7 +1662,7 @@ test.describe('home and tools route runtime', () => {
     await navigation.getByRole('button', { name: 'Leaderboards', exact: true }).click();
     const leaderboardMenu = page.getByRole('region', { name: 'Leaderboards' });
     await expect(leaderboardMenu.getByRole('link', { name: /Popular Models/ })).toHaveAttribute('href', '/popular-models/');
-    await expect(leaderboardMenu.getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours/');
+    await expect(leaderboardMenu.getByRole('link', { name: /Make it yours/ })).toHaveAttribute('href', '/make-it-yours');
     await assertNoHorizontalOverflow(page);
   });
 
