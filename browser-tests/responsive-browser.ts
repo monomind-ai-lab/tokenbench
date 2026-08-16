@@ -1767,6 +1767,29 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
   });
 
+  test('keeps weighted score insights synchronized with the visible ranking', async ({ page }) => {
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: `window.Chart=class Chart{static charts=new WeakMap();constructor(canvas,configuration){this.canvas=canvas;this.configuration=configuration;Chart.charts.set(canvas,this)}static getChart(canvas){return Chart.charts.get(canvas)||null}destroy(){Chart.charts.delete(this.canvas)}update(){}};`,
+    }));
+    await page.goto('/make-it-yours/');
+
+    await expect(page.getByRole('button', { name: 'List view' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('region', { name: 'Ranked model evidence' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Weighted score vs. cost' })).toBeVisible();
+    await expect(page.getByRole('img', { name: /Weighted score versus blended cost/ })).toBeVisible();
+    await expect(page.getByRole('img', { name: /Weighted score ranking by blended cost/ })).toBeVisible();
+
+    const disclosure = page.getByText('Exact weighted score and cost values').locator('..');
+    await disclosure.click();
+    const exactTable = disclosure.getByRole('table');
+    await expect(exactTable).toBeVisible();
+    const before = await exactTable.innerText();
+    await page.locator('#weight-agentic').fill('100');
+    await expect(exactTable).not.toHaveText(before);
+  });
+
   test('reuses the comparison picker pattern for multi-provider filtering and adding models beyond the default top 20', async ({ page }) => {
     await page.setViewportSize({ width: 1302, height: 1324 });
     await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());

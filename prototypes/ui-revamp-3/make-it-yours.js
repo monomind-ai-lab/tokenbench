@@ -5,7 +5,7 @@
   const domains = ['agentic', 'coding', 'reasoning', 'math', 'multimodal', 'throughput'];
   const maxRankedModels = 20;
   const providers = [...new Set(TB_MODELS.map(model => model.provider))].sort((a, b) => a.localeCompare(b));
-  let view = 'cards';
+  let view = 'rows';
   let ttft = .8;
   let tps = 60;
   let showExcluded = true;
@@ -141,6 +141,113 @@
     });
   }
 
+  function weightedFrontier(models) {
+    let bestScore = Number.NEGATIVE_INFINITY;
+    return [...models]
+      .sort((left, right) => left.cost - right.cost)
+      .filter(model => {
+        const currentScore = score(model);
+        if (currentScore <= bestScore) return false;
+        bestScore = currentScore;
+        return true;
+      });
+  }
+
+  function renderWeightedInsightTable(models, { cheapestFirst = false } = {}) {
+    const orderedModels = cheapestFirst ? [...models].sort((left, right) => left.cost - right.cost) : models;
+    const frontierIds = new Set(weightedFrontier(models).map(model => model.id));
+    return `<div class="table-wrap" role="region" aria-label="Exact weighted score and cost values" tabindex="0"><table><thead><tr><th scope="col">${cheapestFirst ? 'Cost rank' : 'Weighted rank'}</th><th scope="col">Model / profile</th><th scope="col">Provider</th><th scope="col">Weighted score</th><th scope="col">Blended $ / 1M</th><th scope="col">Frontier</th><th scope="col">SLA result</th></tr></thead><tbody>${orderedModels.map((model, index) => `<tr><td>${index + 1}</td><th scope="row">${link(model)}</th><td><span class="provider-dot" style="background:${model.color}"></span>${escapeHtml(model.provider)}</td><td>${score(model).toFixed(1)}</td><td>$${model.cost.toFixed(2)}</td><td>${frontierIds.has(model.id) ? 'Weighted frontier' : 'Dominated'}</td><td>${meetsSla(model) ? 'Pass' : 'Outside threshold'}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+
+  function renderWeightedScoreCostChart(models) {
+    const palette = colors();
+    const frontier = weightedFrontier(models);
+    const canvas = $('#weighted-score-cost-chart');
+    const point = model => ({ x: model.cost, y: score(model), modelId: model.id, name: model.name });
+    chart(canvas, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: 'Visible models',
+            data: models.map(point),
+            backgroundColor: models.map(model => model.color),
+            borderColor: palette.line,
+            borderWidth: 1,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'Weighted frontier',
+            data: frontier.map(point),
+            backgroundColor: palette.plum,
+            borderColor: palette.plum,
+            borderWidth: 2,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            showLine: true,
+            tension: 0
+          }
+        ]
+      },
+      options: {
+        onHover: (event, elements) => {
+          const target = event.native?.target;
+          if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+        },
+        onClick: (_event, elements, instance) => {
+          const active = elements[0];
+          const selected = active && instance.data.datasets[active.datasetIndex]?.data[active.index];
+          if (selected?.modelId) location.href = `/model-profile?model=${encodeURIComponent(selected.modelId)}`;
+        },
+        plugins: {
+          legend: { labels: { color: palette.muted, usePointStyle: true, boxWidth: 10 } },
+          tooltip: {
+            callbacks: {
+              label: context => `${context.raw.name}: ${context.raw.y.toFixed(1)} score · $${context.raw.x.toFixed(2)} / 1M`
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'logarithmic',
+            title: { display: true, text: 'Blended $ / 1M', color: palette.muted },
+            ticks: { color: palette.muted },
+            grid: { color: palette.line }
+          },
+          y: {
+            title: { display: true, text: 'Weighted score', color: palette.muted },
+            ticks: { color: palette.muted },
+            grid: { color: palette.line }
+          }
+        }
+      }
+    });
+  }
+
+  function renderWeightedInsights(models) {
+    const scatterCanvas = $('#weighted-score-cost-chart');
+    const costCanvas = $('#weighted-cost-ranking-chart');
+    if (!models.length) {
+      if (typeof Chart !== 'undefined') {
+        Chart.getChart(scatterCanvas)?.destroy();
+        Chart.getChart(costCanvas)?.destroy();
+      }
+      const message = 'No visible weighted results. Reset a filter or show outside-SLA models to restore the score and cost evidence.';
+      $('#weighted-score-cost-table').innerHTML = emptyState(message);
+      $('#weighted-cost-ranking-table').innerHTML = emptyState(message);
+      $('#weighted-insight-status').textContent = 'Weighted score and cost insights are paused until a visible result is available.';
+      return;
+    }
+
+    const cheapestFirst = [...models].sort((left, right) => left.cost - right.cost);
+    $('#weighted-score-cost-table').innerHTML = renderWeightedInsightTable(models);
+    $('#weighted-cost-ranking-table').innerHTML = renderWeightedInsightTable(models, { cheapestFirst: true });
+    $('#weighted-insight-status').textContent = `${models.length} visible model${models.length === 1 ? '' : 's'} · ${weightedFrontier(models).length} on the weighted frontier.`;
+    renderWeightedScoreCostChart(models);
+    horizontal('weighted-cost-ranking-chart', cheapestFirst, model => score(model), 'Weighted score', () => true);
+  }
+
   function emptyState(message) {
     return `<div class="leaderboard-empty empty"><p>${escapeHtml(message)}</p><button class="toggle" type="button" data-reset-leaderboard-filters>Reset filters</button></div>`;
   }
@@ -244,6 +351,7 @@
       $('#rank-alt').innerHTML = emptyState(message);
       $('#output').innerHTML = emptyState(message);
     }
+    renderWeightedInsights(visibleModels);
 
     $('#pass').textContent = `${qualified.length} / ${filteredCandidates.length} pass`;
     if (filteredCandidates.length) {
@@ -366,7 +474,7 @@
     announce('Filters reset. Showing the full top-20 candidate set.');
   }
 
-  function shareUrl() {
+  function shareUrl(anchor = 'weighted-ranking') {
     const url = new URL(location.origin + location.pathname);
     url.searchParams.set('access', accessFilter);
     if (providerFilters.size) url.searchParams.set('provider', [...providerFilters].join(','));
@@ -376,7 +484,7 @@
     url.searchParams.set('tps', String(tps));
     url.searchParams.set('view', view);
     url.searchParams.set('weights', domains.map(domain => `${domain}:${Number(TB.weights[domain]).toFixed(2)}`).join(','));
-    url.hash = 'weighted-ranking';
+    url.hash = anchor;
     return url;
   }
 
@@ -411,6 +519,18 @@
     }
   }
 
+  async function copyWeightedInsightLink() {
+    const url = shareUrl('weighted-score-cost');
+    try {
+      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(url.href);
+      else fallbackCopy(url.href);
+      history.replaceState(null, '', url);
+      announce('Weighted score insight link copied with the current visible result set.');
+    } catch {
+      announce('The weighted score insight link could not be copied. Copy the address from the browser bar instead.', true);
+    }
+  }
+
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const linkElement = document.createElement('a');
@@ -437,6 +557,21 @@
     const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\n');
     downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `tokenbench-top-20-${new Date().toISOString().slice(0, 10)}.csv`);
     announce(`CSV downloaded with ${visibleModels.length} visible model${visibleModels.length === 1 ? '' : 's'}.`);
+  }
+
+  function downloadWeightedInsightCsv() {
+    if (!visibleModels.length) {
+      announce('There are no weighted score insights to export. Reset a filter or show outside-SLA models.', true);
+      return;
+    }
+    const frontierIds = new Set(weightedFrontier(visibleModels).map(model => model.id));
+    const headers = ['Cost rank', 'Model', 'Provider', 'Weighted score', 'Blended $ per 1M', 'Weighted frontier', 'SLA result'];
+    const rows = [...visibleModels]
+      .sort((left, right) => left.cost - right.cost)
+      .map((model, index) => [index + 1, model.name, model.provider, score(model).toFixed(1), model.cost.toFixed(2), frontierIds.has(model.id) ? 'Yes' : 'No', meetsSla(model) ? 'Pass' : 'Outside threshold']);
+    const csv = [headers, ...rows].map(row => row.map(csvCell).join(',')).join('\n');
+    downloadBlob(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' }), `tokenbench-weighted-score-cost-${new Date().toISOString().slice(0, 10)}.csv`);
+    announce(`Weighted score and cost CSV downloaded with ${visibleModels.length} visible model${visibleModels.length === 1 ? '' : 's'}.`);
   }
 
   function drawChartPanel(context, source, label, x, y, width) {
@@ -534,6 +669,71 @@
     }
   }
 
+  async function downloadWeightedInsightPng() {
+    const button = $('#download-weighted-insight-png');
+    if (!visibleModels.length) {
+      announce('There are no weighted score insights to render. Reset a filter or show outside-SLA models.', true);
+      return;
+    }
+    if (typeof Chart === 'undefined') {
+      announce('Chart.js is unavailable. Download the weighted score CSV for exact values instead.', true);
+      return;
+    }
+
+    const scatterCanvas = $('#weighted-score-cost-chart');
+    const costCanvas = $('#weighted-cost-ranking-chart');
+    if (![scatterCanvas, costCanvas].every(canvas => Chart.getChart(canvas))) {
+      announce('The weighted score chart image is not ready yet. Try again after the charts finish rendering.', true);
+      return;
+    }
+
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    announce('Preparing weighted score PNG…');
+    try {
+      [scatterCanvas, costCanvas].forEach(canvas => Chart.getChart(canvas)?.update('none'));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+      const root = getComputedStyle(document.documentElement);
+      const canvasColor = root.getPropertyValue('--canvas').trim();
+      const ink = root.getPropertyValue('--ink').trim();
+      const muted = root.getPropertyValue('--muted').trim();
+      const exportCanvas = document.createElement('canvas');
+      const context = exportCanvas.getContext('2d');
+      const width = 1200;
+      const padding = 48;
+      const gap = 24;
+      const contentWidth = width - padding * 2;
+      const headerHeight = 150;
+      const panelHeight = source => 58 + Math.max(280, Math.round(source.height / source.width * (contentWidth - 48))) + 24;
+      exportCanvas.width = width;
+      exportCanvas.height = padding + headerHeight + panelHeight(scatterCanvas) + gap + panelHeight(costCanvas) + padding;
+
+      context.fillStyle = canvasColor;
+      context.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      context.fillStyle = ink;
+      context.font = '800 42px system-ui, sans-serif';
+      context.fillText('TokenBench — Weighted score vs. cost', padding, padding + 46);
+      context.fillStyle = muted;
+      context.font = '600 22px ui-monospace, monospace';
+      context.fillText(`${visibleModels.length} visible · ${weightedFrontier(visibleModels).length} weighted frontier · illustrative prototype data`, padding, padding + 88);
+      context.fillText(`${accessLabel()} · ${providerLabel()} · TTFT ≤ ${ttft.toFixed(2)}s · throughput ≥ ${tps} tok/s`, padding, padding + 124);
+
+      const scatterY = padding + headerHeight;
+      const renderedScatterHeight = drawChartPanel(context, scatterCanvas, 'Weighted score versus blended cost', padding, scatterY, contentWidth);
+      drawChartPanel(context, costCanvas, 'Weighted score, cheapest first', padding, scatterY + renderedScatterHeight + gap, contentWidth);
+
+      const blob = await new Promise((resolve, reject) => exportCanvas.toBlob(result => result ? resolve(result) : reject(new Error('PNG encoding failed')), 'image/png'));
+      downloadBlob(blob, `tokenbench-weighted-score-cost-${new Date().toISOString().slice(0, 10)}.png`);
+      announce(`Weighted score and cost PNG downloaded with ${visibleModels.length} visible model${visibleModels.length === 1 ? '' : 's'}.`);
+    } catch {
+      announce('The weighted score PNG could not be generated. Download the CSV for exact values instead.', true);
+    } finally {
+      button.disabled = false;
+      button.removeAttribute('aria-busy');
+    }
+  }
+
   parseSharedState();
   initSliders();
   setupProviderFilter();
@@ -558,6 +758,9 @@
   $('#copy-leaderboard-link').addEventListener('click', copyLeaderboardLink);
   $('#download-leaderboard-csv').addEventListener('click', downloadCsv);
   $('#download-leaderboard-png').addEventListener('click', downloadPng);
+  $('#copy-weighted-insight-link').addEventListener('click', copyWeightedInsightLink);
+  $('#download-weighted-insight-csv').addEventListener('click', downloadWeightedInsightCsv);
+  $('#download-weighted-insight-png').addEventListener('click', downloadWeightedInsightPng);
 
   window.renderPage = renderPage;
   renderPage();

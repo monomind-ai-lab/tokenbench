@@ -13,6 +13,14 @@ afterEach(async () => {
 });
 
 describe('approved preview bundle', () => {
+  it('ships the list-first weighted score and cost insight contract', async () => {
+    const script = await readFile('prototypes/ui-revamp-3/make-it-yours.js', 'utf8');
+
+    expect(script).toContain("let view = 'rows';");
+    expect(script).toContain('function weightedFrontier(models)');
+    expect(script).toContain('function renderWeightedInsights(models)');
+  });
+
   it('publishes every rebuilt page and its runtime assets at the approved routes', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-make-it-yours-'));
     outputRoots.push(outputDir);
