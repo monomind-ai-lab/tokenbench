@@ -82,7 +82,7 @@
           </div>
         </div>
         <div class="grid-3 compare-bars" style="margin-top:12px">
-          <div><span class="label">Blended cost ($ / 1M)</span><div class="chart-wrap short"><canvas id="compare-cost" role="img" aria-label="Selected model blended cost comparison"></canvas></div></div>
+          <div><span class="label" id="compare-cost-label">Blended cost ($ / 1M)</span><div class="chart-wrap short"><canvas id="compare-cost" role="img" aria-label="Selected model blended cost comparison"></canvas></div></div>
           <div><span class="label">TTFT (seconds)</span><div class="chart-wrap short"><canvas id="compare-ttft" role="img" aria-label="Selected model time to first token comparison"></canvas></div></div>
           <div><span class="label">Throughput (tok/s)</span><div class="chart-wrap short"><canvas id="compare-tps" role="img" aria-label="Selected model throughput comparison"></canvas></div></div>
         </div>
@@ -106,7 +106,7 @@
     const rawRequested = (new URLSearchParams(location.search).get('models') || '').split(',').filter(Boolean);
     let selection = normalizeModelIds(rawRequested);
     const selectedIds = () => normalizeModelIds(selection);
-    const chosen = () => selectedIds().map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
+    const chosen = () => selectedIds().map(comparisonModelById).filter(Boolean);
     const validSelection = () => selectedIds().length >= 2;
 
     function persistSelection() {
@@ -180,35 +180,30 @@
       $('#result-model-links').innerHTML = selectedModelChips(models);
       bindComparisonRemovals($('#result-model-links'), id => updateSelection(selection.filter(candidate => candidate !== id)));
       const capabilityTable = $('#compare-capability-table');
-      capabilityTable.innerHTML = comparisonMatrix(models, [
-        ['Agentic', model => domainScore(model, 'agentic').toFixed(0)],
-        ['Coding', model => domainScore(model, 'coding').toFixed(0)],
-        ['Reasoning', model => domainScore(model, 'reasoning').toFixed(0)],
-        ['Math', model => domainScore(model, 'math').toFixed(0)],
-        ['Multimodal', model => domainScore(model, 'multimodal').toFixed(0)],
-        ['Throughput', model => domainScore(model, 'throughput').toFixed(0)]
-      ], {id: 'compare-capability-matrix', ariaLabel: 'Exact capability comparison'});
+      capabilityTable.innerHTML = comparisonMatrix(models, comparisonCapabilityRows(), {id: 'compare-capability-matrix', ariaLabel: 'Exact capability comparison'});
       capabilityTable.querySelector('table')?.setAttribute('aria-label', 'Exact capability comparison');
       $('#compare-specs').innerHTML = comparisonMatrix(models, [
         ['Provider', model => model.provider],
         ['Access', model => model.access],
-        ['Input / 1M', model => `$${model.inputPrice.toFixed(2)}`],
-        ['Output / 1M', model => `$${model.outputPrice.toFixed(2)}`],
-        ['Cache read / 1M', model => model.cacheRead == null ? 'Unavailable' : `$${model.cacheRead.toFixed(2)}`],
-        ['Blended cost / 1M', model => `$${model.cost.toFixed(2)}`],
+        ['Input / 1M', model => formatComparisonCurrency(model.inputPrice)],
+        ['Output / 1M', model => formatComparisonCurrency(model.outputPrice)],
+        ['Cache read / 1M', model => formatComparisonCurrency(model.cacheRead)],
+        [models.some(model => model.costBasis) ? 'Cost per successful task' : 'Blended cost / 1M', model => model.costBasis ? `${formatComparisonCurrency(model.cost)} / successful task` : formatComparisonCurrency(model.cost)],
         ['Context window', model => model.context],
         ['Maximum output', model => model.maxOutput],
-        ['TTFT p50', model => `${model.ttft}s`],
-        ['Throughput', model => `${model.tps} tok/s`],
+        ['TTFT p50', model => Number.isFinite(model.ttft) ? `${model.ttft}s` : 'Unavailable'],
+        ['Throughput', model => Number.isFinite(model.tps) ? `${model.tps} tok/s` : 'Unavailable'],
         ['Lifecycle', model => model.lifecycle || 'Unavailable'],
         ['Sunset', model => model.sunset || 'Not reported']
       ], {id: 'compare-specification-matrix', ariaLabel: 'Itemized model comparison'});
       $('#compare-radar').setAttribute('aria-label', `Capability radar comparing ${models.map(model => model.name).join(', ')}`);
-      $('#compare-cost').setAttribute('aria-label', `Blended cost comparison for ${models.map(model => model.name).join(', ')}`);
+      const costComparisonLabel = models.some(model => model.costBasis) ? 'Cost per successful task' : 'Blended cost ($ / 1M)';
+      $('#compare-cost-label').textContent = costComparisonLabel;
+      $('#compare-cost').setAttribute('aria-label', `${costComparisonLabel} comparison for ${models.map(model => model.name).join(', ')}`);
       $('#compare-ttft').setAttribute('aria-label', `Time to first token comparison for ${models.map(model => model.name).join(', ')}`);
       $('#compare-tps').setAttribute('aria-label', `Throughput comparison for ${models.map(model => model.name).join(', ')}`);
-      radar($('#compare-radar'), models, {legendPadding: 32});
-      comparisonBar($('#compare-cost'), models, 'Blended cost', model => model.cost);
+      radar($('#compare-radar'), models);
+      comparisonBar($('#compare-cost'), models, costComparisonLabel, model => model.cost);
       comparisonBar($('#compare-ttft'), models, 'TTFT', model => model.ttft);
       comparisonBar($('#compare-tps'), models, 'Throughput', model => model.tps);
       result.hidden = false;

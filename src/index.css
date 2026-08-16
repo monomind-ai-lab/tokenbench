@@ -1428,9 +1428,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-comparison-selected-block { min-width: 0; display: grid; gap: 8px; }
 .popular-models-comparison-status { margin-top: 10px; }
 .popular-models-selected-models { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px; }
-.popular-models-model-tag { min-height: 36px; display: inline-flex; align-items: center; gap: 4px; padding: 3px 5px 3px 10px; border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--outline)); border-radius: 999px; background: color-mix(in srgb, var(--primary-soft) 54%, var(--surface)); font-size: 0.72rem; font-weight: 750; }
-.popular-models-model-tag a { color: var(--text); text-decoration: none; }
-.popular-models-model-tag button { width: 30px; min-width: 30px; min-height: 30px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
+.popular-models-model-tag { min-height: 44px; display: inline-flex; align-items: center; gap: 4px; padding: 0 0 0 6px; border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--outline)); border-radius: 999px; background: color-mix(in srgb, var(--primary-soft) 54%, var(--surface)); font-size: 0.72rem; font-weight: 750; }
+.popular-models-model-tag a { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; padding: 0 4px; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.popular-models-model-tag button { width: 44px; min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--muted); }
 .popular-models-model-tag button:hover { background: var(--surface-high); color: var(--danger); }
 .popular-models-model-tag button:disabled { opacity: 0.45; cursor: not-allowed; }
 .popular-models-picker { position: relative; width: max-content; max-width: 100%; }

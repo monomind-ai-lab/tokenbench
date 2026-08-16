@@ -31,6 +31,15 @@ window.TB_MODELS=[
 {id:'grok-3-mini',name:'Grok 3 Mini',provider:'xAI',color:'#ef4444',access:'Proprietary',cost:.6,inputPrice:.3,outputPrice:1.2,cacheRead:null,cacheWrite:null,maxOutput:'16k',ttft:.4,tps:98,context:'128k',released:'2025-04-09',lifecycle:'Current',sunset:null,modalities:'Text',agentic:85,coding:88,reasoning:91,math:92,multimodal:55,throughput:98}
 ];
 
+// These records deliberately retain the Popular Models fixture identities used
+// by its compare handoff. Every populated value below comes from that approved
+// illustrative fixture; unavailable prototype-only fields stay unavailable
+// instead of being filled by a similarly named model or invented data.
+window.TB_POPULAR_HANDOFF_MODELS=[
+{id:'claude-opus-4-1',name:'Claude Opus 4.1',provider:'Anthropic',color:'#c27d60',access:'Proprietary',cost:9.5,costBasis:'per-successful-task',inputPrice:null,outputPrice:75,cacheRead:null,cacheWrite:null,maxOutput:'Unavailable in Popular Models fixtures',ttft:null,tps:null,context:'Unavailable in Popular Models fixtures',released:'Unavailable in Popular Models fixtures',lifecycle:'Unavailable',sunset:null,modalities:'Unavailable in Popular Models fixtures',agentic:97,coding:98,reasoning:99,math:96,multimodal:null,throughput:null,compositeScore:96.8},
+{id:'gpt-5',name:'GPT-5',provider:'OpenAI',color:'#404040',access:'Proprietary',cost:5.4,costBasis:'per-successful-task',inputPrice:null,outputPrice:45,cacheRead:null,cacheWrite:null,maxOutput:'Unavailable in Popular Models fixtures',ttft:null,tps:null,context:'Unavailable in Popular Models fixtures',released:'Unavailable in Popular Models fixtures',lifecycle:'Unavailable',sunset:null,modalities:'Unavailable in Popular Models fixtures',agentic:95,coding:96,reasoning:97,math:96,multimodal:null,throughput:null,compositeScore:95.8}
+];
+
 window.TB_LIFECYCLE=[
 {id:'gpt-4-turbo',name:'GPT-4 Turbo',provider:'OpenAI',status:'Retirement scheduled',announced:'2026-06-15',sunset:'2026-09-30',replacementId:'gpt-4o',replacement:'GPT-4o',costDelta:'75% lower fixture cost',speedDelta:'2.8× faster fixture speed',source:'Provider retirement notice · staging fixture',observed:'2026-08-15'},
 {id:'claude-3-opus',name:'Claude 3 Opus',provider:'Anthropic',status:'Retirement scheduled',announced:'2026-08-08',sunset:'2026-11-15',replacementId:'claude-3-5-sonnet',replacement:'Claude 3.5 Sonnet',costDelta:'80% lower fixture cost',speedDelta:'2.5× faster fixture speed',source:'Provider retirement notice · staging fixture',observed:'2026-08-15'}

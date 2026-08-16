@@ -147,6 +147,47 @@ function handlerBackedAssetMode(): 'vite-source' | 'as-served' {
   return process.env.TOKENBENCH_BROWSER_ASSET_MODE === 'production' ? 'as-served' : 'vite-source';
 }
 
+function usesProductionPreviewAssets(): boolean {
+  return handlerBackedAssetMode() === 'as-served';
+}
+
+const comparisonChartRegistryStub = `window.Chart=class Chart{static instances=new Set();static charts=new WeakMap();constructor(canvas,configuration){this.canvas=canvas;this.configuration=configuration;this.type=configuration.type;Chart.instances.add(this);Chart.charts.set(canvas,this)}static getChart(canvas){return Chart.charts.get(canvas)||null}destroy(){Chart.instances.delete(this);Chart.charts.delete(this.canvas)}update(){}};`;
+
+async function installComparisonChartRegistryStub(page: Page): Promise<void> {
+  await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: comparisonChartRegistryStub,
+  }));
+}
+
+async function installRealComparisonChartJs(page: Page): Promise<void> {
+  const chartJs = await readFile('node_modules/chart.js/dist/chart.umd.js', 'utf8');
+  await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/javascript',
+    body: chartJs,
+  }));
+}
+
+async function radarLegendGap(page: Page, selector: string): Promise<number> {
+  return page.locator(selector).evaluate((canvas) => {
+    const chart = (window as any).Chart.getChart(canvas);
+    const hitBoxes = chart.legend?.legendHitBoxes ?? [];
+    const legendBottom = Math.max(...hitBoxes.map((box: { top: number; height: number }) => box.top + box.height));
+    return chart.scales.r.top - legendBottom;
+  });
+}
+
+async function waitForRadarLayout(page: Page, selector: string): Promise<void> {
+  await expect.poll(() => page.locator(selector).evaluate((canvas) => {
+    const chart = (window as any).Chart.getChart(canvas);
+    chart?.resize();
+    chart?.update('none');
+    return chart?.legend?.legendHitBoxes?.length ?? 0;
+  })).toBeGreaterThan(0);
+}
+
 async function blockExternalRequests(page: Page, origin = previewOrigin()): Promise<void> {
   await page.route((url) => url.origin !== origin && (url.protocol === 'http:' || url.protocol === 'https:'), (route) => route.abort());
 }
@@ -303,7 +344,7 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
   { path: '/leaderboards/llm/coding/', heading: 'Coding benchmark', hydratedClientMarker: '.leaderboard-results[aria-label="Coding benchmark"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text to image', hydratedClientMarker: '.leaderboard-results[aria-label="Text to image"]' },
-  { path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page' },
+  ...(usesProductionPreviewAssets() ? [] : [{ path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page' }]),
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
   { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
   { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
@@ -1505,7 +1546,8 @@ test.describe('generated static route runtime', () => {
     ['/leaderboards/media/video-editing/', 'Video editing'],
   ] as const;
 
-  test('ships a raw crawlable compare hub, then mounts its active-revision directory without external requests', async ({ page, request, baseURL }) => {
+  test('ships a raw crawlable compare hub in the Vite/source suite', async ({ page, request, baseURL }) => {
+    test.skip(usesProductionPreviewAssets(), 'The production preview serves the approved prototype at /compare/.');
     await page.setViewportSize({ width: 1024, height: 1000 });
     if (!baseURL) throw new Error('Playwright baseURL is required for origin-scoped route stubs.');
     const rawResponse = await request.get('/compare/');
@@ -1619,6 +1661,7 @@ test.describe('generated static route runtime', () => {
   });
 
   test('does not mount the legacy calculator over server-rendered dynamic or unknown shells', async ({ page, request }) => {
+    test.skip(usesProductionPreviewAssets(), 'The production preview serves the approved prototype at /compare/.');
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
     const shellResponse = await request.get('/compare/');
@@ -2063,11 +2106,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       { pathname: '/popular-models/', selected: ['Claude Opus 4.1', 'GPT-5'], href: '/compare?models=claude-opus-4-1%2Cgpt-5' },
     ] as const;
 
-    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/javascript',
-      body: 'window.Chart=class Chart{constructor(canvas,configuration){canvas.dataset.legendPadding=String(configuration.options?.plugins?.legend?.labels?.padding??"")}static getChart(){return null}destroy(){}update(){}};',
-    }));
+    await installComparisonChartRegistryStub(page);
     await page.setViewportSize({ width: 1302, height: 1324 });
 
     for (const { pathname, selected, href } of cases) {
@@ -2095,7 +2134,24 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       const detailsLink = workspace.getByRole('link', { name: 'More details' });
       await expect(detailsLink).toHaveAttribute('href', href);
       await expect(workspace.getByRole('img', { name: /Selected model capability radar|Seven-category profile comparison/ })).toBeVisible();
-      if (pathname !== '/popular-models/') await expect(workspace.locator('canvas').first()).toHaveAttribute('data-legend-padding', '32');
+
+      const selectedActionBounds = await workspace.getByRole('list', { name: 'Selected comparison models' }).evaluate((list) => [...list.querySelectorAll('a, button')].map((action) => {
+        const bounds = action.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      }));
+      expect(selectedActionBounds).not.toHaveLength(0);
+      expect(selectedActionBounds.every((bounds) => bounds.width >= 44 && bounds.height >= 44)).toBe(true);
+
+      if (pathname !== '/popular-models/') {
+        const exactValues = workspace.getByText('Exact capability values').locator('..');
+        await exactValues.locator('summary').click();
+        for (const label of ['Agentic', 'Coding', 'Reasoning', 'Math', 'Multimodal', 'Throughput']) {
+          await expect(exactValues.getByRole('rowheader', { name: label })).toBeVisible();
+        }
+        for (const modelName of selected) {
+          await expect(exactValues.getByRole('columnheader', { name: new RegExp(modelName) })).toBeVisible();
+        }
+      }
 
       const layout = await workspace.evaluate((element) => {
         const heading = element.querySelector('h2, h3')!.getBoundingClientRect();
@@ -2132,15 +2188,110 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     }
   });
 
-  test('keeps Compare radar legend spacing distinct from quick comparison', async ({ page }) => {
-    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
-      status: 200,
-      contentType: 'application/javascript',
-      body: 'window.Chart=class Chart{constructor(canvas,configuration){canvas.dataset.legendPadding=String(configuration.options?.plugins?.legend?.labels?.padding??"")}static getChart(){return null}destroy(){}update(){}};',
-    }));
-    await page.goto('/compare?models=claude-3-5-sonnet,deepseek-v3');
+  test('hands off the default Popular Models selection to the same ordered prototype models', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+    await page.goto('/popular-models/');
 
-    await expect(page.getByRole('img', { name: /Capability radar comparing/ })).toHaveAttribute('data-legend-padding', '32');
+    const workspace = page.getByRole('region', { name: 'Quick comparison' });
+    await workspace.getByRole('link', { name: 'More details' }).click();
+    await expect(page).toHaveURL(/\/compare\?models=claude-opus-4-1%2Cgpt-5$/u);
+    await expect(page.locator('#result-title')).toHaveText('Claude Opus 4.1 vs GPT-5');
+    await expect(page.locator('#result-model-links').getByRole('link').allTextContents()).resolves.toEqual(['Claude Opus 4.1', 'GPT-5']);
+    await expect(page.locator('#compare-cost-label')).toHaveText('Cost per successful task');
+  });
+
+  test('exposes the exact six capability rows beside every prototype quick radar', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+
+    for (const { pathname, candidate } of [
+      { pathname: '/models', candidate: '#catalog-output .compare' },
+      { pathname: '/make-it-yours/', candidate: '#output .compare' },
+    ]) {
+      await page.goto(pathname);
+      await page.locator(candidate).first().click();
+      await page.locator(candidate).nth(1).click();
+      const workspace = page.getByRole('region', { name: 'Quick comparison' });
+      const exactValues = workspace.locator('details').filter({ hasText: 'Exact capability values' });
+      await expect(exactValues).toBeVisible();
+      await exactValues.locator('summary').click();
+      for (const label of ['Agentic', 'Coding', 'Reasoning', 'Math', 'Multimodal', 'Throughput']) {
+        await expect(exactValues.getByRole('rowheader', { name: label })).toBeVisible();
+      }
+      expect(await exactValues.getByRole('columnheader').allTextContents()).toHaveLength(3);
+    }
+  });
+
+  test('keeps only the current prototype radar instance through repeated quick comparison renders', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+
+    for (const { pathname, firstSelector, secondSelector, clearSelector } of [
+      { pathname: '/models', firstSelector: '#catalog-output .compare', secondSelector: '#catalog-output .compare', clearSelector: '#clear' },
+      { pathname: '/make-it-yours/', firstSelector: '#output .compare', secondSelector: '#output .compare', clearSelector: '#clear' },
+    ]) {
+      await page.goto(pathname);
+      await page.locator(firstSelector).first().click();
+      await page.locator(secondSelector).nth(1).click();
+      await expect(page.getByRole('region', { name: 'Quick comparison' })).toBeVisible();
+      await expect.poll(() => page.evaluate(() => [...(window as any).Chart.instances].filter((instance: { type: string }) => instance.type === 'radar').length)).toBe(1);
+
+      await page.getByRole('button', { name: 'clear' }).click();
+      await expect.poll(() => page.evaluate(() => [...(window as any).Chart.instances].filter((instance: { type: string }) => instance.type === 'radar').length)).toBe(0);
+      await expect(page.locator(clearSelector)).toBeVisible();
+    }
+  });
+
+  test('reserves a real 32px legend-to-spiderweb gap for every prototype radar', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await installRealComparisonChartJs(page);
+    await page.setViewportSize({ width: 1302, height: 1324 });
+
+    await page.goto('/models');
+    await page.locator('#catalog-output .compare').first().click();
+    await page.locator('#catalog-output .compare').nth(1).click();
+    await expect(page.locator('#radar')).toBeVisible();
+    await waitForRadarLayout(page, '#radar');
+    expect(await radarLegendGap(page, '#radar')).toBeGreaterThanOrEqual(31);
+    expect(await radarLegendGap(page, '#radar')).toBeLessThanOrEqual(33);
+
+    await page.goto('/make-it-yours/');
+    await page.locator('#output .compare').first().click();
+    await page.locator('#output .compare').nth(1).click();
+    await expect(page.locator('#leaderboard-radar')).toBeVisible();
+    await waitForRadarLayout(page, '#leaderboard-radar');
+    expect(await radarLegendGap(page, '#leaderboard-radar')).toBeGreaterThanOrEqual(31);
+    expect(await radarLegendGap(page, '#leaderboard-radar')).toBeLessThanOrEqual(33);
+
+    await page.goto('/compare?models=claude-3-5-sonnet,deepseek-v3');
+    await expect(page.locator('#compare-radar')).toBeVisible();
+    await waitForRadarLayout(page, '#compare-radar');
+    expect(await radarLegendGap(page, '#compare-radar')).toBeGreaterThanOrEqual(31);
+    expect(await radarLegendGap(page, '#compare-radar')).toBeLessThanOrEqual(33);
+  });
+
+  test('keeps every prototype selected-model action at least 44px square on quick and dedicated comparisons', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+    await page.setViewportSize({ width: 320, height: 844 });
+
+    for (const pathname of ['/models', '/make-it-yours/']) {
+      await page.goto(pathname);
+      const candidate = pathname === '/models' ? '#catalog-output .compare' : '#output .compare';
+      await page.locator(candidate).first().click();
+      await page.locator(candidate).nth(1).click();
+      const actions = await page.getByRole('region', { name: 'Quick comparison' }).getByRole('list', { name: 'Selected comparison models' }).evaluate((list) => [...list.querySelectorAll('a, button')].map((action) => {
+        const bounds = action.getBoundingClientRect();
+        return { width: bounds.width, height: bounds.height };
+      }));
+      expect(actions.every((bounds) => bounds.width >= 44 && bounds.height >= 44)).toBe(true);
+      await assertNoHorizontalOverflow(page);
+    }
+
+    await page.goto('/compare?models=claude-3-5-sonnet,deepseek-v3');
+    const dedicatedActions = await page.locator('#result-model-links').evaluate((root) => [...root.querySelectorAll('a, button')].map((action) => {
+      const bounds = action.getBoundingClientRect();
+      return { width: bounds.width, height: bounds.height };
+    }));
+    expect(dedicatedActions.every((bounds) => bounds.width >= 44 && bounds.height >= 44)).toBe(true);
+    await assertNoHorizontalOverflow(page);
   });
 });
 
@@ -2278,6 +2429,7 @@ test.describe('newsletter and alerts browser coverage', () => {
   });
 
   test('keeps compact compare alerts opt-in, keyboard submission, confirmation, retry guidance, and layout safe at mobile and desktop widths', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'Compare-hub alerts are covered by the Vite/source suite; production preview uses the prototype route.');
     test.setTimeout(120_000);
     const origin = previewOrigin();
 
@@ -2504,6 +2656,7 @@ test.describe('handler-backed compare browser coverage', () => {
   });
 
   test('hydrates a handler comparison after a compare-hub document', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'The legacy compare hub is intentionally source-suite-only.');
     const origin = previewOrigin();
     const errors = captureBrowserErrors(page);
     await page.setViewportSize({ width: 320, height: 1000 });

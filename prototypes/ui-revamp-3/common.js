@@ -6,15 +6,31 @@ const PREVIEW_PATHS={home:'/models',models:'/models',modelCatalog:'/models#catal
 const previewModelProfilePath=slug=>`${PREVIEW_PATHS.modelProfile}?model=${encodeURIComponent(slug)}`;
 const TB={charts:[],weights:{agentic:20,coding:20,reasoning:20,math:15,multimodal:15,throughput:10},selected:[],theme:localStorage.tbTheme||'light'};
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
-function domainScore(m,key){return key==='throughput'?Math.min(100,m.tps/120*100):m[key]}
-function score(m,w=TB.weights){let sum=Object.values(w).reduce((a,b)=>a+b,0);return sum?Object.entries(w).reduce((n,[k,v])=>n+domainScore(m,k)*v,0)/sum:null}
+const comparisonModels=()=>[...(window.TB_MODELS||[]),...(window.TB_POPULAR_HANDOFF_MODELS||[])];
+const comparisonModelById=id=>comparisonModels().find(model=>model.id===id);
+function domainScore(m,key){let value=key==='throughput'?(Number.isFinite(m.tps)?Math.min(100,m.tps/120*100):null):m[key];return Number.isFinite(value)?value:null}
+function score(m,w=TB.weights){if(Number.isFinite(m.compositeScore))return m.compositeScore;let entries=Object.entries(w).filter(([key])=>Number.isFinite(domainScore(m,key))),sum=entries.reduce((total,[,value])=>total+value,0);return sum?entries.reduce((total,[key,value])=>total+domainScore(m,key)*value,0)/sum:null}
 function colors(){let s=getComputedStyle(document.documentElement),read=name=>s.getPropertyValue(name).trim();return{ink:read('--ink'),muted:read('--muted'),line:read('--line'),plum:read('--plum'),accentText:read('--accent-text')||read('--plum')}}
 function chart(canvas,config){if(!canvas)return null;if(typeof Chart==='undefined'){canvas.hidden=true;if(!canvas.parentElement.querySelector('.chart-failure'))canvas.insertAdjacentHTML('afterend','<p class="empty chart-failure" role="status">Chart.js did not load. Use the exact evidence table on this page.</p>');return null}canvas.hidden=false;canvas.parentElement.querySelector('.chart-failure')?.remove();let old=Chart.getChart(canvas);if(old)old.destroy();config.options={responsive:true,maintainAspectRatio:false,animation:matchMedia('(prefers-reduced-motion: reduce)').matches?false:{duration:250},...config.options};return new Chart(canvas,config)}
 function setupShell(){document.documentElement.dataset.theme=TB.theme;let current=location.pathname.split('/').pop()||'index.html',theme=$('#theme');if(['article-hybrid-router.html','article-hybrid-router','hybrid-router'].includes(current)){let metadata=$('article header .label'),fixture=$('article header .fixture');if(metadata)metadata.textContent='Guide · Published 12 Aug 2026 · Updated 15 Aug 2026 · Review status: current';if(fixture&&!$('#article-evidence-cue'))fixture.insertAdjacentHTML('afterend','<p id="article-evidence-cue" class="fixture">Evidence cue · route-price and SLA fixtures observed 15 Aug 2026 · sources itemized below</p>')}if(theme){let syncTheme=()=>{let dark=TB.theme==='dark';theme.textContent='Theme';theme.setAttribute('aria-pressed',String(dark));theme.setAttribute('aria-label',dark?'Switch to light theme':'Switch to dark theme')};syncTheme();theme.addEventListener('click',()=>{TB.theme=TB.theme==='dark'?'light':'dark';localStorage.tbTheme=TB.theme;document.documentElement.dataset.theme=TB.theme;syncTheme();window.renderPage?.()})}}
 const baseShellSetup=setupShell;setupShell=function(){baseShellSetup();if((location.pathname.endsWith('article-hybrid-router.html')||location.pathname.endsWith('/article-hybrid-router')||location.pathname.endsWith('/articles/hybrid-router'))&&!$('#mobile-toc')){let header=$('article header');header?.insertAdjacentHTML('afterend','<details id="mobile-toc" class="mobile-toc panel soft"><summary>On this page</summary><nav aria-label="Article sections"><a href="#question">Decision question</a><a href="#recommendation">Recommendation</a><a href="#assumptions">Assumptions</a><a href="#evidence">Evidence framing</a><a href="#cost">Cost comparison</a><a href="#matrix">Decision matrix</a><a href="#next">Internal tools</a></nav></details>')}};function link(m){return `<a class="model-name" href="${previewModelProfilePath(m.id)}">${m.name}</a>`}
 function modelOptions(){return TB_MODELS.map(m=>`<option value="${m.id}">${m.name} — ${m.provider}</option>`).join('')}
-function radar(canvas,models,{legendPadding=12}={}){let c=colors(),keys=['agentic','coding','reasoning','math','multimodal','throughput'],series=[{color:c.plum,dash:[],point:'circle'},{color:'#f97316',dash:[7,3],point:'rectRounded'},{color:'#10b981',dash:[2,3],point:'triangle'},{color:'#d946ef',dash:[10,3,2,3],point:'rectRot'}];return chart(canvas,{type:'radar',data:{labels:['Agentic','Coding','Reasoning','Math','Multimodal','Throughput'],datasets:models.map((m,i)=>{let style=series[i%series.length];return{label:m.name,data:keys.map(k=>domainScore(m,k)),borderColor:style.color,backgroundColor:style.color+'20',borderDash:style.dash,pointStyle:style.point,pointRadius:3,borderWidth:2}})},options:{plugins:{legend:{labels:{color:c.muted,font:{size:11},usePointStyle:true,boxWidth:10,padding:legendPadding}}},scales:{r:{min:45,max:100,ticks:{display:false},grid:{color:c.line},angleLines:{color:c.line},pointLabels:{color:c.muted,font:{size:10}}}}}})}
-function normalizeModelIds(ids,max=MAX_COMPARE_MODELS){let known=new Set((window.TB_MODELS||[]).map(model=>model.id)),seen=new Set();return (ids||[]).filter(id=>{if(!known.has(id)||seen.has(id))return false;seen.add(id);return true}).slice(0,max)}
+const RADAR_LEGEND_TO_SPIDERWEB_GAP=32;
+const CHART_JS_LEGEND_TRAILING_INSET=10;
+const radarLegendGapPlugin={
+  id:'tokenbenchRadarLegendGap',
+  beforeLayout(chartInstance,_args,options){
+    let spacer=chartInstance.$tokenbenchRadarLegendSpacer;
+    if(!spacer){
+      spacer={position:'top',fullSize:false,weight:999,options:{},isHorizontal(){return true},update(width){this.width=width;this.height=this.heightValue},draw(){}};
+      Chart.layouts.addBox(chartInstance,spacer);
+      chartInstance.$tokenbenchRadarLegendSpacer=spacer;
+    }
+    spacer.heightValue=Math.max(0,(options?.gap??0)-CHART_JS_LEGEND_TRAILING_INSET);
+  }
+};
+function radar(canvas,models,{legendGap=RADAR_LEGEND_TO_SPIDERWEB_GAP}={}){let c=colors(),keys=['agentic','coding','reasoning','math','multimodal','throughput'],series=[{color:c.plum,dash:[],point:'circle'},{color:'#f97316',dash:[7,3],point:'rectRounded'},{color:'#10b981',dash:[2,3],point:'triangle'},{color:'#d946ef',dash:[10,3,2,3],point:'rectRot'}];return chart(canvas,{type:'radar',plugins:[radarLegendGapPlugin],data:{labels:['Agentic','Coding','Reasoning','Math','Multimodal','Throughput'],datasets:models.map((m,i)=>{let style=series[i%series.length];return{label:m.name,data:keys.map(k=>domainScore(m,k)),borderColor:style.color,backgroundColor:style.color+'20',borderDash:style.dash,pointStyle:style.point,pointRadius:3,borderWidth:2}})},options:{plugins:{tokenbenchRadarLegendGap:{gap:legendGap},legend:{position:'top',labels:{color:c.muted,font:{size:11},usePointStyle:true,boxWidth:10,padding:12}}},scales:{r:{min:45,max:100,ticks:{display:false},grid:{color:c.line},angleLines:{color:c.line},pointLabels:{color:c.muted,font:{size:10}}}}}})}
+function normalizeModelIds(ids,max=MAX_COMPARE_MODELS){let known=new Set(comparisonModels().map(model=>model.id)),seen=new Set();return (ids||[]).filter(id=>{if(!known.has(id)||seen.has(id))return false;seen.add(id);return true}).slice(0,max)}
 function previewComparisonHref(modelIds){return `${PREVIEW_PATHS.compare}?${new URLSearchParams({models:normalizeModelIds(modelIds).join(',')})}`}
 function table(models,{showCompare=true,ariaLabel='Ranked model evidence',costMode='blended'}={}){let compareHead=showCompare?'<th scope="col">Compare</th>':'',compareCell=m=>showCompare?`<td><button class="toggle compare" aria-pressed="${TB.selected.includes(m.id)}" data-id="${m.id}">${TB.selected.includes(m.id)?'Selected':'Compare'}</button></td>`:'',costHead=costMode==='input-output'?'$ Cost In/Out':'Blended $/1M',costCell=m=>costMode==='input-output'?`$${m.inputPrice.toFixed(2)} / $${m.outputPrice.toFixed(2)}`:`$${m.cost.toFixed(2)}`;return `<div class="table-wrap" role="region" aria-label="${ariaLabel}" tabindex="0"><table><thead><tr><th scope="col">Rank</th><th scope="col">Model / profile</th><th scope="col">Provider</th><th scope="col">Composite</th><th scope="col">${costHead}</th><th scope="col">TTFT</th><th scope="col">Throughput</th><th scope="col">Lifecycle</th>${compareHead}</tr></thead><tbody>${models.map((m,i)=>`<tr><td>${i+1}</td><th scope="row">${link(m)}</th><td><span class="provider-dot" style="background:${m.color}"></span>${m.provider}</td><td>${score(m).toFixed(1)}</td><td>${costCell(m)}</td><td>${m.ttft}s</td><td>${m.tps} tok/s</td><td>${m.lifecycle||'Not reported'}</td>${compareCell(m)}</tr>`).join('')}</tbody></table></div>`}
 function modelCard(m,{rank=null}={}){let selected=TB.selected.includes(m.id),meta=rank?`#${rank} · ${m.provider}`:`<span class="provider-dot" style="background:${m.color}"></span>${m.provider} · ${m.access}`;return `<article class="panel rank-card model-card"><span class="tag">${meta}</span><h3 class="subhead rank-card-title">${link(m)}</h3><button class="toggle compare rank-card-compare" aria-pressed="${selected}" aria-label="${selected?'Remove':'Add'} ${m.name} ${selected?'from':'to'} comparison" data-id="${m.id}">${selected?'Selected':'Compare'}</button><div class="metrics rank-metrics"><div class="metric"><span class="label">Score</span><b>${score(m).toFixed(1)}</b></div><div class="metric"><span class="label">TTFT</span><b>${m.ttft}s</b></div><div class="metric"><span class="label">TPS</span><b>${m.tps}</b></div><div class="metric"><span class="label">Input / 1M</span><b>$${m.inputPrice.toFixed(2)}</b></div><div class="metric"><span class="label">Output / 1M</span><b>$${m.outputPrice.toFixed(2)}</b></div><div class="metric"><span class="label">Context</span><b>${m.context}</b></div></div></article>`}
@@ -27,15 +43,26 @@ function comparisonDecisionRows(models){
   return [
     ['Rank',model=>`#${rankById.get(model.id)}`],
     ['Provider',model=>`<span class="provider-dot" style="background:${compareHtml(model.color)}"></span>${compareHtml(model.provider)}`],
-    ['Composite',model=>score(model).toFixed(1)],
-    ['Input / output · $/1M',model=>`$${model.inputPrice.toFixed(2)} / $${model.outputPrice.toFixed(2)}`],
-    ['Blended cost · $/1M',model=>`$${model.cost.toFixed(2)}`],
-    ['TTFT',model=>`${model.ttft}s`],
-    ['Throughput',model=>`${model.tps} tok/s`],
+    ['Composite',model=>formatComparisonNumber(score(model),1)],
+    ['Input / output · $/1M',model=>`${formatComparisonCurrency(model.inputPrice)} / ${formatComparisonCurrency(model.outputPrice)}`],
+    [models.some(model=>model.costBasis)?'Cost per successful task':'Blended cost · $/1M',model=>model.costBasis?`${formatComparisonCurrency(model.cost)} / successful task`:formatComparisonCurrency(model.cost)],
+    ['TTFT',model=>Number.isFinite(model.ttft)?`${model.ttft}s`:'Unavailable'],
+    ['Throughput',model=>Number.isFinite(model.tps)?`${model.tps} tok/s`:'Unavailable'],
     ['Context window',model=>compareHtml(model.context)],
     ['Lifecycle',model=>compareHtml(model.lifecycle||'Not reported')]
   ];
 }
+
+function formatComparisonNumber(value,digits=0){return Number.isFinite(value)?Number(value).toFixed(digits):'Unavailable'}
+function formatComparisonCurrency(value){return Number.isFinite(value)?`$${Number(value).toFixed(2)}`:'Unavailable'}
+function comparisonCapabilityRows(){return [
+  ['Agentic',model=>formatComparisonNumber(domainScore(model,'agentic'))],
+  ['Coding',model=>formatComparisonNumber(domainScore(model,'coding'))],
+  ['Reasoning',model=>formatComparisonNumber(domainScore(model,'reasoning'))],
+  ['Math',model=>formatComparisonNumber(domainScore(model,'math'))],
+  ['Multimodal',model=>formatComparisonNumber(domainScore(model,'multimodal'))],
+  ['Throughput',model=>formatComparisonNumber(domainScore(model,'throughput'))]
+]}
 
 function comparisonMatrix(models,rows,{ariaLabel='Selected model comparison',id='comparison-matrix',allowRemove=false}={}){
   if(!models.length)return '<p class="empty">Select models to compare.</p>';
@@ -139,7 +166,7 @@ function mountModelPicker(root,{id,selectedIds,onAdd,max=MAX_COMPARE_MODELS,excl
   document.addEventListener('pointerdown',event=>{if(!picker.contains(event.target)&&!panel.hidden)close()},{signal:controller.signal});
 }
 
-window.TB={...TB,$,$$,domainScore,score,colors,chart,setupShell,link,modelOptions,radar,table,modelCard,bindCompare,normalizeModelIds,previewComparisonHref,comparisonDecisionRows,comparisonMatrix,selectedModelChips,bindComparisonRemovals,mountModelPicker,MAX_COMPARE_MODELS};
+window.TB={...TB,$,$$,domainScore,score,colors,chart,setupShell,link,modelOptions,radar,table,modelCard,bindCompare,normalizeModelIds,comparisonModels,comparisonModelById,previewComparisonHref,comparisonDecisionRows,comparisonCapabilityRows,comparisonMatrix,formatComparisonNumber,formatComparisonCurrency,selectedModelChips,bindComparisonRemovals,mountModelPicker,MAX_COMPARE_MODELS};
 
 const shellIcons={
   moon:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 15.4A8.5 8.5 0 0 1 8.6 3.7 8.5 8.5 0 1 0 20.3 15.4Z"/></svg>',
