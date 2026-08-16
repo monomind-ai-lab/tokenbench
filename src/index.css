@@ -1377,6 +1377,11 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-subtask-drawer dl > div { min-width: 0; display: flex; justify-content: space-between; gap: 9px; }
 .popular-models-subtask-drawer dt { color: var(--muted); font-size: 0.66rem; overflow-wrap: anywhere; }
 .popular-models-subtask-drawer dd { flex: 0 0 auto; margin: 0; font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; }
+@media (min-width: 1024px) {
+  .popular-models-desktop-table .popular-models-subtask-drawer { column-gap: 24px; row-gap: 10px; }
+  .popular-models-desktop-table .popular-models-subtask-drawer > section + section { position: relative; }
+  .popular-models-desktop-table .popular-models-subtask-drawer > section + section::before { content: ''; position: absolute; inset-block: 0; inset-inline-start: -12px; width: 1px; background: var(--outline); }
+}
 .popular-models-mobile-cards { display: none; min-width: 0; margin: 0; padding: 0; list-style: none; }
 .popular-models-mobile-card { min-width: 0; padding: 16px 0; border-bottom: 1px solid var(--outline); }
 .popular-models-mobile-card:last-child { border-bottom: 0; }

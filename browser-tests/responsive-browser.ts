@@ -3208,6 +3208,38 @@ test.describe('viewport and theme hydration matrix', () => {
 });
 
 test.describe('Popular Models terminology and contrast', () => {
+  test('separates expanded subtask categories with responsive spacing and dividers', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto('/popular-models/', { waitUntil: 'domcontentloaded' });
+
+    await page.getByRole('button', { name: /Expand .* subtasks/ }).first().click();
+    const desktopDrawer = page.locator('.popular-models-desktop-table .popular-models-subtask-drawer').first();
+    await expect(desktopDrawer).toBeVisible();
+    const desktopLayout = await desktopDrawer.evaluate((drawer) => {
+      const sections = [...drawer.querySelectorAll('section')];
+      return {
+        columnGap: Number.parseFloat(getComputedStyle(drawer).columnGap),
+        separators: sections.map((section) => {
+          const styles = getComputedStyle(section, '::before');
+          return {
+            content: styles.content,
+            width: Number.parseFloat(styles.width),
+          };
+        }),
+      };
+    });
+    expect(desktopLayout.columnGap).toBeGreaterThanOrEqual(20);
+    expect(desktopLayout.separators[0]?.content).toBe('none');
+    expect(desktopLayout.separators.slice(1).every((separator) => separator.content === '""' && separator.width === 1)).toBe(true);
+
+    await page.setViewportSize({ width: 375, height: 900 });
+    const mobileDrawer = page.locator('.popular-models-mobile-card .popular-models-subtask-drawer').first();
+    await expect(mobileDrawer).toBeVisible();
+    expect(await mobileDrawer.locator('section').evaluateAll((sections) => sections.every((section) => getComputedStyle(section, '::before').content === 'none'))).toBe(true);
+    expect(await mobileDrawer.evaluate((drawer) => drawer.scrollWidth <= drawer.clientWidth)).toBe(true);
+  });
+
   test('keeps dark-theme score highlights distinct and table headers centered', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await setStoredTheme(page, 'dark');
