@@ -44,6 +44,13 @@
   const modelRates = () => (window.TB_MODELS || []).filter((model) => Number.isFinite(model.inputPrice) && Number.isFinite(model.outputPrice));
   const modelById = (id) => modelRates().find((model) => model.id === id) || modelRates()[0];
   const price = (value) => Number.isFinite(value) ? money(value) : 'Unavailable';
+  const cacheFallbackNotes = (model) => [
+    !Number.isFinite(model.cacheRead) ? `Cache-read price unavailable; cache reads use standard input price (${rate(model.inputPrice)}).` : '',
+    !Number.isFinite(model.cacheWrite) ? `Cache-write price unavailable; cache writes use standard input price (${rate(model.inputPrice)}).` : '',
+  ].filter(Boolean);
+  const cachePriceEvidence = (value, kind, model) => Number.isFinite(value)
+    ? price(value)
+    : `Unavailable · cache-${kind} price unavailable; standard input fallback (${rate(model.inputPrice)})`;
 
   function buildModelOptions() {
     controls.model.innerHTML = modelRates().map((model) => `<option value="${model.id}">${model.name} — ${model.provider}</option>`).join('');
@@ -139,11 +146,15 @@
   function renderSummary(state, result) {
     const crossoverText = Number.isFinite(result.crossover) ? millions(result.crossover) : 'No API crossover';
     document.querySelector('#breakeven-crossover').textContent = crossoverText;
-    const lowerCost = !Number.isFinite(result.crossover)
-      ? 'SaaS is lower cost throughout the 0–300M token domain.'
-      : result.crossover >= DOMAIN_MAX_MILLIONS
-        ? 'API is lower cost throughout the 0–300M token domain.'
-        : `API is lower cost below ${millions(result.crossover)}; SaaS is lower cost at and above it.`;
+    const lowerCost = result.saasCost === 0
+      ? result.apiRate > 0
+        ? 'SaaS is equal at 0M tokens and lower cost for positive token volumes.'
+        : 'SaaS and API are equal throughout the 0–300M token domain.'
+      : !Number.isFinite(result.crossover)
+        ? 'SaaS is lower cost throughout the 0–300M token domain.'
+        : result.crossover >= DOMAIN_MAX_MILLIONS
+          ? 'API is lower cost throughout the 0–300M token domain.'
+          : `API is lower cost below ${millions(result.crossover)}; SaaS is lower cost at and above it.`;
     document.querySelector('#breakeven-lower-cost').textContent = lowerCost;
     document.querySelector('#breakeven-saas-cost').textContent = money(result.saasCost);
     document.querySelector('#breakeven-effective-rate').textContent = rate(result.apiRate);
@@ -153,8 +164,10 @@
 
   function renderPriceEvidence(result) {
     const model = result.model;
-    document.querySelector('#breakeven-price-table tbody').innerHTML = `<tr><th scope="row">${model.name}</th><td>${price(model.inputPrice)}</td><td>${price(model.outputPrice)}</td><td>${price(model.cacheRead)}</td><td>${price(model.cacheWrite)}</td></tr>`;
-    document.querySelector('#breakeven-source').textContent = `Source: TB_MODELS fixture data (${model.provider}) · price effective ${PRICE_EFFECTIVE_DATE} · inspected ${new Date().toISOString()}.`;
+    document.querySelector('#breakeven-price-table tbody').innerHTML = `<tr><th scope="row">${model.name}</th><td>${price(model.inputPrice)}</td><td>${price(model.outputPrice)}</td><td>${cachePriceEvidence(model.cacheRead, 'read', model)}</td><td>${cachePriceEvidence(model.cacheWrite, 'write', model)}</td></tr>`;
+    const fallbackNotes = cacheFallbackNotes(model);
+    const fallbackDisclosure = fallbackNotes.length ? ` · ${fallbackNotes.join(' ')}` : ' · Cache-read and cache-write prices are available in this fixture.';
+    document.querySelector('#breakeven-source').textContent = `Source: TB_MODELS fixture data (${model.provider}) · price effective ${PRICE_EFFECTIVE_DATE} · inspected ${new Date().toISOString()}${fallbackDisclosure}`;
   }
 
   function renderTable(result) {
@@ -198,13 +211,16 @@
 
   function renderDisclosures(state, result) {
     const cacheTerms = state.cacheReads || state.cacheWrites ? ` Cached reads are ${state.cacheReads}% and cached writes are ${state.cacheWrites}% of input tokens.` : '';
-    document.querySelector('#breakeven-formula').textContent = `SaaS = ${state.seats} seats × ${money(state.seatPrice)}. API = monthly tokens (in millions) × effective API rate (${rate(result.apiRate)}); crossover = SaaS ÷ effective API rate.${cacheTerms}${state.longContext ? ' A 1.5× long-context planning multiplier is included.' : ''}`;
+    const fallbackNotes = cacheFallbackNotes(result.model);
+    const fallbackTerms = fallbackNotes.length ? ` ${fallbackNotes.join(' ')}` : '';
+    document.querySelector('#breakeven-formula').textContent = `SaaS = ${state.seats} seats × ${money(state.seatPrice)}. API = monthly tokens (in millions) × effective API rate (${rate(result.apiRate)}); crossover = SaaS ÷ effective API rate.${cacheTerms}${fallbackTerms}${state.longContext ? ' A 1.5× long-context planning multiplier is included.' : ''}`;
     document.querySelector('#breakeven-assumptions').innerHTML = [
       'Model prices are illustrative TB_MODELS fixture values, not live provider pricing or a quote.',
       `Price effective date: ${PRICE_EFFECTIVE_DATE}.`,
       'Input/output mix is applied before the optional cache and long-context adjustments.',
       'Text is estimated at 4 characters per token; code is estimated at 3 characters per token.',
       'Taxes, platform fees, volume discounts, requests that do not bill tokens, and seat-plan limits are excluded.',
+      ...fallbackNotes,
     ].map((assumption) => `<li>${assumption}</li>`).join('');
     document.querySelector('#breakeven-timestamp').textContent = `Calculation timestamp: ${new Date().toISOString()} · Domain: 0–300M tokens/month.`;
   }
@@ -245,7 +261,10 @@
     });
     document.querySelector('#breakeven-copy-link').addEventListener('click', copyLink);
     document.querySelector('#breakeven-download-csv').addEventListener('click', downloadCsv);
-    document.querySelector('#breakeven-print').addEventListener('click', () => window.print());
+    document.querySelector('#breakeven-print').addEventListener('click', () => {
+      document.querySelector('#breakeven-action-status').textContent = 'Preparing print view…';
+      window.print();
+    });
   }
 
   buildModelOptions();

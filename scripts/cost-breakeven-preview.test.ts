@@ -51,7 +51,9 @@ function renderBreakeven(search = '') {
       window.URL.createObjectURL = () => 'blob:tokenbench-test';
       window.URL.revokeObjectURL = () => undefined;
       window.HTMLElement.prototype.scrollIntoView = () => undefined;
-      window.print = () => undefined;
+      let printCalls = 0;
+      window.print = () => { printCalls += 1; };
+      (window as unknown as { __printCalls: () => number }).__printCalls = () => printCalls;
     },
     runScripts: 'dangerously',
     url: `https://preview.tokenbench.test/cost/breakeven${search}`,
@@ -106,6 +108,40 @@ describe('cost breakeven preview', () => {
     expect(window.location.search).toContain('model=claude-3-5-sonnet');
     expect(window.location.search).toContain('seats=50');
     expect(window.location.search).toContain('tokenVolume=300');
+  });
+
+  it('discloses standard-input fallback whenever fixture cache prices are unavailable', () => {
+    const { document } = requirePage('?model=phi-4&cacheReads=20&cacheWrites=20');
+    const source = document.querySelector('#breakeven-source')?.textContent ?? '';
+    const priceEvidence = document.querySelector('#breakeven-price-table')?.textContent ?? '';
+    const formula = document.querySelector('#breakeven-formula')?.textContent ?? '';
+    const assumptions = document.querySelector('#breakeven-assumptions')?.textContent ?? '';
+
+    expect(source).toMatch(/cache-read price unavailable.*standard input/iu);
+    expect(source).toMatch(/cache-write price unavailable.*standard input/iu);
+    expect(priceEvidence).toMatch(/cache-read.*standard input/iu);
+    expect(priceEvidence).toMatch(/cache-write.*standard input/iu);
+    expect(formula).toMatch(/cache-read price unavailable.*standard input/iu);
+    expect(formula).toMatch(/cache-write price unavailable.*standard input/iu);
+    expect(assumptions).toMatch(/cache-read price unavailable.*standard input/iu);
+    expect(assumptions).toMatch(/cache-write price unavailable.*standard input/iu);
+  });
+
+  it('describes a zero-price SaaS baseline without a negative token region', () => {
+    const { document } = requirePage('?seats=5&seatPrice=0&model=claude-3-5-sonnet');
+    const lowerCost = document.querySelector('#breakeven-lower-cost')?.textContent ?? '';
+
+    expect(document.querySelector('#breakeven-crossover')?.textContent).toContain('0M tokens');
+    expect(lowerCost).not.toMatch(/below 0M tokens/iu);
+    expect(lowerCost).toMatch(/equal at 0M tokens.*lower cost for positive token volumes/iu);
+  });
+
+  it('announces print preparation before invoking the browser print action', () => {
+    const { document, window } = requirePage();
+    document.querySelector<HTMLButtonElement>('#breakeven-print')?.click();
+
+    expect(document.querySelector('#breakeven-action-status')?.textContent).toMatch(/preparing.*print/iu);
+    expect((window as unknown as { __printCalls: () => number }).__printCalls()).toBe(1);
   });
 
   it('keeps sampled chart curve values identical to the accessible evidence table', () => {

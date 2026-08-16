@@ -27,10 +27,17 @@
    ```text
    npm test -- scripts/cost-breakeven-preview.test.ts
    Test Files  1 passed (1)
-   Tests       5 passed (5)
+   Tests       8 passed (8)
    ```
 
    `git diff --check` was also clean for the three implementation/test files.
+
+## Review fix round
+
+- Added explicit cache-read/cache-write fallback disclosures to the selected-price evidence row, formula, and assumptions whenever a fixture lacks a cache rate; the effective rate continues to use the standard input price and now explains that substitution at every audit surface.
+- Added a zero-SaaS branch so the output says SaaS is equal at 0M and lower for positive token volumes, without describing an impossible negative/“below 0M” API region.
+- Added the live `Preparing print view…` status update before invoking `window.print()`.
+- Added regression tests for all three review findings. The pre-fix run was RED at 3 failing tests; the post-fix focused run is GREEN at 8/8.
 
 ## Integration handoff
 
