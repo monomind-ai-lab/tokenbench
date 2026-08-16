@@ -1872,6 +1872,21 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await expect(page.getByRole('img', { name: /Weighted score versus blended cost/ })).toBeVisible();
     await expect(page.getByRole('img', { name: /Weighted score ranking by blended cost/ })).toBeVisible();
 
+    const disclosureLayout = await page.evaluate(() => {
+      const details = [...document.querySelectorAll('.ranking-details, .sla-details, .weighted-insight-details')];
+      const panels = [...document.querySelectorAll('.weighted-insights-grid > .weighted-insight-panel')];
+      return {
+        details: details.map((element) => {
+          const style = getComputedStyle(element);
+          return { marginTop: style.marginTop, marginBottom: style.marginBottom, paddingTop: style.paddingTop, borderTop: style.borderTopStyle };
+        }),
+        panelHeights: panels.map((element) => Math.round(element.getBoundingClientRect().height)),
+      };
+    });
+    expect(disclosureLayout.details.length).toBe(4);
+    expect(disclosureLayout.details.every((layout) => layout.marginTop === '32px' && layout.marginBottom === '12px' && layout.paddingTop === '12px' && layout.borderTop === 'solid')).toBe(true);
+    expect(new Set(disclosureLayout.panelHeights).size).toBe(1);
+
     const disclosure = page.getByText('Exact weighted score and cost values').locator('..');
     await disclosure.click();
     const exactTable = disclosure.getByRole('table');
@@ -1913,8 +1928,12 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       'Claude 3.5 Sonnet',
       'Claude Opus 5',
     ]);
-    const costChartHeight = await page.locator('#weighted-cost-ranking-chart').evaluate((canvas) => Number.parseFloat(canvas.parentElement?.style.height || '0'));
-    expect(costChartHeight).toBeGreaterThanOrEqual(20 * 44);
+    const chartHeights = await page.evaluate(() => {
+      const height = (id: string) => Number.parseFloat((document.querySelector(`#${id}`)?.parentElement as HTMLElement | null)?.style.height || '0');
+      return { cost: height('weighted-cost-ranking-chart'), ttft: height('ttft-chart'), tps: height('tps-chart') };
+    });
+    expect(chartHeights.cost).toBe(chartHeights.ttft);
+    expect(chartHeights.cost).toBe(chartHeights.tps);
 
     await page.locator('#weight-agentic').fill('100');
     await expect(solScore).toHaveText('96.5');
@@ -2036,7 +2055,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     expect(png.suggestedFilename()).toMatch(/^tokenbench-weighted-score-cost-\d{4}-\d{2}-\d{2}\.png$/u);
   });
 
-  test('keeps every weighted score insights cost row pointer-reachable above the former height cap', async ({ page }) => {
+  test('matches weighted score cost chart height to the SLA bar charts while retaining row navigation', async ({ page }) => {
     const allModelIds = [
       'claude-3-5-sonnet', 'deepseek-v3', 'deepseek-r1', 'gpt-4o', 'gemini-1-5-pro', 'llama-3-3-70b',
       'gpt-5-6-sol', 'claude-mythos-5', 'claude-opus-5', 'gemini-3-6-pro', 'grok-4-5', 'deepseek-v4-pro-0813',
@@ -2050,16 +2069,23 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
     const geometry = await page.locator('#weighted-cost-ranking-chart').evaluate((canvas) => {
       const instance = (window as any).Chart.getChart(canvas);
+      const ttftCanvas = document.querySelector('#ttft-chart') as HTMLCanvasElement | null;
+      const tpsCanvas = document.querySelector('#tps-chart') as HTMLCanvasElement | null;
       const { top, bottom } = instance.chartArea;
       const models = instance.configuration.data.labels;
       return {
         modelCount: models.length,
         rowHeight: (bottom - top) / models.length,
         lastRowCenter: bottom - (bottom - top) / models.length / 2,
+        weightedHeight: (canvas.parentElement as HTMLElement).getBoundingClientRect().height,
+        ttftHeight: ttftCanvas?.parentElement?.getBoundingClientRect().height ?? 0,
+        tpsHeight: tpsCanvas?.parentElement?.getBoundingClientRect().height ?? 0,
       };
     });
     expect(geometry.modelCount).toBe(30);
-    expect(geometry.rowHeight).toBeGreaterThanOrEqual(44);
+    expect(geometry.weightedHeight).toBe(geometry.ttftHeight);
+    expect(geometry.weightedHeight).toBe(geometry.tpsHeight);
+    expect(geometry.rowHeight).toBeGreaterThan(0);
     await assertNoHorizontalOverflow(page);
 
     await page.locator('#weighted-cost-ranking-chart').evaluate((canvas, lastRowCenter) => {

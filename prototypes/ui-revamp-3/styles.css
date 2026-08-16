@@ -1526,11 +1526,17 @@ button:disabled {
 }
 
 .ranking-details {
-  margin-top: 20px;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .sla-details {
-  margin: 20px 0 12px;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .frontier-details {
@@ -1977,7 +1983,7 @@ button:disabled {
 }
 
 .weighted-insights-grid {
-  align-items: start;
+  align-items: stretch;
 }
 
 .weighted-insight-panel {
@@ -2009,7 +2015,10 @@ button:disabled {
 }
 
 .weighted-insight-details {
-  margin: 20px 0 0;
+  margin-top: 32px;
+  margin-bottom: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .weighted-insight-details summary {
