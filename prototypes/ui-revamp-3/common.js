@@ -13,13 +13,133 @@ function normalizeModelIds(ids,max=MAX_COMPARE_MODELS){let known=new Set((window
 function table(models,{showCompare=true,ariaLabel='Ranked model evidence',costMode='blended'}={}){let compareHead=showCompare?'<th scope="col">Compare</th>':'',compareCell=m=>showCompare?`<td><button class="toggle compare" aria-pressed="${TB.selected.includes(m.id)}" data-id="${m.id}">${TB.selected.includes(m.id)?'Selected':'Compare'}</button></td>`:'',costHead=costMode==='input-output'?'$ Cost In/Out':'Blended $/1M',costCell=m=>costMode==='input-output'?`$${m.inputPrice.toFixed(2)} / $${m.outputPrice.toFixed(2)}`:`$${m.cost.toFixed(2)}`;return `<div class="table-wrap" role="region" aria-label="${ariaLabel}" tabindex="0"><table><thead><tr><th scope="col">Rank</th><th scope="col">Model / profile</th><th scope="col">Provider</th><th scope="col">Composite</th><th scope="col">${costHead}</th><th scope="col">TTFT</th><th scope="col">Throughput</th><th scope="col">Lifecycle</th>${compareHead}</tr></thead><tbody>${models.map((m,i)=>`<tr><td>${i+1}</td><th scope="row">${link(m)}</th><td><span class="provider-dot" style="background:${m.color}"></span>${m.provider}</td><td>${score(m).toFixed(1)}</td><td>${costCell(m)}</td><td>${m.ttft}s</td><td>${m.tps} tok/s</td><td>${m.lifecycle||'Not reported'}</td>${compareCell(m)}</tr>`).join('')}</tbody></table></div>`}
 function modelCard(m,{rank=null}={}){let selected=TB.selected.includes(m.id),meta=rank?`#${rank} · ${m.provider}`:`<span class="provider-dot" style="background:${m.color}"></span>${m.provider} · ${m.access}`;return `<article class="panel rank-card model-card"><span class="tag">${meta}</span><h3 class="subhead rank-card-title">${link(m)}</h3><button class="toggle compare rank-card-compare" aria-pressed="${selected}" aria-label="${selected?'Remove':'Add'} ${m.name} ${selected?'from':'to'} comparison" data-id="${m.id}">${selected?'Selected':'Compare'}</button><div class="metrics rank-metrics"><div class="metric"><span class="label">Score</span><b>${score(m).toFixed(1)}</b></div><div class="metric"><span class="label">TTFT</span><b>${m.ttft}s</b></div><div class="metric"><span class="label">TPS</span><b>${m.tps}</b></div><div class="metric"><span class="label">Input / 1M</span><b>$${m.inputPrice.toFixed(2)}</b></div><div class="metric"><span class="label">Output / 1M</span><b>$${m.outputPrice.toFixed(2)}</b></div><div class="metric"><span class="label">Context</span><b>${m.context}</b></div></div></article>`}
 const compareRoots=new WeakSet();function bindCompare(root=document){if(compareRoots.has(root))return;compareRoots.add(root);root.addEventListener('click',event=>{let b=event.target.closest?.('.compare');if(!b||!root.contains(b))return;let id=b.dataset.id,target=root===document?document.body:root;$('.compare-limit',target)?.remove();TB.selected=normalizeModelIds(TB.selected);if(TB.selected.includes(id)){TB.selected=TB.selected.filter(x=>x!==id)}else if(TB.selected.length<MAX_COMPARE_MODELS){TB.selected.push(id)}else{target.insertAdjacentHTML('afterbegin','<p class="error compare-limit" role="status">Comparison is limited to four models. Remove one selected model before adding another.</p>');return}window.renderPage?.()})}
-window.TB={...TB,$,$$,domainScore,score,colors,chart,setupShell,link,modelOptions,radar,table,modelCard,bindCompare,normalizeModelIds,MAX_COMPARE_MODELS};
+
+function compareHtml(value){return String(value).replace(/[&<>'"]/g,character=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'})[character])}
+
+function comparisonDecisionRows(models){
+  const rankById=new Map(models.map((model,index)=>[model.id,index+1]));
+  return [
+    ['Rank',model=>`#${rankById.get(model.id)}`],
+    ['Provider',model=>`<span class="provider-dot" style="background:${compareHtml(model.color)}"></span>${compareHtml(model.provider)}`],
+    ['Composite',model=>score(model).toFixed(1)],
+    ['Input / output · $/1M',model=>`$${model.inputPrice.toFixed(2)} / $${model.outputPrice.toFixed(2)}`],
+    ['Blended cost · $/1M',model=>`$${model.cost.toFixed(2)}`],
+    ['TTFT',model=>`${model.ttft}s`],
+    ['Throughput',model=>`${model.tps} tok/s`],
+    ['Context window',model=>compareHtml(model.context)],
+    ['Lifecycle',model=>compareHtml(model.lifecycle||'Not reported')]
+  ];
+}
+
+function comparisonMatrix(models,rows,{ariaLabel='Selected model comparison',id='comparison-matrix',allowRemove=false}={}){
+  if(!models.length)return '<p class="empty">Select models to compare.</p>';
+  const modelHeading=model=>`<div class="comparison-model-heading"><span class="comparison-model-provider"><span class="provider-dot" style="background:${compareHtml(model.color)}"></span>${compareHtml(model.provider)}</span>${link(model)}${allowRemove?`<button class="text-action comparison-remove-model" type="button" data-remove-comparison-model="${compareHtml(model.id)}" aria-label="Remove ${compareHtml(model.name)} from comparison">${shellIcons.close}<span>Remove</span></button>`:''}</div>`;
+  const tableRows=rows.map(([label,value])=>`<tr><th scope="row">${compareHtml(label)}</th>${models.map(model=>`<td>${value(model)}</td>`).join('')}</tr>`).join('');
+  const mobileRows=rows.map(([label,value])=>`<section class="comparison-metric-card" role="listitem"><h4>${compareHtml(label)}</h4><dl>${models.map(model=>`<div><dt>${link(model)}</dt><dd>${value(model)}</dd></div>`).join('')}</dl></section>`).join('');
+  return `<div class="comparison-matrix" style="--comparison-model-count:${models.length}"><div class="comparison-matrix-scroll table-wrap" role="region" aria-label="${compareHtml(ariaLabel)}" aria-describedby="${compareHtml(id)}-scroll-help" tabindex="0"><table><thead><tr><th class="comparison-metric-column" scope="col">Metric</th>${models.map(model=>`<th scope="col">${modelHeading(model)}</th>`).join('')}</tr></thead><tbody>${tableRows}</tbody></table></div><p class="sr-only" id="${compareHtml(id)}-scroll-help">Scroll horizontally to view every selected model.</p><div class="comparison-matrix-mobile" role="list" aria-label="${compareHtml(ariaLabel)} by metric">${mobileRows}</div></div>`;
+}
+
+function selectedModelChips(models,{removable=true}={}){
+  return models.map(model=>`<span class="compare-model-chip" role="listitem"><a class="model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${compareHtml(model.name)}</a>${removable?`<button type="button" data-remove-comparison-model="${compareHtml(model.id)}" aria-label="Remove ${compareHtml(model.name)} from comparison" title="Remove ${compareHtml(model.name)}">${shellIcons.close}</button>`:''}</span>`).join('');
+}
+
+const comparisonRemovalControllers=new WeakMap();
+function bindComparisonRemovals(root,onRemove){
+  comparisonRemovalControllers.get(root)?.abort();
+  const controller=new AbortController();
+  comparisonRemovalControllers.set(root,controller);
+  root.addEventListener('click',event=>{
+    const button=event.target.closest?.('[data-remove-comparison-model]');
+    if(!button||!root.contains(button))return;
+    onRemove(button.dataset.removeComparisonModel);
+  },{signal:controller.signal});
+}
+
+const modelPickerControllers=new WeakMap();
+function mountModelPicker(root,{id,selectedIds,onAdd,max=MAX_COMPARE_MODELS}={}){
+  modelPickerControllers.get(root)?.abort();
+  const controller=new AbortController();
+  modelPickerControllers.set(root,controller);
+  const selected=normalizeModelIds(selectedIds,max);
+  const available=TB_MODELS.filter(model=>!selected.includes(model.id));
+  const atLimit=selected.length>=max;
+  const limitCopy=`${selected.length} of ${max} models selected${atLimit?'; remove a model to add another.':'.'}`;
+  root.innerHTML=`<div class="compare-model-picker" id="${compareHtml(id)}"><button class="button compare-model-picker-toggle${atLimit?' is-disabled':''}" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="${compareHtml(id)}-panel" aria-disabled="${atLimit}" title="${compareHtml(atLimit?limitCopy:'Search and add a model')}">${shellIcons.plus}<span>Add a model</span></button><div class="compare-model-picker-panel" id="${compareHtml(id)}-panel" role="dialog" aria-label="Add a model" hidden><label class="compare-model-picker-search">${shellIcons.search}<span class="sr-only">Search models or providers</span><input type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${compareHtml(id)}-options" autocomplete="off" placeholder="Search models or providers"></label><div class="compare-model-picker-options" id="${compareHtml(id)}-options" role="listbox" aria-label="Available models"></div><p class="compare-model-picker-status" role="status" aria-live="polite"></p></div><p class="sr-only compare-model-picker-limit" aria-live="polite">${compareHtml(limitCopy)}</p></div>`;
+  const picker=$('.compare-model-picker',root);
+  const toggle=$('.compare-model-picker-toggle',picker);
+  const panel=$('.compare-model-picker-panel',picker);
+  const input=$('input',picker);
+  const optionsRoot=$('.compare-model-picker-options',picker);
+  const status=$('.compare-model-picker-status',picker);
+  let matches=[];
+  let activeIndex=-1;
+
+  const setActive=index=>{
+    const optionButtons=$$('[role=option]',optionsRoot);
+    activeIndex=optionButtons.length?Math.max(0,Math.min(index,optionButtons.length-1)):-1;
+    optionButtons.forEach((button,buttonIndex)=>button.setAttribute('aria-selected',String(buttonIndex===activeIndex)));
+    const active=optionButtons[activeIndex];
+    input.setAttribute('aria-activedescendant',active?.id||'');
+    active?.scrollIntoView({block:'nearest'});
+  };
+  const renderOptions=()=>{
+    const query=input.value.trim().toLowerCase();
+    matches=available.filter(model=>`${model.name} ${model.provider} ${model.access}`.toLowerCase().includes(query));
+    optionsRoot.innerHTML=matches.length?matches.map((model,index)=>`<button class="compare-model-picker-option" id="${compareHtml(id)}-option-${index}" type="button" role="option" aria-selected="false" data-add-comparison-model="${compareHtml(model.id)}"><span><strong>${compareHtml(model.name)}</strong><small>${compareHtml(model.provider)} · ${compareHtml(model.access)}</small></span><span class="provider-dot" style="background:${compareHtml(model.color)}"></span></button>`).join(''):`<p class="compare-model-picker-empty">${query?'No models match this search.':'Every available model is already selected.'}</p>`;
+    status.textContent=matches.length?`${matches.length} model${matches.length===1?'':'s'} available.`:'No models available.';
+    setActive(matches.length?0:-1);
+  };
+  const close=({restoreFocus=false}={})=>{
+    panel.hidden=true;
+    toggle.setAttribute('aria-expanded','false');
+    input.setAttribute('aria-expanded','false');
+    input.setAttribute('aria-activedescendant','');
+    if(restoreFocus)toggle.focus();
+  };
+  const open=()=>{
+    if(atLimit){$('.compare-model-picker-limit',picker).textContent=limitCopy;return}
+    panel.hidden=false;
+    toggle.setAttribute('aria-expanded','true');
+    input.setAttribute('aria-expanded','true');
+    input.value='';
+    renderOptions();
+    requestAnimationFrame(()=>input.focus());
+  };
+  const choose=modelId=>{
+    if(!modelId||selected.includes(modelId)||selected.length>=max)return;
+    close();
+    onAdd(modelId);
+    requestAnimationFrame(()=>{
+      const nextPicker=document.getElementById(id);
+      const nextToggle=$('.compare-model-picker-toggle',nextPicker);
+      if(nextToggle?.getAttribute('aria-disabled')==='false')nextToggle.click();
+      else nextToggle?.focus();
+    });
+  };
+
+  toggle.addEventListener('click',()=>panel.hidden?open():close({restoreFocus:true}),{signal:controller.signal});
+  input.addEventListener('input',renderOptions,{signal:controller.signal});
+  input.addEventListener('keydown',event=>{
+    if(event.key==='ArrowDown'){event.preventDefault();setActive(activeIndex+1)}
+    else if(event.key==='ArrowUp'){event.preventDefault();setActive(activeIndex-1)}
+    else if(event.key==='Home'){event.preventDefault();setActive(0)}
+    else if(event.key==='End'){event.preventDefault();setActive(matches.length-1)}
+    else if(event.key==='Enter'&&activeIndex>=0){event.preventDefault();choose(matches[activeIndex]?.id)}
+    else if(event.key==='Escape'){event.preventDefault();close({restoreFocus:true})}
+  },{signal:controller.signal});
+  optionsRoot.addEventListener('click',event=>choose(event.target.closest?.('[data-add-comparison-model]')?.dataset.addComparisonModel),{signal:controller.signal});
+  document.addEventListener('pointerdown',event=>{if(!picker.contains(event.target)&&!panel.hidden)close()},{signal:controller.signal});
+}
+
+window.TB={...TB,$,$$,domainScore,score,colors,chart,setupShell,link,modelOptions,radar,table,modelCard,bindCompare,normalizeModelIds,comparisonDecisionRows,comparisonMatrix,selectedModelChips,bindComparisonRemovals,mountModelPicker,MAX_COMPARE_MODELS};
 
 const shellIcons={
   moon:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.3 15.4A8.5 8.5 0 0 1 8.6 3.7 8.5 8.5 0 1 0 20.3 15.4Z"/></svg>',
   sun:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   globe:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
   close:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>',
+  plus:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  search:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>',
   chevron:'<svg aria-hidden="true" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m4 6 4 4 4-4"/></svg>',
   grid:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="14" y="3.5" width="6.5" height="6.5" rx="1"/><rect x="3.5" y="14" width="6.5" height="6.5" rx="1"/><rect x="14" y="14" width="6.5" height="6.5" rx="1"/></svg>',
   list:'<svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>'

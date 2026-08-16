@@ -422,6 +422,297 @@ input[type=range] {
   flex-wrap: wrap;
 }
 
+.compare-tray-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.compare-list[role=list] {
+  list-style: none;
+}
+
+.compare-model-chip {
+  position: relative;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid color-mix(in srgb, var(--plum) 42%, var(--line));
+  border-radius: var(--pill);
+  background: color-mix(in srgb, var(--plum) 8%, var(--surface));
+}
+
+.compare-model-chip .model-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.compare-model-chip button {
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pill);
+  color: var(--muted);
+  background: transparent;
+}
+
+.compare-model-chip button:hover {
+  color: var(--ink);
+  background: var(--panel);
+}
+
+.compare-model-chip button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.compare-model-picker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.compare-model-picker-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.compare-model-picker-toggle svg {
+  width: 17px;
+  height: 17px;
+}
+
+.compare-model-picker-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.compare-model-picker-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 9;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(480px, calc(100vh - 120px));
+  padding: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r2);
+  background: var(--panel);
+  box-shadow: 0 18px 44px rgb(0 0 0 / .24);
+}
+
+.compare-model-picker-panel[hidden] {
+  display: none;
+}
+
+.compare-model-picker-search {
+  position: relative;
+  display: block;
+}
+
+.compare-model-picker-search > svg {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.compare-model-picker-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px 8px 38px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r1);
+  color: var(--ink);
+  background: var(--surface);
+}
+
+.compare-model-picker-options {
+  display: grid;
+  gap: 4px;
+  max-height: 320px;
+  margin-top: 8px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.compare-model-picker-option {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r1);
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+}
+
+.compare-model-picker-option > span:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.compare-model-picker-option strong,
+.compare-model-picker-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compare-model-picker-option small {
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+
+.compare-model-picker-option:hover,
+.compare-model-picker-option[aria-selected=true] {
+  border-color: color-mix(in srgb, var(--plum) 48%, var(--line));
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--plum) 10%, var(--surface));
+}
+
+.compare-model-picker-status,
+.compare-model-picker-empty {
+  margin: 8px 2px 0;
+  color: var(--muted);
+  font-size: var(--fs-11);
+}
+
+.comparison-matrix {
+  min-width: 0;
+}
+
+.comparison-matrix-scroll table {
+  width: 100%;
+  min-width: max(100%, calc(144px + var(--comparison-model-count) * 144px));
+  table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+
+.comparison-matrix-scroll th,
+.comparison-matrix-scroll td {
+  vertical-align: middle;
+}
+
+.comparison-matrix-scroll thead th {
+  height: auto;
+  min-width: 144px;
+  white-space: normal;
+}
+
+.comparison-matrix-scroll .comparison-metric-column,
+.comparison-matrix-scroll tbody th {
+  position: sticky;
+  left: 0;
+  width: 144px;
+  min-width: 144px;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.comparison-matrix-scroll .comparison-metric-column {
+  z-index: 3;
+}
+
+.comparison-model-heading {
+  min-width: 0;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+}
+
+.comparison-model-heading .model-name {
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.comparison-model-provider {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.comparison-remove-model {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.comparison-remove-model svg {
+  width: 14px;
+  height: 14px;
+}
+
+.comparison-matrix-mobile {
+  display: none;
+}
+
+.comparison-metric-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r1);
+  background: var(--surface);
+}
+
+.comparison-metric-card h4 {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: var(--fs-11);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.comparison-metric-card dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.comparison-metric-card dl > div {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.comparison-metric-card dt,
+.comparison-metric-card dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.comparison-metric-card dd {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .models-compare-tray #compare-more {
   margin-left: auto;
   text-align: right;
@@ -563,6 +854,42 @@ button:disabled {
   font: 800 var(--fs-20) 'JetBrains Mono', ui-monospace, monospace;
 }
 
+.compare-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r2);
+  background: var(--surface);
+}
+
+.compare-selected-block {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.compare-selected-block .compare-list {
+  min-height: 44px;
+  align-items: center;
+}
+
+.compare-selected-block .compare-list:empty::before {
+  content: 'No models selected yet.';
+  color: var(--muted);
+  font-size: var(--fs-12);
+}
+
+.compare-result-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .compare-controls {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -675,7 +1002,12 @@ button:disabled {
 }
 
 .compare-summary-grid {
-  grid-template-columns: minmax(360px, .8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(320px, .65fr) minmax(0, 1.35fr);
+}
+
+.compare-tray #comparison {
+  grid-template-columns: minmax(280px, .65fr) minmax(0, 1.35fr);
+  align-items: stretch;
 }
 
 .compare-radar-wrap {
@@ -1157,6 +1489,16 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .compare-composer {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .compare-composer .compare-model-picker,
+  .compare-composer .compare-model-picker-toggle {
+    width: 100%;
+  }
+
   .compare-optional-controls {
     grid-template-columns: 1fr;
   }
@@ -1207,6 +1549,37 @@ button:disabled {
 
   .compare-add-row .button {
     width: 100%;
+  }
+
+  .models-compare-tray > .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .compare-tray-actions,
+  .compare-model-picker,
+  .compare-model-picker-toggle {
+    width: 100%;
+  }
+
+  .compare-tray-actions {
+    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+
+  .compare-model-picker-panel {
+    right: 0;
+    left: 0;
+    width: 100%;
+  }
+
+  .comparison-matrix-scroll {
+    display: none;
+  }
+
+  .comparison-matrix-mobile {
+    display: grid;
+    gap: 8px;
   }
 
   .compare-radar-wrap {
@@ -1554,6 +1927,10 @@ button:disabled {
 }
 
 @media (max-width: 1100px) {
+  .compare-tray #comparison {
+    grid-template-columns: 1fr;
+  }
+
   .leaderboard-slider-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }

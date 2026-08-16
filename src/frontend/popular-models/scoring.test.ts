@@ -70,8 +70,8 @@ describe('popular-model scoring helpers', () => {
     ]);
   });
 
-  it('deduplicates, validates, bounds, and backfills comparison selections to two fixtures', () => {
-    const selectedFixtures = POPULAR_MODEL_FIXTURES.slice(0, 3);
+  it('deduplicates, validates, bounds to four, and backfills comparison selections to two fixtures', () => {
+    const selectedFixtures = POPULAR_MODEL_FIXTURES.slice(0, 5);
 
     expect(normalizePopularComparisonSelection([
       'not-a-fixture',
@@ -79,11 +79,13 @@ describe('popular-model scoring helpers', () => {
       selectedFixtures[1]!.id,
       selectedFixtures[2]!.id,
       selectedFixtures[0]!.id,
-      'later-fixture',
+      selectedFixtures[3]!.id,
+      selectedFixtures[4]!.id,
     ], selectedFixtures)).toEqual([
       selectedFixtures[1]!.id,
       selectedFixtures[2]!.id,
       selectedFixtures[0]!.id,
+      selectedFixtures[3]!.id,
     ]);
     expect(normalizePopularComparisonSelection([selectedFixtures[2]!.id], selectedFixtures)).toEqual([
       selectedFixtures[2]!.id,

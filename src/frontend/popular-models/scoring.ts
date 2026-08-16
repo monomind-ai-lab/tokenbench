@@ -237,7 +237,7 @@ export function buildPopularLogCostScatter(
   };
 }
 
-/** Ensures UI comparison controls always display two or three valid fixture IDs when possible. */
+/** Ensures UI comparison controls display two to four valid fixture IDs when possible. */
 export function normalizePopularComparisonSelection(
   requestedIds: readonly string[],
   availableFixtures: readonly PopularModelFixture[],
@@ -245,12 +245,12 @@ export function normalizePopularComparisonSelection(
   const availableIds = new Set(availableFixtures.map((fixture) => fixture.id));
   const normalized: string[] = [];
   for (const id of requestedIds) {
-    if (normalized.length === 3) break;
+    if (normalized.length === 4) break;
     if (availableIds.has(id) && !normalized.includes(id)) normalized.push(id);
   }
   const minimumSelectionCount = Math.min(2, availableFixtures.length);
   for (const fixture of availableFixtures) {
-    if (normalized.length >= minimumSelectionCount || normalized.length === 3) break;
+    if (normalized.length >= minimumSelectionCount || normalized.length === 4) break;
     if (!normalized.includes(fixture.id)) normalized.push(fixture.id);
   }
   return normalized;

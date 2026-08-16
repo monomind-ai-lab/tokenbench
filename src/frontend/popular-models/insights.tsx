@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type {
   ChartConfiguration,
@@ -8,6 +8,7 @@ import type {
   TooltipItem,
 } from 'chart.js';
 import { PopularChartCanvas } from './chart-canvas';
+import { PopularModelPicker } from './model-picker';
 import { useSiteTheme } from '../site-preferences';
 import { POPULAR_CATEGORY_KEYS, POPULAR_CATEGORY_LABELS } from './fixtures';
 import { normalizePopularComparisonSelection } from './scoring';
@@ -55,6 +56,7 @@ const PROVIDER_TOKEN_KEYS = [
 ] as const satisfies readonly (keyof PopularChartTheme)[];
 
 const POINT_STYLES: readonly PointStyle[] = ['circle', 'rectRounded', 'triangle', 'rectRot', 'crossRot', 'star', 'rect', 'cross'];
+const MAX_PROFILE_COMPARISON_MODELS = 4;
 
 function cssValue(styles: CSSStyleDeclaration, property: string): string {
   return styles.getPropertyValue(property).trim();
@@ -126,7 +128,6 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
     models[0]?.id ?? '',
     models[3]?.id ?? '',
   ], models));
-  const [candidateModelId, setCandidateModelId] = useState('');
   const [theme, setTheme] = useState<PopularChartTheme>(readChartTheme);
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setTheme(readChartTheme()));
@@ -264,7 +265,7 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
       labels: POPULAR_CATEGORY_KEYS.map((category) => POPULAR_CATEGORY_LABELS[category]),
       datasets: selectedModels.map((model, index) => {
         const style = providerStyle(model.organization);
-        const comparisonColors = [theme.primaryStrong, theme.tertiary, theme.warning] as const;
+        const comparisonColors = [theme.primaryStrong, theme.tertiary, theme.warning, theme.danger] as const;
         const comparisonColor = comparisonColors[index % comparisonColors.length];
         return {
           label: model.name,
@@ -296,10 +297,9 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
     },
   }), [organizations, selectedModels, theme]);
 
-  const addModel = () => {
-    if (!candidateModelId || selectedModelIds.length >= 3 || selectedModelIds.includes(candidateModelId)) return;
-    setSelectedModelIds((current) => [...current, candidateModelId]);
-    setCandidateModelId('');
+  const addModel = (modelId: string) => {
+    if (!modelId || selectedModelIds.length >= MAX_PROFILE_COMPARISON_MODELS || selectedModelIds.includes(modelId)) return;
+    setSelectedModelIds((current) => normalizePopularComparisonSelection([...current, modelId], models));
   };
   const removeModel = (id: string) => setSelectedModelIds((current) => current.length <= 2 ? current : current.filter((candidate) => candidate !== id));
 
@@ -334,19 +334,16 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
     </div>
 
     <article className="popular-models-insight-panel popular-models-profile-panel">
-      <div className="popular-models-chart-heading"><div><h3>Category profile comparison</h3><p>Compare two or three models across all seven benchmark categories.</p></div></div>
+      <div className="popular-models-chart-heading"><div><h3>Category profile comparison</h3><p>Compare two to four models across all seven benchmark categories.</p></div></div>
       <div className="popular-models-profile-controls">
         <div className="popular-models-selected-models" aria-label="Selected comparison models">
           {selectedModels.map((model) => <span className="popular-models-model-tag" key={model.id}><a href={modelHref(model)}>{model.name}</a><button type="button" aria-label={`Remove ${model.name}`} title={selectedModelIds.length <= 2 ? 'Keep at least two models selected' : `Remove ${model.name}`} disabled={selectedModelIds.length <= 2} onClick={() => removeModel(model.id)}><X aria-hidden="true" size={14} /></button></span>)}
         </div>
-        <div className="popular-models-add-model">
-          <label><span>Add a model</span><select className="popular-models-touch-target" value={candidateModelId} onChange={(event) => setCandidateModelId(event.target.value)} disabled={selectedModelIds.length >= 3}><option value="">Choose model</option>{availableModels.map((model) => <option value={model.id} key={model.id}>{model.name} · {model.organization}</option>)}</select></label>
-          <button className="button button-secondary popular-models-touch-target" type="button" disabled={!candidateModelId || selectedModelIds.length >= 3} onClick={addModel}><Plus aria-hidden="true" size={16} />Add model</button>
-        </div>
-        <p className="popular-models-comparison-status" role="status" aria-live="polite">{selectedModelIds.length} of 3 models selected. Add a third model, then remove one to replace a current selection.</p>
+        <PopularModelPicker models={availableModels} selectedCount={selectedModelIds.length} max={MAX_PROFILE_COMPARISON_MODELS} onAdd={addModel} />
+        <p className="popular-models-comparison-status" role="status" aria-live="polite">{selectedModelIds.length} of {MAX_PROFILE_COMPARISON_MODELS} models selected. {selectedModelIds.length >= MAX_PROFILE_COMPARISON_MODELS ? 'Remove a model to add another.' : `Add up to ${MAX_PROFILE_COMPARISON_MODELS - selectedModelIds.length} more.`}</p>
       </div>
       <div className="popular-models-chart-wrap popular-models-radar-chart"><PopularChartCanvas ariaLabel={`Seven-category profile comparison for ${selectedModels.map((model) => model.name).join(', ')}`} configuration={radarConfiguration} /></div>
-      <details className="popular-models-chart-data"><summary>Exact category profile values</summary><div className="popular-models-chart-table-wrap"><table><thead><tr><th scope="col">Model</th>{POPULAR_CATEGORY_KEYS.map((category) => <th scope="col" key={category}>{POPULAR_CATEGORY_LABELS[category]}</th>)}</tr></thead><tbody>{selectedModels.map((model) => <tr key={model.id}><th scope="row"><a href={modelHref(model)}>{model.name}</a></th>{POPULAR_CATEGORY_KEYS.map((category) => <td key={category}>{formatScore(model.categoryScores[category])}</td>)}</tr>)}</tbody></table></div></details>
+      <details className="popular-models-chart-data"><summary>Exact category profile values</summary><div className="popular-models-chart-table-wrap popular-models-profile-matrix-table"><table><thead><tr><th scope="col">Category</th>{selectedModels.map((model) => <th scope="col" key={model.id}><a href={modelHref(model)}>{model.name}</a><small>{model.organization}</small></th>)}</tr></thead><tbody>{POPULAR_CATEGORY_KEYS.map((category) => <tr key={category}><th scope="row">{POPULAR_CATEGORY_LABELS[category]}</th>{selectedModels.map((model) => <td key={model.id}>{formatScore(model.categoryScores[category])}</td>)}</tr>)}</tbody></table></div><div className="popular-models-profile-matrix-cards" role="list" aria-label="Category profile values by metric">{POPULAR_CATEGORY_KEYS.map((category) => <section key={category} role="listitem"><h4>{POPULAR_CATEGORY_LABELS[category]}</h4><dl>{selectedModels.map((model) => <div key={model.id}><dt><a href={modelHref(model)}>{model.name}</a></dt><dd>{formatScore(model.categoryScores[category])}</dd></div>)}</dl></section>)}</div></details>
     </article>
   </section>;
 }

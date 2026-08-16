@@ -32,17 +32,30 @@ describe('PopularModelsPage', () => {
     expect(within(leaderboard).getByRole('columnheader', { name: /Multi-step planning/ })).toBeInTheDocument();
   });
 
-  it('expands inline subtask evidence and supports a third comparison model', () => {
+  it('expands inline subtask evidence and compares up to four model columns through search', () => {
     render(<PopularModelsPage />);
 
     fireEvent.click(screen.getAllByRole('button', { name: /Expand Claude Opus 4.1 subtasks/ })[0]!);
     expect(screen.getAllByRole('region', { name: 'Reasoning subtasks' }).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Constraint synthesis').length).toBeGreaterThan(0);
 
-    const selector = screen.getByRole('combobox', { name: 'Add a model' });
-    fireEvent.change(selector, { target: { value: 'claude-haiku-4-5' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Add model' }));
-    expect(screen.getByText('3 of 3 models selected. Add a third model, then remove one to replace a current selection.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Add a model' }));
+    const search = screen.getByRole('combobox', { name: 'Search models or organizations' });
+    fireEvent.change(search, { target: { value: 'Haiku' } });
+    fireEvent.click(screen.getByRole('option', { name: /Claude Haiku 4.5/ }));
+    expect(screen.getByText('3 of 4 models selected. Add up to 1 more.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Claude Haiku 4.5' })).toBeEnabled();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Search models or organizations' }), { target: { value: 'DeepSeek V3.2' } });
+    fireEvent.click(screen.getByRole('option', { name: /DeepSeek V3.2/ }));
+    expect(screen.getByText('4 of 4 models selected. Remove a model to add another.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add a model' })).toBeDisabled();
+
+    const profileDetails = screen.getByText('Exact category profile values').closest('details')!;
+    fireEvent.click(within(profileDetails).getByText('Exact category profile values'));
+    const matrix = within(profileDetails).getByRole('table');
+    expect(within(matrix).getByRole('columnheader', { name: /Claude Opus 4.1/ })).toBeInTheDocument();
+    expect(within(matrix).getByRole('columnheader', { name: /DeepSeek V3.2/ })).toBeInTheDocument();
+    expect(within(matrix).getByRole('rowheader', { name: 'Reasoning' })).toBeInTheDocument();
   });
 });

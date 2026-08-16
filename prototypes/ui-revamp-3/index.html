@@ -14,7 +14,13 @@ setupShell();let view='cards';function filtered(){let q=$('#search').value.toLow
   compareMore.id = 'compare-more';
   compareMore.className = 'text-link';
   compareMore.textContent = 'More details';
-  modelsTray.querySelector(':scope > .toolbar').append(compareMore);
+  const modelsComparePicker = document.createElement('div');
+  modelsComparePicker.id = 'models-compare-picker-host';
+  const compareActions = document.createElement('div');
+  compareActions.className = 'compare-tray-actions';
+  compareActions.append(modelsComparePicker, compareMore);
+  modelsTray.querySelector(':scope > .toolbar').append(compareActions);
+  $('#selected-names').setAttribute('role', 'list');
   $('#search').setAttribute('aria-label', 'Search models or providers');
   $('#access').setAttribute('aria-label', 'Filter by access type');
   const catalogView = $('#cards').parentElement;
@@ -53,11 +59,23 @@ setupShell();let view='cards';function filtered(){let q=$('#search').value.toLow
     modelsTray.classList.toggle('show', show);
     $('#selection-count').textContent = `${TB.selected.length}/4`;
     $('#tray-selection-count').textContent = `${TB.selected.length} / 4 selected`;
-    $('#selected-names').innerHTML = models.map(model => `<a class="tag model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${model.name}</a>`).join('');
+    $('#selected-names').innerHTML = selectedModelChips(models);
+    bindComparisonRemovals($('#selected-names'), id => {
+      TB.selected = TB.selected.filter(candidate => candidate !== id);
+      window.renderPage();
+    });
+    mountModelPicker(modelsComparePicker, {
+      id: 'models-compare-picker',
+      selectedIds: TB.selected,
+      onAdd: id => {
+        TB.selected = normalizeModelIds([...TB.selected, id]);
+        window.renderPage();
+      }
+    });
     compareMore.href = `compare.html?${new URLSearchParams({models: models.map(model => model.id).join(',')})}`;
     compareMore.setAttribute('aria-label', `More details for ${models.length} selected models`);
     if (show) {
-      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short"><canvas id="radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><div class="comparison-table-head"><h3 class="subhead">Delta table</h3><button class="text-action" id="clear" type="button">clear</button></div>${table(models)}</div>`;
+      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short"><canvas id="radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><div class="comparison-table-head"><h3 class="subhead">Decision matrix</h3><button class="text-action" id="clear" type="button">clear</button></div>${comparisonMatrix(models, comparisonDecisionRows(models), {id: 'models-decision-matrix', ariaLabel: 'Selected model decision matrix'})}</div>`;
       radar($('#radar'), models);
       $('#clear').addEventListener('click', () => { TB.selected = []; window.renderPage(); });
     } else {
@@ -71,7 +89,6 @@ setupShell();let view='cards';function filtered(){let q=$('#search').value.toLow
     if (typeof Chart !== 'undefined') Chart.getChart($('#radar'))?.destroy();
     baseModelsRender();
     renderLifecyclePreview();
-    bindCompare($('#comparison'));
     $$('#catalog-output .compare').forEach(button => button.setAttribute('aria-pressed', String(TB.selected.includes(button.dataset.id))));
     updateCatalogCount();
     $('#cards').setAttribute('aria-pressed', String(view === 'cards'));

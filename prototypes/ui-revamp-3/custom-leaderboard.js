@@ -138,15 +138,28 @@
   }
 
   function renderLeaderboardCompare() {
+    TB.selected = normalizeModelIds(TB.selected);
     const models = TB.selected.map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
     const show = models.length >= 2;
     const shouldReveal = show && !comparisonWasVisible;
     $('#tray').classList.toggle('show', show);
-    $('#selected-names').innerHTML = models.map(model => `<a class="tag model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${escapeHtml(model.name)}</a>`).join('');
+    $('#selected-names').innerHTML = selectedModelChips(models);
+    bindComparisonRemovals($('#selected-names'), id => {
+      TB.selected = TB.selected.filter(candidate => candidate !== id);
+      renderPage(false);
+    });
+    mountModelPicker($('#leaderboard-compare-picker-host'), {
+      id: 'leaderboard-compare-picker',
+      selectedIds: TB.selected,
+      onAdd: id => {
+        TB.selected = normalizeModelIds([...TB.selected, id]);
+        renderPage(false);
+      }
+    });
     $('#compare-summary').textContent = show ? `${models.length} candidates selected · current ranking weights remain applied` : 'Select two to four models from Cards or Table.';
     if (show) {
       if (typeof Chart !== 'undefined') Chart.getChart($('#leaderboard-radar'))?.destroy();
-      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short"><canvas id="leaderboard-radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><h3 class="subhead">Decision deltas</h3><dl class="data-list">${models.map(model => `<div><dt>${link(model)}</dt><dd>${score(model).toFixed(1)} composite · ${model.ttft}s TTFT · ${model.tps} tok/s · $${model.inputPrice.toFixed(2)} / $${model.outputPrice.toFixed(2)} input/output · ${model.context} context · ${escapeHtml(model.lifecycle)}</dd></div>`).join('')}</dl></div>`;
+      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short"><canvas id="leaderboard-radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><h3 class="subhead">Decision matrix</h3>${comparisonMatrix(models, comparisonDecisionRows(models), {id: 'leaderboard-decision-matrix', ariaLabel: 'Ranked candidate decision matrix'})}</div>`;
       radar($('#leaderboard-radar'), models);
     } else {
       $('#comparison').innerHTML = '';

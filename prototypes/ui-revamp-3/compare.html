@@ -29,31 +29,20 @@
         <div>
           <p class="label compare-step-label">Start here</p>
           <h2 class="section-title" id="compare-selector-title">Choose 2–4 models</h2>
-          <p class="lede">Select the two required models first, then add up to two optional models. Selections from the Models workbench arrive here prefilled.</p>
+          <p class="lede">Search and add at least two models, then add up to two more if needed. Selections from the Models workbench arrive here prefilled.</p>
         </div>
         <div class="selection-progress" aria-live="polite"><span class="label">Selected</span><strong id="selection-progress">0 / 4</strong></div>
       </div>
       <form id="compare-form">
-        <div class="compare-controls" style="margin-top:20px">
-          <label class="model-slot"><span class="label">Required model 1</span><select id="left-model" class="model-selector" required aria-describedby="selector-status"></select></label>
-          <label class="model-slot"><span class="label">Required model 2</span><select id="right-model" class="model-selector" required aria-describedby="selector-status"></select></label>
-        </div>
-        <div class="compare-optional-controls" id="optional-controls">
-          <div class="optional-model-slot" data-optional-slot="2" hidden>
-            <label class="model-slot"><span class="label">Optional model 3</span><select id="third-model" class="model-selector" aria-describedby="selector-status"></select></label>
-            <button class="text-action optional-remove" type="button" data-remove-slot="2" aria-label="Remove optional model 3">Remove</button>
+        <div class="compare-composer" style="margin-top:20px">
+          <div class="compare-selected-block">
+            <span class="label">Selected models</span>
+            <div class="compare-list" id="compare-selected-models" role="list" aria-label="Selected comparison models"></div>
           </div>
-          <div class="optional-model-slot" data-optional-slot="3" hidden>
-            <label class="model-slot"><span class="label">Optional model 4</span><select id="fourth-model" class="model-selector" aria-describedby="selector-status"></select></label>
-            <button class="text-action optional-remove" type="button" data-remove-slot="3" aria-label="Remove optional model 4">Remove</button>
-          </div>
-        </div>
-        <div class="compare-add-row">
-          <button class="button" id="add-optional-model" type="button" aria-describedby="selector-status" disabled>Add optional model</button>
-          <span class="fixture">Optional slots unlock after both required models are selected.</span>
+          <div id="compare-page-picker-host"></div>
         </div>
         <div class="selector-actions">
-          <p id="selector-status" class="selector-status" aria-live="polite">Select required model 1 and required model 2 to begin.</p>
+          <p id="selector-status" class="selector-status" aria-live="polite">Add at least two models to begin.</p>
           <button class="button primary" id="run-compare" type="submit" disabled>Compare models</button>
         </div>
       </form>
@@ -68,9 +57,9 @@
       <div class="toolbar compare-result-head">
         <div>
           <h2 class="section-title" id="result-title"></h2>
-          <div class="compare-list" id="result-model-links"></div>
+          <div class="compare-list" id="result-model-links" role="list" aria-label="Models in this comparison"></div>
         </div>
-        <a class="text-link" href="index.html#catalog">Back to model catalog →</a>
+        <div class="compare-result-actions"><div id="compare-result-picker-host"></div><a class="text-link" href="index.html#catalog">Back to model catalog →</a></div>
       </div>
 
       <div class="grid-2 compare-summary-grid" style="margin-top:16px">
@@ -113,33 +102,13 @@
   <script>
     setupShell();
     const form = $('#compare-form');
-    const selectors = $$('.model-selector');
-    const [left, right] = selectors;
     const run = $('#run-compare');
-    const addOptional = $('#add-optional-model');
     const result = $('#compare-result');
-    let visibleSlots = 2;
-
-    selectors.forEach((select, index) => {
-      const placeholder = index < 2 ? `Select required model ${index + 1}` : `Select optional model ${index + 1}`;
-      select.innerHTML = `<option value="">${placeholder}</option>${modelOptions()}`;
-    });
-
     const rawRequested = (new URLSearchParams(location.search).get('models') || '').split(',').filter(Boolean);
-    const requested = normalizeModelIds(rawRequested);
-    requested.forEach((id, index) => { selectors[index].value = id; });
-    visibleSlots = Math.max(2, requested.length);
-
-    const selectedIds = () => normalizeModelIds(selectors.map(select => select.value).filter(Boolean));
+    let selection = normalizeModelIds(rawRequested);
+    const selectedIds = () => normalizeModelIds(selection);
     const chosen = () => selectedIds().map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
-    const requiredReady = () => Boolean(left.value && right.value && left.value !== right.value);
-    const validSelection = () => requiredReady() && selectedIds().length >= 2;
-
-    function setVisibleSlots(count) {
-      visibleSlots = Math.max(2, Math.min(MAX_COMPARE_MODELS, count));
-      $$('.optional-model-slot').forEach(slot => { slot.hidden = Number(slot.dataset.optionalSlot) >= visibleSlots; });
-      addOptional.hidden = visibleSlots >= MAX_COMPARE_MODELS;
-    }
+    const validSelection = () => selectedIds().length >= 2;
 
     function persistSelection() {
       const url = new URL(location.href);
@@ -149,31 +118,34 @@
       history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
     }
 
-    function syncOptionAvailability() {
-      const ids = selectedIds();
-      selectors.forEach(select => {
-        [...select.options].forEach(option => {
-          if (option.value) option.disabled = option.value !== select.value && ids.includes(option.value);
-        });
-      });
+    function updateSelection(nextSelection, {persist = true, refreshResult = true} = {}) {
+      const wasVisible = !result.hidden;
+      selection = normalizeModelIds(nextSelection);
+      if (selection.length < 2) result.hidden = true;
+      syncSelector({persist});
+      if (wasVisible && refreshResult && validSelection()) renderComparison(false, false);
     }
 
     function syncSelector({persist = false} = {}) {
       const ids = selectedIds();
+      selection = ids;
+      const models = chosen();
       const count = ids.length;
       const valid = validSelection();
-      syncOptionAvailability();
-      setVisibleSlots(visibleSlots);
+      TB.selected = ids;
+      $('#compare-selected-models').innerHTML = selectedModelChips(models);
+      bindComparisonRemovals($('#compare-selected-models'), id => updateSelection(selection.filter(candidate => candidate !== id)));
+      mountModelPicker($('#compare-page-picker-host'), {id: 'compare-page-picker', selectedIds: ids, onAdd: id => updateSelection([...selection, id])});
+      mountModelPicker($('#compare-result-picker-host'), {id: 'compare-result-picker', selectedIds: ids, onAdd: id => updateSelection([...selection, id])});
       $('#selection-progress').textContent = `${count} / ${MAX_COMPARE_MODELS}`;
       run.disabled = !valid;
       run.textContent = valid ? `Compare ${count} models` : 'Compare models';
-      addOptional.disabled = !requiredReady() || (visibleSlots > 2 && !selectors[visibleSlots - 1].value);
       const status = $('#selector-status');
       status.classList.toggle('ready', valid);
-      if (!left.value && !right.value) status.textContent = 'Select required model 1 and required model 2 to begin.';
-      else if (!requiredReady()) status.textContent = 'Choose both required model slots before comparing.';
-      else if (count === 2) status.textContent = '2 of 4 selected · ready to compare. Add up to 2 optional models if needed.';
-      else if (count === 3) status.textContent = '3 of 4 selected · ready to compare. Add 1 more optional model if needed.';
+      if (count === 0) status.textContent = 'Add at least two models to begin.';
+      else if (count === 1) status.textContent = '1 of 4 selected · add one more model to compare.';
+      else if (count === 2) status.textContent = '2 of 4 selected · ready to compare. Add up to 2 more models if needed.';
+      else if (count === 3) status.textContent = '3 of 4 selected · ready to compare. Add 1 more model if needed.';
       else status.textContent = '4 of 4 selected · ready to compare.';
       if (persist) persistSelection();
     }
@@ -200,22 +172,15 @@
       });
     }
 
-    function comparisonMatrix(models, rows, ariaLabel) {
-      return `<div class="table-wrap" role="region" aria-label="${ariaLabel}" tabindex="0"><table><thead><tr><th scope="col">Specification</th>${models.map(model => `<th scope="col">${link(model)}</th>`).join('')}</tr></thead><tbody>${rows.map(([label, value]) => `<tr><th scope="row">${label}</th>${models.map(model => `<td>${value(model)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
-    }
-
-    function decisionCards(models) {
-      return `<div class="compare-decision-cards">${models.map((model, index) => `<article class="compare-decision-card"><div class="comparison-table-head"><span class="tag">#${index + 1} · ${model.provider}</span>${link(model)}</div><dl><div><dt>Composite</dt><dd>${score(model).toFixed(1)}</dd></div><div><dt>Blended $/1M</dt><dd>$${model.cost.toFixed(2)}</dd></div><div><dt>TTFT</dt><dd>${model.ttft}s</dd></div><div><dt>Throughput</dt><dd>${model.tps} tok/s</dd></div><div><dt>Lifecycle</dt><dd>${model.lifecycle || 'Not reported'}</dd></div></dl></article>`).join('')}</div>`;
-    }
-
     function renderComparison(updateUrl = true, reveal = false) {
       if (!validSelection()) { syncSelector(); return; }
       const models = chosen();
       TB.selected = models.map(model => model.id);
       if (updateUrl) persistSelection();
       $('#result-title').textContent = models.length === 2 ? `${models[0].name} vs ${models[1].name}` : `${models.length}-model comparison`;
-      $('#result-model-links').innerHTML = models.map(model => `<a class="tag model-name" href="model-profile.html?model=${encodeURIComponent(model.id)}">${model.name}</a>`).join('');
-      $('#compare-deltas').innerHTML = table(models, {showCompare: false, ariaLabel: 'Selected model decision comparison'}) + decisionCards(models);
+      $('#result-model-links').innerHTML = selectedModelChips(models);
+      bindComparisonRemovals($('#result-model-links'), id => updateSelection(selection.filter(candidate => candidate !== id)));
+      $('#compare-deltas').innerHTML = comparisonMatrix(models, comparisonDecisionRows(models), {id: 'compare-decision-matrix', ariaLabel: 'Selected model decision matrix'});
       $('#compare-capability-table').innerHTML = comparisonMatrix(models, [
         ['Agentic', model => domainScore(model, 'agentic').toFixed(0)],
         ['Coding', model => domainScore(model, 'coding').toFixed(0)],
@@ -223,7 +188,7 @@
         ['Math', model => domainScore(model, 'math').toFixed(0)],
         ['Multimodal', model => domainScore(model, 'multimodal').toFixed(0)],
         ['Throughput', model => domainScore(model, 'throughput').toFixed(0)]
-      ], 'Exact capability comparison');
+      ], {id: 'compare-capability-matrix', ariaLabel: 'Exact capability comparison'});
       $('#compare-specs').innerHTML = comparisonMatrix(models, [
         ['Provider', model => model.provider],
         ['Access', model => model.access],
@@ -237,7 +202,7 @@
         ['Throughput', model => `${model.tps} tok/s`],
         ['Lifecycle', model => model.lifecycle || 'Unavailable'],
         ['Sunset', model => model.sunset || 'Not reported']
-      ], 'Itemized model comparison');
+      ], {id: 'compare-specification-matrix', ariaLabel: 'Itemized model comparison'});
       $('#compare-radar').setAttribute('aria-label', `Capability radar comparing ${models.map(model => model.name).join(', ')}`);
       $('#compare-cost').setAttribute('aria-label', `Blended cost comparison for ${models.map(model => model.name).join(', ')}`);
       $('#compare-ttft').setAttribute('aria-label', `Time to first token comparison for ${models.map(model => model.name).join(', ')}`);
@@ -251,33 +216,12 @@
       if (reveal) requestAnimationFrame(() => result.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start'}));
     }
 
-    selectors.forEach(select => select.addEventListener('change', () => { result.hidden = true; syncSelector({persist: true}); }));
-    addOptional.addEventListener('click', () => {
-      if (visibleSlots >= MAX_COMPARE_MODELS) return;
-      result.hidden = true;
-      setVisibleSlots(visibleSlots + 1);
-      syncSelector();
-      selectors[visibleSlots - 1].focus();
-    });
-    $$('.optional-remove').forEach(button => button.addEventListener('click', () => {
-      const index = Number(button.dataset.removeSlot);
-      for (let cursor = index; cursor < visibleSlots - 1; cursor += 1) selectors[cursor].value = selectors[cursor + 1].value;
-      selectors[visibleSlots - 1].value = '';
-      setVisibleSlots(visibleSlots - 1);
-      result.hidden = true;
-      syncSelector({persist: true});
-      addOptional.focus();
-    }));
     form.addEventListener('submit', event => { event.preventDefault(); renderComparison(true, true); });
     $$('.pair-shortcut').forEach(button => button.addEventListener('click', () => {
-      left.value = button.dataset.left;
-      right.value = button.dataset.right;
-      selectors.slice(2).forEach(select => { select.value = ''; });
-      setVisibleSlots(2);
+      updateSelection([button.dataset.left, button.dataset.right], {persist: true, refreshResult: false});
       renderComparison(true, true);
     }));
     window.renderPage = () => { if (!result.hidden && validSelection()) renderComparison(false, false); };
-    setVisibleSlots(visibleSlots);
     syncSelector({persist: true});
     if (validSelection()) renderComparison(false, false);
   </script>
