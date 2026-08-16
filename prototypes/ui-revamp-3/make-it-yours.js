@@ -349,9 +349,10 @@
     });
     $('#compare-summary').textContent = show ? `${models.length} candidates selected · current ranking weights remain applied` : 'Select two to four models from Cards or Table.';
     $('#compare-more').href = previewComparisonHref(TB.selected);
-    $('#compare-more').setAttribute('aria-label', `More details for ${models.length} selected models`);
+    $('#compare-more').textContent = 'In-depth comparison';
+    $('#compare-more').setAttribute('aria-label', `In-depth comparison for ${models.length} selected models`);
     if (show) {
-      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short quick-comparison-radar"><canvas id="leaderboard-radar" role="img" aria-label="Selected model capability radar"></canvas></div><details class="quick-comparison-details"><summary>Exact capability values</summary>${comparisonMatrix(models, comparisonCapabilityRows(), {id: 'leaderboard-capability-matrix', ariaLabel: 'Exact capability comparison'})}</details></div><div class="panel"><h3 class="subhead">Decision matrix</h3>${comparisonMatrix(models, comparisonDecisionRows(models), {id: 'leaderboard-decision-matrix', ariaLabel: 'Ranked candidate decision matrix'})}</div>`;
+      $('#comparison').innerHTML = `<div class="panel soft"><h3 class="subhead">Capability overlay</h3><div class="chart-wrap short quick-comparison-radar"><canvas id="leaderboard-radar" role="img" aria-label="Selected model capability radar"></canvas></div></div><div class="panel"><h3 class="subhead">Decision matrix</h3>${comparisonMatrix(models, comparisonDecisionRows(models), {id: 'leaderboard-decision-matrix', ariaLabel: 'Ranked candidate decision matrix'})}</div>`;
       leaderboardQuickRadar = radar($('#leaderboard-radar'), models);
     } else {
       $('#comparison').innerHTML = '';

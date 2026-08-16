@@ -803,6 +803,26 @@ input[type=range] {
   text-align: left;
 }
 
+.leaderboard-quick-comparison-footer {
+  justify-content: flex-start;
+}
+
+.leaderboard-quick-comparison-footer #compare-more {
+  margin-left: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--plum);
+  border-radius: var(--r1);
+  color: var(--accent-text);
+  background: var(--surface);
+}
+
+.leaderboard-quick-comparison-footer #compare-more:hover,
+.leaderboard-quick-comparison-footer #compare-more:focus-visible {
+  color: var(--accent-text);
+  background: color-mix(in srgb, var(--plum) 12%, var(--surface));
+  text-decoration: none;
+}
+
 .text-link {
   display: inline-flex;
   flex: 0 0 auto;
@@ -2124,6 +2144,46 @@ button:disabled {
 
 .leaderboard-comparison {
   margin-top: 12px;
+}
+
+.leaderboard-comparison > .panel:first-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.leaderboard-comparison > .panel:first-child .quick-comparison-radar {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 245px;
+  margin: 0 auto;
+}
+
+.leaderboard-comparison > .panel:first-child .quick-comparison-radar > canvas {
+  height: 100% !important;
+}
+
+.leaderboard-comparison > .panel:nth-child(2) > .subhead {
+  margin-bottom: 12px;
+}
+
+@media (min-width: 1101px) {
+  .leaderboard-comparison > .panel:first-child {
+    position: relative;
+  }
+
+  .leaderboard-comparison > .panel:first-child .quick-comparison-radar {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    left: 16px;
+    width: auto;
+    height: 245px;
+    min-height: 245px;
+    margin: 0;
+    transform: translateY(-50%);
+  }
 }
 
 .leaderboard-output-section {

@@ -2191,7 +2191,8 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
       const selectedNames = await workspace.getByRole('list', { name: 'Selected comparison models' }).getByRole('link').allTextContents();
       expect(selectedNames).toEqual(selected);
-      const detailsLink = workspace.getByRole('link', { name: 'More details' });
+      const detailsLabel = pathname === '/make-it-yours/' ? 'In-depth comparison' : 'More details';
+      const detailsLink = workspace.getByRole('link', { name: detailsLabel });
       await expect(detailsLink).toHaveAttribute('href', href);
       await expect(workspace.getByRole('img', { name: /Selected model capability radar|Seven-category profile comparison/ })).toBeVisible();
 
@@ -2202,7 +2203,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       expect(selectedActionBounds).not.toHaveLength(0);
       expect(selectedActionBounds.every((bounds) => bounds.width >= 44 && bounds.height >= 44)).toBe(true);
 
-      if (pathname !== '/popular-models/') {
+      if (pathname === '/models') {
         const exactValues = workspace.getByText('Exact capability values').locator('..');
         await exactValues.locator('summary').click();
         for (const label of ['Agentic', 'Coding', 'Reasoning', 'Math', 'Multimodal', 'Throughput']) {
@@ -2218,7 +2219,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
         const clear = element.querySelector('button[aria-label="clear"], button#clear')!.getBoundingClientRect();
         const selected = element.querySelector('[role="list"][aria-label="Selected comparison models"]')!;
         const picker = element.querySelector('.compare-model-picker, .popular-models-picker')!;
-        const detailsLink = [...element.querySelectorAll('a')].find((link) => link.textContent?.trim() === 'More details')!;
+          const detailsLink = [...element.querySelectorAll('a')].find((link) => ['More details', 'In-depth comparison'].includes(link.textContent?.trim() || ''))!;
         const details = detailsLink.getBoundingClientRect();
         const footer = detailsLink.closest('footer')!.getBoundingClientRect();
         const radar = element.querySelector('canvas')!.getBoundingClientRect();
@@ -2231,6 +2232,8 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
           detailsHeight: details.height,
           detailsLeft: details.left,
           footerLeft: footer.left,
+          detailsBorder: getComputedStyle(detailsLink).borderStyle,
+          detailsBackground: getComputedStyle(detailsLink).backgroundColor,
           radarCentered: Math.abs((radar.left + radar.right) / 2 - (radarParent.left + radarParent.right) / 2) < 1,
         };
       });
@@ -2239,6 +2242,10 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       expect(layout.detailsBelowHeading).toBe(true);
       expect(Math.abs(layout.detailsLeft - layout.footerLeft)).toBeLessThanOrEqual(1);
       expect(layout.detailsHeight).toBeGreaterThanOrEqual(44);
+      if (pathname === '/make-it-yours/') {
+        expect(layout.detailsBorder).toBe('solid');
+        expect(layout.detailsBackground).not.toBe('rgba(0, 0, 0, 0)');
+      }
       expect(layout.radarCentered).toBe(true);
 
       await page.setViewportSize({ width: 320, height: 844 });
@@ -2283,7 +2290,6 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
     for (const { pathname, candidate } of [
       { pathname: '/models', candidate: '#catalog-output .compare' },
-      { pathname: '/make-it-yours/', candidate: '#output .compare' },
     ]) {
       await page.goto(pathname);
       await page.locator(candidate).first().click();
@@ -2297,6 +2303,29 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       }
       expect(await exactValues.getByRole('columnheader').allTextContents()).toHaveLength(3);
     }
+  });
+
+  test('keeps Make it yours quick comparison focused and vertically centers its radar', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+    await page.goto('/make-it-yours/');
+    await page.locator('#output .compare').first().click();
+    await page.locator('#output .compare').nth(1).click();
+
+    const workspace = page.getByRole('region', { name: 'Quick comparison' });
+    await expect(workspace).toBeVisible();
+    await expect(workspace.getByText('Exact capability values', { exact: true })).toHaveCount(0);
+    await expect(workspace.getByRole('heading', { name: 'Decision matrix' })).toBeVisible();
+    await expect(workspace.getByRole('link', { name: 'In-depth comparison' })).toBeVisible();
+
+    const decisionMargin = await workspace.getByRole('heading', { name: 'Decision matrix' }).evaluate((heading) => getComputedStyle(heading).marginBottom);
+    expect(decisionMargin).toBe('12px');
+
+    const radarAlignment = await workspace.locator('#comparison > .panel:first-child').evaluate((panel) => {
+      const canvas = panel.querySelector('canvas')!.getBoundingClientRect();
+      const bounds = panel.getBoundingClientRect();
+      return { canvasCenter: (canvas.top + canvas.bottom) / 2, panelCenter: (bounds.top + bounds.bottom) / 2 };
+    });
+    expect(Math.abs(radarAlignment.canvasCenter - radarAlignment.panelCenter)).toBeLessThanOrEqual(2);
   });
 
   test('keeps only the current prototype radar instance through repeated quick comparison renders', async ({ page }) => {
