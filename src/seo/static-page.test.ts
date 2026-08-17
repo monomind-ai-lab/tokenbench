@@ -17,5 +17,9 @@ describe('static site chrome', () => {
     expect(html).toContain('aria-label="Newsletter signup"');
     expect(html).toContain('LLM API Cost &amp; Benchmark Cheatsheet');
     expect(html).not.toContain('href="/leaderboards/"');
+
+    const popularModelsHtml = staticChrome('<main id="page-content">Evidence</main>', 'popularModels');
+    expect(popularModelsHtml).toContain('id="primary-leaderboards-menu"');
+    expect(popularModelsHtml).toContain('aria-current="page">Leaderboards');
   });
 });

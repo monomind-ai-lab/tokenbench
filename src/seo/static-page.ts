@@ -70,7 +70,7 @@ function staticHeader(activePage: StaticNavigationPage): string {
     <nav id="primary-navigation" class="primary-nav" data-open="false" aria-label="Primary navigation">
       <a href="${PREVIEW_ROUTE_PATHS.home}"${activeAttribute(activePage === 'home')}>Home</a>
       <button id="primary-models-menu" class="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="primary-models-panel"${activeAttribute(activePage === 'models' || activePage === 'pricePerformance')}>Models ${chevron}</button>
-      <button id="primary-leaderboards-menu" class="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="primary-leaderboards-panel"${activeAttribute(activePage === 'leaderboards')}>Leaderboards ${chevron}</button>
+      <button id="primary-leaderboards-menu" class="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="primary-leaderboards-panel"${activeAttribute(activePage === 'leaderboards' || activePage === 'popularModels')}>Leaderboards ${chevron}</button>
       <a href="${PREVIEW_ROUTE_PATHS.compare}"${activeAttribute(activePage === 'compare')}>Compare</a>
       <a href="${PREVIEW_ROUTE_PATHS.calculator}"${activeAttribute(activePage === 'calculator')}>Subscribe vs API</a>
       <button id="primary-articles-menu" class="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="primary-articles-panel"${activeAttribute(activePage === 'guides')}>Articles ${chevron}</button>

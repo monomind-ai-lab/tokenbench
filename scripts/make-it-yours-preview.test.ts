@@ -36,8 +36,10 @@ describe('approved preview bundle', () => {
     expect(document).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/make-it-yours/">');
     expect(document).toContain('src="/ui-revamp-3-assets/make-it-yours.js');
     expect(document).toContain('href="/ui-revamp-3-assets/styles.css');
-    expect(shellScript).toContain("const leaderboardActive=current==='make-it-yours';");
+    expect(shellScript).toContain("const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);");
     expect(shellScript).toContain("location.pathname.replace(/\\/+$/, '').split('/').pop()||'index'");
+    expect(shellScript).toContain("const currentPage=current.replace(/\\.html$/,'');");
+    expect(shellScript).toContain("const costActive=['cost','calculator','breakeven'].includes(currentPage);");
 
     const expectedPages = [
       ['index.html', 'Empirical evidence for practical AI runtime and cost decisions.'],

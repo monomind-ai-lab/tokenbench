@@ -401,14 +401,16 @@ function setupNavigation(){
   if(!nav||!shell)return;
 
   const current=location.pathname.replace(/\/+$/, '').split('/').pop()||'index';
+  const currentPage=current.replace(/\.html$/,'');
   const homeActive=location.pathname==='/';
-  const modelsActive=['models','model-profile','model-lifecycle'].includes(current);
-  const leaderboardActive=current==='make-it-yours';
-  const articlesActive=['article-hybrid-router','articles','hybrid-router'].includes(current);
+  const modelsActive=['models','model-profile','model-lifecycle'].includes(currentPage);
+  const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);
+  const articlesActive=['article-hybrid-router','articles','hybrid-router'].includes(currentPage);
+  const costActive=['cost','calculator','breakeven'].includes(currentPage);
   const currentAttribute=active=>active?' aria-current="page"':'';
   nav.setAttribute('aria-label','Primary');
   nav.id='primary-navigation';
-  nav.innerHTML=`<a href="${PREVIEW_PATHS.home}"${currentAttribute(homeActive)}>Home</a><button class="nav-trigger" id="nav-models" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-models" data-menu="models"${currentAttribute(modelsActive)}>Models${shellIcons.chevron}</button><button class="nav-trigger" id="nav-leaderboards" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-leaderboards" data-menu="leaderboards"${currentAttribute(leaderboardActive)}>Leaderboards${shellIcons.chevron}</button><a href="${PREVIEW_PATHS.compare}"${currentAttribute(current==='compare')}>Compare</a><a href="${PREVIEW_PATHS.cost}"${current==='cost'?' aria-current="page"':''}>Subscribe vs API</a><button class="nav-trigger" id="nav-articles" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-articles" data-menu="articles"${currentAttribute(articlesActive)}>Articles${shellIcons.chevron}</button>`;
+  nav.innerHTML=`<a href="${PREVIEW_PATHS.home}"${currentAttribute(homeActive)}>Home</a><button class="nav-trigger" id="nav-models" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-models" data-menu="models"${currentAttribute(modelsActive)}>Models${shellIcons.chevron}</button><button class="nav-trigger" id="nav-leaderboards" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-leaderboards" data-menu="leaderboards"${currentAttribute(leaderboardActive)}>Leaderboards${shellIcons.chevron}</button><a href="${PREVIEW_PATHS.compare}"${currentAttribute(currentPage==='compare')}>Compare</a><a href="${PREVIEW_PATHS.cost}"${currentAttribute(costActive)}>Subscribe vs API</a><button class="nav-trigger" id="nav-articles" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-articles" data-menu="articles"${currentAttribute(articlesActive)}>Articles${shellIcons.chevron}</button>`;
 
   let menuToggle=$('#mobile-nav-toggle',shell);
   if(!menuToggle){

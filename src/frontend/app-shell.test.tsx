@@ -571,6 +571,12 @@ describe('responsive calculator app shell', () => {
     expect(menu).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('marks popular models inside the Leaderboards navigation group', () => {
+    render(<SiteHeader theme="dark" language="en" activePage="popularModels" onThemeToggle={vi.fn()} onLanguageChange={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Leaderboards' })).toHaveAttribute('aria-current', 'page');
+  });
+
   it('does not present API-only model owners as subscription plan providers', async () => {
     const apiOnlyOffer = {
       ...FRONTEND_TEST_CATALOG.modelOffers[1],

@@ -20,6 +20,9 @@ describe('preview navigation links', () => {
     expect(shell).toContain("cost:'/cost'");
     expect(shell).toContain("costCalculator:'/cost/calculator'");
     expect(shell).toContain("costBreakeven:'/cost/breakeven'");
+    expect(shell).toContain("const currentPage=current.replace(/\\.html$/,'');");
+    expect(shell).toContain("const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);");
+    expect(shell).toContain("const costActive=['cost','calculator','breakeven'].includes(currentPage);");
     expect(shell).not.toContain('https://tokenbench.monomind.one/models/');
     expect(shell).not.toContain('href="/models/"');
     expect(shell).not.toContain('href="/compare/"');
@@ -47,6 +50,10 @@ describe('preview navigation links', () => {
     expect(articleDetail).toContain('Related articles');
     expect(articleDetail).not.toContain('Related guides');
     expect(articleDetail).toContain('href="/articles/track-claude-code-usage/"');
+    expect(articleDetail).toContain('href="/models">Models workbench</a>');
+    expect(articleDetail).not.toContain('href="/guides/">Guides</a>');
+    expect(articles).toContain('href="/cost">Subscribe vs API</a>');
+    expect(articles).toContain('href="/models">Models workbench</a>');
     expect(articleDetail).toContain('href="/articles"');
   });
 
