@@ -1,10 +1,12 @@
-import { access, mkdtemp, rm, readFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
+import { previewStaticEntries, type PreviewStaticEntry } from '../src/preview/route-manifest';
 import { generateStaticPages } from './generate-static-pages';
+import { copyMakeItYoursPreview, prototypeBundleEntries } from './make-it-yours-preview';
 
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -14,6 +16,39 @@ afterEach(async () => {
 });
 
 describe('approved preview bundle', () => {
+  it('copies only prototype-delivered static entries from the manifest', async () => {
+    const reactEntry: PreviewStaticEntry = {
+      routeId: 'models',
+      delivery: 'react',
+      source: 'prototype-bundle',
+      outputPathname: '/models/',
+      output: ['models', 'index.html'],
+      document: 'index.html',
+      clearOutputDirectory: true,
+      match: {
+        routeId: 'models',
+        pathname: '/models/',
+        search: new URLSearchParams(),
+        hash: '',
+        params: {},
+      },
+    };
+
+    expect(prototypeBundleEntries()).toEqual(
+      previewStaticEntries().filter((entry) => entry.source === 'prototype-bundle' && entry.delivery === 'prototype'),
+    );
+    expect(prototypeBundleEntries([reactEntry])).toEqual([]);
+
+    const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-react-delivery-preview-'));
+    outputRoots.push(outputDir);
+    await mkdir(join(outputDir, 'models'), { recursive: true });
+    await writeFile(join(outputDir, 'models', 'index.html'), 'react delivery');
+
+    await copyMakeItYoursPreview(outputDir, [reactEntry]);
+
+    await expect(readFile(join(outputDir, 'models', 'index.html'), 'utf8')).resolves.toBe('react delivery');
+  });
+
   it('ships the list-first weighted score and cost insight contract', async () => {
     const script = await readFile('prototypes/ui-revamp-3/make-it-yours.js', 'utf8');
 

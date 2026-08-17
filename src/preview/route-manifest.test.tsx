@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SITE_CONFIG } from '../brand/site-config';
 import { GUIDES } from '../guides/content';
 import { matchPreviewRoute, previewPaths, previewRoutes, previewStaticEntries } from './route-manifest';
 
@@ -38,7 +39,7 @@ describe('preview route manifest', () => {
 
   it('derives one static article entry per guide from the manifest', () => {
     const staticEntries = previewStaticEntries();
-    const articleEntries = staticEntries.filter((entry) => entry.routeId === 'article-detail');
+    const articleEntries = staticEntries.filter((entry) => entry.source === 'generated-guide');
 
     expect(articleEntries).toHaveLength(GUIDES.length);
     expect(new Set(articleEntries.map((entry) => entry.outputPathname))).toHaveLength(GUIDES.length);
@@ -75,5 +76,58 @@ describe('preview route manifest', () => {
       name: route?.metadata(match!).h1,
       url: route?.metadata(match!).canonical,
     })]);
+  });
+
+  it.each([
+    {
+      href: 'https://tokenbench.test/articles',
+      canonical: `${SITE_CONFIG.origin}/articles/`,
+      title: 'Articles & guides — TokenBench',
+      description: 'TokenBench guides and prototype LLM insights for source-aware AI decisions.',
+      h1: 'Articles for the AI bill you can explain.',
+      schemaType: 'CollectionPage',
+    },
+    {
+      href: 'https://tokenbench.test/articles/hybrid-router',
+      canonical: `${SITE_CONFIG.origin}/articles/hybrid-router/`,
+      title: 'Hybrid router guide — TokenBench',
+      description: 'A decision framework for using a hybrid model router while keeping cost, evidence, escalation, and rollback explicit.',
+      h1: 'A hybrid router for high-stakes agentic work',
+      schemaType: 'Article',
+    },
+  ] as const)('publishes preview-specific metadata for $href', ({ href, canonical, title, description, h1, schemaType }) => {
+    const match = matchPreviewRoute(new URL(href));
+    const route = previewRoutes.find((candidate) => candidate.id === match?.routeId);
+    const metadata = route?.metadata(match!);
+
+    expect(metadata).toMatchObject({ canonical, title, description, h1 });
+    expect(metadata?.openGraph).toMatchObject({ url: canonical, title, description });
+    expect(route?.structuredData(match!)).toEqual([expect.objectContaining({
+      '@type': schemaType,
+      url: canonical,
+    })]);
+  });
+
+  it('owns the complete prototype bundle output set', () => {
+    const prototypeEntries = previewStaticEntries()
+      .filter((entry) => entry.source === 'prototype-bundle')
+      .map((entry) => `${entry.output.join('/')} <= ${entry.document}`);
+
+    expect(prototypeEntries.sort()).toEqual([
+      'index.html <= home.html',
+      'models.html <= index.html',
+      'models/index.html <= index.html',
+      'compare.html <= compare.html',
+      'compare/index.html <= compare.html',
+      'model-profile/index.html <= model-profile.html',
+      'model-lifecycle/index.html <= model-lifecycle.html',
+      'popular-models/index.html <= popular-models.html',
+      'make-it-yours/index.html <= make-it-yours.html',
+      'subscribe-vs-api/index.html <= cost-calculator.html',
+      'articles.html <= articles.html',
+      'articles/index.html <= articles.html',
+      'articles/hybrid-router.html <= article-hybrid-router.html',
+      'articles/hybrid-router/index.html <= article-hybrid-router.html',
+    ].sort());
   });
 });

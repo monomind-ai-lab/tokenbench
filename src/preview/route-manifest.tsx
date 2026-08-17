@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { SITE_CONFIG } from '../brand/site-config';
 import { CompareHubPage } from '../pages/compare-hub-page';
 import { HomePage } from '../pages/home-page';
 import { PopularModelsPage } from '../pages/popular-models-page';
@@ -6,6 +7,7 @@ import { PricePerformanceApp } from '../pages/price-performance-page';
 import { GuideArticlePage, GuidesHub } from '../frontend/guides-page';
 import { GUIDE_BY_SLUG, GUIDES } from '../guides/content';
 import { metadataForRoute } from '../seo/metadata';
+import type { PageMetadata } from '../seo/metadata';
 import type { PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewStaticEntry } from './route-types';
 
 export type { PreviewPageProps, PreviewPayloadDefinition, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewStaticEntry } from './route-types';
@@ -13,6 +15,66 @@ export type { PreviewPageProps, PreviewPayloadDefinition, PreviewRoute, PreviewR
 const defaultSkipLink = {
   skipLinkTarget: 'page-content',
   skipLinkLabel: 'Skip to page content',
+} as const;
+
+interface PrototypeBundleDefinition {
+  readonly outputPathname: string;
+  readonly output: readonly string[];
+  readonly document: string;
+  readonly clearOutputDirectory: boolean;
+}
+
+interface PreviewManifestRoute extends PreviewRoute {
+  readonly prototypeBundle: readonly PrototypeBundleDefinition[];
+}
+
+interface PreviewMetadataDefinition {
+  readonly title: string;
+  readonly description: string;
+  readonly h1: string;
+  readonly type?: 'website' | 'article';
+}
+
+const socialImage = `${SITE_CONFIG.origin}/og-guides.png`;
+
+function previewMetadata(pathname: string, definition: PreviewMetadataDefinition): PageMetadata {
+  const normalizedPathname = pathname === '/'
+    ? ''
+    : `${pathname.replace(/\/+$/, '')}/`;
+  const canonical = `${SITE_CONFIG.origin}${normalizedPathname}`;
+  return {
+    ...definition,
+    canonical,
+    robots: 'index,follow',
+    openGraph: {
+      type: definition.type ?? 'website',
+      title: definition.title,
+      description: definition.description,
+      url: canonical,
+      image: socialImage,
+      imageAlt: `${SITE_CONFIG.name} — ${definition.h1}`,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: definition.title,
+      description: definition.description,
+      image: socialImage,
+    },
+  };
+}
+
+const previewArticleMetadata = {
+  articles: previewMetadata('/articles/', {
+    title: `Articles & guides — ${SITE_CONFIG.name}`,
+    description: `${SITE_CONFIG.name} guides and prototype LLM insights for source-aware AI decisions.`,
+    h1: 'Articles for the AI bill you can explain.',
+  }),
+  hybridRouter: previewMetadata('/articles/hybrid-router/', {
+    title: `Hybrid router guide — ${SITE_CONFIG.name}`,
+    description: 'A decision framework for using a hybrid model router while keeping cost, evidence, escalation, and rollback explicit.',
+    h1: 'A hybrid router for high-stakes agentic work',
+    type: 'article',
+  }),
 } as const;
 
 function normalizePathname(pathname: string): string {
@@ -53,10 +115,21 @@ function structuredData(match: PreviewRouteMatch): readonly unknown[] {
   const route = previewRoutes.find((candidate) => candidate.id === match.routeId);
   if (!route) throw new Error(`Unknown preview route: ${match.routeId}`);
   const metadata = route.metadata(match);
+  if (route.id === 'article-detail') {
+    return [{
+      '@context': 'https://schema.org',
+      '@type': 'Article',
+      headline: metadata.h1,
+      description: metadata.description,
+      url: metadata.canonical,
+      mainEntityOfPage: metadata.canonical,
+    }];
+  }
   return [{
     '@context': 'https://schema.org',
-    '@type': 'WebPage',
+    '@type': route.id === 'articles' ? 'CollectionPage' : 'WebPage',
     name: metadata.h1,
+    description: metadata.description,
     url: metadata.canonical,
   }];
 }
@@ -84,6 +157,7 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: prototypeFallbackPage,
+    prototypeBundle: [{ outputPathname: '/', output: ['index.html'], document: 'home.html', clearOutputDirectory: false }],
   },
   {
     id: 'models',
@@ -96,6 +170,10 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: popularModelsPage,
+    prototypeBundle: [
+      { outputPathname: '/models.html', output: ['models.html'], document: 'index.html', clearOutputDirectory: true },
+      { outputPathname: '/models/', output: ['models', 'index.html'], document: 'index.html', clearOutputDirectory: true },
+    ],
   },
   {
     id: 'model-profile',
@@ -108,6 +186,7 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: prototypeFallbackPage,
+    prototypeBundle: [{ outputPathname: '/model-profile/', output: ['model-profile', 'index.html'], document: 'model-profile.html', clearOutputDirectory: false }],
   },
   {
     id: 'model-lifecycle',
@@ -120,6 +199,7 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: prototypeFallbackPage,
+    prototypeBundle: [{ outputPathname: '/model-lifecycle/', output: ['model-lifecycle', 'index.html'], document: 'model-lifecycle.html', clearOutputDirectory: false }],
   },
   {
     id: 'popular-models',
@@ -132,6 +212,7 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: popularModelsPage,
+    prototypeBundle: [{ outputPathname: '/popular-models/', output: ['popular-models', 'index.html'], document: 'popular-models.html', clearOutputDirectory: false }],
   },
   {
     id: 'make-it-yours',
@@ -144,6 +225,7 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: popularModelsPage,
+    prototypeBundle: [{ outputPathname: '/make-it-yours/', output: ['make-it-yours', 'index.html'], document: 'make-it-yours.html', clearOutputDirectory: false }],
   },
   {
     id: 'compare',
@@ -156,6 +238,10 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: compareHubPage,
+    prototypeBundle: [
+      { outputPathname: '/compare.html', output: ['compare.html'], document: 'compare.html', clearOutputDirectory: true },
+      { outputPathname: '/compare/', output: ['compare', 'index.html'], document: 'compare.html', clearOutputDirectory: true },
+    ],
   },
   {
     id: 'subscribe-vs-api',
@@ -168,6 +254,7 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: pricePerformancePage,
+    prototypeBundle: [{ outputPathname: '/subscribe-vs-api/', output: ['subscribe-vs-api', 'index.html'], document: 'cost-calculator.html', clearOutputDirectory: true }],
   },
   {
     id: 'articles',
@@ -175,11 +262,15 @@ const manifestRoutes = [
     outputPathname: '/articles',
     delivery: 'prototype',
     shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to articles' },
-    metadata: () => metadataForRoute({ kind: 'guides' }),
+    metadata: () => previewArticleMetadata.articles,
     structuredData,
     staticData: async () => undefined,
     payload: null,
     Page: guidesHubPage,
+    prototypeBundle: [
+      { outputPathname: '/articles.html', output: ['articles.html'], document: 'articles.html', clearOutputDirectory: false },
+      { outputPathname: '/articles/', output: ['articles', 'index.html'], document: 'articles.html', clearOutputDirectory: false },
+    ],
   },
   {
     id: 'article-detail',
@@ -189,14 +280,19 @@ const manifestRoutes = [
     shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to article content' },
     metadata: (match) => {
       const slug = match.params.slug;
+      if (slug === 'hybrid-router') return previewArticleMetadata.hybridRouter;
       return slug && GUIDE_BY_SLUG.has(slug)
         ? metadataForRoute({ kind: 'guides', slug })
-        : metadataForRoute({ kind: 'guides' });
+        : previewArticleMetadata.articles;
     },
     structuredData,
     staticData: async (match) => match.params.slug ? GUIDE_BY_SLUG.get(match.params.slug) : undefined,
     payload: null,
     Page: PrototypeArticlePage,
+    prototypeBundle: [
+      { outputPathname: '/articles/hybrid-router.html', output: ['articles', 'hybrid-router.html'], document: 'article-hybrid-router.html', clearOutputDirectory: false },
+      { outputPathname: '/articles/hybrid-router/', output: ['articles', 'hybrid-router', 'index.html'], document: 'article-hybrid-router.html', clearOutputDirectory: false },
+    ],
   },
   {
     id: 'llm-price-performance',
@@ -209,8 +305,9 @@ const manifestRoutes = [
     staticData: async () => undefined,
     payload: null,
     Page: pricePerformancePage,
+    prototypeBundle: [],
   },
-] as const satisfies readonly PreviewRoute[];
+] as const satisfies readonly PreviewManifestRoute[];
 
 export const previewRoutes: readonly PreviewRoute[] = manifestRoutes;
 
@@ -247,17 +344,26 @@ export const previewPaths = {
 
 export function previewStaticEntries(): readonly PreviewStaticEntry[] {
   return previewRoutes.flatMap((route) => {
-    if (route.id === 'article-detail') {
-      return GUIDES.map((guide) => ({
-        routeId: route.id,
-        outputPathname: `/articles/${guide.slug}/`,
-        match: routeMatch(route.id, new URL(`/articles/${guide.slug}/`, 'https://tokenbench.test'), { slug: guide.slug }),
-      }));
-    }
-    return [{
+    const manifestRoute = manifestRoutes.find((candidate) => candidate.id === route.id);
+    const prototypeBundle = manifestRoute?.prototypeBundle.map((entry) => ({
       routeId: route.id,
-      outputPathname: route.outputPathname,
-      match: routeMatch(route.id, new URL(route.outputPathname, 'https://tokenbench.test')),
-    }];
+      delivery: route.delivery,
+      source: 'prototype-bundle' as const,
+      ...entry,
+      match: routeMatch(route.id, new URL(entry.outputPathname, 'https://tokenbench.test')),
+    })) ?? [];
+    if (route.id === 'article-detail') {
+      return [...prototypeBundle, ...GUIDES.map((guide) => ({
+        routeId: route.id,
+        delivery: route.delivery,
+        source: 'generated-guide' as const,
+        outputPathname: `/articles/${guide.slug}/`,
+        output: ['articles', guide.slug, 'index.html'],
+        document: undefined,
+        clearOutputDirectory: false,
+        match: routeMatch(route.id, new URL(`/articles/${guide.slug}/`, 'https://tokenbench.test'), { slug: guide.slug }),
+      }))];
+    }
+    return prototypeBundle;
   });
 }

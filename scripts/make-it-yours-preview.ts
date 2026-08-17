@@ -2,6 +2,7 @@ import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Plugin } from 'vite';
+import { previewStaticEntries, type PreviewStaticEntry } from '../src/preview/route-manifest';
 import { FRONTEND_ASSETS } from '../src/routing/frontend-assets';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -10,29 +11,11 @@ const sharedAssetPath = '/ui-revamp-3-assets';
 const sharedAssetDirectoryName = sharedAssetPath.slice(1);
 const chartAssetSource = join(projectRoot, 'node_modules', 'chart.js', 'dist', 'chart.umd.js');
 
-interface PreviewPageBundle {
-  readonly output: readonly string[];
-  readonly document: string;
-}
-
-const previewPageBundles: readonly PreviewPageBundle[] = [
-  { output: ['index.html'], document: 'home.html' },
-  { output: ['models.html'], document: 'index.html' },
-  { output: ['models', 'index.html'], document: 'index.html' },
-  { output: ['compare.html'], document: 'compare.html' },
-  { output: ['compare', 'index.html'], document: 'compare.html' },
-  { output: ['model-profile', 'index.html'], document: 'model-profile.html' },
-  { output: ['model-lifecycle', 'index.html'], document: 'model-lifecycle.html' },
-  { output: ['popular-models', 'index.html'], document: 'popular-models.html' },
-  { output: ['make-it-yours', 'index.html'], document: 'make-it-yours.html' },
-  { output: ['subscribe-vs-api', 'index.html'], document: 'cost-calculator.html' },
-  { output: ['articles.html'], document: 'articles.html' },
-  { output: ['articles', 'index.html'], document: 'articles.html' },
-  { output: ['articles', 'hybrid-router.html'], document: 'article-hybrid-router.html' },
-  { output: ['articles', 'hybrid-router', 'index.html'], document: 'article-hybrid-router.html' },
-];
-
 const sharedScripts = ['common.js', 'data.js', 'make-it-yours.js', 'articles.js', 'article-detail.js', 'cost-calculator.js'] as const;
+
+export function prototypeBundleEntries(entries: readonly PreviewStaticEntry[] = previewStaticEntries()): readonly PreviewStaticEntry[] {
+  return entries.filter((entry) => entry.source === 'prototype-bundle' && entry.delivery === 'prototype');
+}
 
 function withSharedAssetPaths(document: string): string {
   return document
@@ -43,7 +26,8 @@ function withSharedAssetPaths(document: string): string {
     .replaceAll('/assets/tokenbench.css', FRONTEND_ASSETS.stylesheet);
 }
 
-async function copyPreviewPage(outputDirectory: string, page: PreviewPageBundle): Promise<void> {
+async function copyPreviewPage(outputDirectory: string, page: PreviewStaticEntry): Promise<void> {
+  if (!page.document) throw new Error(`Prototype bundle entry is missing its source document: ${page.outputPathname}`);
   const destination = join(outputDirectory, ...page.output);
   await mkdir(dirname(destination), { recursive: true });
   await writeFile(destination, withSharedAssetPaths(await readFile(join(prototypeDirectory, page.document), 'utf8')));
@@ -61,11 +45,13 @@ async function copySharedAssets(outputDirectory: string): Promise<void> {
 }
 
 /** Copies the approved rebuilt surfaces into their Pages canonical routes. */
-export async function copyMakeItYoursPreview(outputDirectory: string): Promise<void> {
-  await Promise.all(['models', 'compare', 'cost', 'subscribe-vs-api'].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
+export async function copyMakeItYoursPreview(outputDirectory: string, entries: readonly PreviewStaticEntry[] = previewStaticEntries()): Promise<void> {
+  const bundles = prototypeBundleEntries(entries);
+  const outputDirectories = new Set(bundles.flatMap((entry) => entry.clearOutputDirectory && entry.output.length > 1 ? [entry.output[0]] : []));
+  await Promise.all(['cost', ...outputDirectories].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
   await Promise.all([
     copySharedAssets(outputDirectory),
-    ...previewPageBundles.map((page) => copyPreviewPage(outputDirectory, page)),
+    ...bundles.map((page) => copyPreviewPage(outputDirectory, page)),
   ]);
 }
 

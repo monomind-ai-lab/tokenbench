@@ -50,6 +50,11 @@ export interface PreviewRoute {
 
 export interface PreviewStaticEntry {
   readonly routeId: PreviewRouteId;
+  readonly delivery: 'prototype' | 'react';
+  readonly source: 'prototype-bundle' | 'generated-guide';
   readonly outputPathname: string;
+  readonly output: readonly string[];
+  readonly document: string | undefined;
+  readonly clearOutputDirectory: boolean;
   readonly match: PreviewRouteMatch;
 }
