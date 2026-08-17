@@ -86,7 +86,8 @@ describe('crawlable static-page generator', () => {
     expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
     expect(guide).toContain('<html lang="en" data-theme="dark">');
     expect(guide).toContain(THEME_BOOTSTRAP);
-    expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
+    expect(guide).toContain('<main id="article-content" class="page-main" tabindex="-1">');
+    expect(guide).toContain('<main id="article-content" class="page-main" tabindex="-1"><div class="guides-main article-main">');
     expect(guide).toContain('<meta property="og:type" content="article">');
     expect(guide).toContain('https://tokenbench.monomind.one/articles/track-claude-code-usage/');
 
