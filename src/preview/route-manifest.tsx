@@ -187,13 +187,8 @@ function structuredData(match: PreviewRouteMatch): readonly unknown[] {
   }];
 }
 
-function articleChannel(search: URLSearchParams): 'all' | ArticleChannel {
-  const value = search.get('channel');
-  return value === 'guides' || value === 'insights' || value === 'news' ? value : 'all';
-}
-
-function ArticlesRoutePage({ match }: PreviewPageProps) {
-  return <ArticlesPage articles={ARTICLES} initialChannel={articleChannel(match.search)} />;
+function ArticlesRoutePage({ data }: PreviewPageProps) {
+  return <ArticlesPage articles={ARTICLES} initialChannel={parseArticlesPayload(data)?.channel ?? 'all'} />;
 }
 
 function ArticleDetailRoutePage({ match }: PreviewPageProps) {
@@ -415,7 +410,7 @@ const manifestRoutes = [
     shell: { activePage: 'guides', skipLinkTarget: 'article-content', skipLinkLabel: 'Skip to articles' },
     metadata: () => previewArticleMetadata.articles,
     structuredData,
-    staticData: async (match) => ({ channel: articleChannel(match.search) }),
+    staticData: async () => ({ channel: 'all' }),
     payload: articlesPayload,
     Page: articlesPage,
     prototypeBundle: [],

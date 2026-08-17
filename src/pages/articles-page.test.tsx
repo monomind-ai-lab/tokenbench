@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ARTICLES } from '../articles/content';
 import { ArticlesPage } from './articles-page';
 
@@ -36,5 +37,19 @@ describe('ArticlesPage', () => {
     expect(screen.getByRole('tab', { name: /^All/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('button', { name: 'All topics' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('searchbox', { name: 'Search articles' })).toHaveValue('');
+  });
+
+  it('uses the all-channel first render then synchronizes a valid direct channel URL without console errors', () => {
+    window.history.replaceState({}, '', '/articles?channel=insights');
+    const staticHtml = renderToStaticMarkup(<ArticlesPage articles={ARTICLES} initialChannel="all" />);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(staticHtml).toContain('id="article-tab-all" aria-controls="article-index" aria-selected="true"');
+    render(<ArticlesPage articles={ARTICLES} initialChannel="all" />);
+
+    expect(screen.getByRole('tab', { name: /^Insights/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('2 articles shown')).toBeVisible();
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 });

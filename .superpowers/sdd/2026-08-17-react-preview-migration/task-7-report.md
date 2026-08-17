@@ -79,3 +79,39 @@ Result: 12 files, 61 tests passed.
 
 - `npm test -- scripts/generate-static-pages.test.ts` has one known, unrelated Task 6-era failure: it expects the old exact Home string `<h1>Transparent AI Costs. Verified Benchmarks.</h1>`, while the completed React Home SSR emits `<h1 id="home-hero-heading">…</h1>`. Per coordination direction, this test was not changed for Task 7.
 - No Task 7 content-conversion concerns.
+
+## Fix round 1 — review findings
+
+### Contextual decision links
+
+- Added a semantic `Related decision context` navigation block to `ArticleDetailPage`.
+- The renderer iterates each record's `contextualLinks` and resolves `LeaderboardKey` values through the canonical route registry; no guide-specific links are hard-coded in the component.
+- Added a data-table test for all five guide records and their exact canonical destinations: four pricing/context links, plus coding and value-frontier links for the cost-optimization guide.
+
+### Channel-query hydration
+
+- The `/articles` manifest now emits the single static all-channel payload unconditionally.
+- `ArticlesRoutePage` uses that validated payload as the first render's `initialChannel`, so a direct `?channel=guides|insights|news` URL hydrates the same all-channel tree as the static document.
+- `ArticlesPage` synchronizes a valid current URL channel in an effect after hydration without mutating history; existing tab interactions continue to use `history.replaceState`.
+- Added regressions that prove all-channel first-render markup, direct URL effect synchronization, and resolver hydration at a `?channel=guides` URL with no console error or static-body replacement.
+
+### RED/GREEN evidence
+
+RED command:
+
+```sh
+npm test -- src/pages/article-detail-page.test.tsx src/pages/articles-page.test.tsx src/preview/client-resolver.test.tsx
+```
+
+Result: 7 expected failures — five missing contextual-navigation blocks, URL-channel-first article hydration markup, and missing post-hydration direct-channel synchronization.
+
+GREEN command:
+
+```sh
+npm test -- src/articles/content.test.ts src/pages/articles-page.test.tsx src/pages/article-detail-page.test.tsx src/preview/client-resolver.test.tsx src/preview/route-manifest.test.tsx src/frontend/guides-page.test.tsx src/GuidesApp.test.tsx scripts/generate-guide-pages.test.ts
+```
+
+Result: 8 files, 59 tests passed.
+
+- `npm run lint` — passed.
+- `npm run build` — passed; no-JS `/articles` remains substantive all-channel SSR and the build retains canonical article documents.

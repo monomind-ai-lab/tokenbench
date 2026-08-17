@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Clock } from 'lucide-react';
 import { articlePath, type Article, type ArticleChannel } from '../articles/content';
 
@@ -49,6 +49,10 @@ export function ArticlesPage({ articles, initialChannel }: ArticlesPageProps) {
   const [type, setType] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ArticleSort>('newest');
+  useEffect(() => {
+    const channelFromUrl = normalChannel(new URLSearchParams(window.location.search).get('channel'));
+    setChannel((current) => current === channelFromUrl ? current : channelFromUrl);
+  }, []);
   const channelCounts = useMemo(() => new Map(CHANNELS.map(({ value }) => [value, value === 'all' ? articles.length : articles.filter((article) => article.channel === value).length])), [articles]);
   const visibleArticles = useMemo(() => [...articles]
     .filter((article) => (channel === 'all' || article.channel === channel)

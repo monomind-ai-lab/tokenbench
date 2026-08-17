@@ -56,6 +56,20 @@ describe('startPreviewRoute', () => {
     expect(renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode)).toContain('A hybrid router for high-stakes agentic work');
   });
 
+  it('hydrates a direct article-channel URL from the static all-channel payload without a mismatch', () => {
+    document.body.innerHTML = '<div id="root"><section data-server-articles>Server articles</section></div><script id="articles-initial-data" type="application/json">{"channel":"all"}</script>';
+    window.history.replaceState({}, '', '/articles?channel=guides');
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'articles' });
+    expect(document.querySelector('[data-server-articles]')).toBeInTheDocument();
+    expect(createRootMock).not.toHaveBeenCalled();
+    const hydrated = renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode);
+    expect(hydrated).toContain('id="article-tab-all" aria-controls="article-index" aria-selected="true"');
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('preserves Popular Models SSR HTML when its dedicated payload is malformed', () => {
     const payload = document.getElementById('popular-models-initial-data')!;
     payload.textContent = '{bad json';

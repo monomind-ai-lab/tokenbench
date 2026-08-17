@@ -43,6 +43,23 @@ describe('ArticleDetailPage', () => {
     }
   });
 
+  it.each([
+    ['track-claude-code-usage', [['Review AI model pricing and context', '/leaderboards/llm/pricing-context/']]],
+    ['monitor-openai-codex-usage', [['Review AI model pricing and context', '/leaderboards/llm/pricing-context/']]],
+    ['openrouter-guide-model-routing-cost-controls', [['Review AI model pricing and context', '/leaderboards/llm/pricing-context/']]],
+    ['legitimate-free-ai-api-access-credits', [['Review AI model pricing and context', '/leaderboards/llm/pricing-context/']]],
+    ['reduce-llm-api-costs-caching-batch-output-limits', [['Review AI coding model benchmarks', '/leaderboards/llm/coding/'], ['Explore the LLM value frontier', '/leaderboards/llm/value/']]],
+  ] as const)('renders every contextual decision link for %s at its canonical destination', (slug, expectedLinks) => {
+    const article = ARTICLE_BY_SLUG.get(slug);
+    if (!article) throw new Error(`Missing guide article: ${slug}`);
+    render(<ArticleDetailPage article={article} />);
+
+    const contextualLinks = within(screen.getByRole('navigation', { name: 'Related decision context' }));
+    for (const [label, href] of expectedLinks) {
+      expect(contextualLinks.getByRole('link', { name: new RegExp(`^${label}`, 'u') })).toHaveAttribute('href', href);
+    }
+  });
+
   it('marks the selected table-of-contents item current and retains Hybrid Router’s text alternative', () => {
     const hybrid = ARTICLE_BY_SLUG.get('hybrid-router');
     if (!hybrid) throw new Error('Hybrid Router article fixture is missing');
