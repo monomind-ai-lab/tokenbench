@@ -700,6 +700,21 @@ describe('responsive calculator app shell', () => {
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
   });
 
+  it('uses the skip-link target as the shared main target', () => {
+    render(<AppShell
+      activePage="calculator"
+      language="en"
+      onLanguageChange={vi.fn()}
+      onThemeToggle={vi.fn()}
+      skipLinkLabel="Skip to calculator"
+      skipLinkTarget="calculator"
+      theme="dark"
+    ><p>Calculator content</p></AppShell>);
+
+    expect(screen.getByRole('link', { name: 'Skip to calculator' })).toHaveAttribute('href', '#calculator');
+    expect(screen.getByRole('main')).toHaveAttribute('id', 'calculator');
+  });
+
   it('renders comparison offers as compact cards at a 320px viewport', async () => {
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
     render(<App />);

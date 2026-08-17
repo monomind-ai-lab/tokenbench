@@ -180,7 +180,7 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
         <SiteHeader theme={theme} language={language} activePage={activePage} onThemeToggle={onThemeToggle} onLanguageChange={onLanguageChange} />
         {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
         {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
-        {contentWrapper === 'main' ? <main id="page-content" className="page-main" tabIndex={-1}>{children}</main> : children}
+        {contentWrapper === 'main' ? <main id={skipLinkTarget} className="page-main" tabIndex={-1}>{children}</main> : children}
         <SiteFooter disclaimer="Verify provider evidence before purchasing." />
       </div>
     </SiteThemeProvider>

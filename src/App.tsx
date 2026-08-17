@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { defaultApiEquivalentForPlan } from './catalog/plan-api-equivalent';
 import { redistributeModelMix } from './catalog/calculator';
 import type { ModelOffer, PlanOffer } from './catalog/contracts';
@@ -11,11 +11,10 @@ import {
 } from './frontend/calculator-state';
 import type { ConversationWorkload } from './catalog/subscription-api-calculator';
 import { Comparison } from './frontend/comparison';
-import { AppShell } from './frontend/app-shell';
+import { PageFrame } from './frontend/page-frame';
 import { API_ONLY_PROVIDER_IDS, paidIndividualPlans } from './frontend/plan-filter';
 import { recommendationForResult, ResultsDashboard, selectedPlanForProvider } from './frontend/results-dashboard';
 import { ShareAction } from './frontend/share-action';
-import { useSitePreferences } from './frontend/site-preferences';
 import { ComparisonPage } from './frontend/comparison-page';
 import type { ComparisonViewModel } from './frontend/comparison-contracts';
 import type { ModelProfileViewModel } from './frontend/model-profile-contracts';
@@ -31,38 +30,11 @@ import { ToolsPage } from './pages/tools-page';
 import { ModelProfilePage } from './pages/model-profile-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
 import { PopularModelsPage } from './pages/popular-models-page';
-import { matchRoute, ROUTE_PATHS, type LeaderboardKey, type SiteNavigationPage } from './routing/routes';
+import { matchRoute, ROUTE_PATHS, type LeaderboardKey } from './routing/routes';
+import type { PreviewRoute } from './preview/route-types';
 
-interface PageFrameProps {
-  readonly children: ReactNode;
-  readonly activePage?: SiteNavigationPage;
-  readonly skipLinkTarget?: string;
-  readonly skipLinkLabel?: string;
-  readonly catalogState?: CatalogState;
-  readonly surface?: 'default' | 'leaderboard-workbench';
-}
-
-function PageFrame({ children, activePage, skipLinkTarget, skipLinkLabel, catalogState, surface }: PageFrameProps) {
-  const { theme, language, toggleTheme, changeLanguage } = useSitePreferences();
-
-  return (
-    <AppShell
-      theme={theme}
-      language={language}
-      activePage={activePage}
-      skipLinkTarget={skipLinkTarget}
-      skipLinkLabel={skipLinkLabel}
-      onThemeToggle={toggleTheme}
-      onLanguageChange={changeLanguage}
-      catalogPhase={catalogState?.phase}
-      notice={catalogState?.notice}
-      error={catalogState?.error}
-      onRetry={catalogState?.retry}
-      surface={surface}
-    >
-      {children}
-    </AppShell>
-  );
+function pageShell(activePage?: PreviewRoute['shell']['activePage'], skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content'): PreviewRoute['shell'] {
+  return { activePage, skipLinkTarget, skipLinkLabel } as PreviewRoute['shell'];
 }
 
 const DEFAULT_WORKLOAD: ConversationWorkload = {
@@ -239,8 +211,8 @@ function CalculatorPage() {
   const focusResult = () => document.getElementById('calculator-result')?.focus();
 
   return (
-    <PageFrame activePage="calculator" skipLinkTarget="calculator" skipLinkLabel="Skip to calculator" catalogState={catalogState}>
-      <section id="calculator" className="content-stack calculator-page" aria-labelledby="calculator-heading" tabIndex={-1}>
+    <PageFrame shell={pageShell('calculator', 'calculator', 'Skip to calculator')} catalogState={catalogState}>
+      <section className="content-stack calculator-page" aria-labelledby="calculator-heading" tabIndex={-1}>
         <header className="calculator-intro">
           <h1 id="calculator-heading">Should you subscribe or pay as you go?</h1>
           <p>Estimate the API-equivalent value of an AI subscription from conversations, messages, directional tokens, and active days that match your workload.</p>
@@ -292,27 +264,27 @@ function CalculatorPage() {
 }
 
 function HomeRoute() {
-  return <PageFrame activePage="home"><HomePage /></PageFrame>;
+  return <PageFrame shell={pageShell('home')}><HomePage /></PageFrame>;
 }
 
 function ToolsRoute() {
-  return <PageFrame><ToolsPage /></PageFrame>;
+  return <PageFrame shell={pageShell()}><ToolsPage /></PageFrame>;
 }
 
 function CompareHubRoute() {
-  return <PageFrame activePage="compare"><CompareHubPage /></PageFrame>;
+  return <PageFrame shell={pageShell('compare')}><CompareHubPage /></PageFrame>;
 }
 
 function LeaderboardsRoute() {
-  return <PageFrame activePage="leaderboards"><LeaderboardDirectoryPage /></PageFrame>;
+  return <PageFrame shell={pageShell('leaderboards')}><LeaderboardDirectoryPage /></PageFrame>;
 }
 
 function PopularModelsRoute() {
-  return <PageFrame activePage="popularModels"><PopularModelsPage /></PageFrame>;
+  return <PageFrame shell={pageShell('popularModels')}><PopularModelsPage /></PageFrame>;
 }
 
 function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
-  return <PageFrame activePage="leaderboards"><LeaderboardPage keyName={keyName} /></PageFrame>;
+  return <PageFrame shell={pageShell('leaderboards')}><LeaderboardPage keyName={keyName} /></PageFrame>;
 }
 function ModelsRoute() {
   const [envelope, setEnvelope] = useState<ModelDirectoryEnvelope | null>(null);
@@ -329,7 +301,7 @@ function ModelsRoute() {
     return () => { active = false; };
   }, []);
 
-  return <PageFrame activePage="models">
+  return <PageFrame shell={pageShell('models')}>
     {envelope
       ? <ModelsPage envelope={envelope} />
       : <section className="content-stack models-page" data-server-models><section className="models-hero panel" aria-labelledby="models-heading"><span className="eyebrow">Weekly model directory</span><h1 id="models-heading">Popular AI models</h1><p>Loading the latest validated model directory.</p><Skeleton label="Loading popular models" /></section></section>}
@@ -338,7 +310,7 @@ function ModelsRoute() {
 
 /** Shared by the price-performance Pages Function response and browser hydration. */
 export function PricePerformanceRoute({ initialEnvelope }: { readonly initialEnvelope?: PricePerformanceEnvelope }) {
-  return <PageFrame activePage="pricePerformance">
+  return <PageFrame shell={pageShell('pricePerformance')}>
     <PricePerformanceApp initialEnvelope={initialEnvelope} />
   </PageFrame>;
 }
@@ -346,12 +318,12 @@ export function PricePerformanceRoute({ initialEnvelope }: { readonly initialEnv
 
 /** Shared by the Pages Function SSR response and browser hydration. */
 export function ComparisonDetailApp({ viewModel }: { readonly viewModel: ComparisonViewModel }) {
-  return <PageFrame activePage="compare"><ComparisonPage viewModel={viewModel} /></PageFrame>;
+  return <PageFrame shell={pageShell('compare')}><ComparisonPage viewModel={viewModel} /></PageFrame>;
 }
 
 /** Shared by each durable model Pages Function response and browser hydration. */
 export function ModelProfileApp({ viewModel }: { readonly viewModel: ModelProfileViewModel }) {
-  return <PageFrame activePage="models"><ModelProfilePage viewModel={viewModel} /></PageFrame>;
+  return <PageFrame shell={pageShell('models')}><ModelProfilePage viewModel={viewModel} /></PageFrame>;
 }
 
 export default function App() {
