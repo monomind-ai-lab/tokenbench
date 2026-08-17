@@ -115,6 +115,22 @@ describe('startPreviewRoute', () => {
     expect(window.location.search).toBe('?provider=DeepSeek');
   });
 
+  it('hydrates a direct Compare query from the substantive default static payload without replacing the first tree', async () => {
+    const comparison = await fixtureAdapter.comparison({ modelIds: ['gpt-4o', 'deepseek-v3'] });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    document.body.innerHTML = `<div id="root"><main data-server-compare>Server compare</main></div><script id="compare-initial-data" type="application/json">${JSON.stringify(comparison)}</script>`;
+    window.history.replaceState({}, '', '/compare?models=deepseek-v3,gpt-4o');
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'compare' });
+    expect(document.querySelector('[data-server-compare]')).toBeInTheDocument();
+    expect(createRootMock).not.toHaveBeenCalled();
+    const hydrated = renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode);
+    expect(hydrated).toContain('GPT-4o vs DeepSeek V3');
+    expect(hydrated).toContain('Exact capability comparison');
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
+  });
+
   it('does not mount an unmatched route', () => {
     window.history.replaceState({}, '', '/leaderboards/llm/coding/');
 

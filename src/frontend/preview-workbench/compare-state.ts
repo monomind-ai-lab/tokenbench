@@ -4,7 +4,8 @@ export interface CompareState {
   readonly modelIds: readonly string[];
 }
 
-export const DEFAULT_COMPARE_STATE: CompareState = { modelIds: [] };
+/** The existing representative fixture pair used by the static no-JavaScript document. */
+export const DEFAULT_COMPARE_STATE: CompareState = { modelIds: ['gpt-4o', 'deepseek-v3'] };
 
 /** Retains the first requested instance of each bounded comparison identifier. */
 export function normalizeCompareModelIds(modelIds: readonly string[]): readonly string[] {
@@ -20,6 +21,12 @@ export function normalizeCompareModelIds(modelIds: readonly string[]): readonly 
 
 export function decodeCompareState(params: URLSearchParams): CompareState {
   return { modelIds: normalizeCompareModelIds((params.get('models') ?? '').split(',')) };
+}
+
+/** Applies only complete two-to-four model queries; all other URL state keeps the static default. */
+export function compareStateFromQuery(params: URLSearchParams): CompareState {
+  const state = decodeCompareState(params);
+  return state.modelIds.length >= 2 ? state : DEFAULT_COMPARE_STATE;
 }
 
 export function encodeCompareState(state: CompareState): URLSearchParams {

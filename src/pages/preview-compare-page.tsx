@@ -12,10 +12,11 @@ import {
 } from '../frontend/preview-workbench/compare-export-actions';
 import {
   addCompareModel,
-  decodeCompareState,
+  compareStateFromQuery,
   DEFAULT_COMPARE_STATE,
   encodeCompareState,
   MAX_COMPARE_MODELS,
+  normalizeCompareModelIds,
   removeCompareModel,
   type CompareState,
 } from '../frontend/preview-workbench/compare-state';
@@ -31,6 +32,17 @@ interface PreviewComparePageProps extends PreviewPageProps {
 
 interface CompareMatrixRow extends CompareExportRow {
   readonly id: string;
+}
+
+interface CompareColumn {
+  readonly id: string;
+  readonly model: PreviewModel | null;
+  readonly name: string;
+  readonly unavailableReason: string | null;
+}
+
+interface KnownCompareColumn extends CompareColumn {
+  readonly model: PreviewModel;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -52,6 +64,13 @@ export function parsePreviewComparePageData(value: unknown): CompareContract | n
     && data.unavailableModelIds.every(unavailableId)
     ? value as unknown as CompareContract
     : null;
+}
+
+/** Uses the validated static payload order so SSR and the first client tree are identical. */
+function staticCompareState(value: unknown): CompareState {
+  const contract = parsePreviewComparePageData(value);
+  const modelIds = normalizeCompareModelIds(contract?.data?.models.map((model) => model.id) ?? []);
+  return modelIds.length >= 2 ? { modelIds } : DEFAULT_COMPARE_STATE;
 }
 
 function evidenceValue<T>(value: EvidenceValue<T>): T | null {
@@ -86,60 +105,87 @@ function money(value: number | null): string {
   return value === null ? 'Unavailable' : `$${value.toFixed(2)}`;
 }
 
-function selectedModelsInOrder(modelIds: readonly string[], models: readonly PreviewModel[]): readonly PreviewModel[] {
+function unavailableModelName(modelId: string): string {
+  return `Unavailable model (${modelId})`;
+}
+
+function unavailableReason(modelId: string): string {
+  return `No approved fixture for ${modelId}`;
+}
+
+function selectedColumnsInOrder(modelIds: readonly string[], models: readonly PreviewModel[]): readonly CompareColumn[] {
   const byId = new Map(models.map((model) => [model.id, model]));
-  return modelIds.flatMap((id) => {
+  return modelIds.map((id) => {
     const model = byId.get(id);
-    return model ? [model] : [];
+    return model
+      ? { id, model, name: modelName(model), unavailableReason: null }
+      : { id, model: null, name: unavailableModelName(id), unavailableReason: unavailableReason(id) };
   });
 }
 
-function capabilityRows(models: readonly PreviewModel[]): readonly CompareMatrixRow[] {
-  const axes = models.flatMap((model) => evidenceValue(model.capability)?.radar ?? []);
+function isKnownColumn(column: CompareColumn): column is KnownCompareColumn {
+  return column.model !== null;
+}
+
+function unavailableCell(column: CompareColumn): string {
+  return `Unavailable — ${column.unavailableReason ?? unavailableReason(column.id)}`;
+}
+
+function columnValue(column: CompareColumn, value: (model: PreviewModel) => string): string {
+  return column.model ? value(column.model) : unavailableCell(column);
+}
+
+function capabilityRows(columns: readonly CompareColumn[]): readonly CompareMatrixRow[] {
+  const axes = columns.flatMap((column) => column.model ? evidenceValue(column.model.capability)?.radar ?? [] : []);
   const keys = Array.from(new Set(axes.map((axis) => axis.key)));
   return keys.map((key) => {
     const axis = axes.find((candidate) => candidate.key === key)!;
     return {
       id: `capability-${key}`,
       label: axis.label,
-      values: models.map((model) => {
+      values: columns.map((column) => columnValue(column, (model) => {
         const value = evidenceValue(model.capability)?.radar.find((candidate) => candidate.key === key)?.percentile ?? null;
         return decimal(value);
-      }),
+      })),
     };
   });
 }
 
-function decisionRows(models: readonly PreviewModel[]): readonly CompareMatrixRow[] {
+function economicsRows(columns: readonly CompareColumn[]): readonly CompareMatrixRow[] {
   return [
-    { id: 'rank', label: 'Rank', values: models.map((_model, index) => `#${index + 1}`) },
-    { id: 'provider', label: 'Provider', values: models.map(modelProvider) },
-    { id: 'access', label: 'Access', values: models.map((model) => evidenceText(model.access, (value) => value)) },
-    { id: 'composite', label: 'Composite score', values: models.map((model) => decimal(evidenceValue(model.capability)?.compositeScore ?? null)) },
-    { id: 'input-output', label: 'Input / output · $/1M', values: models.map((model) => {
-      const pricing = evidenceValue(model.routePricing);
-      return pricing ? `${money(pricing.inputUsdPerMillion)} / ${money(pricing.outputUsdPerMillion)}` : 'Unavailable';
-    }) },
-    { id: 'cache-read', label: 'Cache read · $/1M', values: models.map((model) => {
-      const cache = evidenceValue(model.routePricing)?.cache;
-      return cache ? evidenceText(cache, (value) => evidenceText(value.readUsdPerMillion, money)) : 'Unavailable';
-    }) },
-    { id: 'task-cost', label: 'Cost per successful task', values: models.map((model) => money(evidenceValue(model.taskEconomics)?.costUsdPerSuccessfulTask ?? null)) },
-    { id: 'ttft', label: 'TTFT p50', values: models.map((model) => {
+    { id: 'economics-task-cost', label: 'Cost per successful task', values: columns.map((column) => columnValue(column, (model) => money(evidenceValue(model.taskEconomics)?.costUsdPerSuccessfulTask ?? null))) },
+    { id: 'economics-ttft', label: 'TTFT p50', values: columns.map((column) => columnValue(column, (model) => {
       const ttft = evidenceValue(model.runtime)?.ttftP50Seconds ?? null;
       return ttft === null ? 'Unavailable' : `${ttft.toFixed(2)}s`;
-    }) },
-    { id: 'throughput', label: 'Throughput', values: models.map((model) => {
-      const throughput = evidenceValue(model.runtime)?.outputTokensPerSecond ?? null;
-      return throughput === null ? 'Unavailable' : `${throughput.toFixed(0)} tok/s`;
-    }) },
-    { id: 'runtime-conditions', label: 'Runtime conditions', values: models.map((model) => evidenceText(model.runtime, (value) => value.conditions)) },
-    { id: 'benchmark-release', label: 'Benchmark release', values: models.map((model) => evidenceText(model.benchmark, (value) => value.releaseOn)) },
-    { id: 'lifecycle', label: 'Lifecycle', values: models.map((model) => evidenceText(model.lifecycle, (value) => value.status)) },
-    { id: 'sunset', label: 'Sunset', values: models.map((model) => {
+    })) },
+    { id: 'economics-throughput', label: 'Throughput', values: columns.map((column) => columnValue(column, (model) => {
+      const value = evidenceValue(model.runtime)?.outputTokensPerSecond ?? null;
+      return value === null ? 'Unavailable' : `${value.toFixed(0)} tok/s`;
+    })) },
+  ];
+}
+
+function decisionRows(columns: readonly CompareColumn[]): readonly CompareMatrixRow[] {
+  return [
+    { id: 'rank', label: 'Rank', values: columns.map((column, index) => column.model ? `#${index + 1}` : unavailableCell(column)) },
+    { id: 'provider', label: 'Provider', values: columns.map((column) => columnValue(column, modelProvider)) },
+    { id: 'access', label: 'Access', values: columns.map((column) => columnValue(column, (model) => evidenceText(model.access, (value) => value))) },
+    { id: 'composite', label: 'Composite score', values: columns.map((column) => columnValue(column, (model) => decimal(evidenceValue(model.capability)?.compositeScore ?? null))) },
+    { id: 'input-output', label: 'Input / output · $/1M', values: columns.map((column) => columnValue(column, (model) => {
+      const pricing = evidenceValue(model.routePricing);
+      return pricing ? `${money(pricing.inputUsdPerMillion)} / ${money(pricing.outputUsdPerMillion)}` : 'Unavailable';
+    })) },
+    { id: 'cache-read', label: 'Cache read · $/1M', values: columns.map((column) => columnValue(column, (model) => {
+      const cache = evidenceValue(model.routePricing)?.cache;
+      return cache ? evidenceText(cache, (value) => evidenceText(value.readUsdPerMillion, money)) : 'Unavailable';
+    })) },
+    { id: 'runtime-conditions', label: 'Runtime conditions', values: columns.map((column) => columnValue(column, (model) => evidenceText(model.runtime, (value) => value.conditions))) },
+    { id: 'benchmark-release', label: 'Benchmark release', values: columns.map((column) => columnValue(column, (model) => evidenceText(model.benchmark, (value) => value.releaseOn))) },
+    { id: 'lifecycle', label: 'Lifecycle', values: columns.map((column) => columnValue(column, (model) => evidenceText(model.lifecycle, (value) => value.status))) },
+    { id: 'sunset', label: 'Sunset', values: columns.map((column) => columnValue(column, (model) => {
       const lifecycle = evidenceValue(model.lifecycle);
       return lifecycle ? evidenceText(lifecycle.sunsetOn, (value) => value) : 'Unavailable';
-    }) },
+    })) },
   ];
 }
 
@@ -148,15 +194,15 @@ function chartColors(count: number): readonly string[] {
   return Array.from({ length: count }, (_value, index) => palette[index % palette.length]!);
 }
 
-function radarChart(models: readonly PreviewModel[]): ChartConfiguration<'radar'> {
-  const axes = capabilityRows(models);
-  const colors = chartColors(models.length);
+function radarChart(columns: readonly KnownCompareColumn[]): ChartConfiguration<'radar'> {
+  const axes = capabilityRows(columns);
+  const colors = chartColors(columns.length);
   return {
     type: 'radar',
     data: {
       labels: axes.map((row) => row.label),
-      datasets: models.map((model, index) => ({
-        label: modelName(model),
+      datasets: columns.map((column, index) => ({
+        label: column.name,
         data: axes.map((row) => Number(row.values[index]) || 0),
         borderColor: colors[index],
         backgroundColor: `${colors[index]}28`,
@@ -173,15 +219,15 @@ function radarChart(models: readonly PreviewModel[]): ChartConfiguration<'radar'
   };
 }
 
-function barChart(label: string, models: readonly PreviewModel[], values: readonly (number | null)[]): ChartConfiguration<'bar'> {
+function barChart(label: string, columns: readonly KnownCompareColumn[], values: readonly (number | null)[]): ChartConfiguration<'bar'> {
   return {
     type: 'bar',
     data: {
-      labels: models.map(modelName),
+      labels: columns.map((column) => column.name),
       datasets: [{
         label,
         data: values.map((value) => value ?? 0),
-        backgroundColor: chartColors(models.length),
+        backgroundColor: chartColors(columns.length),
         borderRadius: 4,
       }],
     },
@@ -196,33 +242,30 @@ function barChart(label: string, models: readonly PreviewModel[], values: readon
 function ComparisonMatrix({ ariaLabel, id, models, rows }: {
   readonly ariaLabel: string;
   readonly id: string;
-  readonly models: readonly PreviewModel[];
+  readonly models: readonly CompareColumn[];
   readonly rows: readonly CompareMatrixRow[];
 }) {
   return <div className="comparison-matrix popular-models-comparison-matrix" id={id}>
     <div className="comparison-matrix-table popular-models-comparison-matrix-table" role="region" aria-label={ariaLabel} tabIndex={0}>
       <table>
-        <thead><tr><th scope="col">Metric</th>{models.map((model) => <th scope="col" key={model.id}><span>{modelName(model)}</span><small aria-hidden="true">{modelProvider(model)}</small></th>)}</tr></thead>
+        <thead><tr><th scope="col">Metric</th>{models.map((model) => <th scope="col" key={model.id}><span>{model.name}</span>{model.model ? <small aria-hidden="true">{modelProvider(model.model)}</small> : null}</th>)}</tr></thead>
         <tbody>{rows.map((row) => <tr key={row.id}><th scope="row">{row.label}</th>{row.values.map((value, index) => <td key={`${row.id}-${models[index]?.id ?? index}`}>{value}</td>)}</tr>)}</tbody>
       </table>
     </div>
     <p className="sr-only">Scroll horizontally to view every selected model.</p>
     <div className="comparison-matrix-mobile popular-models-comparison-matrix-cards" role="list" aria-label={`${ariaLabel}, metric-first mobile view`}>
-      {rows.map((row) => <section key={row.id} role="listitem"><h4>{row.label}</h4><dl>{models.map((model, index) => <div key={model.id}><dt>{modelName(model)}</dt><dd>{row.values[index]}</dd></div>)}</dl></section>)}
+      {rows.map((row) => <section key={row.id} role="listitem"><h4>{row.label}</h4><dl>{models.map((model, index) => <div key={model.id}><dt>{model.name}</dt><dd>{row.values[index]}</dd></div>)}</dl></section>)}
     </div>
   </div>;
 }
 
-function SelectionChips({ modelIds, models, onRemove }: {
-  readonly modelIds: readonly string[];
-  readonly models: readonly PreviewModel[];
+function SelectionChips({ models, onRemove }: {
+  readonly models: readonly CompareColumn[];
   readonly onRemove: (modelId: string) => void;
 }) {
-  const modelById = new Map(models.map((model) => [model.id, model]));
   return <div className="compare-list" role="list" aria-label="Selected comparison models">
-    {modelIds.map((id) => {
-      const model = modelById.get(id);
-      const name = model ? modelName(model) : id;
+    {models.map((column) => {
+      const { id, model, name } = column;
       return <span className="compare-model-chip" key={id} role="listitem">
         {model ? <a href={profileHref(model)}>{name}</a> : <span>{name}</span>}
         <button type="button" aria-label={`Remove ${name} from comparison`} onClick={() => onRemove(id)}><X aria-hidden="true" size={14} /></button>
@@ -255,12 +298,12 @@ function ModelPicker({ models, selectedIds, onAdd }: {
 }
 
 function ResultActions({ data, exportRoot, onState }: {
-  readonly data: { readonly models: readonly PreviewModel[]; readonly rows: readonly CompareMatrixRow[] };
+  readonly data: { readonly models: readonly CompareColumn[]; readonly rows: readonly CompareMatrixRow[] };
   readonly exportRoot: RefObject<HTMLElement | null>;
   readonly onState: (state: CompareActionState) => void;
 }) {
   const date = new Date().toISOString().slice(0, 10);
-  const exportData = { models: data.models.map((model) => ({ name: modelName(model) })), rows: data.rows };
+  const exportData = { models: data.models.map((model) => ({ name: model.name })), rows: data.rows };
   const copy = async () => {
     try {
       await copyCompareLink();
@@ -318,19 +361,19 @@ function throughput(model: PreviewModel): number | null {
 }
 
 export function PreviewComparePage({ match, data, adapter = fixtureAdapter }: PreviewComparePageProps) {
-  const [state, setState] = useState<CompareState>(DEFAULT_COMPARE_STATE);
+  const [state, setState] = useState<CompareState>(() => staticCompareState(data));
   const [routeStateApplied, setRouteStateApplied] = useState(false);
   const [contract, setContract] = useState<CompareContract | null>(() => parsePreviewComparePageData(data));
   const [directoryModels, setDirectoryModels] = useState<readonly PreviewModel[]>([]);
-  const [resultsVisible, setResultsVisible] = useState(false);
+  const [resultsVisible, setResultsVisible] = useState(() => staticCompareState(data).modelIds.length >= 2);
   const [revealResults, setRevealResults] = useState(false);
   const [actionState, setActionState] = useState<CompareActionState>(null);
   const resultRef = useRef<HTMLElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setState(decodeCompareState(match.search));
-    setResultsVisible(decodeCompareState(match.search).modelIds.length >= 2);
+    setState(compareStateFromQuery(match.search));
+    setResultsVisible(true);
     setRouteStateApplied(true);
   }, [match.search]);
   useEffect(() => {
@@ -357,15 +400,16 @@ export function PreviewComparePage({ match, data, adapter = fixtureAdapter }: Pr
     setRevealResults(false);
   }, [resultsVisible, revealResults]);
 
-  const selectedModels = useMemo(() => selectedModelsInOrder(state.modelIds, contract?.data?.models ?? []), [contract?.data?.models, state.modelIds]);
-  const selectedDirectoryModels = useMemo(() => selectedModelsInOrder(state.modelIds, directoryModels), [directoryModels, state.modelIds]);
-  const capability = useMemo(() => capabilityRows(selectedModels), [selectedModels]);
-  const decision = useMemo(() => decisionRows(selectedModels), [selectedModels]);
-  const allRows = useMemo(() => [...capability, ...decision], [capability, decision]);
-  const title = state.modelIds.length === 2 && selectedModels.length === 2
-    ? `${modelName(selectedModels[0]!)} vs ${modelName(selectedModels[1]!)}`
+  const selectedColumns = useMemo(() => selectedColumnsInOrder(state.modelIds, contract?.data?.models ?? []), [contract?.data?.models, state.modelIds]);
+  const capability = useMemo(() => capabilityRows(selectedColumns), [selectedColumns]);
+  const economics = useMemo(() => economicsRows(selectedColumns), [selectedColumns]);
+  const decision = useMemo(() => decisionRows(selectedColumns), [selectedColumns]);
+  const chartColumns = useMemo(() => selectedColumns.filter(isKnownColumn), [selectedColumns]);
+  const allRows = useMemo(() => [...capability, ...economics, ...decision], [capability, decision, economics]);
+  const title = state.modelIds.length === 2
+    ? `${selectedColumns[0]?.name ?? state.modelIds[0]} vs ${selectedColumns[1]?.name ?? state.modelIds[1]}`
     : `${state.modelIds.length}-model comparison`;
-  const unavailableCount = Math.max(0, state.modelIds.length - selectedModels.length);
+  const unavailableCount = selectedColumns.filter((column) => !column.model).length;
   const runComparison = () => {
     if (state.modelIds.length < 2) return;
     setResultsVisible(true);
@@ -381,20 +425,20 @@ export function PreviewComparePage({ match, data, adapter = fixtureAdapter }: Pr
     <header className="panel" aria-labelledby="compare-page-heading"><p className="eyebrow">Illustrative prototype data</p><h1 id="compare-page-heading">Compare models</h1><p>Choose 2–4 models, then inspect capability, runtime, cost, context and lifecycle differences without collapsing unlike evidence.</p></header>
     <section className="panel compare-selector-panel" aria-labelledby="compare-selector-title">
       <div className="compare-selector-head"><div><p className="eyebrow">Start here</p><h2 id="compare-selector-title">Choose 2–4 models</h2><p>Search and add at least two models, then add up to two more if needed. Selections from the Models workbench arrive here prefilled.</p></div><div className="selection-progress" aria-live="polite"><span>Selected</span><strong>{state.modelIds.length} / {MAX_COMPARE_MODELS}</strong></div></div>
-      <div className="compare-composer"><div><span className="eyebrow">Selected models</span><SelectionChips modelIds={state.modelIds} models={selectedDirectoryModels} onRemove={(id) => updateSelection(removeCompareModel(state.modelIds, id))} /></div><ModelPicker models={directoryModels} selectedIds={state.modelIds} onAdd={(id) => updateSelection(addCompareModel(state.modelIds, id))} /></div>
+      <div className="compare-composer"><div><span className="eyebrow">Selected models</span><SelectionChips models={selectedColumns} onRemove={(id) => updateSelection(removeCompareModel(state.modelIds, id))} /></div><ModelPicker models={directoryModels} selectedIds={state.modelIds} onAdd={(id) => updateSelection(addCompareModel(state.modelIds, id))} /></div>
       <div className="selector-actions"><p role="status">{state.modelIds.length === 0 ? 'Add at least two models to begin.' : state.modelIds.length === 1 ? '1 of 4 selected · add one more model to compare.' : `${state.modelIds.length} of 4 selected · ready to compare.${state.modelIds.length < 4 ? ` Add up to ${MAX_COMPARE_MODELS - state.modelIds.length} more model${state.modelIds.length === 3 ? '' : 's'} if needed.` : ''}`}</p><button className="button" disabled={state.modelIds.length < 2} onClick={runComparison} type="button">{state.modelIds.length >= 2 ? `Compare ${state.modelIds.length} models` : 'Compare models'}</button></div>
     </section>
     {resultsVisible ? <section className="compare-result-panel" id="compare-result" ref={resultRef} tabIndex={-1} aria-labelledby="result-title">
-      <div className="compare-result-head"><div><p className="eyebrow">Review result</p><h2 id="result-title">{title}</h2></div><ResultActions data={{ models: selectedModels, rows: allRows }} exportRoot={exportRef} onState={setActionState} /></div>
+      <div className="compare-result-head"><div><p className="eyebrow">Review result</p><h2 id="result-title">{title}</h2></div><ResultActions data={{ models: selectedColumns, rows: allRows }} exportRoot={exportRef} onState={setActionState} /></div>
       {actionState ? <p role="status" data-tone={actionState.tone}>{actionState.message}</p> : null}
       {unavailableCount > 0 ? <p role="status">{unavailableCount} selected model{unavailableCount === 1 ? '' : 's'} do not have approved comparison fixtures yet and remain in the selection above.</p> : null}
-      <ResultBoundary contract={contract}>{() => selectedModels.length > 0 ? <div ref={exportRef}>
+      <ResultBoundary contract={contract}>{() => selectedColumns.length > 0 ? <div ref={exportRef}>
         <div className="grid-2 compare-summary-grid">
-          <section className="panel compare-radar-panel" aria-labelledby="compare-radar-title"><h3 id="compare-radar-title">Six-domain capability overlay</h3><p className="fixture">Normalized fixture scores · identical axes</p><div className="compare-chart-wrap compare-radar-wrap"><PopularChartCanvas ariaLabel={`Capability comparison radar for ${selectedModels.map(modelName).join(', ')}`} configuration={radarChart(selectedModels)} /></div></section>
-          <section className="panel compare-capability-panel" aria-labelledby="compare-capability-title"><h3 id="compare-capability-title">Exact capability values</h3><ComparisonMatrix ariaLabel="Exact capability comparison" id="compare-capability-matrix" models={selectedModels} rows={capability} /></section>
+          <section className="panel compare-radar-panel" aria-labelledby="compare-radar-title"><h3 id="compare-radar-title">Six-domain capability overlay</h3><p className="fixture">Normalized fixture scores · identical axes</p><div className="compare-chart-wrap compare-radar-wrap">{chartColumns.length > 0 ? <PopularChartCanvas ariaLabel={`Capability comparison radar for ${chartColumns.map((column) => column.name).join(', ')}`} configuration={radarChart(chartColumns)} /> : <p role="status">No approved fixture data is available to chart.</p>}</div></section>
+          <section className="panel compare-capability-panel" aria-labelledby="compare-capability-title"><h3 id="compare-capability-title">Exact capability values</h3><ComparisonMatrix ariaLabel="Exact capability comparison" id="compare-capability-matrix" models={selectedColumns} rows={capability} /></section>
         </div>
-        <section className="panel compare-economics-panel" aria-labelledby="compare-economics-title"><h3 id="compare-economics-title">Runtime and route economics</h3><p className="fixture">Representative hosted-route fixtures · p50 · streaming · 1× concurrency</p><div className="grid-3 compare-bars"><div><span>Cost per successful task</span><div className="compare-chart-wrap"><PopularChartCanvas ariaLabel={`Cost comparison for ${selectedModels.map(modelName).join(', ')}`} configuration={barChart('Cost per successful task', selectedModels, selectedModels.map(taskCost))} /></div></div><div><span>TTFT (seconds)</span><div className="compare-chart-wrap"><PopularChartCanvas ariaLabel={`Time to first token comparison for ${selectedModels.map(modelName).join(', ')}`} configuration={barChart('TTFT', selectedModels, selectedModels.map(ttft))} /></div></div><div><span>Throughput (tok/s)</span><div className="compare-chart-wrap"><PopularChartCanvas ariaLabel={`Throughput comparison for ${selectedModels.map(modelName).join(', ')}`} configuration={barChart('Throughput', selectedModels, selectedModels.map(throughput))} /></div></div></div></section>
-        <section className="panel compare-decision-panel" aria-labelledby="compare-decision-title"><h3 id="compare-decision-title">Decision deltas</h3><p className="fixture">Tabulated specs for quick comparison.</p><ComparisonMatrix ariaLabel="Itemized model comparison" id="compare-specification-matrix" models={selectedModels} rows={decision} /><p className="fixture">Sources and freshness · route, benchmark and lifecycle records are staging fixtures. Missing evidence remains unavailable.</p></section>
+        <section className="panel compare-economics-panel" aria-labelledby="compare-economics-title"><h3 id="compare-economics-title">Runtime and route economics</h3><p className="fixture">Representative hosted-route fixtures · p50 · streaming · 1× concurrency</p>{chartColumns.length > 0 ? <div className="grid-3 compare-bars"><div><span>Cost per successful task</span><div className="compare-chart-wrap"><PopularChartCanvas ariaLabel={`Cost comparison for ${chartColumns.map((column) => column.name).join(', ')}`} configuration={barChart('Cost per successful task', chartColumns, chartColumns.map((column) => taskCost(column.model)))} /></div></div><div><span>TTFT (seconds)</span><div className="compare-chart-wrap"><PopularChartCanvas ariaLabel={`Time to first token comparison for ${chartColumns.map((column) => column.name).join(', ')}`} configuration={barChart('TTFT', chartColumns, chartColumns.map((column) => ttft(column.model)))} /></div></div><div><span>Throughput (tok/s)</span><div className="compare-chart-wrap"><PopularChartCanvas ariaLabel={`Throughput comparison for ${chartColumns.map((column) => column.name).join(', ')}`} configuration={barChart('Throughput', chartColumns, chartColumns.map((column) => throughput(column.model)))} /></div></div></div> : <p role="status">No approved fixture data is available to chart.</p>}<ComparisonMatrix ariaLabel="Exact runtime and route economics" id="compare-economics-matrix" models={selectedColumns} rows={economics} /></section>
+        <section className="panel compare-decision-panel" aria-labelledby="compare-decision-title"><h3 id="compare-decision-title">Decision deltas</h3><p className="fixture">Tabulated specs for quick comparison.</p><ComparisonMatrix ariaLabel="Itemized model comparison" id="compare-specification-matrix" models={selectedColumns} rows={decision} /><p className="fixture">Sources and freshness · route, benchmark and lifecycle records are staging fixtures. Missing evidence remains unavailable.</p></section>
       </div> : <p role="status">No approved fixture data is available for the selected models.</p>}</ResultBoundary>
     </section> : null}
   </div>;

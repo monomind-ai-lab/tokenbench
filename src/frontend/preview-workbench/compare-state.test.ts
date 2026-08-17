@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   addCompareModel,
+  compareStateFromQuery,
+  DEFAULT_COMPARE_STATE,
   decodeCompareState,
   encodeCompareState,
   removeCompareModel,
@@ -17,5 +19,12 @@ describe('compare workbench URL state', () => {
   it('adds and removes selected models without reordering retained selections', () => {
     expect(addCompareModel(['gpt-4o', 'deepseek-v3'], 'llama-3-3-70b')).toEqual(['gpt-4o', 'deepseek-v3', 'llama-3-3-70b']);
     expect(removeCompareModel(['gpt-4o', 'deepseek-v3', 'llama-3-3-70b'], 'deepseek-v3')).toEqual(['gpt-4o', 'llama-3-3-70b']);
+  });
+
+  it('keeps the representative default when the comparison query is missing or has fewer than two IDs', () => {
+    expect(compareStateFromQuery(new URLSearchParams())).toEqual(DEFAULT_COMPARE_STATE);
+    expect(compareStateFromQuery(new URLSearchParams('models=gpt-4o'))).toEqual(DEFAULT_COMPARE_STATE);
+    expect(compareStateFromQuery(new URLSearchParams('models=unknown-model,deepseek-v3,gpt-4o')).modelIds)
+      .toEqual(['unknown-model', 'deepseek-v3', 'gpt-4o']);
   });
 });

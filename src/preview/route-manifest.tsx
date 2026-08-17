@@ -8,7 +8,7 @@ import { PopularModelsRoutePage, parsePopularModelsPageData, popularModelsPageDa
 import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
 import { createFixtureAdapter } from '../frontend/preview-data/fixture-adapter';
-import { decodeCompareState } from '../frontend/preview-workbench/compare-state';
+import { DEFAULT_COMPARE_STATE } from '../frontend/preview-workbench/compare-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
 import { ArticlesPage } from '../pages/articles-page';
@@ -406,7 +406,7 @@ const manifestRoutes = [
     shell: { activePage: 'compare', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'compareHub' }),
     structuredData,
-    staticData: async (match) => staticPreviewAdapter.comparison({ modelIds: decodeCompareState(match.search).modelIds }),
+    staticData: async () => staticPreviewAdapter.comparison({ modelIds: DEFAULT_COMPARE_STATE.modelIds }),
     payload: comparePayload,
     Page: comparePage,
     prototypeBundle: [],

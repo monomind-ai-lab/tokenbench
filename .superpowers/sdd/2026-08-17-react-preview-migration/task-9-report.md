@@ -79,3 +79,52 @@ Result: passed. The generated React preview includes `dist/compare/index.html`; 
 
 - Preview fixtures currently expose two approved comparison models; the React state and picker support up to four whenever the adapter provides them. Representative fixture expansion remains deferred to Task 12.
 - Production build is successful with the existing Vite large-main-chunk advisory; this task does not alter bundling strategy.
+
+## Fix round 1/5 — static default and unavailable selections
+
+### Implementation
+
+- Static `/compare` generation now always requests the existing representative fixture pair `gpt-4o,deepseek-v3`. The page derives its first controlled state from the validated static payload order, so the server document and first hydration tree are substantive and identical.
+- Only a valid normalized two-to-four `?models=` query replaces that initial state after hydration. A missing or one-ID query retains the static default and is canonically normalized through the existing history replacement path.
+- The result projection now builds ordered comparison columns from every selected ID. IDs absent from adapter data receive the stable header `Unavailable model (<id>)` and `Unavailable — No approved fixture for <id>` values in capability, economics, and decision tables.
+- The economics section now includes a native exact-value matrix beneath its charts. CSV uses the same capability/economics/decision row arrays in displayed order, and PNG export captures these matrices, including unavailable columns.
+
+### RED / GREEN evidence
+
+Initial RED command:
+
+```text
+npm test -- src/frontend/preview-workbench/compare-state.test.ts src/frontend/preview-workbench/compare-export-actions.test.ts src/pages/preview-compare-page.test.tsx src/preview/client-resolver.test.tsx src/preview/route-manifest.test.tsx scripts/preview-build-routes.test.ts
+```
+
+RED result: 6 intended behavior failures: missing `compareStateFromQuery`, empty static comparison payload/tree, static hydration missing the default matrix, and unknown IDs filtered from selected columns.
+
+Payload-authority RED command:
+
+```text
+npm test -- src/pages/preview-compare-page.test.tsx
+```
+
+RED result: the static page rendered `GPT-4o vs DeepSeek V3` even when the validated static payload ordered `DeepSeek V3, GPT-4o`.
+
+GREEN command:
+
+```text
+npm test -- src/frontend/preview-workbench/compare-state.test.ts src/frontend/preview-workbench/compare-export-actions.test.ts src/pages/preview-compare-page.test.tsx src/preview/client-resolver.test.tsx src/preview/route-manifest.test.tsx scripts/preview-build-routes.test.ts
+```
+
+GREEN result: 6 files, 52 tests passed.
+
+```text
+npm run lint
+npm run build
+```
+
+Result: both passed. Generated `dist/compare/index.html` was inspected and contains `Review result`, the representative pair title, exact capability matrix, economics, and Decision deltas. Vite emitted the existing large-main-chunk advisory.
+
+### Fix self-review
+
+- `/compare/:pair` remains exclusively in `previewRuntimeRoutes` with the unchanged SSR component and payload.
+- The no-JavaScript document contains native capability, economics, and decision tables; charts are supplemental.
+- The direct-query client resolver test verifies the first hydrated markup remains the default static comparison, while the page test verifies post-hydration query order and URL normalization.
+- The unavailable-order test verifies `unknown-model,deepseek-v3,gpt-4o` in chips, all semantic headers, CSV content, and the exact DOM handed to PNG export.

@@ -176,9 +176,12 @@ describe('preview route manifest', () => {
       contractVersion: 'ui-data-contract/v1',
       data: { models: expect.any(Array) },
     });
-    await expect(compare.staticData(compare.match(new URL('https://tokenbench.test/compare?models=gpt-4o,deepseek-v3'))!)).resolves.toMatchObject({
+    await expect(compare.staticData(compare.match(new URL('https://tokenbench.test/compare'))!)).resolves.toMatchObject({
       contractVersion: 'ui-data-contract/v1',
-      data: { models: expect.any(Array), unavailableModelIds: expect.any(Array) },
+      data: {
+        models: [expect.objectContaining({ id: 'gpt-4o' }), expect.objectContaining({ id: 'deepseek-v3' })],
+        unavailableModelIds: [],
+      },
     });
     expect(models.payload).not.toBeNull();
     expect(profile.payload).not.toBeNull();
