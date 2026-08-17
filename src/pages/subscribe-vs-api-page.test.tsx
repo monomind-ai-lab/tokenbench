@@ -35,6 +35,43 @@ describe('SubscribeVsApiPage', () => {
     expect(screen.getByRole('table', { name: 'Exact API and Monthly subscription crossover values' })).toBeInTheDocument();
   });
 
+  it('normalizes direct-loaded cache shares before calculating the crossover', async () => {
+    const data = await fixtureAdapter.subscription({});
+    const match = {
+      routeId: 'subscribe-vs-api' as const,
+      pathname: '/subscribe-vs-api',
+      search: new URLSearchParams('cacheReadShare=100'),
+      hash: '',
+      params: {},
+    };
+
+    render(<SubscribeVsApiPage match={match} data={data} />);
+
+    expect(screen.getByRole('spinbutton', { name: 'Cache-read share' })).toHaveValue(95);
+    expect(screen.getByRole('spinbutton', { name: 'Cache-write share' })).toHaveValue(5);
+    expect(screen.getByRole('table', { name: 'Exact API and Monthly subscription crossover values' })).toBeInTheDocument();
+  });
+
+  it('uses a published long-context tier and renders its provenance with unavailable source reasons', async () => {
+    const data = await fixtureAdapter.subscription({});
+    const match = { routeId: 'subscribe-vs-api' as const, pathname: '/subscribe-vs-api', search: new URLSearchParams(), hash: '', params: {} };
+
+    render(<SubscribeVsApiPage match={match} data={data} />);
+    fireEvent.click(screen.getByLabelText(/Long-context workload/i));
+
+    const sourcePrices = screen.getByRole('table', { name: 'Selected model source prices' });
+    expect(within(sourcePrices).getByText('Long-context input')).toBeInTheDocument();
+    expect(within(sourcePrices).getByText('$5.00')).toBeInTheDocument();
+    const derived = screen.getByRole('table', { name: 'Derived monthly API line items' });
+    expect(within(derived).getByRole('row', { name: /standard input/i })).toHaveTextContent('$5.00');
+
+    const provenance = screen.getByRole('region', { name: 'Source provenance' });
+    expect(within(provenance).getAllByText('Illustrative prototype data')).not.toHaveLength(0);
+    expect(within(provenance).getAllByText('Representative route, cache, and task-economics fixture from the approved preview.')).not.toHaveLength(0);
+    expect(within(provenance).getByText(/No approved cache-write price source/)).toBeInTheDocument();
+    expect(within(provenance).getAllByText('2026-08-13T00:00:00.000Z')).not.toHaveLength(0);
+  });
+
   it('rejects incomplete route-pricing evidence before hydration', async () => {
     const data = structuredClone(await fixtureAdapter.subscription({}));
     const pricing = data.data?.models[0]?.routePricing;

@@ -66,6 +66,8 @@ function isRoutePricing(value: unknown): value is RoutePricing {
     && typeof value.route === 'string'
     && typeof value.inputUsdPerMillion === 'number'
     && typeof value.outputUsdPerMillion === 'number'
+    && (value.longContextInputUsdPerMillion === undefined
+      || isEvidenceValue(value.longContextInputUsdPerMillion, (candidate): candidate is number => typeof candidate === 'number'))
     && isEvidenceValue(value.cache, isCachePricing);
 }
 
@@ -153,6 +155,11 @@ function initialState(data: SubscriptionData, search: URLSearchParams): Subscrib
     ? Object.fromEntries(selectedModelIds.map((id, index) => [id, encodedWeights[index]!]))
     : evenMix(selectedModelIds);
   const contentType = search.get('contentType') === 'code' ? 'code' : 'text';
+  const cacheWriteShareBasisPoints = positiveInteger(search.get('cacheWriteShare'), 0, 100, 5) * 100;
+  const cacheReadShareBasisPoints = Math.min(
+    10_000 - cacheWriteShareBasisPoints,
+    positiveInteger(search.get('cacheReadShare'), 0, 100, 20) * 100,
+  );
   return {
     providerId: selectedPlan ? providerId(selectedPlan) : '',
     planId,
@@ -165,8 +172,8 @@ function initialState(data: SubscriptionData, search: URLSearchParams): Subscrib
       outputTokensPerMessage: positiveInteger(search.get('o'), 0, 1_000_000, DEFAULT_WORKLOAD.outputTokensPerMessage),
       activeDaysPerMonth: positiveInteger(search.get('d'), 0, 31, DEFAULT_WORKLOAD.activeDaysPerMonth),
     },
-    cacheReadShareBasisPoints: positiveInteger(search.get('cacheReadShare'), 0, 100, 20) * 100,
-    cacheWriteShareBasisPoints: positiveInteger(search.get('cacheWriteShare'), 0, 100, 5) * 100,
+    cacheReadShareBasisPoints,
+    cacheWriteShareBasisPoints,
     longContext: search.get('longContext') === '1',
     characterEstimate: {
       contentType,
@@ -189,10 +196,31 @@ function formatTokens(tokens: number): string {
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(tokens);
 }
 
-function sourceUsd(value: EvidenceValue<number>, fallback: number): { readonly value: number; readonly label: string } {
+function sourceUsd(value: EvidenceValue<number>, fallback: number): { readonly value: number; readonly label: string; readonly status: string } {
   return value.availability === 'available'
-    ? { value: value.value, label: formatUsd(value.value) }
-    : { value: fallback, label: 'Unavailable; standard input used in scenario' };
+    ? { value: value.value, label: formatUsd(value.value), status: 'Published source rate' }
+    : { value: fallback, label: 'Unavailable; standard input used in scenario', status: `Unavailable: ${value.reason}` };
+}
+
+function unavailablePriceEvidence(reason: string): EvidenceValue<number> {
+  return { availability: 'unavailable', reason };
+}
+
+function cacheReadEvidence(pricing: RoutePricing): EvidenceValue<number> {
+  return pricing.cache.availability === 'available'
+    ? pricing.cache.value.readUsdPerMillion
+    : unavailablePriceEvidence(pricing.cache.reason);
+}
+
+function cacheWriteEvidence(pricing: RoutePricing): EvidenceValue<number> {
+  return pricing.cache.availability === 'available'
+    ? pricing.cache.value.writeUsdPerMillion
+    : unavailablePriceEvidence(pricing.cache.reason);
+}
+
+function longContextEvidence(pricing: RoutePricing): EvidenceValue<number> {
+  return pricing.longContextInputUsdPerMillion
+    ?? unavailablePriceEvidence('No approved long-context price source');
 }
 
 function weightedRate(selected: readonly { readonly model: PreviewModel; readonly shareBasisPoints: number }[], rate: (pricing: RoutePricing) => number): number {
@@ -212,8 +240,9 @@ function scenario(
   const rates: ApiRates = {
     inputMicroDollarsPerMillion: weightedRate(selected, (pricing) => pricing.inputUsdPerMillion),
     outputMicroDollarsPerMillion: weightedRate(selected, (pricing) => pricing.outputUsdPerMillion),
-    cachedInputMicroDollarsPerMillion: weightedRate(selected, (pricing) => sourceUsd(pricing.cache.availability === 'available' ? pricing.cache.value.readUsdPerMillion : { availability: 'unavailable', reason: 'Cache evidence unavailable' }, pricing.inputUsdPerMillion).value),
-    cacheWriteMicroDollarsPerMillion: weightedRate(selected, (pricing) => sourceUsd(pricing.cache.availability === 'available' ? pricing.cache.value.writeUsdPerMillion : { availability: 'unavailable', reason: 'Cache evidence unavailable' }, pricing.inputUsdPerMillion).value),
+    cachedInputMicroDollarsPerMillion: weightedRate(selected, (pricing) => sourceUsd(cacheReadEvidence(pricing), pricing.inputUsdPerMillion).value),
+    cacheWriteMicroDollarsPerMillion: weightedRate(selected, (pricing) => sourceUsd(cacheWriteEvidence(pricing), pricing.inputUsdPerMillion).value),
+    longContextInputMicroDollarsPerMillion: weightedRate(selected, (pricing) => sourceUsd(longContextEvidence(pricing), pricing.inputUsdPerMillion).value),
   };
   return calculateSubscriptionApiResult({
     ...state.workload,
@@ -299,20 +328,40 @@ async function copyScenarioLink(url: string): Promise<void> {
 function SourcePriceRows({ selected }: { readonly selected: readonly { readonly model: PreviewModel; readonly shareBasisPoints: number }[] }) {
   return <tbody>{selected.flatMap(({ model, shareBasisPoints }) => {
     const pricing = modelPricing(model)!;
-    const read = pricing.cache.availability === 'available'
-      ? sourceUsd(pricing.cache.value.readUsdPerMillion, pricing.inputUsdPerMillion)
-      : { value: pricing.inputUsdPerMillion, label: 'Unavailable; standard input used in scenario' };
-    const write = pricing.cache.availability === 'available'
-      ? sourceUsd(pricing.cache.value.writeUsdPerMillion, pricing.inputUsdPerMillion)
-      : { value: pricing.inputUsdPerMillion, label: 'Unavailable; standard input used in scenario' };
+    const read = sourceUsd(cacheReadEvidence(pricing), pricing.inputUsdPerMillion);
+    const write = sourceUsd(cacheWriteEvidence(pricing), pricing.inputUsdPerMillion);
+    const longContext = sourceUsd(longContextEvidence(pricing), pricing.inputUsdPerMillion);
     return [
       ['Standard input', formatUsd(pricing.inputUsdPerMillion), 'Published source rate'],
-      ['Cache read', read.label, read.label.startsWith('Unavailable') ? 'Source rate unavailable' : 'Published source rate'],
-      ['Cache write', write.label, write.label.startsWith('Unavailable') ? 'Source rate unavailable' : 'Published source rate'],
-      ['Long-context input', 'Unavailable; standard input used in scenario', 'No separate approved long-context tier'],
+      ['Cache read', read.label, read.status],
+      ['Cache write', write.label, write.status],
+      ['Long-context input', longContext.label, longContext.status],
       ['Output', formatUsd(pricing.outputUsdPerMillion), 'Published source rate'],
     ].map(([component, rate, status]) => <tr key={`${model.id}-${component}`}><th scope="row">{modelName(model)} <span className="fixture">{shareBasisPoints / 100}% mix</span></th><td>{component}</td><td>{rate}</td><td>{status}</td></tr>);
   })}</tbody>;
+}
+
+function EvidenceDetail({ label, value }: { readonly key?: string; readonly label: string; readonly value: EvidenceValue<unknown> }) {
+  const provenance = value.provenance;
+  return <div><dt>{label}</dt><dd>{value.availability === 'available' ? 'Available' : `Unavailable: ${value.reason}`}{provenance ? <><span> — </span><strong>{provenance.label}</strong><span> · </span><time dateTime={provenance.effectiveAt}>{provenance.effectiveAt}</time><span> · </span><span>{provenance.note}</span></> : null}</dd></div>;
+}
+
+function SourceProvenance({ plan, selected }: { readonly plan: SubscriptionPlan | undefined; readonly selected: readonly { readonly model: PreviewModel; readonly shareBasisPoints: number }[] }) {
+  const entries = [
+    ...(plan ? [{ label: `${planLabel(plan)} monthly subscription`, value: plan.monthlyUsd as EvidenceValue<unknown> }] : []),
+    ...selected.flatMap(({ model }) => {
+      const pricing = modelPricing(model)!;
+      return [
+        { label: `${modelName(model)} route pricing`, value: model.routePricing as EvidenceValue<unknown> },
+        { label: `${modelName(model)} cache write`, value: cacheWriteEvidence(pricing) as EvidenceValue<unknown> },
+        { label: `${modelName(model)} long-context input`, value: longContextEvidence(pricing) as EvidenceValue<unknown> },
+      ];
+    }),
+  ];
+  return <section className="panel subscribe-provenance" aria-labelledby="subscription-provenance-heading">
+    <div className="toolbar"><div><h2 id="subscription-provenance-heading">Source provenance</h2><p className="fixture">Source label, note, effective time, and unavailable reason remain distinct from the derived scenario.</p></div></div>
+    <dl>{entries.map((entry) => <EvidenceDetail key={entry.label} label={entry.label} value={entry.value} />)}</dl>
+  </section>;
 }
 
 export function SubscribeVsApiPage({ match, data }: PreviewPageProps) {
@@ -430,7 +479,7 @@ export function SubscribeVsApiPage({ match, data }: PreviewPageProps) {
       <div className="subscribe-control-grid subscribe-crossover-inputs"><label>Subscription seats<output>{state.seats} {state.seats === 1 ? 'seat' : 'seats'}</output><input aria-label="Subscription seats" type="range" min="1" max="50" step="1" value={state.seats} onChange={(event) => update({ ...state, seats: Number(event.currentTarget.value) })} /></label><label>Token volume in crossover domain (0–300M)<input aria-label="Token volume in crossover domain" type="number" min="0" max="300000000" step="1" value={state.tokenVolume} onChange={(event) => update({ ...state, tokenVolume: positiveInteger(event.currentTarget.value, 0, 300_000_000, state.tokenVolume) })} /></label></div>
       {result ? <><div className="subscribe-result-grid"><dl><dt>Monthly subscription</dt><dd>{formatUsd(result.monthlySubscriptionUsd)}</dd><small>{state.seats} × {formatUsd(planPrice(selectedPlan!))} per seat / month</small></dl><dl><dt>API at selected volume</dt><dd>{formatUsd(result.selectedVolumeApiUsd)}</dd><small>{formatTokens(state.tokenVolume)} tokens</small></dl><dl><dt>Crossover</dt><dd>{result.crossoverTokens === null ? 'Not calculated' : `${formatTokens(result.crossoverTokens)} tokens`}</dd><small>{result.crossoverTokens === null ? 'A positive API rate is required.' : lowerCost({ tokens: state.tokenVolume, monthlySubscriptionUsd: result.monthlySubscriptionUsd, apiUsd: result.selectedVolumeApiUsd }) === 'API' ? 'API is lower at the selected volume.' : 'Monthly subscription is lower at the selected volume.'}</small></dl></div><div className="subscribe-crossover-chart"><CrossoverChart domain={result.domain} /></div><div className="table-wrap" role="region" aria-label="Exact API and Monthly subscription crossover values" tabIndex={0}><table aria-label="Exact API and Monthly subscription crossover values"><caption>Direct samples include the selected volume and crossover when they sit inside the 0–300M token domain. Display rounding does not change lower-cost results.</caption><thead><tr><th scope="col">Monthly tokens</th><th scope="col">Monthly subscription</th><th scope="col">API usage</th><th scope="col">Lower cost</th></tr></thead><tbody>{result.domain.map((point) => <tr key={point.tokens}><th scope="row">{point.tokens === state.tokenVolume ? <strong>Selected volume · </strong> : null}{result.crossoverTokens !== null && Math.abs(point.tokens - result.crossoverTokens) < 0.0001 ? <strong>Crossover · </strong> : null}{formatTokens(point.tokens)} tokens</th><td>{formatUsd(point.monthlySubscriptionUsd)}</td><td>{formatUsd(point.apiUsd)}</td><td>{lowerCost(point)}</td></tr>)}</tbody></table></div></> : <p role="alert">Choose a source-priced plan and a complete model mix to calculate the crossover.</p>}
     </section>
-    {result ? <section className="subscribe-evidence-grid" aria-label="Source prices and derived calculations"><article className="panel"><div className="toolbar"><div><h2>Source price records</h2><p className="fixture">Published fixture values remain separate from derived totals.</p></div><span className="tag">Source data</span></div><div className="table-wrap" role="region" aria-label="Selected model source prices" tabIndex={0}><table aria-label="Selected model source prices"><caption>Source rate records for the selected model mix.</caption><thead><tr><th scope="col">Model</th><th scope="col">Price component</th><th scope="col">Source rate / 1M</th><th scope="col">Evidence state</th></tr></thead><SourcePriceRows selected={selected} /></table></div></article><article className="panel"><div className="toolbar"><div><h2>Derived monthly line items</h2><p className="fixture">Scenario arithmetic, not source price records.</p></div><span className="tag">Derived</span></div><div className="table-wrap" role="region" aria-label="Derived monthly API line items" tabIndex={0}><table aria-label="Derived monthly API line items"><caption>Exact scenario lines before display rounding.</caption><thead><tr><th scope="col">Line item</th><th scope="col">Monthly tokens</th><th scope="col">Rate / 1M</th><th scope="col">Monthly cost</th></tr></thead><tbody>{result.lineItems.map((item) => <tr key={item.id}><th scope="row">{item.id.replaceAll('-', ' ')}</th><td>{new Intl.NumberFormat('en-US').format(item.tokens)}</td><td>{formatUsd(item.rateMicroDollarsPerMillion / 1_000_000)}</td><td>{formatUsd(item.costMicroDollars / 1_000_000)}</td></tr>)}</tbody></table></div></article></section> : null}
+    {result ? <section className="subscribe-evidence-grid" aria-label="Source prices and derived calculations"><article className="panel"><div className="toolbar"><div><h2>Source price records</h2><p className="fixture">Published fixture values remain separate from derived totals.</p></div><span className="tag">Source data</span></div><div className="table-wrap" role="region" aria-label="Selected model source prices" tabIndex={0}><table aria-label="Selected model source prices"><caption>Source rate records for the selected model mix.</caption><thead><tr><th scope="col">Model</th><th scope="col">Price component</th><th scope="col">Source rate / 1M</th><th scope="col">Evidence state</th></tr></thead><SourcePriceRows selected={selected} /></table></div></article><article className="panel"><div className="toolbar"><div><h2>Derived monthly line items</h2><p className="fixture">Scenario arithmetic, not source price records.</p></div><span className="tag">Derived</span></div><div className="table-wrap" role="region" aria-label="Derived monthly API line items" tabIndex={0}><table aria-label="Derived monthly API line items"><caption>Exact scenario lines before display rounding.</caption><thead><tr><th scope="col">Line item</th><th scope="col">Monthly tokens</th><th scope="col">Rate / 1M</th><th scope="col">Monthly cost</th></tr></thead><tbody>{result.lineItems.map((item) => <tr key={item.id}><th scope="row">{item.id.replaceAll('-', ' ')}</th><td>{new Intl.NumberFormat('en-US').format(item.tokens)}</td><td>{formatUsd(item.rateMicroDollarsPerMillion / 1_000_000)}</td><td>{formatUsd(item.costMicroDollars / 1_000_000)}</td></tr>)}</tbody></table></div></article><SourceProvenance plan={selectedPlan} selected={selected} /></section> : null}
     <section className="subscribe-evidence-grid" aria-label="Formula and assumptions"><details className="panel" open><summary>Formula and rounding</summary><p>Monthly messages = conversations per day × messages per conversation × active days. Cache reads and writes split adjusted input tokens; each line uses the selected source rate or the disclosed standard-input fallback. Monthly subscription is seats × the selected source plan price.</p></details><aside className="panel"><h2>Assumptions and timestamp</h2><p>Long-context mode applies a visible 1.5× input-token scenario buffer. It does not invent a separate source price tier when one is unavailable.</p><p className="fixture">Source effective time: <time>{sourceEffectiveAt}</time></p><p className="fixture">Calculated from the delivered contract: <time>{calculatedAt}</time></p></aside></section>
   </div>;
 }

@@ -71,6 +71,8 @@ export interface RoutePricing {
   readonly outputUsdPerMillion: number;
   /** Optional only because the directory fixture does not claim a blended route price. */
   readonly blendedUsdPerMillion?: EvidenceValue<number>;
+  /** Optional because many providers do not publish a distinct long-context input tier. */
+  readonly longContextInputUsdPerMillion?: EvidenceValue<number>;
   readonly cache: EvidenceValue<CachePricing>;
 }
 

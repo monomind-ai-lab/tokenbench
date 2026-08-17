@@ -122,4 +122,23 @@ describe('fixtureAdapter', () => {
       reason: 'No approved model task-economics source',
     });
   });
+
+  it('supplies typed long-context price evidence for the subscription comparison', async () => {
+    const result = await fixtureAdapter.subscription({ modelId: 'gpt-4o' });
+    const pricing = result.data?.models.find((model) => model.id === 'gpt-4o')?.routePricing;
+
+    expect(pricing).toMatchObject({
+      availability: 'available',
+      value: {
+        longContextInputUsdPerMillion: {
+          availability: 'available',
+          value: 5,
+          provenance: {
+            label: 'Illustrative prototype data',
+            effectiveAt: '2026-08-13T00:00:00.000Z',
+          },
+        },
+      },
+    });
+  });
 });

@@ -79,6 +79,7 @@ const gpt4o: PreviewModel = {
     route: 'OpenAI native · fixture',
     inputUsdPerMillion: 2.5,
     outputUsdPerMillion: 10,
+    longContextInputUsdPerMillion: available(5, PREVIEW_FIXTURE_PROVENANCE.economics),
     cache: available({
       readUsdPerMillion: available(1.25, PREVIEW_FIXTURE_PROVENANCE.economics),
       writeUsdPerMillion: unavailable('No approved cache-write price source'),
