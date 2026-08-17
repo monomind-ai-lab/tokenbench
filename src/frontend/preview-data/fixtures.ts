@@ -67,6 +67,14 @@ const gpt4o: PreviewModel = {
     releaseOn: '2024-05-13',
     subtasks: [{ id: 'reasoning', label: 'Reasoning' }, { id: 'coding', label: 'Coding' }],
   }, PREVIEW_FIXTURE_PROVENANCE.benchmark),
+  capability: available({
+    compositeScore: 82.4,
+    radar: [
+      { key: 'reasoning', label: 'Reasoning', percentile: 91, rank: 3, fieldSize: 36 },
+      { key: 'coding', label: 'Coding', percentile: 88, rank: 4, fieldSize: 36 },
+      { key: 'throughput', label: 'Throughput', percentile: 84, rank: 6, fieldSize: 36 },
+    ],
+  }, PREVIEW_FIXTURE_PROVENANCE.benchmark),
   routePricing: available({
     route: 'OpenAI native · fixture',
     inputUsdPerMillion: 2.5,
@@ -95,6 +103,14 @@ const deepseekV3: PreviewModel = {
   benchmark: available({
     releaseOn: '2025-12-26',
     subtasks: [{ id: 'reasoning', label: 'Reasoning' }, { id: 'coding', label: 'Coding' }],
+  }, PREVIEW_FIXTURE_PROVENANCE.benchmark),
+  capability: available({
+    compositeScore: 76.1,
+    radar: [
+      { key: 'reasoning', label: 'Reasoning', percentile: 83, rank: 6, fieldSize: 36 },
+      { key: 'coding', label: 'Coding', percentile: 81, rank: 7, fieldSize: 36 },
+      { key: 'throughput', label: 'Throughput', percentile: 72, rank: 11, fieldSize: 36 },
+    ],
   }, PREVIEW_FIXTURE_PROVENANCE.benchmark),
   routePricing: available({
     route: 'DeepSeek native · fixture',

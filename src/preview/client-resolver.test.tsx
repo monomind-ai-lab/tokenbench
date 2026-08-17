@@ -21,6 +21,7 @@ vi.mock('../frontend/model-profile-contracts', () => ({ parseModelProfileViewMod
 
 import { startPreviewRoute } from './client-resolver';
 import { previewRoutes } from './route-manifest';
+import { fixtureAdapter } from '../frontend/preview-data/adapter';
 
 describe('startPreviewRoute', () => {
   beforeEach(() => {
@@ -92,14 +93,26 @@ describe('startPreviewRoute', () => {
     expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves other prototype routes when their hydration payload is missing', () => {
+  it('mounts the migrated Models workbench when its static payload is absent', () => {
     document.body.innerHTML = '<div id="root"><main data-server-models>Server models</main></div>';
     window.history.replaceState({}, '', '/models/');
 
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'unmatched' });
-    expect(document.querySelector('[data-server-models]')).toBeInTheDocument();
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'models' });
+    expect(document.getElementById('root')).toBeEmptyDOMElement();
     expect(hydrateRootMock).not.toHaveBeenCalled();
-    expect(createRootMock).not.toHaveBeenCalled();
+    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
+  });
+
+  it('hydrates a direct Models filter URL from the unfiltered static document before applying its query state', async () => {
+    const models = await fixtureAdapter.models({});
+    document.body.innerHTML = `<div id="root"><main data-server-models>Server models</main></div><script id="models-initial-data" type="application/json">${JSON.stringify(models)}</script>`;
+    window.history.replaceState({}, '', '/models?provider=DeepSeek');
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'models' });
+    const hydrated = renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode);
+    expect(hydrated).toContain('GPT-4o');
+    expect(hydrated).toContain('DeepSeek V3');
+    expect(window.location.search).toBe('?provider=DeepSeek');
   });
 
   it('does not mount an unmatched route', () => {

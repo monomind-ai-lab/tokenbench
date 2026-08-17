@@ -78,6 +78,21 @@ describe('fixtureAdapter', () => {
     });
   });
 
+  it('supplies explicitly labelled illustrative capability evidence for the preview frontier and radar', async () => {
+    const result = await fixtureAdapter.profile('gpt-4o');
+
+    expect(result.data?.model.capability).toMatchObject({
+      availability: 'available',
+      provenance: { label: 'Illustrative prototype data' },
+      value: {
+        compositeScore: expect.any(Number),
+        radar: expect.arrayContaining([
+          expect.objectContaining({ label: 'Reasoning', percentile: expect.any(Number) }),
+        ]),
+      },
+    });
+  });
+
   it('does not substitute another model when subscription economics are unavailable', async () => {
     const result = await fixtureAdapter.subscription({ modelId: 'not-an-approved-fixture' });
 

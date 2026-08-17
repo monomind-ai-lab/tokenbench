@@ -12,6 +12,9 @@ import { createFixtureAdapter } from '../frontend/preview-data/fixture-adapter';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
 import { ArticlesPage } from '../pages/articles-page';
+import { LifecycleRadarPage, parseLifecycleRadarPageData } from '../pages/lifecycle-radar-page';
+import { PreviewModelProfilePage, parsePreviewModelProfilePageData } from '../pages/preview-model-profile-page';
+import { PreviewModelsPage, parsePreviewModelsPageData } from '../pages/preview-models-page';
 import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
 import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
@@ -258,6 +261,9 @@ const popularModelsPage = PopularModelsRoutePage as ComponentType<PreviewPagePro
 const compareHubPage = CompareHubPage as ComponentType<PreviewPageProps>;
 const articlesPage = ArticlesRoutePage as ComponentType<PreviewPageProps>;
 const articleDetailPage = ArticleDetailRoutePage as ComponentType<PreviewPageProps>;
+const modelsPage = PreviewModelsPage as ComponentType<PreviewPageProps>;
+const modelProfilePage = PreviewModelProfilePage as ComponentType<PreviewPageProps>;
+const lifecyclePage = LifecycleRadarPage as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
@@ -266,6 +272,9 @@ const homePayload = { key: 'home-initial-data', parse: parseHomePageData } as co
 const popularModelsPayload = { key: 'popular-models-initial-data', parse: parsePopularModelsPageData } as const;
 const articlesPayload = { key: 'articles-initial-data', parse: parseArticlesPayload } as const;
 const articlePayload = { key: 'article-initial-data', parse: parseArticlePayload } as const;
+const modelsPayload = { key: 'models-initial-data', parse: parsePreviewModelsPageData } as const;
+const modelProfilePayload = { key: 'preview-model-profile-initial-data', parse: parsePreviewModelProfilePageData } as const;
+const lifecyclePayload = { key: 'model-lifecycle-initial-data', parse: parseLifecycleRadarPageData } as const;
 
 export const previewRuntimeRoutes = [
   {
@@ -301,46 +310,43 @@ const manifestRoutes = [
     id: 'models',
     match: exactPathMatcher('models', '/models'),
     outputPathname: '/models',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'models' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: popularModelsPage,
-    prototypeBundle: [
-      { outputPathname: '/models.html', output: ['models.html'], document: 'index.html', clearOutputDirectory: true },
-      { outputPathname: '/models/', output: ['models', 'index.html'], document: 'index.html', clearOutputDirectory: true },
-    ],
+    staticData: async () => staticPreviewAdapter.models({}),
+    payload: modelsPayload,
+    Page: modelsPage,
+    prototypeBundle: [],
   },
   {
     id: 'model-profile',
     match: exactPathMatcher('model-profile', '/model-profile'),
     outputPathname: '/model-profile',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: (match) => metadataForRoute({ kind: 'modelProfile', slug: match.search.get('model') ?? 'model' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: prototypeFallbackPage,
-    prototypeBundle: [{ outputPathname: '/model-profile/', output: ['model-profile', 'index.html'], document: 'model-profile.html', clearOutputDirectory: false }],
+    staticData: async (match) => staticPreviewAdapter.profile(match.search.get('model') ?? 'gpt-4o'),
+    payload: modelProfilePayload,
+    Page: modelProfilePage,
+    prototypeBundle: [],
   },
   {
     id: 'model-lifecycle',
     match: exactPathMatcher('model-lifecycle', '/model-lifecycle'),
     outputPathname: '/model-lifecycle',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'models' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: prototypeFallbackPage,
-    prototypeBundle: [{ outputPathname: '/model-lifecycle/', output: ['model-lifecycle', 'index.html'], document: 'model-lifecycle.html', clearOutputDirectory: false }],
+    staticData: async () => staticPreviewAdapter.lifecycle({ horizonDays: 90 }),
+    payload: lifecyclePayload,
+    Page: lifecyclePage,
+    prototypeBundle: [],
   },
   {
     id: 'popular-models',

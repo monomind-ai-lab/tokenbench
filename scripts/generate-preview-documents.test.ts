@@ -30,13 +30,15 @@ describe('generatePreviewDocuments', () => {
     expect(html).toContain('<footer class="app-footer"');
   });
 
-  it('does not emit an entry for a prototype-delivered route', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'tokenbench-prototype-preview-'));
+  it('emits a semantic Models workbench document once the route is React-delivered', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-models-preview-'));
     outputRoots.push(root);
 
     await generatePreviewDocuments(root, previewRoutes.filter((route) => route.id === 'models'));
 
-    await expect(access(join(root, 'models', 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
+    const html = await readFile(join(root, 'models', 'index.html'), 'utf8');
+    expect(html).toContain('<h1 id="models-workbench-heading">Models workbench</h1>');
+    expect(html).toContain('<script id="models-initial-data" type="application/json">');
   });
 
   it('emits Hybrid Router’s substantive React document once the article route is ready', async () => {

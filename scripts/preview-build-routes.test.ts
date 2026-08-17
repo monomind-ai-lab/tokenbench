@@ -10,6 +10,9 @@ describe('preview build routes', () => {
 
     expect(entries).toMatchObject({
       'preview-home-index-html': `${process.cwd()}/index.html`,
+      'preview-models-models-index-html': `${process.cwd()}/models/index.html`,
+      'preview-model-profile-model-profile-index-html': `${process.cwd()}/model-profile/index.html`,
+      'preview-model-lifecycle-model-lifecycle-index-html': `${process.cwd()}/model-lifecycle/index.html`,
       'preview-popular-models-popular-models-index-html': `${process.cwd()}/popular-models/index.html`,
       'preview-articles-articles-index-html': `${process.cwd()}/articles/index.html`,
       'preview-article-detail-articles-hybrid-router-index-html': `${process.cwd()}/articles/hybrid-router/index.html`,
@@ -17,6 +20,9 @@ describe('preview build routes', () => {
     });
     expect(Object.keys(inputs)).toEqual(expect.arrayContaining([
       'preview-home-index-html',
+      'preview-models-models-index-html',
+      'preview-model-profile-model-profile-index-html',
+      'preview-model-lifecycle-model-lifecycle-index-html',
       'preview-popular-models-popular-models-index-html',
       'preview-articles-articles-index-html',
       'preview-article-detail-articles-hybrid-router-index-html',

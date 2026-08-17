@@ -37,6 +37,9 @@ describe('preview route manifest', () => {
 
     expect(previewRoutes.filter((route) => route.delivery === 'react').map((route) => route.id)).toEqual([
       'home',
+      'models',
+      'model-profile',
+      'model-lifecycle',
       'popular-models',
       'articles',
       'article-detail',
@@ -115,6 +118,29 @@ describe('preview route manifest', () => {
     });
   });
 
+  it('uses typed fixture-adapter payloads for the migrated model-family routes', async () => {
+    const models = previewRoutes.find((candidate) => candidate.id === 'models');
+    const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
+    const lifecycle = previewRoutes.find((candidate) => candidate.id === 'model-lifecycle');
+    if (!models || !profile || !lifecycle) throw new Error('Model preview routes are unavailable');
+
+    await expect(models.staticData(models.match(new URL('https://tokenbench.test/models'))!)).resolves.toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      data: { models: expect.any(Array) },
+    });
+    await expect(profile.staticData(profile.match(new URL('https://tokenbench.test/model-profile?model=gpt-4o'))!)).resolves.toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      data: { model: expect.any(Object) },
+    });
+    await expect(lifecycle.staticData(lifecycle.match(new URL('https://tokenbench.test/model-lifecycle'))!)).resolves.toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      data: { models: expect.any(Array) },
+    });
+    expect(models.payload).not.toBeNull();
+    expect(profile.payload).not.toBeNull();
+    expect(lifecycle.payload).not.toBeNull();
+  });
+
   it('rejects incomplete Home model rows before hydration', () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'home');
 
@@ -164,12 +190,8 @@ describe('preview route manifest', () => {
 
     expect(prototypeEntries.sort()).toEqual([
       'index.html <= home.html',
-      'models.html <= index.html',
-      'models/index.html <= index.html',
       'compare.html <= compare.html',
       'compare/index.html <= compare.html',
-      'model-profile/index.html <= model-profile.html',
-      'model-lifecycle/index.html <= model-lifecycle.html',
       'popular-models/index.html <= popular-models.html',
       'make-it-yours/index.html <= make-it-yours.html',
       'subscribe-vs-api/index.html <= cost-calculator.html',

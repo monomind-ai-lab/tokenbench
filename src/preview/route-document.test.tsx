@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { previewRoutes } from './route-manifest';
 import { renderPreviewDocument } from './route-document';
+import { fixtureAdapter } from '../frontend/preview-data/adapter';
 
 describe('renderPreviewDocument', () => {
   it('renders a React shell with metadata and escapes a closing script payload', () => {
@@ -19,5 +20,15 @@ describe('renderPreviewDocument', () => {
     expect(html).toContain('<script id="home-initial-data" type="application/json">');
     expect(html).not.toContain('</script><script>alert(1)</script>');
     expect(html).toContain('\\u003c/script>\\u003cscript>alert(1)\\u003c/script>');
+  });
+
+  it('keeps the shared Models shell as the only page-content landmark', async () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'models');
+    const match = route?.match(new URL('https://tokenbench.test/models'));
+    if (!route || !match) throw new Error('Models preview route is unavailable');
+
+    const html = renderPreviewDocument(route, match, await fixtureAdapter.models({}));
+
+    expect(html.match(/id="page-content"/gu)).toHaveLength(1);
   });
 });

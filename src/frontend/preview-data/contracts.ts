@@ -42,6 +42,24 @@ export interface BenchmarkRelease {
   readonly subtasks: readonly BenchmarkSubtask[];
 }
 
+/**
+ * Illustrative preview-only capability evidence. It deliberately mirrors the
+ * radar primitive's observable inputs without claiming a published benchmark
+ * model or importing the production profile contract.
+ */
+export interface CapabilityRadarAxis {
+  readonly key: string;
+  readonly label: string;
+  readonly percentile: number | null;
+  readonly rank: number | null;
+  readonly fieldSize: number | null;
+}
+
+export interface ModelCapability {
+  readonly compositeScore: number;
+  readonly radar: readonly CapabilityRadarAxis[];
+}
+
 export interface CachePricing {
   readonly readUsdPerMillion: EvidenceValue<number>;
   readonly writeUsdPerMillion: EvidenceValue<number>;
@@ -76,6 +94,7 @@ export interface PreviewModel {
   readonly identity: EvidenceValue<ModelIdentity>;
   readonly access: EvidenceValue<ModelAccess>;
   readonly benchmark: EvidenceValue<BenchmarkRelease>;
+  readonly capability: EvidenceValue<ModelCapability>;
   readonly routePricing: EvidenceValue<RoutePricing>;
   readonly taskEconomics: EvidenceValue<TaskEconomics>;
   readonly runtime: EvidenceValue<RuntimeSla>;
