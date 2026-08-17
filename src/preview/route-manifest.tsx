@@ -3,18 +3,19 @@ import { ComparisonDetailApp, ModelProfileApp } from '../App.tsx';
 import { ARTICLE_BY_SLUG, ARTICLES, articlePath, type Article, type ArticleChannel } from '../articles/content';
 import { SITE_CONFIG } from '../brand/site-config';
 import { parsePricePerformanceEnvelope } from '../benchmarks/price-performance-contracts';
-import { CompareHubPage } from '../pages/compare-hub-page';
 import { HomePage, type HomePageData } from '../pages/home-page';
 import { PopularModelsRoutePage, parsePopularModelsPageData, popularModelsPageData } from '../pages/popular-models-page';
 import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
 import { createFixtureAdapter } from '../frontend/preview-data/fixture-adapter';
+import { decodeCompareState } from '../frontend/preview-workbench/compare-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
 import { ArticlesPage } from '../pages/articles-page';
 import { LifecycleRadarPage, parseLifecycleRadarPageData } from '../pages/lifecycle-radar-page';
 import { PreviewModelProfilePage, parsePreviewModelProfilePageData } from '../pages/preview-model-profile-page';
 import { PreviewModelsPage, parsePreviewModelsPageData } from '../pages/preview-models-page';
+import { PreviewComparePage, parsePreviewComparePageData } from '../pages/preview-compare-page';
 import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
 import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
@@ -277,12 +278,12 @@ const prototypeFallbackPage = HomePage as ComponentType<PreviewPageProps>;
 const homePage = HomeRoutePage as ComponentType<PreviewPageProps>;
 const pricePerformancePage = PricePerformanceApp as ComponentType<PreviewPageProps>;
 const popularModelsPage = PopularModelsRoutePage as ComponentType<PreviewPageProps>;
-const compareHubPage = CompareHubPage as ComponentType<PreviewPageProps>;
 const articlesPage = ArticlesRoutePage as ComponentType<PreviewPageProps>;
 const articleDetailPage = ArticleDetailRoutePage as ComponentType<PreviewPageProps>;
 const modelsPage = PreviewModelsPage as ComponentType<PreviewPageProps>;
 const modelProfilePage = PreviewModelProfilePage as ComponentType<PreviewPageProps>;
 const lifecyclePage = LifecycleRadarPage as ComponentType<PreviewPageProps>;
+const comparePage = PreviewComparePage as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
@@ -294,6 +295,7 @@ const articlePayload = { key: 'article-initial-data', parse: parseArticlePayload
 const modelsPayload = { key: 'models-initial-data', parse: parsePreviewModelsPageData } as const;
 const modelProfilePayload = { key: 'preview-model-profile-initial-data', parse: parsePreviewModelProfilePageData } as const;
 const lifecyclePayload = { key: 'model-lifecycle-initial-data', parse: parseLifecycleRadarPageData } as const;
+const comparePayload = { key: 'compare-initial-data', parse: parsePreviewComparePageData } as const;
 
 export const previewRuntimeRoutes = [
   {
@@ -399,18 +401,15 @@ const manifestRoutes = [
     id: 'compare',
     match: exactPathMatcher('compare', '/compare'),
     outputPathname: '/compare',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'compare', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'compareHub' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: compareHubPage,
-    prototypeBundle: [
-      { outputPathname: '/compare.html', output: ['compare.html'], document: 'compare.html', clearOutputDirectory: true },
-      { outputPathname: '/compare/', output: ['compare', 'index.html'], document: 'compare.html', clearOutputDirectory: true },
-    ],
+    staticData: async (match) => staticPreviewAdapter.comparison({ modelIds: decodeCompareState(match.search).modelIds }),
+    payload: comparePayload,
+    Page: comparePage,
+    prototypeBundle: [],
   },
   {
     id: 'subscribe-vs-api',

@@ -41,6 +41,7 @@ describe('preview route manifest', () => {
       'model-profile',
       'model-lifecycle',
       'popular-models',
+      'compare',
       'articles',
       'article-detail',
     ]);
@@ -160,7 +161,8 @@ describe('preview route manifest', () => {
     const models = previewRoutes.find((candidate) => candidate.id === 'models');
     const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
     const lifecycle = previewRoutes.find((candidate) => candidate.id === 'model-lifecycle');
-    if (!models || !profile || !lifecycle) throw new Error('Model preview routes are unavailable');
+    const compare = previewRoutes.find((candidate) => candidate.id === 'compare');
+    if (!models || !profile || !lifecycle || !compare) throw new Error('Model preview routes are unavailable');
 
     await expect(models.staticData(models.match(new URL('https://tokenbench.test/models'))!)).resolves.toMatchObject({
       contractVersion: 'ui-data-contract/v1',
@@ -174,9 +176,14 @@ describe('preview route manifest', () => {
       contractVersion: 'ui-data-contract/v1',
       data: { models: expect.any(Array) },
     });
+    await expect(compare.staticData(compare.match(new URL('https://tokenbench.test/compare?models=gpt-4o,deepseek-v3'))!)).resolves.toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      data: { models: expect.any(Array), unavailableModelIds: expect.any(Array) },
+    });
     expect(models.payload).not.toBeNull();
     expect(profile.payload).not.toBeNull();
     expect(lifecycle.payload).not.toBeNull();
+    expect(compare.payload).not.toBeNull();
   });
 
   it('rejects incomplete Home model rows before hydration', () => {
@@ -228,8 +235,6 @@ describe('preview route manifest', () => {
 
     expect(prototypeEntries.sort()).toEqual([
       'index.html <= home.html',
-      'compare.html <= compare.html',
-      'compare/index.html <= compare.html',
       'popular-models/index.html <= popular-models.html',
       'make-it-yours/index.html <= make-it-yours.html',
       'subscribe-vs-api/index.html <= cost-calculator.html',
