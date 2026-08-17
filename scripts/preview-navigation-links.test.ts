@@ -41,6 +41,12 @@ describe('preview navigation links', () => {
     expect(articles).not.toContain('href="/article-hybrid-router"');
     expect(articleDetail).toContain('href="/models"');
     expect(articleDetail).toContain('href="/make-it-yours/"');
+    expect(articleDetail).toContain('Build a ranking around your priorities');
+    expect(articleDetail).toContain('href="/cost"');
+    expect(articleDetail).toContain('Explore the Cost hub');
+    expect(articleDetail).toContain('Related articles');
+    expect(articleDetail).not.toContain('Related guides');
+    expect(articleDetail).toContain('href="/articles/track-claude-code-usage/"');
     expect(articleDetail).toContain('href="/articles"');
   });
 

@@ -2780,6 +2780,13 @@ button:disabled {
 
 .article-detail-callout strong { color: var(--accent-text); font-size: var(--fs-14); }
 .article-detail-callout p { margin: 8px 0 0; }
+.article-detail-callout-label,
+.article-detail-cta-label { display: block; color: var(--accent-text); font: 750 var(--fs-11) 'JetBrains Mono', ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.article-detail-make-it-yours { margin-top: 32px; padding: 20px 22px; }
+.article-detail-make-it-yours h2 { margin: 8px 0; font-size: var(--fs-20); letter-spacing: -.015em; }
+.article-detail-make-it-yours p { max-width: 62ch; margin: 0 0 16px; color: var(--muted); }
+.article-detail-make-it-yours .button { display: inline-flex; align-items: center; gap: 8px; }
+.article-detail-make-it-yours .button svg { width: 17px; height: 17px; }
 
 .article-detail-page .table-wrap { margin: 22px 0; }
 .article-detail-page table { font-variant-numeric: tabular-nums; }
@@ -2861,6 +2868,8 @@ button:disabled {
 .article-detail-cta p { max-width: 480px; margin: 0; color: #fff; opacity: .82; }
 .article-detail-cta .button { flex: 0 0 auto; gap: 8px; white-space: nowrap; }
 .article-detail-cta svg { width: 17px; height: 17px; }
+.article-detail-cost-cta { margin-top: 24px; }
+.article-detail-cost-cta .article-detail-cta-label { color: #d6e3ff; }
 
 .article-detail-toc {
   position: sticky;
