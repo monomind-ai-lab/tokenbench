@@ -106,6 +106,44 @@ describe('preview route manifest', () => {
     })]);
   });
 
+  it('keeps query-profile metadata on the encoded preview URL rather than the runtime detail route', () => {
+    const match = matchPreviewRoute(new URL('https://tokenbench.test/model-profile?model=GPT%205.6%2FSol'));
+    const route = previewRoutes.find((candidate) => candidate.id === match?.routeId);
+    const metadata = route?.metadata(match!);
+    const canonical = `${SITE_CONFIG.origin}/model-profile?model=GPT%205.6%2FSol`;
+
+    expect(metadata).toMatchObject({
+      canonical,
+      title: 'GPT 5.6/Sol model evidence | TokenBench',
+      description: 'Review a retained AI model profile on TokenBench with source-backed benchmark scores, relative field ranks, route pricing, specifications, and an auditable evidence ledger.',
+    });
+    expect(metadata?.openGraph).toMatchObject({
+      url: canonical,
+      title: metadata?.title,
+      description: metadata?.description,
+    });
+    expect(metadata?.canonical).not.toContain('/models/');
+  });
+
+  it('publishes lifecycle-specific metadata on the slashless preview lifecycle route', () => {
+    const match = matchPreviewRoute(new URL('https://tokenbench.test/model-lifecycle'));
+    const route = previewRoutes.find((candidate) => candidate.id === match?.routeId);
+    const metadata = route?.metadata(match!);
+    const canonical = `${SITE_CONFIG.origin}/model-lifecycle`;
+
+    expect(metadata).toMatchObject({
+      canonical,
+      title: 'Model Lifecycle & Retirement Radar | TokenBench',
+      description: 'Track model retirement notices, sunset dates, source-backed replacement paths, and explicit unavailable migration evidence with TokenBench.',
+    });
+    expect(metadata?.openGraph).toMatchObject({
+      url: canonical,
+      title: metadata?.title,
+      description: metadata?.description,
+    });
+    expect(metadata?.canonical).not.toBe(`${SITE_CONFIG.origin}/models/`);
+  });
+
   it('uses a reproducible fixture timestamp for static Home delivery', async () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'home');
     const match = route?.match(new URL('https://tokenbench.test/'));

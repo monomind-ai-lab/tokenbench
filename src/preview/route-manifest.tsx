@@ -54,11 +54,7 @@ interface PreviewMetadataDefinition {
 
 const socialImage = `${SITE_CONFIG.origin}/og-guides.png`;
 
-function previewMetadata(pathname: string, definition: PreviewMetadataDefinition): PageMetadata {
-  const normalizedPathname = pathname === '/'
-    ? ''
-    : `${pathname.replace(/\/+$/, '')}/`;
-  const canonical = `${SITE_CONFIG.origin}${normalizedPathname}`;
+function previewMetadataForCanonical(canonical: string, definition: PreviewMetadataDefinition): PageMetadata {
   return {
     ...definition,
     canonical,
@@ -79,6 +75,29 @@ function previewMetadata(pathname: string, definition: PreviewMetadataDefinition
     },
   };
 }
+
+function previewMetadata(pathname: string, definition: PreviewMetadataDefinition): PageMetadata {
+  const normalizedPathname = pathname === '/'
+    ? ''
+    : `${pathname.replace(/\/+$/, '')}/`;
+  return previewMetadataForCanonical(`${SITE_CONFIG.origin}${normalizedPathname}`, definition);
+}
+
+function previewQueryProfileMetadata(slug: string): PageMetadata {
+  const runtimeMetadata = metadataForRoute({ kind: 'modelProfile', slug });
+  const canonical = `${SITE_CONFIG.origin}/model-profile?model=${encodeURIComponent(slug)}`;
+  return previewMetadataForCanonical(canonical, {
+    title: runtimeMetadata.title,
+    description: runtimeMetadata.description,
+    h1: runtimeMetadata.h1,
+  });
+}
+
+const previewLifecycleMetadata = previewMetadataForCanonical(`${SITE_CONFIG.origin}/model-lifecycle`, {
+  title: `Model Lifecycle & Retirement Radar | ${SITE_CONFIG.name}`,
+  description: `Track model retirement notices, sunset dates, source-backed replacement paths, and explicit unavailable migration evidence with ${SITE_CONFIG.name}.`,
+  h1: 'Production model lifecycle & retirement radar',
+});
 
 const previewArticleMetadata = {
   articles: previewMetadata('/articles/', {
@@ -327,7 +346,7 @@ const manifestRoutes = [
     delivery: 'react',
     documentReadiness: readyReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
-    metadata: (match) => metadataForRoute({ kind: 'modelProfile', slug: match.search.get('model') ?? 'model' }),
+    metadata: (match) => previewQueryProfileMetadata(match.search.get('model') ?? 'model'),
     structuredData,
     staticData: async (match) => staticPreviewAdapter.profile(match.search.get('model') ?? 'gpt-4o'),
     payload: modelProfilePayload,
@@ -341,7 +360,7 @@ const manifestRoutes = [
     delivery: 'react',
     documentReadiness: readyReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
-    metadata: () => metadataForRoute({ kind: 'models' }),
+    metadata: () => previewLifecycleMetadata,
     structuredData,
     staticData: async () => staticPreviewAdapter.lifecycle({ horizonDays: 90 }),
     payload: lifecyclePayload,
