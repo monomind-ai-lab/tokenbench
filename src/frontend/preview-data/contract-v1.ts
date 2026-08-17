@@ -27,6 +27,7 @@ type JsonRecord = Record<string, unknown>;
 type ValueValidator = (value: unknown, path: string) => void;
 
 const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function fail(path: string, message: string): never {
   throw new TypeError(`${path} ${message}`);
@@ -64,30 +65,42 @@ function array(value: unknown, path: string): readonly unknown[] {
   return value;
 }
 
-function utcTimestamp(value: unknown, path: string): void {
-  if (typeof value !== 'string' || !UTC_TIMESTAMP.test(value)) {
-    fail(path, 'must be a UTC ISO-8601 timestamp ending in Z');
-  }
+/** Strict format predicate also registered with Ajv by the consumer-contract tests. */
+export function isStrictUtcTimestamp(value: string): boolean {
+  if (!UTC_TIMESTAMP.test(value)) return false;
   const parsed = new Date(value);
   const [calendarDate, clock] = value.split('T');
   const [year, month, day] = calendarDate.split('-').map(Number);
   const [hour, minute, secondWithFraction] = clock.slice(0, -1).split(':');
   const second = Number(secondWithFraction.split('.')[0]);
-  if (
-    !Number.isFinite(parsed.getTime())
-    || parsed.getUTCFullYear() !== year
-    || parsed.getUTCMonth() !== month - 1
-    || parsed.getUTCDate() !== day
-    || parsed.getUTCHours() !== Number(hour)
-    || parsed.getUTCMinutes() !== Number(minute)
-    || parsed.getUTCSeconds() !== second
-  ) {
+  return Number.isFinite(parsed.getTime())
+    && parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day
+    && parsed.getUTCHours() === Number(hour)
+    && parsed.getUTCMinutes() === Number(minute)
+    && parsed.getUTCSeconds() === second;
+}
+
+/** Strict format predicate also registered with Ajv by the consumer-contract tests. */
+export function isStrictCalendarDate(value: string): boolean {
+  if (!CALENDAR_DATE.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  const [year, month, day] = value.split('-').map(Number);
+  return Number.isFinite(parsed.getTime())
+    && parsed.getUTCFullYear() === year
+    && parsed.getUTCMonth() === month - 1
+    && parsed.getUTCDate() === day;
+}
+
+function utcTimestamp(value: unknown, path: string): void {
+  if (typeof value !== 'string' || !isStrictUtcTimestamp(value)) {
     fail(path, 'must be a UTC ISO-8601 timestamp ending in Z');
   }
 }
 
 function date(value: unknown, path: string): void {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(`${value}T00:00:00.000Z`))) {
+  if (typeof value !== 'string' || !isStrictCalendarDate(value)) {
     fail(path, 'must be an ISO-8601 calendar date');
   }
 }
@@ -340,8 +353,7 @@ export function parseUiDataContractV1<M extends UiDataContractV1Method>(
   utcTimestamp(envelope.fetchedAt, 'fetchedAt');
   if (envelope.effectiveAt !== null) utcTimestamp(envelope.effectiveAt, 'effectiveAt');
 
-  const sources = array(envelope.provenance, 'provenance');
-  sources.forEach((source, index) => provenance(source, `provenance[${index}]`));
+  array(envelope.provenance, 'provenance').forEach((source, index) => provenance(source, `provenance[${index}]`));
 
   if (envelope.status === 'unavailable') {
     if (envelope.data !== null) fail('data', 'must be null when status is unavailable');
@@ -352,16 +364,8 @@ export function parseUiDataContractV1<M extends UiDataContractV1Method>(
 
   if ('reason' in envelope) fail('reason', 'is only allowed when status is unavailable');
   if (envelope.data === null) fail('data', 'must be present when status is available or partial');
-
-  const effectiveTimes = new Set(sources.map((source) => (source as JsonRecord).effectiveAt));
-  if (envelope.effectiveAt === null) {
-    if (effectiveTimes.size < 2) fail('effectiveAt', 'may be null only for a mixed-source envelope');
-  } else if (
-    effectiveTimes.size !== 1
-    || sources.length === 0
-    || envelope.effectiveAt !== (sources[0] as JsonRecord).effectiveAt
-  ) {
-    fail('effectiveAt', 'must match the common provenance effectiveAt');
+  if (envelope.status === 'available' && envelope.effectiveAt === null) {
+    fail('effectiveAt', 'must be non-null when status is available');
   }
 
   methodData(envelope.data, method);

@@ -1,12 +1,79 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import Ajv2020 from 'ajv/dist/2020';
 import { describe, expect, it } from 'vitest';
-import { parseUiDataContractV1, type UiDataContractV1Method } from './contract-v1';
+import {
+  isStrictCalendarDate,
+  isStrictUtcTimestamp,
+  parseUiDataContractV1,
+  type UiDataContractV1Method,
+} from './contract-v1';
 
 const contractRoot = resolve(process.cwd(), 'contracts/ui-data-contract/v1');
 
 function readExample<T>(name: string): T {
   return JSON.parse(readFileSync(resolve(contractRoot, 'examples', `${name}.json`), 'utf8')) as T;
+}
+
+function readContractFile<T>(path: string): T {
+  return JSON.parse(readFileSync(resolve(contractRoot, path), 'utf8')) as T;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+interface ContractSchema extends JsonRecord {
+  readonly $id: string;
+  readonly $schema: string;
+}
+
+interface ContractMetaSchema extends JsonRecord {
+  readonly $id: string;
+  readonly $schema: string;
+  readonly $vocabulary: Readonly<Record<string, boolean>>;
+}
+
+interface ManifestEntry {
+  readonly method: UiDataContractV1Method;
+  readonly file: string;
+  readonly schemaRef: string;
+  readonly classification: 'positive consumer example' | 'expected rejection';
+}
+
+interface Manifest {
+  readonly examples: readonly ManifestEntry[];
+}
+
+const schema = readContractFile<ContractSchema>('schema.json');
+const metaSchema = readContractFile<ContractMetaSchema>('meta-schema.json');
+const manifest = readContractFile<Manifest>('examples/manifest.json');
+
+function clone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function schemaValidator(schemaRef: string) {
+  const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false, validateFormats: true });
+  ajv.addFormat('date-time', { type: 'string', validate: isStrictUtcTimestamp });
+  ajv.addFormat('date', { type: 'string', validate: isStrictCalendarDate });
+  ajv.addMetaSchema(metaSchema);
+  ajv.addSchema(schema);
+  const validate = ajv.getSchema(`${schema.$id}${schemaRef}`);
+  if (!validate) throw new Error(`Manifest schema reference did not resolve: ${schemaRef}`);
+  return validate;
+}
+
+function expectSchemaAndParserParity(
+  value: unknown,
+  method: UiDataContractV1Method,
+  expectedValid: boolean,
+): void {
+  const validate = schemaValidator(`#/$defs/${method}Envelope`);
+  expect(validate(value), JSON.stringify(validate.errors)).toBe(expectedValid);
+  if (expectedValid) {
+    expect(() => parseUiDataContractV1(value, method)).not.toThrow();
+  } else {
+    expect(() => parseUiDataContractV1(value, method)).toThrow();
+  }
 }
 
 const examples = {
@@ -79,5 +146,87 @@ describe('parseUiDataContractV1', () => {
         unavailableModelIds: [{ availability: 'unavailable', reason: '' }],
       },
     }, 'comparison')).toThrow(/non-empty reason/);
+  });
+
+  it('rejects impossible nested calendar dates', () => {
+    const invalidRelease = clone(examples.models) as JsonRecord;
+    const releaseModel = ((invalidRelease.data as JsonRecord).models as JsonRecord[])[0]!;
+    const identityProvenance = (releaseModel.identity as JsonRecord).provenance;
+    releaseModel.benchmark = {
+      availability: 'available',
+      value: { releaseOn: '2026-02-30', subtasks: [] },
+      provenance: identityProvenance,
+    };
+
+    const invalidSunset = clone(examples.lifecycle) as JsonRecord;
+    const lifecycleModel = ((invalidSunset.data as JsonRecord).models as JsonRecord[])[0]!;
+    const sunset = ((lifecycleModel.lifecycle as JsonRecord).value as JsonRecord).sunsetOn as JsonRecord;
+    sunset.value = '2026-02-30';
+
+    expect(() => parseUiDataContractV1(invalidRelease, 'models')).toThrow(/calendar date/);
+    expect(() => parseUiDataContractV1(invalidSunset, 'lifecycle')).toThrow(/calendar date/);
+  });
+});
+
+describe('published ui-data-contract/v1 schema', () => {
+  it('declares date and date-time formats as required assertions', () => {
+    expect(metaSchema.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
+    expect(schema.$schema).toBe(metaSchema.$id);
+    expect(metaSchema.$vocabulary).toMatchObject({
+      'https://json-schema.org/draft/2020-12/vocab/format-assertion': true,
+    });
+  });
+
+  it('resolves every manifest example through the published schema', () => {
+    for (const entry of manifest.examples) {
+      const validate = schemaValidator(entry.schemaRef);
+      const value = readContractFile<unknown>(`examples/${entry.file}`);
+      expect(validate(value), `${entry.file}: ${JSON.stringify(validate.errors)}`)
+        .toBe(entry.classification === 'positive consumer example');
+    }
+  });
+
+  it('keeps parser and schema status/effective-time rules in parity', () => {
+    const availableWithNullTime = clone(examples.models) as JsonRecord;
+    availableWithNullTime.status = 'available';
+    availableWithNullTime.effectiveAt = null;
+
+    const unavailableWithTime = clone(examples.models) as JsonRecord;
+    unavailableWithTime.status = 'unavailable';
+    unavailableWithTime.reason = 'No approved source for the requested surface';
+    unavailableWithTime.data = null;
+
+    const partialWithIndependentTime = clone(examples.models) as JsonRecord;
+    partialWithIndependentTime.effectiveAt = '2026-08-09T00:00:00.000Z';
+
+    expectSchemaAndParserParity(availableWithNullTime, 'models', false);
+    expectSchemaAndParserParity(unavailableWithTime, 'models', false);
+    expectSchemaAndParserParity(examples.mixedSource, 'rankings', true);
+    expectSchemaAndParserParity(partialWithIndependentTime, 'models', true);
+  });
+
+  it('rejects impossible envelope, provenance, and nested dates through both boundaries', () => {
+    const invalidEnvelopeTime = clone(examples.models) as JsonRecord;
+    invalidEnvelopeTime.fetchedAt = '2026-02-30T00:00:00.000Z';
+
+    const invalidProvenanceTime = clone(examples.models) as JsonRecord;
+    ((invalidProvenanceTime.provenance as JsonRecord[])[0]!).effectiveAt = '2026-02-30T00:00:00.000Z';
+
+    const invalidRelease = clone(examples.models) as JsonRecord;
+    const releaseModel = ((invalidRelease.data as JsonRecord).models as JsonRecord[])[0]!;
+    releaseModel.benchmark = {
+      availability: 'available',
+      value: { releaseOn: '2026-02-30', subtasks: [] },
+      provenance: (releaseModel.identity as JsonRecord).provenance,
+    };
+
+    const invalidSunset = clone(examples.lifecycle) as JsonRecord;
+    const lifecycleModel = ((invalidSunset.data as JsonRecord).models as JsonRecord[])[0]!;
+    (((lifecycleModel.lifecycle as JsonRecord).value as JsonRecord).sunsetOn as JsonRecord).value = '2026-02-30';
+
+    expectSchemaAndParserParity(invalidEnvelopeTime, 'models', false);
+    expectSchemaAndParserParity(invalidProvenanceTime, 'models', false);
+    expectSchemaAndParserParity(invalidRelease, 'models', false);
+    expectSchemaAndParserParity(invalidSunset, 'lifecycle', false);
   });
 });

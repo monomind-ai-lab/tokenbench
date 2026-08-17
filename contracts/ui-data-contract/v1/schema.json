@@ -1,8 +1,8 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$schema": "https://tokenbench.dev/contracts/ui-data-contract/v1/meta-schema.json",
   "$id": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json",
   "title": "TokenBench UI data contract v1",
-  "description": "PROPOSED consumer contract. The parser additionally enforces that a non-null envelope effectiveAt equals the sole provenance effectiveAt, while null is reserved for unavailable or mixed-source envelopes.",
+  "description": "PROPOSED consumer contract. Available envelopes require a non-null effectiveAt; unavailable envelopes require data and effectiveAt to be null; partial envelopes use null as the explicit mixed-source timing marker or may publish a producer-supplied non-null effectiveAt. Producers remain responsible for accurately populating provenance effective times; this schema does not compare array values.",
   "allOf": [
     { "$ref": "#/$defs/envelope" },
     {
@@ -333,14 +333,34 @@
       },
       "allOf": [
         {
+          "if": { "properties": { "status": { "const": "available" } } },
+          "then": {
+            "not": { "required": ["reason"], "properties": { "reason": {} } },
+            "properties": {
+              "data": { "type": "object" },
+              "effectiveAt": { "$ref": "#/$defs/utcTimestamp" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "const": "partial" } } },
+          "then": {
+            "not": { "required": ["reason"], "properties": { "reason": {} } },
+            "properties": {
+              "data": { "type": "object" },
+              "effectiveAt": { "oneOf": [{ "$ref": "#/$defs/utcTimestamp" }, { "type": "null" }] }
+            }
+          }
+        },
+        {
           "if": { "properties": { "status": { "const": "unavailable" } } },
           "then": {
             "required": ["reason"],
-            "properties": { "data": { "type": "null" }, "effectiveAt": { "type": "null" } }
-          },
-          "else": {
-            "not": { "required": ["reason"] },
-            "properties": { "data": { "type": "object" } }
+            "properties": {
+              "reason": { "$ref": "#/$defs/nonEmptyString" },
+              "data": { "type": "null" },
+              "effectiveAt": { "type": "null" }
+            }
           }
         }
       ]
