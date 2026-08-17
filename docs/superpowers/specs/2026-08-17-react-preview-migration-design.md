@@ -43,6 +43,29 @@ enter the same React detail-page route rather than add another static template.
 
 ## Chosen architecture
 
+### Parallel pipeline contract gate
+
+Frontend migration and data-pipeline work proceed in parallel. The frontend may
+build routing, static rendering, the shared shell, content pages, pure view
+components, and typed state/export/chart adapters before the revised pipeline
+is ready. Data-heavy workbenches may use representative fixtures during that
+period, but they cannot be declared complete or have their fixture adapter
+removed until `UI data contract v1` is accepted.
+
+`UI data contract v1` must define versioned response shapes, availability
+states, source provenance, effective/fetched timestamps, and representative
+responses for model identity/access, benchmark releases and subtasks, route
+pricing, task economics, cache pricing, subscription plans, runtime SLA facts,
+and lifecycle/replacement facts. The UI consumes these responses through a
+narrow typed adapter. Page components cannot depend directly on D1 rows, R2
+objects, ingestion-worker internals, or prototype global objects.
+
+Current LiveBench data whose redistribution rights are unresolved cannot be
+copied into preview fixtures or published storage. Historical pinned datasets
+may be exposed only with their source and effective time; unsupported current
+economics and runtime/lifecycle fields remain explicitly unavailable until an
+approved source exists.
+
 ### One preview-route manifest
 
 Create one typed manifest that maps each in-scope pathname to:
@@ -141,17 +164,24 @@ download/share actions, and accessible semantic data tables.
    server/static document renderer, route metadata, and a unified browser
    resolver. Establish a React shell test for every in-scope route. Do not
    remove the copy plugin yet.
-2. **Low-risk content and existing React surfaces.** Move Home, Popular
+2. **UI data contract adapter.** Define the versioned frontend contract and
+   fixture/API adapter boundary in parallel with the pipeline work. Add
+   availability/provenance rendering and contract fixtures before data-heavy
+   routes consume it.
+3. **Low-risk content and existing React surfaces.** Move Home, Popular
    Models, Price Performance, the Articles index, all article details, and
    query-route wrappers for Models/Profile into manifest-rendered React pages.
-3. **Shared fixture workbench foundation.** Establish typed preview data,
+4. **Shared fixture workbench foundation.** Establish typed preview data,
    URL-state, chart lifecycle, selection tray, and export utilities. Port
    Models, Lifecycle, and Compare over that foundation.
-4. **Calculation workbenches.** Port Make-it-yours and Subscribe vs API,
+5. **Calculation workbenches.** Port Make-it-yours and Subscribe vs API,
    retaining their approved formula/output parity and semantic tables. Extend
    existing calculator domain types rather than keep a separate vanilla
    calculation engine.
-5. **Cut over delivery.** Replace prototype-copy assertions with React route
+6. **Pipeline integration gate.** Replace representative fixtures with the
+   accepted `UI data contract v1` responses and prove unavailable/source-time
+   behavior before declaring data-heavy workbenches complete.
+7. **Cut over delivery.** Replace prototype-copy assertions with React route
    build tests. Remove `makeItYoursPreviewPlugin`, its copied JavaScript/Chart
    asset pipeline, and prototype pages only after every in-scope route passes
    behavioral, no-JS, navigation/footer, and visual regression gates.
@@ -186,7 +216,9 @@ Each slice must pass before the next begins:
    theme/language, charts, keyboard control, URL sharing, and exports.
 5. Focused parity assertions for the existing cost and Make-it-yours preview
    test contracts before their prototype tests are retired.
-6. A final build, TypeScript check, diff check, and manual review of all
+6. Contract tests using representative `UI data contract v1` payloads,
+   including unavailable values, stale sources, and mixed-source timestamps.
+7. A final build, TypeScript check, diff check, and manual review of all
    in-scope stable preview routes.
 
 ## Success criteria
@@ -197,6 +229,8 @@ Each slice must pass before the next begins:
   `prototypes/ui-revamp-3/*` or depends on its copied JavaScript asset bundle.
 - The app retains the approved visual/UI behavior, semantic alternatives,
   query state, exports, and current navigation/footer destinations.
+- Data-heavy pages depend only on the accepted versioned UI contract and render
+  unavailable/provenance/effective-time states without inventing values.
 - Legacy routes continue to redirect and are not duplicated as React pages.
 - Build, type, route, and browser parity gates pass without changing the
   deployed preview until a deployment is explicitly requested.
