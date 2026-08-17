@@ -26,6 +26,16 @@ const validState: CalculatorShareState = {
     'provider-a:alpha:opencode_zen': 3_333,
   },
   mappingMode: 'override',
+  cacheReadShareBasisPoints: 2_000,
+  cacheWriteShareBasisPoints: 1_000,
+  longContext: true,
+  characterEstimate: {
+    contentType: 'code',
+    inputCharactersPerMessage: 1_200,
+    outputCharactersPerMessage: 600,
+  },
+  seats: 12,
+  tokenVolume: 120_000_000,
 };
 
 function nonIndividualPlan(kind: 'free' | 'team'): PlanOffer {
@@ -42,11 +52,21 @@ describe('calculator share state', () => {
   it('round trips every primary input and explicit weighted override', () => {
     const params = encodeCalculatorShareState(validState);
 
-    expect([...params.keys()]).toEqual(['c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan']);
+    expect([...params.keys()]).toEqual([
+      'c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan',
+      'cacheReadShare', 'cacheWriteShare', 'longContext', 'contentType',
+      'inputCharactersPerMessage', 'outputCharactersPerMessage', 'seats', 'tokenVolume',
+    ]);
     expect(params.get('c')).toBe('12');
     expect(params.get('models')).toBe(modelIds.join(','));
     expect(params.get('weights')).toBe('3334,3333,3333');
     expect(decodeCalculatorShareState(params, FRONTEND_TEST_CATALOG)).toEqual({ state: validState, wasNormalized: false });
+  });
+
+  it('round-trips cache, long-context, character estimate, seat, and token-domain inputs', () => {
+    const decoded = decodeCalculatorShareState(new URLSearchParams(encodeCalculatorShareState(validState)), FRONTEND_TEST_CATALOG);
+
+    expect(decoded?.state).toEqual(validState);
   });
 
   it('ignores unrelated campaign parameters without changing a valid state', () => {

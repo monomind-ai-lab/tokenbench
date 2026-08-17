@@ -17,6 +17,7 @@ import { PreviewModelProfilePage, parsePreviewModelProfilePageData } from '../pa
 import { PreviewModelsPage, parsePreviewModelsPageData } from '../pages/preview-models-page';
 import { PreviewComparePage, parsePreviewComparePageData } from '../pages/preview-compare-page';
 import { MakeItYoursPage, parseMakeItYoursPageData } from '../pages/make-it-yours-page';
+import { SubscribeVsApiPage, parseSubscribeVsApiPageData } from '../pages/subscribe-vs-api-page';
 import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
 import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
@@ -292,6 +293,7 @@ const modelProfilePage = PreviewModelProfilePage as ComponentType<PreviewPagePro
 const lifecyclePage = LifecycleRadarPage as ComponentType<PreviewPageProps>;
 const comparePage = PreviewComparePage as ComponentType<PreviewPageProps>;
 const makeItYoursPage = MakeItYoursPage as ComponentType<PreviewPageProps>;
+const subscribeVsApiPage = SubscribeVsApiPage as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
@@ -305,6 +307,7 @@ const modelProfilePayload = { key: 'preview-model-profile-initial-data', parse: 
 const lifecyclePayload = { key: 'model-lifecycle-initial-data', parse: parseLifecycleRadarPageData } as const;
 const comparePayload = { key: 'compare-initial-data', parse: parsePreviewComparePageData } as const;
 const makeItYoursPayload = { key: 'make-it-yours-initial-data', parse: parseMakeItYoursPageData } as const;
+const subscribeVsApiPayload = { key: 'subscribe-vs-api-initial-data', parse: parseSubscribeVsApiPageData } as const;
 
 export const previewRuntimeRoutes = [
   {
@@ -424,15 +427,15 @@ const manifestRoutes = [
     id: 'subscribe-vs-api',
     match: exactPathMatcher('subscribe-vs-api', '/subscribe-vs-api'),
     outputPathname: '/subscribe-vs-api',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'calculator', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'calculator' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: pricePerformancePage,
-    prototypeBundle: [{ outputPathname: '/subscribe-vs-api/', output: ['subscribe-vs-api', 'index.html'], document: 'cost-calculator.html', clearOutputDirectory: true }],
+    staticData: async () => staticPreviewAdapter.subscription({}),
+    payload: subscribeVsApiPayload,
+    Page: subscribeVsApiPage,
+    prototypeBundle: [],
   },
   {
     id: 'articles',

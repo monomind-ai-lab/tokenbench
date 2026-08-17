@@ -174,6 +174,8 @@ export interface SubscriptionPlan {
 
 export interface SubscriptionData {
   readonly plans: readonly SubscriptionPlan[];
+  /** Route-pricing evidence available to the subscription comparison surface. */
+  readonly models: readonly PreviewModel[];
   readonly selectedModelTaskEconomics: EvidenceValue<TaskEconomics>;
 }
 

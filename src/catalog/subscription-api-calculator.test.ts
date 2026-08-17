@@ -19,6 +19,13 @@ function fixture(overrides: Partial<typeof baseWorkload> & Partial<{
   planCostMicroDollars: number;
   inputMicroDollarsPerMillion: number;
   outputMicroDollarsPerMillion: number;
+  seats: number;
+  tokenVolume: number;
+  cacheReadShareBasisPoints: number;
+  cacheWriteShareBasisPoints: number;
+  cachedInputMicroDollarsPerMillion: number;
+  cacheWriteMicroDollarsPerMillion: number;
+  longContext: boolean;
 }> = {}) {
   return {
     ...baseWorkload,
@@ -158,5 +165,24 @@ describe('message-level subscription versus API calculator', () => {
       efficiencyBasisPoints: 0,
       cheaper: 'equal',
     });
+  });
+
+  it('calculates monthly subscription and API cost for one through fifty seats', () => {
+    const result = calculateSubscriptionApiResult(fixture({
+      seats: 12,
+      tokenVolume: 120_000_000,
+      cacheReadShareBasisPoints: 2_000,
+      cacheWriteShareBasisPoints: 1_000,
+      cachedInputMicroDollarsPerMillion: 1_000_000,
+      cacheWriteMicroDollarsPerMillion: 3_000_000,
+      longContext: true,
+    }));
+
+    expect(result.monthlySubscriptionUsd).toBe(240);
+    expect(result.selectedVolumeApiUsd).toBeGreaterThan(0);
+    expect(result.crossoverTokens).toBeGreaterThan(0);
+    expect(result.domain).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tokens: 120_000_000, monthlySubscriptionUsd: 240 }),
+    ]));
   });
 });

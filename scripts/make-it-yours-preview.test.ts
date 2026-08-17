@@ -81,33 +81,17 @@ describe('approved preview bundle', () => {
     await execFileAsync('npx', ['vite', 'build', '--outDir', outputDir], { cwd: process.cwd() });
 
     const document = await readFile(join(outputDir, 'make-it-yours', 'index.html'), 'utf8');
-    const sharedAssets = join(outputDir, 'ui-revamp-3-assets');
-    const shellScript = await readFile(join(sharedAssets, 'common.js'), 'utf8');
     expect(document).toContain('<title>Make it yours — TokenBench</title>');
     expect(document).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/make-it-yours/">');
     expect(document).toContain('<script id="make-it-yours-initial-data" type="application/json">');
     expect(document).toContain('/assets/main.js');
     expect(document).toContain('/assets/tokenbench.css');
     expect(document).not.toContain('/ui-revamp-3-assets/make-it-yours.js');
-    expect(shellScript).toContain("const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);");
-    expect(shellScript).toContain("location.pathname.replace(/\\/+$/, '').split('/').pop()||'index'");
-    expect(shellScript).toContain("const currentPage=current.replace(/\\.html$/,'');");
-    expect(shellScript).toContain("const costActive=['subscribe-vs-api'].includes(currentPage);");
-
-    const prototypePages = [
-      [join('subscribe-vs-api', 'index.html'), 'Monthly cost simulator'],
-    ] as const;
-    for (const [file, expectedText] of prototypePages) {
-      const html = await readFile(join(outputDir, file), 'utf8');
-      expect(html).toContain(expectedText);
-      expect(html).toContain('href="/ui-revamp-3-assets/styles.css');
-      expect(html).toContain('src="/ui-revamp-3-assets/common.js');
-    }
-
     const reactPages = [
       ['index.html', 'API cost preview'],
       [join('popular-models', 'index.html'), 'popular-models-page'],
       [join('make-it-yours', 'index.html'), 'make-it-yours-page'],
+      [join('subscribe-vs-api', 'index.html'), 'subscribe-vs-api-page'],
     ] as const;
     for (const [file, expectedText] of reactPages) {
       const html = await readFile(join(outputDir, file), 'utf8');
@@ -116,13 +100,7 @@ describe('approved preview bundle', () => {
       expect(html).toContain('/assets/tokenbench.css');
       expect(html).not.toContain('/ui-revamp-3-assets/common.js');
     }
-    await expect(access(join(sharedAssets, 'styles.css'))).resolves.toBeUndefined();
-    await expect(access(join(sharedAssets, 'data.js'))).resolves.toBeUndefined();
-    await expect(access(join(sharedAssets, 'common.js'))).resolves.toBeUndefined();
-    await expect(access(join(sharedAssets, 'make-it-yours.js'))).resolves.toBeUndefined();
-    await expect(access(join(sharedAssets, 'articles.js'))).resolves.toBeUndefined();
-    await expect(access(join(sharedAssets, 'article-detail.js'))).resolves.toBeUndefined();
-    await expect(access(join(sharedAssets, 'assets', 'monomind-tokenbench.png'))).resolves.toBeUndefined();
+    await expect(access(join(outputDir, 'ui-revamp-3-assets'))).rejects.toMatchObject({ code: 'ENOENT' });
 
     const guideDetail = await readFile(join(outputDir, 'articles', 'track-claude-code-usage', 'index.html'), 'utf8');
     expect(guideDetail).toContain('How to Track Claude Code Usage, Tokens, and Spend');

@@ -43,6 +43,7 @@ describe('preview route manifest', () => {
       'popular-models',
       'make-it-yours',
       'compare',
+      'subscribe-vs-api',
       'articles',
       'article-detail',
     ]);
@@ -232,7 +233,7 @@ describe('preview route manifest', () => {
     ]));
   });
 
-  it('owns the complete prototype bundle output set', () => {
+  it('owns only the remaining prototype bundle output set', () => {
     const prototypeEntries = previewStaticEntries()
       .filter((entry) => entry.source === 'prototype-bundle')
       .map((entry) => `${entry.output.join('/')} <= ${entry.document}`);
@@ -240,7 +241,6 @@ describe('preview route manifest', () => {
     expect(prototypeEntries.sort()).toEqual([
       'index.html <= home.html',
       'popular-models/index.html <= popular-models.html',
-      'subscribe-vs-api/index.html <= cost-calculator.html',
     ].sort());
   });
 });

@@ -89,6 +89,10 @@ export interface ModelOffer {
   unit: PriceUnit;
   inputMicroDollarsPerMillion: number;
   cachedInputMicroDollarsPerMillion?: number;
+  /** Published cache-write price when the route bills it separately. */
+  cacheWriteMicroDollarsPerMillion?: number;
+  /** Published long-context input tier when the provider exposes one. */
+  longContextInputMicroDollarsPerMillion?: number;
   outputMicroDollarsPerMillion: number;
   contextWindowTokens?: number;
   maxOutputTokens?: number;

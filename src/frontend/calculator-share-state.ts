@@ -5,6 +5,7 @@ import type { ConversationWorkload } from '../catalog/subscription-api-calculato
 import { isPaidIndividualPlan } from './plan-filter';
 
 const SHARE_KEYS = ['c', 'm', 'i', 'o', 'd', 'models', 'weights', 'provider', 'plan'] as const;
+const ADVANCED_SHARE_KEYS = ['cacheReadShare', 'cacheWriteShare', 'longContext', 'contentType', 'inputCharactersPerMessage', 'outputCharactersPerMessage', 'seats', 'tokenVolume'] as const;
 const LEGACY_KEYS = ['input', 'tokens'] as const;
 type ShareKey = (typeof SHARE_KEYS)[number];
 
@@ -15,6 +16,16 @@ export interface CalculatorShareState {
   readonly selectedModelIds: readonly string[];
   readonly modelMixBasisPoints: Readonly<Record<string, number>>;
   readonly mappingMode: 'default' | 'override';
+  readonly cacheReadShareBasisPoints?: number;
+  readonly cacheWriteShareBasisPoints?: number;
+  readonly longContext?: boolean;
+  readonly characterEstimate?: {
+    readonly contentType: 'text' | 'code';
+    readonly inputCharactersPerMessage: number;
+    readonly outputCharactersPerMessage: number;
+  };
+  readonly seats?: number;
+  readonly tokenVolume?: number;
 }
 
 export interface DecodedCalculatorShareState {
@@ -103,6 +114,22 @@ export function encodeCalculatorShareState(state: CalculatorShareState): URLSear
   params.set('weights', state.selectedModelIds.map((id) => state.modelMixBasisPoints[id]).join(','));
   params.set('provider', state.providerId);
   params.set('plan', state.planId);
+  const hasAdvancedState = state.cacheReadShareBasisPoints !== undefined
+    && state.cacheWriteShareBasisPoints !== undefined
+    && state.longContext !== undefined
+    && state.characterEstimate !== undefined
+    && state.seats !== undefined
+    && state.tokenVolume !== undefined;
+  if (hasAdvancedState) {
+    params.set('cacheReadShare', String(state.cacheReadShareBasisPoints! / 100));
+    params.set('cacheWriteShare', String(state.cacheWriteShareBasisPoints! / 100));
+    params.set('longContext', state.longContext ? '1' : '0');
+    params.set('contentType', state.characterEstimate!.contentType);
+    params.set('inputCharactersPerMessage', String(state.characterEstimate!.inputCharactersPerMessage));
+    params.set('outputCharactersPerMessage', String(state.characterEstimate!.outputCharactersPerMessage));
+    params.set('seats', String(state.seats));
+    params.set('tokenVolume', String(state.tokenVolume));
+  }
   return params;
 }
 
@@ -167,6 +194,36 @@ export function decodeCalculatorShareState(params: URLSearchParams, catalog: Cat
     || normalizedModelIds.some((id, index) => id !== selectedModelIds[index])
     || normalizedModelIds.some((id, index) => modelMixBasisPoints[id] !== weights[index]);
   const mappingMode = inferredMappingMode(providerId, normalizedPlanId, normalizedModelIds, modelMixBasisPoints, catalog);
+  const advancedValues = ADVANCED_SHARE_KEYS.map((key) => readSingleStateValue(params, key));
+  const hasAdvanced = advancedValues.some((value) => value !== null);
+  let advancedState: Pick<CalculatorShareState, 'cacheReadShareBasisPoints' | 'cacheWriteShareBasisPoints' | 'longContext' | 'characterEstimate' | 'seats' | 'tokenVolume'> = {};
+  if (hasAdvanced) {
+    if (advancedValues.some((value) => value === null)) return null;
+    const [encodedCacheRead, encodedCacheWrite, encodedLongContext, encodedContentType, encodedInputCharacters, encodedOutputCharacters, encodedSeats, encodedTokenVolume] = advancedValues;
+    const cacheReadShare = parseInteger(encodedCacheRead!, 0, 100);
+    const cacheWriteShare = parseInteger(encodedCacheWrite!, 0, 100);
+    const inputCharactersPerMessage = parseInteger(encodedInputCharacters!, 0, 4_000_000);
+    const outputCharactersPerMessage = parseInteger(encodedOutputCharacters!, 0, 4_000_000);
+    const seats = parseInteger(encodedSeats!, 1, 50);
+    const tokenVolume = parseInteger(encodedTokenVolume!, 0, 300_000_000);
+    if (cacheReadShare === null
+      || cacheWriteShare === null
+      || cacheReadShare + cacheWriteShare > 100
+      || inputCharactersPerMessage === null
+      || outputCharactersPerMessage === null
+      || seats === null
+      || tokenVolume === null
+      || (encodedLongContext !== '0' && encodedLongContext !== '1')
+      || (encodedContentType !== 'text' && encodedContentType !== 'code')) return null;
+    advancedState = {
+      cacheReadShareBasisPoints: cacheReadShare * 100,
+      cacheWriteShareBasisPoints: cacheWriteShare * 100,
+      longContext: encodedLongContext === '1',
+      characterEstimate: { contentType: encodedContentType, inputCharactersPerMessage, outputCharactersPerMessage },
+      seats,
+      tokenVolume,
+    };
+  }
 
   return {
     state: {
@@ -176,6 +233,7 @@ export function decodeCalculatorShareState(params: URLSearchParams, catalog: Cat
       selectedModelIds: normalizedModelIds,
       modelMixBasisPoints,
       mappingMode,
+      ...advancedState,
     },
     wasNormalized: hasLegacy || normalizedPlanId !== planId || modelsChanged,
   };

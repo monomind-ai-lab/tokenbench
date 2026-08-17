@@ -1,11 +1,13 @@
 import {
   calculateApiEquivalentCost,
+  calculateSubscriptionApiResult,
   compareSubscriptionWithApi,
   deriveConversationWorkload,
   type ApiEquivalentCost,
   type ConversationWorkload,
   type DerivedConversationWorkload,
   type SubscriptionApiComparison,
+  type CrossoverResult,
 } from '../catalog/subscription-api-calculator';
 import { defaultApiEquivalentForPlan } from '../catalog/plan-api-equivalent';
 import type { CatalogFreshness, ModelMixEntry, ModelOffer, PlanEntitlement, PlanOffer, PricingBasis } from '../catalog/contracts';
@@ -76,6 +78,7 @@ export interface CalculatorSnapshot {
   readonly maximumPlanValueMicroDollars: number | null;
   readonly monthlyTokens: number;
   readonly chartPoints: ChartPoint[];
+  readonly crossover: CrossoverResult | null;
 }
 
 type ModelPricingBasis = ModelOffer['pricingBasis'];
@@ -126,6 +129,16 @@ export function groupOffersByBasis(offers: ModelOffer[]): Record<ModelPricingBas
 function weightedRate(entries: readonly ModelMixEntry[], direction: 'inputMicroDollarsPerMillion' | 'outputMicroDollarsPerMillion'): number {
   const numerator = entries.reduce(
     (total, entry) => total + BigInt(entry.model[direction]) * BigInt(entry.shareBasisPoints),
+    0n,
+  );
+  const value = (numerator + 5_000n) / 10_000n;
+  if (value > SAFE_INTEGER_MAX) throw new Error(`${direction} weighted rate exceeds the safe integer range`);
+  return Number(value);
+}
+
+function weightedOptionalRate(entries: readonly ModelMixEntry[], direction: 'cachedInputMicroDollarsPerMillion' | 'cacheWriteMicroDollarsPerMillion' | 'longContextInputMicroDollarsPerMillion'): number {
+  const numerator = entries.reduce(
+    (total, entry) => total + BigInt(entry.model[direction] ?? entry.model.inputMicroDollarsPerMillion) * BigInt(entry.shareBasisPoints),
     0n,
   );
   const value = (numerator + 5_000n) / 10_000n;
@@ -207,6 +220,11 @@ export function buildCalculatorSnapshot({
   monthlyTokens,
   catalogFreshness,
   calculationTimestamp,
+  seats,
+  tokenVolume,
+  cacheReadShareBasisPoints,
+  cacheWriteShareBasisPoints,
+  longContext,
 }: {
   modelOffers: ModelOffer[];
   selectedModelIds: string[];
@@ -218,6 +236,11 @@ export function buildCalculatorSnapshot({
   monthlyTokens?: number;
   catalogFreshness?: CatalogFreshness;
   calculationTimestamp?: string;
+  seats?: number;
+  tokenVolume?: number;
+  cacheReadShareBasisPoints?: number;
+  cacheWriteShareBasisPoints?: number;
+  longContext?: boolean;
 }): CalculatorSnapshot {
   const snapshotWorkload = workload ?? legacyWorkload(inputShareBasisPoints ?? 5_000, monthlyTokens ?? 10_000_000);
   const derivedWorkload = deriveConversationWorkload(snapshotWorkload);
@@ -235,15 +258,31 @@ export function buildCalculatorSnapshot({
     ? [{ model: defaultOffer, shareBasisPoints: 10_000 }]
     : selectedMixEntries;
   const hasCompleteMix = isCompleteMix(arithmeticEntries);
-  const apiEquivalentCost = hasCompleteMix
-    ? calculateApiEquivalentCost(derivedWorkload, {
+  const rates = hasCompleteMix
+    ? {
       inputMicroDollarsPerMillion: weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion'),
       outputMicroDollarsPerMillion: weightedRate(arithmeticEntries, 'outputMicroDollarsPerMillion'),
+      cachedInputMicroDollarsPerMillion: weightedOptionalRate(arithmeticEntries, 'cachedInputMicroDollarsPerMillion'),
+      cacheWriteMicroDollarsPerMillion: weightedOptionalRate(arithmeticEntries, 'cacheWriteMicroDollarsPerMillion'),
+      longContextInputMicroDollarsPerMillion: weightedOptionalRate(arithmeticEntries, 'longContextInputMicroDollarsPerMillion'),
+    }
+    : null;
+  const scenario = rates && selectedPlan
+    ? calculateSubscriptionApiResult({
+      ...snapshotWorkload,
+      ...rates,
+      planCostMicroDollars: selectedPlan.monthlyCostMicroDollars,
+      seats,
+      tokenVolume,
+      cacheReadShareBasisPoints,
+      cacheWriteShareBasisPoints,
+      longContext,
     })
     : null;
-  const comparison = apiEquivalentCost && selectedPlan
+  const apiEquivalentCost = scenario?.apiEquivalentCost ?? (rates ? calculateApiEquivalentCost(derivedWorkload, rates) : null);
+  const comparison = scenario ?? (apiEquivalentCost && selectedPlan
     ? compareSubscriptionWithApi(selectedPlan.monthlyCostMicroDollars, derivedWorkload, apiEquivalentCost, snapshotWorkload.activeDaysPerMonth)
-    : null;
+    : null);
   const totalMonthlyTokens = safeAdd(derivedWorkload.monthlyInputTokens, derivedWorkload.monthlyOutputTokens, 'Monthly workload');
   const blendedCostPerMillion = hasCompleteMix
     ? Math.round((weightedRate(arithmeticEntries, 'inputMicroDollarsPerMillion') * (derivedWorkload.monthlyInputTokens / Math.max(1, totalMonthlyTokens)))
@@ -276,6 +315,7 @@ export function buildCalculatorSnapshot({
     maximumPlanValueMicroDollars: null,
     monthlyTokens: totalMonthlyTokens,
     chartPoints,
+    crossover: scenario?.crossover ?? null,
   };
 }
 

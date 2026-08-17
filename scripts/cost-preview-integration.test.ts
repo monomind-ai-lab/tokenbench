@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
+import { generateStaticPages } from './generate-static-pages';
 
 const execFileAsync = promisify(execFile);
 const outputRoots: string[] = [];
@@ -21,17 +22,21 @@ describe('cost preview bundle integration', () => {
     expect(shell).not.toContain("costBreakeven:'/cost/breakeven'");
   });
 
-  it('copies one consolidated calculator into the canonical Pages path with shared assets', async () => {
+  it('builds one React calculator document into the canonical Pages path', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-cost-preview-'));
     outputRoots.push(outputDir);
+    await generateStaticPages(process.cwd());
     await execFileAsync('npx', ['vite', 'build', '--outDir', outputDir], { cwd: process.cwd() });
 
     const html = await readFile(join(outputDir, 'subscribe-vs-api', 'index.html'), 'utf8');
     const redirects = await readFile(join(outputDir, '_redirects'), 'utf8');
-    expect(html).toContain('href="/ui-revamp-3-assets/styles.css');
-    expect(html).toContain('src="/ui-revamp-3-assets/common.js');
-    expect(html).toContain('src="/ui-revamp-3-assets/chart.umd.js');
     expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/subscribe-vs-api/">');
+    expect(html).toContain('<script id="subscribe-vs-api-initial-data" type="application/json">');
+    expect(html).toContain('Exact API and Monthly subscription crossover values');
+    expect(html).toContain('/assets/main.js');
+    expect(html).toContain('/assets/tokenbench.css');
+    expect(html).not.toContain('/ui-revamp-3-assets/cost-calculator.js');
+    expect(html).not.toContain('/ui-revamp-3-assets/chart.umd.js');
 
     for (const legacyPath of [
       '/tools/subscriptions-vs-apis',
@@ -50,7 +55,7 @@ describe('cost preview bundle integration', () => {
       await expect(access(join(outputDir, route, 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
     }
 
-    await expect(access(join(outputDir, 'ui-revamp-3-assets', 'cost-calculator.js'))).resolves.toBeUndefined();
-    await expect(access(join(outputDir, 'ui-revamp-3-assets', 'chart.umd.js'))).resolves.toBeUndefined();
+    await expect(access(join(outputDir, 'ui-revamp-3-assets', 'cost-calculator.js'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(join(outputDir, 'ui-revamp-3-assets', 'chart.umd.js'))).rejects.toMatchObject({ code: 'ENOENT' });
   }, 120_000);
 });

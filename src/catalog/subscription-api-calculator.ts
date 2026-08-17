@@ -1,6 +1,7 @@
 const MILLION = 1_000_000n;
 const BASIS_POINTS = 10_000;
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const CROSSOVER_DOMAIN_TOKENS = [0, 25_000_000, 50_000_000, 100_000_000, 150_000_000, 200_000_000, 250_000_000, 300_000_000] as const;
 
 type WorkloadKey = keyof ConversationWorkload;
 
@@ -21,6 +22,9 @@ export interface DerivedConversationWorkload {
 export interface ApiRates {
   readonly inputMicroDollarsPerMillion: number;
   readonly outputMicroDollarsPerMillion: number;
+  readonly cachedInputMicroDollarsPerMillion?: number;
+  readonly cacheWriteMicroDollarsPerMillion?: number;
+  readonly longContextInputMicroDollarsPerMillion?: number;
 }
 
 export interface ApiEquivalentCost {
@@ -41,11 +45,45 @@ export interface SubscriptionApiComparison {
 
 export interface SubscriptionApiCalculationInput extends ConversationWorkload, ApiRates {
   readonly planCostMicroDollars: number;
+  /** The comparison is a seat-based scenario, distinct from the selected plan source price. */
+  readonly seats?: number;
+  /** A selected point in the bounded crossover domain, in tokens. */
+  readonly tokenVolume?: number;
+  readonly cacheReadShareBasisPoints?: number;
+  readonly cacheWriteShareBasisPoints?: number;
+  readonly longContext?: boolean;
+}
+
+export interface CrossoverDomainPoint {
+  readonly tokens: number;
+  readonly monthlySubscriptionUsd: number;
+  readonly apiUsd: number;
+}
+
+export interface CrossoverResult {
+  readonly monthlySubscriptionUsd: number;
+  readonly selectedVolumeApiUsd: number;
+  readonly crossoverTokens: number | null;
+  readonly domain: readonly CrossoverDomainPoint[];
+}
+
+export interface ApiCostLineItem {
+  readonly id: 'standard-input' | 'cache-read' | 'cache-write' | 'output';
+  readonly tokens: number;
+  readonly rateMicroDollarsPerMillion: number;
+  readonly costMicroDollars: number;
 }
 
 export interface SubscriptionApiResult extends SubscriptionApiComparison {
   readonly derivedWorkload: DerivedConversationWorkload;
   readonly apiEquivalentCost: ApiEquivalentCost;
+  readonly adjustedInputTokens: number;
+  readonly lineItems: readonly ApiCostLineItem[];
+  readonly crossover: CrossoverResult;
+  readonly monthlySubscriptionUsd: number;
+  readonly selectedVolumeApiUsd: number;
+  readonly crossoverTokens: number | null;
+  readonly domain: readonly CrossoverDomainPoint[];
 }
 
 function requireSafeInteger(value: unknown, label: string): number {
@@ -64,6 +102,13 @@ function requireBoundedInteger(value: unknown, key: WorkloadKey, minimum: number
 function requireNonNegativeSafeInteger(value: unknown, label: string): number {
   const parsed = requireSafeInteger(value, label);
   if (parsed < 0) throw new Error(`${label} must be a non-negative integer`);
+  return parsed;
+}
+
+function optionalBoundedInteger(value: number | undefined, label: string, minimum: number, maximum: number, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = requireSafeInteger(value, label);
+  if (parsed < minimum || parsed > maximum) throw new Error(`${label} must be an integer between ${minimum.toLocaleString()} and ${maximum.toLocaleString()}`);
   return parsed;
 }
 
@@ -126,6 +171,45 @@ export function calculateApiEquivalentCost(derived: DerivedConversationWorkload,
   return { inputCostMicroDollars, outputCostMicroDollars, apiCostMicroDollars };
 }
 
+function roundedShare(total: number, shareBasisPoints: number, label: string): number {
+  return safeNumber(
+    (BigInt(total) * BigInt(shareBasisPoints) + 5_000n) / BigInt(BASIS_POINTS),
+    label,
+  );
+}
+
+function crossoverResult(
+  planCostMicroDollars: number,
+  seats: number,
+  tokenVolume: number,
+  totalTokens: number,
+  apiCostMicroDollars: number,
+): CrossoverResult {
+  const subscriptionMicroDollars = safeNumber(
+    BigInt(planCostMicroDollars) * BigInt(seats),
+    'Monthly subscription cost',
+  );
+  const monthlySubscriptionUsd = subscriptionMicroDollars / 1_000_000;
+  const rateMicroDollarsPerMillion = totalTokens > 0
+    ? (apiCostMicroDollars * 1_000_000) / totalTokens
+    : 0;
+  const apiUsd = (tokens: number) => tokens * rateMicroDollarsPerMillion / 1_000_000_000_000;
+  const crossoverTokens = rateMicroDollarsPerMillion > 0
+    ? subscriptionMicroDollars * 1_000_000 / rateMicroDollarsPerMillion
+    : null;
+  const tokens = new Set<number>([...CROSSOVER_DOMAIN_TOKENS, tokenVolume]);
+  if (crossoverTokens !== null && crossoverTokens >= 0 && crossoverTokens <= 300_000_000) tokens.add(crossoverTokens);
+  const domain = [...tokens]
+    .sort((left, right) => left - right)
+    .map((point) => ({ tokens: point, monthlySubscriptionUsd, apiUsd: apiUsd(point) }));
+  return {
+    monthlySubscriptionUsd,
+    selectedVolumeApiUsd: apiUsd(tokenVolume),
+    crossoverTokens,
+    domain,
+  };
+}
+
 export function compareSubscriptionWithApi(
   planCostMicroDollars: number,
   derived: DerivedConversationWorkload,
@@ -173,10 +257,60 @@ export function compareSubscriptionWithApi(
 export function calculateSubscriptionApiResult(input: SubscriptionApiCalculationInput): SubscriptionApiResult {
   const workload = normalizeConversationWorkload(input);
   const derivedWorkload = deriveConversationWorkload(workload);
-  const apiEquivalentCost = calculateApiEquivalentCost(derivedWorkload, input);
+  const seats = optionalBoundedInteger(input.seats, 'seats', 1, 50, 1);
+  const tokenVolume = optionalBoundedInteger(input.tokenVolume, 'tokenVolume', 0, 300_000_000, 0);
+  const cacheReadShareBasisPoints = optionalBoundedInteger(input.cacheReadShareBasisPoints, 'cacheReadShareBasisPoints', 0, BASIS_POINTS, 0);
+  const cacheWriteShareBasisPoints = optionalBoundedInteger(input.cacheWriteShareBasisPoints, 'cacheWriteShareBasisPoints', 0, BASIS_POINTS, 0);
+  if (cacheReadShareBasisPoints + cacheWriteShareBasisPoints > BASIS_POINTS) {
+    throw new Error('Cache read and write shares must not exceed 10,000 basis points');
+  }
+  const inputMultiplierBasisPoints = input.longContext ? 15_000 : 10_000;
+  const adjustedInputTokens = roundedShare(derivedWorkload.monthlyInputTokens, inputMultiplierBasisPoints, 'Adjusted input tokens');
+  const cacheReadTokens = roundedShare(adjustedInputTokens, cacheReadShareBasisPoints, 'Cache-read tokens');
+  const cacheWriteTokens = roundedShare(adjustedInputTokens, cacheWriteShareBasisPoints, 'Cache-write tokens');
+  const standardInputTokens = adjustedInputTokens - cacheReadTokens - cacheWriteTokens;
+  const inputRate = requireNonNegativeSafeInteger(input.inputMicroDollarsPerMillion, 'inputMicroDollarsPerMillion');
+  const cacheReadRate = input.cachedInputMicroDollarsPerMillion === undefined
+    ? inputRate
+    : requireNonNegativeSafeInteger(input.cachedInputMicroDollarsPerMillion, 'cachedInputMicroDollarsPerMillion');
+  const cacheWriteRate = input.cacheWriteMicroDollarsPerMillion === undefined
+    ? inputRate
+    : requireNonNegativeSafeInteger(input.cacheWriteMicroDollarsPerMillion, 'cacheWriteMicroDollarsPerMillion');
+  const longContextRate = input.longContextInputMicroDollarsPerMillion === undefined
+    ? inputRate
+    : requireNonNegativeSafeInteger(input.longContextInputMicroDollarsPerMillion, 'longContextInputMicroDollarsPerMillion');
+  const standardInputRate = input.longContext ? longContextRate : inputRate;
+  const outputRate = requireNonNegativeSafeInteger(input.outputMicroDollarsPerMillion, 'outputMicroDollarsPerMillion');
+  const lineItems: readonly ApiCostLineItem[] = [
+    { id: 'standard-input', tokens: standardInputTokens, rateMicroDollarsPerMillion: standardInputRate, costMicroDollars: roundedMicroDollars(standardInputTokens, standardInputRate, 'Standard-input API-equivalent cost') },
+    { id: 'cache-read', tokens: cacheReadTokens, rateMicroDollarsPerMillion: cacheReadRate, costMicroDollars: roundedMicroDollars(cacheReadTokens, cacheReadRate, 'Cache-read API-equivalent cost') },
+    { id: 'cache-write', tokens: cacheWriteTokens, rateMicroDollarsPerMillion: cacheWriteRate, costMicroDollars: roundedMicroDollars(cacheWriteTokens, cacheWriteRate, 'Cache-write API-equivalent cost') },
+    { id: 'output', tokens: derivedWorkload.monthlyOutputTokens, rateMicroDollarsPerMillion: outputRate, costMicroDollars: roundedMicroDollars(derivedWorkload.monthlyOutputTokens, outputRate, 'Output API-equivalent cost') },
+  ];
+  const inputCostMicroDollars = safeNumber(
+    BigInt(lineItems[0].costMicroDollars) + BigInt(lineItems[1].costMicroDollars) + BigInt(lineItems[2].costMicroDollars),
+    'Input API-equivalent cost',
+  );
+  const outputCostMicroDollars = lineItems[3].costMicroDollars;
+  const apiEquivalentCost = {
+    inputCostMicroDollars,
+    outputCostMicroDollars,
+    apiCostMicroDollars: safeNumber(BigInt(inputCostMicroDollars) + BigInt(outputCostMicroDollars), 'API-equivalent cost'),
+  };
+  const crossover = crossoverResult(
+    input.planCostMicroDollars,
+    seats,
+    tokenVolume,
+    adjustedInputTokens + derivedWorkload.monthlyOutputTokens,
+    apiEquivalentCost.apiCostMicroDollars,
+  );
   return {
-    ...compareSubscriptionWithApi(input.planCostMicroDollars, derivedWorkload, apiEquivalentCost, workload.activeDaysPerMonth),
+    ...compareSubscriptionWithApi(input.planCostMicroDollars * seats, derivedWorkload, apiEquivalentCost, workload.activeDaysPerMonth),
     derivedWorkload,
     apiEquivalentCost,
+    adjustedInputTokens,
+    lineItems,
+    crossover,
+    ...crossover,
   };
 }

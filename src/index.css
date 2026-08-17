@@ -2045,3 +2045,60 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
     height: 380px;
   }
 }
+
+/* Subscribe vs API keeps source facts and derived crossover arithmetic visibly separate. */
+.subscribe-vs-api-page { padding-bottom: 28px; }
+.subscribe-vs-api-page .toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.subscribe-vs-api-page .toolbar [role='group'] { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.subscribe-controls { display: grid; gap: 28px; box-shadow: none; }
+.subscribe-control-section { display: grid; gap: 14px; scroll-margin-top: calc(var(--header-height) + 16px); }
+.subscribe-control-section + .subscribe-control-section { padding-top: 28px; border-top: 1px solid var(--outline); }
+.subscribe-control-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.subscribe-control-grid > label, .subscribe-mix-controls > label, .subscribe-character-estimate > .subscribe-control-grid > label { display: grid; gap: 7px; color: var(--ink); font-family: var(--font-label); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.03em; }
+.subscribe-control-grid input:not([type='checkbox']):not([type='range']), .subscribe-control-grid select, .subscribe-character-estimate input, .subscribe-character-estimate select { width: 100%; min-height: 42px; padding: 9px 10px; border: 1px solid var(--outline); border-radius: 8px; background: var(--surface); color: var(--ink); font: inherit; }
+.subscribe-checkbox { align-self: end; grid-column: 1 / -1; display: flex !important; align-items: center; gap: 8px; min-height: 42px; padding: 0 2px; }
+.subscribe-model-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.subscribe-model-choice { display: flex; align-items: flex-start; gap: 10px; min-height: 68px; padding: 13px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface-low); cursor: pointer; }
+.subscribe-model-choice:has(input:checked) { border-color: color-mix(in srgb, var(--primary) 70%, var(--outline)); background: var(--primary-soft); }
+.subscribe-model-choice span { display: grid; gap: 3px; }
+.subscribe-model-choice small, .subscribe-result-grid small { color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+.subscribe-mix-controls { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface-low); }
+.subscribe-mix-controls label { grid-template-columns: minmax(110px, 1fr) auto minmax(120px, 2fr); align-items: center; }
+.subscribe-mix-controls output { color: var(--primary-strong); text-align: right; }
+.subscribe-character-estimate { display: grid; gap: 14px; margin: 2px 0 0; padding: 14px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface-low); }
+.subscribe-character-estimate legend { padding: 0 4px; color: var(--muted); font-family: var(--font-label); font-size: 0.72rem; font-weight: 800; }
+.subscribe-character-estimate button { width: fit-content; }
+.subscribe-crossover { display: grid; gap: 20px; scroll-margin-top: calc(var(--header-height) + 16px); box-shadow: none; }
+.subscribe-crossover h2, .subscribe-evidence-grid h2 { margin: 5px 0 0; font-family: var(--font-display); font-size: clamp(1.25rem, 2.4vw, 1.75rem); letter-spacing: -0.035em; }
+.subscribe-crossover .toolbar p { max-width: 620px; margin: 6px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
+.subscribe-crossover-inputs { align-items: end; }
+.subscribe-crossover-inputs label { grid-template-columns: 1fr auto; }
+.subscribe-crossover-inputs input[type='range'] { grid-column: 1 / -1; }
+.subscribe-result-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.subscribe-result-grid dl { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface-low); }
+.subscribe-result-grid dt { color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+.subscribe-result-grid dd { margin: 8px 0 6px; color: var(--primary-strong); font-family: var(--font-display); font-size: 1.45rem; letter-spacing: -0.04em; }
+.subscribe-crossover-chart { height: clamp(260px, 42vw, 390px); padding: 12px; border: 1px solid var(--outline); border-radius: 10px; background: var(--surface); }
+.subscribe-crossover-chart canvas { width: 100% !important; height: 100% !important; }
+.subscribe-vs-api-page .table-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--outline); border-radius: 9px; background: var(--surface); }
+.subscribe-vs-api-page table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.subscribe-vs-api-page caption { padding: 12px; color: var(--muted); text-align: left; font-size: 0.75rem; line-height: 1.45; }
+.subscribe-vs-api-page th, .subscribe-vs-api-page td { padding: 11px 12px; border-top: 1px solid var(--outline); text-align: left; vertical-align: top; }
+.subscribe-vs-api-page thead th { border-top: 0; background: var(--surface-low); color: var(--muted); font-family: var(--font-label); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+.subscribe-evidence-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.subscribe-evidence-grid > .panel { min-width: 0; box-shadow: none; }
+.subscribe-evidence-grid > details > p, .subscribe-evidence-grid > aside > p { color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+.subscription-action-status { margin: 0; padding: 12px 14px; border: 1px solid var(--outline); border-radius: 9px; font-size: 0.84rem; }
+.subscription-action-status.status-info { border-color: color-mix(in srgb, var(--primary) 45%, var(--outline)); background: var(--primary-soft); }
+.subscription-action-status.status-error { border-color: #cb3a57; color: #a4213f; background: #fff0f3; }
+
+@media (max-width: 760px) {
+  .subscribe-vs-api-page .toolbar { align-items: stretch; flex-direction: column; }
+  .subscribe-vs-api-page .toolbar [role='group'] { justify-content: flex-start; }
+  .subscribe-control-grid, .subscribe-model-grid, .subscribe-evidence-grid, .subscribe-result-grid { grid-template-columns: minmax(0, 1fr); }
+  .subscribe-mix-controls label { grid-template-columns: minmax(0, 1fr) auto; }
+  .subscribe-mix-controls input { grid-column: 1 / -1; }
+  .subscribe-crossover-inputs label { grid-template-columns: minmax(0, 1fr); }
+  .subscribe-crossover-inputs output { justify-self: start; }
+  .subscribe-crossover-chart { height: 280px; padding: 8px; }
+}

@@ -155,6 +155,7 @@ export function createFixtureAdapter(now: () => Date = () => new Date()): Previe
         : [PREVIEW_FIXTURE_PROVENANCE.plans];
       return contract({
         plans: PREVIEW_FIXTURE_SUBSCRIPTION_PLANS,
+        models: PREVIEW_FIXTURE_MODELS,
         selectedModelTaskEconomics,
       }, provenance, now().toISOString());
     },

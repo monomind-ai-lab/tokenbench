@@ -71,4 +71,25 @@ describe('frontend calculator state', () => {
     expect(grouped.openrouter.map((offer) => offer.id)).toEqual(['provider-a:alpha:openrouter']);
     expect(grouped.opencode_zen.map((offer) => offer.id)).toEqual(['provider-a:alpha:opencode_zen']);
   });
+
+  it('keeps source rate selection separate from the derived crossover domain', () => {
+    const directOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
+    const snapshot = buildCalculatorSnapshot({
+      modelOffers: [directOffer],
+      selectedModelIds: [directOffer.id],
+      modelMixBasisPoints: { [directOffer.id]: 10_000 },
+      workload,
+      selectedPlan: FRONTEND_TEST_CATALOG.plans[0],
+      seats: 12,
+      tokenVolume: 120_000_000,
+      cacheReadShareBasisPoints: 2_000,
+      cacheWriteShareBasisPoints: 1_000,
+      longContext: true,
+    });
+
+    expect(snapshot.crossover?.monthlySubscriptionUsd).toBe(240);
+    expect(snapshot.crossover?.domain).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tokens: 120_000_000 }),
+    ]));
+  });
 });
