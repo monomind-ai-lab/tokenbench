@@ -2,7 +2,7 @@ const MAX_COMPARE_MODELS=4;
 // Keep the self-contained prototype shell pointed at the combined preview
 // routes. These are intentionally separate from the production React route
 // contracts so a preview click never leaves the preview deployment.
-const PREVIEW_PATHS={home:'/models',models:'/models',modelCatalog:'/models#catalog',compare:'/compare',modelProfile:'/model-profile',modelLifecycle:'/model-lifecycle',popularModels:'/popular-models/',makeItYours:'/make-it-yours/',guides:'/guides/',articles:'/articles',articleDetail:'/articles/hybrid-router',cost:'/cost',costCalculator:'/cost/calculator',costBreakeven:'/cost/breakeven',calculator:'/cost',pricePerformance:'/llm-price-performance/',methodology:'/methodology/benchalign/',privacy:'/privacy/'};
+const PREVIEW_PATHS={home:'/',models:'/models',modelCatalog:'/models#catalog',compare:'/compare',modelProfile:'/model-profile',modelLifecycle:'/model-lifecycle',popularModels:'/popular-models/',makeItYours:'/make-it-yours/',guides:'/guides/',articles:'/articles',articleDetail:'/articles/hybrid-router',cost:'/cost',costCalculator:'/cost/calculator',costBreakeven:'/cost/breakeven',calculator:'/cost',pricePerformance:'/llm-price-performance/',methodology:'/methodology/benchalign/',privacy:'/privacy/'};
 const previewModelProfilePath=slug=>`${PREVIEW_PATHS.modelProfile}?model=${encodeURIComponent(slug)}`;
 const TB={charts:[],weights:{agentic:20,coding:20,reasoning:20,math:15,multimodal:15,throughput:10},selected:[],theme:localStorage.tbTheme||'light'};
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -401,13 +401,14 @@ function setupNavigation(){
   if(!nav||!shell)return;
 
   const current=location.pathname.replace(/\/+$/, '').split('/').pop()||'index';
-  const modelsActive=['index','models','model-profile','model-lifecycle'].includes(current);
+  const homeActive=location.pathname==='/';
+  const modelsActive=['models','model-profile','model-lifecycle'].includes(current);
   const leaderboardActive=current==='make-it-yours';
   const articlesActive=['article-hybrid-router','articles','hybrid-router'].includes(current);
   const currentAttribute=active=>active?' aria-current="page"':'';
   nav.setAttribute('aria-label','Primary');
   nav.id='primary-navigation';
-  nav.innerHTML=`<a href="${PREVIEW_PATHS.home}">Home</a><button class="nav-trigger" id="nav-models" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-models" data-menu="models"${currentAttribute(modelsActive)}>Models${shellIcons.chevron}</button><button class="nav-trigger" id="nav-leaderboards" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-leaderboards" data-menu="leaderboards"${currentAttribute(leaderboardActive)}>Leaderboards${shellIcons.chevron}</button><a href="${PREVIEW_PATHS.compare}"${currentAttribute(current==='compare')}>Compare</a><a href="${PREVIEW_PATHS.cost}"${current==='cost'?' aria-current="page"':''}>Subscribe vs API</a><button class="nav-trigger" id="nav-articles" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-articles" data-menu="articles"${currentAttribute(articlesActive)}>Articles${shellIcons.chevron}</button>`;
+  nav.innerHTML=`<a href="${PREVIEW_PATHS.home}"${currentAttribute(homeActive)}>Home</a><button class="nav-trigger" id="nav-models" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-models" data-menu="models"${currentAttribute(modelsActive)}>Models${shellIcons.chevron}</button><button class="nav-trigger" id="nav-leaderboards" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-leaderboards" data-menu="leaderboards"${currentAttribute(leaderboardActive)}>Leaderboards${shellIcons.chevron}</button><a href="${PREVIEW_PATHS.compare}"${currentAttribute(current==='compare')}>Compare</a><a href="${PREVIEW_PATHS.cost}"${current==='cost'?' aria-current="page"':''}>Subscribe vs API</a><button class="nav-trigger" id="nav-articles" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mega-articles" data-menu="articles"${currentAttribute(articlesActive)}>Articles${shellIcons.chevron}</button>`;
 
   let menuToggle=$('#mobile-nav-toggle',shell);
   if(!menuToggle){
@@ -505,7 +506,6 @@ function setupPreviewLinkRewrites(){
   if(document.body.dataset.previewLinksReady==='true')return;
   document.body.dataset.previewLinksReady='true';
   const canonicalLinks=new Map([
-    ['/',PREVIEW_PATHS.models],
     ['/#catalog',PREVIEW_PATHS.modelCatalog],
     ['/make-it-yours',PREVIEW_PATHS.makeItYours],
     ['/article-hybrid-router',PREVIEW_PATHS.articleDetail],

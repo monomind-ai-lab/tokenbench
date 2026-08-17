@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Source-aware model benchmarks, runtime measurements, and route economics for practical AI decisions.">
+  <link rel="canonical" href="https://tokenbench.monomind.one/">
+  <title>TokenBench — Empirical AI runtime and cost evidence</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="chart.umd.js"></script>
+</head>
+<body>
+  <!--
+  THESIS: TokenBench proves decisions through working evidence surfaces, not a conventional marketing hero followed by feature claims.
+  OWN-WORLD: Obsidian decision terminal, electric-blue evidence accent, hairline structure, compact measurement typography, and dense but breathable data regions.
+  STORY: Understand the evidence boundary, inspect five working decision previews, then enter the tool that answers the current question.
+  FIRST VIEWPORT: A left-aligned evidence proposition and actions face a live ranked evidence terminal at equal visual weight.
+  FORM: Sequential evidence dossier, structure 1, seed key user-pinned-five-surface-tour.
+  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
+  -->
+  <header class="topbar"><div class="shell"><a class="brand" href="/" aria-label="TokenBench home"><img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><nav class="nav" aria-label="Primary"></nav><div class="header-actions"><button class="icon-button" id="theme" type="button" aria-label="Toggle color theme">Theme</button></div></div></header>
+
+  <main class="home-page" id="page-content">
+    <section class="home-hero shell" aria-labelledby="home-title">
+      <div class="home-hero-copy">
+        <h1 id="home-title">Empirical evidence for practical AI runtime and cost decisions.</h1>
+        <p>Independent quantitative LLM analysis of capability, streaming latency, and route economics—without collapsed or hidden data.</p>
+        <div class="home-hero-actions">
+          <a class="button primary" href="/models">Explore Models Workbench</a>
+          <a class="button" href="/compare">Compare Models</a>
+        </div>
+        <p class="fixture">Illustrative preview values · source adapters and revision timestamps remain visible on decision pages</p>
+      </div>
+      <div class="home-evidence-terminal" aria-label="Illustrative model evidence preview">
+        <div class="home-terminal-head"><span>Decision snapshot</span><span>Observed 17 Aug 2026 · prototype</span></div>
+        <div class="home-terminal-columns" aria-hidden="true"><span>Candidate</span><span>Score</span><span>TTFT</span><span>$/1M</span></div>
+        <ol>
+          <li><span><b>GPT-5.6 Sol</b><small>OpenAI · proprietary</small></span><strong data-label="Score">96.2</strong><code data-label="TTFT">0.33s</code><code data-label="$/1M">$5.25</code></li>
+          <li><span><b>Gemini 3.6 Pro</b><small>Google · proprietary</small></span><strong data-label="Score">95.0</strong><code data-label="TTFT">0.36s</code><code data-label="$/1M">$3.10</code></li>
+          <li><span><b>DeepSeek V4 Flash 0731</b><small>DeepSeek · open weights</small></span><strong data-label="Score">88.8</strong><code data-label="TTFT">0.27s</code><code data-label="$/1M">$0.26</code></li>
+        </ol>
+        <div class="home-terminal-foot"><span><i></i> Source-linked evidence</span><span>Unknowns remain unavailable</span></div>
+      </div>
+    </section>
+
+    <div class="home-tour shell">
+      <section class="home-feature-section home-models-section" aria-labelledby="home-models-title">
+        <div class="home-section-number" aria-hidden="true">01</div>
+        <div class="home-section-heading"><div><h2 id="home-models-title">Discover &amp; Filter Models</h2><p>Move from candidate discovery to exact route economics without leaving the evidence surface.</p></div><a class="home-section-link" href="/models">Open Models Workbench <span aria-hidden="true">→</span></a></div>
+        <div class="home-filter-pills" role="group" aria-label="Filter model preview">
+          <button type="button" aria-pressed="true" data-home-model-filter="all">All Models</button>
+          <button type="button" aria-pressed="false" data-home-model-filter="open">Open-weight</button>
+          <button type="button" aria-pressed="false" data-home-model-filter="latency">Low-latency</button>
+          <button type="button" aria-pressed="false" data-home-model-filter="throughput">High-throughput</button>
+        </div>
+        <div class="home-model-table table-wrap" role="region" aria-label="Model workbench preview" tabindex="0">
+          <table><thead><tr><th>Model</th><th>Provider</th><th>Access</th><th>Input / 1M</th><th>Output / 1M</th><th>TTFT · p50</th><th>Throughput</th></tr></thead><tbody id="home-model-table-body"></tbody></table>
+        </div>
+        <div class="home-model-cards" id="home-model-cards" aria-label="Model workbench preview cards"></div>
+        <p class="fixture" id="home-model-filter-status" aria-live="polite"></p>
+      </section>
+
+      <section class="home-feature-section" aria-labelledby="home-popular-title">
+        <div class="home-section-number" aria-hidden="true">02</div>
+        <div class="home-section-heading"><div><h2 id="home-popular-title">Popular Model Insights</h2><p>Scan the capability, service, and cost signals people compare most often.</p></div><a class="home-section-link" href="/popular-models/">View All Popular Model Insights <span aria-hidden="true">→</span></a></div>
+        <div id="popular-models-insights-grid" class="home-popular-grid">
+          <article class="home-popular-card" data-provider="OpenAI"><div><span class="home-provider-mark" style="--provider:#9ca3af"></span><span>OpenAI</span></div><h3>GPT-5.6 Sol</h3><strong class="home-score-badge">96.2</strong><dl><div><dt>Coding</dt><dd>96</dd></div><div><dt>Throughput</dt><dd>118 tok/s</dd></div><div><dt>Blended</dt><dd>$5.25/1M</dd></div></dl></article>
+          <article class="home-popular-card" data-provider="Anthropic"><div><span class="home-provider-mark" style="--provider:#c27d60"></span><span>Anthropic</span></div><h3>Claude Mythos 5</h3><strong class="home-score-badge">96.0</strong><dl><div><dt>Coding</dt><dd>97</dd></div><div><dt>Throughput</dt><dd>96 tok/s</dd></div><div><dt>Blended</dt><dd>$5.90/1M</dd></div></dl></article>
+          <article class="home-popular-card" data-provider="Google"><div><span class="home-provider-mark" style="--provider:#10b981"></span><span>Google</span></div><h3>Gemini 3.6 Pro</h3><strong class="home-score-badge">95.0</strong><dl><div><dt>Multimodal</dt><dd>98</dd></div><div><dt>Throughput</dt><dd>112 tok/s</dd></div><div><dt>Blended</dt><dd>$3.10/1M</dd></div></dl></article>
+          <article class="home-popular-card" data-provider="DeepSeek"><div><span class="home-provider-mark" style="--provider:#2563eb"></span><span>DeepSeek</span></div><h3>DeepSeek V4 Flash 0731</h3><strong class="home-score-badge">88.8</strong><dl><div><dt>Coding</dt><dd>92</dd></div><div><dt>Throughput</dt><dd>132 tok/s</dd></div><div><dt>Blended</dt><dd>$0.26/1M</dd></div></dl></article>
+        </div>
+        <p class="fixture">Illustrative prototype ranking and service values</p>
+      </section>
+
+      <section class="home-feature-section" aria-labelledby="home-compare-title">
+        <div class="home-section-number" aria-hidden="true">03</div>
+        <div class="home-section-heading"><div><h2 id="home-compare-title">Head-to-Head Capability &amp; Economics</h2><p>Compare capability shape and route constraints before choosing a default runtime.</p></div><a class="home-section-link" href="/compare?models=gpt-4o%2Cdeepseek-v3">Compare All Models <span aria-hidden="true">→</span></a></div>
+        <div class="home-comparison-grid">
+          <div class="home-radar-panel"><h3>Six-domain capability overlay</h3><div class="chart-wrap"><canvas id="home-comparison-radar" role="img" aria-label="GPT-4o and DeepSeek V3 capability comparison" aria-describedby="home-comparison-summary"></canvas></div><p class="sr-only" id="home-comparison-summary">GPT-4o: Agentic 89, Coding 90, Reasoning 89, Math 88, Multimodal 92, Throughput 105. DeepSeek V3: Agentic 87, Coding 92, Reasoning 89, Math 89, Multimodal 75, Throughput 65.</p></div>
+          <div class="home-decision-deltas"><div class="home-model-pair"><article><span>Closed model</span><h3>GPT-4o</h3><small>OpenAI · Proprietary</small></article><b aria-hidden="true">vs</b><article><span>Open-weight model</span><h3>DeepSeek V3</h3><small>DeepSeek · Open weights</small></article></div><div class="home-service-bars"><div><span>TTFT · lower is better</span><div><i style="--bar:69%"></i><b>0.38s</b></div><div><i style="--bar:100%"></i><b>0.55s</b></div></div><div><span>Throughput · higher is better</span><div><i style="--bar:100%"></i><b>105 tok/s</b></div><div><i style="--bar:62%"></i><b>65 tok/s</b></div></div></div><dl class="home-delta-grid"><div><dt>Input / output</dt><dd>$2.50 / $10.00</dd><dd>$0.27 / $1.10</dd></div><div><dt>Blended cost</dt><dd>$4.38 / 1M</dd><dd>$0.48 / 1M</dd></div><div><dt>Context</dt><dd>128k</dd><dd>128k</dd></div></dl></div>
+        </div>
+        <p class="fixture">Illustrative prototype data · compare page preserves exact values and unavailable states</p>
+      </section>
+
+      <section class="home-feature-section home-cost-section" aria-labelledby="home-cost-title">
+        <div class="home-section-number" aria-hidden="true">04</div>
+        <div class="home-cost-copy"><h2 id="home-cost-title">Subscription vs. Pay-As-You-Go API Analysis</h2><p>Test when a fixed individual seat crosses an API-equivalent workload instead of treating either route as universally cheaper.</p><a class="button primary" href="/cost/calculator">Calculate Subscription vs API Savings</a><p class="fixture">Illustrative GPT-4o workload · 1,800 input + 700 output tokens per prompt · source prices shown separately in the calculator</p></div>
+        <div class="home-cost-calculator">
+          <div class="home-cost-results"><article><span>Fixed seat</span><strong>$20.00</strong><small>per month</small></article><span aria-hidden="true">versus</span><article><span>API consumption</span><strong id="home-api-cost">$13.80</strong><small>per month</small></article></div>
+          <label for="home-cost-prompts">Monthly prompts sent <output id="home-prompt-count" for="home-cost-prompts">1,200</output></label>
+          <input id="home-cost-prompts" type="range" min="0" max="4000" step="50" value="1200" aria-label="Monthly prompts sent">
+          <div class="home-cost-scale"><span>0</span><span>4,000</span></div>
+          <p id="home-crossover-copy">API is cheaper below approximately 1,739 prompts per month.</p>
+        </div>
+      </section>
+
+      <section class="home-feature-section" aria-labelledby="home-articles-title">
+        <div class="home-section-number" aria-hidden="true">05</div>
+        <div class="home-section-heading"><div><h2 id="home-articles-title">Methodological Research &amp; Analysis</h2><p>Follow the assumptions, monitoring practices, and architecture behind defensible model decisions.</p></div><a class="home-section-link" href="/articles">Browse All Articles <span aria-hidden="true">→</span></a></div>
+        <div class="home-articles-grid">
+          <article><span>Architecture</span><h3><a href="/articles/hybrid-router">A hybrid router for high-stakes agentic work</a></h3><p>Reserve expensive capability for the requests that need it while keeping routine work observable and reversible.</p><small>9 min read · Aug 2026</small></article>
+          <article><span>Cost optimization</span><h3><a href="/guides/reduce-llm-api-costs-caching-batch-output-limits/">Lower LLM API Costs with Caching, Batch Jobs, and Output Caps</a></h3><p>Reduce cost per successful task without shifting expense into retries, latency, or human review.</p><small>11 min read · Aug 2026</small></article>
+          <article><span>API routing</span><h3><a href="/guides/openrouter-guide-model-routing-cost-controls/">OpenRouter for Beginners: Routing and Cost Controls</a></h3><p>Use explicit budgets, logging, and provider-policy choices when one API reaches multiple models.</p><small>10 min read · Aug 2026</small></article>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script src="data.js?v=top20-20260815"></script>
+  <script src="common.js"></script>
+  <script>
+    if (!localStorage.tbTheme) TB.theme = 'dark';
+    setupShell();
+
+    const homePreviewIds = ['gpt-4o', 'claude-3-5-sonnet', 'deepseek-v3', 'llama-3-3-70b'];
+    const homePreviewModels = homePreviewIds.map(id => TB_MODELS.find(model => model.id === id)).filter(Boolean);
+    const homeTableBody = $('#home-model-table-body');
+    const homeCards = $('#home-model-cards');
+    const homeStatus = $('#home-model-filter-status');
+    const currency = value => `$${value.toFixed(2)}`;
+    const matchesHomeFilter = (model, filter) => filter === 'all' || filter === 'open' && model.access === 'Open weights' || filter === 'latency' && model.ttft <= .4 || filter === 'throughput' && model.tps >= 100;
+    function renderHomeModels(filter = 'all') {
+      const models = homePreviewModels.filter(model => matchesHomeFilter(model, filter));
+      homeTableBody.innerHTML = models.map(model => `<tr><th scope="row"><a class="model-name" href="${previewModelProfilePath(model.id)}">${model.name}</a></th><td>${model.provider}</td><td>${model.access}</td><td>${currency(model.inputPrice)}</td><td>${currency(model.outputPrice)}</td><td>${model.ttft.toFixed(2)}s</td><td>${model.tps} tok/s</td></tr>`).join('');
+      homeCards.innerHTML = models.map(model => `<article><div><a class="model-name" href="${previewModelProfilePath(model.id)}">${model.name}</a><span>${model.provider} · ${model.access}</span></div><dl><div><dt>Input / output</dt><dd>${currency(model.inputPrice)} / ${currency(model.outputPrice)}</dd></div><div><dt>TTFT · p50</dt><dd>${model.ttft.toFixed(2)}s</dd></div><div><dt>Throughput</dt><dd>${model.tps} tok/s</dd></div></dl></article>`).join('');
+      homeStatus.textContent = `${models.length} illustrative model${models.length === 1 ? '' : 's'} shown`;
+    }
+    $$('.home-filter-pills button').forEach(button => button.addEventListener('click', () => {
+      $$('.home-filter-pills button').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+      renderHomeModels(button.dataset.homeModelFilter);
+    }));
+    renderHomeModels();
+
+    const homeComparisonModels = ['gpt-4o', 'deepseek-v3'].map(id => TB_MODELS.find(model => model.id === id));
+    radar($('#home-comparison-radar'), homeComparisonModels);
+
+    const prompts = $('#home-cost-prompts');
+    const promptCount = $('#home-prompt-count');
+    const apiCost = $('#home-api-cost');
+    const costPerPrompt = (1800 * 2.5 + 700 * 10) / 1e6;
+    const crossover = Math.round(20 / costPerPrompt);
+    function renderHomeCost() {
+      const count = Number(prompts.value);
+      promptCount.value = count.toLocaleString('en-US');
+      promptCount.textContent = promptCount.value;
+      apiCost.textContent = `$${(count * costPerPrompt).toFixed(2)}`;
+      $('#home-crossover-copy').textContent = count < crossover ? `API remains lower at this workload. The illustrative crossover is approximately ${crossover.toLocaleString('en-US')} prompts.` : `A $20 fixed seat is lower at this workload. The illustrative crossover is approximately ${crossover.toLocaleString('en-US')} prompts.`;
+    }
+    prompts.addEventListener('input', renderHomeCost);
+    renderHomeCost();
+  </script>
+</body>
+</html>

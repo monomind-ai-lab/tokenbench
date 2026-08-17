@@ -25,7 +25,7 @@ export const ROUTE_PATHS = {
  * below, so shared chrome must use this map instead of the production routes.
  */
 export const PREVIEW_ROUTE_PATHS = {
-  home: '/models',
+  home: '/',
   models: '/models',
   modelCatalog: '/models#catalog',
   compare: '/compare',

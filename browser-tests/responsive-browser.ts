@@ -1823,12 +1823,6 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       contentType: 'application/javascript',
       body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
     }));
-    if (usesProductionPreviewAssets()) {
-      const redirect = await page.request.get('/', { maxRedirects: 0 });
-      expect(redirect.status()).toBe(301);
-      expect(redirect.headers().location).toBe('/models');
-    }
-
     for (const pathname of [
       ...(usesProductionPreviewAssets() ? ['/'] : []),
       '/models',
@@ -1839,10 +1833,9 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       '/articles/hybrid-router',
     ]) {
       await page.goto(pathname);
-      const finalPathname = pathname === '/' ? '/models' : pathname;
-      expect(new URL(page.url()).pathname, pathname).toBe(finalPathname);
-      if (pathname === '/') await expect(page.getByRole('heading', { name: 'Models workbench', level: 1 })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/models');
+      expect(new URL(page.url()).pathname, pathname).toBe(pathname);
+      if (pathname === '/') await expect(page.getByRole('heading', { name: 'Empirical evidence for practical AI runtime and cost decisions.', level: 1 })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/');
       const footer = page.locator('footer');
       await expect(footer.getByRole('link', { name: 'Models workbench' }), pathname).toHaveAttribute('href', '/models');
       await expect(footer.getByRole('link', { name: 'Popular models' }), pathname).toHaveAttribute('href', '/popular-models/');
@@ -1858,13 +1851,128 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     for (const pathname of ['/models/', '/compare/', '/articles/', '/articles/hybrid-router/']) {
       await page.goto(pathname);
       expect(new URL(page.url()).pathname, pathname).toBe(pathname);
-      await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/models');
+      await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/');
     }
   });
 
   test('keeps the model profile hero aligned and routes its comparison action to the selected model', async ({ page }) => {
     test.skip(!usesProductionPreviewAssets(), 'The approved model profile prototype is served from the production preview bundle.');
     await page.goto('/model-profile/?model=gpt-4o');
+
+  test('publishes the homepage decision tour with responsive previews and a live cost control', async ({ page }) => {
+    test.skip(!usesProductionPreviewAssets(), 'The approved homepage prototype is served from the production preview bundle.');
+    await installComparisonChartRegistryStub(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto('/');
+
+    await expect(page.getByRole('heading', { name: 'Empirical evidence for practical AI runtime and cost decisions.', level: 1 })).toBeVisible();
+    await expect(page.getByText(/Independent quantitative LLM analysis of capability/)).toBeVisible();
+    await expect(page.locator('.home-hero-badge')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'DeepSeek V4 Flash 0731', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Explore Models Workbench' })).toHaveAttribute('href', '/models');
+    await expect(page.getByRole('link', { name: 'Compare Models', exact: true })).toHaveAttribute('href', '/compare');
+    await expect(page.locator('.home-feature-section')).toHaveCount(5);
+    await expect(page.locator('#popular-models-insights-grid')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Open Models Workbench' })).toHaveAttribute('href', '/models');
+    await expect(page.getByRole('link', { name: 'View All Popular Model Insights' })).toHaveAttribute('href', '/popular-models/');
+    await expect(page.getByRole('link', { name: 'Compare All Models' })).toHaveAttribute('href', '/compare?models=gpt-4o%2Cdeepseek-v3');
+    await expect(page.getByRole('link', { name: 'Calculate Subscription vs API Savings' })).toHaveAttribute('href', '/cost/calculator');
+    await expect(page.getByRole('link', { name: 'Browse All Articles' })).toHaveAttribute('href', '/articles');
+
+    const comparisonChart = await page.locator('#home-comparison-radar').evaluate((canvas) => {
+      const chart = (window as any).Chart.getChart(canvas);
+      const configuration = chart?.configuration || chart?.config;
+      return configuration?.data?.datasets?.map((dataset: { label: string }) => dataset.label) ?? [];
+    });
+    expect(comparisonChart).toEqual(['GPT-4o', 'DeepSeek V3']);
+    await expect(page.locator('#home-comparison-radar')).toHaveAttribute('aria-describedby', 'home-comparison-summary');
+    await expect(page.locator('#home-comparison-summary')).toContainText('GPT-4o: Agentic 89');
+    await expect(page.locator('#home-comparison-summary')).toContainText('DeepSeek V3: Agentic 87');
+
+    const costBefore = await page.locator('#home-api-cost').textContent();
+    await page.getByLabel('Monthly prompts sent').fill('1800');
+    await expect(page.locator('#home-prompt-count')).toHaveText('1,800');
+    await expect(page.locator('#home-api-cost')).not.toHaveText(costBefore || '');
+
+    const desktopColumns = await page.locator('#popular-models-insights-grid').evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+    expect(desktopColumns).toBe(2);
+    await assertNoHorizontalOverflow(page);
+
+    await page.setViewportSize({ width: 375, height: 900 });
+    const mobileLayout = await page.evaluate(() => ({
+      popularColumns: getComputedStyle(document.querySelector('#popular-models-insights-grid')!).gridTemplateColumns.split(' ').length,
+      comparisonColumns: getComputedStyle(document.querySelector('.home-comparison-grid')!).gridTemplateColumns.split(' ').length,
+      tableVisible: getComputedStyle(document.querySelector('.home-model-table')!).display !== 'none',
+      cardsVisible: getComputedStyle(document.querySelector('.home-model-cards')!).display !== 'none',
+      terminalCodesVisible: [...document.querySelectorAll('.home-evidence-terminal li code')].every((element) => getComputedStyle(element).display !== 'none'),
+    }));
+    expect(mobileLayout).toEqual({ popularColumns: 1, comparisonColumns: 1, tableVisible: false, cardsVisible: true, terminalCodesVisible: true });
+    await assertNoHorizontalOverflow(page);
+  });
+
+  test('connects the Models Workbench Pareto frontier without a duplicate disclosure table', async ({ page }) => {
+    await installComparisonChartRegistryStub(page);
+    await page.goto('/models');
+
+    await expect(page.locator('.frontier-details')).toHaveCount(0);
+    await expect(page.getByText('Semantic chart alternative')).toHaveCount(0);
+    await expect(page.locator('#pareto')).toHaveAttribute('aria-describedby', 'pareto-summary');
+    await expect(page.locator('#pareto-summary')).toContainText('Gemma 3 27B');
+    await expect(page.locator('#pareto-summary')).toContainText('GPT-5.6 Sol');
+
+    const chartContract = await page.locator('#pareto').evaluate((canvas) => {
+      const chart = (window as any).Chart.getChart(canvas);
+      const datasets = chart.configuration.data.datasets;
+      const frontier = datasets.find((dataset: { label?: string }) => dataset.label === 'Pareto frontier');
+      const models = datasets.find((dataset: { label?: string }) => dataset.label === 'Models');
+      return {
+        accent: getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim(),
+        frontier: frontier ? {
+          type: frontier.type,
+          showLine: frontier.showLine,
+          fill: frontier.fill,
+          borderColor: frontier.borderColor,
+          borderWidth: frontier.borderWidth,
+          tension: frontier.tension,
+          pointRadius: frontier.pointRadius,
+          pointHoverRadius: frontier.pointHoverRadius,
+          pointHitRadius: frontier.pointHitRadius,
+          order: frontier.order,
+          modelIds: frontier.data.map((point: { m: { id: string } }) => point.m.id),
+        } : null,
+        modelOrder: models?.order ?? null,
+      };
+    });
+
+    expect(chartContract.frontier).toEqual({
+      type: 'line',
+      showLine: true,
+      fill: false,
+      borderColor: chartContract.accent,
+      borderWidth: 2,
+      tension: 0,
+      pointRadius: 0,
+      pointHoverRadius: 0,
+      pointHitRadius: 0,
+      order: 2,
+      modelIds: [
+        'gemma-3-27b',
+        'deepseek-v4-flash-0731',
+        'llama-4-maverick',
+        'kimi-k3',
+        'qwen3-8-max',
+        'gemini-3-6-pro',
+        'gpt-5-6-sol',
+      ],
+    });
+    expect(chartContract.modelOrder).toBe(1);
+
+    await page.getByLabel('Frontier only').check();
+    await expect.poll(() => page.locator('#pareto').evaluate((canvas) => {
+      const chart = (window as any).Chart.getChart(canvas);
+      return chart.configuration.data.datasets.find((dataset: { label?: string }) => dataset.label === 'Pareto frontier')?.data.length ?? 0;
+    })).toBe(7);
+  });
 
     await expect(page.getByRole('heading', { name: 'GPT-4o', level: 1 })).toBeVisible();
     await expect(page.locator('.profile-status')).toHaveText('Current');

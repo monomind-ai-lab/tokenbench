@@ -93,7 +93,7 @@ describe('TokenBench route registry', () => {
   });
 
   it('keeps preview chrome destinations separate from production route contracts', () => {
-    expect(PREVIEW_ROUTE_PATHS.home).toBe('/models');
+    expect(PREVIEW_ROUTE_PATHS.home).toBe('/');
     expect(PREVIEW_ROUTE_PATHS.models).toBe('/models');
     expect(PREVIEW_ROUTE_PATHS.modelCatalog).toBe('/models#catalog');
     expect(PREVIEW_ROUTE_PATHS.popularModels).toBe('/popular-models/');

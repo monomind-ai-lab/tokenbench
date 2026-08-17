@@ -38,6 +38,7 @@ describe('approved preview bundle', () => {
     expect(shellScript).toContain("location.pathname.replace(/\\/+$/, '').split('/').pop()||'index'");
 
     const expectedPages = [
+      ['index.html', 'Empirical evidence for practical AI runtime and cost decisions.'],
       ['models.html', 'Models workbench'],
       [join('models', 'index.html'), 'Models workbench'],
       ['compare.html', 'Compare models'],

@@ -7,7 +7,7 @@ describe('preview navigation links', () => {
   it('keeps the vanilla shell on the approved preview destinations', async () => {
     const shell = await readFile(`${prototypeRoot}/common.js`, 'utf8');
 
-    expect(shell).toContain("home:'/models'");
+    expect(shell).toContain("home:'/'");
     expect(shell).toContain("models:'/models'");
     expect(shell).toContain("modelCatalog:'/models#catalog'");
     expect(shell).toContain("popularModels:'/popular-models/'");
@@ -47,7 +47,7 @@ describe('preview navigation links', () => {
   it('publishes legacy redirects to the approved canonical preview routes', async () => {
     const redirects = await readFile('public/_redirects', 'utf8');
 
-    expect(redirects).toContain('/ /models 301');
+    expect(redirects).not.toContain('/ /models 301');
     expect(redirects).toContain('/article-hybrid-router /articles/hybrid-router 301');
     expect(redirects).toContain('/custom-leaderboard /make-it-yours/ 301');
   });

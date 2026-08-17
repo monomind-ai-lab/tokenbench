@@ -15,6 +15,7 @@ interface PreviewPageBundle {
 }
 
 const previewPageBundles: readonly PreviewPageBundle[] = [
+  { output: ['index.html'], document: 'home.html' },
   { output: ['models.html'], document: 'index.html' },
   { output: ['models', 'index.html'], document: 'index.html' },
   { output: ['compare.html'], document: 'compare.html' },
