@@ -41,11 +41,10 @@ describe('preview route manifest', () => {
     expect(previewRuntimeRoutes.map((route) => route.id)).toEqual([
       'comparison-detail',
       'model-profile-detail',
-      'models-directory',
     ]);
     expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/compare/model-a-vs-model-b/'))?.routeId).toBe('comparison-detail');
     expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/models/gpt-5-6-sol/'))?.routeId).toBe('model-profile-detail');
-    expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/models/'))?.routeId).toBe('models-directory');
+    expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/models/'))).toBeNull();
     const staticRouteIds = new Set<string>(previewStaticEntries().map((entry) => entry.routeId));
     expect(previewRuntimeRoutes.every((route) => !staticRouteIds.has(route.id))).toBe(true);
   });

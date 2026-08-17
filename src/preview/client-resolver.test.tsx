@@ -6,7 +6,6 @@ const rootRenderer = vi.hoisted(() => vi.fn());
 const createRootMock = vi.hoisted(() => vi.fn(() => ({ render: rootRenderer })));
 const hydrateRootMock = vi.hoisted(() => vi.fn());
 const parseComparisonViewModelMock = vi.hoisted(() => vi.fn());
-const parseModelDirectoryEnvelopeMock = vi.hoisted(() => vi.fn());
 const parseModelProfileViewModelMock = vi.hoisted(() => vi.fn());
 const parsePricePerformanceEnvelopeMock = vi.hoisted(() => vi.fn());
 
@@ -15,13 +14,9 @@ vi.mock('../App.tsx', () => ({
   ComparisonDetailApp: ({ viewModel }: { readonly viewModel: { readonly revision: string } }) => <div data-comparison-detail-app>{viewModel.revision}</div>,
   ModelProfileApp: ({ viewModel }: { readonly viewModel: { readonly revision: string } }) => <div data-model-profile-app>{viewModel.revision}</div>,
 }));
-vi.mock('../pages/models-page', () => ({
-  ModelsApp: ({ initialEnvelope }: { readonly initialEnvelope: { readonly revision: string } }) => <div data-models-app>{initialEnvelope.revision}</div>,
-}));
 vi.mock('../pages/price-performance-page', () => ({ PricePerformanceApp: () => <div data-price-performance-app /> }));
 vi.mock('../benchmarks/price-performance-contracts', () => ({ parsePricePerformanceEnvelope: parsePricePerformanceEnvelopeMock }));
 vi.mock('../frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
-vi.mock('../frontend/model-directory-contracts', () => ({ parseModelDirectoryEnvelope: parseModelDirectoryEnvelopeMock }));
 vi.mock('../frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
 
 import { startPreviewRoute } from './client-resolver';
@@ -31,17 +26,24 @@ describe('startPreviewRoute', () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     parseComparisonViewModelMock.mockReset();
-    parseModelDirectoryEnvelopeMock.mockReset();
     parseModelProfileViewModelMock.mockReset();
     parsePricePerformanceEnvelopeMock.mockReset();
-    document.body.innerHTML = '<div id="root"><main>Server fallback</main></div><script id="preview-initial-data" type="application/json">{"revision":"prototype-r1"}</script>';
+    document.body.innerHTML = '<header class="topbar">Prototype header</header><main class="shell page"><div id="root" data-popular-models-workbench><section>Server fallback</section></div></main><footer class="articles-footer">Prototype footer</footer><script id="preview-initial-data" type="application/json">{"revision":"prototype-r1"}</script>';
     window.history.replaceState({}, '', '/popular-models/');
   });
 
-  it('hydrates valid embedded data with the manifest page', () => {
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'popular-models' });
-    expect(hydrateRootMock).toHaveBeenCalledWith(document.getElementById('root'), expect.anything());
-    expect(createRootMock).not.toHaveBeenCalled();
+  it('mounts Popular Models inside its prototype workbench without adding a second shell', () => {
+    const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
+    expect(document.querySelectorAll('.topbar')).toHaveLength(1);
+    expect(document.querySelectorAll('.articles-footer')).toHaveLength(1);
+    expect(workbench).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(workbench);
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+    const mounted = renderToStaticMarkup(rootRenderer.mock.calls[0]?.[0] as ReactNode);
+    expect(mounted).toContain('popular-models-page');
+    expect(mounted).not.toContain('top-header');
   });
 
   it('preserves substantive HTML when an embedded payload is malformed', () => {
@@ -51,7 +53,7 @@ describe('startPreviewRoute', () => {
     vi.stubGlobal('fetch', fetchSpy);
 
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'preserved-invalid-payload', routeId: 'popular-models' });
-    expect(document.getElementById('root')).toHaveTextContent('Server fallback');
+    expect(document.querySelector('[data-popular-models-workbench]')).toHaveTextContent('Server fallback');
     expect(hydrateRootMock).not.toHaveBeenCalled();
     expect(createRootMock).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -59,11 +61,31 @@ describe('startPreviewRoute', () => {
 
   it('mounts a declared client-load route when no embedded payload exists', () => {
     document.getElementById('preview-initial-data')?.remove();
+    const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
 
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
-    expect(document.getElementById('root')).toBeEmptyDOMElement();
-    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
+    expect(workbench).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(workbench);
     expect(rootRenderer).toHaveBeenCalledTimes(1);
+  });
+
+  it('mounts Popular Models from its workbench target without requiring a root ID', () => {
+    document.body.innerHTML = '<header class="topbar">Prototype header</header><main class="shell page"><div data-popular-models-workbench><section>Server fallback</section></div></main><footer class="articles-footer">Prototype footer</footer>';
+    const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
+    expect(workbench).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(workbench);
+  });
+
+  it('preserves other prototype routes when their hydration payload is missing', () => {
+    document.body.innerHTML = '<div id="root"><main data-server-models>Server models</main></div>';
+    window.history.replaceState({}, '', '/models/');
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'unmatched' });
+    expect(document.querySelector('[data-server-models]')).toBeInTheDocument();
+    expect(hydrateRootMock).not.toHaveBeenCalled();
+    expect(createRootMock).not.toHaveBeenCalled();
   });
 
   it('does not mount an unmatched route', () => {
@@ -115,28 +137,6 @@ describe('startPreviewRoute', () => {
 
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'preserved-invalid-payload', routeId: 'model-profile-detail' });
     expect(document.querySelector('[data-server-profile]')).toBeInTheDocument();
-    expect(hydrateRootMock).not.toHaveBeenCalled();
-    expect(createRootMock).not.toHaveBeenCalled();
-  });
-
-  it('hydrates the models directory with its existing SSR component and validated manifest payload', () => {
-    document.body.innerHTML = '<div id="root"><main data-server-models>Server models</main></div><script id="models-initial-data" type="application/json">{"revision":"models-r1"}</script>';
-    window.history.replaceState({}, '', '/models/');
-    parseModelDirectoryEnvelopeMock.mockReturnValue({ revision: 'models-r1' });
-
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'models-directory' });
-    expect(parseModelDirectoryEnvelopeMock).toHaveBeenCalledWith({ revision: 'models-r1' });
-    expect(document.querySelector('[data-server-models]')).toBeInTheDocument();
-    expect(createRootMock).not.toHaveBeenCalled();
-    expect(renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode)).toContain('data-models-app');
-  });
-
-  it('preserves models directory SSR HTML when its embedded payload is malformed', () => {
-    document.body.innerHTML = '<div id="root"><main data-server-models>Server models</main></div><script id="models-initial-data" type="application/json">not-json</script>';
-    window.history.replaceState({}, '', '/models/');
-
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'preserved-invalid-payload', routeId: 'models-directory' });
-    expect(document.querySelector('[data-server-models]')).toBeInTheDocument();
     expect(hydrateRootMock).not.toHaveBeenCalled();
     expect(createRootMock).not.toHaveBeenCalled();
   });

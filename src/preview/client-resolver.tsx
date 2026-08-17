@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { NewsletterConfirmedPage } from '../pages/newsletter-confirmed-page';
+import { PopularModelsPage } from '../pages/popular-models-page';
 import { PageFrame } from '../frontend/page-frame';
 import { matchRoute } from '../routing/routes';
 import { matchPreviewRoute, matchPreviewRuntimeRoute, previewRoutes, previewRuntimeRoutes } from './route-manifest';
@@ -45,6 +46,15 @@ function runtimeRouteElement(route: PreviewRuntimeRoute, data: unknown) {
   return <StrictMode>{route.render(data)}</StrictMode>;
 }
 
+function mountPopularModelsWorkbench(document: Document, routeId: PreviewRoute['id']): HydrationResult {
+  const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]');
+  if (!workbench) return { kind: 'unmatched' };
+
+  workbench.replaceChildren();
+  createRoot(workbench).render(<StrictMode><PopularModelsPage /></StrictMode>);
+  return { kind: 'mounted', routeId };
+}
+
 function startRuntimeRoute(document: Document, url: URL): HydrationResult | null {
   const match = matchPreviewRuntimeRoute(url);
   if (!match) return null;
@@ -87,8 +97,17 @@ export function startPreviewRoute(document: Document, location: Location): Hydra
   }
 
   const route = previewRoutes.find((candidate) => candidate.id === match.routeId);
+  if (!route) return { kind: 'unmatched' };
+
+  if (route.prototypeMount === 'popular-models-workbench') {
+    if (route.payload && embeddedPayload(document, route.payload).kind === 'invalid') {
+      return { kind: 'preserved-invalid-payload', routeId: route.id };
+    }
+    return mountPopularModelsWorkbench(document, route.id);
+  }
+
   const root = document.getElementById('root');
-  if (!route || !root) return { kind: 'unmatched' };
+  if (!root) return { kind: 'unmatched' };
 
   if (route.payload) {
     const payload = embeddedPayload(document, route.payload);
@@ -99,7 +118,7 @@ export function startPreviewRoute(document: Document, location: Location): Hydra
     if (payload.kind === 'invalid') return { kind: 'preserved-invalid-payload', routeId: route.id };
   }
 
-  if (!route.clientLoad) return { kind: 'unmatched' };
+  if (route.delivery !== 'react') return { kind: 'unmatched' };
   root.replaceChildren();
   createRoot(root).render(previewRouteElement(route, match));
   return { kind: 'mounted', routeId: route.id };

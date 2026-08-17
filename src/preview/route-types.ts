@@ -17,8 +17,9 @@ export type PreviewRouteId =
 
 export type PreviewRuntimeRouteId =
   | 'comparison-detail'
-  | 'model-profile-detail'
-  | 'models-directory';
+  | 'model-profile-detail';
+
+export type PreviewPrototypeMountPolicy = 'preserve' | 'popular-models-workbench';
 
 export type PreviewClientRouteId = PreviewRouteId | PreviewRuntimeRouteId;
 
@@ -57,7 +58,7 @@ export interface PreviewRoute {
   readonly match: (url: URL) => PreviewRouteMatch | null;
   readonly outputPathname: string;
   readonly delivery: 'prototype' | 'react';
-  readonly clientLoad: boolean;
+  readonly prototypeMount: PreviewPrototypeMountPolicy;
   readonly documentReadiness: PreviewDocumentReadiness;
   readonly shell: {
     readonly activePage: SiteNavigationPage;
