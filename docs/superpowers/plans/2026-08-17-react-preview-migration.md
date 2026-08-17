@@ -799,9 +799,80 @@ git commit -m "feat: migrate subscribe versus API to React"
 
 ---
 
-### Task 12: Accept and integrate the pipeline contract
+### Task 12: Publish the proposed `ui-data-contract/v1` consumer package
 
 **Files:**
+- Create: `contracts/ui-data-contract/v1/schema.json`
+- Create: `contracts/ui-data-contract/v1/ACCEPTANCE.md`
+- Create: `contracts/ui-data-contract/v1/examples/manifest.json`
+- Create: six positive method examples under `contracts/ui-data-contract/v1/examples/`
+- Create: `contracts/ui-data-contract/v1/examples/mixed-source.json`
+- Create: `contracts/ui-data-contract/v1/examples/unsupported-version.json`
+- Create: `src/frontend/preview-data/contract-v1.ts`
+- Create: `src/frontend/preview-data/contract-v1.test.ts`
+
+**Interfaces:**
+- Consumes: the existing frontend `UiDataContractV1<T>` and six `PreviewDataAdapter` result types.
+- Produces: a proposed JSON Schema, deterministic consumer examples, a strict envelope/parser harness, and a pipeline sign-off checklist. It does not produce a live API adapter or claim pipeline acceptance.
+
+- [ ] **Step 1: Write failing consumer-contract tests before creating the package**
+
+```ts
+it.each(['models', 'profile', 'lifecycle', 'rankings', 'comparison', 'subscription'] as const)(
+  'parses the proposed %s example without a page-specific transformation',
+  (method) => expect(parseUiDataContractV1(examples[method], method).contractVersion).toBe('ui-data-contract/v1'),
+);
+
+it('preserves mixed-source and unavailable evidence verbatim', () => {
+  const parsed = parseUiDataContractV1(examples.mixedSource, 'rankings');
+  expect(parsed.effectiveAt).toBeNull();
+  expect(new Set(parsed.provenance.map((source) => source.effectiveAt)).size).toBeGreaterThan(1);
+  expect(JSON.stringify(parsed)).toContain('No approved source');
+});
+
+it('rejects unsupported versions and invalid UTC timestamps', () => {
+  expect(() => parseUiDataContractV1(examples.unsupportedVersion, 'models')).toThrow(/Unsupported UI data contract version/);
+});
+```
+
+- [ ] **Step 2: Run the focused test and confirm the missing-contract failure**
+
+Run: `npm test -- src/frontend/preview-data/contract-v1.test.ts`
+
+Expected: FAIL because the parser, schema, and examples do not exist.
+
+- [ ] **Step 3: Implement the proposal without changing runtime adapter selection**
+
+The schema must use JSON Schema 2020-12, require `contractVersion`, `status`, `fetchedAt`, `effectiveAt`, `data`, and `provenance`, and reject undeclared envelope fields. Timestamp values are UTC ISO-8601 strings ending in `Z`; `effectiveAt` may be `null` only for unavailable or mixed-source envelopes. Each evidence value is either `available` with its value and provenance, or `unavailable` with a non-empty reason and optional provenance.
+
+The manifest marks the six method examples and `mixed-source.json` as positive consumer examples and `unsupported-version.json` as an expected rejection. `ACCEPTANCE.md` must begin with `Status: PROPOSED — NOT PIPELINE ACCEPTED` and list the exact pipeline sign-off evidence: pipeline commit SHA, stable artifact path, method/query for all six responses, mixed-source behavior, unavailable reasons, invalid/unsupported-version behavior, and confirmation that D1/R2/cache internals are absent.
+
+The examples may use the approved illustrative adapter facts, but their provenance and documentation must remain explicitly illustrative. They are contract examples, not accepted production responses.
+
+- [ ] **Step 4: Run proposal, fixture, and type checks**
+
+Run: `npm test -- src/frontend/preview-data/contract-v1.test.ts src/frontend/preview-data/fixture-adapter.test.ts`
+
+Run: `npm run lint`
+
+Expected: PASS; examples round-trip without data loss, negative examples fail for the expected reason, and no runtime page or adapter silently switches modes.
+
+- [ ] **Step 5: Commit the consumer contract proposal**
+
+```bash
+git add contracts/ui-data-contract/v1 src/frontend/preview-data/contract-v1.ts src/frontend/preview-data/contract-v1.test.ts
+git commit -m "feat: publish preview data contract proposal"
+```
+
+**Reviewer gate:** Reject if the package claims pipeline acceptance, if examples lose unavailable/provenance/effective-time evidence, if unsupported versions parse, if schema and parser disagree, or if runtime adapter selection changes before pipeline sign-off.
+
+---
+
+### Task 13: Accept pipeline artifacts and integrate the API adapter
+
+**Files:**
+- Modify: `contracts/ui-data-contract/v1/ACCEPTANCE.md`
+- Create: accepted pipeline snapshots under `contracts/ui-data-contract/v1/accepted/`
 - Create: `src/frontend/preview-data/api-adapter.ts`
 - Create: `src/frontend/preview-data/api-adapter.test.ts`
 - Modify: `src/frontend/preview-data/contracts.ts`
@@ -809,10 +880,14 @@ git commit -m "feat: migrate subscribe versus API to React"
 - Modify: data-heavy page tests under `src/pages/`
 
 **Interfaces:**
-- Consumes: accepted pipeline payloads with `contractVersion: 'ui-data-contract/v1'`.
+- Consumes: pipeline-approved artifacts that conform to the Task 12 proposal or a reviewed, versioned amendment.
 - Produces: an API-backed `PreviewDataAdapter` with the same return types as the fixture adapter.
 
-- [ ] **Step 1: Save accepted representative payloads as contract fixtures and write failing parser tests**
+- [ ] **Step 1: Verify and record the external acceptance gate before editing runtime code**
+
+The pipeline task must provide an accepted schema and representative responses for `models`, `profile`, `lifecycle`, `rankings`, `comparison`, and `subscription`; mixed-source and unavailable cases; invalid/unsupported-version behavior; a stable artifact path; and a pipeline commit SHA. Record those exact references in `ACCEPTANCE.md`. If any item is missing, stop without changing runtime code.
+
+- [ ] **Step 2: Save accepted snapshots and write failing API-adapter tests**
 
 ```ts
 it.each(['models', 'profile', 'lifecycle', 'rankings', 'comparison', 'subscription'] as const)(
@@ -820,23 +895,16 @@ it.each(['models', 'profile', 'lifecycle', 'rankings', 'comparison', 'subscripti
   async (method) => expect((await apiAdapter[method](queries[method])).contractVersion).toBe('ui-data-contract/v1'),
 );
 
-it('retains unavailable and mixed-source timestamps from the API', async () => {
+it('never substitutes fixture facts for an unavailable API response', async () => {
   const result = await apiAdapter.rankings(query);
-  expect(result.status).toBe('partial');
-  expect(result.data?.models.some((model) => model.runtime.availability === 'unavailable')).toBe(true);
-  expect(new Set(result.provenance.map((source) => source.effectiveAt)).size).toBeGreaterThan(1);
+  expect(result.status).toBe('unavailable');
+  expect(result.data).toBeNull();
 });
 ```
 
-- [ ] **Step 2: Run API adapter tests and confirm fixture-only failure**
+- [ ] **Step 3: Implement strict transport parsing and adapter selection**
 
-Run: `npm test -- src/frontend/preview-data/api-adapter.test.ts src/frontend/preview-data/fixture-adapter.test.ts`
-
-Expected: FAIL because no API adapter/parser exists.
-
-- [ ] **Step 3: Implement strict parsing and adapter selection**
-
-Reject unsupported contract versions and invalid timestamps without clearing server content. Keep the fixture adapter available only for explicit preview/test configuration. Preserve every provenance item and unavailable reason verbatim.
+Reuse Task 12's parser. Reject unsupported versions and invalid timestamps without clearing server content. Keep the fixture adapter available only for explicit preview/test configuration. Preserve every provenance item and unavailable reason verbatim.
 
 ```ts
 export function createPreviewDataAdapter(mode: 'api' | 'fixture'): PreviewDataAdapter {
@@ -848,20 +916,22 @@ export function createPreviewDataAdapter(mode: 'api' | 'fixture'): PreviewDataAd
 
 Run: `npm test -- src/frontend/preview-data/*.test.ts src/pages/preview-models-page.test.tsx src/pages/preview-model-profile-page.test.tsx src/pages/lifecycle-radar-page.test.tsx src/pages/popular-models-page.test.tsx src/pages/preview-compare-page.test.tsx src/pages/make-it-yours-page.test.tsx src/pages/subscribe-vs-api-page.test.tsx`
 
-Expected: PASS for full, partial, unavailable, stale, and mixed-source payloads.
+Run: `npm run lint`
 
-- [ ] **Step 5: Commit pipeline integration**
+Expected: PASS for full, partial, unavailable, stale, mixed-source, invalid, and unsupported-version payloads.
+
+- [ ] **Step 5: Commit accepted pipeline integration**
 
 ```bash
-git add src/frontend/preview-data src/pages
-git commit -m "feat: connect React previews to UI data contract"
+git add contracts/ui-data-contract/v1 src/frontend/preview-data src/pages
+git commit -m "feat: connect React previews to accepted UI data contract"
 ```
 
-**Reviewer gate:** This task cannot pass before the pipeline task supplies an accepted versioned schema and representative responses. Reject any UI fallback that silently substitutes fixture facts for an API unavailable value.
+**Reviewer gate:** Reject without a recorded pipeline commit/artifact path, if accepted snapshots diverge from the reviewed schema without a versioned amendment, or if any API-unavailable state silently falls back to fixture data.
 
 ---
 
-### Task 13: Remove prototype delivery and complete QA
+### Task 14: Remove prototype delivery and complete QA
 
 **Files:**
 - Delete: `scripts/make-it-yours-preview.ts`
@@ -928,7 +998,7 @@ git add -A scripts/make-it-yours-preview.ts vite.config.ts package.json scripts 
 git commit -m "refactor: complete React preview delivery"
 ```
 
-**Reviewer gate:** Reject if any direct deep link depends on an SPA catch-all, if any legacy redirect becomes a duplicate page, if no-JavaScript content is empty, or if deployment is attempted without a separate user request.
+**Reviewer gate:** Reject if Task 13 is incomplete, if any direct deep link depends on an SPA catch-all, if any legacy redirect becomes a duplicate page, if no-JavaScript content is empty, or if deployment is attempted without a separate user request.
 
 ---
 
@@ -941,7 +1011,7 @@ After Tasks 1–5 land and pass review, these file ownership groups can run conc
 - Decision tools worker: Tasks 9–10 sequentially (`preview-compare`, weighted ranking workbench).
 - Cost worker: Task 11 (`subscribe-vs-api`, calculator contracts/state/chart).
 
-Task 6 owns shared Home/Popular files and should land before the four groups. Task 12 waits for the external pipeline contract. Task 13 waits for every route and Task 12.
+Task 6 owns shared Home/Popular files and should land before the four groups. Task 12 can publish the consumer contract proposal while the external pipeline continues. Task 13 waits for the pipeline's accepted artifacts and Task 12 review. Task 14 waits for every route and Task 13.
 
 ## Review protocol
 
