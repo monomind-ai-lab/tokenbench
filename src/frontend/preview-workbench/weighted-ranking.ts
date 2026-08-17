@@ -1,4 +1,5 @@
 export const WEIGHTED_RANKING_CAPABILITIES = ['agentic', 'coding', 'reasoning', 'math', 'multimodal', 'throughput'] as const;
+export const MAX_WEIGHTED_RANKING_MODELS = 20;
 
 export type WeightedRankingCapability = typeof WEIGHTED_RANKING_CAPABILITIES[number];
 export type WeightedRankingAccess = 'all' | 'open' | 'closed';
@@ -31,6 +32,8 @@ export interface WeightedRankingModel {
 
 export interface WeightedRankingRow extends WeightedRankingModel {
   readonly score: number;
+  readonly meetsTtft: boolean;
+  readonly meetsThroughput: boolean;
   readonly meetsSla: boolean;
   readonly frontier: boolean;
 }
@@ -58,7 +61,6 @@ function finite(value: unknown): value is number {
 function scoreFor(model: WeightedRankingModel, capability: WeightedRankingCapability): number | null {
   const explicit = model.scores?.[capability] ?? model[capability];
   if (finite(explicit)) return explicit;
-  if (capability === 'throughput' && finite(model.throughput)) return Math.min(100, model.throughput / 120 * 100);
   return null;
 }
 
@@ -75,7 +77,8 @@ export function weightedScore(model: WeightedRankingModel, weights: WeightedRank
   for (const capability of WEIGHTED_RANKING_CAPABILITIES) {
     const weight = weights[capability];
     const score = scoreFor(model, capability);
-    if (!finite(weight) || weight <= 0 || score === null) continue;
+    if (!finite(weight) || weight <= 0) continue;
+    if (score === null) return null;
     weightedTotal += score * weight;
     activeWeight += weight;
   }
@@ -83,7 +86,15 @@ export function weightedScore(model: WeightedRankingModel, weights: WeightedRank
 }
 
 export function meetsWeightedRankingSla(model: Pick<WeightedRankingModel, 'ttft' | 'throughput'>, filters: Pick<WeightedRankingFilters, 'maxTtft' | 'minThroughput'>): boolean {
-  return finite(model.ttft) && finite(model.throughput) && model.ttft <= filters.maxTtft && model.throughput >= filters.minThroughput;
+  return meetsWeightedRankingTtft(model, filters) && meetsWeightedRankingThroughput(model, filters);
+}
+
+export function meetsWeightedRankingTtft(model: Pick<WeightedRankingModel, 'ttft'>, filters: Pick<WeightedRankingFilters, 'maxTtft'>): boolean {
+  return finite(model.ttft) && model.ttft <= filters.maxTtft;
+}
+
+export function meetsWeightedRankingThroughput(model: Pick<WeightedRankingModel, 'throughput'>, filters: Pick<WeightedRankingFilters, 'minThroughput'>): boolean {
+  return finite(model.throughput) && model.throughput >= filters.minThroughput;
 }
 
 function matchesFilters(model: WeightedRankingModel, filters: WeightedRankingFilters): boolean {
@@ -117,18 +128,23 @@ export function buildWeightedRanking(input: {
   readonly models: readonly WeightedRankingModel[];
   readonly weights: WeightedRankingWeights;
   readonly filters: WeightedRankingFilters;
+  /** The visible leaderboard uses 20; selection resolution can retain an explicitly selected fixture outside it. */
+  readonly limit?: number;
 }): WeightedRankingResult {
   const validation = validateWeights(input.weights);
   if (!validation.valid) {
     return { valid: false, reason: validation.reason, candidates: [], rows: [], chartRows: [], tableRows: [], frontier: [] };
   }
 
+  const limit = input.limit === undefined ? MAX_WEIGHTED_RANKING_MODELS : Math.max(0, input.limit);
   const candidates = orderRows(input.models
     .filter((model) => matchesFilters(model, input.filters))
     .flatMap((model) => {
       const score = weightedScore(model, input.weights);
-      return score === null ? [] : [{ ...model, score, meetsSla: meetsWeightedRankingSla(model, input.filters), frontier: false }];
-    }));
+      const meetsTtft = meetsWeightedRankingTtft(model, input.filters);
+      const meetsThroughput = meetsWeightedRankingThroughput(model, input.filters);
+      return score === null ? [] : [{ ...model, score, meetsTtft, meetsThroughput, meetsSla: meetsTtft && meetsThroughput, frontier: false }];
+    })).slice(0, limit);
   const rows = input.filters.showOutsideSla ? candidates : candidates.filter((row) => row.meetsSla);
   const frontierIds = new Set(weightedFrontier(rows).map((row) => row.id));
   const orderedRows = rows.map((row) => ({ ...row, frontier: frontierIds.has(row.id) }));

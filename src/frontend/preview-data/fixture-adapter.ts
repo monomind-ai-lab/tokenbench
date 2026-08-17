@@ -20,6 +20,7 @@ import {
   PREVIEW_FIXTURE_MODELS,
   PREVIEW_FIXTURE_PROVENANCE,
   PREVIEW_FIXTURE_SUBSCRIPTION_PLANS,
+  PREVIEW_WEIGHTED_RANKING_FIXTURE_MODELS,
 } from './fixtures';
 
 const ALL_FIXTURE_PROVENANCE = Object.values(PREVIEW_FIXTURE_PROVENANCE);
@@ -117,8 +118,8 @@ export function createFixtureAdapter(now: () => Date = () => new Date()): Previe
     },
 
     async rankings(query): Promise<UiDataContractV1<RankingData>> {
-      const limit = query.limit === undefined ? PREVIEW_FIXTURE_MODELS.length : Math.max(0, query.limit);
-      const models = PREVIEW_FIXTURE_MODELS.slice(0, limit).map((model, index) => ({
+      const limit = query.limit === undefined ? PREVIEW_WEIGHTED_RANKING_FIXTURE_MODELS.length : Math.max(0, query.limit);
+      const models = PREVIEW_WEIGHTED_RANKING_FIXTURE_MODELS.slice(0, limit).map((model, index) => ({
         model,
         rank: {
           availability: 'available' as const,

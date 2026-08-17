@@ -93,6 +93,27 @@ describe('fixtureAdapter', () => {
     });
   });
 
+  it('supplies the approved top-20 ranking fixture with every weighted capability explicitly evidenced', async () => {
+    const result = await fixtureAdapter.rankings({ limit: 20 });
+    const claude = result.data?.models.find((entry) => entry.model.id === 'claude-3-5-sonnet')?.model;
+
+    expect(result.data?.models).toHaveLength(20);
+    expect(claude?.capability).toMatchObject({
+      availability: 'available',
+      provenance: { label: 'Illustrative prototype data' },
+      value: {
+        radar: expect.arrayContaining([
+          expect.objectContaining({ key: 'agentic', percentile: 92 }),
+          expect.objectContaining({ key: 'coding', percentile: 94 }),
+          expect.objectContaining({ key: 'reasoning', percentile: 90 }),
+          expect.objectContaining({ key: 'math', percentile: 88 }),
+          expect.objectContaining({ key: 'multimodal', percentile: 89 }),
+          expect.objectContaining({ key: 'throughput', percentile: 68.33333333333333 }),
+        ]),
+      },
+    });
+  });
+
   it('does not substitute another model when subscription economics are unavailable', async () => {
     const result = await fixtureAdapter.subscription({ modelId: 'not-an-approved-fixture' });
 

@@ -43,4 +43,19 @@ describe('buildWeightedRanking', () => {
     expect(result.rows.map((row) => row.id)).toEqual(['alpha']);
     expect(result.tableRows.map((row) => row.id)).toEqual(result.chartRows.map((row) => row.id));
   });
+
+  it('keeps TTFT and throughput eligibility independent', () => {
+    const result = buildWeightedRanking({
+      models: [{
+        ...models[0],
+        id: 'slow-output',
+        ttft: 0.4,
+        throughput: 55,
+      }],
+      weights: { agentic: 20, coding: 20, reasoning: 20, math: 15, multimodal: 15, throughput: 10 },
+      filters: { access: 'all', providers: [], maxTtft: 0.8, minThroughput: 60, showOutsideSla: true },
+    });
+
+    expect(result.rows[0]).toMatchObject({ meetsTtft: true, meetsThroughput: false, meetsSla: false });
+  });
 });

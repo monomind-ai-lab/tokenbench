@@ -4,14 +4,14 @@ export type WeightedRankingView = 'rows' | 'cards';
 
 export interface WeightedRankingState extends WeightedRankingFilters {
   readonly weights: WeightedRankingWeights;
-  readonly addedModelIds: readonly string[];
+  readonly selectedModelIds: readonly string[];
   readonly view: WeightedRankingView;
 }
 
 export const DEFAULT_WEIGHTED_RANKING_STATE: WeightedRankingState = {
   access: 'all',
   providers: [],
-  addedModelIds: [],
+  selectedModelIds: [],
   maxTtft: 0.8,
   minThroughput: 60,
   showOutsideSla: true,
@@ -33,6 +33,10 @@ function normalizeIds(ids: readonly string[]): readonly string[] {
     normalized.push(id);
   }
   return normalized;
+}
+
+export function normalizeWeightedRankingSelection(ids: readonly string[]): readonly string[] {
+  return normalizeIds(ids).slice(0, 4);
 }
 
 function parseWeights(value: string | null): WeightedRankingWeights | null {
@@ -67,7 +71,7 @@ export function weightedRankingStateFromQuery(params: URLSearchParams): Weighted
   return {
     access: (access ?? DEFAULT_WEIGHTED_RANKING_STATE.access) as WeightedRankingAccess,
     providers: normalizeIds((params.get('provider') ?? '').split(',')),
-    addedModelIds: normalizeIds((params.get('models') ?? '').split(',')),
+    selectedModelIds: normalizeWeightedRankingSelection((params.get('models') ?? '').split(',')),
     maxTtft: maxTtft ?? DEFAULT_WEIGHTED_RANKING_STATE.maxTtft,
     minThroughput: minThroughput ?? DEFAULT_WEIGHTED_RANKING_STATE.minThroughput,
     showOutsideSla: outside !== '0',
@@ -80,7 +84,7 @@ export function encodeWeightedRankingState(state: WeightedRankingState): URLSear
   const params = new URLSearchParams();
   params.set('access', state.access);
   if (state.providers.length) params.set('provider', normalizeIds(state.providers).join(','));
-  if (state.addedModelIds.length) params.set('models', normalizeIds(state.addedModelIds).join(','));
+  if (state.selectedModelIds.length) params.set('models', normalizeWeightedRankingSelection(state.selectedModelIds).join(','));
   params.set('outside', state.showOutsideSla ? '1' : '0');
   params.set('ttft', state.maxTtft.toFixed(2));
   params.set('tps', String(state.minThroughput));
