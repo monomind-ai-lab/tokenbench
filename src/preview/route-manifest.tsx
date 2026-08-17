@@ -3,10 +3,11 @@ import { ComparisonDetailApp, ModelProfileApp } from '../App.tsx';
 import { SITE_CONFIG } from '../brand/site-config';
 import { parsePricePerformanceEnvelope } from '../benchmarks/price-performance-contracts';
 import { CompareHubPage } from '../pages/compare-hub-page';
-import { HomePage } from '../pages/home-page';
-import { PopularModelsPage } from '../pages/popular-models-page';
+import { HomePage, type HomePageData } from '../pages/home-page';
+import { PopularModelsRoutePage, parsePopularModelsPageData, popularModelsPageData } from '../pages/popular-models-page';
 import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
+import { createFixtureAdapter } from '../frontend/preview-data/fixture-adapter';
 import { GuideArticlePage, GuidesHub } from '../frontend/guides-page';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { GUIDE_BY_SLUG, GUIDES } from '../guides/content';
@@ -25,6 +26,9 @@ const pendingReactDocument: PreviewDocumentReadiness = {
   status: 'blocked',
   reason: 'The substantive React page and static data have not been migrated.',
 };
+
+const readyReactDocument: PreviewDocumentReadiness = { status: 'ready' };
+const staticPreviewAdapter = createFixtureAdapter(() => new Date('2026-08-17T00:00:00.000Z'));
 
 interface PrototypeBundleDefinition {
   readonly outputPathname: string;
@@ -175,15 +179,59 @@ function PrototypeArticlePage({ match }: PreviewPageProps) {
   return guide ? <GuideArticlePage guide={guide} /> : <GuidesHub />;
 }
 
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isEvidenceValue(value: unknown, isAvailableValue: (candidate: unknown) => boolean): boolean {
+  if (!isRecord(value)) return false;
+  if (value.availability === 'unavailable') return typeof value.reason === 'string';
+  return value.availability === 'available' && isAvailableValue(value.value);
+}
+
+function isHomePreviewModel(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.id !== 'string') return false;
+  return isEvidenceValue(value.identity, (identity) => isRecord(identity)
+      && typeof identity.slug === 'string'
+      && typeof identity.name === 'string'
+      && typeof identity.provider === 'string')
+    && isEvidenceValue(value.access, (access) => access === 'Proprietary' || access === 'Open weights')
+    && isEvidenceValue(value.routePricing, (routePricing) => isRecord(routePricing)
+      && typeof routePricing.inputUsdPerMillion === 'number'
+      && typeof routePricing.outputUsdPerMillion === 'number')
+    && isEvidenceValue(value.runtime, (runtime) => isRecord(runtime)
+      && typeof runtime.ttftP50Seconds === 'number'
+      && typeof runtime.outputTokensPerSecond === 'number');
+}
+
+function parseHomePageData(value: unknown): HomePageData | null {
+  if (!isRecord(value)) return null;
+  const candidate = value as { readonly contractVersion?: unknown; readonly data?: { readonly models?: unknown } | null };
+  return candidate.contractVersion === 'ui-data-contract/v1'
+    && typeof candidate.data === 'object'
+    && candidate.data !== null
+    && Array.isArray(candidate.data.models)
+    && candidate.data.models.every(isHomePreviewModel)
+    ? value as unknown as HomePageData
+    : null;
+}
+
+function HomeRoutePage({ data }: PreviewPageProps) {
+  return <HomePage data={parseHomePageData(data) ?? undefined} />;
+}
+
 const prototypeFallbackPage = HomePage as ComponentType<PreviewPageProps>;
+const homePage = HomeRoutePage as ComponentType<PreviewPageProps>;
 const pricePerformancePage = PricePerformanceApp as ComponentType<PreviewPageProps>;
-const popularModelsPage = PopularModelsPage as ComponentType<PreviewPageProps>;
+const popularModelsPage = PopularModelsRoutePage as ComponentType<PreviewPageProps>;
 const compareHubPage = CompareHubPage as ComponentType<PreviewPageProps>;
 const guidesHubPage = GuidesHub as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
 const pricePerformancePayload = { key: 'price-performance-initial-data', parse: parsePricePerformanceEnvelope } as const;
+const homePayload = { key: 'home-initial-data', parse: parseHomePageData } as const;
+const popularModelsPayload = { key: 'popular-models-initial-data', parse: parsePopularModelsPageData } as const;
 
 export const previewRuntimeRoutes = [
   {
@@ -205,15 +253,15 @@ const manifestRoutes = [
     id: 'home',
     match: exactPathMatcher('home', '/'),
     outputPathname: '/',
-    delivery: 'prototype',
+    delivery: 'react',
     prototypeMount: 'preserve',
-    documentReadiness: pendingReactDocument,
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'home', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'home' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: prototypeFallbackPage,
+    staticData: async () => staticPreviewAdapter.models({}),
+    payload: homePayload,
+    Page: homePage,
     prototypeBundle: [{ outputPathname: '/', output: ['index.html'], document: 'home.html', clearOutputDirectory: false }],
   },
   {
@@ -268,14 +316,14 @@ const manifestRoutes = [
     id: 'popular-models',
     match: exactPathMatcher('popular-models', '/popular-models/'),
     outputPathname: '/popular-models/',
-    delivery: 'prototype',
-    prototypeMount: 'popular-models-workbench',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    prototypeMount: 'preserve',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'popularModels', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'popularModels' }),
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
+    staticData: async () => popularModelsPageData(),
+    payload: popularModelsPayload,
     Page: popularModelsPage,
     prototypeBundle: [{ outputPathname: '/popular-models/', output: ['popular-models', 'index.html'], document: 'popular-models.html', clearOutputDirectory: false }],
   },

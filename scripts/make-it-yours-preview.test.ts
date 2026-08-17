@@ -57,7 +57,7 @@ describe('approved preview bundle', () => {
     expect(script).toContain('function renderWeightedInsights(models)');
   });
 
-  it('copies a crawlable Popular Models fallback into the built preview', async () => {
+  it('builds a crawlable React Popular Models document without a prototype workbench mount', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-popular-models-preview-'));
     outputRoots.push(outputDir);
 
@@ -67,9 +67,10 @@ describe('approved preview bundle', () => {
     const document = await readFile(join(outputDir, 'popular-models', 'index.html'), 'utf8');
     expect(document).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/popular-models/">');
     expect(document).toContain('<meta name="description" content="Explore an interactive TokenBench prototype for comparing popular AI models across quality, category performance, and cost per successful task.">');
-    expect(document).toContain('<h1 id="popular-models-fallback-heading">Popular models leaderboard</h1>');
-    expect(document).toContain('Data boundary:');
-    expect(document).toContain('illustrative prototype data until LiveBench and TokenBench data adapters are connected.');
+    expect(document).toContain('<h1 id="popular-models-heading" class="leaderboard-page-hero-title">Popular models leaderboard</h1>');
+    expect(document).toContain('Every name, score, cost, verbosity value');
+    expect(document).toContain('<script id="popular-models-initial-data" type="application/json">');
+    expect(document).not.toContain('data-popular-models-workbench');
   }, 30_000);
 
   it('publishes every rebuilt page and its runtime assets at the approved routes', async () => {
@@ -91,25 +92,35 @@ describe('approved preview bundle', () => {
     expect(shellScript).toContain("const currentPage=current.replace(/\\.html$/,'');");
     expect(shellScript).toContain("const costActive=['subscribe-vs-api'].includes(currentPage);");
 
-    const expectedPages = [
-      ['index.html', 'Empirical evidence for practical AI runtime and cost decisions.'],
+    const prototypePages = [
       ['models.html', 'Models workbench'],
       [join('models', 'index.html'), 'Models workbench'],
       ['compare.html', 'Compare models'],
       [join('compare', 'index.html'), 'Compare models'],
       [join('model-profile', 'index.html'), 'Model profile'],
       [join('model-lifecycle', 'index.html'), 'Model lifecycle'],
-      [join('popular-models', 'index.html'), 'data-popular-models-workbench'],
       ['articles.html', 'Articles'],
       [join('articles', 'index.html'), 'Articles'],
       [join('articles', 'hybrid-router.html'), 'A hybrid router for high-stakes agentic work'],
       [join('articles', 'hybrid-router', 'index.html'), 'A hybrid router for high-stakes agentic work'],
     ] as const;
-    for (const [file, expectedText] of expectedPages) {
+    for (const [file, expectedText] of prototypePages) {
       const html = await readFile(join(outputDir, file), 'utf8');
       expect(html).toContain(expectedText);
       expect(html).toContain('href="/ui-revamp-3-assets/styles.css');
       expect(html).toContain('src="/ui-revamp-3-assets/common.js');
+    }
+
+    const reactPages = [
+      ['index.html', 'API cost preview'],
+      [join('popular-models', 'index.html'), 'popular-models-page'],
+    ] as const;
+    for (const [file, expectedText] of reactPages) {
+      const html = await readFile(join(outputDir, file), 'utf8');
+      expect(html).toContain(expectedText);
+      expect(html).toContain('/assets/main.js');
+      expect(html).toContain('/assets/tokenbench.css');
+      expect(html).not.toContain('/ui-revamp-3-assets/common.js');
     }
     await expect(access(join(sharedAssets, 'styles.css'))).resolves.toBeUndefined();
     await expect(access(join(sharedAssets, 'data.js'))).resolves.toBeUndefined();

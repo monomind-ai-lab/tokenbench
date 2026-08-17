@@ -1,6 +1,5 @@
 import { renderToString } from 'react-dom/server';
 import { PageFrame } from '../frontend/page-frame';
-import { FRONTEND_ASSETS } from '../routing/frontend-assets';
 import { documentHtml, headMarkup } from '../seo/static-page';
 import type { PreviewRoute, PreviewRouteMatch } from './route-types';
 
@@ -16,7 +15,6 @@ export function renderPreviewDocument(route: PreviewRoute, match: PreviewRouteMa
     headMarkup(route.metadata(match), [...route.structuredData(match)]),
     body,
     {
-      assets: FRONTEND_ASSETS,
       payload: data === undefined
         ? undefined
         : { id: route.payload?.key ?? 'preview-initial-data', value: data },

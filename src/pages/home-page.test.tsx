@@ -8,6 +8,7 @@ import type {
 import type { RepresentativeComparison } from '../benchmarks/api-projections';
 import type { BenchmarkApiEnvelope, BenchmarkSummaryData } from '../frontend/use-benchmarks';
 import { benchmarkCacheKey, writeBenchmarkEnvelopeCache } from '../frontend/benchmark-cache';
+import { fixtureAdapter } from '../frontend/preview-data/adapter';
 import { HomePage } from './home-page';
 
 const UPDATED_AT = '2026-08-06T12:00:00.000Z';
@@ -153,6 +154,20 @@ afterEach(() => {
 });
 
 describe('HomePage', () => {
+  it('renders the approved home decision paths and API cost preview from static data', async () => {
+    const homeFixture = await fixtureAdapter.models({});
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 500 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<HomePage data={homeFixture} />);
+
+    expect(screen.getByRole('link', { name: /explore models/i })).toHaveAttribute('href', '/models');
+    expect(screen.getByRole('region', { name: /api cost preview/i })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /filter model preview/i })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: /monthly prompts sent/i })).toHaveValue('1200');
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('explains the product and exposes the three primary decisions', () => {
     renderWithHomeSummary();
 

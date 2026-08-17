@@ -9,8 +9,67 @@ import { PopularInsightsSection } from '../frontend/popular-models/insights';
 import { PopularLeaderboardSection } from '../frontend/popular-models/leaderboard';
 import type { PopularModelFixture } from '../frontend/popular-models/types';
 import { StatusBanner } from '../frontend/ui';
+import type { PreviewPageProps } from '../preview/route-types';
 
 type ExportState = { readonly tone: 'info' | 'error'; readonly message: string } | null;
+
+export interface PopularModelsPageData {
+  readonly disclaimer: string;
+  readonly models: readonly PopularModelFixture[];
+}
+
+interface PopularModelsPageProps {
+  readonly data?: PopularModelsPageData;
+}
+
+export function popularModelsPageData(): PopularModelsPageData {
+  return {
+    disclaimer: POPULAR_MODELS_FIXTURE_METADATA.disclaimer,
+    models: POPULAR_MODELS_FIXTURE,
+  };
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isPopularModelFixture(value: unknown): value is PopularModelFixture {
+  if (!isRecord(value)
+    || typeof value.id !== 'string'
+    || typeof value.slug !== 'string'
+    || typeof value.name !== 'string'
+    || typeof value.organization !== 'string'
+    || typeof value.openWeights !== 'boolean'
+    || typeof value.finetune !== 'boolean'
+    || typeof value.overallScore !== 'number'
+    || typeof value.costPerSuccessfulTask !== 'number'
+    || typeof value.outputCostPerMillion !== 'number'
+    || typeof value.verbosityTokens !== 'number'
+    || value.fixture !== true
+    || !isRecord(value.categoryScores)
+    || !isRecord(value.categorySubtasks)) return false;
+
+  return POPULAR_CATEGORY_KEYS.every((category) => {
+    const subtasks = value.categorySubtasks[category];
+    return typeof value.categoryScores[category] === 'number'
+      && Array.isArray(subtasks)
+      && subtasks.every((subtask) => isRecord(subtask)
+        && typeof subtask.id === 'string'
+        && typeof subtask.label === 'string'
+        && typeof subtask.score === 'number'
+        && typeof subtask.note === 'string');
+  });
+}
+
+export function parsePopularModelsPageData(value: unknown): PopularModelsPageData | null {
+  if (!isRecord(value)) return null;
+  const candidate = value as { readonly disclaimer?: unknown; readonly models?: unknown };
+  return typeof candidate.disclaimer === 'string'
+    && Array.isArray(candidate.models)
+    && candidate.models.every(isPopularModelFixture)
+    ? candidate as PopularModelsPageData
+    : null;
+}
 
 function csvRows(models: readonly PopularModelFixture[]): readonly (readonly (string | number | boolean)[])[] {
   return [
@@ -39,8 +98,9 @@ function csvRows(models: readonly PopularModelFixture[]): readonly (readonly (st
   ];
 }
 
-export function PopularModelsPage() {
+export function PopularModelsPage({ data }: PopularModelsPageProps = {}) {
   const [exportState, setExportState] = useState<ExportState>(null);
+  const pageData = data ?? popularModelsPageData();
 
   const copyLink = useCallback(async (sectionId: string) => {
     try {
@@ -77,22 +137,27 @@ export function PopularModelsPage() {
       </header>
 
       <StatusBanner tone="warning">
-        {POPULAR_MODELS_FIXTURE_METADATA.disclaimer}
+        {pageData.disclaimer}
       </StatusBanner>
       {exportState ? <StatusBanner tone={exportState.tone}>{exportState.message}</StatusBanner> : null}
 
       <PopularLeaderboardSection
-        models={POPULAR_MODELS_FIXTURE}
+        models={pageData.models}
         onCopyLink={copyLink}
         onDownloadPng={downloadPng}
         onDownloadCsv={downloadCsv}
       />
       <PopularInsightsSection
-        models={POPULAR_MODELS_FIXTURE}
+        models={pageData.models}
         onCopyLink={copyLink}
         onDownloadPng={downloadPng}
         onDownloadCsv={downloadCsv}
       />
     </div>
   );
+}
+
+/** Adapts manifest data into the page's typed fixture contract without a prototype mount. */
+export function PopularModelsRoutePage({ data }: PreviewPageProps) {
+  return <PopularModelsPage data={parsePopularModelsPageData(data) ?? undefined} />;
 }

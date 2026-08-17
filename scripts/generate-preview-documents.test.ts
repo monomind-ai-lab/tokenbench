@@ -34,9 +34,9 @@ describe('generatePreviewDocuments', () => {
     const root = await mkdtemp(join(tmpdir(), 'tokenbench-prototype-preview-'));
     outputRoots.push(root);
 
-    await generatePreviewDocuments(root, previewRoutes.filter((route) => route.id === 'home'));
+    await generatePreviewDocuments(root, previewRoutes.filter((route) => route.id === 'models'));
 
-    await expect(access(join(root, 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(join(root, 'models', 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('refuses an accidental Hybrid Router React delivery until its substantive document is ready', () => {

@@ -29,55 +29,43 @@ describe('startPreviewRoute', () => {
     parseComparisonViewModelMock.mockReset();
     parseModelProfileViewModelMock.mockReset();
     parsePricePerformanceEnvelopeMock.mockReset();
-    document.body.innerHTML = '<header class="topbar">Prototype header</header><main class="shell page"><div id="root" data-popular-models-workbench><section>Server fallback</section></div></main><footer class="articles-footer">Prototype footer</footer><script id="preview-initial-data" type="application/json">{"revision":"prototype-r1"}</script>';
+    document.body.innerHTML = '<div id="root"><section>Server fallback</section></div><script id="popular-models-initial-data" type="application/json">{"models":[],"disclaimer":"Illustrative prototype data"}</script>';
     window.history.replaceState({}, '', '/popular-models/');
   });
 
-  it('ignores generic outer JSON and mounts Popular Models inside its prototype workbench without adding a second shell', () => {
-    const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
+  it('hydrates Popular Models from its validated route payload beneath the shared shell', () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'popular-models');
 
-    expect(previewRoutes.find((route) => route.id === 'popular-models')?.payload).toBeNull();
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
-    expect(document.querySelectorAll('.topbar')).toHaveLength(1);
-    expect(document.querySelectorAll('.articles-footer')).toHaveLength(1);
-    expect(workbench).toBeEmptyDOMElement();
-    expect(createRootMock).toHaveBeenCalledWith(workbench);
-    expect(hydrateRootMock).not.toHaveBeenCalled();
-    const mounted = renderToStaticMarkup(rootRenderer.mock.calls[0]?.[0] as ReactNode);
-    expect(mounted).toContain('popular-models-page');
-    expect(mounted).not.toContain('top-header');
+    expect(route?.delivery).toBe('react');
+    expect(route?.prototypeMount).toBe('preserve');
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'popular-models' });
+    expect(document.querySelector('[data-popular-models-workbench]')).toBeNull();
+    expect(createRootMock).not.toHaveBeenCalled();
+    const hydrated = renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode);
+    expect(hydrated).toContain('popular-models-page');
+    expect(hydrated).toContain('top-header');
   });
 
-  it('does not interpret malformed generic outer JSON as a Popular Models hydration payload', () => {
-    const payload = document.getElementById('preview-initial-data')!;
+  it('preserves Popular Models SSR HTML when its dedicated payload is malformed', () => {
+    const payload = document.getElementById('popular-models-initial-data')!;
     payload.textContent = '{bad json';
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
-    expect(document.querySelector('[data-popular-models-workbench]')).toBeEmptyDOMElement();
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'preserved-invalid-payload', routeId: 'popular-models' });
+    expect(document.getElementById('root')).toHaveTextContent('Server fallback');
     expect(hydrateRootMock).not.toHaveBeenCalled();
-    expect(createRootMock).toHaveBeenCalledWith(document.querySelector('[data-popular-models-workbench]'));
+    expect(createRootMock).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('mounts a declared client-load route when no embedded payload exists', () => {
-    document.getElementById('preview-initial-data')?.remove();
-    const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
+    document.getElementById('popular-models-initial-data')?.remove();
 
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
-    expect(workbench).toBeEmptyDOMElement();
-    expect(createRootMock).toHaveBeenCalledWith(workbench);
+    expect(document.getElementById('root')).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
     expect(rootRenderer).toHaveBeenCalledTimes(1);
-  });
-
-  it('mounts Popular Models from its workbench target without requiring a root ID', () => {
-    document.body.innerHTML = '<header class="topbar">Prototype header</header><main class="shell page"><div data-popular-models-workbench><section>Server fallback</section></div></main><footer class="articles-footer">Prototype footer</footer>';
-    const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
-
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
-    expect(workbench).toBeEmptyDOMElement();
-    expect(createRootMock).toHaveBeenCalledWith(workbench);
   });
 
   it('preserves other prototype routes when their hydration payload is missing', () => {

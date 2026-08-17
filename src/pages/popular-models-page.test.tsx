@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { PopularModelsPage } from './popular-models-page';
+import { fixtureAdapter } from '../frontend/preview-data/adapter';
+import { POPULAR_MODELS_FIXTURE } from '../frontend/popular-models/fixtures';
+import { PopularModelComparisonWorkspace } from '../frontend/popular-models/comparison-workspace';
+import { previewRoutes } from '../preview/route-manifest';
+import { parsePopularModelsPageData, PopularModelsPage } from './popular-models-page';
 
 vi.mock('../frontend/popular-models/chart-canvas', () => ({
   PopularChartCanvas: ({
@@ -13,6 +17,45 @@ vi.mock('../frontend/popular-models/chart-canvas', () => ({
 }));
 
 describe('PopularModelsPage', () => {
+  it('rejects incomplete Popular Models payload rows before hydration', () => {
+    expect(parsePopularModelsPageData({
+      disclaimer: 'Illustrative prototype data',
+      models: [{ id: 'partial', slug: 'partial', name: 'Partial model' }],
+    })).toBeNull();
+  });
+
+  it('hides the quick comparison tray below two selected models', () => {
+    render(<PopularModelComparisonWorkspace
+      availableModels={POPULAR_MODELS_FIXTURE.slice(1)}
+      decisionRows={[]}
+      detailRows={[]}
+      economicsCharts={[]}
+      maxModels={4}
+      onAdd={() => undefined}
+      onRemove={() => undefined}
+      profileRows={[]}
+      radarConfiguration={{ type: 'radar', data: { labels: [], datasets: [] } }}
+      selectedModels={POPULAR_MODELS_FIXTURE.slice(0, 1)}
+    />);
+
+    expect(screen.queryByRole('region', { name: 'Compare popular models' })).toBeNull();
+  });
+
+  it('renders Popular Models directly beneath the shared shell', async () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'popular-models');
+    const match = route?.match(new URL('https://tokenbench.test/popular-models/'));
+    const rankingsFixture = await fixtureAdapter.rankings({ limit: 4 });
+    if (!route || !match) throw new Error('Popular Models preview route is unavailable');
+    const RoutePage = route.Page;
+
+    render(<RoutePage match={match} data={rankingsFixture} />);
+
+    expect(route.delivery).toBe('react');
+    expect(route.prototypeMount).toBe('preserve');
+    expect(screen.getByRole('heading', { level: 1, name: /popular models leaderboard/i })).toBeInTheDocument();
+    expect(document.querySelector('[data-popular-models-workbench]')).toBeNull();
+  });
+
   it('uses the compact leaderboard hero hierarchy from the deployed Make it yours page', () => {
     render(<PopularModelsPage />);
 

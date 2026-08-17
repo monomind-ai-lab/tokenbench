@@ -76,6 +76,8 @@ export function PopularModelComparisonWorkspace({
   radarConfiguration,
   selectedModels,
 }: PopularComparisonWorkspaceProps) {
+  if (selectedModels.length < 2) return null;
+
   const canRemove = selectedModels.length > 2;
   const remaining = Math.max(0, maxModels - selectedModels.length);
   const names = selectedModels.map((model) => model.name).join(', ');

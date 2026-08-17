@@ -27,14 +27,18 @@ describe('preview route manifest', () => {
     (pathname) => expect(matchPreviewRoute(new URL(pathname, 'https://tokenbench.test'))).toBeNull(),
   );
 
-  it('assigns every preview URL to exactly one prototype route', () => {
+  it('assigns every preview URL to exactly one route and cuts over only Home and Popular Models', () => {
     for (const route of previewRoutes) {
       const url = new URL(route.outputPathname, 'https://tokenbench.test');
       const owners = previewRoutes.filter((candidate) => candidate.match(url)?.routeId === route.id);
 
       expect(owners).toHaveLength(1);
-      expect(owners[0]?.delivery).toBe('prototype');
     }
+
+    expect(previewRoutes.filter((route) => route.delivery === 'react').map((route) => route.id)).toEqual([
+      'home',
+      'popular-models',
+    ]);
   });
 
   it('keeps runtime-only SSR routes out of static preview generation', () => {
@@ -88,6 +92,27 @@ describe('preview route manifest', () => {
       name: route?.metadata(match!).h1,
       url: route?.metadata(match!).canonical,
     })]);
+  });
+
+  it('uses a reproducible fixture timestamp for static Home delivery', async () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'home');
+    const match = route?.match(new URL('https://tokenbench.test/'));
+    if (!route || !match) throw new Error('Home preview route is unavailable');
+
+    await expect(route.staticData(match)).resolves.toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      fetchedAt: '2026-08-17T00:00:00.000Z',
+      data: { models: expect.any(Array) },
+    });
+  });
+
+  it('rejects incomplete Home model rows before hydration', () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'home');
+
+    expect(route?.payload?.parse({
+      contractVersion: 'ui-data-contract/v1',
+      data: { models: [{ id: 'partial' }] },
+    })).toBeNull();
   });
 
   it.each([
