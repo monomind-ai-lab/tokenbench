@@ -562,6 +562,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .article-toc ol { display: grid; gap: 13px; margin: 14px 0 0; padding: 0; list-style: none; }
 .article-toc a { color: var(--muted); font-size: 0.72rem; line-height: 1.4; text-decoration: none; }
 .article-toc a:hover { color: var(--primary-strong); }
+.article-toc a[aria-current='location'] { color: var(--primary-strong); font-weight: 800; }
 .calculator-cta { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin-top: 64px; padding: 28px; border-radius: var(--radius); background: var(--primary-card); color: #fff; }
 .calculator-cta .eyebrow { color: #d6e3ff; }
 .calculator-cta h2 { margin: 7px 0 8px; color: #fff; font-family: var(--font-display); font-size: 1.35rem; letter-spacing: -0.035em; }

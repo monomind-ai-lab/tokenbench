@@ -39,14 +39,19 @@ describe('generatePreviewDocuments', () => {
     await expect(access(join(root, 'models', 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('refuses an accidental Hybrid Router React delivery until its substantive document is ready', () => {
-    const route = previewRoutes.find((candidate) => candidate.id === 'article-detail');
-    if (!route) throw new Error('Missing Hybrid Router fixture route');
-    const accidentalReactRoute = { ...route, delivery: 'react' } as PreviewRoute;
+  it('emits Hybrid Router’s substantive React document once the article route is ready', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-react-article-preview-'));
+    outputRoots.push(root);
 
-    expect(() => previewHtmlEntries('/generated-preview', [accidentalReactRoute])).toThrow(
-      /article-detail.*Hybrid Router.*static data/iu,
-    );
+    await generatePreviewDocuments(root, previewRoutes.filter((route) => route.id === 'article-detail'));
+
+    const hybrid = await readFile(join(root, 'articles', 'hybrid-router', 'index.html'), 'utf8');
+    expect(hybrid).toContain('<h1>A hybrid router for high-stakes agentic work</h1>');
+    expect(hybrid).toContain('Illustrative monthly cost index. Lower cost does not imply acceptable quality or operational risk.');
+    expect(hybrid).toContain('"@type":"Article"');
+    expect(hybrid).toContain('"@type":"BreadcrumbList"');
+    expect(hybrid.match(/<main\b/gu)).toHaveLength(1);
+    expect(hybrid).toContain('<main id="article-content" class="page-main" tabindex="-1">');
   });
 
   it('derives article document outputs from the manifest entry tree', () => {

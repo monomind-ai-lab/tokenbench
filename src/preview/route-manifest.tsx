@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { ComparisonDetailApp, ModelProfileApp } from '../App.tsx';
+import { ARTICLE_BY_SLUG, ARTICLES, articlePath, type Article, type ArticleChannel } from '../articles/content';
 import { SITE_CONFIG } from '../brand/site-config';
 import { parsePricePerformanceEnvelope } from '../benchmarks/price-performance-contracts';
 import { CompareHubPage } from '../pages/compare-hub-page';
@@ -8,9 +9,9 @@ import { PopularModelsRoutePage, parsePopularModelsPageData, popularModelsPageDa
 import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
 import { createFixtureAdapter } from '../frontend/preview-data/fixture-adapter';
-import { GuideArticlePage, GuidesHub } from '../frontend/guides-page';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
-import { GUIDE_BY_SLUG, GUIDES } from '../guides/content';
+import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
+import { ArticlesPage } from '../pages/articles-page';
 import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
 import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
@@ -82,13 +83,18 @@ const previewArticleMetadata = {
     description: `${SITE_CONFIG.name} guides and prototype LLM insights for source-aware AI decisions.`,
     h1: 'Articles for the AI bill you can explain.',
   }),
-  hybridRouter: previewMetadata('/articles/hybrid-router/', {
-    title: `Hybrid router guide — ${SITE_CONFIG.name}`,
-    description: 'A decision framework for using a hybrid model router while keeping cost, evidence, escalation, and rollback explicit.',
-    h1: 'A hybrid router for high-stakes agentic work',
-    type: 'article',
-  }),
 } as const;
+
+function metadataForArticle(article: Article): PageMetadata {
+  return previewMetadata(articlePath(article.slug), {
+    title: article.slug === 'hybrid-router'
+      ? `${article.seoTitle} — ${SITE_CONFIG.name}`
+      : `${article.seoTitle} | ${SITE_CONFIG.name}`,
+    description: article.description,
+    h1: article.title,
+    type: 'article',
+  });
+}
 
 function normalizePathname(pathname: string): string {
   if (pathname === '/') return '/';
@@ -128,7 +134,7 @@ function articleDetailMatch(url: URL): PreviewRouteMatch | null {
   if (!articleMatch) return null;
 
   const slug = articleMatch[1];
-  if (slug === 'hybrid-router' || GUIDE_BY_SLUG.has(slug)) {
+  if (ARTICLE_BY_SLUG.has(slug)) {
     return routeMatch('article-detail', url, { slug });
   }
   return null;
@@ -156,14 +162,21 @@ function structuredData(match: PreviewRouteMatch): readonly unknown[] {
   if (!route) throw new Error(`Unknown preview route: ${match.routeId}`);
   const metadata = route.metadata(match);
   if (route.id === 'article-detail') {
-    return [{
-      '@context': 'https://schema.org',
-      '@type': 'Article',
-      headline: metadata.h1,
-      description: metadata.description,
-      url: metadata.canonical,
-      mainEntityOfPage: metadata.canonical,
-    }];
+    const article = match.params.slug ? ARTICLE_BY_SLUG.get(match.params.slug) : undefined;
+    if (!article) return [];
+    return [
+      articleJsonLd(article),
+      {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: SITE_CONFIG.name, item: SITE_CONFIG.origin },
+          { '@type': 'ListItem', position: 2, name: 'Articles', item: `${SITE_CONFIG.origin}/articles/` },
+          { '@type': 'ListItem', position: 3, name: article.channelLabel, item: `${SITE_CONFIG.origin}/articles?channel=${article.channel}` },
+          { '@type': 'ListItem', position: 4, name: article.title, item: metadata.canonical },
+        ],
+      },
+    ];
   }
   return [{
     '@context': 'https://schema.org',
@@ -174,13 +187,36 @@ function structuredData(match: PreviewRouteMatch): readonly unknown[] {
   }];
 }
 
-function PrototypeArticlePage({ match }: PreviewPageProps) {
-  const guide = match.params.slug ? GUIDE_BY_SLUG.get(match.params.slug) : undefined;
-  return guide ? <GuideArticlePage guide={guide} /> : <GuidesHub />;
+function articleChannel(search: URLSearchParams): 'all' | ArticleChannel {
+  const value = search.get('channel');
+  return value === 'guides' || value === 'insights' || value === 'news' ? value : 'all';
+}
+
+function ArticlesRoutePage({ match }: PreviewPageProps) {
+  return <ArticlesPage articles={ARTICLES} initialChannel={articleChannel(match.search)} />;
+}
+
+function ArticleDetailRoutePage({ match }: PreviewPageProps) {
+  const article = match.params.slug ? ARTICLE_BY_SLUG.get(match.params.slug) : undefined;
+  return article ? <ArticleDetailPage article={article} /> : <ArticlesPage articles={ARTICLES} initialChannel="all" />;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
   return typeof value === 'object' && value !== null;
+}
+
+function parseArticlePayload(value: unknown): { readonly slug: string } | null {
+  return isRecord(value) && typeof value.slug === 'string' && ARTICLE_BY_SLUG.has(value.slug)
+    ? { slug: value.slug }
+    : null;
+}
+
+function parseArticlesPayload(value: unknown): { readonly channel: 'all' | ArticleChannel } | null {
+  if (!isRecord(value)) return null;
+  const channel = value.channel;
+  return channel === 'all' || channel === 'guides' || channel === 'insights' || channel === 'news'
+    ? { channel }
+    : null;
 }
 
 function isEvidenceValue(value: unknown, isAvailableValue: (candidate: unknown) => boolean): boolean {
@@ -225,13 +261,16 @@ const homePage = HomeRoutePage as ComponentType<PreviewPageProps>;
 const pricePerformancePage = PricePerformanceApp as ComponentType<PreviewPageProps>;
 const popularModelsPage = PopularModelsRoutePage as ComponentType<PreviewPageProps>;
 const compareHubPage = CompareHubPage as ComponentType<PreviewPageProps>;
-const guidesHubPage = GuidesHub as ComponentType<PreviewPageProps>;
+const articlesPage = ArticlesRoutePage as ComponentType<PreviewPageProps>;
+const articleDetailPage = ArticleDetailRoutePage as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
 const pricePerformancePayload = { key: 'price-performance-initial-data', parse: parsePricePerformanceEnvelope } as const;
 const homePayload = { key: 'home-initial-data', parse: parseHomePageData } as const;
 const popularModelsPayload = { key: 'popular-models-initial-data', parse: parsePopularModelsPageData } as const;
+const articlesPayload = { key: 'articles-initial-data', parse: parseArticlesPayload } as const;
+const articlePayload = { key: 'article-initial-data', parse: parseArticlePayload } as const;
 
 export const previewRuntimeRoutes = [
   {
@@ -371,44 +410,32 @@ const manifestRoutes = [
     id: 'articles',
     match: exactPathMatcher('articles', '/articles'),
     outputPathname: '/articles',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
-    shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to articles' },
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
+    shell: { activePage: 'guides', skipLinkTarget: 'article-content', skipLinkLabel: 'Skip to articles' },
     metadata: () => previewArticleMetadata.articles,
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: guidesHubPage,
-    prototypeBundle: [
-      { outputPathname: '/articles.html', output: ['articles.html'], document: 'articles.html', clearOutputDirectory: false },
-      { outputPathname: '/articles/', output: ['articles', 'index.html'], document: 'articles.html', clearOutputDirectory: false },
-    ],
+    staticData: async (match) => ({ channel: articleChannel(match.search) }),
+    payload: articlesPayload,
+    Page: articlesPage,
+    prototypeBundle: [],
   },
   {
     id: 'article-detail',
     match: articleDetailMatch,
     outputPathname: '/articles/hybrid-router',
-    delivery: 'prototype',
-    documentReadiness: {
-      status: 'blocked',
-      reason: 'Hybrid Router substantive React page and static data are pending Task 7.',
-    },
-    shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to article content' },
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
+    shell: { activePage: 'guides', skipLinkTarget: 'article-content', skipLinkLabel: 'Skip to article content' },
     metadata: (match) => {
-      const slug = match.params.slug;
-      if (slug === 'hybrid-router') return previewArticleMetadata.hybridRouter;
-      return slug && GUIDE_BY_SLUG.has(slug)
-        ? metadataForRoute({ kind: 'guides', slug })
-        : previewArticleMetadata.articles;
+      const article = match.params.slug ? ARTICLE_BY_SLUG.get(match.params.slug) : undefined;
+      return article ? metadataForArticle(article) : previewArticleMetadata.articles;
     },
     structuredData,
-    staticData: async (match) => match.params.slug ? GUIDE_BY_SLUG.get(match.params.slug) : undefined,
-    payload: null,
-    Page: PrototypeArticlePage,
-    prototypeBundle: [
-      { outputPathname: '/articles/hybrid-router.html', output: ['articles', 'hybrid-router.html'], document: 'article-hybrid-router.html', clearOutputDirectory: false },
-      { outputPathname: '/articles/hybrid-router/', output: ['articles', 'hybrid-router', 'index.html'], document: 'article-hybrid-router.html', clearOutputDirectory: false },
-    ],
+    staticData: async (match) => ({ slug: match.params.slug }),
+    payload: articlePayload,
+    Page: articleDetailPage,
+    prototypeBundle: [],
   },
   {
     id: 'llm-price-performance',
@@ -478,15 +505,15 @@ export function previewStaticEntries(): readonly PreviewStaticEntry[] {
       match: routeMatch(route.id, new URL(entry.outputPathname, 'https://tokenbench.test')),
     })) ?? [];
     if (route.id === 'article-detail') {
-      return [...prototypeBundle, ...GUIDES.map((guide) => ({
+      return [...prototypeBundle, ...ARTICLES.filter((article) => article.slug !== 'hybrid-router').map((article) => ({
         routeId: route.id,
         delivery: route.delivery,
         source: 'generated-guide' as const,
-        outputPathname: `/articles/${guide.slug}/`,
-        output: ['articles', guide.slug, 'index.html'],
+        outputPathname: articlePath(article.slug),
+        output: ['articles', article.slug, 'index.html'],
         document: undefined,
         clearOutputDirectory: false,
-        match: routeMatch(route.id, new URL(`/articles/${guide.slug}/`, 'https://tokenbench.test'), { slug: guide.slug }),
+        match: routeMatch(route.id, new URL(articlePath(article.slug), 'https://tokenbench.test'), { slug: article.slug }),
       }))];
     }
     return prototypeBundle;

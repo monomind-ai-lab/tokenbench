@@ -1,6 +1,7 @@
-import { ArrowRight, BookOpen, ChevronRight, Clock, ExternalLink } from 'lucide-react';
-import { SITE_CONFIG } from '../brand/site-config';
-import { articlePath, GUIDES, relatedGuides, type GuideArticle, type GuideSection } from '../guides/content';
+import { ArrowRight, BookOpen, Clock } from 'lucide-react';
+import { ARTICLE_BY_SLUG, articlePath } from '../articles/content';
+import { GUIDES, type GuideArticle } from '../guides/content';
+import { ArticleDetailPage } from '../pages/article-detail-page';
 import { PREVIEW_ROUTE_PATHS, ROUTE_PATHS } from '../routing/routes';
 
 function formatGuideDate(value: string): string {
@@ -31,48 +32,8 @@ export function GuidesHub() {
   </main>;
 }
 
-function GuideSectionView({ section }: { readonly section: GuideSection; readonly key?: string }) {
-  return <section id={section.id} className="article-section">
-    <h2>{section.title}</h2>
-    {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
-    {section.steps ? <ol>{section.steps.map((step) => <li key={step}>{step}</li>)}</ol> : null}
-    {section.bullets ? <ul>{section.bullets.map((bullet) => <li key={bullet}>{bullet}</li>)}</ul> : null}
-    {section.table ? <div className="guide-table-wrap"><table className="guide-table"><thead><tr>{section.table.headers.map((header) => <th scope="col" key={header}>{header}</th>)}</tr></thead><tbody>{section.table.rows.map((row) => <tr key={row.join('|')}>{row.map((cell) => <td key={cell}>{cell}</td>)}</tr>)}</tbody></table></div> : null}
-    {section.callout ? <aside className="guide-callout"><strong>{section.callout.title}</strong><p>{section.callout.text}</p></aside> : null}
-    {section.sources?.length ? <div className="section-sources"><span>Official references</span>{section.sources.map((source) => <a href={source.url} target="_blank" rel="noreferrer" key={source.url}>{source.label}<ExternalLink aria-hidden="true" size={13} /></a>)}</div> : null}
-  </section>;
-}
-
-function MakeItYoursCta() {
-  return <aside className="guide-callout decision-context" aria-labelledby="make-it-yours-heading">
-    <span className="eyebrow">Make it yours</span>
-    <h2 id="make-it-yours-heading">Build a ranking around your priorities</h2>
-    <p>Adjust capability weights and service thresholds to create a shortlist that reflects the work you need models to do.</p>
-    <a href={PREVIEW_ROUTE_PATHS.makeItYours}>Make it yours <ArrowRight aria-hidden="true" size={16} /></a>
-  </aside>;
-}
-
 export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
-  const recommendations = relatedGuides(guide);
-  return <main id="guide-content" className="guides-main article-main" tabIndex={-1}>
-    <nav className="breadcrumbs" aria-label="Breadcrumb"><a href={PREVIEW_ROUTE_PATHS.articles}>Articles</a><ChevronRight aria-hidden="true" size={14} /><a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`}>Guides</a><ChevronRight aria-hidden="true" size={14} /><span aria-current="page">{guide.category}</span></nav>
-    <article className="guide-article">
-      <header className="article-header">
-        <span className="eyebrow">{guide.category}</span>
-        <h1>{guide.title}</h1>
-        <p className="article-dek">{guide.dek}</p>
-        <div className="article-byline"><span>By {SITE_CONFIG.parentName}</span><span>Updated {formatGuideDate(guide.updatedAt)}</span><span><Clock aria-hidden="true" size={15} />{guide.readMinutes} min read</span></div>
-      </header>
-      <div className="article-layout">
-        <div className="article-body">
-          <aside className="takeaways" aria-labelledby="takeaways-heading"><span className="eyebrow">At a glance</span><h2 id="takeaways-heading">What you’ll learn</h2><ul>{guide.takeaways.map((takeaway) => <li key={takeaway}>{takeaway}</li>)}</ul></aside>
-          {guide.sections.map((section) => <GuideSectionView key={section.id} section={section} />)}
-          <MakeItYoursCta />
-          <aside className="calculator-cta"><div><span className="eyebrow">Cost planning</span><h2>Explore Subscribe vs API</h2><p>Compare subscription and API costs, find a breakeven point, and review the assumptions behind one shareable scenario.</p></div><a className="button" href={PREVIEW_ROUTE_PATHS.calculator}>Explore Subscribe vs API <ArrowRight aria-hidden="true" size={16} /></a></aside>
-        </div>
-        <aside className="article-toc" aria-label="On this page"><strong>On this page</strong><ol>{guide.sections.map((section) => <li key={section.id}><a href={`#${section.id}`}>{section.title.replace(/^\d+\.\s*/, '')}</a></li>)}</ol></aside>
-      </div>
-    </article>
-    <section className="related-guides" aria-labelledby="related-guides-heading"><div className="guide-index-heading"><div><span className="eyebrow">Keep optimizing</span><h2 id="related-guides-heading">Related articles</h2></div><a href={PREVIEW_ROUTE_PATHS.articles}>View all articles</a></div><div className="related-grid">{recommendations.map((related) => <GuideCard guide={related} key={related.slug} />)}</div></section>
-  </main>;
+  const article = ARTICLE_BY_SLUG.get(guide.slug);
+  if (!article) return null;
+  return <ArticleDetailPage article={article} legacyGuideBreadcrumb />;
 }

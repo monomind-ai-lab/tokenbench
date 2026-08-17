@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SITE_CONFIG } from '../brand/site-config';
-import { GUIDES } from '../guides/content';
+import { ARTICLES } from '../articles/content';
 import { matchPreviewRoute, matchPreviewRuntimeRoute, previewPaths, previewRoutes, previewRuntimeRoutes, previewStaticEntries } from './route-manifest';
 
 describe('preview route manifest', () => {
@@ -27,7 +27,7 @@ describe('preview route manifest', () => {
     (pathname) => expect(matchPreviewRoute(new URL(pathname, 'https://tokenbench.test'))).toBeNull(),
   );
 
-  it('assigns every preview URL to exactly one route and cuts over only Home and Popular Models', () => {
+  it('assigns every preview URL to exactly one route and delivers the article index and details through React', () => {
     for (const route of previewRoutes) {
       const url = new URL(route.outputPathname, 'https://tokenbench.test');
       const owners = previewRoutes.filter((candidate) => candidate.match(url)?.routeId === route.id);
@@ -38,6 +38,8 @@ describe('preview route manifest', () => {
     expect(previewRoutes.filter((route) => route.delivery === 'react').map((route) => route.id)).toEqual([
       'home',
       'popular-models',
+      'articles',
+      'article-detail',
     ]);
   });
 
@@ -57,14 +59,17 @@ describe('preview route manifest', () => {
     expect(previewRuntimeRoutes.every((route) => !staticRouteIds.has(route.id))).toBe(true);
   });
 
-  it('derives one static article entry per guide from the manifest', () => {
+  it('matches every canonical article detail and derives static entries from the unified article model', () => {
     const staticEntries = previewStaticEntries();
     const articleEntries = staticEntries.filter((entry) => entry.source === 'generated-guide');
 
-    expect(articleEntries).toHaveLength(GUIDES.length);
-    expect(new Set(articleEntries.map((entry) => entry.outputPathname))).toHaveLength(GUIDES.length);
+    for (const article of ARTICLES) {
+      expect(matchPreviewRoute(new URL(`https://tokenbench.test/articles/${article.slug}/`))).toMatchObject({ routeId: 'article-detail', params: { slug: article.slug } });
+    }
+    expect(articleEntries).toHaveLength(ARTICLES.length - 1);
+    expect(new Set(articleEntries.map((entry) => entry.outputPathname))).toHaveLength(ARTICLES.length - 1);
     expect(articleEntries.map((entry) => entry.outputPathname)).toEqual(
-      GUIDES.map((guide) => `/articles/${guide.slug}/`),
+      ARTICLES.filter((article) => article.slug !== 'hybrid-router').map((article) => `/articles/${article.slug}/`),
     );
   });
 
@@ -143,10 +148,13 @@ describe('preview route manifest', () => {
 
     expect(metadata).toMatchObject({ canonical, title, description, h1 });
     expect(metadata?.openGraph).toMatchObject({ url: canonical, title, description });
-    expect(route?.structuredData(match!)).toEqual([expect.objectContaining({
+    expect(route?.structuredData(match!)).toEqual(expect.arrayContaining([expect.objectContaining({
       '@type': schemaType,
       url: canonical,
-    })]);
+    })]));
+    if (schemaType === 'Article') expect(route?.structuredData(match!)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ '@type': 'BreadcrumbList' }),
+    ]));
   });
 
   it('owns the complete prototype bundle output set', () => {
@@ -165,10 +173,6 @@ describe('preview route manifest', () => {
       'popular-models/index.html <= popular-models.html',
       'make-it-yours/index.html <= make-it-yours.html',
       'subscribe-vs-api/index.html <= cost-calculator.html',
-      'articles.html <= articles.html',
-      'articles/index.html <= articles.html',
-      'articles/hybrid-router.html <= article-hybrid-router.html',
-      'articles/hybrid-router/index.html <= article-hybrid-router.html',
     ].sort());
   });
 });

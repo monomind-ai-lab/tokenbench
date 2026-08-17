@@ -46,6 +46,16 @@ describe('startPreviewRoute', () => {
     expect(hydrated).toContain('top-header');
   });
 
+  it('hydrates an article detail from its validated manifest payload without replacing the static body', () => {
+    document.body.innerHTML = '<div id="root"><article data-server-article>Server article</article></div><script id="article-initial-data" type="application/json">{"slug":"hybrid-router"}</script>';
+    window.history.replaceState({}, '', '/articles/hybrid-router/');
+
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'article-detail' });
+    expect(document.querySelector('[data-server-article]')).toBeInTheDocument();
+    expect(createRootMock).not.toHaveBeenCalled();
+    expect(renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode)).toContain('A hybrid router for high-stakes agentic work');
+  });
+
   it('preserves Popular Models SSR HTML when its dedicated payload is malformed', () => {
     const payload = document.getElementById('popular-models-initial-data')!;
     payload.textContent = '{bad json';
