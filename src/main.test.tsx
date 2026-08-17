@@ -11,9 +11,10 @@ const parseModelDirectoryEnvelopeMock = vi.hoisted(() => vi.fn());
 const parsePricePerformanceEnvelopeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-dom/client', () => ({ createRoot: createRootMock, hydrateRoot: hydrateRootMock }));
-vi.mock('./App.tsx', () => ({ default: () => null, ComparisonDetailApp: () => null, ModelProfileApp: () => null, PricePerformanceRoute: () => null }));
+vi.mock('./App.tsx', () => ({ default: () => <div data-react-app-shell />, ComparisonDetailApp: () => null, ModelProfileApp: () => null, PricePerformanceRoute: () => null }));
 vi.mock('./GuidesApp.tsx', () => ({ default: () => null }));
 vi.mock('./pages/models-page', () => ({ ModelsApp: () => null }));
+vi.mock('./pages/popular-models-page', () => ({ PopularModelsPage: () => <div data-popular-models-workbench-page /> }));
 vi.mock('./frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
 vi.mock('./frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
 vi.mock('./frontend/model-directory-contracts', () => ({ parseModelDirectoryEnvelope: parseModelDirectoryEnvelopeMock }));
@@ -108,6 +109,22 @@ describe('browser entrypoint', () => {
     expect(rootRenderer).toHaveBeenCalledTimes(1);
   });
 
+  it('mounts Popular Models into the prototype chrome instead of replacing it with the React app shell', async () => {
+    document.body.innerHTML = '<header class="topbar"></header><main class="shell page"><div id="root" data-popular-models-workbench><section><h1>Popular models leaderboard</h1></section></div></main><footer class="articles-footer"></footer>';
+    window.history.replaceState({}, '', '/popular-models/');
+
+    await import('./main.tsx');
+
+    const root = document.getElementById('root')!;
+    expect(root).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(root);
+    expect(document.querySelector('.topbar')).toBeInTheDocument();
+    expect(document.querySelector('.articles-footer')).toBeInTheDocument();
+    const mounted = renderToStaticMarkup(rootRenderer.mock.calls[0]?.[0] as ReactNode);
+    expect(mounted).toContain('data-popular-models-workbench-page');
+    expect(mounted).not.toContain('data-react-app-shell');
+  });
+
   it('mounts the standalone confirmation page without an application shell', async () => {
     window.history.replaceState({}, '', '/newsletter/confirmed/');
     document.body.innerHTML = '<div id="root"><div class="transactional-page-shell">Crawlable confirmation</div></div>';
@@ -126,14 +143,6 @@ describe('browser entrypoint', () => {
     expect(markup).not.toMatch(/app-shell|top-header|app-footer/);
   });
 
-  it('mounts the interactive BenchAlign methodology page from its fixed route', async () => {
-    window.history.replaceState({}, '', '/methodology/benchalign/');
-
-    await import('./main.tsx');
-
-    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
-    expect(rootRenderer).toHaveBeenCalledTimes(1);
-  });
   it('hydrates the models directory from its validated server payload without refetching', async () => {
     document.body.innerHTML = '<div id="root"><main data-server-models>Popular models</main></div><script id="models-initial-data" type="application/json">{"revision":"benchlm-r1"}</script>';
     window.history.replaceState({}, '', '/models/');

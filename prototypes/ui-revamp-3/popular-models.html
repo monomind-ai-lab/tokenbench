@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Popular Models Leaderboard | TokenBench</title>
+  <meta name="description" content="Explore an interactive TokenBench prototype for comparing popular AI models across quality, category performance, and cost per successful task.">
+  <link rel="canonical" href="https://tokenbench.monomind.one/popular-models/">
+  <link rel="stylesheet" href="/assets/tokenbench.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="/" aria-label="TokenBench home"><img class="brand-logo" src="assets/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a>
+      <nav class="nav" aria-label="Primary"></nav>
+      <div class="header-actions"><button class="icon-button" id="theme" aria-label="Toggle dark theme">◐</button></div>
+    </div>
+  </header>
+  <main class="shell page">
+    <div id="root" data-popular-models-workbench>
+      <section class="popular-models-static-fallback" aria-labelledby="popular-models-fallback-heading">
+        <h1 id="popular-models-fallback-heading">Popular models leaderboard</h1>
+        <p>Explore quality, task economics, and category strengths across TokenBench’s interactive model workbench.</p>
+        <p><strong>Data boundary:</strong> This preview uses illustrative prototype data until LiveBench and TokenBench data adapters are connected.</p>
+      </section>
+    </div>
+  </main>
+  <script src="data.js?v=top20-20260815"></script>
+  <script src="common.js"></script>
+  <script>setupShell();</script>
+  <script type="module" src="/assets/main.js"></script>
+</body>
+</html>

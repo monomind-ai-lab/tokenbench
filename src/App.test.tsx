@@ -6,7 +6,7 @@ import './index.css';
 
 describe('calculator application flow', () => {
   beforeEach(() => {
-    window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
+    window.history.replaceState({}, '', '/subscribe-vs-api/');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(FRONTEND_TEST_CATALOG), {
       status: 200,
       headers: { 'content-type': 'application/json', etag: `"${FRONTEND_TEST_CATALOG.revision}"` },

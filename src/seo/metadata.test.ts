@@ -32,16 +32,14 @@ const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }, canonical: `${origin}/articles/legitimate-free-ai-api-access-credits/` },
   { route: { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }, canonical: `${origin}/articles/reduce-llm-api-costs-caching-batch-output-limits/` },
   { route: { kind: 'tools' }, canonical: `${origin}/tools/` },
-  { route: { kind: 'calculator' }, canonical: `${origin}/tools/subscriptions-vs-apis/` },
+  { route: { kind: 'calculator' }, canonical: `${origin}/subscribe-vs-api/` },
   { route: { kind: 'compareHub' }, canonical: `${origin}/compare/` },
   { route: { kind: 'pricePerformance' }, canonical: `${origin}/llm-price-performance/` },
   { route: { kind: 'newsletterConfirmed' }, canonical: `${origin}/newsletter/confirmed/` },
   { route: { kind: 'welcome' }, canonical: `${origin}/welcome/` },
-  { route: { kind: 'privacy' }, canonical: `${origin}/privacy/` },
   { route: { kind: 'leaderboards' }, canonical: `${origin}/leaderboards/` },
   { route: { kind: 'models' }, canonical: `${origin}/models/` },
   { route: { kind: 'popularModels' }, canonical: `${origin}/popular-models/` },
-  { route: { kind: 'methodologyBenchAlign' }, canonical: `${origin}/methodology/benchalign/` },
   { route: { kind: 'leaderboard', key: 'llm-overall' }, canonical: `${origin}/leaderboards/llm/overall/` },
   { route: { kind: 'leaderboard', key: 'llm-coding' }, canonical: `${origin}/leaderboards/llm/coding/` },
   { route: { kind: 'leaderboard', key: 'llm-agentic' }, canonical: `${origin}/leaderboards/llm/agentic/` },
@@ -189,5 +187,5 @@ describe('route metadata registry', () => {
     expect(page.description).toContain('messages');
     expect(page.description).toContain('input and output tokens');
     expect(page.description).toContain('API-equivalent pricing');
-    expect(page.canonical).toBe(`${origin}/tools/subscriptions-vs-apis/`);
+    expect(page.canonical).toBe(`${origin}/subscribe-vs-api/`);
   });

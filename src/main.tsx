@@ -8,6 +8,7 @@ import { parseModelDirectoryEnvelope } from './frontend/model-directory-contract
 import { parsePricePerformanceEnvelope } from './benchmarks/price-performance-contracts';
 import { NewsletterConfirmedPage } from './pages/newsletter-confirmed-page';
 import { ModelsApp } from './pages/models-page';
+import { PopularModelsPage } from './pages/popular-models-page';
 import { matchRoute } from './routing/routes';
 import './index.css';
 
@@ -48,9 +49,10 @@ function initialModelProfileViewModel() {
 }
 
 const route = matchRoute(window.location.pathname);
+const popularModelsWorkbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]');
 const RootApp = route.kind === 'guides'
   ? GuidesApp
-  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'methodologyBenchAlign' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard' || route.kind === 'popularModels'
+  : route.kind === 'home' || route.kind === 'tools' || route.kind === 'calculator' || route.kind === 'compareHub' || route.kind === 'leaderboards' || route.kind === 'leaderboard' || route.kind === 'popularModels'
     ? App
     : null;
 
@@ -94,6 +96,15 @@ if (route.kind === 'modelProfile') {
       </StrictMode>,
     );
   }
+} else if (route.kind === 'popularModels' && popularModelsWorkbench) {
+  // The copied preview includes a no-JavaScript fallback. Remove it before
+  // mounting so the interactive workbench is its sole visible H1 and content.
+  popularModelsWorkbench.replaceChildren();
+  createRoot(popularModelsWorkbench).render(
+    <StrictMode>
+      <PopularModelsPage />
+    </StrictMode>,
+  );
 } else if (RootApp) {
   const root = document.getElementById('root')!;
   // These static shells remain for no-JavaScript crawlers. Once their

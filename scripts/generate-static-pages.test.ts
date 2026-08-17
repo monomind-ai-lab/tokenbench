@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -40,7 +40,6 @@ describe('crawlable static-page generator', () => {
     const reasoning = await readFile(join(root, 'leaderboards/llm/reasoning/index.html'), 'utf8');
     const knowledge = await readFile(join(root, 'leaderboards/llm/knowledge/index.html'), 'utf8');
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
-    const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
     const popularModels = await readFile(join(root, 'popular-models/index.html'), 'utf8');
     const guide = await readFile(join(root, 'articles/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
@@ -78,16 +77,10 @@ describe('crawlable static-page generator', () => {
     expect(knowledge).toContain('If BenchLM has not published the reviewed category metric');
     expect(knowledge).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/knowledge/">');
 
-    expect(methodology).toContain('<h1>How BenchAlign rankings work</h1>');
-    expect(methodology).toContain('TokenBench republishes BenchLM&#039;s BenchAlign results');
-    expect(methodology).toContain('https://benchlm.ai/methodology');
-    expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
-
     expect(popularModels).toContain('<h1>Popular models leaderboard</h1>');
     expect(popularModels).toContain('Interactive frontend prototype');
     expect(popularModels).toContain('https://tokenbench.monomind.one/popular-models/');
 
-    expect(home).toContain('<a href="/methodology/benchalign/">Methodology</a>');
     expect(home).not.toContain('href="/sources/"');
 
     expect(guide).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
@@ -97,12 +90,17 @@ describe('crawlable static-page generator', () => {
     expect(guide).toContain('<meta property="og:type" content="article">');
     expect(guide).toContain('https://tokenbench.monomind.one/articles/track-claude-code-usage/');
 
-    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
+    expect(home).toContain('href="/subscribe-vs-api/"');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/subscribe-vs-api/</loc>');
+    expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
+    await expect(access(join(root, 'tools', 'subscriptions-vs-apis', 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/reasoning/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/knowledge/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc>');
-    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
-    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/privacy/</loc>');
+    await expect(access(join(root, 'methodology/benchalign/index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(access(join(root, 'privacy/index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
+    expect(sitemap).not.toContain('<loc>https://tokenbench.monomind.one/privacy/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/popular-models/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/articles/track-claude-code-usage/</loc>');
     expect(sitemap).not.toContain('/welcome/');
@@ -137,7 +135,7 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).not.toContain('/newsletter/confirmed/');
   });
 
-  it('publishes the welcome landing as a noindex static page and the privacy policy as an indexable page', async () => {
+  it('publishes the welcome landing as a noindex static page', async () => {
     const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
     outputRoots.push(root);
 
@@ -155,54 +153,6 @@ describe('crawlable static-page generator', () => {
     expect(welcome).toContain('welcome-cover');
     expect(welcome).not.toContain('class="transactional-page-shell"');
 
-    const privacy = await readFile(join(root, 'privacy', 'index.html'), 'utf8');
-    expect(privacy).toContain('<h1>Privacy Policy for TokenBench</h1>');
-    expect(privacy).toContain('<meta name="robots" content="index,follow,max-image-preview:large">');
-    expect(privacy).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/privacy/">');
-    expect(privacy).toContain('privacy@monomind.one');
-    expect(privacy).toContain('We <strong>do not sell or rent</strong>');
-    expect(privacy).toContain('class="content-stack static-page-content static-policy"');
-  });
-
-  it.each([
-    {
-      label: 'malicious markup',
-      upstreamRevision: '</strong><script>globalThis.compromised=true</script>',
-      schemaVersion: 'schema-malicious-environment',
-    },
-    {
-      label: 'a stale revision',
-      upstreamRevision: 'benchlm-method-2025-01-stale',
-      schemaVersion: 'schema-stale-environment',
-    },
-    {
-      label: 'mismatched revision and schema variables',
-      upstreamRevision: 'benchlm-method-from-revision-a',
-      schemaVersion: 'schema-from-revision-b',
-    },
-  ])('does not publish $label from free-text build variables without a validated active summary artifact', async ({
-    upstreamRevision,
-    schemaVersion,
-  }) => {
-    const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
-    outputRoots.push(root);
-    const previousRevision = process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION;
-    const previousSchema = process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION;
-    process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = upstreamRevision;
-    process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION = schemaVersion;
-
-    try {
-      await generateStaticPages(root);
-      const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
-      expect(methodology).toContain('Published method version: <strong>Unavailable</strong>.');
-      expect(methodology).not.toContain(upstreamRevision);
-      expect(methodology).not.toContain(schemaVersion);
-    } finally {
-      if (previousRevision === undefined) delete process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION;
-      else process.env.TOKENBENCH_BENCHALIGN_UPSTREAM_REVISION = previousRevision;
-      if (previousSchema === undefined) delete process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION;
-      else process.env.TOKENBENCH_BENCHALIGN_SCHEMA_VERSION = previousSchema;
-    }
   });
 
   it('preserves unowned files inside generated route trees', async () => {
@@ -221,6 +171,22 @@ describe('crawlable static-page generator', () => {
     await expect(readFile(guideSentinel, 'utf8')).resolves.toBe('guide draft');
   });
 
+  it('removes only the retired generated calculator entry from the tools tree', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-static-pages-'));
+    outputRoots.push(root);
+    const retiredCalculator = join(root, 'tools', 'subscriptions-vs-apis', 'index.html');
+    const unrelatedTool = join(root, 'tools', 'research-notes', 'index.html');
+    await mkdir(join(root, 'tools', 'subscriptions-vs-apis'), { recursive: true });
+    await mkdir(join(root, 'tools', 'research-notes'), { recursive: true });
+    await writeFile(retiredCalculator, 'retired calculator');
+    await writeFile(unrelatedTool, 'keep this tool');
+
+    await generateStaticPages(root);
+
+    await expect(access(retiredCalculator)).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(readFile(unrelatedTool, 'utf8')).resolves.toBe('keep this tool');
+  });
+
   it('preserves unowned guide files when the guide CLI runs directly', async () => {
     const root = await mkdtemp(join(tmpdir(), 'tokenbench-guide-pages-'));
     outputRoots.push(root);
@@ -235,7 +201,7 @@ describe('crawlable static-page generator', () => {
   });
 
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(32);
+    expect(FIXED_ROUTES).toHaveLength(29);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

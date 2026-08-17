@@ -15,7 +15,7 @@ describe('guides experience', () => {
 
     expect(screen.getByRole('link', { name: 'TokenBench home' })).toHaveAttribute('href', '/');
     expect(screen.getByText('Source-aware model, pricing, and workload evidence for practical AI decisions.')).toBeInTheDocument();
-    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: 'Subscribe vs API' })).toHaveAttribute('href', '/cost');
+    expect(within(screen.getByRole('navigation', { name: 'Primary navigation' })).getByRole('link', { name: 'Subscribe vs API' })).toHaveAttribute('href', '/subscribe-vs-api');
     expect(screen.queryByText(/AI Cost Engine/i)).not.toBeInTheDocument();
   });
 
@@ -40,8 +40,8 @@ describe('guides experience', () => {
     expect(screen.getAllByRole('link', { name: /Claude Code/i }).some((link) => link.getAttribute('href')?.startsWith('https://'))).toBe(true);
     expect(screen.getByRole('heading', { name: 'Build a ranking around your priorities' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Make it yours' })).toHaveAttribute('href', '/make-it-yours/');
-    expect(screen.getByRole('heading', { name: 'Explore the Cost hub' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Explore Cost hub' })).toHaveAttribute('href', '/cost');
+    expect(screen.getByRole('heading', { name: 'Explore Subscribe vs API' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Explore Subscribe vs API' })).toHaveAttribute('href', '/subscribe-vs-api');
     expect(screen.getByRole('heading', { name: 'Related articles' })).toBeInTheDocument();
     for (const slug of guide.relatedSlugs) {
       const related = GUIDES.find((item) => item.slug === slug);

@@ -13,6 +13,16 @@ vi.mock('../frontend/popular-models/chart-canvas', () => ({
 }));
 
 describe('PopularModelsPage', () => {
+  it('uses the compact leaderboard hero hierarchy from the deployed Make it yours page', () => {
+    render(<PopularModelsPage />);
+
+    const hero = screen.getByRole('banner', { name: 'Popular models leaderboard' });
+    expect(hero).toHaveClass('popular-models-hero', 'leaderboard-page-hero');
+    expect(within(hero).getByRole('heading', { name: 'Popular models leaderboard', level: 1 })).toHaveClass('leaderboard-page-hero-title');
+    expect(within(hero).getByText('Explore quality, task economics, and category strengths across one dense interactive workbench.')).toHaveClass('leaderboard-page-hero-description');
+    expect(within(hero).getByText('Illustrative prototype data')).toHaveClass('popular-models-fixture-badge', 'leaderboard-page-hero-fixture');
+  });
+
   it('renders both interactive LiveBench-inspired sections with an explicit fixture boundary', () => {
     render(<PopularModelsPage />);
 
@@ -20,7 +30,8 @@ describe('PopularModelsPage', () => {
     expect(screen.getByRole('heading', { name: '01 Leaderboard', level: 2 })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '02 Insights', level: 2 })).toBeInTheDocument();
     expect(screen.getByText(/Every name, score, cost, verbosity value/)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Quick comparison', level: 3 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Compare popular models', level: 3 })).toBeInTheDocument();
+    expect(screen.getByText('Comparison workspace')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Quality versus cost scatter/ })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Horizontal ranking of models by cost/ })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Seven-category profile comparison/ })).toBeInTheDocument();
@@ -72,12 +83,13 @@ describe('PopularModelsPage', () => {
   it('uses the reusable quick comparison action order', () => {
     render(<PopularModelsPage />);
 
-    const workspace = screen.getByRole('region', { name: 'Quick comparison' });
-    expect(within(workspace).getByRole('heading', { name: 'Quick comparison' })).toBeInTheDocument();
-    expect(within(workspace).getByRole('button', { name: 'clear' })).toBeInTheDocument();
+    const workspace = screen.getByRole('region', { name: 'Compare popular models' });
+    expect(within(workspace).getByRole('heading', { name: 'Compare popular models' })).toBeInTheDocument();
+    expect(within(workspace).queryByRole('button', { name: 'clear' })).not.toBeInTheDocument();
     expect(within(workspace).getByRole('button', { name: 'Add a model' })).toBeInTheDocument();
     expect(within(workspace).getByRole('link', { name: 'More details' })).toHaveAttribute('href', '/compare?models=claude-opus-4-1%2Cgpt-5');
     expect(within(workspace).getByRole('img', { name: /Seven-category profile comparison/ })).toHaveAttribute('data-legend-padding', '32');
+    expect(workspace).toHaveClass('compare-tray', 'quick-comparison', 'leaderboard-quick-comparison', 'panel', 'show');
   });
 
   it('expands inline subtask evidence and compares up to four model columns through search', () => {

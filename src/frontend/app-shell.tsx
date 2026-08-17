@@ -144,12 +144,12 @@ export function SiteFooter({ disclaimer }: SiteFooterProps) {
         <a href={PREVIEW_ROUTE_PATHS.popularModels}>Popular models</a>
         <a href={PREVIEW_ROUTE_PATHS.makeItYours}>Make it yours</a>
         <a href={PREVIEW_ROUTE_PATHS.compare}>Compare models</a>
-        <a href={PREVIEW_ROUTE_PATHS.articles}>Articles</a>
       </nav>
-      <nav className="footer-links" aria-label="Trust">
-        <strong>Trust</strong>
-        <a href={PREVIEW_ROUTE_PATHS.methodologyBenchAlign}>Methodology</a>
-        <a href={PREVIEW_ROUTE_PATHS.privacy}>Privacy</a>
+      <nav className="footer-links" aria-label="Articles">
+        <strong>Articles</strong>
+        <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`}>Guides</a>
+        <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=insights`}>Insights</a>
+        <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=news`}>News</a>
       </nav>
       <NewsletterSignup context="footer" />
     </div>

@@ -5,16 +5,14 @@ export const ROUTE_PATHS = {
   home: '/',
   guides: '/guides/',
   tools: '/tools/',
-  calculator: '/tools/subscriptions-vs-apis/',
+  calculator: '/subscribe-vs-api/',
   pricePerformance: '/llm-price-performance/',
   compareHub: '/compare/',
   models: '/models/',
   popularModels: '/popular-models/',
   leaderboards: '/leaderboards/',
-  methodologyBenchAlign: '/methodology/benchalign/',
   newsletterConfirmed: '/newsletter/confirmed/',
   welcome: '/welcome/',
-  privacy: '/privacy/',
 } as const;
 
 /**
@@ -36,10 +34,8 @@ export const PREVIEW_ROUTE_PATHS = {
   guides: '/guides/',
   articles: '/articles',
   articleDetail: '/articles/hybrid-router',
-  calculator: '/cost',
+  calculator: '/subscribe-vs-api',
   pricePerformance: '/llm-price-performance/',
-  methodologyBenchAlign: '/methodology/benchalign/',
-  privacy: '/privacy/',
 } as const;
 
 export function previewModelProfilePath(slug: string): string {
@@ -230,16 +226,13 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
     route: { kind: 'guides' as const, slug: guide.slug },
   })),
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
-  { id: 'calculator', pathname: ROUTE_PATHS.calculator, route: { kind: 'calculator' } },
   { id: 'price-performance', pathname: ROUTE_PATHS.pricePerformance, route: { kind: 'pricePerformance' } },
   { id: 'compare', pathname: ROUTE_PATHS.compareHub, route: { kind: 'compareHub' } },
   { id: 'models', pathname: ROUTE_PATHS.models, route: { kind: 'models' } },
   { id: 'popular-models', pathname: ROUTE_PATHS.popularModels, route: { kind: 'popularModels' } },
   { id: 'newsletter-confirmed', pathname: ROUTE_PATHS.newsletterConfirmed, route: { kind: 'newsletterConfirmed' } },
   { id: 'welcome', pathname: ROUTE_PATHS.welcome, route: { kind: 'welcome' } },
-  { id: 'privacy', pathname: ROUTE_PATHS.privacy, route: { kind: 'privacy' } },
   { id: 'leaderboards', pathname: ROUTE_PATHS.leaderboards, route: { kind: 'leaderboards' } },
-  { id: 'methodology-benchalign', pathname: ROUTE_PATHS.methodologyBenchAlign, route: { kind: 'methodologyBenchAlign' } },
 ];
 
 const leaderboardFixedRoutes: readonly FixedRouteDefinition[] = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[]).map((key) => ({
@@ -274,7 +267,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'tools': return ROUTE_PATHS.tools;
     case 'calculator': return ROUTE_PATHS.calculator;
     case 'pricePerformance': return ROUTE_PATHS.pricePerformance;
-    case 'methodologyBenchAlign': return ROUTE_PATHS.methodologyBenchAlign;
+    case 'methodologyBenchAlign': return null;
     case 'guides': return route.slug ? articlePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'models': return ROUTE_PATHS.models;
@@ -283,7 +276,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'modelProfile': return `${ROUTE_PATHS.models}${encodeURIComponent(route.slug)}/`;
     case 'newsletterConfirmed': return ROUTE_PATHS.newsletterConfirmed;
     case 'welcome': return ROUTE_PATHS.welcome;
-    case 'privacy': return ROUTE_PATHS.privacy;
+    case 'privacy': return null;
     case 'leaderboards': return ROUTE_PATHS.leaderboards;
     case 'leaderboard': return LEADERBOARD_ROUTES[route.key].pathname;
     case 'redirect': return route.to;
@@ -298,14 +291,12 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.tools) return { kind: 'tools' };
   if (normalizedPathname === ROUTE_PATHS.calculator) return { kind: 'calculator' };
   if (normalizedPathname === ROUTE_PATHS.pricePerformance) return { kind: 'pricePerformance' };
-  if (normalizedPathname === ROUTE_PATHS.methodologyBenchAlign) return { kind: 'methodologyBenchAlign' };
   if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
   if (normalizedPathname === ROUTE_PATHS.popularModels) return { kind: 'popularModels' };
   if (normalizedPathname === ROUTE_PATHS.newsletterConfirmed) return { kind: 'newsletterConfirmed' };
   if (normalizedPathname === ROUTE_PATHS.welcome) return { kind: 'welcome' };
-  if (normalizedPathname === ROUTE_PATHS.privacy) return { kind: 'privacy' };
   if (normalizedPathname === ROUTE_PATHS.leaderboards) return { kind: 'leaderboards' };
 
   if (normalizedPathname === '/leaderboard/') return { kind: 'redirect', to: ROUTE_PATHS.leaderboards };

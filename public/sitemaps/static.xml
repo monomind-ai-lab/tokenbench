@@ -8,14 +8,11 @@
   <url><loc>https://tokenbench.monomind.one/articles/legitimate-free-ai-api-access-credits/</loc></url>
   <url><loc>https://tokenbench.monomind.one/articles/reduce-llm-api-costs-caching-batch-output-limits/</loc></url>
   <url><loc>https://tokenbench.monomind.one/tools/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc></url>
   <url><loc>https://tokenbench.monomind.one/llm-price-performance/</loc></url>
   <url><loc>https://tokenbench.monomind.one/compare/</loc></url>
   <url><loc>https://tokenbench.monomind.one/models/</loc></url>
   <url><loc>https://tokenbench.monomind.one/popular-models/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/privacy/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/</loc></url>
-  <url><loc>https://tokenbench.monomind.one/methodology/benchalign/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/overall/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/coding/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/llm/agentic/</loc></url>
@@ -30,4 +27,5 @@
   <url><loc>https://tokenbench.monomind.one/leaderboards/media/text-to-video/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/media/image-to-video/</loc></url>
   <url><loc>https://tokenbench.monomind.one/leaderboards/media/video-editing/</loc></url>
+  <url><loc>https://tokenbench.monomind.one/subscribe-vs-api/</loc></url>
 </urlset>

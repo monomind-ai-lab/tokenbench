@@ -21,7 +21,7 @@ function renderAt(pathname: string) {
   return render(<App />);
 }
 
-const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
+const CALCULATOR_PATH = '/subscribe-vs-api/';
 const selectedDirectOffer = FRONTEND_TEST_CATALOG.modelOffers[0];
 
 interface CalculatorPathOptions {
@@ -150,7 +150,7 @@ describe('responsive calculator app shell', () => {
   beforeEach(() => {
     localStorage.clear();
     document.documentElement.dataset.theme = 'light';
-    window.history.replaceState({}, '', '/tools/subscriptions-vs-apis/');
+    window.history.replaceState({}, '', '/subscribe-vs-api/');
     respondWithCatalog();
   });
 
@@ -161,7 +161,7 @@ describe('responsive calculator app shell', () => {
 
     expect(screen.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeInTheDocument();
     expect(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Compare models' })).toHaveAttribute('href', '/compare');
-    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Open the calculator' })).toHaveAttribute('href', '/subscribe-vs-api/');
     expect(screen.getByRole('link', { name: 'Browse leaderboards' })).toHaveAttribute('href', '/leaderboards/');
     expect(screen.getByRole('region', { name: 'Market at a glance' })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'TokenBench decision workflow' })).not.toBeInTheDocument();
@@ -169,12 +169,17 @@ describe('responsive calculator app shell', () => {
     const footer = screen.getByRole('contentinfo');
     expect(within(footer).getByRole('form', { name: 'Newsletter signup' })).toBeInTheDocument();
     expect(within(footer).getByRole('checkbox', { name: /Notify me when new models are added/i })).toBeInTheDocument();
-    expect(within(footer).getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(within(footer).getByRole('link', { name: 'Price vs performance' })).toHaveAttribute('href', '/llm-price-performance/');
     expect(within(footer).getByRole('link', { name: 'Models workbench' })).toHaveAttribute('href', '/models');
-    expect(within(footer).getByRole('link', { name: 'Articles' })).toHaveAttribute('href', '/articles');
+    const articleChannels = within(footer).getByRole('navigation', { name: 'Articles' });
+    for (const [label, href] of [
+      ['Guides', '/articles?channel=guides'],
+      ['Insights', '/articles?channel=insights'],
+      ['News', '/articles?channel=news'],
+    ] as const) {
+      expect(within(articleChannels).getByRole('link', { name: label })).toHaveAttribute('href', href);
+    }
     expect(within(footer).queryByRole('link', { name: 'Data sources' })).not.toBeInTheDocument();
-    expect(within(footer).getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy/');
     expect(within(footer).queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
     expect(footer).not.toHaveTextContent(/Catalog refresh/i);
     expect(footer).not.toHaveTextContent(/Updated /i);
@@ -186,12 +191,12 @@ describe('responsive calculator app shell', () => {
     renderAt('/tools/');
 
     expect(screen.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    expect(screen.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/subscribe-vs-api/');
     expect(screen.queryByRole('group', { name: /Provider selection/i })).not.toBeInTheDocument();
   });
 
   it('keeps the calculator controls and results on their dedicated route', async () => {
-    renderAt('/tools/subscriptions-vs-apis/');
+    renderAt('/subscribe-vs-api/');
 
     expect(screen.getByRole('heading', { name: 'Should you subscribe or pay as you go?', level: 1 })).toBeInTheDocument();
     expect(await screen.findByRole('group', { name: /Provider selection/i })).toBeInTheDocument();
@@ -464,7 +469,7 @@ describe('responsive calculator app shell', () => {
   });
 
   it('shows MonoMind guidance when monthly usage exceeds the agency threshold', async () => {
-    renderAt('/tools/subscriptions-vs-apis/');
+    renderAt('/subscribe-vs-api/');
 
     await calculatorReadyHeading();
     fireEvent.change(screen.getByRole('spinbutton', { name: 'Conversations per day' }), { target: { value: '101' } });

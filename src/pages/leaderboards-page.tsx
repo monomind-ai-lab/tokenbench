@@ -588,7 +588,7 @@ export function LeaderboardDirectoryPage() {
       <span className="eyebrow">TokenBench directory</span>
       <h1 id="leaderboard-directory-heading">Model leaderboards</h1>
       <p>Explore current model leaders by capability, workload, cost, and human preference.</p>
-      <p className="leaderboard-methodology"><strong>Method:</strong> Overall, Agent, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge remain clearly labeled evidence lenses. <a href={ROUTE_PATHS.methodologyBenchAlign}>How BenchAlign rankings work</a>.</p>
+      <p className="leaderboard-methodology"><strong>Method:</strong> Overall, Agent, and Coding are validated BenchAlign views. Reasoning, Multimodal, and Knowledge remain clearly labeled evidence lenses.</p>
     </section>
 
     <DecisionReadyPicks />

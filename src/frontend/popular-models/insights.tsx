@@ -426,7 +426,6 @@ export function PopularInsightsSection({ models, onCopyLink, onDownloadPng, onDo
       economicsCharts={comparisonEconomicsCharts}
       maxModels={MAX_PROFILE_COMPARISON_MODELS}
       onAdd={addModel}
-      onClear={() => setSelectedModelIds([])}
       onRemove={removeModel}
       profileRows={comparisonProfileRows}
       radarConfiguration={radarConfiguration}

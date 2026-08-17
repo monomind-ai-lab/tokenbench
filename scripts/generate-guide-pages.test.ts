@@ -28,7 +28,7 @@ describe('generateGuidePages', () => {
     expect(article).toContain('tabindex="-1"');
     expect(article).toContain('href="/articles?channel=guides"');
     expect(article).toContain('href="/make-it-yours/"');
-    expect(article).toContain('href="/cost"');
+    expect(article).toContain('href="/subscribe-vs-api"');
     expect(article).not.toContain('Related decision context');
     expect(article).not.toContain('href="/tools/subscriptions-vs-apis/#calculator"');
   });

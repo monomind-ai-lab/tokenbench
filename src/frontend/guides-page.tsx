@@ -22,7 +22,7 @@ export function GuidesHub() {
       <span className="eyebrow"><BookOpen aria-hidden="true" size={16} /> AI bill playbook</span>
       <h1 id="guides-heading">Spend smarter on AI</h1>
       <p>Practical, source-backed guides for measuring usage, choosing the right access path, and cutting avoidable token costs without trading away quality.</p>
-      <div className="guides-hero-actions"><a className="button guide-primary-action" href={`${ROUTE_PATHS.calculator}#calculator`}>Open the calculator</a><span>5 field guides · Reviewed {formatGuideDate(GUIDES[0].updatedAt)}</span></div>
+      <div className="guides-hero-actions"><a className="button guide-primary-action" href={PREVIEW_ROUTE_PATHS.calculator}>Open Subscribe vs API</a><span>5 field guides · Reviewed {formatGuideDate(GUIDES[0].updatedAt)}</span></div>
     </section>
     <section className="guide-index" aria-labelledby="all-guides-heading">
       <div className="guide-index-heading"><div><span className="eyebrow">Guides</span><h2 id="all-guides-heading">Start with the bill you can see</h2></div><p>Each guide links to official documentation and the next useful step.</p></div>
@@ -68,7 +68,7 @@ export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
           <aside className="takeaways" aria-labelledby="takeaways-heading"><span className="eyebrow">At a glance</span><h2 id="takeaways-heading">What you’ll learn</h2><ul>{guide.takeaways.map((takeaway) => <li key={takeaway}>{takeaway}</li>)}</ul></aside>
           {guide.sections.map((section) => <GuideSectionView key={section.id} section={section} />)}
           <MakeItYoursCta />
-          <aside className="calculator-cta"><div><span className="eyebrow">Cost planning</span><h2>Explore the Cost hub</h2><p>Compare subscription and API costs, find a breakeven point, and review the assumptions behind each estimate.</p></div><a className="button" href={PREVIEW_ROUTE_PATHS.calculator}>Explore Cost hub <ArrowRight aria-hidden="true" size={16} /></a></aside>
+          <aside className="calculator-cta"><div><span className="eyebrow">Cost planning</span><h2>Explore Subscribe vs API</h2><p>Compare subscription and API costs, find a breakeven point, and review the assumptions behind one shareable scenario.</p></div><a className="button" href={PREVIEW_ROUTE_PATHS.calculator}>Explore Subscribe vs API <ArrowRight aria-hidden="true" size={16} /></a></aside>
         </div>
         <aside className="article-toc" aria-label="On this page"><strong>On this page</strong><ol>{guide.sections.map((section) => <li key={section.id}><a href={`#${section.id}`}>{section.title.replace(/^\d+\.\s*/, '')}</a></li>)}</ol></aside>
       </div>

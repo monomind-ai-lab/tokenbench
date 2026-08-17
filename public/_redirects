@@ -1,4 +1,12 @@
 /article-hybrid-router /articles/hybrid-router 301
+/tools/subscriptions-vs-apis /subscribe-vs-api/ 301
+/tools/subscriptions-vs-apis/ /subscribe-vs-api/ 301
+/cost /subscribe-vs-api/ 301
+/cost/ /subscribe-vs-api/ 301
+/cost/calculator /subscribe-vs-api/ 301
+/cost/calculator/ /subscribe-vs-api/ 301
+/cost/breakeven /subscribe-vs-api/ 301
+/cost/breakeven/ /subscribe-vs-api/ 301
 /guides /guides/ 301
 /guides/track-claude-code-usage /articles/track-claude-code-usage/ 301
 /guides/track-claude-code-usage/ /articles/track-claude-code-usage/ 301

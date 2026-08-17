@@ -28,7 +28,6 @@ import { HomePage } from './pages/home-page';
 import { CompareHubPage } from './pages/compare-hub-page';
 import { LeaderboardDirectoryPage, LeaderboardPage } from './pages/leaderboards-page';
 import { ToolsPage } from './pages/tools-page';
-import { BenchAlignMethodologyPage } from './pages/benchalign-methodology-page';
 import { ModelProfilePage } from './pages/model-profile-page';
 import { PricePerformanceApp } from './pages/price-performance-page';
 import { PopularModelsPage } from './pages/popular-models-page';
@@ -300,10 +299,6 @@ function ToolsRoute() {
   return <PageFrame><ToolsPage /></PageFrame>;
 }
 
-function BenchAlignMethodologyRoute() {
-  return <PageFrame activePage="leaderboards"><BenchAlignMethodologyPage /></PageFrame>;
-}
-
 function CompareHubRoute() {
   return <PageFrame activePage="compare"><CompareHubPage /></PageFrame>;
 }
@@ -313,7 +308,7 @@ function LeaderboardsRoute() {
 }
 
 function PopularModelsRoute() {
-  return <PageFrame activePage="leaderboards" surface="leaderboard-workbench"><PopularModelsPage /></PageFrame>;
+  return <PageFrame activePage="popularModels"><PopularModelsPage /></PageFrame>;
 }
 
 function LeaderboardRoute({ keyName }: { readonly keyName: LeaderboardKey }) {
@@ -366,7 +361,6 @@ export default function App() {
   if (route.kind === 'tools') return <ToolsRoute />;
   if (route.kind === 'calculator') return <CalculatorPage />;
   if (route.kind === 'pricePerformance') return <PricePerformanceRoute />;
-  if (route.kind === 'methodologyBenchAlign') return <BenchAlignMethodologyRoute />;
   if (route.kind === 'compareHub') return <CompareHubRoute />;
   if (route.kind === 'leaderboards') return <LeaderboardsRoute />;
   if (route.kind === 'leaderboard') return <LeaderboardRoute keyName={route.key} />;

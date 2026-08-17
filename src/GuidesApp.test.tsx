@@ -13,7 +13,6 @@ describe('guides shared chrome', () => {
 
     expect(screen.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
     expect(screen.queryByRole('link', { name: 'Sources' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
   });
 
   it('uses the shared preview navigation and footer for an article detail page', () => {
@@ -26,7 +25,7 @@ describe('guides shared chrome', () => {
     expect(within(navigation).getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/');
     expect(within(navigation).getByRole('button', { name: 'Articles' })).toHaveAttribute('aria-current', 'page');
     expect(within(navigation).getByRole('link', { name: 'Compare' })).toHaveAttribute('href', '/compare');
-    expect(within(navigation).getByRole('link', { name: 'Subscribe vs API' })).toHaveAttribute('href', '/cost');
+    expect(within(navigation).getByRole('link', { name: 'Subscribe vs API' })).toHaveAttribute('href', '/subscribe-vs-api');
 
     fireEvent.click(within(navigation).getByRole('button', { name: 'Models' }));
     expect(within(screen.getByRole('region', { name: 'Models' })).getByRole('link', { name: /^Models workbench/ })).toHaveAttribute('href', '/models');
@@ -41,6 +40,13 @@ describe('guides shared chrome', () => {
 
     const footer = screen.getByRole('contentinfo');
     expect(within(footer).getByRole('link', { name: 'Models workbench' })).toHaveAttribute('href', '/models');
-    expect(within(footer).getByRole('link', { name: 'Articles' })).toHaveAttribute('href', '/articles');
+    const articleChannels = within(footer).getByRole('navigation', { name: 'Articles' });
+    for (const [label, href] of [
+      ['Guides', '/articles?channel=guides'],
+      ['Insights', '/articles?channel=insights'],
+      ['News', '/articles?channel=news'],
+    ] as const) {
+      expect(within(articleChannels).getByRole('link', { name: label })).toHaveAttribute('href', href);
+    }
   });
 });

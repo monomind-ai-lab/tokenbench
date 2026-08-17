@@ -2,10 +2,32 @@ const MAX_COMPARE_MODELS=4;
 // Keep the self-contained prototype shell pointed at the combined preview
 // routes. These are intentionally separate from the production React route
 // contracts so a preview click never leaves the preview deployment.
-const PREVIEW_PATHS={home:'/',models:'/models',modelCatalog:'/models#catalog',compare:'/compare',modelProfile:'/model-profile',modelLifecycle:'/model-lifecycle',popularModels:'/popular-models/',makeItYours:'/make-it-yours/',guides:'/guides/',articles:'/articles',articleDetail:'/articles/hybrid-router',cost:'/cost',costCalculator:'/cost/calculator',costBreakeven:'/cost/breakeven',calculator:'/cost',pricePerformance:'/llm-price-performance/',methodology:'/methodology/benchalign/',privacy:'/privacy/'};
+const PREVIEW_PATHS={home:'/',models:'/models',modelCatalog:'/models#catalog',compare:'/compare',modelProfile:'/model-profile',modelLifecycle:'/model-lifecycle',popularModels:'/popular-models/',makeItYours:'/make-it-yours/',guides:'/guides/',articles:'/articles',articleDetail:'/articles/hybrid-router',cost:'/subscribe-vs-api',calculator:'/subscribe-vs-api',pricePerformance:'/llm-price-performance/',methodology:'/methodology/benchalign/',privacy:'/privacy/'};
 const previewModelProfilePath=slug=>`${PREVIEW_PATHS.modelProfile}?model=${encodeURIComponent(slug)}`;
 const TB={charts:[],weights:{agentic:20,coding:20,reasoning:20,math:15,multimodal:15,throughput:10},selected:[],theme:localStorage.tbTheme||'light'};
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const GOOGLE_TRANSLATE_CHROME=['.goog-te-banner-frame','.skiptranslate iframe','.VIpgJd-ZVi9od-ORHb-OEVmcd','.VIpgJd-ZVi9od-aZ2wEe-wOHMyf','body > .skiptranslate','iframe[id^=":"][id$=".container"]'].join(',');
+function suppressGoogleTranslateChrome(){
+  $$(GOOGLE_TRANSLATE_CHROME).forEach(element=>{
+    if(element.id==='google_translate_element')return;
+    element.setAttribute('aria-hidden','true');
+    element.style.setProperty('display','none','important');
+    element.style.setProperty('height','0','important');
+    element.style.setProperty('visibility','hidden','important');
+  });
+  if(document.body){
+    if(document.body.style.getPropertyValue('top')!=='0px'||document.body.style.getPropertyPriority('top')!=='important')document.body.style.setProperty('top','0px','important');
+    if(document.documentElement.style.getPropertyValue('margin-top')!=='0px'||document.documentElement.style.getPropertyPriority('margin-top')!=='important')document.documentElement.style.setProperty('margin-top','0px','important');
+  }
+}
+function watchGoogleTranslateChrome(){
+  suppressGoogleTranslateChrome();
+  if(document.documentElement.dataset.translateChromeWatch==='true')return;
+  document.documentElement.dataset.translateChromeWatch='true';
+  const observer=new MutationObserver(suppressGoogleTranslateChrome);
+  observer.observe(document.documentElement,{childList:true,subtree:true});
+  observer.observe(document.body,{attributes:true,attributeFilter:['style']});
+}
 const comparisonModels=()=>[...(window.TB_MODELS||[]),...(window.TB_POPULAR_HANDOFF_MODELS||[])];
 const comparisonModelById=id=>comparisonModels().find(model=>model.id===id);
 function domainScore(m,key){let value=key==='throughput'?(Number.isFinite(m.tps)?Math.min(100,m.tps/120*100):null):m[key];return Number.isFinite(value)?value:null}
@@ -406,7 +428,7 @@ function setupNavigation(){
   const modelsActive=['models','model-profile','model-lifecycle'].includes(currentPage);
   const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);
   const articlesActive=['article-hybrid-router','articles','hybrid-router'].includes(currentPage);
-  const costActive=['cost','calculator','breakeven'].includes(currentPage);
+  const costActive=['subscribe-vs-api'].includes(currentPage);
   const currentAttribute=active=>active?' aria-current="page"':'';
   nav.setAttribute('aria-label','Primary');
   nav.id='primary-navigation';
@@ -498,7 +520,7 @@ function setupGlobalFooter(){
   $('.articles-footer')?.remove();
   const footer=document.createElement('footer');
   footer.className='articles-footer';
-  footer.innerHTML=`<div class="shell articles-footer-grid"><section class="articles-footer-brand" aria-label="About TokenBench"><a class="brand" href="${PREVIEW_PATHS.home}"><img class="brand-logo" src="/brand/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><p>Source-aware model, pricing, and workload evidence for practical AI decisions.</p><p class="articles-evidence-warning">Verify provider evidence before purchasing.</p></section><nav class="articles-footer-links" aria-label="Explore"><strong>Explore</strong><a href="${PREVIEW_PATHS.models}">Models workbench</a><a href="${PREVIEW_PATHS.cost}">Subscribe vs API</a><a href="${PREVIEW_PATHS.pricePerformance}">Price vs performance</a><a href="${PREVIEW_PATHS.popularModels}">Popular models</a><a href="${PREVIEW_PATHS.makeItYours}">Make it yours</a><a href="${PREVIEW_PATHS.compare}">Compare models</a><a href="${PREVIEW_PATHS.articles}">Articles</a></nav><nav class="articles-footer-links" aria-label="Trust"><strong>Trust</strong><a href="${PREVIEW_PATHS.methodology}">Methodology</a><a href="${PREVIEW_PATHS.privacy}">Privacy</a></nav><section class="articles-signup" aria-labelledby="global-signup-title"><h2 id="global-signup-title">LLM API Cost &amp; Benchmark Cheatsheet</h2><p>Preview the monthly model-cost and benchmark cheatsheet signup flow. This prototype does not send a request.</p><form><label>First name <input name="firstName" autocomplete="given-name" required></label><label>Company <input name="company" autocomplete="organization" required></label><label>Email <input name="email" type="email" autocomplete="email" required></label><label class="articles-consent"><input name="consent" type="checkbox"> <span>Notify me when new models are added to TokenBench.</span></label><button class="button primary" type="submit">Preview signup</button><p class="articles-signup-status" aria-live="polite"></p></form></section></div><div class="shell articles-footer-meta"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a></div>`;
+  footer.innerHTML=`<div class="shell articles-footer-grid"><section class="articles-footer-brand" aria-label="About TokenBench"><a class="brand" href="${PREVIEW_PATHS.home}"><img class="brand-logo" src="/brand/monomind-tokenbench.png" width="32" height="32" alt=""><span class="brand-name">TokenBench</span></a><p>Source-aware model, pricing, and workload evidence for practical AI decisions.</p><p class="articles-evidence-warning">Verify provider evidence before purchasing.</p></section><nav class="articles-footer-links" aria-label="Explore"><strong>Explore</strong><a href="${PREVIEW_PATHS.models}">Models workbench</a><a href="${PREVIEW_PATHS.cost}">Subscribe vs API</a><a href="${PREVIEW_PATHS.popularModels}">Popular models</a><a href="${PREVIEW_PATHS.makeItYours}">Make it yours</a><a href="${PREVIEW_PATHS.compare}">Compare models</a></nav><nav class="articles-footer-links" aria-label="Articles"><strong>Articles</strong><a href="${PREVIEW_PATHS.articles}?channel=guides">Guides</a><a href="${PREVIEW_PATHS.articles}?channel=insights">Insights</a><a href="${PREVIEW_PATHS.articles}?channel=news">News</a></nav><section class="articles-signup" aria-labelledby="global-signup-title"><h2 id="global-signup-title">LLM API Cost &amp; Benchmark Cheatsheet</h2><p>Preview the monthly model-cost and benchmark cheatsheet signup flow. This prototype does not send a request.</p><form><label>First name <input name="firstName" autocomplete="given-name" required></label><label>Company <input name="company" autocomplete="organization" required></label><label>Email <input name="email" type="email" autocomplete="email" required></label><label class="articles-consent"><input name="consent" type="checkbox"> <span>Notify me when new models are added to TokenBench.</span></label><button class="button primary" type="submit">Preview signup</button><p class="articles-signup-status" aria-live="polite"></p></form></section></div><div class="shell articles-footer-meta"><a href="https://monomind.one/">Powered by MonoMind AI Lab</a></div>`;
   document.body.append(footer);
   const form=$('form',footer),status=$('.articles-signup-status',footer);
   form?.addEventListener('submit',event=>{event.preventDefault();if(!form.reportValidity())return;status.textContent='Preview complete — no information was sent.'});
@@ -526,5 +548,5 @@ function setupPreviewLinkRewrites(){
 }
 
 const shellWithHeaderTools=setupShell;
-setupShell=function(){shellWithHeaderTools();setupBrand();setupHeaderTools();setupNavigation();setupGlobalFooter();setupPreviewLinkRewrites()};
+setupShell=function(){shellWithHeaderTools();setupBrand();setupHeaderTools();setupNavigation();setupGlobalFooter();setupPreviewLinkRewrites();watchGoogleTranslateChrome()};
 window.TB.setupShell=setupShell;

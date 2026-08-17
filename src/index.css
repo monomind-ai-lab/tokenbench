@@ -1431,6 +1431,9 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-comparison-progress strong { font-family: var(--font-label); font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 .popular-models-comparison-composer { min-width: 0; display: grid; gap: 16px; margin-top: 20px; padding: 16px; border: 1px solid var(--outline); border-radius: var(--radius); background: var(--surface); }
 .popular-models-comparison-selected-block { min-width: 0; display: grid; gap: 8px; }
+.popular-models-comparison-composer-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.popular-models-comparison-more { min-height: 44px; display: inline-flex; align-items: center; padding: 8px 12px; border: 1px solid var(--primary); border-radius: 8px; color: var(--primary-strong); background: var(--surface); font-size: 0.74rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.popular-models-comparison-more:hover, .popular-models-comparison-more:focus-visible { background: color-mix(in srgb, var(--primary) 12%, var(--surface)); text-decoration: none; }
 .popular-models-comparison-status { margin-top: 10px; }
 .popular-models-selected-models { min-width: 0; display: flex; flex-wrap: wrap; gap: 7px; }
 .popular-models-model-tag { min-height: 44px; display: inline-flex; align-items: center; gap: 4px; padding: 0 0 0 6px; border: 1px solid color-mix(in srgb, var(--primary) 48%, var(--outline)); border-radius: 999px; background: color-mix(in srgb, var(--primary-soft) 54%, var(--surface)); font-size: 0.72rem; font-weight: 750; }
@@ -1487,9 +1490,6 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
 .popular-models-comparison-matrix-cards dt { overflow-wrap: anywhere; }
 .popular-models-comparison-matrix-cards dd { font-family: var(--font-label); font-size: 0.7rem; font-weight: 800; text-align: right; overflow-wrap: break-word; }
 .popular-models-comparison-fixture-note { margin: 16px 0 0; color: var(--muted); font-size: 0.68rem; line-height: 1.5; }
-.popular-models-comparison-footer { display: flex; align-items: center; min-height: 44px; margin-top: 16px; }
-.popular-models-comparison-footer a { min-height: 44px; display: inline-flex; align-items: center; color: var(--primary-strong); font-size: 0.74rem; font-weight: 800; text-decoration: none; }
-.popular-models-comparison-footer a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
 @media (max-width: 1023px) {
   .popular-models-desktop-table { display: none; }
@@ -1520,10 +1520,11 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   .popular-models-radar-chart { height: 420px; }
   .popular-models-comparison-workspace { padding: 16px; }
   .popular-models-comparison-heading { grid-template-columns: minmax(0, 1fr); }
-  .popular-models-comparison-heading-actions { width: 100%; grid-template-columns: 1fr auto; align-items: center; justify-items: stretch; padding-top: 12px; border-top: 1px solid var(--outline); }
-  .popular-models-comparison-clear { justify-self: end; }
+  .popular-models-comparison-heading-actions { width: auto; display: block; padding-top: 0; border-top: 0; }
   .popular-models-comparison-progress { grid-template-columns: auto auto; align-items: center; justify-content: space-between; justify-items: start; }
   .popular-models-comparison-composer { align-items: stretch; }
+  .popular-models-comparison-composer-actions { width: 100%; align-items: stretch; }
+  .popular-models-comparison-more, .popular-models-picker, .popular-models-picker-toggle { flex: 1 1 auto; }
   .popular-models-comparison-bars { grid-template-columns: minmax(0, 1fr); }
   .popular-models-picker, .popular-models-picker-toggle { width: 100%; }
   .popular-models-picker-panel { right: 0; left: 0; width: 100%; }
@@ -1614,14 +1615,15 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   gap: 28px;
 }
 
-.app-shell[data-surface='leaderboard-workbench'] .popular-models-hero {
+.popular-models-hero.leaderboard-page-hero {
+  display: block;
   align-items: flex-start;
   gap: 16px;
   padding: 0 0 28px;
   border-bottom-color: var(--outline);
 }
 
-.app-shell[data-surface='leaderboard-workbench'] .popular-models-hero h1 {
+.popular-models-hero.leaderboard-page-hero h1 {
   max-width: none;
   font-size: 30px;
   font-weight: 750;
@@ -1629,14 +1631,14 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   line-height: 1.1;
 }
 
-.app-shell[data-surface='leaderboard-workbench'] .popular-models-hero p {
+.popular-models-hero.leaderboard-page-hero .leaderboard-page-hero-description {
   max-width: 75ch;
   margin-top: 6px;
   font-size: 14px;
   line-height: 1.45;
 }
 
-.app-shell[data-surface='leaderboard-workbench'] .popular-models-fixture-badge {
+.popular-models-hero.leaderboard-page-hero .popular-models-fixture-badge {
   padding: 0;
   border: 0;
   border-radius: 0;
@@ -1646,6 +1648,11 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   letter-spacing: 0;
   line-height: 1.45;
   text-transform: none;
+}
+
+.popular-models-hero.leaderboard-page-hero .leaderboard-page-hero-fixture {
+  display: block;
+  margin-top: 12px;
 }
 
 .app-shell[data-surface='leaderboard-workbench'] .popular-models-page > .status-banner {
@@ -1775,7 +1782,8 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   border-radius: 6px;
 }
 
-.app-shell[data-surface='leaderboard-workbench'] .popular-models-score-top-five {
+.app-shell[data-surface='leaderboard-workbench'] .popular-models-score-top-five,
+#root[data-popular-models-workbench] .popular-models-score-top-five {
   border: 1px solid color-mix(in srgb, var(--primary) 58%, var(--outline));
   background: color-mix(in srgb, var(--primary) 24%, var(--surface-high));
   color: var(--primary-strong);
@@ -1850,7 +1858,7 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
   margin-top: 16px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 800px) {
   .app-shell[data-surface='leaderboard-workbench'] .header-inner,
   .app-shell[data-surface='leaderboard-workbench'] .page-main {
     width: min(1280px, calc(100% - 24px));
@@ -1864,12 +1872,12 @@ input[type='range'] { width: 100%; min-height: 44px; height: 44px; accent-color:
     gap: 20px;
   }
 
-  .app-shell[data-surface='leaderboard-workbench'] .popular-models-hero {
+  .popular-models-hero.leaderboard-page-hero {
     gap: 8px;
     padding: 0 0 20px;
   }
 
-  .app-shell[data-surface='leaderboard-workbench'] .popular-models-hero h1 {
+  .popular-models-hero.leaderboard-page-hero h1 {
     font-size: 24px;
   }
 

@@ -68,12 +68,12 @@ export function PopularModelsPage() {
 
   return (
     <div className="content-stack popular-models-page">
-      <header className="popular-models-hero" aria-labelledby="popular-models-heading">
+      <header className="popular-models-hero leaderboard-page-hero" aria-labelledby="popular-models-heading">
         <div>
-          <h1 id="popular-models-heading">Popular models leaderboard</h1>
-          <p>Explore quality, task economics, and category strengths across one dense interactive workbench.</p>
+          <h1 id="popular-models-heading" className="leaderboard-page-hero-title">Popular models leaderboard</h1>
+          <p className="leaderboard-page-hero-description">Explore quality, task economics, and category strengths across one dense interactive workbench.</p>
+          <span className="popular-models-fixture-badge leaderboard-page-hero-fixture">Illustrative prototype data</span>
         </div>
-        <span className="popular-models-fixture-badge">Illustrative prototype data</span>
       </header>
 
       <StatusBanner tone="warning">

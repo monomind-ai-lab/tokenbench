@@ -320,7 +320,6 @@ describe('LeaderboardDirectoryPage', () => {
     expect(within(codingCard).getAllByText(/Updated /)).toHaveLength(3);
     expect(codingCard.querySelectorAll('.provider-mark')).toHaveLength(3);
     expect(within(codingCard).getByRole('link', { name: 'View full leaderboard' })).toHaveAttribute('href', '/leaderboards/llm/coding/');
-    expect(screen.getByRole('link', { name: 'How BenchAlign rankings work' })).toHaveAttribute('href', '/methodology/benchalign/');
     expect(document.querySelector('.leaderboard-cover-image')).toBeNull();
   });
 

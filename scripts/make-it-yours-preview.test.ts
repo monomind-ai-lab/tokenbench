@@ -22,6 +22,21 @@ describe('approved preview bundle', () => {
     expect(script).toContain('function renderWeightedInsights(models)');
   });
 
+  it('copies a crawlable Popular Models fallback into the built preview', async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-popular-models-preview-'));
+    outputRoots.push(outputDir);
+
+    await generateStaticPages(process.cwd());
+    await execFileAsync('npx', ['vite', 'build', '--outDir', outputDir], { cwd: process.cwd() });
+
+    const document = await readFile(join(outputDir, 'popular-models', 'index.html'), 'utf8');
+    expect(document).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/popular-models/">');
+    expect(document).toContain('<meta name="description" content="Explore an interactive TokenBench prototype for comparing popular AI models across quality, category performance, and cost per successful task.">');
+    expect(document).toContain('<h1 id="popular-models-fallback-heading">Popular models leaderboard</h1>');
+    expect(document).toContain('Data boundary:');
+    expect(document).toContain('illustrative prototype data until LiveBench and TokenBench data adapters are connected.');
+  }, 30_000);
+
   it('publishes every rebuilt page and its runtime assets at the approved routes', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-make-it-yours-'));
     outputRoots.push(outputDir);
@@ -39,7 +54,7 @@ describe('approved preview bundle', () => {
     expect(shellScript).toContain("const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);");
     expect(shellScript).toContain("location.pathname.replace(/\\/+$/, '').split('/').pop()||'index'");
     expect(shellScript).toContain("const currentPage=current.replace(/\\.html$/,'');");
-    expect(shellScript).toContain("const costActive=['cost','calculator','breakeven'].includes(currentPage);");
+    expect(shellScript).toContain("const costActive=['subscribe-vs-api'].includes(currentPage);");
 
     const expectedPages = [
       ['index.html', 'Empirical evidence for practical AI runtime and cost decisions.'],
@@ -49,6 +64,7 @@ describe('approved preview bundle', () => {
       [join('compare', 'index.html'), 'Compare models'],
       [join('model-profile', 'index.html'), 'Model profile'],
       [join('model-lifecycle', 'index.html'), 'Model lifecycle'],
+      [join('popular-models', 'index.html'), 'data-popular-models-workbench'],
       ['articles.html', 'Articles'],
       [join('articles', 'index.html'), 'Articles'],
       [join('articles', 'hybrid-router.html'), 'A hybrid router for high-stakes agentic work'],

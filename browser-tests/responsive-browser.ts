@@ -59,7 +59,7 @@ function colorAlpha(color: string): number {
   return alpha;
 }
 
-const CALCULATOR_PATH = '/tools/subscriptions-vs-apis/';
+const CALCULATOR_PATH = '/subscribe-vs-api/';
 const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
 const CATALOG_FIXTURE_IDENTITY_HEADER = 'x-tokenbench-browser-catalog-fixture';
 
@@ -235,11 +235,13 @@ async function assertFirstViewportOmitsInternalRevisions(page: Page): Promise<vo
   for (const revision of INTERNAL_FIXTURE_REVISIONS) expect(visibleText).not.toContain(revision);
 }
 
-async function installInteractiveRouteStubs(page: Page): Promise<CatalogFixture> {
+async function installInteractiveRouteStubs(page: Page): Promise<CatalogFixture | undefined> {
   const origin = previewOrigin();
   await resetCatalogFixtureLifecycle(page);
   await blockExternalRequests(page, origin);
-  const catalogFixture = await installCatalogFixture(page, FRONTEND_TEST_CATALOG);
+  const catalogFixture = usesProductionPreviewAssets()
+    ? undefined
+    : await installCatalogFixture(page, FRONTEND_TEST_CATALOG);
   await stubBenchmarkDirectory(page, origin);
   await page.route((url) => url.origin === origin && url.pathname.startsWith('/api/benchmarks/leaderboards/'), (route) => fulfillJson(route, {
     error: 'Published benchmark data is unavailable for this fixture route.',
@@ -262,6 +264,7 @@ async function assertHydratedRouteFrame(
   await expect(page.getByRole('banner')).toHaveCount(1);
   await expect(page.getByRole('contentinfo')).toHaveCount(1);
   await expect(page.locator('nav[aria-label="Primary navigation"]')).toHaveCount(1);
+  await expect(page.locator('.app-shell')).toHaveCount(1);
   await expect(page.locator('.static-page-shell')).toHaveCount(0);
   await expect(page.locator(route.hydratedClientMarker)).toBeVisible();
   await assertNoHorizontalOverflow(page);
@@ -340,14 +343,14 @@ interface HydrationMatrixRoute {
 const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   ...(usesProductionPreviewAssets() ? [] : [{ path: '/', heading: 'Transparent AI Costs. Verified Benchmarks.', hydratedClientMarker: '.home-page' }]),
   { path: '/tools/', heading: 'AI cost decision tools', hydratedClientMarker: '.tools-page' },
-  { path: '/tools/subscriptions-vs-apis/', heading: 'Should you subscribe or pay as you go?', hydratedClientMarker: '.calculator-page' },
+  ...(usesProductionPreviewAssets() ? [] : [{ path: '/subscribe-vs-api/', heading: 'Should you subscribe or pay as you go?', hydratedClientMarker: '.calculator-page' }]),
   { path: '/leaderboards/', heading: 'Model leaderboards', hydratedClientMarker: '.leaderboard-directory-page' },
   { path: '/leaderboards/llm/coding/', heading: 'Coding benchmark', hydratedClientMarker: '.leaderboard-results[aria-label="Coding benchmark"]' },
   { path: '/leaderboards/media/text-to-image/', heading: 'Text to image', hydratedClientMarker: '.leaderboard-results[aria-label="Text to image"]' },
   ...(usesProductionPreviewAssets() ? [] : [{ path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page' }]),
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
-  { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.guides-shell main.guides-main:not(.article-main)' },
-  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.guides-shell main.guides-main.article-main' },
+  { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.app-shell main.guides-main:not(.article-main)' },
+  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.app-shell main.guides-main.article-main' },
 ];
 
 const hydrationThemes = ['dark', 'light'] as const;
@@ -416,6 +419,22 @@ async function activateSkipLinkAndAssertTarget(page: Page, targetId: string): Pr
 }
 
 test.describe('responsive calculator browser harness', () => {
+  test('serves the production calculator prototype without catalog API hydration', async ({ page }) => {
+    test.skip(!usesProductionPreviewAssets(), 'The source suite covers the React calculator.');
+    const catalogRequests: string[] = [];
+    page.on('request', (request) => {
+      if (new URL(request.url()).pathname === '/api/catalog') catalogRequests.push(request.url());
+    });
+    await page.setViewportSize({ width: 390, height: 1000 });
+    await blockExternalRequests(page);
+    await page.goto(CALCULATOR_PATH, { waitUntil: 'domcontentloaded' });
+
+    await expect(page.locator('#monthly-cost-calculator')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Monthly cost simulator', level: 1 })).toBeVisible();
+    await expect.poll(() => catalogRequests).toEqual([]);
+    await assertNoHorizontalOverflow(page);
+  });
+
   test('successful provider images keep requested dimensions before and after an oversized Brandfetch asset loads', async ({ page }) => {
     const origin = previewOrigin();
     const requestedSizes = [20, 24, 32] as const;
@@ -474,6 +493,9 @@ test.describe('responsive calculator browser harness', () => {
     expect(afterLoad).toEqual(beforeLoad);
     await assertNoHorizontalOverflow(page);
   });
+
+  test.describe('source calculator interactions', () => {
+    test.skip(usesProductionPreviewAssets(), 'The production bundle publishes the static calculator prototype.');
 
   test('calculator result explains how to recover when the selected provider has no verified models', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });
@@ -840,7 +862,7 @@ test.describe('responsive calculator browser harness', () => {
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FRONTEND_TEST_CATALOG) });
     });
-    await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
+    await page.goto('/subscribe-vs-api/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'API-equivalent monthly cost' })).toBeVisible({ timeout: 15_000 });
 
@@ -859,6 +881,7 @@ test.describe('responsive calculator browser harness', () => {
     await page.unrouteAll();
     await openCalculator(page, { ...FRONTEND_TEST_CATALOG, freshness: { status: 'stale', checkedAt: '2026-08-02T00:00:00.000Z' } });
     await expect(page.getByText('The published catalog is stale; verify pricing before making a decision.')).toBeVisible();
+  });
   });
 });
 
@@ -1483,7 +1506,6 @@ test.describe('guides browser harness', () => {
       await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
       await expect(page.getByRole('link', { name: 'Sources', exact: true })).toHaveCount(0);
       await expect(page.getByRole('link', { name: 'Data sources', exact: true })).toHaveCount(0);
-      await expect(page.getByRole('link', { name: 'Methodology' })).toHaveAttribute('href', '/methodology/benchalign/');
       const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
       expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
     });
@@ -1738,7 +1760,7 @@ test.describe('home and tools route runtime', () => {
         await expect(page.getByRole('heading', { name: 'Transparent AI Costs. Verified Benchmarks.', level: 1 })).toBeVisible();
         const heroActions = page.locator('.home-hero-actions');
         await expect(heroActions.getByRole('link', { name: 'Compare models', exact: true })).toHaveAttribute('href', '/compare/');
-        await expect(heroActions.getByRole('link', { name: 'Review Your Subscriptions', exact: true })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+        await expect(heroActions.getByRole('link', { name: 'Review Your Subscriptions', exact: true })).toHaveAttribute('href', '/subscribe-vs-api/');
         await expect(heroActions.getByRole('link', { name: 'Browse leaderboards', exact: true })).toHaveAttribute('href', '/leaderboards/');
         await expect(page.getByRole('heading', { name: 'MonoMind AI Lab', level: 2 })).toBeVisible();
 
@@ -1777,7 +1799,7 @@ test.describe('home and tools route runtime', () => {
     await expect(page.locator('.static-page-shell')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'AI cost decision tools', level: 1 })).toBeVisible();
     await expect(page.getByRole('list', { name: 'Available TokenBench tools' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/tools/subscriptions-vs-apis/');
+    await expect(page.getByRole('link', { name: 'Open subscription vs. API calculator' })).toHaveAttribute('href', '/subscribe-vs-api/');
   });
 });
 
@@ -1829,6 +1851,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       '/popular-models/',
       '/make-it-yours/',
       '/compare',
+      '/subscribe-vs-api/',
       '/articles',
       '/articles/hybrid-router',
     ]) {
@@ -1841,7 +1864,16 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       await expect(footer.getByRole('link', { name: 'Popular models' }), pathname).toHaveAttribute('href', '/popular-models/');
       await expect(footer.getByRole('link', { name: 'Make it yours' }), pathname).toHaveAttribute('href', '/make-it-yours/');
       await expect(footer.getByRole('link', { name: 'Compare models' }), pathname).toHaveAttribute('href', '/compare');
-      await expect(footer.getByRole('link', { name: 'Articles' }), pathname).toHaveAttribute('href', '/articles');
+      await expect(footer.getByRole('link', { name: 'Subscribe vs API' }), pathname).toHaveAttribute('href', '/subscribe-vs-api');
+      const articleChannels = footer.getByRole('navigation', { name: 'Articles' });
+      await expect(articleChannels, pathname).toBeVisible();
+      for (const [label, href] of [
+        ['Guides', '/articles?channel=guides'],
+        ['Insights', '/articles?channel=insights'],
+        ['News', '/articles?channel=news'],
+      ] as const) {
+        await expect(articleChannels.getByRole('link', { name: label, exact: true }), pathname).toHaveAttribute('href', href);
+      }
       expect(browserErrors.consoleErrors, `console errors on ${pathname}`).toEqual([]);
       expect(browserErrors.pageErrors, `page errors on ${pathname}`).toEqual([]);
     }
@@ -1854,10 +1886,6 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       await expect(page.getByRole('link', { name: 'TokenBench home' }).first(), pathname).toHaveAttribute('href', '/');
     }
   });
-
-  test('keeps the model profile hero aligned and routes its comparison action to the selected model', async ({ page }) => {
-    test.skip(!usesProductionPreviewAssets(), 'The approved model profile prototype is served from the production preview bundle.');
-    await page.goto('/model-profile/?model=gpt-4o');
 
   test('publishes the homepage decision tour with responsive previews and a live cost control', async ({ page }) => {
     test.skip(!usesProductionPreviewAssets(), 'The approved homepage prototype is served from the production preview bundle.');
@@ -1876,7 +1904,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await expect(page.getByRole('link', { name: 'Open Models Workbench' })).toHaveAttribute('href', '/models');
     await expect(page.getByRole('link', { name: 'View All Popular Model Insights' })).toHaveAttribute('href', '/popular-models/');
     await expect(page.getByRole('link', { name: 'Compare All Models' })).toHaveAttribute('href', '/compare?models=gpt-4o%2Cdeepseek-v3');
-    await expect(page.getByRole('link', { name: 'Calculate Subscription vs API Savings' })).toHaveAttribute('href', '/cost/calculator');
+    await expect(page.getByRole('link', { name: 'Calculate Subscription vs API Savings' })).toHaveAttribute('href', '/subscribe-vs-api');
     await expect(page.getByRole('link', { name: 'Browse All Articles' })).toHaveAttribute('href', '/articles');
 
     const comparisonChart = await page.locator('#home-comparison-radar').evaluate((canvas) => {
@@ -1973,6 +2001,10 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
       return chart.configuration.data.datasets.find((dataset: { label?: string }) => dataset.label === 'Pareto frontier')?.data.length ?? 0;
     })).toBe(7);
   });
+
+  test('keeps the model profile hero aligned and routes its comparison action to the selected model', async ({ page }) => {
+    test.skip(!usesProductionPreviewAssets(), 'The approved model profile prototype is served from the production preview bundle.');
+    await page.goto('/model-profile/?model=gpt-4o');
 
     await expect(page.getByRole('heading', { name: 'GPT-4o', level: 1 })).toBeVisible();
     await expect(page.locator('.profile-status')).toHaveText('Current');
@@ -2301,15 +2333,17 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
     for (const { pathname, selected, href } of cases) {
       await page.goto(pathname);
-      const workspace = page.getByRole('region', { name: 'Quick comparison' });
+      const workspaceName = pathname === '/popular-models/' ? 'Compare popular models' : 'Quick comparison';
+      const workspace = page.getByRole('region', { name: workspaceName });
       if (pathname === '/make-it-yours/') {
         await expect(workspace).toBeHidden();
         for (const modelName of selected) {
           await page.getByRole('row', { name: new RegExp(modelName) }).getByRole('button', { name: 'Compare' }).click();
         }
       }
-      await expect(workspace.getByRole('heading', { name: 'Quick comparison' })).toBeVisible();
-      await expect(workspace.getByRole('button', { name: 'clear' })).toBeVisible();
+      await expect(workspace.getByRole('heading', { name: workspaceName })).toBeVisible();
+      if (pathname === '/popular-models/') await expect(workspace.getByRole('button', { name: 'clear' })).toHaveCount(0);
+      else await expect(workspace.getByRole('button', { name: 'clear' })).toBeVisible();
       const addModel = workspace.getByRole('button', { name: 'Add a model' });
       await expect(addModel).toBeVisible();
 
@@ -2352,36 +2386,33 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
 
       const layout = await workspace.evaluate((element) => {
         const heading = element.querySelector('h2, h3')!.getBoundingClientRect();
-        const clear = element.querySelector('button[aria-label="clear"], button#clear')!.getBoundingClientRect();
+        const clearElement = element.querySelector('button[aria-label="clear"], button#clear');
         const selected = element.querySelector('[role="list"][aria-label="Selected comparison models"]')!;
         const picker = element.querySelector('.compare-model-picker, .popular-models-picker')!;
-          const detailsLink = [...element.querySelectorAll('a')].find((link) => ['More details', 'In-depth comparison'].includes(link.textContent?.trim() || ''))!;
+        const detailsLink = [...element.querySelectorAll('a')].find((link) => ['More details', 'In-depth comparison'].includes(link.textContent?.trim() || ''))!;
         const details = detailsLink.getBoundingClientRect();
-        const footer = detailsLink.closest('footer')!.getBoundingClientRect();
         const radar = element.querySelector('canvas')!.getBoundingClientRect();
         const radarParent = element.querySelector('canvas')!.parentElement!.getBoundingClientRect();
         return {
-          clearTop: clear.top,
+          clearTop: clearElement?.getBoundingClientRect().top ?? null,
           headingTop: heading.top,
           pickerAfterSelected: Boolean(selected.compareDocumentPosition(picker) & Node.DOCUMENT_POSITION_FOLLOWING),
+          detailsAfterPicker: Boolean(picker.compareDocumentPosition(detailsLink) & Node.DOCUMENT_POSITION_FOLLOWING),
           detailsBelowHeading: details.top > heading.bottom,
           detailsHeight: details.height,
-          detailsLeft: details.left,
-          footerLeft: footer.left,
           detailsBorder: getComputedStyle(detailsLink).borderStyle,
           detailsBackground: getComputedStyle(detailsLink).backgroundColor,
           radarCentered: Math.abs((radar.left + radar.right) / 2 - (radarParent.left + radarParent.right) / 2) < 1,
         };
       });
-      expect(layout.clearTop).toBeLessThanOrEqual(layout.headingTop + 8);
+      if (pathname !== '/popular-models/') expect(layout.clearTop).not.toBeNull();
+      if (layout.clearTop !== null) expect(layout.clearTop).toBeLessThanOrEqual(layout.headingTop + 8);
       expect(layout.pickerAfterSelected).toBe(true);
+      expect(layout.detailsAfterPicker).toBe(true);
       expect(layout.detailsBelowHeading).toBe(true);
-      expect(Math.abs(layout.detailsLeft - layout.footerLeft)).toBeLessThanOrEqual(1);
       expect(layout.detailsHeight).toBeGreaterThanOrEqual(44);
-      if (pathname === '/make-it-yours/') {
-        expect(layout.detailsBorder).toBe('solid');
-        expect(layout.detailsBackground).not.toBe('rgba(0, 0, 0, 0)');
-      }
+      expect(layout.detailsBorder).toBe('solid');
+      expect(layout.detailsBackground).not.toBe('rgba(0, 0, 0, 0)');
       expect(layout.radarCentered).toBe(true);
 
       await page.setViewportSize({ width: 320, height: 844 });
@@ -2412,7 +2443,7 @@ test.describe('ui-revamp-3 Make it yours controls', () => {
     await installComparisonChartRegistryStub(page);
     await page.goto('/popular-models/');
 
-    const workspace = page.getByRole('region', { name: 'Quick comparison' });
+    const workspace = page.getByRole('region', { name: 'Compare popular models' });
     await workspace.getByRole('link', { name: 'More details' }).click();
     await expect(page).toHaveURL(/\/compare\?models=claude-opus-4-1%2Cgpt-5$/u);
     await expect(page.locator('#result-title')).toHaveText('Claude Opus 4.1 vs GPT-5');
@@ -3275,7 +3306,7 @@ test.describe('viewport and theme hydration matrix', () => {
             const cell = activeCell;
             await test.step(`viewport=${viewport.width}px theme=${theme} path=${route.path}`, async () => {
               await setStoredTheme(page, theme);
-              const catalogDelivery = route.path === CALCULATOR_PATH ? catalogFixture.expectNextDelivery() : undefined;
+              const catalogDelivery = route.path === CALCULATOR_PATH ? catalogFixture?.expectNextDelivery() : undefined;
               await page.goto(route.path, { waitUntil: 'domcontentloaded', timeout: HYDRATION_MATRIX_NAVIGATION_TIMEOUT_MS });
               if (catalogDelivery) await catalogDelivery;
               await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
@@ -3348,6 +3379,28 @@ test.describe('Popular Models terminology and contrast', () => {
     expect(await mobileDrawer.evaluate((drawer) => drawer.scrollWidth <= drawer.clientWidth)).toBe(true);
   });
 
+  test('applies the top-five score border in the copied production workbench mount', async ({ page }) => {
+    test.skip(!usesProductionPreviewAssets(), 'The source suite uses the React application shell.');
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await setStoredTheme(page, 'dark');
+    await page.route('https://cdn.jsdelivr.net/**', (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/javascript',
+      body: 'window.Chart=class Chart{static getChart(){return null}destroy(){}update(){}};',
+    }));
+    await page.goto('/popular-models/', { waitUntil: 'domcontentloaded' });
+
+    const score = page.locator('#root[data-popular-models-workbench] .popular-models-score-top-five').first();
+    await expect(score).toBeVisible();
+    await expect(page.locator(".app-shell[data-surface='leaderboard-workbench']")).toHaveCount(0);
+    const styles = await score.evaluate((element) => {
+      const scoreStyles = getComputedStyle(element);
+      return { borderColor: scoreStyles.borderTopColor, borderWidth: scoreStyles.borderTopWidth };
+    });
+    expect(styles.borderWidth).toBe('1px');
+    expect(colorAlpha(styles.borderColor)).toBeGreaterThan(0);
+  });
+
   test('keeps dark-theme score highlights distinct and table headers centered', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await setStoredTheme(page, 'dark');
@@ -3410,6 +3463,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
   });
 
   test('moves focus to the calculator when the calculator skip link is activated', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'The production bundle publishes the static calculator prototype.');
     await page.setViewportSize({ width: 390, height: 1000 });
     await openCalculator(page);
 
@@ -3417,6 +3471,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
   });
 
   test('moves focus to the persistent calculator target while the catalog is still loading', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'The production bundle publishes the static calculator prototype.');
     await page.setViewportSize({ width: 390, height: 1000 });
     const origin = previewOrigin();
     await blockExternalRequests(page, origin);
@@ -3430,7 +3485,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
     });
 
     try {
-      await page.goto('/tools/subscriptions-vs-apis/', { waitUntil: 'domcontentloaded' });
+      await page.goto('/subscribe-vs-api/', { waitUntil: 'domcontentloaded' });
       await expect(page.getByLabel('Loading verified catalog')).toBeVisible();
       await activateSkipLinkAndAssertTarget(page, 'calculator');
     } finally {
@@ -3469,6 +3524,7 @@ test.describe('keyboard and chart accessibility regressions', () => {
   });
 
   test('describes the plotted current tokens and API-equivalent value in chart accessibility text', async ({ page }) => {
+    test.skip(usesProductionPreviewAssets(), 'The production bundle publishes the static calculator prototype.');
     await page.setViewportSize({ width: 1024, height: 1000 });
     await openCalculator(page);
     const chart = page.getByRole('img', { name: /API-equivalent value trend/i });

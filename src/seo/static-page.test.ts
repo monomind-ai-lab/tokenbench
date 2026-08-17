@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { JSDOM } from 'jsdom';
 import { staticChrome } from './static-page';
 
 describe('static site chrome', () => {
@@ -13,7 +14,19 @@ describe('static site chrome', () => {
     expect(html).toContain('<a href="/models">Models workbench</a>');
     expect(html).toContain('<a href="/compare">Compare models</a>');
     expect(html).toContain('<a href="/make-it-yours/">Make it yours</a>');
-    expect(html).toContain('<a href="/articles">Articles</a>');
+    const document = new JSDOM(html).window.document;
+    const footer = document.querySelector('footer.app-footer');
+    const explore = footer?.querySelector('nav[aria-label="Explore"]');
+    const articleChannels = footer?.querySelector('nav[aria-label="Articles"]');
+    expect(explore?.querySelector('a[href="/articles"]')).toBeNull();
+    expect([...articleChannels?.querySelectorAll('a') ?? []].map((link) => ({
+      label: link.textContent,
+      href: link.getAttribute('href'),
+    }))).toEqual([
+      { label: 'Guides', href: '/articles?channel=guides' },
+      { label: 'Insights', href: '/articles?channel=insights' },
+      { label: 'News', href: '/articles?channel=news' },
+    ]);
     expect(html).toContain('aria-label="Newsletter signup"');
     expect(html).toContain('LLM API Cost &amp; Benchmark Cheatsheet');
     expect(html).not.toContain('href="/leaderboards/"');

@@ -138,7 +138,6 @@ export function ModelsPage({ envelope, query = DEFAULT_MODEL_DIRECTORY_QUERY, on
       <h2 id="models-evidence-heading">A popular model is a starting point, not a verdict.</h2>
       <p>Weekly order follows the corrected BenchLM public <code>bench-align-v5</code> overall order. Scores, category evidence, pricing, and freshness stay visible so you can validate the route that fits your workload.</p>
       <p>Sources: {envelope.attribution.map((source) => <a href={source.url} key={`${source.sourceId}-${source.url}`}>{source.label}</a>)}</p>
-      <a href={ROUTE_PATHS.methodologyBenchAlign}>How BenchAlign rankings work</a>
     </section>
   </div>;
 }

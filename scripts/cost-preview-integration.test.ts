@@ -13,40 +13,44 @@ afterEach(async () => {
 });
 
 describe('cost preview bundle integration', () => {
-  it('defines the hub and canonical calculator destinations in the preview shell', async () => {
-    const [hub, shell] = await Promise.all([
-      readFile('prototypes/ui-revamp-3/cost.html', 'utf8'),
-      readFile('prototypes/ui-revamp-3/common.js', 'utf8'),
-    ]);
+  it('defines /subscribe-vs-api as the sole preview cost destination', async () => {
+    const shell = await readFile('prototypes/ui-revamp-3/common.js', 'utf8');
 
-    expect(hub).toContain('Monthly cost simulator');
-    expect(hub).toContain('Breakeven calculator');
-    expect(hub).toContain('href="/cost/calculator"');
-    expect(hub).toContain('href="/cost/breakeven"');
-    expect(shell).toContain("cost:'/cost'");
-    expect(shell).toContain("costCalculator:'/cost/calculator'");
-    expect(shell).toContain("costBreakeven:'/cost/breakeven'");
+    expect(shell).toContain("cost:'/subscribe-vs-api'");
+    expect(shell).not.toContain("costCalculator:'/cost/calculator'");
+    expect(shell).not.toContain("costBreakeven:'/cost/breakeven'");
   });
 
-  it('copies the hub and calculators into canonical Pages paths with shared assets', async () => {
+  it('copies one consolidated calculator into the canonical Pages path with shared assets', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-cost-preview-'));
     outputRoots.push(outputDir);
     await execFileAsync('npx', ['vite', 'build', '--outDir', outputDir], { cwd: process.cwd() });
 
-    for (const route of ['cost', join('cost', 'calculator'), join('cost', 'breakeven')]) {
-      const htmlPath = join(outputDir, route, 'index.html');
-      const html = await readFile(htmlPath, 'utf8');
-      expect(html).toContain('href="/ui-revamp-3-assets/styles.css');
-      expect(html).toContain('src="/ui-revamp-3-assets/common.js');
-      if (route === join('cost', 'breakeven')) expect(html).toContain('src="/ui-revamp-3-assets/chart.umd.js');
+    const html = await readFile(join(outputDir, 'subscribe-vs-api', 'index.html'), 'utf8');
+    const redirects = await readFile(join(outputDir, '_redirects'), 'utf8');
+    expect(html).toContain('href="/ui-revamp-3-assets/styles.css');
+    expect(html).toContain('src="/ui-revamp-3-assets/common.js');
+    expect(html).toContain('src="/ui-revamp-3-assets/chart.umd.js');
+    expect(html).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/subscribe-vs-api/">');
+
+    for (const legacyPath of [
+      '/tools/subscriptions-vs-apis',
+      '/tools/subscriptions-vs-apis/',
+      '/cost',
+      '/cost/',
+      '/cost/calculator',
+      '/cost/calculator/',
+      '/cost/breakeven',
+      '/cost/breakeven/',
+    ]) {
+      expect(redirects).toContain(`${legacyPath} /subscribe-vs-api/ 301`);
     }
 
-    for (const document of ['cost.html', join('cost', 'calculator.html'), join('cost', 'breakeven.html')]) {
-      await expect(access(join(outputDir, document))).resolves.toBeUndefined();
+    for (const route of ['cost', join('cost', 'calculator'), join('cost', 'breakeven'), join('tools', 'subscriptions-vs-apis')]) {
+      await expect(access(join(outputDir, route, 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
     }
 
     await expect(access(join(outputDir, 'ui-revamp-3-assets', 'cost-calculator.js'))).resolves.toBeUndefined();
-    await expect(access(join(outputDir, 'ui-revamp-3-assets', 'cost-breakeven.js'))).resolves.toBeUndefined();
     await expect(access(join(outputDir, 'ui-revamp-3-assets', 'chart.umd.js'))).resolves.toBeUndefined();
   }, 120_000);
 });

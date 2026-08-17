@@ -118,20 +118,10 @@ const pageDefinitions = {
     h1: `Welcome to ${SITE_CONFIG.name}`,
     robots: 'noindex,follow' as const,
   },
-  privacy: {
-    title: `Privacy Policy | ${SITE_CONFIG.name}`,
-    description: `Read the ${SITE_CONFIG.name} privacy policy explaining how MonoMind AI Lab collects, uses, protects, and safeguards personal data across the site, decision engines, and newsletter.`,
-    h1: 'Privacy Policy for TokenBench',
-  },
   leaderboards: {
     title: `AI Model Leaderboards | ${SITE_CONFIG.name}`,
     description: `Browse ${SITE_CONFIG.name}'s source-aware AI model leaderboards for capability, coding, agentic work, human preference, multimodal tasks, and media generation.`,
     h1: 'Model leaderboards',
-  },
-  methodologyBenchAlign: {
-    title: `How BenchAlign Rankings Work | ${SITE_CONFIG.name}`,
-    description: `Read how ${SITE_CONFIG.name} republishes BenchLM's BenchAlign output, separates supported and estimated rows, and preserves source methodology and refresh boundaries.`,
-    h1: 'How BenchAlign rankings work',
   },
   comparison: {
     title: `AI Model Comparison | ${SITE_CONFIG.name}`,
@@ -156,15 +146,15 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
   switch (route.kind) {
     case 'home': return makeMetadata('/', pageDefinitions.home);
     case 'tools': return makeMetadata('/tools/', pageDefinitions.tools);
-    case 'calculator': return makeMetadata('/tools/subscriptions-vs-apis/', pageDefinitions.calculator);
+    case 'calculator': return makeMetadata(ROUTE_PATHS.calculator, pageDefinitions.calculator);
     case 'pricePerformance': return makeMetadata(ROUTE_PATHS.pricePerformance, pageDefinitions.pricePerformance);
-    case 'methodologyBenchAlign': return makeMetadata('/methodology/benchalign/', pageDefinitions.methodologyBenchAlign);
+    case 'methodologyBenchAlign': return makeMetadata('/', pageDefinitions.notFound);
     case 'compareHub': return makeMetadata('/compare/', pageDefinitions.compareHub);
     case 'models': return makeMetadata(ROUTE_PATHS.models, pageDefinitions.models);
     case 'popularModels': return makeMetadata(ROUTE_PATHS.popularModels, pageDefinitions.popularModels);
     case 'newsletterConfirmed': return makeMetadata(ROUTE_PATHS.newsletterConfirmed, pageDefinitions.newsletterConfirmed);
     case 'welcome': return makeMetadata(ROUTE_PATHS.welcome, pageDefinitions.welcome);
-    case 'privacy': return makeMetadata(ROUTE_PATHS.privacy, pageDefinitions.privacy);
+    case 'privacy': return makeMetadata('/', pageDefinitions.notFound);
     case 'leaderboards': return makeMetadata('/leaderboards/', pageDefinitions.leaderboards);
     case 'leaderboard': {
       const definition = LEADERBOARD_ROUTES[route.key];

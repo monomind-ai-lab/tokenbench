@@ -27,12 +27,11 @@ const fixedRouteCases = [
   ['/articles/legitimate-free-ai-api-access-credits', { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }],
   ['/articles/reduce-llm-api-costs-caching-batch-output-limits', { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }],
   ['/tools', { kind: 'tools' }],
-  ['/tools/subscriptions-vs-apis', { kind: 'calculator' }],
+  ['/subscribe-vs-api', { kind: 'calculator' }],
   ['/compare', { kind: 'compareHub' }],
   ['/llm-price-performance', { kind: 'pricePerformance' }],
   ['/newsletter/confirmed', { kind: 'newsletterConfirmed' }],
   ['/welcome', { kind: 'welcome' }],
-  ['/privacy', { kind: 'privacy' }],
   ['/leaderboards', { kind: 'leaderboards' }],
   ['/models', { kind: 'models' }],
   ['/popular-models', { kind: 'popularModels' }],
@@ -80,8 +79,6 @@ describe('TokenBench route registry', () => {
   });
 
   it('publishes the approved decision hierarchy and canonical redirects', () => {
-    expect(ROUTE_PATHS.methodologyBenchAlign).toBe('/methodology/benchalign/');
-    expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'methodologyBenchAlign' });
     expect(matchRoute('/leaderboard')).toEqual({ kind: 'redirect', to: '/leaderboards/' });
     expect(matchRoute('/leaderboard/llm/coding')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/coding/' });
     expect(matchRoute('/leaderboard/llm/reasoning')).toEqual({ kind: 'redirect', to: '/leaderboards/llm/reasoning/' });
@@ -106,11 +103,19 @@ describe('TokenBench route registry', () => {
     expect(PREVIEW_ROUTE_PATHS.makeItYours).toBe('/make-it-yours/');
     expect(PREVIEW_ROUTE_PATHS.articles).toBe('/articles');
     expect(PREVIEW_ROUTE_PATHS.articleDetail).toBe('/articles/hybrid-router');
-    expect(PREVIEW_ROUTE_PATHS.calculator).toBe('/cost');
+    expect(PREVIEW_ROUTE_PATHS.calculator).toBe('/subscribe-vs-api');
     expect(previewModelProfilePath('GPT 5.6/Sol')).toBe('/model-profile?model=GPT%205.6%2FSol');
   });
 
   it('does not turn unknown fixed-path candidates into published pages', () => {
+    expect(matchRoute('/cost')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/cost/calculator')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/cost/breakeven')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/tools/subscriptions-vs-apis')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/methodology/benchalign')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/methodology/benchalign/')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/privacy')).toEqual({ kind: 'notFound' });
+    expect(matchRoute('/privacy/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/guides/not-a-guide/')).toEqual({ kind: 'notFound' });
     expect(matchRoute('/leaderboards/llm/not-a-metric/')).toEqual({ kind: 'notFound' });
   });
@@ -143,13 +148,10 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/leaderboards/media/video-editing/index.html',
       '/generated-tokenbench/leaderboards/multimodal/vision-documents/index.html',
       '/generated-tokenbench/llm-price-performance/index.html',
-      '/generated-tokenbench/methodology/benchalign/index.html',
       '/generated-tokenbench/models/index.html',
       '/generated-tokenbench/newsletter/confirmed/index.html',
       '/generated-tokenbench/popular-models/index.html',
-      '/generated-tokenbench/privacy/index.html',
       '/generated-tokenbench/tools/index.html',
-      '/generated-tokenbench/tools/subscriptions-vs-apis/index.html',
       '/generated-tokenbench/welcome/index.html',
     ]);
     expect(inputs.home).toBe('/generated-tokenbench/index.html');
