@@ -1,0 +1,31 @@
+{
+  "contractVersion": "ui-data-contract/v1",
+  "status": "partial",
+  "fetchedAt": "2026-08-17T00:00:00.000Z",
+  "effectiveAt": "2026-08-15T00:00:00.000Z",
+  "data": {
+    "models": [],
+    "unavailableModelIds": [
+      {
+        "availability": "unavailable",
+        "reason": "No approved source for comparison model selection",
+        "provenance": {
+          "id": "illustrative-model-identity",
+          "label": "Illustrative prototype data",
+          "kind": "illustrative_prototype",
+          "effectiveAt": "2026-08-15T00:00:00.000Z",
+          "note": "Representative model identity and access fixture from the approved preview."
+        }
+      }
+    ]
+  },
+  "provenance": [
+    {
+      "id": "illustrative-model-identity",
+      "label": "Illustrative prototype data",
+      "kind": "illustrative_prototype",
+      "effectiveAt": "2026-08-15T00:00:00.000Z",
+      "note": "Representative model identity and access fixture from the approved preview."
+    }
+  ]
+}

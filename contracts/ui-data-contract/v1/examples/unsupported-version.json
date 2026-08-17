@@ -1,0 +1,9 @@
+{
+  "contractVersion": "ui-data-contract/v2",
+  "status": "unavailable",
+  "reason": "Illustrative unsupported-version rejection example; not a pipeline response.",
+  "fetchedAt": "2026-08-17T00:00:00.000Z",
+  "effectiveAt": null,
+  "data": null,
+  "provenance": []
+}

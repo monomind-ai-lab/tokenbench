@@ -1,0 +1,60 @@
+{
+  "contractVersion": "ui-data-contract/v1",
+  "status": "partial",
+  "fetchedAt": "2026-08-17T00:00:00.000Z",
+  "effectiveAt": null,
+  "data": {
+    "models": [
+      {
+        "model": {
+          "id": "gpt-4o",
+          "identity": {
+            "availability": "available",
+            "value": { "slug": "gpt-4o", "name": "GPT-4o", "provider": "OpenAI" },
+            "provenance": {
+              "id": "illustrative-model-identity",
+              "label": "Illustrative prototype data",
+              "kind": "illustrative_prototype",
+              "effectiveAt": "2026-08-15T00:00:00.000Z",
+              "note": "Representative model identity and access fixture from the approved preview."
+            }
+          },
+          "access": { "availability": "unavailable", "reason": "No approved source for illustrative access evidence" },
+          "benchmark": { "availability": "unavailable", "reason": "No approved source for illustrative benchmark evidence" },
+          "capability": { "availability": "unavailable", "reason": "No approved source for illustrative capability evidence" },
+          "routePricing": { "availability": "unavailable", "reason": "No approved source for illustrative route pricing" },
+          "taskEconomics": { "availability": "unavailable", "reason": "No approved source for illustrative task economics" },
+          "runtime": { "availability": "unavailable", "reason": "No approved source for illustrative runtime evidence" },
+          "lifecycle": { "availability": "unavailable", "reason": "No approved source for illustrative lifecycle evidence" }
+        },
+        "rank": {
+          "availability": "unavailable",
+          "reason": "No approved source for final ranking",
+          "provenance": {
+            "id": "illustrative-benchmark",
+            "label": "Illustrative prototype data",
+            "kind": "illustrative_prototype",
+            "effectiveAt": "2026-08-14T00:00:00.000Z",
+            "note": "Representative benchmark release and subtask fixture from the approved preview."
+          }
+        }
+      }
+    ]
+  },
+  "provenance": [
+    {
+      "id": "illustrative-model-identity",
+      "label": "Illustrative prototype data",
+      "kind": "illustrative_prototype",
+      "effectiveAt": "2026-08-15T00:00:00.000Z",
+      "note": "Representative model identity and access fixture from the approved preview."
+    },
+    {
+      "id": "illustrative-benchmark",
+      "label": "Illustrative prototype data",
+      "kind": "illustrative_prototype",
+      "effectiveAt": "2026-08-14T00:00:00.000Z",
+      "note": "Representative benchmark release and subtask fixture from the approved preview."
+    }
+  ]
+}

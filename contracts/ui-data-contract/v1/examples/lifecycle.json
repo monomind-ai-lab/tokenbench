@@ -1,0 +1,65 @@
+{
+  "contractVersion": "ui-data-contract/v1",
+  "status": "partial",
+  "fetchedAt": "2026-08-17T00:00:00.000Z",
+  "effectiveAt": null,
+  "data": {
+    "models": [
+      {
+        "modelId": "gpt-4-turbo",
+        "identity": {
+          "availability": "available",
+          "value": { "slug": "gpt-4-turbo", "name": "GPT-4 Turbo", "provider": "OpenAI" },
+          "provenance": {
+            "id": "illustrative-model-identity",
+            "label": "Illustrative prototype data",
+            "kind": "illustrative_prototype",
+            "effectiveAt": "2026-08-15T00:00:00.000Z",
+            "note": "Representative model identity and access fixture from the approved preview."
+          }
+        },
+        "lifecycle": {
+          "availability": "available",
+          "value": {
+            "status": "Retirement scheduled",
+            "sunsetOn": {
+              "availability": "available",
+              "value": "2026-09-30",
+              "provenance": {
+                "id": "illustrative-lifecycle",
+                "label": "Illustrative prototype data",
+                "kind": "illustrative_prototype",
+                "effectiveAt": "2026-08-11T00:00:00.000Z",
+                "note": "Representative lifecycle fixture from the approved preview."
+              }
+            }
+          },
+          "provenance": {
+            "id": "illustrative-lifecycle",
+            "label": "Illustrative prototype data",
+            "kind": "illustrative_prototype",
+            "effectiveAt": "2026-08-11T00:00:00.000Z",
+            "note": "Representative lifecycle fixture from the approved preview."
+          }
+        },
+        "replacement": { "availability": "unavailable", "reason": "No approved replacement source" }
+      }
+    ]
+  },
+  "provenance": [
+    {
+      "id": "illustrative-model-identity",
+      "label": "Illustrative prototype data",
+      "kind": "illustrative_prototype",
+      "effectiveAt": "2026-08-15T00:00:00.000Z",
+      "note": "Representative model identity and access fixture from the approved preview."
+    },
+    {
+      "id": "illustrative-lifecycle",
+      "label": "Illustrative prototype data",
+      "kind": "illustrative_prototype",
+      "effectiveAt": "2026-08-11T00:00:00.000Z",
+      "note": "Representative lifecycle fixture from the approved preview."
+    }
+  ]
+}

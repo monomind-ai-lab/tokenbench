@@ -1,0 +1,385 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json",
+  "title": "TokenBench UI data contract v1",
+  "description": "PROPOSED consumer contract. The parser additionally enforces that a non-null envelope effectiveAt equals the sole provenance effectiveAt, while null is reserved for unavailable or mixed-source envelopes.",
+  "allOf": [
+    { "$ref": "#/$defs/envelope" },
+    {
+      "anyOf": [
+        { "$ref": "#/$defs/modelsEnvelope" },
+        { "$ref": "#/$defs/profileEnvelope" },
+        { "$ref": "#/$defs/lifecycleEnvelope" },
+        { "$ref": "#/$defs/rankingsEnvelope" },
+        { "$ref": "#/$defs/comparisonEnvelope" },
+        { "$ref": "#/$defs/subscriptionEnvelope" }
+      ]
+    }
+  ],
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1, "pattern": "\\S" },
+    "utcTimestamp": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$",
+      "description": "UTC ISO-8601 timestamp; must end in Z."
+    },
+    "calendarDate": {
+      "type": "string",
+      "format": "date",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "kind", "effectiveAt", "note"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "kind": { "enum": ["illustrative_prototype", "approved_manual"] },
+        "effectiveAt": { "$ref": "#/$defs/utcTimestamp" },
+        "note": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "availableEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["availability", "value", "provenance"],
+      "properties": {
+        "availability": { "const": "available" },
+        "value": {},
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "unavailableEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["availability", "reason"],
+      "properties": {
+        "availability": { "const": "unavailable" },
+        "reason": { "$ref": "#/$defs/nonEmptyString" },
+        "provenance": { "$ref": "#/$defs/provenance" }
+      }
+    },
+    "evidence": {
+      "oneOf": [
+        { "$ref": "#/$defs/availableEvidence" },
+        { "$ref": "#/$defs/unavailableEvidence" }
+      ]
+    },
+    "evidenceString": {
+      "allOf": [
+        { "$ref": "#/$defs/evidence" },
+        {
+          "if": { "properties": { "availability": { "const": "available" } } },
+          "then": { "properties": { "value": { "$ref": "#/$defs/nonEmptyString" } } }
+        }
+      ]
+    },
+    "evidenceNumber": {
+      "allOf": [
+        { "$ref": "#/$defs/evidence" },
+        {
+          "if": { "properties": { "availability": { "const": "available" } } },
+          "then": { "properties": { "value": { "type": "number" } } }
+        }
+      ]
+    },
+    "modelIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slug", "name", "provider"],
+      "properties": {
+        "slug": { "$ref": "#/$defs/nonEmptyString" },
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "provider": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "modelAccess": { "enum": ["Proprietary", "Open weights"] },
+    "benchmarkSubtask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "label": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "benchmarkRelease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["releaseOn", "subtasks"],
+      "properties": {
+        "releaseOn": { "$ref": "#/$defs/calendarDate" },
+        "subtasks": { "type": "array", "items": { "$ref": "#/$defs/benchmarkSubtask" } }
+      }
+    },
+    "capabilityRadarAxis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "label", "percentile", "rank", "fieldSize"],
+      "properties": {
+        "key": { "$ref": "#/$defs/nonEmptyString" },
+        "label": { "$ref": "#/$defs/nonEmptyString" },
+        "percentile": { "type": ["number", "null"] },
+        "rank": { "type": ["number", "null"] },
+        "fieldSize": { "type": ["number", "null"] }
+      }
+    },
+    "modelCapability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compositeScore", "radar"],
+      "properties": {
+        "compositeScore": { "type": "number" },
+        "radar": { "type": "array", "items": { "$ref": "#/$defs/capabilityRadarAxis" } }
+      }
+    },
+    "cachePricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readUsdPerMillion", "writeUsdPerMillion"],
+      "properties": {
+        "readUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" },
+        "writeUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" }
+      }
+    },
+    "routePricing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["route", "inputUsdPerMillion", "outputUsdPerMillion", "cache"],
+      "properties": {
+        "route": { "$ref": "#/$defs/nonEmptyString" },
+        "inputUsdPerMillion": { "type": "number" },
+        "outputUsdPerMillion": { "type": "number" },
+        "blendedUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" },
+        "longContextInputUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" },
+        "cache": { "$ref": "#/$defs/evidenceCachePricing" }
+      }
+    },
+    "taskEconomics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["costUsdPerSuccessfulTask", "workload"],
+      "properties": {
+        "costUsdPerSuccessfulTask": { "type": "number" },
+        "workload": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "runtimeSla": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ttftP50Seconds", "outputTokensPerSecond", "conditions"],
+      "properties": {
+        "ttftP50Seconds": { "type": "number" },
+        "outputTokensPerSecond": { "type": "number" },
+        "conditions": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "modelLifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sunsetOn"],
+      "properties": {
+        "status": { "enum": ["Current", "Retirement scheduled"] },
+        "sunsetOn": { "$ref": "#/$defs/evidenceCalendarDate" }
+      }
+    },
+    "lifecycleReplacement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelId", "migrationNote"],
+      "properties": {
+        "modelId": { "$ref": "#/$defs/nonEmptyString" },
+        "migrationNote": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "evidenceModelIdentity": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelIdentity" } } } }]
+    },
+    "evidenceModelAccess": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelAccess" } } } }]
+    },
+    "evidenceBenchmarkRelease": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/benchmarkRelease" } } } }]
+    },
+    "evidenceCapability": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelCapability" } } } }]
+    },
+    "evidenceRoutePricing": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/routePricing" } } } }]
+    },
+    "evidenceTaskEconomics": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/taskEconomics" } } } }]
+    },
+    "evidenceRuntimeSla": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/runtimeSla" } } } }]
+    },
+    "evidenceLifecycle": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelLifecycle" } } } }]
+    },
+    "evidenceLifecycleReplacement": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/lifecycleReplacement" } } } }]
+    },
+    "evidenceCachePricing": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/cachePricing" } } } }]
+    },
+    "evidenceCalendarDate": {
+      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/calendarDate" } } } }]
+    },
+    "previewModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "identity", "access", "benchmark", "capability", "routePricing", "taskEconomics", "runtime", "lifecycle"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "identity": { "$ref": "#/$defs/evidenceModelIdentity" },
+        "access": { "$ref": "#/$defs/evidenceModelAccess" },
+        "benchmark": { "$ref": "#/$defs/evidenceBenchmarkRelease" },
+        "capability": { "$ref": "#/$defs/evidenceCapability" },
+        "routePricing": { "$ref": "#/$defs/evidenceRoutePricing" },
+        "taskEconomics": { "$ref": "#/$defs/evidenceTaskEconomics" },
+        "runtime": { "$ref": "#/$defs/evidenceRuntimeSla" },
+        "lifecycle": { "$ref": "#/$defs/evidenceLifecycle" }
+      }
+    },
+    "lifecycleModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelId", "identity", "lifecycle", "replacement"],
+      "properties": {
+        "modelId": { "$ref": "#/$defs/nonEmptyString" },
+        "identity": { "$ref": "#/$defs/evidenceModelIdentity" },
+        "lifecycle": { "$ref": "#/$defs/evidenceLifecycle" },
+        "replacement": { "$ref": "#/$defs/evidenceLifecycleReplacement" }
+      }
+    },
+    "rankingEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "rank"],
+      "properties": {
+        "model": { "$ref": "#/$defs/previewModel" },
+        "rank": { "$ref": "#/$defs/evidenceNumber" }
+      }
+    },
+    "subscriptionPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "displayName", "monthlyUsd", "includedUsage"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "provider": { "$ref": "#/$defs/evidenceString" },
+        "displayName": { "$ref": "#/$defs/evidenceString" },
+        "monthlyUsd": { "$ref": "#/$defs/evidenceNumber" },
+        "includedUsage": { "$ref": "#/$defs/evidenceString" }
+      }
+    },
+    "modelsData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["models"],
+      "properties": { "models": { "type": "array", "items": { "$ref": "#/$defs/previewModel" } } }
+    },
+    "profileData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model"],
+      "properties": { "model": { "$ref": "#/$defs/previewModel" } }
+    },
+    "lifecycleData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["models"],
+      "properties": { "models": { "type": "array", "items": { "$ref": "#/$defs/lifecycleModel" } } }
+    },
+    "rankingsData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["models"],
+      "properties": { "models": { "type": "array", "items": { "$ref": "#/$defs/rankingEntry" } } }
+    },
+    "comparisonData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["models", "unavailableModelIds"],
+      "properties": {
+        "models": { "type": "array", "items": { "$ref": "#/$defs/previewModel" } },
+        "unavailableModelIds": { "type": "array", "items": { "$ref": "#/$defs/evidenceString" } }
+      }
+    },
+    "subscriptionData": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plans", "models", "selectedModelTaskEconomics"],
+      "properties": {
+        "plans": { "type": "array", "items": { "$ref": "#/$defs/subscriptionPlan" } },
+        "models": { "type": "array", "items": { "$ref": "#/$defs/previewModel" } },
+        "selectedModelTaskEconomics": { "$ref": "#/$defs/evidenceTaskEconomics" }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "status", "fetchedAt", "effectiveAt", "data", "provenance"],
+      "properties": {
+        "contractVersion": { "const": "ui-data-contract/v1" },
+        "status": { "enum": ["available", "partial", "unavailable"] },
+        "reason": { "$ref": "#/$defs/nonEmptyString" },
+        "fetchedAt": { "$ref": "#/$defs/utcTimestamp" },
+        "effectiveAt": { "oneOf": [{ "$ref": "#/$defs/utcTimestamp" }, { "type": "null" }] },
+        "data": { "type": ["object", "null"] },
+        "provenance": { "type": "array", "items": { "$ref": "#/$defs/provenance" } }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "unavailable" } } },
+          "then": {
+            "required": ["reason"],
+            "properties": { "data": { "type": "null" }, "effectiveAt": { "type": "null" } }
+          },
+          "else": {
+            "not": { "required": ["reason"] },
+            "properties": { "data": { "type": "object" } }
+          }
+        }
+      ]
+    },
+    "modelsEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/modelsData" } } } }
+      ]
+    },
+    "profileEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/profileData" } } } }
+      ]
+    },
+    "lifecycleEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/lifecycleData" } } } }
+      ]
+    },
+    "rankingsEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/rankingsData" } } } }
+      ]
+    },
+    "comparisonEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/comparisonData" } } } }
+      ]
+    },
+    "subscriptionEnvelope": {
+      "allOf": [
+        { "$ref": "#/$defs/envelope" },
+        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/subscriptionData" } } } }
+      ]
+    }
+  }
+}
