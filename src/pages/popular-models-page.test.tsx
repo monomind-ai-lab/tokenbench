@@ -51,7 +51,7 @@ describe('PopularModelsPage', () => {
     render(<RoutePage match={match} data={rankingsFixture} />);
 
     expect(route.delivery).toBe('react');
-    expect(route.prototypeMount).toBe('preserve');
+    expect(route).not.toHaveProperty('prototypeMount');
     expect(screen.getByRole('heading', { level: 1, name: /popular models leaderboard/i })).toBeInTheDocument();
     expect(document.querySelector('[data-popular-models-workbench]')).toBeNull();
   });

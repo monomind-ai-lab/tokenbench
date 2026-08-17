@@ -15,7 +15,7 @@ import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
 import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
 
-export type { PreviewClientRouteId, PreviewDocumentReadiness, PreviewPageProps, PreviewPayloadDefinition, PreviewPrototypeMountPolicy, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
+export type { PreviewClientRouteId, PreviewDocumentReadiness, PreviewPageProps, PreviewPayloadDefinition, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
 
 const defaultSkipLink = {
   skipLinkTarget: 'page-content',
@@ -254,7 +254,6 @@ const manifestRoutes = [
     match: exactPathMatcher('home', '/'),
     outputPathname: '/',
     delivery: 'react',
-    prototypeMount: 'preserve',
     documentReadiness: readyReactDocument,
     shell: { activePage: 'home', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'home' }),
@@ -269,7 +268,6 @@ const manifestRoutes = [
     match: exactPathMatcher('models', '/models'),
     outputPathname: '/models',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'models' }),
@@ -287,7 +285,6 @@ const manifestRoutes = [
     match: exactPathMatcher('model-profile', '/model-profile'),
     outputPathname: '/model-profile',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: (match) => metadataForRoute({ kind: 'modelProfile', slug: match.search.get('model') ?? 'model' }),
@@ -302,7 +299,6 @@ const manifestRoutes = [
     match: exactPathMatcher('model-lifecycle', '/model-lifecycle'),
     outputPathname: '/model-lifecycle',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'models' }),
@@ -317,7 +313,6 @@ const manifestRoutes = [
     match: exactPathMatcher('popular-models', '/popular-models/'),
     outputPathname: '/popular-models/',
     delivery: 'react',
-    prototypeMount: 'preserve',
     documentReadiness: readyReactDocument,
     shell: { activePage: 'popularModels', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'popularModels' }),
@@ -332,7 +327,6 @@ const manifestRoutes = [
     match: exactPathMatcher('make-it-yours', '/make-it-yours/'),
     outputPathname: '/make-it-yours/',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'leaderboards', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'leaderboards' }),
@@ -347,7 +341,6 @@ const manifestRoutes = [
     match: exactPathMatcher('compare', '/compare'),
     outputPathname: '/compare',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'compare', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'compareHub' }),
@@ -365,7 +358,6 @@ const manifestRoutes = [
     match: exactPathMatcher('subscribe-vs-api', '/subscribe-vs-api'),
     outputPathname: '/subscribe-vs-api',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'calculator', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'calculator' }),
@@ -380,7 +372,6 @@ const manifestRoutes = [
     match: exactPathMatcher('articles', '/articles'),
     outputPathname: '/articles',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to articles' },
     metadata: () => previewArticleMetadata.articles,
@@ -398,7 +389,6 @@ const manifestRoutes = [
     match: articleDetailMatch,
     outputPathname: '/articles/hybrid-router',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: {
       status: 'blocked',
       reason: 'Hybrid Router substantive React page and static data are pending Task 7.',
@@ -425,7 +415,6 @@ const manifestRoutes = [
     match: exactPathMatcher('llm-price-performance', '/llm-price-performance/'),
     outputPathname: '/llm-price-performance/',
     delivery: 'prototype',
-    prototypeMount: 'preserve',
     documentReadiness: pendingReactDocument,
     shell: { activePage: 'pricePerformance', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'pricePerformance' }),

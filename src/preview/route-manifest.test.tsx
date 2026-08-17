@@ -41,6 +41,10 @@ describe('preview route manifest', () => {
     ]);
   });
 
+  it('does not expose a transitional prototype mount policy', () => {
+    expect(previewRoutes.every((route) => !Object.hasOwn(route, 'prototypeMount'))).toBe(true);
+  });
+
   it('keeps runtime-only SSR routes out of static preview generation', () => {
     expect(previewRuntimeRoutes.map((route) => route.id)).toEqual([
       'comparison-detail',

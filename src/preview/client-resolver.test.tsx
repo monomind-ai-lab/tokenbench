@@ -37,7 +37,7 @@ describe('startPreviewRoute', () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'popular-models');
 
     expect(route?.delivery).toBe('react');
-    expect(route?.prototypeMount).toBe('preserve');
+    expect(route).not.toHaveProperty('prototypeMount');
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'popular-models' });
     expect(document.querySelector('[data-popular-models-workbench]')).toBeNull();
     expect(createRootMock).not.toHaveBeenCalled();
