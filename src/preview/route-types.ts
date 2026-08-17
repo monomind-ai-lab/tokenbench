@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactElement } from 'react';
 import type { SiteNavigationPage } from '../routing/routes';
 import type { PageMetadata } from '../seo/metadata';
 
@@ -15,6 +15,13 @@ export type PreviewRouteId =
   | 'article-detail'
   | 'llm-price-performance';
 
+export type PreviewRuntimeRouteId =
+  | 'comparison-detail'
+  | 'model-profile-detail'
+  | 'models-directory';
+
+export type PreviewClientRouteId = PreviewRouteId | PreviewRuntimeRouteId;
+
 export interface PreviewRouteMatch {
   readonly routeId: PreviewRouteId;
   readonly pathname: string;
@@ -23,8 +30,17 @@ export interface PreviewRouteMatch {
   readonly params: Readonly<Record<string, string>>;
 }
 
+export interface PreviewRuntimeRouteMatch {
+  readonly routeId: PreviewRuntimeRouteId;
+  readonly pathname: string;
+  readonly search: URLSearchParams;
+  readonly hash: string;
+  readonly params: Readonly<Record<string, string>>;
+}
+
 export interface PreviewPayloadDefinition {
   readonly key: string;
+  readonly parse: (value: unknown) => unknown | null;
 }
 
 export type PreviewDocumentReadiness =
@@ -41,6 +57,7 @@ export interface PreviewRoute {
   readonly match: (url: URL) => PreviewRouteMatch | null;
   readonly outputPathname: string;
   readonly delivery: 'prototype' | 'react';
+  readonly clientLoad: boolean;
   readonly documentReadiness: PreviewDocumentReadiness;
   readonly shell: {
     readonly activePage: SiteNavigationPage;
@@ -52,6 +69,14 @@ export interface PreviewRoute {
   readonly staticData: (match: PreviewRouteMatch) => Promise<unknown | undefined>;
   readonly payload: PreviewPayloadDefinition | null;
   readonly Page: ComponentType<PreviewPageProps>;
+}
+
+/** Runtime-only SSR routes are deliberately excluded from static preview output. */
+export interface PreviewRuntimeRoute {
+  readonly id: PreviewRuntimeRouteId;
+  readonly match: (url: URL) => PreviewRuntimeRouteMatch | null;
+  readonly payload: PreviewPayloadDefinition;
+  readonly render: (data: unknown) => ReactElement;
 }
 
 export interface PreviewStaticEntry {

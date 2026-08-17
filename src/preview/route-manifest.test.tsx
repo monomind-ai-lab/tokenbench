@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SITE_CONFIG } from '../brand/site-config';
 import { GUIDES } from '../guides/content';
-import { matchPreviewRoute, previewPaths, previewRoutes, previewStaticEntries } from './route-manifest';
+import { matchPreviewRoute, matchPreviewRuntimeRoute, previewPaths, previewRoutes, previewRuntimeRoutes, previewStaticEntries } from './route-manifest';
 
 describe('preview route manifest', () => {
   it.each([
@@ -35,6 +35,19 @@ describe('preview route manifest', () => {
       expect(owners).toHaveLength(1);
       expect(owners[0]?.delivery).toBe('prototype');
     }
+  });
+
+  it('keeps runtime-only SSR routes out of static preview generation', () => {
+    expect(previewRuntimeRoutes.map((route) => route.id)).toEqual([
+      'comparison-detail',
+      'model-profile-detail',
+      'models-directory',
+    ]);
+    expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/compare/model-a-vs-model-b/'))?.routeId).toBe('comparison-detail');
+    expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/models/gpt-5-6-sol/'))?.routeId).toBe('model-profile-detail');
+    expect(matchPreviewRuntimeRoute(new URL('https://tokenbench.test/models/'))?.routeId).toBe('models-directory');
+    const staticRouteIds = new Set<string>(previewStaticEntries().map((entry) => entry.routeId));
+    expect(previewRuntimeRoutes.every((route) => !staticRouteIds.has(route.id))).toBe(true);
   });
 
   it('derives one static article entry per guide from the manifest', () => {
