@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fixtureAdapter } from './fixture-adapter';
+import { createFixtureAdapter, fixtureAdapter } from './fixture-adapter';
 
 describe('fixtureAdapter', () => {
   it('preserves unavailable facts instead of inventing values', async () => {
@@ -17,6 +17,26 @@ describe('fixtureAdapter', () => {
 
     expect(result.fetchedAt).toMatch(/Z$/);
     expect(new Set(result.provenance.map((source) => source.effectiveAt)).size).toBeGreaterThan(1);
+  });
+
+  it('preserves the requested comparison order', async () => {
+    const result = await fixtureAdapter.comparison({ modelIds: ['deepseek-v3', 'gpt-4o'] });
+    const slugs = result.data?.models.map((model) => model.identity.availability === 'available' ? model.identity.value.slug : null);
+
+    expect(slugs).toEqual(['deepseek-v3', 'gpt-4o']);
+  });
+
+  it('filters lifecycle records from the fetched reference time', async () => {
+    const adapter = createFixtureAdapter(() => new Date('2026-08-16T00:00:00.000Z'));
+
+    expect((await adapter.lifecycle({ horizonDays: 44 })).data?.models).toEqual([]);
+    expect((await adapter.lifecycle({ horizonDays: 45 })).data?.models).toHaveLength(1);
+    const expired = await createFixtureAdapter(() => new Date('2026-10-01T00:00:00.000Z'))
+      .lifecycle({ horizonDays: 90 });
+    expect(expired).toMatchObject({
+      data: { models: [] },
+      provenance: [],
+    });
   });
 
   it('returns an unavailable profile contract for an unknown slug', async () => {
