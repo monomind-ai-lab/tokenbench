@@ -4,14 +4,6 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { generateGuidePages } from './generate-guide-pages';
 
-const expectedLeaderboardPaths = {
-  'track-claude-code-usage': ['/leaderboards/llm/pricing-context/'],
-  'monitor-openai-codex-usage': ['/leaderboards/llm/pricing-context/'],
-  'openrouter-guide-model-routing-cost-controls': ['/leaderboards/llm/pricing-context/'],
-  'legitimate-free-ai-api-access-credits': ['/leaderboards/llm/pricing-context/'],
-  'reduce-llm-api-costs-caching-batch-output-limits': ['/leaderboards/llm/coding/', '/leaderboards/llm/value/'],
-} as const;
-
 const temporaryRoots: string[] = [];
 
 afterEach(async () => {
@@ -19,41 +11,43 @@ afterEach(async () => {
 });
 
 describe('generateGuidePages', () => {
-  it('points crawlable guide calculator calls to the dedicated calculator route', async () => {
+  it('writes the legacy guide hub and canonical article detail pages', async () => {
     const outputRoot = await mkdtemp(join(tmpdir(), 'tokenbench-guide-pages-'));
     temporaryRoots.push(outputRoot);
 
     await generateGuidePages(outputRoot);
 
     const [hub, article] = await Promise.all([
-      readFile(join(outputRoot, 'index.html'), 'utf8'),
-      readFile(join(outputRoot, 'track-claude-code-usage', 'index.html'), 'utf8'),
+      readFile(join(outputRoot, 'guides', 'index.html'), 'utf8'),
+      readFile(join(outputRoot, 'articles', 'track-claude-code-usage', 'index.html'), 'utf8'),
     ]);
 
-    for (const html of [hub, article]) {
-      expect(html).toContain('id="page-content"');
-      expect(html).toContain('tabindex="-1"');
-      expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
-      expect(html).not.toContain('href="/#calculator"');
-    }
+    expect(hub).toContain('id="page-content"');
+    expect(hub).toContain('href="/articles/track-claude-code-usage/"');
+    expect(article).toContain('id="page-content"');
+    expect(article).toContain('tabindex="-1"');
+    expect(article).toContain('href="/articles?channel=guides"');
+    expect(article).toContain('href="/make-it-yours/"');
+    expect(article).toContain('href="/cost"');
+    expect(article).not.toContain('Related decision context');
+    expect(article).not.toContain('href="/tools/subscriptions-vs-apis/#calculator"');
   });
 
-  it('writes branded canonical articles with honest leaderboard context', async () => {
+  it('keeps every article canonical and every related guide route-safe', async () => {
     const outputRoot = await mkdtemp(join(tmpdir(), 'tokenbench-guide-pages-'));
     temporaryRoots.push(outputRoot);
 
     await generateGuidePages(outputRoot);
 
-    for (const [slug, paths] of Object.entries(expectedLeaderboardPaths)) {
-      const html = await readFile(join(outputRoot, slug, 'index.html'), 'utf8');
+    for (const slug of ['track-claude-code-usage', 'monitor-openai-codex-usage', 'openrouter-guide-model-routing-cost-controls', 'legitimate-free-ai-api-access-credits', 'reduce-llm-api-costs-caching-batch-output-limits']) {
+      const html = await readFile(join(outputRoot, 'articles', slug, 'index.html'), 'utf8');
 
       expect(html).toContain('TokenBench');
       expect(html).not.toContain('AI Cost Engine');
-      expect(html).toContain(`<link rel="canonical" href="https://tokenbench.monomind.one/guides/${slug}/">`);
+      expect(html).toContain(`<link rel="canonical" href="https://tokenbench.monomind.one/articles/${slug}/">`);
       expect(html).toContain('"@type":"Article"');
       expect(html).toContain('"@type":"BreadcrumbList"');
-      expect(html).toContain('href="/tools/subscriptions-vs-apis/#calculator"');
-      for (const path of paths) expect(html).toContain(`href="${path}"`);
+      expect(html).not.toContain('href="/guides/');
     }
   });
 });

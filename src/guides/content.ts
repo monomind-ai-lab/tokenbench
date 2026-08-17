@@ -595,7 +595,16 @@ export const GUIDES: GuideArticle[] = [
 
 export const GUIDE_BY_SLUG = new Map(GUIDES.map((guide) => [guide.slug, guide]));
 
+export function articlePath(slug: string): string {
+  return `/articles/${slug}/`;
+}
+
+/** @deprecated Use articlePath for canonical article destinations. */
 export function guidePath(slug: string): string {
+  return articlePath(slug);
+}
+
+export function legacyGuidePath(slug: string): string {
   return `/guides/${slug}/`;
 }
 

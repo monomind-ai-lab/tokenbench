@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LEADERBOARD_ROUTES } from '../routing/routes';
-import { GUIDES, GUIDE_BY_SLUG } from './content';
+import { articlePath, GUIDES, GUIDE_BY_SLUG, legacyGuidePath } from './content';
 
 const expectedContextualLeaderboards = {
   'track-claude-code-usage': ['llm-pricing-context'],
@@ -21,6 +21,13 @@ describe('guide catalog', () => {
       expect(guide.description.length).toBeLessThanOrEqual(160);
       expect(guide.sections.length).toBeGreaterThanOrEqual(4);
       expect(new Set(guide.sections.map((section) => section.id)).size).toBe(guide.sections.length);
+    }
+  });
+
+  it('gives each guide a canonical article detail route while retaining its legacy guide path', () => {
+    for (const guide of GUIDES) {
+      expect(articlePath(guide.slug)).toBe(`/articles/${guide.slug}/`);
+      expect(legacyGuidePath(guide.slug)).toBe(`/guides/${guide.slug}/`);
     }
   });
 

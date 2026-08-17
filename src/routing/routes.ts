@@ -1,5 +1,5 @@
 import { SITE_CONFIG } from '../brand/site-config';
-import { GUIDE_BY_SLUG, GUIDES, guidePath } from '../guides/content';
+import { articlePath, GUIDE_BY_SLUG, GUIDES } from '../guides/content';
 
 export const ROUTE_PATHS = {
   home: '/',
@@ -226,7 +226,7 @@ const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'guides', pathname: ROUTE_PATHS.guides, route: { kind: 'guides' } },
   ...GUIDES.map((guide) => ({
     id: `guide-${guide.slug}`,
-    pathname: guidePath(guide.slug),
+    pathname: articlePath(guide.slug),
     route: { kind: 'guides' as const, slug: guide.slug },
   })),
   { id: 'tools', pathname: ROUTE_PATHS.tools, route: { kind: 'tools' } },
@@ -275,7 +275,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'calculator': return ROUTE_PATHS.calculator;
     case 'pricePerformance': return ROUTE_PATHS.pricePerformance;
     case 'methodologyBenchAlign': return ROUTE_PATHS.methodologyBenchAlign;
-    case 'guides': return route.slug ? guidePath(route.slug) : ROUTE_PATHS.guides;
+    case 'guides': return route.slug ? articlePath(route.slug) : ROUTE_PATHS.guides;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'models': return ROUTE_PATHS.models;
     case 'popularModels': return ROUTE_PATHS.popularModels;
@@ -317,8 +317,11 @@ export function matchRoute(pathname: string): AppRoute {
     if (isPublishedLeaderboard) return { kind: 'redirect', to: canonicalPathname };
   }
 
+  const articleMatch = normalizedPathname.match(/^\/articles\/([^/]+)\/$/);
+  if (articleMatch && GUIDE_BY_SLUG.has(articleMatch[1])) return { kind: 'guides', slug: articleMatch[1] };
+
   const guideMatch = normalizedPathname.match(/^\/guides\/([^/]+)\/$/);
-  if (guideMatch && GUIDE_BY_SLUG.has(guideMatch[1])) return { kind: 'guides', slug: guideMatch[1] };
+  if (guideMatch && GUIDE_BY_SLUG.has(guideMatch[1])) return { kind: 'redirect', to: articlePath(guideMatch[1]) };
 
   const leaderboardKey = (Object.keys(LEADERBOARD_ROUTES) as LeaderboardKey[])
     .find((key) => LEADERBOARD_ROUTES[key].pathname === normalizedPathname);

@@ -63,7 +63,7 @@ async function copySharedAssets(outputDirectory: string): Promise<void> {
 
 /** Copies the approved rebuilt surfaces into their Pages canonical routes. */
 export async function copyMakeItYoursPreview(outputDirectory: string): Promise<void> {
-  await Promise.all(['models', 'compare', 'articles', 'cost'].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
+  await Promise.all(['models', 'compare', 'cost'].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
   await Promise.all([
     copySharedAssets(outputDirectory),
     ...previewPageBundles.map((page) => copyPreviewPage(outputDirectory, page)),

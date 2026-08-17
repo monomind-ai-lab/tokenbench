@@ -21,11 +21,11 @@ const APPROVED_LEADERBOARD_TITLES = {
 const fixedRouteCases = [
   ['/', { kind: 'home' }],
   ['/guides', { kind: 'guides' }],
-  ['/guides/track-claude-code-usage', { kind: 'guides', slug: 'track-claude-code-usage' }],
-  ['/guides/monitor-openai-codex-usage', { kind: 'guides', slug: 'monitor-openai-codex-usage' }],
-  ['/guides/openrouter-guide-model-routing-cost-controls', { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }],
-  ['/guides/legitimate-free-ai-api-access-credits', { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }],
-  ['/guides/reduce-llm-api-costs-caching-batch-output-limits', { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }],
+  ['/articles/track-claude-code-usage', { kind: 'guides', slug: 'track-claude-code-usage' }],
+  ['/articles/monitor-openai-codex-usage', { kind: 'guides', slug: 'monitor-openai-codex-usage' }],
+  ['/articles/openrouter-guide-model-routing-cost-controls', { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }],
+  ['/articles/legitimate-free-ai-api-access-credits', { kind: 'guides', slug: 'legitimate-free-ai-api-access-credits' }],
+  ['/articles/reduce-llm-api-costs-caching-batch-output-limits', { kind: 'guides', slug: 'reduce-llm-api-costs-caching-batch-output-limits' }],
   ['/tools', { kind: 'tools' }],
   ['/tools/subscriptions-vs-apis', { kind: 'calculator' }],
   ['/compare', { kind: 'compareHub' }],
@@ -92,6 +92,11 @@ describe('TokenBench route registry', () => {
     expect(LEADERBOARD_ROUTES['llm-agentic'].navigationLabel).toBe('Agentic performance');
   });
 
+  it('redirects legacy guide detail URLs to their canonical article routes', () => {
+    expect(matchRoute('/guides/track-claude-code-usage/')).toEqual({ kind: 'redirect', to: '/articles/track-claude-code-usage/' });
+    expect(matchRoute('/guides/reduce-llm-api-costs-caching-batch-output-limits/')).toEqual({ kind: 'redirect', to: '/articles/reduce-llm-api-costs-caching-batch-output-limits/' });
+  });
+
   it('keeps preview chrome destinations separate from production route contracts', () => {
     expect(PREVIEW_ROUTE_PATHS.home).toBe('/');
     expect(PREVIEW_ROUTE_PATHS.models).toBe('/models');
@@ -114,13 +119,13 @@ describe('TokenBench route registry', () => {
     const inputs = staticHtmlEntries('/generated-tokenbench');
 
     expect(Object.values(inputs).sort()).toEqual([
+      '/generated-tokenbench/articles/legitimate-free-ai-api-access-credits/index.html',
+      '/generated-tokenbench/articles/monitor-openai-codex-usage/index.html',
+      '/generated-tokenbench/articles/openrouter-guide-model-routing-cost-controls/index.html',
+      '/generated-tokenbench/articles/reduce-llm-api-costs-caching-batch-output-limits/index.html',
+      '/generated-tokenbench/articles/track-claude-code-usage/index.html',
       '/generated-tokenbench/compare/index.html',
       '/generated-tokenbench/guides/index.html',
-      '/generated-tokenbench/guides/legitimate-free-ai-api-access-credits/index.html',
-      '/generated-tokenbench/guides/monitor-openai-codex-usage/index.html',
-      '/generated-tokenbench/guides/openrouter-guide-model-routing-cost-controls/index.html',
-      '/generated-tokenbench/guides/reduce-llm-api-costs-caching-batch-output-limits/index.html',
-      '/generated-tokenbench/guides/track-claude-code-usage/index.html',
       '/generated-tokenbench/index.html',
       '/generated-tokenbench/leaderboards/index.html',
       '/generated-tokenbench/leaderboards/llm/agentic/index.html',

@@ -1,5 +1,5 @@
 import { HOME_PAGE_COPY, SITE_CONFIG } from '../brand/site-config';
-import { GUIDE_BY_SLUG } from '../guides/content';
+import { articlePath, GUIDE_BY_SLUG } from '../guides/content';
 import { LEADERBOARD_ROUTES, ROUTE_PATHS, pathnameForRoute, type AppRoute } from '../routing/routes';
 
 export interface PageMetadata {
@@ -174,7 +174,7 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
       if (!route.slug) return makeMetadata('/guides/', pageDefinitions.guides);
       const guide = GUIDE_BY_SLUG.get(route.slug);
       if (!guide) return makeMetadata('/guides/', pageDefinitions.notFound);
-      return makeMetadata(`/guides/${guide.slug}/`, {
+      return makeMetadata(articlePath(guide.slug), {
         title: `${guide.seoTitle} | ${SITE_CONFIG.name}`,
         description: guide.description,
         h1: guide.title,

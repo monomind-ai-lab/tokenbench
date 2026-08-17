@@ -2,8 +2,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SITE_CONFIG } from '../src/brand/site-config';
-import { GUIDES, guidePath, relatedGuides, type GuideArticle, type GuideSection } from '../src/guides/content';
-import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../src/routing/routes';
+import { articlePath, GUIDES, relatedGuides, type GuideArticle, type GuideSection } from '../src/guides/content';
+import { PREVIEW_ROUTE_PATHS, ROUTE_PATHS } from '../src/routing/routes';
 import { metadataForRoute } from '../src/seo/metadata';
 import { documentHtml, escapeHtml, headMarkup, staticChrome } from '../src/seo/static-page';
 
@@ -12,7 +12,7 @@ function formatDate(value: string): string {
 }
 
 function guideCard(guide: GuideArticle): string {
-  return `<article class="guide-card"><div class="guide-card-meta"><span>${escapeHtml(guide.category)}</span><span>${guide.readMinutes} min read</span></div><h2><a href="${guidePath(guide.slug)}">${escapeHtml(guide.title)}</a></h2><p>${escapeHtml(guide.dek)}</p><a class="guide-card-link" href="${guidePath(guide.slug)}">Read guide →</a></article>`;
+  return `<article class="guide-card"><div class="guide-card-meta"><span>${escapeHtml(guide.category)}</span><span>${guide.readMinutes} min read</span></div><h2><a href="${articlePath(guide.slug)}">${escapeHtml(guide.title)}</a></h2><p>${escapeHtml(guide.dek)}</p><a class="guide-card-link" href="${articlePath(guide.slug)}">Read guide →</a></article>`;
 }
 
 function renderSection(section: GuideSection): string {
@@ -44,21 +44,20 @@ function guideHubStructuredData(): unknown[] {
         '@type': 'ListItem',
         position: index + 1,
         name: guide.title,
-        url: `${SITE_CONFIG.origin}${guidePath(guide.slug)}`,
+        url: `${SITE_CONFIG.origin}${articlePath(guide.slug)}`,
       })),
     },
   }];
 }
 
-function contextualLinks(guide: GuideArticle): string {
-  const links = guide.contextualLinks.map((link) => `<li><a href="${LEADERBOARD_ROUTES[link.leaderboard].pathname}">${escapeHtml(link.label)}</a> — ${escapeHtml(link.description)}</li>`).join('');
-  return `<aside class="guide-callout decision-context" aria-labelledby="decision-context-heading"><span class="eyebrow">Decision context</span><h2 id="decision-context-heading">Related decision context</h2><p>Use these source-aware pages as a starting point, then inspect the published evidence and unavailable states before relying on a route.</p><ul>${links}</ul></aside>`;
+function makeItYoursCta(): string {
+  return `<aside class="guide-callout decision-context" aria-labelledby="make-it-yours-heading"><span class="eyebrow">Make it yours</span><h2 id="make-it-yours-heading">Build a ranking around your priorities</h2><p>Adjust capability weights and service thresholds to create a shortlist that reflects the work you need models to do.</p><a href="${PREVIEW_ROUTE_PATHS.makeItYours}">Make it yours →</a></aside>`;
 }
 
 function articleContent(guide: GuideArticle): string {
   const toc = `<aside class="article-toc" aria-label="On this page"><strong>On this page</strong><ol>${guide.sections.map((section) => `<li><a href="#${section.id}">${escapeHtml(section.title.replace(/^\d+\.\s*/, ''))}</a></li>`).join('')}</ol></aside>`;
   const related = relatedGuides(guide);
-  return `<main id="page-content" class="guides-main article-main" tabindex="-1"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="${ROUTE_PATHS.guides}">Guides</a><span>›</span><span aria-current="page">${escapeHtml(guide.category)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">${escapeHtml(guide.category)}</span><h1>${escapeHtml(guide.title)}</h1><p class="article-dek">${escapeHtml(guide.dek)}</p><div class="article-byline"><span>By ${SITE_CONFIG.parentName}</span><span>Updated ${formatDate(guide.updatedAt)}</span><span>${guide.readMinutes} min read</span></div></header><div class="article-layout"><div class="article-body"><aside class="takeaways"><span class="eyebrow">At a glance</span><h2>What you’ll learn</h2><ul>${guide.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join('')}</ul></aside>${guide.sections.map(renderSection).join('')}${contextualLinks(guide)}<aside class="calculator-cta"><div><span class="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a class="button" href="${ROUTE_PATHS.calculator}#calculator">Open calculator →</a></aside></div>${toc}</div></article><section class="related-guides"><div class="guide-index-heading"><div><span class="eyebrow">Keep optimizing</span><h2>Related guides</h2></div><a href="${ROUTE_PATHS.guides}">View all guides</a></div><div class="related-grid">${related.map(guideCard).join('')}</div></section></main>`;
+  return `<main id="page-content" class="guides-main article-main" tabindex="-1"><nav class="breadcrumbs" aria-label="Breadcrumb"><a href="${PREVIEW_ROUTE_PATHS.articles}">Articles</a><span>›</span><a href="${PREVIEW_ROUTE_PATHS.articles}?channel=guides">Guides</a><span>›</span><span aria-current="page">${escapeHtml(guide.category)}</span></nav><article class="guide-article"><header class="article-header"><span class="eyebrow">${escapeHtml(guide.category)}</span><h1>${escapeHtml(guide.title)}</h1><p class="article-dek">${escapeHtml(guide.dek)}</p><div class="article-byline"><span>By ${SITE_CONFIG.parentName}</span><span>Updated ${formatDate(guide.updatedAt)}</span><span>${guide.readMinutes} min read</span></div></header><div class="article-layout"><div class="article-body"><aside class="takeaways"><span class="eyebrow">At a glance</span><h2>What you’ll learn</h2><ul>${guide.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join('')}</ul></aside>${guide.sections.map(renderSection).join('')}${makeItYoursCta()}<aside class="calculator-cta"><div><span class="eyebrow">Cost planning</span><h2>Explore the Cost hub</h2><p>Compare subscription and API costs, find a breakeven point, and review the assumptions behind each estimate.</p></div><a class="button" href="${PREVIEW_ROUTE_PATHS.calculator}">Explore Cost hub →</a></aside></div>${toc}</div></article><section class="related-guides"><div class="guide-index-heading"><div><span class="eyebrow">Keep optimizing</span><h2>Related articles</h2></div><a href="${PREVIEW_ROUTE_PATHS.articles}">View all articles</a></div><div class="related-grid">${related.map(guideCard).join('')}</div></section></main>`;
 }
 
 function articleStructuredData(guide: GuideArticle): unknown[] {
@@ -82,25 +81,28 @@ function articleStructuredData(guide: GuideArticle): unknown[] {
       '@type': 'BreadcrumbList',
       itemListElement: [
         { '@type': 'ListItem', position: 1, name: SITE_CONFIG.name, item: SITE_CONFIG.origin },
-        { '@type': 'ListItem', position: 2, name: 'Guides', item: `${SITE_CONFIG.origin}/guides/` },
-        { '@type': 'ListItem', position: 3, name: guide.title, item: metadata.canonical },
+        { '@type': 'ListItem', position: 2, name: 'Articles', item: `${SITE_CONFIG.origin}${PREVIEW_ROUTE_PATHS.articles}` },
+        { '@type': 'ListItem', position: 3, name: 'Guides', item: `${SITE_CONFIG.origin}${PREVIEW_ROUTE_PATHS.articles}?channel=guides` },
+        { '@type': 'ListItem', position: 4, name: guide.title, item: metadata.canonical },
       ],
     },
   ];
 }
 
 export async function generateGuidePages(outputRoot: string): Promise<void> {
-  await mkdir(outputRoot, { recursive: true });
+  const guideHubRoot = resolve(outputRoot, 'guides');
+  const articleRoot = resolve(outputRoot, 'articles');
+  await Promise.all([mkdir(guideHubRoot, { recursive: true }), mkdir(articleRoot, { recursive: true })]);
 
   const hubMetadata = metadataForRoute({ kind: 'guides' });
-  await writeFile(resolve(outputRoot, 'index.html'), documentHtml(
+  await writeFile(resolve(guideHubRoot, 'index.html'), documentHtml(
     headMarkup(hubMetadata, guideHubStructuredData()),
     staticChrome(guideHubContent(), 'guides'),
   ));
 
   await Promise.all(GUIDES.map(async (guide) => {
     const metadata = metadataForRoute({ kind: 'guides', slug: guide.slug });
-    const articleDir = resolve(outputRoot, guide.slug);
+    const articleDir = resolve(articleRoot, guide.slug);
     await mkdir(articleDir, { recursive: true });
     await writeFile(resolve(articleDir, 'index.html'), documentHtml(
       headMarkup(metadata, articleStructuredData(guide)),
@@ -110,8 +112,7 @@ export async function generateGuidePages(outputRoot: string): Promise<void> {
 }
 
 async function runGuideGenerator(): Promise<void> {
-  const outputRoot = resolve(process.cwd(), 'guides');
-  await generateGuidePages(outputRoot);
+  await generateGuidePages(process.cwd());
   console.log(`Generated ${GUIDES.length + 1} guide pages.`);
 }
 

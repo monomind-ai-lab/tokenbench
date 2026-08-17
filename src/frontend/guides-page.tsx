@@ -1,7 +1,7 @@
 import { ArrowRight, BookOpen, ChevronRight, Clock, ExternalLink } from 'lucide-react';
 import { SITE_CONFIG } from '../brand/site-config';
-import { GUIDES, guidePath, relatedGuides, type GuideArticle, type GuideSection } from '../guides/content';
-import { LEADERBOARD_ROUTES, ROUTE_PATHS } from '../routing/routes';
+import { articlePath, GUIDES, relatedGuides, type GuideArticle, type GuideSection } from '../guides/content';
+import { PREVIEW_ROUTE_PATHS, ROUTE_PATHS } from '../routing/routes';
 
 function formatGuideDate(value: string): string {
   return new Intl.DateTimeFormat('en', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
@@ -10,9 +10,9 @@ function formatGuideDate(value: string): string {
 export function GuideCard({ guide }: { readonly guide: GuideArticle; readonly key?: string }) {
   return <article className="guide-card">
     <div className="guide-card-meta"><span>{guide.category}</span><span><Clock aria-hidden="true" size={14} />{guide.readMinutes} min read</span></div>
-    <h2><a href={guidePath(guide.slug)}>{guide.title}</a></h2>
+    <h2><a href={articlePath(guide.slug)}>{guide.title}</a></h2>
     <p>{guide.dek}</p>
-    <a className="guide-card-link" href={guidePath(guide.slug)}>Read guide <ArrowRight aria-hidden="true" size={16} /></a>
+    <a className="guide-card-link" href={articlePath(guide.slug)}>Read guide <ArrowRight aria-hidden="true" size={16} /></a>
   </article>;
 }
 
@@ -43,19 +43,19 @@ function GuideSectionView({ section }: { readonly section: GuideSection; readonl
   </section>;
 }
 
-function GuideContextualLinks({ guide }: { readonly guide: GuideArticle }) {
-  return <aside className="guide-callout decision-context" aria-labelledby="decision-context-heading">
-    <span className="eyebrow">Decision context</span>
-    <h2 id="decision-context-heading">Related decision context</h2>
-    <p>Use these source-aware pages as a starting point, then inspect the published evidence and unavailable states before relying on a route.</p>
-    <ul>{guide.contextualLinks.map((link) => <li key={link.leaderboard}><a href={LEADERBOARD_ROUTES[link.leaderboard].pathname}>{link.label}</a><span> — {link.description}</span></li>)}</ul>
+function MakeItYoursCta() {
+  return <aside className="guide-callout decision-context" aria-labelledby="make-it-yours-heading">
+    <span className="eyebrow">Make it yours</span>
+    <h2 id="make-it-yours-heading">Build a ranking around your priorities</h2>
+    <p>Adjust capability weights and service thresholds to create a shortlist that reflects the work you need models to do.</p>
+    <a href={PREVIEW_ROUTE_PATHS.makeItYours}>Make it yours <ArrowRight aria-hidden="true" size={16} /></a>
   </aside>;
 }
 
 export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
   const recommendations = relatedGuides(guide);
   return <main id="guide-content" className="guides-main article-main" tabIndex={-1}>
-    <nav className="breadcrumbs" aria-label="Breadcrumb"><a href={ROUTE_PATHS.guides}>Guides</a><ChevronRight aria-hidden="true" size={14} /><span aria-current="page">{guide.category}</span></nav>
+    <nav className="breadcrumbs" aria-label="Breadcrumb"><a href={PREVIEW_ROUTE_PATHS.articles}>Articles</a><ChevronRight aria-hidden="true" size={14} /><a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`}>Guides</a><ChevronRight aria-hidden="true" size={14} /><span aria-current="page">{guide.category}</span></nav>
     <article className="guide-article">
       <header className="article-header">
         <span className="eyebrow">{guide.category}</span>
@@ -67,12 +67,12 @@ export function GuideArticlePage({ guide }: { readonly guide: GuideArticle }) {
         <div className="article-body">
           <aside className="takeaways" aria-labelledby="takeaways-heading"><span className="eyebrow">At a glance</span><h2 id="takeaways-heading">What you’ll learn</h2><ul>{guide.takeaways.map((takeaway) => <li key={takeaway}>{takeaway}</li>)}</ul></aside>
           {guide.sections.map((section) => <GuideSectionView key={section.id} section={section} />)}
-          <GuideContextualLinks guide={guide} />
-          <aside className="calculator-cta"><div><span className="eyebrow">Put the numbers to work</span><h2>Compare your usage with current plan and API prices</h2><p>Use your observed monthly tokens and model mix to estimate API-equivalent value and potential savings.</p></div><a className="button" href={`${ROUTE_PATHS.calculator}#calculator`}>Open calculator <ArrowRight aria-hidden="true" size={16} /></a></aside>
+          <MakeItYoursCta />
+          <aside className="calculator-cta"><div><span className="eyebrow">Cost planning</span><h2>Explore the Cost hub</h2><p>Compare subscription and API costs, find a breakeven point, and review the assumptions behind each estimate.</p></div><a className="button" href={PREVIEW_ROUTE_PATHS.calculator}>Explore Cost hub <ArrowRight aria-hidden="true" size={16} /></a></aside>
         </div>
         <aside className="article-toc" aria-label="On this page"><strong>On this page</strong><ol>{guide.sections.map((section) => <li key={section.id}><a href={`#${section.id}`}>{section.title.replace(/^\d+\.\s*/, '')}</a></li>)}</ol></aside>
       </div>
     </article>
-    <section className="related-guides" aria-labelledby="related-guides-heading"><div className="guide-index-heading"><div><span className="eyebrow">Keep optimizing</span><h2 id="related-guides-heading">Related guides</h2></div><a href={ROUTE_PATHS.guides}>View all guides</a></div><div className="related-grid">{recommendations.map((related) => <GuideCard guide={related} key={related.slug} />)}</div></section>
+    <section className="related-guides" aria-labelledby="related-guides-heading"><div className="guide-index-heading"><div><span className="eyebrow">Keep optimizing</span><h2 id="related-guides-heading">Related articles</h2></div><a href={PREVIEW_ROUTE_PATHS.articles}>View all articles</a></div><div className="related-grid">{recommendations.map((related) => <GuideCard guide={related} key={related.slug} />)}</div></section>
   </main>;
 }

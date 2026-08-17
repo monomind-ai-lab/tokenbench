@@ -24,6 +24,7 @@ interface AppShellProps {
   readonly error?: string;
   readonly onRetry?: () => void;
   readonly surface?: 'default' | 'leaderboard-workbench';
+  readonly contentWrapper?: 'main' | 'none';
 }
 
 interface SiteHeaderProps {
@@ -158,7 +159,7 @@ export function SiteFooter({ disclaimer }: SiteFooterProps) {
   </footer>;
 }
 
-export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, onRetry, surface = 'default' }: AppShellProps) {
+export function AppShell({ children, theme, language, activePage, skipLinkTarget = 'page-content', skipLinkLabel = 'Skip to page content', onThemeToggle, onLanguageChange, catalogPhase, notice, error, onRetry, surface = 'default', contentWrapper = 'main' }: AppShellProps) {
   // Match server markup on the first client render; the viewport sync happens
   // after hydration so narrow comparison pages are never abandoned in a
   // mismatched wide-shell DOM.
@@ -178,7 +179,7 @@ export function AppShell({ children, theme, language, activePage, skipLinkTarget
         <SiteHeader theme={theme} language={language} activePage={activePage} onThemeToggle={onThemeToggle} onLanguageChange={onLanguageChange} />
         {error ? <StatusBanner tone="error" actionLabel="Retry loading catalog" onAction={onRetry}>{`Catalog error: ${error}`}</StatusBanner> : null}
         {notice && notice !== error ? <StatusBanner tone="warning" actionLabel={catalogPhase === 'ready' ? 'Retry catalog refresh' : undefined} onAction={catalogPhase === 'ready' ? onRetry : undefined}>{notice}</StatusBanner> : null}
-        <main id="page-content" className="page-main" tabIndex={-1}>{children}</main>
+        {contentWrapper === 'main' ? <main id="page-content" className="page-main" tabIndex={-1}>{children}</main> : children}
         <SiteFooter disclaimer="Verify provider evidence before purchasing." />
       </div>
     </SiteThemeProvider>

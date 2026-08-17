@@ -128,7 +128,7 @@ export async function generateStaticPages(rootDir: string): Promise<void> {
       ));
     }));
 
-  await generateGuidePages(resolve(rootDir, 'guides'));
+  await generateGuidePages(rootDir);
 
   const sitemapPath = resolve(rootDir, 'public', 'sitemaps', 'static.xml');
   await mkdir(dirname(sitemapPath), { recursive: true });

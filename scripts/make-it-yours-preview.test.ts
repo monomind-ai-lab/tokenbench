@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
+import { generateStaticPages } from './generate-static-pages';
 
 const outputRoots: string[] = [];
 const execFileAsync = promisify(execFile);
@@ -25,6 +26,7 @@ describe('approved preview bundle', () => {
     const outputDir = await mkdtemp(join(tmpdir(), 'tokenbench-make-it-yours-'));
     outputRoots.push(outputDir);
 
+    await generateStaticPages(process.cwd());
     await execFileAsync('npx', ['vite', 'build', '--outDir', outputDir], { cwd: process.cwd() });
 
     const document = await readFile(join(outputDir, 'make-it-yours', 'index.html'), 'utf8');
@@ -63,5 +65,9 @@ describe('approved preview bundle', () => {
     await expect(access(join(sharedAssets, 'articles.js'))).resolves.toBeUndefined();
     await expect(access(join(sharedAssets, 'article-detail.js'))).resolves.toBeUndefined();
     await expect(access(join(sharedAssets, 'assets', 'monomind-tokenbench.png'))).resolves.toBeUndefined();
+
+    const guideDetail = await readFile(join(outputDir, 'articles', 'track-claude-code-usage', 'index.html'), 'utf8');
+    expect(guideDetail).toContain('How to Track Claude Code Usage, Tokens, and Spend');
+    expect(guideDetail).toContain('href="/articles/monitor-openai-codex-usage/"');
   }, 30_000);
 });

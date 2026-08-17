@@ -42,7 +42,7 @@ describe('crawlable static-page generator', () => {
     const multimodal = await readFile(join(root, 'leaderboards/multimodal/vision-documents/index.html'), 'utf8');
     const methodology = await readFile(join(root, 'methodology/benchalign/index.html'), 'utf8');
     const popularModels = await readFile(join(root, 'popular-models/index.html'), 'utf8');
-    const guide = await readFile(join(root, 'guides/track-claude-code-usage/index.html'), 'utf8');
+    const guide = await readFile(join(root, 'articles/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
     expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
@@ -95,7 +95,7 @@ describe('crawlable static-page generator', () => {
     expect(guide).toContain(THEME_BOOTSTRAP);
     expect(guide).toContain('<main id="page-content" class="guides-main article-main" tabindex="-1">');
     expect(guide).toContain('<meta property="og:type" content="article">');
-    expect(guide).toContain('https://tokenbench.monomind.one/guides/track-claude-code-usage/');
+    expect(guide).toContain('https://tokenbench.monomind.one/articles/track-claude-code-usage/');
 
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/tools/subscriptions-vs-apis/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/leaderboards/llm/reasoning/</loc>');
@@ -104,6 +104,7 @@ describe('crawlable static-page generator', () => {
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/methodology/benchalign/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/privacy/</loc>');
     expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/popular-models/</loc>');
+    expect(sitemap).toContain('<loc>https://tokenbench.monomind.one/articles/track-claude-code-usage/</loc>');
     expect(sitemap).not.toContain('/welcome/');
     expect(new Set(sitemap.match(/<loc>[^<]+<\/loc>/g)).size).toBe(sitemap.match(/<loc>[^<]+<\/loc>/g)?.length);
     expect(sitemap).not.toContain('/compare/claude-4-vs-gpt-5');
