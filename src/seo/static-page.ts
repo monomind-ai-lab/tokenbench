@@ -9,6 +9,14 @@ export type StaticNavigationPage = SiteNavigationPage | undefined;
 
 interface StaticDocumentOptions {
   readonly includeTranslation?: boolean;
+  readonly assets?: {
+    readonly script: string;
+    readonly stylesheet: string;
+  };
+  readonly payload?: {
+    readonly id: string;
+    readonly value: unknown;
+  };
 }
 
 export function escapeHtml(value: string): string {
@@ -109,6 +117,12 @@ export function transactionalChrome(content: string): string {
 
 export function documentHtml(head: string, content: string, options: StaticDocumentOptions = {}): string {
   const translationMount = options.includeTranslation === false ? '' : '    <div id="google_translate_element"></div>\n';
+  const assets = options.assets
+    ? `    <link rel="stylesheet" href="${escapeHtml(options.assets.stylesheet)}">\n    <script type="module" src="${escapeHtml(options.assets.script)}"></script>`
+    : '    <script type="module" src="/src/main.tsx"></script>';
+  const payload = options.payload
+    ? `    <script id="${escapeHtml(options.payload.id)}" type="application/json">${jsonLd(options.payload.value)}</script>\n`
+    : '';
   return `<!doctype html>
 <html lang="en" data-theme="${SITE_CONFIG.defaultTheme}">
   <head>
@@ -116,7 +130,7 @@ export function documentHtml(head: string, content: string, options: StaticDocum
   </head>
   <body>
 ${translationMount}    <div id="root">${content}</div>
-    <script type="module" src="/src/main.tsx"></script>
+${payload}${assets}
   </body>
 </html>\n`;
 }

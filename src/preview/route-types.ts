@@ -29,6 +29,7 @@ export interface PreviewPayloadDefinition {
 
 export interface PreviewPageProps {
   readonly match: PreviewRouteMatch;
+  readonly data?: unknown;
 }
 
 export interface PreviewRoute {

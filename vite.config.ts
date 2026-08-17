@@ -4,9 +4,13 @@ import path from 'path';
 import {defineConfig} from 'vite';
 import { versionFrontendAssetReferences } from './src/routing/frontend-assets';
 import { staticHtmlEntries } from './src/routing/routes';
+import { previewHtmlEntries } from './scripts/generate-preview-documents';
 import { makeItYoursPreviewPlugin } from './scripts/make-it-yours-preview';
 
-const generatedHtmlInputs = staticHtmlEntries(__dirname);
+const generatedHtmlInputs = {
+  ...staticHtmlEntries(__dirname),
+  ...previewHtmlEntries(__dirname),
+};
 
 export default defineConfig(async ({ command, mode }) => {
   // Pages Functions own production APIs. Vite has no Functions runtime, so

@@ -46,9 +46,14 @@ async function copySharedAssets(outputDirectory: string): Promise<void> {
 
 /** Copies the approved rebuilt surfaces into their Pages canonical routes. */
 export async function copyMakeItYoursPreview(outputDirectory: string, entries: readonly PreviewStaticEntry[] = previewStaticEntries()): Promise<void> {
-  const bundles = prototypeBundleEntries(entries);
+  const reactOutputs = new Set(entries
+    .filter((entry) => entry.delivery === 'react')
+    .map((entry) => entry.output.join('/')));
+  const bundles = prototypeBundleEntries(entries)
+    .filter((entry) => !reactOutputs.has(entry.output.join('/')));
+  if (bundles.length === 0) return;
   const outputDirectories = new Set(bundles.flatMap((entry) => entry.clearOutputDirectory && entry.output.length > 1 ? [entry.output[0]] : []));
-  await Promise.all(['cost', ...outputDirectories].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
+  await Promise.all([...outputDirectories].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
   await Promise.all([
     copySharedAssets(outputDirectory),
     ...bundles.map((page) => copyPreviewPage(outputDirectory, page)),

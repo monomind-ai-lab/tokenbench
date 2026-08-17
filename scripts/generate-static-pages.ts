@@ -11,6 +11,7 @@ import {
 import { metadataForRoute, type PageMetadata } from '../src/seo/metadata';
 import { documentHtml, escapeHtml, headMarkup, staticChrome, transactionalChrome, type StaticNavigationPage } from '../src/seo/static-page';
 import { generateGuidePages } from './generate-guide-pages';
+import { generatePreviewDocuments } from './generate-preview-documents';
 
 function activeNavigation(route: AppRoute): StaticNavigationPage {
   switch (route.kind) {
@@ -138,6 +139,7 @@ export async function generateStaticPages(rootDir: string): Promise<void> {
     }));
 
   await generateGuidePages(rootDir);
+  await generatePreviewDocuments(rootDir);
 
   const sitemapPath = resolve(rootDir, 'public', 'sitemaps', 'static.xml');
   await mkdir(dirname(sitemapPath), { recursive: true });
