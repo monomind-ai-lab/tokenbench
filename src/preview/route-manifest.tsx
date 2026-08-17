@@ -26,12 +26,6 @@ const pendingReactDocument: PreviewDocumentReadiness = {
   reason: 'The substantive React page and static data have not been migrated.',
 };
 
-function parsePreviewPayload(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
-}
-
 interface PrototypeBundleDefinition {
   readonly outputPathname: string;
   readonly output: readonly string[];
@@ -281,7 +275,7 @@ const manifestRoutes = [
     metadata: () => metadataForRoute({ kind: 'popularModels' }),
     structuredData,
     staticData: async () => undefined,
-    payload: { key: 'preview-initial-data', parse: parsePreviewPayload },
+    payload: null,
     Page: popularModelsPage,
     prototypeBundle: [{ outputPathname: '/popular-models/', output: ['popular-models', 'index.html'], document: 'popular-models.html', clearOutputDirectory: false }],
   },

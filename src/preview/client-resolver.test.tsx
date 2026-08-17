@@ -20,6 +20,7 @@ vi.mock('../frontend/comparison-contracts', () => ({ parseComparisonViewModel: p
 vi.mock('../frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
 
 import { startPreviewRoute } from './client-resolver';
+import { previewRoutes } from './route-manifest';
 
 describe('startPreviewRoute', () => {
   beforeEach(() => {
@@ -32,9 +33,10 @@ describe('startPreviewRoute', () => {
     window.history.replaceState({}, '', '/popular-models/');
   });
 
-  it('mounts Popular Models inside its prototype workbench without adding a second shell', () => {
+  it('ignores generic outer JSON and mounts Popular Models inside its prototype workbench without adding a second shell', () => {
     const workbench = document.querySelector<HTMLElement>('[data-popular-models-workbench]')!;
 
+    expect(previewRoutes.find((route) => route.id === 'popular-models')?.payload).toBeNull();
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
     expect(document.querySelectorAll('.topbar')).toHaveLength(1);
     expect(document.querySelectorAll('.articles-footer')).toHaveLength(1);
@@ -46,16 +48,16 @@ describe('startPreviewRoute', () => {
     expect(mounted).not.toContain('top-header');
   });
 
-  it('preserves substantive HTML when an embedded payload is malformed', () => {
+  it('does not interpret malformed generic outer JSON as a Popular Models hydration payload', () => {
     const payload = document.getElementById('preview-initial-data')!;
     payload.textContent = '{bad json';
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
 
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'preserved-invalid-payload', routeId: 'popular-models' });
-    expect(document.querySelector('[data-popular-models-workbench]')).toHaveTextContent('Server fallback');
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'popular-models' });
+    expect(document.querySelector('[data-popular-models-workbench]')).toBeEmptyDOMElement();
     expect(hydrateRootMock).not.toHaveBeenCalled();
-    expect(createRootMock).not.toHaveBeenCalled();
+    expect(createRootMock).toHaveBeenCalledWith(document.querySelector('[data-popular-models-workbench]'));
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
