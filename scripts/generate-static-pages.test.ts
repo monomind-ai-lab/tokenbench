@@ -44,7 +44,7 @@ describe('crawlable static-page generator', () => {
     const guide = await readFile(join(root, 'articles/track-claude-code-usage/index.html'), 'utf8');
     const sitemap = await readFile(join(root, 'public/sitemaps/static.xml'), 'utf8');
 
-    expect(home).toContain('<h1>Transparent AI Costs. Verified Benchmarks.</h1>');
+    expect(home).toContain('<h1 id="home-hero-heading">Transparent AI Costs.<br/>Verified Benchmarks.</h1>');
     expect(home).toContain('<html lang="en" data-theme="dark">');
     expect(home).toContain(THEME_BOOTSTRAP);
     expect(home).toContain('The free decision engine for your AI stack. Evaluate exact model pricing and source-backed performance data so you can choose the best LLM for your workload.');
@@ -77,8 +77,8 @@ describe('crawlable static-page generator', () => {
     expect(knowledge).toContain('If BenchLM has not published the reviewed category metric');
     expect(knowledge).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/knowledge/">');
 
-    expect(popularModels).toContain('<h1>Popular models leaderboard</h1>');
-    expect(popularModels).toContain('Interactive frontend prototype');
+    expect(popularModels).toContain('<h1 id="popular-models-heading" class="leaderboard-page-hero-title">Popular models leaderboard</h1>');
+    expect(popularModels).toContain('<span class="popular-models-fixture-badge leaderboard-page-hero-fixture">Illustrative prototype data</span>');
     expect(popularModels).toContain('https://tokenbench.monomind.one/popular-models/');
 
     expect(home).not.toContain('href="/sources/"');
