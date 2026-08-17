@@ -36,6 +36,39 @@ describe('preview route delivery', () => {
     await expect(readFile(destination, 'utf8')).resolves.toBe('react document');
   });
 
+  it('preserves a nested React document when prototype cleanup clears its parent route directory', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'tokenbench-nested-react-delivery-'));
+    outputRoots.push(root);
+    const nestedReactDocument = join(root, 'models', 'release-notes', 'index.html');
+    await mkdir(join(root, 'models', 'release-notes'), { recursive: true });
+    await writeFile(nestedReactDocument, 'nested react document');
+
+    const prototypeParent: PreviewStaticEntry = {
+      routeId: 'models',
+      delivery: 'prototype',
+      source: 'prototype-bundle',
+      outputPathname: '/models/',
+      output: ['models', 'index.html'],
+      document: 'index.html',
+      clearOutputDirectory: true,
+      match: { routeId: 'models', pathname: '/models/', search: new URLSearchParams(), hash: '', params: {} },
+    };
+    const nestedReactRoute: PreviewStaticEntry = {
+      routeId: 'model-profile',
+      delivery: 'react',
+      source: 'prototype-bundle',
+      outputPathname: '/models/release-notes/',
+      output: ['models', 'release-notes', 'index.html'],
+      document: 'index.html',
+      clearOutputDirectory: false,
+      match: { routeId: 'model-profile', pathname: '/models/release-notes/', search: new URLSearchParams(), hash: '', params: {} },
+    };
+
+    await copyMakeItYoursPreview(root, [prototypeParent, nestedReactRoute]);
+
+    await expect(readFile(nestedReactDocument, 'utf8')).resolves.toBe('nested react document');
+  });
+
   it('does not copy shared prototype assets when every route is React-delivered', async () => {
     const root = await mkdtemp(join(tmpdir(), 'tokenbench-react-delivery-assets-'));
     outputRoots.push(root);

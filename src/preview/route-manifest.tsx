@@ -8,14 +8,19 @@ import { GuideArticlePage, GuidesHub } from '../frontend/guides-page';
 import { GUIDE_BY_SLUG, GUIDES } from '../guides/content';
 import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
-import type { PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewStaticEntry } from './route-types';
+import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewStaticEntry } from './route-types';
 
-export type { PreviewPageProps, PreviewPayloadDefinition, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewStaticEntry } from './route-types';
+export type { PreviewDocumentReadiness, PreviewPageProps, PreviewPayloadDefinition, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewStaticEntry } from './route-types';
 
 const defaultSkipLink = {
   skipLinkTarget: 'page-content',
   skipLinkLabel: 'Skip to page content',
 } as const;
+
+const pendingReactDocument: PreviewDocumentReadiness = {
+  status: 'blocked',
+  reason: 'The substantive React page and static data have not been migrated.',
+};
 
 interface PrototypeBundleDefinition {
   readonly outputPathname: string;
@@ -151,6 +156,7 @@ const manifestRoutes = [
     match: exactPathMatcher('home', '/'),
     outputPathname: '/',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'home', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'home' }),
     structuredData,
@@ -164,6 +170,7 @@ const manifestRoutes = [
     match: exactPathMatcher('models', '/models'),
     outputPathname: '/models',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'models' }),
     structuredData,
@@ -180,6 +187,7 @@ const manifestRoutes = [
     match: exactPathMatcher('model-profile', '/model-profile'),
     outputPathname: '/model-profile',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: (match) => metadataForRoute({ kind: 'modelProfile', slug: match.search.get('model') ?? 'model' }),
     structuredData,
@@ -193,6 +201,7 @@ const manifestRoutes = [
     match: exactPathMatcher('model-lifecycle', '/model-lifecycle'),
     outputPathname: '/model-lifecycle',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'models' }),
     structuredData,
@@ -206,6 +215,7 @@ const manifestRoutes = [
     match: exactPathMatcher('popular-models', '/popular-models/'),
     outputPathname: '/popular-models/',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'popularModels', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'popularModels' }),
     structuredData,
@@ -219,6 +229,7 @@ const manifestRoutes = [
     match: exactPathMatcher('make-it-yours', '/make-it-yours/'),
     outputPathname: '/make-it-yours/',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'leaderboards', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'leaderboards' }),
     structuredData,
@@ -232,6 +243,7 @@ const manifestRoutes = [
     match: exactPathMatcher('compare', '/compare'),
     outputPathname: '/compare',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'compare', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'compareHub' }),
     structuredData,
@@ -248,6 +260,7 @@ const manifestRoutes = [
     match: exactPathMatcher('subscribe-vs-api', '/subscribe-vs-api'),
     outputPathname: '/subscribe-vs-api',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'calculator', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'calculator' }),
     structuredData,
@@ -261,6 +274,7 @@ const manifestRoutes = [
     match: exactPathMatcher('articles', '/articles'),
     outputPathname: '/articles',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to articles' },
     metadata: () => previewArticleMetadata.articles,
     structuredData,
@@ -277,6 +291,10 @@ const manifestRoutes = [
     match: articleDetailMatch,
     outputPathname: '/articles/hybrid-router',
     delivery: 'prototype',
+    documentReadiness: {
+      status: 'blocked',
+      reason: 'Hybrid Router substantive React page and static data are pending Task 7.',
+    },
     shell: { activePage: 'guides', skipLinkTarget: 'guide-content', skipLinkLabel: 'Skip to article content' },
     metadata: (match) => {
       const slug = match.params.slug;
@@ -299,6 +317,7 @@ const manifestRoutes = [
     match: exactPathMatcher('llm-price-performance', '/llm-price-performance/'),
     outputPathname: '/llm-price-performance/',
     delivery: 'prototype',
+    documentReadiness: pendingReactDocument,
     shell: { activePage: 'pricePerformance', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'pricePerformance' }),
     structuredData,

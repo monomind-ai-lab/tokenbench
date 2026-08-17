@@ -52,8 +52,12 @@ export async function copyMakeItYoursPreview(outputDirectory: string, entries: r
   const bundles = prototypeBundleEntries(entries)
     .filter((entry) => !reactOutputs.has(entry.output.join('/')));
   if (bundles.length === 0) return;
-  const outputDirectories = new Set(bundles.flatMap((entry) => entry.clearOutputDirectory && entry.output.length > 1 ? [entry.output[0]] : []));
-  await Promise.all([...outputDirectories].map((directory) => rm(join(outputDirectory, directory), { recursive: true, force: true })));
+  const clearedOutputs = new Map(
+    bundles
+      .filter((entry) => entry.clearOutputDirectory)
+      .map((entry) => [entry.output.join('/'), entry.output] as const),
+  );
+  await Promise.all([...clearedOutputs.values()].map((output) => rm(join(outputDirectory, ...output), { force: true })));
   await Promise.all([
     copySharedAssets(outputDirectory),
     ...bundles.map((page) => copyPreviewPage(outputDirectory, page)),

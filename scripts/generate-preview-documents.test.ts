@@ -10,7 +10,7 @@ const outputRoots: string[] = [];
 function reactRoute(routeId: PreviewRoute['id']): PreviewRoute {
   const route = previewRoutes.find((candidate) => candidate.id === routeId);
   if (!route) throw new Error(`Missing fixture route: ${routeId}`);
-  return { ...route, delivery: 'react' };
+  return { ...route, delivery: 'react', documentReadiness: { status: 'ready' } };
 }
 
 afterEach(async () => {
@@ -37,6 +37,16 @@ describe('generatePreviewDocuments', () => {
     await generatePreviewDocuments(root, previewRoutes.filter((route) => route.id === 'home'));
 
     await expect(access(join(root, 'index.html'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('refuses an accidental Hybrid Router React delivery until its substantive document is ready', () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'article-detail');
+    if (!route) throw new Error('Missing Hybrid Router fixture route');
+    const accidentalReactRoute = { ...route, delivery: 'react' } as PreviewRoute;
+
+    expect(() => previewHtmlEntries('/generated-preview', [accidentalReactRoute])).toThrow(
+      /article-detail.*Hybrid Router.*static data/iu,
+    );
   });
 
   it('derives article document outputs from the manifest entry tree', () => {

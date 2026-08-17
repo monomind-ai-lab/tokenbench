@@ -27,6 +27,10 @@ export interface PreviewPayloadDefinition {
   readonly key: string;
 }
 
+export type PreviewDocumentReadiness =
+  | { readonly status: 'ready' }
+  | { readonly status: 'blocked'; readonly reason: string };
+
 export interface PreviewPageProps {
   readonly match: PreviewRouteMatch;
   readonly data?: unknown;
@@ -37,6 +41,7 @@ export interface PreviewRoute {
   readonly match: (url: URL) => PreviewRouteMatch | null;
   readonly outputPathname: string;
   readonly delivery: 'prototype' | 'react';
+  readonly documentReadiness: PreviewDocumentReadiness;
   readonly shell: {
     readonly activePage: SiteNavigationPage;
     readonly skipLinkTarget: string;

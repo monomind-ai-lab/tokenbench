@@ -25,6 +25,11 @@ function routeMatch(route: PreviewRoute): PreviewRouteMatch {
   return match;
 }
 
+function assertDocumentReady(route: PreviewRoute): void {
+  if (route.documentReadiness.status === 'ready') return;
+  throw new Error(`React preview document is not ready for ${route.id}: ${route.documentReadiness.reason}`);
+}
+
 /**
  * Expands React-delivered routes from the manifest. Article guides come from
  * the manifest's generated-guide entries, so their slugs have one owner.
@@ -32,6 +37,7 @@ function routeMatch(route: PreviewRoute): PreviewRouteMatch {
 export function previewDocumentEntries(routes: readonly PreviewRoute[] = previewRoutes): readonly PreviewDocumentEntry[] {
   return routes.flatMap((route) => {
     if (route.delivery !== 'react') return [];
+    assertDocumentReady(route);
 
     const ownEntry: PreviewDocumentEntry = {
       route,
