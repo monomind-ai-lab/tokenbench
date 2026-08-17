@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { LEADERBOARD_ROUTES, matchRoute, PREVIEW_ROUTE_PATHS, previewModelProfilePath, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
+import { previewPaths } from '../preview/route-manifest';
+import { LEADERBOARD_ROUTES, matchRoute, ROUTE_PATHS, staticHtmlEntries, type LeaderboardKey } from './routes';
 
 const APPROVED_LEADERBOARD_TITLES = {
   'llm-overall': 'Overall benchmarks',
@@ -94,17 +95,17 @@ describe('TokenBench route registry', () => {
     expect(matchRoute('/guides/reduce-llm-api-costs-caching-batch-output-limits/')).toEqual({ kind: 'redirect', to: '/articles/reduce-llm-api-costs-caching-batch-output-limits/' });
   });
 
-  it('keeps preview chrome destinations separate from production route contracts', () => {
-    expect(PREVIEW_ROUTE_PATHS.home).toBe('/');
-    expect(PREVIEW_ROUTE_PATHS.models).toBe('/models');
-    expect(PREVIEW_ROUTE_PATHS.modelCatalog).toBe('/models#catalog');
-    expect(PREVIEW_ROUTE_PATHS.popularModels).toBe('/popular-models/');
-    expect(PREVIEW_ROUTE_PATHS.compare).toBe('/compare');
-    expect(PREVIEW_ROUTE_PATHS.makeItYours).toBe('/make-it-yours/');
-    expect(PREVIEW_ROUTE_PATHS.articles).toBe('/articles');
-    expect(PREVIEW_ROUTE_PATHS.articleDetail).toBe('/articles/hybrid-router');
-    expect(PREVIEW_ROUTE_PATHS.calculator).toBe('/subscribe-vs-api');
-    expect(previewModelProfilePath('GPT 5.6/Sol')).toBe('/model-profile?model=GPT%205.6%2FSol');
+  it('keeps preview chrome destinations in the typed manifest, separate from production route contracts', () => {
+    expect(previewPaths.home).toBe('/');
+    expect(previewPaths.models).toBe('/models');
+    expect(previewPaths.modelCatalog).toBe('/models#catalog');
+    expect(previewPaths.popularModels).toBe('/popular-models/');
+    expect(previewPaths.compare).toBe('/compare');
+    expect(previewPaths.makeItYours).toBe('/make-it-yours/');
+    expect(previewPaths.articles).toBe('/articles');
+    expect(previewPaths.articleDetail).toBe('/articles/hybrid-router');
+    expect(previewPaths.subscribeVsApi).toBe('/subscribe-vs-api');
+    expect(previewPaths.modelProfile('GPT 5.6/Sol')).toBe('/model-profile?model=GPT%205.6%2FSol');
   });
 
   it('does not turn unknown fixed-path candidates into published pages', () => {

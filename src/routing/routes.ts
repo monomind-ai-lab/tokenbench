@@ -1,5 +1,8 @@
 import { SITE_CONFIG } from '../brand/site-config';
 import { articlePath, GUIDE_BY_SLUG, GUIDES } from '../guides/content';
+import { previewPaths } from '../preview/route-manifest';
+
+export { previewPaths, previewPaths as PREVIEW_ROUTE_PATHS } from '../preview/route-manifest';
 
 export const ROUTE_PATHS = {
   home: '/',
@@ -15,31 +18,8 @@ export const ROUTE_PATHS = {
   welcome: '/welcome/',
 } as const;
 
-/**
- * Canonical destinations for the ui-revamp-3 preview surfaces.
- *
- * The production React application retains its own route contracts. The
- * approved ui-revamp-3 deployment publishes rebuilt surfaces at the paths
- * below, so shared chrome must use this map instead of the production routes.
- */
-export const PREVIEW_ROUTE_PATHS = {
-  home: '/',
-  models: '/models',
-  modelCatalog: '/models#catalog',
-  compare: '/compare',
-  modelProfile: '/model-profile',
-  modelLifecycle: '/model-lifecycle',
-  popularModels: '/popular-models/',
-  makeItYours: '/make-it-yours/',
-  guides: '/guides/',
-  articles: '/articles',
-  articleDetail: '/articles/hybrid-router',
-  calculator: '/subscribe-vs-api',
-  pricePerformance: '/llm-price-performance/',
-} as const;
-
 export function previewModelProfilePath(slug: string): string {
-  return `${PREVIEW_ROUTE_PATHS.modelProfile}?model=${encodeURIComponent(slug)}`;
+  return previewPaths.modelProfile(slug);
 }
 
 export type SiteNavigationPage = 'home' | 'calculator' | 'pricePerformance' | 'models' | 'popularModels' | 'compare' | 'leaderboards' | 'guides';

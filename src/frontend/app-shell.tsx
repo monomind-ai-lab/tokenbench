@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Languages, Menu, Moon, Sun, X } from 'lucide-react';
 import { SITE_CONFIG } from '../brand/site-config';
-import { PREVIEW_ROUTE_PATHS, previewModelProfilePath, type SiteNavigationPage } from '../routing/routes';
+import { previewPaths } from '../preview/route-manifest';
+import type { SiteNavigationPage } from '../routing/routes';
 import { LANGUAGES } from '../types';
 import { POPULAR_MODELS_FIXTURE } from './popular-models/fixtures';
 import { getResponsiveLayout } from './responsive';
@@ -71,14 +72,14 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
 
   return <header ref={headerRef} className="top-header" onKeyDown={(event) => { if (event.key === 'Escape') closeNavigation(); }}>
     <div className="header-inner">
-      <div className="brand-lockup"><a className="brand-home" href={PREVIEW_ROUTE_PATHS.home} aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span></span></a></div>
+      <div className="brand-lockup"><a className="brand-home" href={previewPaths.home} aria-label="TokenBench home"><img src="/brand/monomind-tokenbench.png" alt="MonoMind monogram" /><span className="brand-copy"><span className="brand-name">{SITE_CONFIG.name}</span></span></a></div>
       <button type="button" className="menu-button" aria-label={mobileMenuOpen ? 'Close navigation' : 'Open navigation'} aria-controls="primary-navigation" aria-expanded={mobileMenuOpen} onClick={() => { setMobileMenuOpen((current) => !current); setOpenMenu(null); }}>{mobileMenuOpen ? <X aria-hidden="true" size={20} /> : <Menu aria-hidden="true" size={20} />}</button>
       <nav id="primary-navigation" className="primary-nav" data-open={mobileMenuOpen} aria-label="Primary navigation">
-        <a href={PREVIEW_ROUTE_PATHS.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={closeNavigation}>Home</a>
+        <a href={previewPaths.home} aria-current={activePage === 'home' ? 'page' : undefined} onClick={closeNavigation}>Home</a>
         <button id="primary-models-menu" className="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded={openMenu === 'models'} aria-controls="primary-models-panel" aria-current={activePage === 'models' || activePage === 'pricePerformance' ? 'page' : undefined} onClick={() => toggleMenu('models')}>Models <ChevronDown aria-hidden="true" size={13} /></button>
         <button id="primary-leaderboards-menu" className="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded={openMenu === 'leaderboards'} aria-controls="primary-leaderboards-panel" aria-current={activePage === 'leaderboards' || activePage === 'popularModels' ? 'page' : undefined} onClick={() => toggleMenu('leaderboards')}>Leaderboards <ChevronDown aria-hidden="true" size={13} /></button>
-        <a href={PREVIEW_ROUTE_PATHS.compare} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={closeNavigation}>Compare</a>
-        <a href={PREVIEW_ROUTE_PATHS.calculator} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={closeNavigation}>Subscribe vs API</a>
+        <a href={previewPaths.compare} aria-current={activePage === 'compare' ? 'page' : undefined} onClick={closeNavigation}>Compare</a>
+        <a href={previewPaths.subscribeVsApi} aria-current={activePage === 'calculator' ? 'page' : undefined} onClick={closeNavigation}>Subscribe vs API</a>
         <button id="primary-articles-menu" className="primary-nav-menu-trigger" type="button" aria-haspopup="true" aria-expanded={openMenu === 'articles'} aria-controls="primary-articles-panel" aria-current={activePage === 'guides' ? 'page' : undefined} onClick={() => toggleMenu('articles')}>Articles <ChevronDown aria-hidden="true" size={13} /></button>
       </nav>
       <div className="header-actions">
@@ -91,31 +92,31 @@ export function SiteHeader({ theme, language, activePage, onThemeToggle, onLangu
             <div className="primary-nav-mega-section">
               <div className="primary-nav-mega-heading"><h2>Explore models</h2><span>Decision surfaces</span></div>
               <div className="primary-nav-mega-destinations">
-                <a href={PREVIEW_ROUTE_PATHS.models} onClick={closeNavigation}><strong>Models workbench</strong><span>Price, performance and catalog filters</span></a>
-                <a href={PREVIEW_ROUTE_PATHS.modelCatalog} onClick={closeNavigation}><strong>Model catalog</strong><span>Search, filter and compare model evidence</span></a>
-                <a href={PREVIEW_ROUTE_PATHS.modelLifecycle} onClick={closeNavigation}><strong>Lifecycle radar</strong><span>Retirements, sunset dates and migration paths</span></a>
+                <a href={previewPaths.models} onClick={closeNavigation}><strong>Models workbench</strong><span>Price, performance and catalog filters</span></a>
+                <a href={previewPaths.modelCatalog} onClick={closeNavigation}><strong>Model catalog</strong><span>Search, filter and compare model evidence</span></a>
+                <a href={previewPaths.modelLifecycle} onClick={closeNavigation}><strong>Lifecycle radar</strong><span>Retirements, sunset dates and migration paths</span></a>
               </div>
             </div>
             <div className="primary-nav-mega-section primary-nav-top-models">
               <div className="primary-nav-mega-heading"><h2>Top Models</h2><span>Live weekly rank · 12 Aug 2026</span></div>
-              <div className="primary-nav-model-grid">{HEADER_TOP_MODELS.map((model, index) => <a className="primary-nav-model-link" href={previewModelProfilePath(model.slug)} onClick={closeNavigation} key={model.id}><span>#{index + 1}</span><span><strong>{model.name}</strong><small>{model.organization}</small></span><span>{model.overallScore.toFixed(1)}</span></a>)}</div>
+              <div className="primary-nav-model-grid">{HEADER_TOP_MODELS.map((model, index) => <a className="primary-nav-model-link" href={previewPaths.modelProfile(model.slug)} onClick={closeNavigation} key={model.id}><span>#{index + 1}</span><span><strong>{model.name}</strong><small>{model.organization}</small></span><span>{model.overallScore.toFixed(1)}</span></a>)}</div>
             </div>
           </div>
         </section>
         <section id="primary-leaderboards-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-leaderboards-menu" hidden={openMenu !== 'leaderboards'}>
           <div className="primary-nav-mega-heading"><h2>Leaderboards</h2><span>Rank and re-rank models</span></div>
           <div className="primary-nav-mega-destinations">
-            <a href={PREVIEW_ROUTE_PATHS.popularModels} onClick={closeNavigation}><strong>Popular Models</strong><span>Browse top models by quality, performance, and cost.</span></a>
-            <a href={PREVIEW_ROUTE_PATHS.makeItYours} onClick={closeNavigation}><strong>Make it yours</strong><span>Adjust six capability weights and SLA thresholds</span></a>
+            <a href={previewPaths.popularModels} onClick={closeNavigation}><strong>Popular Models</strong><span>Browse top models by quality, performance, and cost.</span></a>
+            <a href={previewPaths.makeItYours} onClick={closeNavigation}><strong>Make it yours</strong><span>Adjust six capability weights and SLA thresholds</span></a>
           </div>
         </section>
         <section id="primary-articles-panel" className="primary-nav-mega-panel primary-nav-mega-panel-compact" aria-labelledby="primary-articles-menu" hidden={openMenu !== 'articles'}>
           <div className="primary-nav-mega-heading"><h2>Articles</h2><span>Everything about AI models</span></div>
           <div className="primary-nav-mega-destinations">
-            <a href={PREVIEW_ROUTE_PATHS.articles} onClick={closeNavigation}><strong>All</strong></a>
-            <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`} onClick={closeNavigation}><strong>Guides</strong></a>
-            <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=insights`} onClick={closeNavigation}><strong>Insights</strong></a>
-            <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=news`} onClick={closeNavigation}><strong>News</strong></a>
+            <a href={previewPaths.articles} onClick={closeNavigation}><strong>All</strong></a>
+            <a href={`${previewPaths.articles}?channel=guides`} onClick={closeNavigation}><strong>Guides</strong></a>
+            <a href={`${previewPaths.articles}?channel=insights`} onClick={closeNavigation}><strong>Insights</strong></a>
+            <a href={`${previewPaths.articles}?channel=news`} onClick={closeNavigation}><strong>News</strong></a>
           </div>
         </section>
       </div>
@@ -138,18 +139,18 @@ export function SiteFooter({ disclaimer }: SiteFooterProps) {
       </section>
       <nav className="footer-links" aria-label="Explore">
         <strong>Explore</strong>
-        <a href={PREVIEW_ROUTE_PATHS.models}>Models workbench</a>
-        <a href={PREVIEW_ROUTE_PATHS.calculator}>Subscribe vs API</a>
-        <a href={PREVIEW_ROUTE_PATHS.pricePerformance}>Price vs performance</a>
-        <a href={PREVIEW_ROUTE_PATHS.popularModels}>Popular models</a>
-        <a href={PREVIEW_ROUTE_PATHS.makeItYours}>Make it yours</a>
-        <a href={PREVIEW_ROUTE_PATHS.compare}>Compare models</a>
+        <a href={previewPaths.models}>Models workbench</a>
+        <a href={previewPaths.subscribeVsApi}>Subscribe vs API</a>
+        <a href={previewPaths.llmPricePerformance}>Price vs performance</a>
+        <a href={previewPaths.popularModels}>Popular models</a>
+        <a href={previewPaths.makeItYours}>Make it yours</a>
+        <a href={previewPaths.compare}>Compare models</a>
       </nav>
       <nav className="footer-links" aria-label="Articles">
         <strong>Articles</strong>
-        <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=guides`}>Guides</a>
-        <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=insights`}>Insights</a>
-        <a href={`${PREVIEW_ROUTE_PATHS.articles}?channel=news`}>News</a>
+        <a href={`${previewPaths.articles}?channel=guides`}>Guides</a>
+        <a href={`${previewPaths.articles}?channel=insights`}>Insights</a>
+        <a href={`${previewPaths.articles}?channel=news`}>News</a>
       </nav>
       <NewsletterSignup context="footer" />
     </div>
