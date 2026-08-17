@@ -16,6 +16,7 @@ import { LifecycleRadarPage, parseLifecycleRadarPageData } from '../pages/lifecy
 import { PreviewModelProfilePage, parsePreviewModelProfilePageData } from '../pages/preview-model-profile-page';
 import { PreviewModelsPage, parsePreviewModelsPageData } from '../pages/preview-models-page';
 import { PreviewComparePage, parsePreviewComparePageData } from '../pages/preview-compare-page';
+import { MakeItYoursPage, parseMakeItYoursPageData } from '../pages/make-it-yours-page';
 import { metadataForRoute } from '../seo/metadata';
 import type { PageMetadata } from '../seo/metadata';
 import type { PreviewDocumentReadiness, PreviewPageProps, PreviewRoute, PreviewRouteId, PreviewRouteMatch, PreviewRuntimeRoute, PreviewRuntimeRouteId, PreviewRuntimeRouteMatch, PreviewStaticEntry } from './route-types';
@@ -98,6 +99,12 @@ const previewLifecycleMetadata = previewMetadataForCanonical(`${SITE_CONFIG.orig
   title: `Model Lifecycle & Retirement Radar | ${SITE_CONFIG.name}`,
   description: `Track model retirement notices, sunset dates, source-backed replacement paths, and explicit unavailable migration evidence with ${SITE_CONFIG.name}.`,
   h1: 'Production model lifecycle & retirement radar',
+});
+
+const previewMakeItYoursMetadata = previewMetadata('/make-it-yours/', {
+  title: `Make it yours — ${SITE_CONFIG.name}`,
+  description: 'Build and export a weighted model leaderboard with capability, provider, access, and service-level filters.',
+  h1: 'Make it yours',
 });
 
 const previewArticleMetadata = {
@@ -284,6 +291,7 @@ const modelsPage = PreviewModelsPage as ComponentType<PreviewPageProps>;
 const modelProfilePage = PreviewModelProfilePage as ComponentType<PreviewPageProps>;
 const lifecyclePage = LifecycleRadarPage as ComponentType<PreviewPageProps>;
 const comparePage = PreviewComparePage as ComponentType<PreviewPageProps>;
+const makeItYoursPage = MakeItYoursPage as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
@@ -296,6 +304,7 @@ const modelsPayload = { key: 'models-initial-data', parse: parsePreviewModelsPag
 const modelProfilePayload = { key: 'preview-model-profile-initial-data', parse: parsePreviewModelProfilePageData } as const;
 const lifecyclePayload = { key: 'model-lifecycle-initial-data', parse: parseLifecycleRadarPageData } as const;
 const comparePayload = { key: 'compare-initial-data', parse: parsePreviewComparePageData } as const;
+const makeItYoursPayload = { key: 'make-it-yours-initial-data', parse: parseMakeItYoursPageData } as const;
 
 export const previewRuntimeRoutes = [
   {
@@ -387,15 +396,15 @@ const manifestRoutes = [
     id: 'make-it-yours',
     match: exactPathMatcher('make-it-yours', '/make-it-yours/'),
     outputPathname: '/make-it-yours/',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'leaderboards', ...defaultSkipLink },
-    metadata: () => metadataForRoute({ kind: 'leaderboards' }),
+    metadata: () => previewMakeItYoursMetadata,
     structuredData,
-    staticData: async () => undefined,
-    payload: null,
-    Page: popularModelsPage,
-    prototypeBundle: [{ outputPathname: '/make-it-yours/', output: ['make-it-yours', 'index.html'], document: 'make-it-yours.html', clearOutputDirectory: false }],
+    staticData: async () => staticPreviewAdapter.rankings({}),
+    payload: makeItYoursPayload,
+    Page: makeItYoursPage,
+    prototypeBundle: [],
   },
   {
     id: 'compare',

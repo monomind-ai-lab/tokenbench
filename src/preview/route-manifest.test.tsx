@@ -41,6 +41,7 @@ describe('preview route manifest', () => {
       'model-profile',
       'model-lifecycle',
       'popular-models',
+      'make-it-yours',
       'compare',
       'articles',
       'article-detail',
@@ -239,7 +240,6 @@ describe('preview route manifest', () => {
     expect(prototypeEntries.sort()).toEqual([
       'index.html <= home.html',
       'popular-models/index.html <= popular-models.html',
-      'make-it-yours/index.html <= make-it-yours.html',
       'subscribe-vs-api/index.html <= cost-calculator.html',
     ].sort());
   });

@@ -85,24 +85,17 @@ describe('approved preview bundle', () => {
     const shellScript = await readFile(join(sharedAssets, 'common.js'), 'utf8');
     expect(document).toContain('<title>Make it yours — TokenBench</title>');
     expect(document).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/make-it-yours/">');
-    expect(document).toContain('src="/ui-revamp-3-assets/make-it-yours.js');
-    expect(document).toContain('href="/ui-revamp-3-assets/styles.css');
+    expect(document).toContain('<script id="make-it-yours-initial-data" type="application/json">');
+    expect(document).toContain('/assets/main.js');
+    expect(document).toContain('/assets/tokenbench.css');
+    expect(document).not.toContain('/ui-revamp-3-assets/make-it-yours.js');
     expect(shellScript).toContain("const leaderboardActive=['make-it-yours','popular-models'].includes(currentPage);");
     expect(shellScript).toContain("location.pathname.replace(/\\/+$/, '').split('/').pop()||'index'");
     expect(shellScript).toContain("const currentPage=current.replace(/\\.html$/,'');");
     expect(shellScript).toContain("const costActive=['subscribe-vs-api'].includes(currentPage);");
 
     const prototypePages = [
-      ['models.html', 'Models workbench'],
-      [join('models', 'index.html'), 'Models workbench'],
-      ['compare.html', 'Compare models'],
-      [join('compare', 'index.html'), 'Compare models'],
-      [join('model-profile', 'index.html'), 'Model profile'],
-      [join('model-lifecycle', 'index.html'), 'Model lifecycle'],
-      ['articles.html', 'Articles'],
-      [join('articles', 'index.html'), 'Articles'],
-      [join('articles', 'hybrid-router.html'), 'A hybrid router for high-stakes agentic work'],
-      [join('articles', 'hybrid-router', 'index.html'), 'A hybrid router for high-stakes agentic work'],
+      [join('subscribe-vs-api', 'index.html'), 'Monthly cost simulator'],
     ] as const;
     for (const [file, expectedText] of prototypePages) {
       const html = await readFile(join(outputDir, file), 'utf8');
@@ -114,6 +107,7 @@ describe('approved preview bundle', () => {
     const reactPages = [
       ['index.html', 'API cost preview'],
       [join('popular-models', 'index.html'), 'popular-models-page'],
+      [join('make-it-yours', 'index.html'), 'make-it-yours-page'],
     ] as const;
     for (const [file, expectedText] of reactPages) {
       const html = await readFile(join(outputDir, file), 'utf8');
