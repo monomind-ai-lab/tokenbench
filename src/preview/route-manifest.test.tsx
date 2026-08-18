@@ -147,19 +147,41 @@ describe('preview route manifest', () => {
     expect(metadata?.canonical).not.toBe(`${SITE_CONFIG.origin}/models/`);
   });
 
-  it('uses a reproducible fixture timestamp for static Home delivery', async () => {
+  it('uses the retained accepted-evidence timestamp for static Home delivery', async () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'home');
     const match = route?.match(new URL('https://tokenbench.test/'));
     if (!route || !match) throw new Error('Home preview route is unavailable');
 
     await expect(route.staticData(match)).resolves.toMatchObject({
       contractVersion: 'ui-data-contract/v1',
-      fetchedAt: '2026-08-17T00:00:00.000Z',
+      fetchedAt: '2026-08-18T00:00:00.000Z',
       data: { models: expect.any(Array) },
     });
   });
 
-  it('uses typed fixture-adapter payloads for the migrated model-family routes', async () => {
+  it('selects the accepted evidence gateway for static data-heavy preview routes without exposing pipeline envelopes to pages', async () => {
+    const models = previewRoutes.find((candidate) => candidate.id === 'models');
+    const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
+    const rankings = previewRoutes.find((candidate) => candidate.id === 'make-it-yours');
+    const subscription = previewRoutes.find((candidate) => candidate.id === 'subscribe-vs-api');
+    if (!models || !profile || !rankings || !subscription) throw new Error('Data-heavy preview routes are unavailable');
+
+    const modelsData = await models.staticData(models.match(new URL('https://tokenbench.test/models'))!);
+    const profileData = await profile.staticData(profile.match(new URL('https://tokenbench.test/model-profile?model=alpha'))!);
+    const rankingsData = await rankings.staticData(rankings.match(new URL('https://tokenbench.test/make-it-yours/'))!);
+    const subscriptionData = await subscription.staticData(subscription.match(new URL('https://tokenbench.test/subscribe-vs-api'))!);
+
+    expect(modelsData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { models: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]) } });
+    expect(profileData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { model: expect.objectContaining({ id: 'alpha' }) } });
+    expect(rankingsData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { models: expect.arrayContaining([expect.any(Object)]) } });
+    expect(subscriptionData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { models: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]) } });
+    for (const data of [modelsData, profileData, rankingsData, subscriptionData]) {
+      expect(data).not.toHaveProperty('method');
+      expect(data).not.toHaveProperty('sources');
+    }
+  });
+
+  it('uses typed accepted-evidence gateway payloads for the migrated model-family routes', async () => {
     const models = previewRoutes.find((candidate) => candidate.id === 'models');
     const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
     const lifecycle = previewRoutes.find((candidate) => candidate.id === 'model-lifecycle');
@@ -181,7 +203,11 @@ describe('preview route manifest', () => {
     await expect(compare.staticData(compare.match(new URL('https://tokenbench.test/compare'))!)).resolves.toMatchObject({
       contractVersion: 'ui-data-contract/v1',
       data: {
-        models: [expect.objectContaining({ id: 'gpt-4o' }), expect.objectContaining({ id: 'deepseek-v3' })],
+        models: expect.arrayContaining([
+          expect.objectContaining({ id: 'alpha' }),
+          expect.objectContaining({ id: 'beta' }),
+          expect.objectContaining({ id: 'gamma' }),
+        ]),
         unavailableModelIds: [],
       },
     });

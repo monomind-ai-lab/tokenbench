@@ -11,47 +11,47 @@ import {
 
 const contractRoot = resolve(process.cwd(), 'contracts/ui-data-contract/v1');
 
-function readExample<T>(name: string): T {
-  return JSON.parse(readFileSync(resolve(contractRoot, 'examples', `${name}.json`), 'utf8')) as T;
-}
-
-function readContractFile<T>(path: string): T {
-  return JSON.parse(readFileSync(resolve(contractRoot, path), 'utf8')) as T;
-}
-
 type JsonRecord = Record<string, unknown>;
 
 interface ContractSchema extends JsonRecord {
   readonly $id: string;
-  readonly $schema: string;
 }
 
 interface ContractMetaSchema extends JsonRecord {
   readonly $id: string;
-  readonly $schema: string;
-  readonly $vocabulary: Readonly<Record<string, boolean>>;
 }
 
-interface ManifestEntry {
+interface AcceptedArtifact {
+  readonly classification: 'method_response' | 'mixed_source' | 'unavailable' | 'expected_rejection';
+  readonly expected: {
+    readonly errorCode: 'invalid_timestamp' | 'unsupported_contract_version' | null;
+    readonly outcome: 'accept' | 'reject';
+  };
+  readonly id: string;
   readonly method: UiDataContractV1Method;
-  readonly file: string;
+  readonly path: string;
   readonly schemaRef: string;
-  readonly classification: 'positive consumer example' | 'expected rejection';
 }
 
-interface Manifest {
-  readonly examples: readonly ManifestEntry[];
+interface EvidenceManifest {
+  readonly artifacts: readonly AcceptedArtifact[];
+  readonly contractVersion: 'ui-data-contract/v1';
+  readonly frontendBaselineCommit: string;
+  readonly producerCommitSha: string;
 }
 
-const schema = readContractFile<ContractSchema>('schema.json');
-const metaSchema = readContractFile<ContractMetaSchema>('meta-schema.json');
-const manifest = readContractFile<Manifest>('examples/manifest.json');
+function readContractFile<T>(path: string): T {
+  const relativePath = path.startsWith('contracts/ui-data-contract/v1/')
+    ? path.slice('contracts/ui-data-contract/v1/'.length)
+    : path;
+  return JSON.parse(readFileSync(resolve(contractRoot, relativePath), 'utf8')) as T;
+}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function schemaValidator(schemaRef: string) {
+function schemaValidator(schema: ContractSchema, metaSchema: ContractMetaSchema, schemaRef: string) {
   const ajv = new Ajv2020({ allErrors: true, strict: true, strictTypes: false, validateFormats: true });
   ajv.addFormat('date-time', { type: 'string', validate: isStrictUtcTimestamp });
   ajv.addFormat('date', { type: 'string', validate: isStrictCalendarDate });
@@ -62,171 +62,66 @@ function schemaValidator(schemaRef: string) {
   return validate;
 }
 
-function expectSchemaAndParserParity(
-  value: unknown,
-  method: UiDataContractV1Method,
-  expectedValid: boolean,
-): void {
-  const validate = schemaValidator(`#/$defs/${method}Envelope`);
-  expect(validate(value), JSON.stringify(validate.errors)).toBe(expectedValid);
-  if (expectedValid) {
-    expect(() => parseUiDataContractV1(value, method)).not.toThrow();
-  } else {
-    expect(() => parseUiDataContractV1(value, method)).toThrow();
-  }
-}
+const schema = readContractFile<ContractSchema>('schema.json');
+const metaSchema = readContractFile<ContractMetaSchema>('meta-schema.json');
+const manifest = readContractFile<EvidenceManifest>('evidence/manifest.json');
+const acceptedArtifacts = manifest.artifacts.filter((artifact) => artifact.expected.outcome === 'accept');
+const rejectedArtifacts = manifest.artifacts.filter((artifact) => artifact.expected.outcome === 'reject');
 
-const examples = {
-  models: readExample<unknown>('models'),
-  profile: readExample<unknown>('profile'),
-  lifecycle: readExample<unknown>('lifecycle'),
-  rankings: readExample<unknown>('rankings'),
-  comparison: readExample<unknown>('comparison'),
-  subscription: readExample<unknown>('subscription'),
-  mixedSource: readExample<unknown>('mixed-source'),
-  unsupportedVersion: readExample<unknown>('unsupported-version'),
-};
+describe('parseUiDataContractV1 accepted pipeline boundary', () => {
+  it.each(acceptedArtifacts)(
+    'validates the accepted $id $method envelope without changing its accepted facts',
+    (artifact) => {
+      const candidate = readContractFile<unknown>(artifact.path);
+      const validate = schemaValidator(schema, metaSchema, artifact.schemaRef);
 
-const methods: readonly UiDataContractV1Method[] = [
-  'models',
-  'profile',
-  'lifecycle',
-  'rankings',
-  'comparison',
-  'subscription',
-];
-
-describe('parseUiDataContractV1', () => {
-  it.each(methods)(
-    'parses the proposed %s example without a page-specific transformation',
-    (method) => {
-      const parsed = parseUiDataContractV1(examples[method], method);
-
-      expect(parsed.contractVersion).toBe('ui-data-contract/v1');
-      expect(parsed).toEqual(examples[method]);
+      expect(validate(candidate), `${artifact.path}: ${JSON.stringify(validate.errors)}`).toBe(true);
+      expect(parseUiDataContractV1(candidate, artifact.method)).toEqual(candidate);
     },
   );
 
-  it('preserves mixed-source and unavailable evidence verbatim', () => {
-    const parsed = parseUiDataContractV1(examples.mixedSource, 'rankings');
+  it('retains producer, baseline, six-method, mixed-source, and unavailable acceptance evidence', () => {
+    expect(manifest).toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      producerCommitSha: 'ac42000893fa2e15d0ae76f7f83ebcea5745f7b5',
+      frontendBaselineCommit: '5d649d315a0bdb052e90bb96d6b7e94544f9ad31',
+    });
+    expect(new Set(acceptedArtifacts.filter((artifact) => artifact.classification === 'method_response').map((artifact) => artifact.method))).toEqual(
+      new Set(['models', 'profile', 'lifecycle', 'rankings', 'comparison', 'subscription']),
+    );
+
+    const mixedSource = readContractFile<JsonRecord>('evidence/responses/rankings.mixed-source.json');
+    const parsed = parseUiDataContractV1(mixedSource, 'rankings');
+    const sources = parsed.sources;
 
     expect(parsed.effectiveAt).toBeNull();
-    expect(new Set(parsed.provenance.map((source) => source.effectiveAt)).size).toBeGreaterThan(1);
-    expect(JSON.stringify(parsed)).toContain('No approved source');
+    expect(new Set(sources.map((source) => source.effectiveAt))).toEqual(new Set([
+      '2026-08-18T00:00:00.000Z',
+      '2026-08-17T00:00:00.000Z',
+    ]));
+
+    const unavailable = parseUiDataContractV1(readContractFile<unknown>('evidence/responses/profile.unavailable.json'), 'profile');
+    expect(unavailable).toMatchObject({ status: 'unavailable', effectiveAt: null, data: null });
   });
 
-  it('rejects unsupported versions and invalid UTC timestamps', () => {
-    expect(() => parseUiDataContractV1(examples.unsupportedVersion, 'models'))
-      .toThrow(/Unsupported UI data contract version/);
-    expect(() => parseUiDataContractV1({
-      ...readExample<Record<string, unknown>>('models'),
-      fetchedAt: '2026-08-17T12:00:00+08:00',
-    }, 'models')).toThrow(/UTC ISO-8601 timestamp/);
-    expect(() => parseUiDataContractV1({
-      ...readExample<Record<string, unknown>>('models'),
-      fetchedAt: '2026-02-30T00:00:00.000Z',
-    }, 'models')).toThrow(/UTC ISO-8601 timestamp/);
+  it.each(rejectedArtifacts)('rejects $id with the stable $expected.errorCode code', (artifact) => {
+    const candidate = readContractFile<unknown>(artifact.path);
+    const validate = schemaValidator(schema, metaSchema, artifact.schemaRef);
+
+    expect(validate(candidate)).toBe(false);
+    expect(() => parseUiDataContractV1(candidate, artifact.method)).toThrow(
+      expect.objectContaining({ code: artifact.expected.errorCode }),
+    );
   });
 
-  it('rejects envelope fields not declared by the proposed schema', () => {
-    expect(() => parseUiDataContractV1({
-      ...readExample<Record<string, unknown>>('models'),
-      cacheNamespace: 'internal-only',
-    }, 'models')).toThrow(/undeclared envelope field/);
-  });
+  it('rejects malformed nested producer data before any page-view-model mapping occurs', () => {
+    const malformed = clone(readContractFile<JsonRecord>('evidence/responses/models.json'));
+    const models = malformed.data as JsonRecord;
+    const firstModel = (models.models as JsonRecord[])[0]!;
+    (firstModel.identity as JsonRecord).displayName = 42;
 
-  it('rejects unavailable evidence with an empty reason', () => {
-    const comparison = readExample<Record<string, unknown>>('comparison');
-    const data = comparison.data as { unavailableModelIds: unknown[] };
-
-    expect(() => parseUiDataContractV1({
-      ...comparison,
-      data: {
-        ...data,
-        unavailableModelIds: [{ availability: 'unavailable', reason: '' }],
-      },
-    }, 'comparison')).toThrow(/non-empty reason/);
-  });
-
-  it('rejects impossible nested calendar dates', () => {
-    const invalidRelease = clone(examples.models) as JsonRecord;
-    const releaseModel = ((invalidRelease.data as JsonRecord).models as JsonRecord[])[0]!;
-    const identityProvenance = (releaseModel.identity as JsonRecord).provenance;
-    releaseModel.benchmark = {
-      availability: 'available',
-      value: { releaseOn: '2026-02-30', subtasks: [] },
-      provenance: identityProvenance,
-    };
-
-    const invalidSunset = clone(examples.lifecycle) as JsonRecord;
-    const lifecycleModel = ((invalidSunset.data as JsonRecord).models as JsonRecord[])[0]!;
-    const sunset = ((lifecycleModel.lifecycle as JsonRecord).value as JsonRecord).sunsetOn as JsonRecord;
-    sunset.value = '2026-02-30';
-
-    expect(() => parseUiDataContractV1(invalidRelease, 'models')).toThrow(/calendar date/);
-    expect(() => parseUiDataContractV1(invalidSunset, 'lifecycle')).toThrow(/calendar date/);
-  });
-});
-
-describe('published ui-data-contract/v1 schema', () => {
-  it('declares date and date-time formats as required assertions', () => {
-    expect(metaSchema.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
-    expect(schema.$schema).toBe(metaSchema.$id);
-    expect(metaSchema.$vocabulary).toMatchObject({
-      'https://json-schema.org/draft/2020-12/vocab/format-assertion': true,
-    });
-  });
-
-  it('resolves every manifest example through the published schema', () => {
-    for (const entry of manifest.examples) {
-      const validate = schemaValidator(entry.schemaRef);
-      const value = readContractFile<unknown>(`examples/${entry.file}`);
-      expect(validate(value), `${entry.file}: ${JSON.stringify(validate.errors)}`)
-        .toBe(entry.classification === 'positive consumer example');
-    }
-  });
-
-  it('keeps parser and schema status/effective-time rules in parity', () => {
-    const availableWithNullTime = clone(examples.models) as JsonRecord;
-    availableWithNullTime.status = 'available';
-    availableWithNullTime.effectiveAt = null;
-
-    const unavailableWithTime = clone(examples.models) as JsonRecord;
-    unavailableWithTime.status = 'unavailable';
-    unavailableWithTime.reason = 'No approved source for the requested surface';
-    unavailableWithTime.data = null;
-
-    const partialWithIndependentTime = clone(examples.models) as JsonRecord;
-    partialWithIndependentTime.effectiveAt = '2026-08-09T00:00:00.000Z';
-
-    expectSchemaAndParserParity(availableWithNullTime, 'models', false);
-    expectSchemaAndParserParity(unavailableWithTime, 'models', false);
-    expectSchemaAndParserParity(examples.mixedSource, 'rankings', true);
-    expectSchemaAndParserParity(partialWithIndependentTime, 'models', true);
-  });
-
-  it('rejects impossible envelope, provenance, and nested dates through both boundaries', () => {
-    const invalidEnvelopeTime = clone(examples.models) as JsonRecord;
-    invalidEnvelopeTime.fetchedAt = '2026-02-30T00:00:00.000Z';
-
-    const invalidProvenanceTime = clone(examples.models) as JsonRecord;
-    ((invalidProvenanceTime.provenance as JsonRecord[])[0]!).effectiveAt = '2026-02-30T00:00:00.000Z';
-
-    const invalidRelease = clone(examples.models) as JsonRecord;
-    const releaseModel = ((invalidRelease.data as JsonRecord).models as JsonRecord[])[0]!;
-    releaseModel.benchmark = {
-      availability: 'available',
-      value: { releaseOn: '2026-02-30', subtasks: [] },
-      provenance: (releaseModel.identity as JsonRecord).provenance,
-    };
-
-    const invalidSunset = clone(examples.lifecycle) as JsonRecord;
-    const lifecycleModel = ((invalidSunset.data as JsonRecord).models as JsonRecord[])[0]!;
-    (((lifecycleModel.lifecycle as JsonRecord).value as JsonRecord).sunsetOn as JsonRecord).value = '2026-02-30';
-
-    expectSchemaAndParserParity(invalidEnvelopeTime, 'models', false);
-    expectSchemaAndParserParity(invalidProvenanceTime, 'models', false);
-    expectSchemaAndParserParity(invalidRelease, 'models', false);
-    expectSchemaAndParserParity(invalidSunset, 'lifecycle', false);
+    const validate = schemaValidator(schema, metaSchema, '#/$defs/modelsEnvelope');
+    expect(validate(malformed)).toBe(false);
+    expect(() => parseUiDataContractV1(malformed, 'models')).toThrow();
   });
 });

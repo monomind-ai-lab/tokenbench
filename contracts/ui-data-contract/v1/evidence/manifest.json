@@ -1,0 +1,471 @@
+{
+  "artifactClass": "contract_acceptance_fixture",
+  "artifacts": [
+    {
+      "byteLength": 19237,
+      "classification": "method_response",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "models",
+      "mediaType": "application/json",
+      "method": "models",
+      "normalizedRequest": {
+        "access": "all",
+        "cursor": null,
+        "limit": 3,
+        "providerIds": [],
+        "search": null
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/models.json",
+      "schemaRef": "#/$defs/modelsEnvelope",
+      "sha256": "sha256:2d4bc37ea0af83f1086c200b366e661c85a5e9ebe0408308431a8788627c0e8d",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/models",
+        "rawQuery": "access=all&limit=3"
+      }
+    },
+    {
+      "byteLength": 13701,
+      "classification": "method_response",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "profile",
+      "mediaType": "application/json",
+      "method": "profile",
+      "normalizedRequest": {
+        "slug": "alpha"
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/profile.json",
+      "schemaRef": "#/$defs/profileEnvelope",
+      "sha256": "sha256:a6f74bf5c300697b66aaae23f8e5d5060666d87753f9103113fdcf82b8d54678",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/models/alpha",
+        "rawQuery": null
+      }
+    },
+    {
+      "byteLength": 1713,
+      "classification": "method_response",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "lifecycle",
+      "mediaType": "application/json",
+      "method": "lifecycle",
+      "normalizedRequest": {
+        "asOf": "2026-08-18T00:00:00.000Z",
+        "horizonDays": 30
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/lifecycle.json",
+      "schemaRef": "#/$defs/lifecycleEnvelope",
+      "sha256": "sha256:c8c90d80e4ee1d5a20b5855216f54417b0f571baf66882aaf41c69f5a956ce40",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/lifecycle",
+        "rawQuery": "asOf=2026-08-18T00%3A00%3A00.000Z&horizonDays=30"
+      }
+    },
+    {
+      "byteLength": 28666,
+      "classification": "method_response",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "rankings",
+      "mediaType": "application/json",
+      "method": "rankings",
+      "normalizedRequest": {
+        "cursor": null,
+        "filters": {
+          "excludeDerivativeFinetunes": false,
+          "openWeights": "all",
+          "organizationIds": []
+        },
+        "limit": 50,
+        "operation": "leaderboard",
+        "releaseId": null
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/rankings.json",
+      "schemaRef": "#/$defs/rankingsEnvelope",
+      "sha256": "sha256:12bb1fda9935bcec7341b1c31db0253ac5f5d5d5b08eb7c96ce99ee672bb9210",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/rankings",
+        "rawQuery": "operation=leaderboard&limit=50"
+      }
+    },
+    {
+      "byteLength": 40533,
+      "classification": "method_response",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "comparison",
+      "mediaType": "application/json",
+      "method": "comparison",
+      "normalizedRequest": {
+        "modelSlugs": [
+          "alpha",
+          "beta",
+          "gamma"
+        ]
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/comparison.json",
+      "schemaRef": "#/$defs/comparisonEnvelope",
+      "sha256": "sha256:5b8d1e9472619cf5b1b025a928547bd3b0b9bfb2403e751f35df597615fb4cf9",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/comparison",
+        "rawQuery": "models=alpha%2Cbeta%2Cgamma"
+      }
+    },
+    {
+      "byteLength": 16905,
+      "classification": "method_response",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "subscription",
+      "mediaType": "application/json",
+      "method": "subscription",
+      "normalizedRequest": {
+        "cacheReadShareBasisPoints": 2000,
+        "cacheWriteShareBasisPoints": 1000,
+        "crossoverTokenVolume": 40000000,
+        "modelMix": [
+          {
+            "modelSlug": "alpha",
+            "pricingTierId": null,
+            "routeId": "alpha-direct",
+            "shareBasisPoints": 6000,
+            "tierContextTokens": 32000
+          },
+          {
+            "modelSlug": "beta",
+            "pricingTierId": null,
+            "routeId": "beta-direct",
+            "shareBasisPoints": 4000,
+            "tierContextTokens": 32000
+          }
+        ],
+        "operation": "calculate",
+        "planId": "fixture-pro",
+        "seats": 2,
+        "workload": {
+          "activeDaysPerMonth": 20,
+          "conversationsPerDay": 10,
+          "inputTokensPerMessage": 1000,
+          "messagesPerConversation": 5,
+          "outputTokensPerMessage": 500
+        }
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/subscription.json",
+      "schemaRef": "#/$defs/subscriptionEnvelope",
+      "sha256": "sha256:b9c97314eeb4b1d27f3666cb89ba4fdde6ee66e26989ca62d7611265f8c626f3",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "POST",
+        "path": "/api/benchmarks/subscription",
+        "rawQuery": null
+      }
+    },
+    {
+      "byteLength": 26439,
+      "classification": "mixed_source",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "rankings-mixed-source",
+      "mediaType": "application/json",
+      "method": "rankings",
+      "normalizedRequest": {
+        "dimensionSetRevision": "ui-data-contract-v1-fixture-dimensions",
+        "filters": {
+          "access": "all",
+          "excludeDerivativeFinetunes": false,
+          "maxInputMicroDollarsPerMillion": null,
+          "maxOutputMicroDollarsPerMillion": null,
+          "maxTtftP50Ms": null,
+          "minContextWindowTokens": null,
+          "minMaxOutputTokens": null,
+          "minTpsP50": null,
+          "providerIds": [],
+          "requiredInputModalities": []
+        },
+        "includeIneligible": true,
+        "limit": 50,
+        "operation": "custom",
+        "weights": {
+          "capability": 20,
+          "efficiency": 50,
+          "reliability": 30
+        }
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/rankings.mixed-source.json",
+      "schemaRef": "#/$defs/rankingsEnvelope",
+      "sha256": "sha256:6656ac36dc35bf908f1f32d045e740f9261b02200872cc080bb9af494eabfcbd",
+      "transport": {
+        "expectedHttpStatus": 200,
+        "httpMethod": "POST",
+        "path": "/api/benchmarks/rankings",
+        "rawQuery": null
+      }
+    },
+    {
+      "byteLength": 1589,
+      "classification": "unavailable",
+      "expected": {
+        "errorCode": null,
+        "outcome": "accept"
+      },
+      "id": "profile-unavailable",
+      "mediaType": "application/json",
+      "method": "profile",
+      "normalizedRequest": {
+        "slug": "alpha"
+      },
+      "observed": [
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": null,
+          "outcome": "accept",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/responses/profile.unavailable.json",
+      "schemaRef": "#/$defs/profileEnvelope",
+      "sha256": "sha256:80815f152d12491d44d6798598ffb4d66a16ffb0ff2477d9850d48c234b5b367",
+      "transport": {
+        "expectedHttpStatus": 404,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/models/alpha",
+        "rawQuery": null
+      }
+    },
+    {
+      "byteLength": 19238,
+      "classification": "expected_rejection",
+      "expected": {
+        "errorCode": "invalid_timestamp",
+        "outcome": "reject"
+      },
+      "id": "models-invalid-timestamp",
+      "mediaType": "application/json",
+      "method": "models",
+      "normalizedRequest": {
+        "access": "all",
+        "cursor": null,
+        "limit": 3,
+        "providerIds": [],
+        "search": null
+      },
+      "observed": [
+        {
+          "errorCode": "invalid_timestamp",
+          "outcome": "reject",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": "invalid_timestamp",
+          "outcome": "reject",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/rejections/models.invalid-timestamp.json",
+      "schemaRef": "#/$defs/modelsEnvelope",
+      "sha256": "sha256:7db28316a709de3322ab1f1497a104f4fac0229c0d5045a7b976dd15ea5d240a",
+      "transport": {
+        "expectedHttpStatus": null,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/models",
+        "rawQuery": "access=all&limit=3"
+      }
+    },
+    {
+      "byteLength": 19237,
+      "classification": "expected_rejection",
+      "expected": {
+        "errorCode": "unsupported_contract_version",
+        "outcome": "reject"
+      },
+      "id": "models-unsupported-version",
+      "mediaType": "application/json",
+      "method": "models",
+      "normalizedRequest": {
+        "access": "all",
+        "cursor": null,
+        "limit": 3,
+        "providerIds": [],
+        "search": null
+      },
+      "observed": [
+        {
+          "errorCode": "unsupported_contract_version",
+          "outcome": "reject",
+          "validatorId": "ajv-2020"
+        },
+        {
+          "errorCode": "unsupported_contract_version",
+          "outcome": "reject",
+          "validatorId": "runtime-boundary"
+        }
+      ],
+      "path": "contracts/ui-data-contract/v1/evidence/rejections/models.unsupported-version.json",
+      "schemaRef": "#/$defs/modelsEnvelope",
+      "sha256": "sha256:abbdd5f94f5601ecd338396ccaf8b61db6328d764fee3c075e51f01897c5ab2f",
+      "transport": {
+        "expectedHttpStatus": null,
+        "httpMethod": "GET",
+        "path": "/api/benchmarks/models",
+        "rawQuery": "access=all&limit=3"
+      }
+    }
+  ],
+  "contractVersion": "ui-data-contract/v1",
+  "frontendBaselineCommit": "5d649d315a0bdb052e90bb96d6b7e94544f9ad31",
+  "generatedAt": "2026-08-18T00:00:00.000Z",
+  "generator": {
+    "command": "npm run generate:ui-data-contract-v1-evidence -- --producer-sha <producer-commit-sha>",
+    "id": "tokenbench-ui-data-contract-v1-evidence",
+    "version": "1"
+  },
+  "manifestSchema": {
+    "byteLength": 9513,
+    "id": "https://tokenbench.dev/contracts/ui-data-contract/v1/evidence/manifest.schema.json",
+    "mediaType": "application/schema+json",
+    "path": "contracts/ui-data-contract/v1/evidence/manifest.schema.json",
+    "sha256": "sha256:16c8403fe0f52387c24a4d8fa3c9a65136688441480aa6f1598ff043bcda1694"
+  },
+  "manifestVersion": 1,
+  "producerCommitSha": "ac42000893fa2e15d0ae76f7f83ebcea5745f7b5",
+  "producerDirty": false,
+  "schema": {
+    "byteLength": 38588,
+    "id": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json",
+    "mediaType": "application/schema+json",
+    "path": "contracts/ui-data-contract/v1/schema.json",
+    "sha256": "sha256:51aea87ac09162ad4538b8794bfb833f0ed6b4a191e86539c992ab1b231e2c99"
+  },
+  "validators": [
+    {
+      "id": "ajv-2020",
+      "strictFormats": [
+        "date",
+        "date-time"
+      ],
+      "version": "8.18.0"
+    },
+    {
+      "id": "runtime-boundary",
+      "strictFormats": [
+        "date",
+        "date-time"
+      ],
+      "version": "ui-data-contract/v1"
+    }
+  ]
+}

@@ -1,31 +1,57 @@
 {
   "contractVersion": "ui-data-contract/v1",
-  "status": "partial",
-  "fetchedAt": "2026-08-17T00:00:00.000Z",
-  "effectiveAt": "2026-08-15T00:00:00.000Z",
+  "method": "comparison",
+  "request": { "modelSlugs": ["gpt-4o", "deepseek-v3"] },
+  "status": "available",
+  "reason": null,
+  "fetchedAt": "2026-08-18T08:00:00.000Z",
+  "effectiveAt": "2026-08-18T07:00:00.000Z",
   "data": {
-    "models": [],
-    "unavailableModelIds": [
+    "requestedModelSlugs": ["gpt-4o", "deepseek-v3"],
+    "models": [
       {
-        "availability": "unavailable",
-        "reason": "No approved source for comparison model selection",
-        "provenance": {
-          "id": "illustrative-model-identity",
-          "label": "Illustrative prototype data",
-          "kind": "illustrative_prototype",
-          "effectiveAt": "2026-08-15T00:00:00.000Z",
-          "note": "Representative model identity and access fixture from the approved preview."
-        }
+        "summary": {
+          "identity": { "configurationId": "openai:gpt-4o", "slug": "gpt-4o", "displayName": "GPT-4o", "organization": "OpenAI" },
+          "openWeights": { "availability": "available", "value": false, "sourceRefs": ["illustrative-source"] },
+          "isDerivativeFinetune": false,
+          "baseModelSlug": null,
+          "overall": { "dimensionId": "overall", "label": "Overall", "score": { "availability": "available", "value": 80, "sourceRefs": ["illustrative-source"] }, "rank": { "availability": "available", "value": 1, "sourceRefs": ["illustrative-source"] }, "fieldSize": { "availability": "available", "value": 10, "sourceRefs": ["illustrative-source"] } },
+          "categories": [],
+          "selectedRouteId": null,
+          "selectedRoutePolicy": "No illustrative route selected.",
+          "selectedRoute": null,
+          "lifecycleStatus": { "availability": "available", "value": "current", "sourceRefs": ["illustrative-source"] }
+        },
+        "releaseOn": "2026-01-01",
+        "tasks": [],
+        "routes": [],
+        "lifecycleEvents": [],
+        "replacement": { "availability": "available", "value": { "modelSlug": "gpt-4o", "migrationNote": "No migration required." }, "sourceRefs": ["illustrative-source"] }
+      },
+      {
+        "summary": {
+          "identity": { "configurationId": "deepseek:deepseek-v3", "slug": "deepseek-v3", "displayName": "DeepSeek V3", "organization": "DeepSeek" },
+          "openWeights": { "availability": "available", "value": true, "sourceRefs": ["illustrative-source"] },
+          "isDerivativeFinetune": false,
+          "baseModelSlug": null,
+          "overall": { "dimensionId": "overall", "label": "Overall", "score": { "availability": "available", "value": 79, "sourceRefs": ["illustrative-source"] }, "rank": { "availability": "available", "value": 2, "sourceRefs": ["illustrative-source"] }, "fieldSize": { "availability": "available", "value": 10, "sourceRefs": ["illustrative-source"] } },
+          "categories": [],
+          "selectedRouteId": null,
+          "selectedRoutePolicy": "No illustrative route selected.",
+          "selectedRoute": null,
+          "lifecycleStatus": { "availability": "available", "value": "current", "sourceRefs": ["illustrative-source"] }
+        },
+        "releaseOn": "2026-01-01",
+        "tasks": [],
+        "routes": [],
+        "lifecycleEvents": [],
+        "replacement": { "availability": "available", "value": { "modelSlug": "deepseek-v3", "migrationNote": "No migration required." }, "sourceRefs": ["illustrative-source"] }
       }
     ]
   },
-  "provenance": [
-    {
-      "id": "illustrative-model-identity",
-      "label": "Illustrative prototype data",
-      "kind": "illustrative_prototype",
-      "effectiveAt": "2026-08-15T00:00:00.000Z",
-      "note": "Representative model identity and access fixture from the approved preview."
-    }
-  ]
+  "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": "illustrative-benchmark-v1", "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
+  "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": "2026-08-17T00:00:00.000Z", "benchmarkCheckedAt": "2026-08-18T07:45:00.000Z" },
+  "sources": [{ "sourceRef": "illustrative-source", "fieldGroup": "/data", "sourceId": "illustrative-source", "sourceRevision": "illustrative-revision-v1", "label": "Illustrative prototype data", "url": "https://example.com/tokenbench-ui-data-contract-v1", "licenseId": null, "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" }],
+  "warnings": [],
+  "provenance": [{ "sourceRef": "illustrative-source", "label": "Illustrative prototype data", "effectiveAt": "2026-08-18T07:00:00.000Z", "note": "Illustrative prototype data source revision illustrative-revision-v1." }]
 }

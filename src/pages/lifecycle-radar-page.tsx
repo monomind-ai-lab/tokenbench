@@ -23,8 +23,8 @@ function provenance(value: unknown): boolean {
   return isRecord(value)
     && text(value.id)
     && text(value.label)
-    && (value.kind === 'illustrative_prototype' || value.kind === 'approved_manual')
-    && text(value.effectiveAt)
+    && (value.kind === 'illustrative_prototype' || value.kind === 'approved_manual' || value.kind === 'accepted_pipeline')
+    && (value.effectiveAt === null || text(value.effectiveAt))
     && text(value.note);
 }
 
@@ -79,7 +79,7 @@ function replacement(model: LifecycleModel): ReactNode {
 function source(model: LifecycleModel): ReactNode {
   if (model.lifecycle.availability !== 'available') return null;
   const provenance = model.lifecycle.provenance;
-  return <p className="fixture">{provenance.label} · Effective {provenance.effectiveAt.slice(0, 10)}</p>;
+  return <p className="fixture">{provenance.label} · Effective {provenance.effectiveAt?.slice(0, 10) ?? 'time unavailable'}</p>;
 }
 
 function LifecycleCards({ models }: { readonly models: readonly LifecycleModel[] }) {

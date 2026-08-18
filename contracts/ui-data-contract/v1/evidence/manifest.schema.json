@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tokenbench.dev/contracts/ui-data-contract/v1/evidence/manifest.schema.json",
+  "title": "TokenBench UI data contract v1 acceptance manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["manifestVersion", "contractVersion", "artifactClass", "generatedAt", "frontendBaselineCommit", "producerCommitSha", "producerDirty", "schema", "manifestSchema", "generator", "validators", "artifacts"],
+  "properties": {
+    "manifestVersion": { "const": 1 },
+    "contractVersion": { "const": "ui-data-contract/v1" },
+    "artifactClass": { "const": "contract_acceptance_fixture" },
+    "generatedAt": { "const": "2026-08-18T00:00:00.000Z" },
+    "frontendBaselineCommit": { "const": "5d649d315a0bdb052e90bb96d6b7e94544f9ad31" },
+    "producerCommitSha": { "$ref": "#/$defs/commitSha" },
+    "producerDirty": { "const": false },
+    "schema": { "allOf": [{ "$ref": "#/$defs/schemaAsset" }, { "properties": { "path": { "const": "contracts/ui-data-contract/v1/schema.json" }, "id": { "const": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json" } } }] },
+    "manifestSchema": { "allOf": [{ "$ref": "#/$defs/schemaAsset" }, { "properties": { "path": { "const": "contracts/ui-data-contract/v1/evidence/manifest.schema.json" }, "id": { "const": "https://tokenbench.dev/contracts/ui-data-contract/v1/evidence/manifest.schema.json" } } }] },
+    "generator": { "$ref": "#/$defs/generator" },
+    "validators": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "prefixItems": [
+        { "allOf": [{ "$ref": "#/$defs/validator" }, { "properties": { "id": { "const": "ajv-2020" }, "version": { "const": "8.18.0" }, "strictFormats": { "const": ["date", "date-time"] } } }] },
+        { "allOf": [{ "$ref": "#/$defs/validator" }, { "properties": { "id": { "const": "runtime-boundary" }, "version": { "const": "ui-data-contract/v1" }, "strictFormats": { "const": ["date", "date-time"] } } }] }
+      ],
+      "items": false
+    },
+    "artifacts": { "type": "array", "minItems": 10, "items": { "$ref": "#/$defs/artifact" } }
+  },
+  "$defs": {
+    "utcTimestamp": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]{3})?Z$" },
+    "commitSha": { "type": "string", "pattern": "^[a-f0-9]{40}$" },
+    "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "repositoryPath": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9._/-]+$" },
+    "schemaAsset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "id", "sha256", "byteLength", "mediaType"],
+      "properties": {
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "id": { "type": "string", "pattern": "^https://tokenbench\\.dev/contracts/ui-data-contract/v1(?:/evidence)?/[-a-z.]+\\.json$" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "mediaType": { "const": "application/schema+json" }
+      }
+    },
+    "generator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "command"],
+      "properties": {
+        "id": { "const": "tokenbench-ui-data-contract-v1-evidence" },
+        "version": { "const": "1" },
+        "command": { "const": "npm run generate:ui-data-contract-v1-evidence -- --producer-sha <producer-commit-sha>" }
+      }
+    },
+    "validator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "strictFormats"],
+      "properties": {
+        "id": { "enum": ["ajv-2020", "runtime-boundary"] },
+        "version": { "type": "string", "minLength": 1 },
+        "strictFormats": { "type": "array", "items": { "enum": ["date", "date-time"] }, "minItems": 2, "maxItems": 2, "uniqueItems": true }
+      }
+    },
+    "outcome": {
+      "type": "object", "additionalProperties": false,
+      "required": ["outcome", "errorCode"],
+      "properties": {
+        "outcome": { "enum": ["accept", "reject"] },
+        "errorCode": { "oneOf": [{ "type": "null" }, { "enum": ["unsupported_contract_version", "method_mismatch", "invalid_timestamp", "invalid_calendar_date", "invalid_request", "invalid_response", "undeclared_field"] }] }
+      }
+    },
+    "transport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["httpMethod", "path", "rawQuery", "expectedHttpStatus"],
+      "properties": {
+        "httpMethod": { "enum": ["GET", "POST"] },
+        "path": { "type": "string", "pattern": "^/api/benchmarks(?:/[A-Za-z0-9._~/-]+)?$" },
+        "rawQuery": { "oneOf": [{ "type": "null" }, { "type": "string", "maxLength": 2048 }] },
+        "expectedHttpStatus": { "oneOf": [{ "type": "null" }, { "type": "integer", "minimum": 100, "maximum": 599 }] }
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["validatorId", "outcome", "errorCode"],
+      "properties": {
+        "validatorId": { "enum": ["ajv-2020", "runtime-boundary"] },
+        "outcome": { "enum": ["accept", "reject"] },
+        "errorCode": { "oneOf": [{ "type": "null" }, { "enum": ["unsupported_contract_version", "method_mismatch", "invalid_timestamp", "invalid_calendar_date", "invalid_request", "invalid_response", "undeclared_field"] }] }
+      }
+    },
+    "artifactBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "classification", "method", "transport", "normalizedRequest", "path", "schemaRef", "expected", "observed", "sha256", "byteLength", "mediaType"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "classification": { "enum": ["method_response", "mixed_source", "unavailable", "expected_rejection"] },
+        "method": { "enum": ["models", "profile", "lifecycle", "rankings", "comparison", "subscription"] },
+        "transport": { "$ref": "#/$defs/transport" },
+        "normalizedRequest": true,
+        "path": { "$ref": "#/$defs/repositoryPath" },
+        "schemaRef": { "type": "string", "pattern": "^#/\\$defs/(?:models|profile|lifecycle|rankings|comparison|subscription)Envelope$" },
+        "expected": { "$ref": "#/$defs/outcome" },
+        "observed": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "$ref": "#/$defs/observation" } },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "mediaType": { "const": "application/json" }
+      },
+      "allOf": [{
+        "if": { "properties": { "expected": { "properties": { "outcome": { "const": "reject" } } } } },
+        "then": {
+          "properties": {
+            "classification": { "const": "expected_rejection" },
+            "transport": { "properties": { "expectedHttpStatus": { "type": "null" } } },
+            "expected": { "properties": { "errorCode": { "type": "string" } } }
+          }
+        },
+        "else": {
+          "properties": {
+            "classification": { "enum": ["method_response", "mixed_source", "unavailable"] },
+            "transport": { "properties": { "expectedHttpStatus": { "type": "integer", "minimum": 100, "maximum": 599 } } },
+            "expected": { "properties": { "errorCode": { "type": "null" } } }
+          }
+        }
+      }]
+    },
+    "modelsArtifact": { "allOf": [{ "$ref": "#/$defs/artifactBase" }, { "properties": { "method": { "const": "models" }, "normalizedRequest": { "$ref": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json#/$defs/modelsRequest" }, "schemaRef": { "const": "#/$defs/modelsEnvelope" } } }] },
+    "profileArtifact": { "allOf": [{ "$ref": "#/$defs/artifactBase" }, { "properties": { "method": { "const": "profile" }, "normalizedRequest": { "$ref": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json#/$defs/profileRequest" }, "schemaRef": { "const": "#/$defs/profileEnvelope" } } }] },
+    "lifecycleArtifact": { "allOf": [{ "$ref": "#/$defs/artifactBase" }, { "properties": { "method": { "const": "lifecycle" }, "normalizedRequest": { "$ref": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json#/$defs/lifecycleRequest" }, "schemaRef": { "const": "#/$defs/lifecycleEnvelope" } } }] },
+    "rankingsArtifact": { "allOf": [{ "$ref": "#/$defs/artifactBase" }, { "properties": { "method": { "const": "rankings" }, "normalizedRequest": { "$ref": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json#/$defs/rankingsRequest" }, "schemaRef": { "const": "#/$defs/rankingsEnvelope" } } }] },
+    "comparisonArtifact": { "allOf": [{ "$ref": "#/$defs/artifactBase" }, { "properties": { "method": { "const": "comparison" }, "normalizedRequest": { "$ref": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json#/$defs/comparisonRequest" }, "schemaRef": { "const": "#/$defs/comparisonEnvelope" } } }] },
+    "subscriptionArtifact": { "allOf": [{ "$ref": "#/$defs/artifactBase" }, { "properties": { "method": { "const": "subscription" }, "normalizedRequest": { "$ref": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json#/$defs/subscriptionRequest" }, "schemaRef": { "const": "#/$defs/subscriptionEnvelope" } } }] },
+    "artifact": { "oneOf": [{ "$ref": "#/$defs/modelsArtifact" }, { "$ref": "#/$defs/profileArtifact" }, { "$ref": "#/$defs/lifecycleArtifact" }, { "$ref": "#/$defs/rankingsArtifact" }, { "$ref": "#/$defs/comparisonArtifact" }, { "$ref": "#/$defs/subscriptionArtifact" }] }
+  }
+}

@@ -1,15 +1,15 @@
 {
   "contractVersion": "ui-data-contract/v1",
-  "status": "PROPOSED — ILLUSTRATIVE CONSUMER EXAMPLES ONLY",
-  "description": "These deterministic examples use approved illustrative adapter facts. They are consumer examples, not production responses and not pipeline-accepted artifacts.",
+  "status": "AMENDED — ILLUSTRATIVE PROTOTYPE EXAMPLES ONLY",
+  "description": "These deterministic illustrative_prototype examples demonstrate consumer envelope shapes. They are neither retained acceptance evidence nor production responses.",
   "examples": [
-    { "method": "models", "file": "models.json", "schemaRef": "#/$defs/modelsEnvelope", "classification": "positive consumer example" },
-    { "method": "profile", "file": "profile.json", "schemaRef": "#/$defs/profileEnvelope", "classification": "positive consumer example" },
-    { "method": "lifecycle", "file": "lifecycle.json", "schemaRef": "#/$defs/lifecycleEnvelope", "classification": "positive consumer example" },
-    { "method": "rankings", "file": "rankings.json", "schemaRef": "#/$defs/rankingsEnvelope", "classification": "positive consumer example" },
-    { "method": "comparison", "file": "comparison.json", "schemaRef": "#/$defs/comparisonEnvelope", "classification": "positive consumer example" },
-    { "method": "subscription", "file": "subscription.json", "schemaRef": "#/$defs/subscriptionEnvelope", "classification": "positive consumer example" },
-    { "method": "rankings", "file": "mixed-source.json", "schemaRef": "#/$defs/rankingsEnvelope", "classification": "positive consumer example" },
-    { "method": "models", "file": "unsupported-version.json", "schemaRef": "#/$defs/modelsEnvelope", "classification": "expected rejection" }
+    { "method": "models", "file": "models.json", "schemaRef": "#/$defs/modelsEnvelope", "classification": "illustrative_prototype" },
+    { "method": "profile", "file": "profile.json", "schemaRef": "#/$defs/profileEnvelope", "classification": "illustrative_prototype" },
+    { "method": "lifecycle", "file": "lifecycle.json", "schemaRef": "#/$defs/lifecycleEnvelope", "classification": "illustrative_prototype" },
+    { "method": "rankings", "file": "rankings.json", "schemaRef": "#/$defs/rankingsEnvelope", "classification": "illustrative_prototype" },
+    { "method": "comparison", "file": "comparison.json", "schemaRef": "#/$defs/comparisonEnvelope", "classification": "illustrative_prototype" },
+    { "method": "subscription", "file": "subscription.json", "schemaRef": "#/$defs/subscriptionEnvelope", "classification": "illustrative_prototype" },
+    { "method": "rankings", "file": "mixed-source.json", "schemaRef": "#/$defs/rankingsEnvelope", "classification": "illustrative_prototype" },
+    { "method": "models", "file": "unsupported-version.json", "schemaRef": "#/$defs/modelsEnvelope", "classification": "expected_rejection" }
   ]
 }

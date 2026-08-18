@@ -1,0 +1,52 @@
+{
+  "contractVersion": "ui-data-contract/v1",
+  "data": {
+    "asOf": "2026-08-18T00:00:00.000Z",
+    "horizonDays": 30,
+    "models": []
+  },
+  "effectiveAt": "2026-08-18T00:00:00.000Z",
+  "fetchedAt": "2026-08-18T00:00:00.000Z",
+  "freshness": {
+    "benchmarkCheckedAt": "2026-08-18T00:00:00.000Z",
+    "benchmarkReleasedAt": "2026-08-01T00:00:00.000Z",
+    "catalogObservedAt": "2026-08-18T00:00:00.000Z",
+    "runtimeObservedAt": "2026-08-18T00:00:00.000Z"
+  },
+  "method": "lifecycle",
+  "provenance": [
+    {
+      "effectiveAt": "2026-08-18T00:00:00.000Z",
+      "label": "Deterministic primary contract fixture",
+      "note": "Deterministic primary contract fixture source revision fixture-primary-r1.",
+      "sourceRef": "fixture:primary-2026-08-18"
+    }
+  ],
+  "reason": null,
+  "request": {
+    "asOf": "2026-08-18T00:00:00.000Z",
+    "horizonDays": 30
+  },
+  "revisions": {
+    "benchmark": "ui-data-contract-v1-fixture-benchmark",
+    "catalog": "ui-data-contract-v1-fixture-catalog",
+    "projection": "ui-data-contract-v1-fixture-projection",
+    "projectionMethodology": "ui-data-contract-v1-fixture-methodology",
+    "runtimeObservationSet": "ui-data-contract-v1-fixture-runtime"
+  },
+  "sources": [
+    {
+      "effectiveAt": "2026-08-18T00:00:00.000Z",
+      "fieldGroup": "/data",
+      "label": "Deterministic primary contract fixture",
+      "licenseId": "CDLA-Permissive-2.0",
+      "observedAt": "2026-08-18T00:00:00.000Z",
+      "sourceId": "fixture-primary",
+      "sourceRef": "fixture:primary-2026-08-18",
+      "sourceRevision": "fixture-primary-r1",
+      "url": "https://example.com/tokenbench/ui-data-contract-v1/primary"
+    }
+  ],
+  "status": "available",
+  "warnings": []
+}

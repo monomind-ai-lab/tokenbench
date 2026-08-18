@@ -1,6 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://tokenbench.dev/contracts/ui-data-contract/v1/meta-schema.json",
+  "title": "TokenBench UI data contract Draft 2020-12 meta-schema",
+  "description": "Requires date and date-time format assertions for TokenBench contract schemas.",
   "$vocabulary": {
     "https://json-schema.org/draft/2020-12/vocab/core": true,
     "https://json-schema.org/draft/2020-12/vocab/applicator": true,

@@ -8,6 +8,7 @@ import {
 import { PopularInsightsSection } from '../frontend/popular-models/insights';
 import { PopularLeaderboardSection } from '../frontend/popular-models/leaderboard';
 import type { PopularModelFixture } from '../frontend/popular-models/types';
+import type { EvidenceValue, PreviewModel, RankingData, UiDataContractV1 } from '../frontend/preview-data/contracts';
 import { StatusBanner } from '../frontend/ui';
 import type { PreviewPageProps } from '../preview/route-types';
 
@@ -17,6 +18,8 @@ export interface PopularModelsPageData {
   readonly disclaimer: string;
   readonly models: readonly PopularModelFixture[];
 }
+
+type RankingContract = UiDataContractV1<RankingData>;
 
 interface PopularModelsPageProps {
   readonly data?: PopularModelsPageData;
@@ -69,6 +72,39 @@ export function parsePopularModelsPageData(value: unknown): PopularModelsPageDat
     && candidate.models.every(isPopularModelFixture)
     ? candidate as PopularModelsPageData
     : null;
+}
+
+function isRankingContract(value: unknown): value is RankingContract {
+  if (!isRecord(value)) return false;
+  const candidate = value as { readonly contractVersion?: unknown; readonly status?: unknown; readonly data?: unknown };
+  return candidate.contractVersion === 'ui-data-contract/v1'
+    && (candidate.status === 'available' || candidate.status === 'partial' || candidate.status === 'unavailable')
+    && (candidate.data === null || (isRecord(candidate.data) && Array.isArray(candidate.data.models)));
+}
+
+function evidenceValue<T>(value: EvidenceValue<T>): T | null {
+  return value.availability === 'available' ? value.value : null;
+}
+
+function rankingModelName(model: PreviewModel): string {
+  return evidenceValue(model.identity)?.name ?? model.id;
+}
+
+/** Renders the accepted leaderboard view model without reintroducing prototype facts. */
+function AcceptedPopularModelsPage({ contract }: { readonly contract: RankingContract }) {
+  if (contract.status === 'unavailable' || contract.data === null) {
+    return <section className="panel" role="alert"><h1>Popular models leaderboard</h1><p>{contract.reason ?? 'Accepted leaderboard evidence is unavailable.'}</p></section>;
+  }
+  return <div className="content-stack popular-models-page">
+    <header className="popular-models-hero leaderboard-page-hero" aria-labelledby="popular-models-heading">
+      <div><h1 id="popular-models-heading" className="leaderboard-page-hero-title">Popular models leaderboard</h1><p className="leaderboard-page-hero-description">Accepted leaderboard evidence is shown with its explicit evidence boundary.</p></div>
+    </header>
+    <section className="panel" aria-labelledby="accepted-leaderboard-heading">
+      <h2 id="accepted-leaderboard-heading">Accepted leaderboard rankings</h2>
+      <p className="fixture">Pipeline-accepted evidence · missing values remain unavailable.</p>
+      <div className="table-wrap" role="region" aria-label="Accepted popular model rankings" tabIndex={0}><table aria-label="Accepted popular model rankings"><thead><tr><th scope="col">Rank</th><th scope="col">Model</th><th scope="col">Evidence</th></tr></thead><tbody>{contract.data.models.map((entry) => <tr key={entry.model.id}><td>{evidenceValue(entry.rank) ?? 'Unavailable'}</td><th scope="row">{rankingModelName(entry.model)}</th><td>{entry.rank.availability === 'available' ? `${entry.rank.provenance.label} · ${entry.rank.provenance.effectiveAt ?? 'effective time unavailable'}` : entry.rank.reason}</td></tr>)}</tbody></table></div>
+    </section>
+  </div>;
 }
 
 function csvRows(models: readonly PopularModelFixture[]): readonly (readonly (string | number | boolean)[])[] {
@@ -159,5 +195,6 @@ export function PopularModelsPage({ data }: PopularModelsPageProps = {}) {
 
 /** Adapts manifest data into the page's typed fixture contract without a prototype mount. */
 export function PopularModelsRoutePage({ data }: PreviewPageProps) {
-  return <PopularModelsPage data={parsePopularModelsPageData(data) ?? undefined} />;
+  const rankings = isRankingContract(data) ? data : null;
+  return rankings ? <AcceptedPopularModelsPage contract={rankings} /> : <PopularModelsPage data={parsePopularModelsPageData(data) ?? undefined} />;
 }

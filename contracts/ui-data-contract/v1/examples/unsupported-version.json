@@ -1,9 +1,15 @@
 {
   "contractVersion": "ui-data-contract/v2",
+  "method": "models",
+  "request": { "search": null, "access": "all", "providerIds": [], "limit": 50, "cursor": null },
   "status": "unavailable",
   "reason": "Illustrative unsupported-version rejection example; not a pipeline response.",
-  "fetchedAt": "2026-08-17T00:00:00.000Z",
+  "fetchedAt": "2026-08-18T08:00:00.000Z",
   "effectiveAt": null,
   "data": null,
+  "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": "illustrative-benchmark-v1", "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
+  "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": "2026-08-17T00:00:00.000Z", "benchmarkCheckedAt": "2026-08-18T07:45:00.000Z" },
+  "sources": [],
+  "warnings": [],
   "provenance": []
 }

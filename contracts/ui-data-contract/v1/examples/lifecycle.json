@@ -1,65 +1,15 @@
 {
   "contractVersion": "ui-data-contract/v1",
-  "status": "partial",
-  "fetchedAt": "2026-08-17T00:00:00.000Z",
-  "effectiveAt": null,
-  "data": {
-    "models": [
-      {
-        "modelId": "gpt-4-turbo",
-        "identity": {
-          "availability": "available",
-          "value": { "slug": "gpt-4-turbo", "name": "GPT-4 Turbo", "provider": "OpenAI" },
-          "provenance": {
-            "id": "illustrative-model-identity",
-            "label": "Illustrative prototype data",
-            "kind": "illustrative_prototype",
-            "effectiveAt": "2026-08-15T00:00:00.000Z",
-            "note": "Representative model identity and access fixture from the approved preview."
-          }
-        },
-        "lifecycle": {
-          "availability": "available",
-          "value": {
-            "status": "Retirement scheduled",
-            "sunsetOn": {
-              "availability": "available",
-              "value": "2026-09-30",
-              "provenance": {
-                "id": "illustrative-lifecycle",
-                "label": "Illustrative prototype data",
-                "kind": "illustrative_prototype",
-                "effectiveAt": "2026-08-11T00:00:00.000Z",
-                "note": "Representative lifecycle fixture from the approved preview."
-              }
-            }
-          },
-          "provenance": {
-            "id": "illustrative-lifecycle",
-            "label": "Illustrative prototype data",
-            "kind": "illustrative_prototype",
-            "effectiveAt": "2026-08-11T00:00:00.000Z",
-            "note": "Representative lifecycle fixture from the approved preview."
-          }
-        },
-        "replacement": { "availability": "unavailable", "reason": "No approved replacement source" }
-      }
-    ]
-  },
-  "provenance": [
-    {
-      "id": "illustrative-model-identity",
-      "label": "Illustrative prototype data",
-      "kind": "illustrative_prototype",
-      "effectiveAt": "2026-08-15T00:00:00.000Z",
-      "note": "Representative model identity and access fixture from the approved preview."
-    },
-    {
-      "id": "illustrative-lifecycle",
-      "label": "Illustrative prototype data",
-      "kind": "illustrative_prototype",
-      "effectiveAt": "2026-08-11T00:00:00.000Z",
-      "note": "Representative lifecycle fixture from the approved preview."
-    }
-  ]
+  "method": "lifecycle",
+  "request": { "asOf": "2026-08-18T00:00:00.000Z", "horizonDays": 30 },
+  "status": "available",
+  "reason": null,
+  "fetchedAt": "2026-08-18T08:00:00.000Z",
+  "effectiveAt": "2026-08-18T07:00:00.000Z",
+  "data": { "asOf": "2026-08-18T00:00:00.000Z", "horizonDays": 30, "models": [] },
+  "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": "illustrative-benchmark-v1", "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
+  "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": "2026-08-17T00:00:00.000Z", "benchmarkCheckedAt": "2026-08-18T07:45:00.000Z" },
+  "sources": [{ "sourceRef": "illustrative-source", "fieldGroup": "/data", "sourceId": "illustrative-source", "sourceRevision": "illustrative-revision-v1", "label": "Illustrative prototype data", "url": "https://example.com/tokenbench-ui-data-contract-v1", "licenseId": null, "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" }],
+  "warnings": [],
+  "provenance": [{ "sourceRef": "illustrative-source", "label": "Illustrative prototype data", "effectiveAt": "2026-08-18T07:00:00.000Z", "note": "Illustrative prototype data source revision illustrative-revision-v1." }]
 }

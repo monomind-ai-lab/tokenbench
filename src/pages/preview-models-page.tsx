@@ -51,8 +51,8 @@ function provenance(value: unknown): boolean {
   return isRecord(value)
     && text(value.id)
     && text(value.label)
-    && (value.kind === 'illustrative_prototype' || value.kind === 'approved_manual')
-    && text(value.effectiveAt)
+    && (value.kind === 'illustrative_prototype' || value.kind === 'approved_manual' || value.kind === 'accepted_pipeline')
+    && (value.effectiveAt === null || text(value.effectiveAt))
     && text(value.note);
 }
 

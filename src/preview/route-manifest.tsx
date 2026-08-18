@@ -4,10 +4,11 @@ import { ARTICLE_BY_SLUG, ARTICLES, articlePath, type Article, type ArticleChann
 import { SITE_CONFIG } from '../brand/site-config';
 import { parsePricePerformanceEnvelope } from '../benchmarks/price-performance-contracts';
 import { HomePage, type HomePageData } from '../pages/home-page';
-import { PopularModelsRoutePage, parsePopularModelsPageData, popularModelsPageData } from '../pages/popular-models-page';
+import { PopularModelsRoutePage, parsePopularModelsPageData } from '../pages/popular-models-page';
 import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
-import { createFixtureAdapter } from '../frontend/preview-data/fixture-adapter';
+import { createEvidenceTransport } from '../frontend/preview-data/evidence-transport';
+import { createPreviewDataGateway } from '../frontend/preview-data/gateway';
 import { DEFAULT_COMPARE_STATE } from '../frontend/preview-workbench/compare-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
@@ -35,7 +36,9 @@ const pendingReactDocument: PreviewDocumentReadiness = {
 };
 
 const readyReactDocument: PreviewDocumentReadiness = { status: 'ready' };
-const staticPreviewAdapter = createFixtureAdapter(() => new Date('2026-08-17T00:00:00.000Z'));
+/** Static preview selects retained evidence deliberately; HTTP remains an unselected Task 14 transport. */
+const staticPreviewAdapter = createPreviewDataGateway(createEvidenceTransport());
+const staticCustomRankingAdapter = createPreviewDataGateway(createEvidenceTransport({ rankings: 'mixed-source' }));
 
 interface PrototypeBundleDefinition {
   readonly outputPathname: string;
@@ -288,11 +291,11 @@ const pricePerformancePage = PricePerformanceApp as ComponentType<PreviewPagePro
 const popularModelsPage = PopularModelsRoutePage as ComponentType<PreviewPageProps>;
 const articlesPage = ArticlesRoutePage as ComponentType<PreviewPageProps>;
 const articleDetailPage = ArticleDetailRoutePage as ComponentType<PreviewPageProps>;
-const modelsPage = PreviewModelsPage as ComponentType<PreviewPageProps>;
-const modelProfilePage = PreviewModelProfilePage as ComponentType<PreviewPageProps>;
-const lifecyclePage = LifecycleRadarPage as ComponentType<PreviewPageProps>;
-const comparePage = PreviewComparePage as ComponentType<PreviewPageProps>;
-const makeItYoursPage = MakeItYoursPage as ComponentType<PreviewPageProps>;
+const modelsPage = ((props: PreviewPageProps) => <PreviewModelsPage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
+const modelProfilePage = ((props: PreviewPageProps) => <PreviewModelProfilePage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
+const lifecyclePage = ((props: PreviewPageProps) => <LifecycleRadarPage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
+const comparePage = ((props: PreviewPageProps) => <PreviewComparePage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
+const makeItYoursPage = ((props: PreviewPageProps) => <MakeItYoursPage {...props} adapter={staticCustomRankingAdapter} />) as ComponentType<PreviewPageProps>;
 const subscribeVsApiPage = SubscribeVsApiPage as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
@@ -390,7 +393,7 @@ const manifestRoutes = [
     shell: { activePage: 'popularModels', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'popularModels' }),
     structuredData,
-    staticData: async () => popularModelsPageData(),
+    staticData: async () => staticPreviewAdapter.rankings({ operation: 'leaderboard', limit: 50 }),
     payload: popularModelsPayload,
     Page: popularModelsPage,
     prototypeBundle: [{ outputPathname: '/popular-models/', output: ['popular-models', 'index.html'], document: 'popular-models.html', clearOutputDirectory: false }],
@@ -404,7 +407,25 @@ const manifestRoutes = [
     shell: { activePage: 'leaderboards', ...defaultSkipLink },
     metadata: () => previewMakeItYoursMetadata,
     structuredData,
-    staticData: async () => staticPreviewAdapter.rankings({}),
+    staticData: async () => staticCustomRankingAdapter.rankings({
+      operation: 'custom',
+      dimensionSetRevision: 'ui-data-contract-v1-fixture-dimensions',
+      filters: {
+        access: 'all',
+        excludeDerivativeFinetunes: false,
+        maxInputMicroDollarsPerMillion: null,
+        maxOutputMicroDollarsPerMillion: null,
+        maxTtftP50Ms: null,
+        minContextWindowTokens: null,
+        minMaxOutputTokens: null,
+        minTpsP50: null,
+        providerIds: [],
+        requiredInputModalities: [],
+      },
+      includeIneligible: true,
+      limit: 50,
+      weights: { capability: 20, efficiency: 50, reliability: 30 },
+    }),
     payload: makeItYoursPayload,
     Page: makeItYoursPage,
     prototypeBundle: [],
@@ -418,7 +439,7 @@ const manifestRoutes = [
     shell: { activePage: 'compare', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'compareHub' }),
     structuredData,
-    staticData: async () => staticPreviewAdapter.comparison({ modelIds: DEFAULT_COMPARE_STATE.modelIds }),
+    staticData: async () => staticPreviewAdapter.comparison({ modelIds: ['alpha', 'beta', 'gamma'] }),
     payload: comparePayload,
     Page: comparePage,
     prototypeBundle: [],

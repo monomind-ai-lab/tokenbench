@@ -26,8 +26,8 @@ function provenance(value: unknown): boolean {
   return isRecord(value)
     && text(value.id)
     && text(value.label)
-    && (value.kind === 'illustrative_prototype' || value.kind === 'approved_manual')
-    && text(value.effectiveAt)
+    && (value.kind === 'illustrative_prototype' || value.kind === 'approved_manual' || value.kind === 'accepted_pipeline')
+    && (value.effectiveAt === null || text(value.effectiveAt))
     && text(value.note);
 }
 
@@ -100,8 +100,8 @@ function unavailable(reason: string): ReactNode {
   return <span className="evidence-unavailable">{reason}</span>;
 }
 
-function sourceLine(label: string, effectiveAt: string): ReactNode {
-  return <p className="fixture">{label} · Effective {effectiveAt.slice(0, 10)}</p>;
+function sourceLine(label: string, effectiveAt: string | null): ReactNode {
+  return <p className="fixture">{label} · Effective {effectiveAt?.slice(0, 10) ?? 'time unavailable'}</p>;
 }
 
 function modelIdentity(model: PreviewModel) {

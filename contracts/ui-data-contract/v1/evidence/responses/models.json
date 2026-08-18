@@ -1,0 +1,656 @@
+{
+  "contractVersion": "ui-data-contract/v1",
+  "data": {
+    "models": [
+      {
+        "baseModelSlug": null,
+        "categories": [
+          {
+            "dimensionId": "coding",
+            "fieldSize": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 10
+            },
+            "label": "Coding",
+            "rank": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 1
+            },
+            "score": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 91
+            }
+          }
+        ],
+        "identity": {
+          "configurationId": "provider-0:alpha",
+          "displayName": "ALPHA",
+          "organization": "Provider 0",
+          "slug": "alpha"
+        },
+        "isDerivativeFinetune": false,
+        "lifecycleStatus": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": "current"
+        },
+        "openWeights": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": false
+        },
+        "overall": {
+          "dimensionId": "overall",
+          "fieldSize": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 10
+          },
+          "label": "Overall",
+          "rank": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 1
+          },
+          "score": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 90
+          }
+        },
+        "selectedRoute": {
+          "cacheReadMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 500000
+          },
+          "cacheWriteMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 1000000
+          },
+          "contextWindowTokens": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 128000
+          },
+          "inputMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 2000000
+          },
+          "inputModalities": [
+            "text"
+          ],
+          "maxOutputTokens": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 16384
+          },
+          "outputMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 8000000
+          },
+          "outputModalities": [
+            "text"
+          ],
+          "pricingTiers": [
+            {
+              "cacheReadMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 500000
+              },
+              "cacheWriteMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 1000000
+              },
+              "inputMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 2000000
+              },
+              "maximumContextTokens": null,
+              "minimumContextTokens": 0,
+              "outputMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 8000000
+              },
+              "pricingTierId": "alpha-direct-standard"
+            }
+          ],
+          "providerId": "provider-0",
+          "routeId": "alpha-direct",
+          "runtimeObservation": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": {
+              "sampleSize": 100,
+              "tpsPercentile": "p50",
+              "ttftPercentile": "p50",
+              "windowEndedAt": "2026-08-18T00:00:00.000Z",
+              "windowStartedAt": "2026-08-17T00:00:00.000Z"
+            }
+          },
+          "status": "available",
+          "tpsP50": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 100
+          },
+          "ttftP50Ms": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 200
+          },
+          "uptimeBasisPoints": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 9999
+          }
+        },
+        "selectedRouteId": "alpha-direct",
+        "selectedRoutePolicy": "lowest available price"
+      },
+      {
+        "baseModelSlug": null,
+        "categories": [
+          {
+            "dimensionId": "coding",
+            "fieldSize": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 10
+            },
+            "label": "Coding",
+            "rank": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 2
+            },
+            "score": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 86
+            }
+          }
+        ],
+        "identity": {
+          "configurationId": "provider-1:beta",
+          "displayName": "BETA",
+          "organization": "Provider 1",
+          "slug": "beta"
+        },
+        "isDerivativeFinetune": false,
+        "lifecycleStatus": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": "current"
+        },
+        "openWeights": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": false
+        },
+        "overall": {
+          "dimensionId": "overall",
+          "fieldSize": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 10
+          },
+          "label": "Overall",
+          "rank": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 2
+          },
+          "score": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 85
+          }
+        },
+        "selectedRoute": {
+          "cacheReadMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 550000
+          },
+          "cacheWriteMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 1050000
+          },
+          "contextWindowTokens": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 128000
+          },
+          "inputMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 2100000
+          },
+          "inputModalities": [
+            "text"
+          ],
+          "maxOutputTokens": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 16384
+          },
+          "outputMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 8100000
+          },
+          "outputModalities": [
+            "text"
+          ],
+          "pricingTiers": [
+            {
+              "cacheReadMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 550000
+              },
+              "cacheWriteMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 1050000
+              },
+              "inputMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 2100000
+              },
+              "maximumContextTokens": null,
+              "minimumContextTokens": 0,
+              "outputMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 8100000
+              },
+              "pricingTierId": "beta-direct-standard"
+            }
+          ],
+          "providerId": "provider-1",
+          "routeId": "beta-direct",
+          "runtimeObservation": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": {
+              "sampleSize": 100,
+              "tpsPercentile": "p50",
+              "ttftPercentile": "p50",
+              "windowEndedAt": "2026-08-18T00:00:00.000Z",
+              "windowStartedAt": "2026-08-17T00:00:00.000Z"
+            }
+          },
+          "status": "available",
+          "tpsP50": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 95
+          },
+          "ttftP50Ms": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 210
+          },
+          "uptimeBasisPoints": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 9999
+          }
+        },
+        "selectedRouteId": "beta-direct",
+        "selectedRoutePolicy": "lowest available price"
+      },
+      {
+        "baseModelSlug": null,
+        "categories": [
+          {
+            "dimensionId": "coding",
+            "fieldSize": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 10
+            },
+            "label": "Coding",
+            "rank": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 3
+            },
+            "score": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 81
+            }
+          }
+        ],
+        "identity": {
+          "configurationId": "provider-2:gamma",
+          "displayName": "GAMMA",
+          "organization": "Provider 2",
+          "slug": "gamma"
+        },
+        "isDerivativeFinetune": false,
+        "lifecycleStatus": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": "current"
+        },
+        "openWeights": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": false
+        },
+        "overall": {
+          "dimensionId": "overall",
+          "fieldSize": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 10
+          },
+          "label": "Overall",
+          "rank": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 3
+          },
+          "score": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 80
+          }
+        },
+        "selectedRoute": {
+          "cacheReadMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 600000
+          },
+          "cacheWriteMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 1100000
+          },
+          "contextWindowTokens": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 128000
+          },
+          "inputMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 2200000
+          },
+          "inputModalities": [
+            "text"
+          ],
+          "maxOutputTokens": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 16384
+          },
+          "outputMicroDollarsPerMillion": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 8200000
+          },
+          "outputModalities": [
+            "text"
+          ],
+          "pricingTiers": [
+            {
+              "cacheReadMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 600000
+              },
+              "cacheWriteMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 1100000
+              },
+              "inputMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 2200000
+              },
+              "maximumContextTokens": null,
+              "minimumContextTokens": 0,
+              "outputMicroDollarsPerMillion": {
+                "availability": "available",
+                "sourceRefs": [
+                  "fixture:primary-2026-08-18"
+                ],
+                "value": 8200000
+              },
+              "pricingTierId": "gamma-direct-standard"
+            }
+          ],
+          "providerId": "provider-2",
+          "routeId": "gamma-direct",
+          "runtimeObservation": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": {
+              "sampleSize": 100,
+              "tpsPercentile": "p50",
+              "ttftPercentile": "p50",
+              "windowEndedAt": "2026-08-18T00:00:00.000Z",
+              "windowStartedAt": "2026-08-17T00:00:00.000Z"
+            }
+          },
+          "status": "available",
+          "tpsP50": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 90
+          },
+          "ttftP50Ms": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 220
+          },
+          "uptimeBasisPoints": {
+            "availability": "available",
+            "sourceRefs": [
+              "fixture:primary-2026-08-18"
+            ],
+            "value": 9999
+          }
+        },
+        "selectedRouteId": "gamma-direct",
+        "selectedRoutePolicy": "lowest available price"
+      }
+    ],
+    "nextCursor": null,
+    "total": 3
+  },
+  "effectiveAt": "2026-08-18T00:00:00.000Z",
+  "fetchedAt": "2026-08-18T00:00:00.000Z",
+  "freshness": {
+    "benchmarkCheckedAt": "2026-08-18T00:00:00.000Z",
+    "benchmarkReleasedAt": "2026-08-01T00:00:00.000Z",
+    "catalogObservedAt": "2026-08-18T00:00:00.000Z",
+    "runtimeObservedAt": "2026-08-18T00:00:00.000Z"
+  },
+  "method": "models",
+  "provenance": [
+    {
+      "effectiveAt": "2026-08-18T00:00:00.000Z",
+      "label": "Deterministic primary contract fixture",
+      "note": "Deterministic primary contract fixture source revision fixture-primary-r1.",
+      "sourceRef": "fixture:primary-2026-08-18"
+    }
+  ],
+  "reason": null,
+  "request": {
+    "access": "all",
+    "cursor": null,
+    "limit": 3,
+    "providerIds": [],
+    "search": null
+  },
+  "revisions": {
+    "benchmark": "ui-data-contract-v1-fixture-benchmark",
+    "catalog": "ui-data-contract-v1-fixture-catalog",
+    "projection": "ui-data-contract-v1-fixture-projection",
+    "projectionMethodology": "ui-data-contract-v1-fixture-methodology",
+    "runtimeObservationSet": "ui-data-contract-v1-fixture-runtime"
+  },
+  "sources": [
+    {
+      "effectiveAt": "2026-08-18T00:00:00.000Z",
+      "fieldGroup": "/data",
+      "label": "Deterministic primary contract fixture",
+      "licenseId": "CDLA-Permissive-2.0",
+      "observedAt": "2026-08-18T00:00:00.000Z",
+      "sourceId": "fixture-primary",
+      "sourceRef": "fixture:primary-2026-08-18",
+      "sourceRevision": "fixture-primary-r1",
+      "url": "https://example.com/tokenbench/ui-data-contract-v1/primary"
+    }
+  ],
+  "status": "available",
+  "warnings": []
+}

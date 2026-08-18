@@ -1,405 +1,92 @@
 {
-  "$schema": "https://tokenbench.dev/contracts/ui-data-contract/v1/meta-schema.json",
-  "$id": "https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json",
-  "title": "TokenBench UI data contract v1",
-  "description": "PROPOSED consumer contract. Available envelopes require a non-null effectiveAt; unavailable envelopes require data and effectiveAt to be null; partial envelopes use null as the explicit mixed-source timing marker or may publish a producer-supplied non-null effectiveAt. Producers remain responsible for accurately populating provenance effective times; this schema does not compare array values.",
-  "allOf": [
-    { "$ref": "#/$defs/envelope" },
-    {
-      "anyOf": [
-        { "$ref": "#/$defs/modelsEnvelope" },
-        { "$ref": "#/$defs/profileEnvelope" },
-        { "$ref": "#/$defs/lifecycleEnvelope" },
-        { "$ref": "#/$defs/rankingsEnvelope" },
-        { "$ref": "#/$defs/comparisonEnvelope" },
-        { "$ref": "#/$defs/subscriptionEnvelope" }
-      ]
-    }
-  ],
-  "$defs": {
-    "nonEmptyString": { "type": "string", "minLength": 1, "pattern": "\\S" },
-    "utcTimestamp": {
-      "type": "string",
-      "format": "date-time",
-      "pattern": "Z$",
-      "description": "UTC ISO-8601 timestamp; must end in Z."
-    },
-    "calendarDate": {
-      "type": "string",
-      "format": "date",
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
-    },
-    "provenance": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "label", "kind", "effectiveAt", "note"],
-      "properties": {
-        "id": { "$ref": "#/$defs/nonEmptyString" },
-        "label": { "$ref": "#/$defs/nonEmptyString" },
-        "kind": { "enum": ["illustrative_prototype", "approved_manual"] },
-        "effectiveAt": { "$ref": "#/$defs/utcTimestamp" },
-        "note": { "$ref": "#/$defs/nonEmptyString" }
-      }
-    },
-    "availableEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["availability", "value", "provenance"],
-      "properties": {
-        "availability": { "const": "available" },
-        "value": {},
-        "provenance": { "$ref": "#/$defs/provenance" }
-      }
-    },
-    "unavailableEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["availability", "reason"],
-      "properties": {
-        "availability": { "const": "unavailable" },
-        "reason": { "$ref": "#/$defs/nonEmptyString" },
-        "provenance": { "$ref": "#/$defs/provenance" }
-      }
-    },
-    "evidence": {
-      "oneOf": [
-        { "$ref": "#/$defs/availableEvidence" },
-        { "$ref": "#/$defs/unavailableEvidence" }
-      ]
-    },
-    "evidenceString": {
-      "allOf": [
-        { "$ref": "#/$defs/evidence" },
-        {
-          "if": { "properties": { "availability": { "const": "available" } } },
-          "then": { "properties": { "value": { "$ref": "#/$defs/nonEmptyString" } } }
-        }
-      ]
-    },
-    "evidenceNumber": {
-      "allOf": [
-        { "$ref": "#/$defs/evidence" },
-        {
-          "if": { "properties": { "availability": { "const": "available" } } },
-          "then": { "properties": { "value": { "type": "number" } } }
-        }
-      ]
-    },
-    "modelIdentity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["slug", "name", "provider"],
-      "properties": {
-        "slug": { "$ref": "#/$defs/nonEmptyString" },
-        "name": { "$ref": "#/$defs/nonEmptyString" },
-        "provider": { "$ref": "#/$defs/nonEmptyString" }
-      }
-    },
-    "modelAccess": { "enum": ["Proprietary", "Open weights"] },
-    "benchmarkSubtask": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "label"],
-      "properties": {
-        "id": { "$ref": "#/$defs/nonEmptyString" },
-        "label": { "$ref": "#/$defs/nonEmptyString" }
-      }
-    },
-    "benchmarkRelease": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["releaseOn", "subtasks"],
-      "properties": {
-        "releaseOn": { "$ref": "#/$defs/calendarDate" },
-        "subtasks": { "type": "array", "items": { "$ref": "#/$defs/benchmarkSubtask" } }
-      }
-    },
-    "capabilityRadarAxis": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["key", "label", "percentile", "rank", "fieldSize"],
-      "properties": {
-        "key": { "$ref": "#/$defs/nonEmptyString" },
-        "label": { "$ref": "#/$defs/nonEmptyString" },
-        "percentile": { "type": ["number", "null"] },
-        "rank": { "type": ["number", "null"] },
-        "fieldSize": { "type": ["number", "null"] }
-      }
-    },
-    "modelCapability": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["compositeScore", "radar"],
-      "properties": {
-        "compositeScore": { "type": "number" },
-        "radar": { "type": "array", "items": { "$ref": "#/$defs/capabilityRadarAxis" } }
-      }
-    },
-    "cachePricing": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["readUsdPerMillion", "writeUsdPerMillion"],
-      "properties": {
-        "readUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" },
-        "writeUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" }
-      }
-    },
-    "routePricing": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["route", "inputUsdPerMillion", "outputUsdPerMillion", "cache"],
-      "properties": {
-        "route": { "$ref": "#/$defs/nonEmptyString" },
-        "inputUsdPerMillion": { "type": "number" },
-        "outputUsdPerMillion": { "type": "number" },
-        "blendedUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" },
-        "longContextInputUsdPerMillion": { "$ref": "#/$defs/evidenceNumber" },
-        "cache": { "$ref": "#/$defs/evidenceCachePricing" }
-      }
-    },
-    "taskEconomics": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["costUsdPerSuccessfulTask", "workload"],
-      "properties": {
-        "costUsdPerSuccessfulTask": { "type": "number" },
-        "workload": { "$ref": "#/$defs/nonEmptyString" }
-      }
-    },
-    "runtimeSla": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["ttftP50Seconds", "outputTokensPerSecond", "conditions"],
-      "properties": {
-        "ttftP50Seconds": { "type": "number" },
-        "outputTokensPerSecond": { "type": "number" },
-        "conditions": { "$ref": "#/$defs/nonEmptyString" }
-      }
-    },
-    "modelLifecycle": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["status", "sunsetOn"],
-      "properties": {
-        "status": { "enum": ["Current", "Retirement scheduled"] },
-        "sunsetOn": { "$ref": "#/$defs/evidenceCalendarDate" }
-      }
-    },
-    "lifecycleReplacement": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["modelId", "migrationNote"],
-      "properties": {
-        "modelId": { "$ref": "#/$defs/nonEmptyString" },
-        "migrationNote": { "$ref": "#/$defs/nonEmptyString" }
-      }
-    },
-    "evidenceModelIdentity": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelIdentity" } } } }]
-    },
-    "evidenceModelAccess": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelAccess" } } } }]
-    },
-    "evidenceBenchmarkRelease": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/benchmarkRelease" } } } }]
-    },
-    "evidenceCapability": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelCapability" } } } }]
-    },
-    "evidenceRoutePricing": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/routePricing" } } } }]
-    },
-    "evidenceTaskEconomics": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/taskEconomics" } } } }]
-    },
-    "evidenceRuntimeSla": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/runtimeSla" } } } }]
-    },
-    "evidenceLifecycle": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/modelLifecycle" } } } }]
-    },
-    "evidenceLifecycleReplacement": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/lifecycleReplacement" } } } }]
-    },
-    "evidenceCachePricing": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/cachePricing" } } } }]
-    },
-    "evidenceCalendarDate": {
-      "allOf": [{ "$ref": "#/$defs/evidence" }, { "if": { "properties": { "availability": { "const": "available" } } }, "then": { "properties": { "value": { "$ref": "#/$defs/calendarDate" } } } }]
-    },
-    "previewModel": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "identity", "access", "benchmark", "capability", "routePricing", "taskEconomics", "runtime", "lifecycle"],
-      "properties": {
-        "id": { "$ref": "#/$defs/nonEmptyString" },
-        "identity": { "$ref": "#/$defs/evidenceModelIdentity" },
-        "access": { "$ref": "#/$defs/evidenceModelAccess" },
-        "benchmark": { "$ref": "#/$defs/evidenceBenchmarkRelease" },
-        "capability": { "$ref": "#/$defs/evidenceCapability" },
-        "routePricing": { "$ref": "#/$defs/evidenceRoutePricing" },
-        "taskEconomics": { "$ref": "#/$defs/evidenceTaskEconomics" },
-        "runtime": { "$ref": "#/$defs/evidenceRuntimeSla" },
-        "lifecycle": { "$ref": "#/$defs/evidenceLifecycle" }
-      }
-    },
-    "lifecycleModel": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["modelId", "identity", "lifecycle", "replacement"],
-      "properties": {
-        "modelId": { "$ref": "#/$defs/nonEmptyString" },
-        "identity": { "$ref": "#/$defs/evidenceModelIdentity" },
-        "lifecycle": { "$ref": "#/$defs/evidenceLifecycle" },
-        "replacement": { "$ref": "#/$defs/evidenceLifecycleReplacement" }
-      }
-    },
-    "rankingEntry": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["model", "rank"],
-      "properties": {
-        "model": { "$ref": "#/$defs/previewModel" },
-        "rank": { "$ref": "#/$defs/evidenceNumber" }
-      }
-    },
-    "subscriptionPlan": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "provider", "displayName", "monthlyUsd", "includedUsage"],
-      "properties": {
-        "id": { "$ref": "#/$defs/nonEmptyString" },
-        "provider": { "$ref": "#/$defs/evidenceString" },
-        "displayName": { "$ref": "#/$defs/evidenceString" },
-        "monthlyUsd": { "$ref": "#/$defs/evidenceNumber" },
-        "includedUsage": { "$ref": "#/$defs/evidenceString" }
-      }
-    },
-    "modelsData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["models"],
-      "properties": { "models": { "type": "array", "items": { "$ref": "#/$defs/previewModel" } } }
-    },
-    "profileData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["model"],
-      "properties": { "model": { "$ref": "#/$defs/previewModel" } }
-    },
-    "lifecycleData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["models"],
-      "properties": { "models": { "type": "array", "items": { "$ref": "#/$defs/lifecycleModel" } } }
-    },
-    "rankingsData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["models"],
-      "properties": { "models": { "type": "array", "items": { "$ref": "#/$defs/rankingEntry" } } }
-    },
-    "comparisonData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["models", "unavailableModelIds"],
-      "properties": {
-        "models": { "type": "array", "items": { "$ref": "#/$defs/previewModel" } },
-        "unavailableModelIds": { "type": "array", "items": { "$ref": "#/$defs/evidenceString" } }
-      }
-    },
-    "subscriptionData": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["plans", "models", "selectedModelTaskEconomics"],
-      "properties": {
-        "plans": { "type": "array", "items": { "$ref": "#/$defs/subscriptionPlan" } },
-        "models": { "type": "array", "items": { "$ref": "#/$defs/previewModel" } },
-        "selectedModelTaskEconomics": { "$ref": "#/$defs/evidenceTaskEconomics" }
-      }
-    },
-    "envelope": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["contractVersion", "status", "fetchedAt", "effectiveAt", "data", "provenance"],
-      "properties": {
-        "contractVersion": { "const": "ui-data-contract/v1" },
-        "status": { "enum": ["available", "partial", "unavailable"] },
-        "reason": { "$ref": "#/$defs/nonEmptyString" },
-        "fetchedAt": { "$ref": "#/$defs/utcTimestamp" },
-        "effectiveAt": { "oneOf": [{ "$ref": "#/$defs/utcTimestamp" }, { "type": "null" }] },
-        "data": { "type": ["object", "null"] },
-        "provenance": { "type": "array", "items": { "$ref": "#/$defs/provenance" } }
-      },
-      "allOf": [
-        {
-          "if": { "properties": { "status": { "const": "available" } } },
-          "then": {
-            "not": { "required": ["reason"], "properties": { "reason": {} } },
-            "properties": {
-              "data": { "type": "object" },
-              "effectiveAt": { "$ref": "#/$defs/utcTimestamp" }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "status": { "const": "partial" } } },
-          "then": {
-            "not": { "required": ["reason"], "properties": { "reason": {} } },
-            "properties": {
-              "data": { "type": "object" },
-              "effectiveAt": { "oneOf": [{ "$ref": "#/$defs/utcTimestamp" }, { "type": "null" }] }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "status": { "const": "unavailable" } } },
-          "then": {
-            "required": ["reason"],
-            "properties": {
-              "reason": { "$ref": "#/$defs/nonEmptyString" },
-              "data": { "type": "null" },
-              "effectiveAt": { "type": "null" }
-            }
-          }
-        }
-      ]
-    },
-    "modelsEnvelope": {
-      "allOf": [
-        { "$ref": "#/$defs/envelope" },
-        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/modelsData" } } } }
-      ]
-    },
-    "profileEnvelope": {
-      "allOf": [
-        { "$ref": "#/$defs/envelope" },
-        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/profileData" } } } }
-      ]
-    },
-    "lifecycleEnvelope": {
-      "allOf": [
-        { "$ref": "#/$defs/envelope" },
-        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/lifecycleData" } } } }
-      ]
-    },
-    "rankingsEnvelope": {
-      "allOf": [
-        { "$ref": "#/$defs/envelope" },
-        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/rankingsData" } } } }
-      ]
-    },
-    "comparisonEnvelope": {
-      "allOf": [
-        { "$ref": "#/$defs/envelope" },
-        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/comparisonData" } } } }
-      ]
-    },
-    "subscriptionEnvelope": {
-      "allOf": [
-        { "$ref": "#/$defs/envelope" },
-        { "if": { "properties": { "status": { "const": "unavailable" } } }, "else": { "properties": { "data": { "$ref": "#/$defs/subscriptionData" } } } }
-      ]
-    }
+  "$schema":"https://tokenbench.dev/contracts/ui-data-contract/v1/meta-schema.json",
+  "$id":"https://tokenbench.dev/contracts/ui-data-contract/v1/schema.json",
+  "oneOf":[{"$ref":"#/$defs/modelsEnvelope"},{"$ref":"#/$defs/profileEnvelope"},{"$ref":"#/$defs/lifecycleEnvelope"},{"$ref":"#/$defs/rankingsEnvelope"},{"$ref":"#/$defs/comparisonEnvelope"},{"$ref":"#/$defs/subscriptionEnvelope"}],
+  "$defs":{
+    "nonEmptyString":{"type":"string","minLength":1,"pattern":"\\S"},
+    "identifier":{"type":"string","minLength":1,"maxLength":256,"pattern":"^[^\\u0000-\\u001f\\u007f]+$"},
+    "routeIdentifier":{"type":"string","minLength":1,"maxLength":512,"pattern":"^[^\\u0000-\\u001f\\u007f]+$"},
+    "safeModelSlug":{"type":"string","pattern":"^[a-z0-9](?:[a-z0-9._~-]{0,158}[a-z0-9])?$"},
+    "cursor":{"type":"string","pattern":"^[A-Za-z0-9_-]{1,1024}$"},
+    "utcTimestamp":{"type":"string","format":"date-time"},
+    "calendarDate":{"type":"string","format":"date"},
+    "safeInteger":{"type":"integer","minimum":0,"maximum":9007199254740991},
+    "positiveSafeInteger":{"type":"integer","minimum":1,"maximum":9007199254740991},
+    "score":{"type":"number","minimum":0,"maximum":100},
+    "usd":{"type":"number","minimum":0,"maximum":1000000000},
+    "basisPoints":{"type":"integer","minimum":0,"maximum":10000},
+    "modalities":{"type":"array","items":{"enum":["text","image","audio","video","file"]},"uniqueItems":true,"maxItems":5},
+    "sourceRefs":{"type":"array","items":{"$ref":"#/$defs/identifier"},"uniqueItems":true},
+    "availableEvidence":{"type":"object","additionalProperties":false,"required":["availability","value","sourceRefs"],"properties":{"availability":{"const":"available"},"value":true,"sourceRefs":{"allOf":[{"$ref":"#/$defs/sourceRefs"},{"minItems":1}]}}},
+    "unavailableEvidence":{"type":"object","additionalProperties":false,"required":["availability","value","reason","sourceRefs"],"properties":{"availability":{"const":"unavailable"},"value":{"type":"null"},"reason":{"$ref":"#/$defs/nonEmptyString"},"sourceRefs":{"$ref":"#/$defs/sourceRefs"}}},
+    "evidenceNonNegativeSafeNumber":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"type":"number","minimum":0,"maximum":9007199254740991}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceRankingRaw":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"type":"number","minimum":0,"maximum":9007199254740991}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceSafeInteger":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/safeInteger"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidencePositiveSafeInteger":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/positiveSafeInteger"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceScore":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/score"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceUsd":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/usd"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceBoolean":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"type":"boolean"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceModelSlug":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/safeModelSlug"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "evidenceLifecycleStatus":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"enum":["current","sunset_scheduled","retired"]}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "sourceAttribution":{"type":"object","additionalProperties":false,"required":["sourceRef","fieldGroup","sourceId","sourceRevision","label","url","licenseId","observedAt","effectiveAt"],"properties":{"sourceRef":{"$ref":"#/$defs/identifier"},"fieldGroup":{"type":"string","pattern":"^/data(?:/(?:[^~/]|~[01])*)*$"},"sourceId":{"$ref":"#/$defs/identifier"},"sourceRevision":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"},"url":{"type":"string","pattern":"^https://"},"licenseId":{"enum":["CDLA-Permissive-2.0","MIT","CC-BY-4.0","OpenRouter-ToS","provider-terms",null]},"observedAt":{"$ref":"#/$defs/utcTimestamp"},"effectiveAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]}}},
+    "provenance":{"type":"object","additionalProperties":false,"required":["sourceRef","label","effectiveAt","note"],"properties":{"sourceRef":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"},"effectiveAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"note":{"$ref":"#/$defs/nonEmptyString"}}},
+    "dataWarning":{"type":"object","additionalProperties":false,"required":["code","fieldGroup","state","message"],"properties":{"code":{"$ref":"#/$defs/identifier"},"fieldGroup":{"type":"string","pattern":"^/data(?:/(?:[^~/]|~[01])*)*$"},"state":{"enum":["unknown","stale","projected","historical"]},"message":{"$ref":"#/$defs/nonEmptyString"}}},
+    "revisions":{"type":"object","additionalProperties":false,"required":["projection","catalog","benchmark","runtimeObservationSet","projectionMethodology"],"properties":{"projection":{"$ref":"#/$defs/identifier"},"catalog":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"benchmark":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"runtimeObservationSet":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"projectionMethodology":{"$ref":"#/$defs/identifier"}}},
+    "freshness":{"type":"object","additionalProperties":false,"required":["catalogObservedAt","runtimeObservedAt","benchmarkReleasedAt","benchmarkCheckedAt"],"properties":{"catalogObservedAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"runtimeObservedAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"benchmarkReleasedAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"benchmarkCheckedAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]}}},
+    "modelsRequest":{"type":"object","additionalProperties":false,"required":["search","access","providerIds","limit","cursor"],"properties":{"search":{"oneOf":[{"type":"string","maxLength":80},{"type":"null"}]},"access":{"enum":["all","proprietary","open_weights"]},"providerIds":{"type":"array","items":{"$ref":"#/$defs/identifier"},"uniqueItems":true,"maxItems":64},"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":{"oneOf":[{"$ref":"#/$defs/cursor"},{"type":"null"}]}}},
+    "profileRequest":{"type":"object","additionalProperties":false,"required":["slug"],"properties":{"slug":{"$ref":"#/$defs/safeModelSlug"}}},
+    "lifecycleRequest":{"type":"object","additionalProperties":false,"required":["asOf","horizonDays"],"properties":{"asOf":{"$ref":"#/$defs/utcTimestamp"},"horizonDays":{"type":"integer","minimum":1,"maximum":3650}}},
+    "leaderboardRankingsRequest":{"type":"object","additionalProperties":false,"required":["operation","releaseId","filters","limit","cursor"],"properties":{"operation":{"const":"leaderboard"},"releaseId":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"filters":{"type":"object","additionalProperties":false,"required":["organizationIds","openWeights","excludeDerivativeFinetunes"],"properties":{"organizationIds":{"type":"array","items":{"$ref":"#/$defs/identifier"},"uniqueItems":true,"maxItems":64},"openWeights":{"enum":["all","only","exclude"]},"excludeDerivativeFinetunes":{"type":"boolean"}}},"limit":{"type":"integer","minimum":1,"maximum":100},"cursor":{"oneOf":[{"$ref":"#/$defs/cursor"},{"type":"null"}]}}},
+    "customRankingsRequest":{"type":"object","additionalProperties":false,"required":["operation","dimensionSetRevision","weights","filters","includeIneligible","limit"],"properties":{"operation":{"const":"custom"},"dimensionSetRevision":{"$ref":"#/$defs/identifier"},"weights":{"type":"object","propertyNames":{"$ref":"#/$defs/identifier"},"additionalProperties":{"$ref":"#/$defs/score"},"minProperties":1,"maxProperties":32},"filters":{"type":"object","additionalProperties":false,"required":["access","providerIds","excludeDerivativeFinetunes","requiredInputModalities","maxInputMicroDollarsPerMillion","maxOutputMicroDollarsPerMillion","minTpsP50","maxTtftP50Ms","minContextWindowTokens","minMaxOutputTokens"],"properties":{"access":{"enum":["all","proprietary","open_weights"]},"providerIds":{"type":"array","items":{"$ref":"#/$defs/identifier"},"uniqueItems":true,"maxItems":64},"excludeDerivativeFinetunes":{"type":"boolean"},"requiredInputModalities":{"$ref":"#/$defs/modalities"},"maxInputMicroDollarsPerMillion":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"maxOutputMicroDollarsPerMillion":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"minTpsP50":{"oneOf":[{"type":"number","minimum":0,"maximum":1000000},{"type":"null"}]},"maxTtftP50Ms":{"oneOf":[{"type":"integer","minimum":0,"maximum":86400000},{"type":"null"}]},"minContextWindowTokens":{"oneOf":[{"$ref":"#/$defs/positiveSafeInteger"},{"type":"null"}]},"minMaxOutputTokens":{"oneOf":[{"$ref":"#/$defs/positiveSafeInteger"},{"type":"null"}]}}},"includeIneligible":{"type":"boolean"},"limit":{"type":"integer","minimum":1,"maximum":100}}},
+    "rankingsRequest":{"oneOf":[{"$ref":"#/$defs/leaderboardRankingsRequest"},{"$ref":"#/$defs/customRankingsRequest"}]},
+    "comparisonRequest":{"type":"object","additionalProperties":false,"required":["modelSlugs"],"properties":{"modelSlugs":{"type":"array","items":{"$ref":"#/$defs/safeModelSlug"},"minItems":2,"maxItems":4,"uniqueItems":true}}},
+    "subscriptionCatalogRequest":{"type":"object","additionalProperties":false,"required":["operation"],"properties":{"operation":{"const":"catalog"}}},
+    "subscriptionWorkload":{"type":"object","additionalProperties":false,"required":["conversationsPerDay","messagesPerConversation","inputTokensPerMessage","outputTokensPerMessage","activeDaysPerMonth"],"properties":{"conversationsPerDay":{"type":"integer","minimum":0,"maximum":10000},"messagesPerConversation":{"type":"integer","minimum":0,"maximum":1000},"inputTokensPerMessage":{"type":"integer","minimum":0,"maximum":1000000},"outputTokensPerMessage":{"type":"integer","minimum":0,"maximum":1000000},"activeDaysPerMonth":{"type":"integer","minimum":0,"maximum":31}}},
+    "subscriptionCalculateRequest":{"type":"object","additionalProperties":false,"required":["operation","planId","seats","modelMix","workload","cacheReadShareBasisPoints","cacheWriteShareBasisPoints","crossoverTokenVolume"],"properties":{"operation":{"const":"calculate"},"planId":{"$ref":"#/$defs/identifier"},"seats":{"type":"integer","minimum":1,"maximum":50},"modelMix":{"type":"array","minItems":1,"maxItems":16,"items":{"type":"object","additionalProperties":false,"required":["modelSlug","routeId","pricingTierId","tierContextTokens","shareBasisPoints"],"properties":{"modelSlug":{"$ref":"#/$defs/safeModelSlug"},"routeId":{"$ref":"#/$defs/routeIdentifier"},"pricingTierId":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"tierContextTokens":{"$ref":"#/$defs/safeInteger"},"shareBasisPoints":{"$ref":"#/$defs/basisPoints"}}}},"workload":{"$ref":"#/$defs/subscriptionWorkload"},"cacheReadShareBasisPoints":{"$ref":"#/$defs/basisPoints"},"cacheWriteShareBasisPoints":{"$ref":"#/$defs/basisPoints"},"crossoverTokenVolume":{"type":"integer","minimum":0,"maximum":300000000}}},
+    "subscriptionRequest":{"oneOf":[{"$ref":"#/$defs/subscriptionCatalogRequest"},{"$ref":"#/$defs/subscriptionCalculateRequest"}]},
+    "modelIdentity":{"type":"object","additionalProperties":false,"required":["configurationId","slug","displayName","organization"],"properties":{"configurationId":{"$ref":"#/$defs/identifier"},"slug":{"$ref":"#/$defs/safeModelSlug"},"displayName":{"$ref":"#/$defs/nonEmptyString"},"organization":{"$ref":"#/$defs/nonEmptyString"}}},
+    "scoreFact":{"type":"object","additionalProperties":false,"required":["dimensionId","label","score","rank","fieldSize"],"properties":{"dimensionId":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"},"score":{"$ref":"#/$defs/evidenceScore"},"rank":{"$ref":"#/$defs/evidencePositiveSafeInteger"},"fieldSize":{"$ref":"#/$defs/evidencePositiveSafeInteger"}}},
+    "taskFact":{"type":"object","additionalProperties":false,"required":["taskId","label","categoryId","score","questionCount","evaluationCostUsd","inputPriceUsdPerMillion","outputPriceUsdPerMillion","equivalentSuccesses","costPerSuccessfulEvaluationUsd","meanInputTokens","meanOutputTokens"],"properties":{"taskId":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"},"categoryId":{"$ref":"#/$defs/identifier"},"score":{"$ref":"#/$defs/evidenceScore"},"questionCount":{"$ref":"#/$defs/evidencePositiveSafeInteger"},"evaluationCostUsd":{"$ref":"#/$defs/evidenceUsd"},"inputPriceUsdPerMillion":{"$ref":"#/$defs/evidenceUsd"},"outputPriceUsdPerMillion":{"$ref":"#/$defs/evidenceUsd"},"equivalentSuccesses":{"$ref":"#/$defs/evidenceNonNegativeSafeNumber"},"costPerSuccessfulEvaluationUsd":{"$ref":"#/$defs/evidenceUsd"},"meanInputTokens":{"$ref":"#/$defs/evidenceSafeInteger"},"meanOutputTokens":{"$ref":"#/$defs/evidenceSafeInteger"}}},
+    "runtimeObservationMetadata":{"type":"object","additionalProperties":false,"required":["windowStartedAt","windowEndedAt","sampleSize","ttftPercentile","tpsPercentile"],"properties":{"windowStartedAt":{"$ref":"#/$defs/utcTimestamp"},"windowEndedAt":{"$ref":"#/$defs/utcTimestamp"},"sampleSize":{"$ref":"#/$defs/positiveSafeInteger"},"ttftPercentile":{"const":"p50"},"tpsPercentile":{"const":"p50"}}},
+    "routePricingTier":{"type":"object","additionalProperties":false,"required":["pricingTierId","minimumContextTokens","maximumContextTokens","inputMicroDollarsPerMillion","outputMicroDollarsPerMillion","cacheReadMicroDollarsPerMillion","cacheWriteMicroDollarsPerMillion"],"properties":{"pricingTierId":{"$ref":"#/$defs/identifier"},"minimumContextTokens":{"$ref":"#/$defs/safeInteger"},"maximumContextTokens":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"inputMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"outputMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"cacheReadMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"cacheWriteMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"}}},
+    "routeFact":{"type":"object","additionalProperties":false,"required":["routeId","providerId","status","inputMicroDollarsPerMillion","outputMicroDollarsPerMillion","cacheReadMicroDollarsPerMillion","cacheWriteMicroDollarsPerMillion","contextWindowTokens","maxOutputTokens","inputModalities","outputModalities","ttftP50Ms","tpsP50","uptimeBasisPoints","runtimeObservation","pricingTiers"],"properties":{"routeId":{"$ref":"#/$defs/routeIdentifier"},"providerId":{"$ref":"#/$defs/identifier"},"status":{"enum":["available","limited","deprecated","unavailable"]},"inputMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"outputMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"cacheReadMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"cacheWriteMicroDollarsPerMillion":{"$ref":"#/$defs/evidenceSafeInteger"},"contextWindowTokens":{"$ref":"#/$defs/evidencePositiveSafeInteger"},"maxOutputTokens":{"$ref":"#/$defs/evidencePositiveSafeInteger"},"inputModalities":{"$ref":"#/$defs/modalities"},"outputModalities":{"$ref":"#/$defs/modalities"},"ttftP50Ms":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"type":"integer","minimum":0,"maximum":86400000}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},"tpsP50":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"type":"number","minimum":0,"maximum":1000000}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},"uptimeBasisPoints":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/basisPoints"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},"runtimeObservation":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/runtimeObservationMetadata"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},"pricingTiers":{"type":"array","items":{"$ref":"#/$defs/routePricingTier"},"uniqueItems":true}}},
+    "replacementValue":{"type":"object","additionalProperties":false,"required":["modelSlug","migrationNote"],"properties":{"modelSlug":{"$ref":"#/$defs/safeModelSlug"},"migrationNote":{"$ref":"#/$defs/nonEmptyString"}}},
+    "evidenceReplacement":{"oneOf":[{"allOf":[{"$ref":"#/$defs/availableEvidence"},{"properties":{"value":{"$ref":"#/$defs/replacementValue"}}}]},{"$ref":"#/$defs/unavailableEvidence"}]},
+    "modelSummary":{"type":"object","additionalProperties":false,"required":["identity","openWeights","isDerivativeFinetune","baseModelSlug","overall","categories","selectedRouteId","selectedRoutePolicy","selectedRoute","lifecycleStatus"],"properties":{"identity":{"$ref":"#/$defs/modelIdentity"},"openWeights":{"$ref":"#/$defs/evidenceBoolean"},"isDerivativeFinetune":{"type":"boolean"},"baseModelSlug":{"oneOf":[{"$ref":"#/$defs/evidenceModelSlug"},{"type":"null"}]},"overall":{"$ref":"#/$defs/scoreFact"},"categories":{"type":"array","items":{"$ref":"#/$defs/scoreFact"},"uniqueItems":true},"selectedRouteId":{"oneOf":[{"$ref":"#/$defs/routeIdentifier"},{"type":"null"}]},"selectedRoutePolicy":{"$ref":"#/$defs/nonEmptyString"},"selectedRoute":{"oneOf":[{"$ref":"#/$defs/routeFact"},{"type":"null"}]},"lifecycleStatus":{"$ref":"#/$defs/evidenceLifecycleStatus"}}},
+    "lifecycleEvent":{"type":"object","additionalProperties":false,"required":["eventId","eventType","effectiveAt","observedAt","confidence"],"properties":{"eventId":{"$ref":"#/$defs/identifier"},"eventType":{"enum":["announcement","deprecation","expiration","retirement"]},"effectiveAt":{"$ref":"#/$defs/utcTimestamp"},"observedAt":{"$ref":"#/$defs/utcTimestamp"},"confidence":{"enum":["official","reviewed_secondary"]}}},
+    "modelProfile":{"type":"object","additionalProperties":false,"required":["summary","releaseOn","tasks","routes","lifecycleEvents","replacement"],"properties":{"summary":{"$ref":"#/$defs/modelSummary"},"releaseOn":{"$ref":"#/$defs/calendarDate"},"tasks":{"type":"array","items":{"$ref":"#/$defs/taskFact"},"uniqueItems":true},"routes":{"type":"array","items":{"$ref":"#/$defs/routeFact"},"uniqueItems":true},"lifecycleEvents":{"type":"array","items":{"$ref":"#/$defs/lifecycleEvent"},"uniqueItems":true},"replacement":{"$ref":"#/$defs/evidenceReplacement"}}},
+    "lifecycleProjectionItem":{"type":"object","additionalProperties":false,"required":["identity","status","events","replacement"],"properties":{"identity":{"$ref":"#/$defs/modelIdentity"},"status":{"$ref":"#/$defs/evidenceLifecycleStatus"},"events":{"type":"array","items":{"$ref":"#/$defs/lifecycleEvent"},"uniqueItems":true},"replacement":{"$ref":"#/$defs/evidenceReplacement"}}},
+    "modelsData":{"type":"object","additionalProperties":false,"required":["models","total","nextCursor"],"properties":{"models":{"type":"array","items":{"$ref":"#/$defs/modelSummary"},"uniqueItems":true},"total":{"$ref":"#/$defs/safeInteger"},"nextCursor":{"oneOf":[{"$ref":"#/$defs/cursor"},{"type":"null"}]}}},
+    "profileData":{"type":"object","additionalProperties":false,"required":["model"],"properties":{"model":{"$ref":"#/$defs/modelProfile"}}},
+    "lifecycleData":{"type":"object","additionalProperties":false,"required":["asOf","horizonDays","models"],"properties":{"asOf":{"$ref":"#/$defs/utcTimestamp"},"horizonDays":{"type":"integer","minimum":1,"maximum":3650},"models":{"type":"array","items":{"$ref":"#/$defs/lifecycleProjectionItem"},"uniqueItems":true}}},
+    "benchmarkUtilityAnchor":{"type":"object","additionalProperties":false,"required":["best","worst","transform"],"properties":{"best":{"$ref":"#/$defs/score"},"worst":{"$ref":"#/$defs/score"},"transform":{"const":"identity"}}},
+    "costUtilityAnchor":{"type":"object","additionalProperties":false,"required":["best","worst","transform"],"properties":{"best":{"type":"integer","minimum":1,"maximum":9007199254740991},"worst":{"type":"integer","minimum":1,"maximum":9007199254740991},"transform":{"const":"log_inverse"}}},
+    "ttftUtilityAnchor":{"type":"object","additionalProperties":false,"required":["best","worst","transform"],"properties":{"best":{"type":"integer","minimum":1,"maximum":86400000},"worst":{"type":"integer","minimum":1,"maximum":86400000},"transform":{"const":"log_inverse"}}},
+    "tpsUtilityAnchor":{"type":"object","additionalProperties":false,"required":["best","worst","transform"],"properties":{"best":{"type":"number","exclusiveMinimum":0,"maximum":1000000},"worst":{"type":"number","exclusiveMinimum":0,"maximum":1000000},"transform":{"const":"log"}}},
+    "rankingDimension":{"type":"object","additionalProperties":false,"required":["dimensionId","label","kind","unit","utilityAnchor"],"properties":{"dimensionId":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"},"kind":{"enum":["benchmark","cost","ttft","tps"]},"unit":{"enum":["score","micro_dollars_per_million","milliseconds","tokens_per_second"]},"utilityAnchor":true},"allOf":[{"if":{"properties":{"kind":{"const":"benchmark"}}},"then":{"properties":{"unit":{"const":"score"},"utilityAnchor":{"$ref":"#/$defs/benchmarkUtilityAnchor"}}}},{"if":{"properties":{"kind":{"const":"cost"}}},"then":{"properties":{"unit":{"const":"micro_dollars_per_million"},"utilityAnchor":{"$ref":"#/$defs/costUtilityAnchor"}}}},{"if":{"properties":{"kind":{"const":"ttft"}}},"then":{"properties":{"unit":{"const":"milliseconds"},"utilityAnchor":{"$ref":"#/$defs/ttftUtilityAnchor"}}}},{"if":{"properties":{"kind":{"const":"tps"}}},"then":{"properties":{"unit":{"const":"tokens_per_second"},"utilityAnchor":{"$ref":"#/$defs/tpsUtilityAnchor"}}}}]},
+    "rankingDimensionSet":{"type":"object","additionalProperties":false,"required":["revision","transformationVersion","dimensions"],"properties":{"revision":{"$ref":"#/$defs/identifier"},"transformationVersion":{"$ref":"#/$defs/identifier"},"dimensions":{"type":"array","items":{"$ref":"#/$defs/rankingDimension"},"minItems":1,"maxItems":32,"uniqueItems":true}}},
+    "rankingDimensionResult":{"type":"object","additionalProperties":false,"required":["dimensionId","rawValue","utility","contribution"],"properties":{"dimensionId":{"$ref":"#/$defs/identifier"},"rawValue":{"$ref":"#/$defs/evidenceRankingRaw"},"utility":{"oneOf":[{"$ref":"#/$defs/score"},{"type":"null"}]},"contribution":{"oneOf":[{"$ref":"#/$defs/score"},{"type":"null"}]}}},
+    "rankingRow":{"type":"object","additionalProperties":false,"required":["model","dimensions","total","rank","pareto","eligible","ineligibilityReasons"],"properties":{"model":{"$ref":"#/$defs/modelSummary"},"dimensions":{"type":"array","items":{"$ref":"#/$defs/rankingDimensionResult"},"uniqueItems":true},"total":{"oneOf":[{"$ref":"#/$defs/score"},{"type":"null"}]},"rank":{"oneOf":[{"$ref":"#/$defs/positiveSafeInteger"},{"type":"null"}]},"pareto":{"oneOf":[{"type":"boolean"},{"type":"null"}]},"eligible":{"type":"boolean"},"ineligibilityReasons":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}}}},
+    "leaderboardTaxonomyCategory":{"type":"object","additionalProperties":false,"required":["categoryId","label","tasks"],"properties":{"categoryId":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"},"tasks":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["taskId","label"],"properties":{"taskId":{"$ref":"#/$defs/identifier"},"label":{"$ref":"#/$defs/nonEmptyString"}}},"uniqueItems":true}}},
+    "leaderboardRow":{"type":"object","additionalProperties":false,"required":["sourceRank","model","taskEconomics","costPerSuccessfulEvaluationUsd","meanOutputTokens","pareto"],"properties":{"sourceRank":{"$ref":"#/$defs/positiveSafeInteger"},"model":{"$ref":"#/$defs/modelSummary"},"taskEconomics":{"type":"array","items":{"$ref":"#/$defs/taskFact"},"uniqueItems":true},"costPerSuccessfulEvaluationUsd":{"$ref":"#/$defs/evidenceUsd"},"meanOutputTokens":{"$ref":"#/$defs/evidenceSafeInteger"},"pareto":{"type":"boolean"}}},
+    "leaderboardRankingsData":{"type":"object","additionalProperties":false,"required":["operation","release","taxonomy","rows","total","nextCursor"],"properties":{"operation":{"const":"leaderboard"},"release":{"type":"object","additionalProperties":false,"required":["releaseId","releaseOn","licenseId","sourceRefs"],"properties":{"releaseId":{"$ref":"#/$defs/identifier"},"releaseOn":{"$ref":"#/$defs/calendarDate"},"licenseId":{"const":"CDLA-Permissive-2.0"},"sourceRefs":{"allOf":[{"$ref":"#/$defs/sourceRefs"},{"minItems":1}]}}},"taxonomy":{"type":"array","items":{"$ref":"#/$defs/leaderboardTaxonomyCategory"},"uniqueItems":true},"rows":{"type":"array","items":{"$ref":"#/$defs/leaderboardRow"},"uniqueItems":true},"total":{"$ref":"#/$defs/safeInteger"},"nextCursor":{"oneOf":[{"$ref":"#/$defs/cursor"},{"type":"null"}]}}},
+    "customRankingsData":{"type":"object","additionalProperties":false,"required":["operation","dimensionSet","submittedWeights","normalizedWeights","rows","totalEligible","totalIneligible","truncated"],"properties":{"operation":{"const":"custom"},"dimensionSet":{"$ref":"#/$defs/rankingDimensionSet"},"submittedWeights":{"type":"object","propertyNames":{"$ref":"#/$defs/identifier"},"additionalProperties":{"$ref":"#/$defs/score"},"minProperties":1,"maxProperties":32},"normalizedWeights":{"type":"object","propertyNames":{"$ref":"#/$defs/identifier"},"additionalProperties":{"type":"number","minimum":0,"maximum":1},"minProperties":1,"maxProperties":32},"rows":{"type":"array","items":{"$ref":"#/$defs/rankingRow"},"uniqueItems":true},"totalEligible":{"$ref":"#/$defs/safeInteger"},"totalIneligible":{"$ref":"#/$defs/safeInteger"},"truncated":{"type":"boolean"}}},
+    "rankingsData":{"oneOf":[{"$ref":"#/$defs/leaderboardRankingsData"},{"$ref":"#/$defs/customRankingsData"}]},
+    "comparisonData":{"type":"object","additionalProperties":false,"required":["requestedModelSlugs","models"],"properties":{"requestedModelSlugs":{"type":"array","items":{"$ref":"#/$defs/safeModelSlug"},"minItems":2,"maxItems":4,"uniqueItems":true},"models":{"type":"array","items":{"$ref":"#/$defs/modelProfile"},"minItems":2,"maxItems":4,"uniqueItems":true}}},
+    "subscriptionPlanFact":{"type":"object","additionalProperties":false,"required":["planId","providerId","displayName","monthlyCostMicroDollars","supportedModelSlugs","sourceRefs"],"properties":{"planId":{"$ref":"#/$defs/identifier"},"providerId":{"$ref":"#/$defs/identifier"},"displayName":{"$ref":"#/$defs/nonEmptyString"},"monthlyCostMicroDollars":{"$ref":"#/$defs/safeInteger"},"supportedModelSlugs":{"type":"array","items":{"$ref":"#/$defs/safeModelSlug"},"uniqueItems":true},"sourceRefs":{"allOf":[{"$ref":"#/$defs/sourceRefs"},{"minItems":1}]}}},
+    "subscriptionWorkloadShape":{"type":"object","additionalProperties":false,"required":["conversationsPerDay","messagesPerConversation","inputTokensPerMessage","outputTokensPerMessage","activeDaysPerMonth","cacheReadShareBasisPoints","cacheWriteShareBasisPoints"],"properties":{"conversationsPerDay":{"type":"integer","minimum":0,"maximum":10000},"messagesPerConversation":{"type":"integer","minimum":0,"maximum":1000},"inputTokensPerMessage":{"type":"integer","minimum":0,"maximum":1000000},"outputTokensPerMessage":{"type":"integer","minimum":0,"maximum":1000000},"activeDaysPerMonth":{"type":"integer","minimum":0,"maximum":31},"cacheReadShareBasisPoints":{"$ref":"#/$defs/basisPoints"},"cacheWriteShareBasisPoints":{"$ref":"#/$defs/basisPoints"}}},
+    "entitlementCapacity":{"type":"object","additionalProperties":false,"required":["minimum","maximum","unit","window"],"properties":{"minimum":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"maximum":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"unit":{"enum":["messages","model_calls","credits_micro_dollars","tasks","feature_uses"]},"window":{"enum":["rolling_5h","weekly","monthly","billing_cycle"]}}},
+    "entitlementSensitivity":{"type":"object","additionalProperties":false,"required":["minimum","maximum","unit"],"properties":{"minimum":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"maximum":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"unit":{"enum":["messages","model_calls","credits_micro_dollars","tasks","feature_uses"]}}},
+    "entitlementProjection":{"allOf":[{"type":"object","required":["projectionId","planId","evidenceState","formula","assumptions","caveats","confidence","boundType","projectedCapacity","workloadShape","sensitivity","methodologyVersion","effectiveAt","sourceRefs"],"properties":{"projectionId":{"$ref":"#/$defs/identifier"},"planId":{"$ref":"#/$defs/identifier"},"evidenceState":{"enum":["provider_stated","projected","dynamic_unknown"]},"formula":{"oneOf":[{"$ref":"#/$defs/nonEmptyString"},{"type":"null"}]},"assumptions":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}},"caveats":{"type":"array","items":{"$ref":"#/$defs/nonEmptyString"}},"confidence":{"enum":["high","medium","low",null]},"boundType":{"enum":["hard_max","practical_upper","outer_ceiling","unknown"]},"projectedCapacity":{"oneOf":[{"$ref":"#/$defs/entitlementCapacity"},{"type":"null"}]},"workloadShape":{"$ref":"#/$defs/subscriptionWorkloadShape"},"sensitivity":{"$ref":"#/$defs/entitlementSensitivity"},"methodologyVersion":{"$ref":"#/$defs/identifier"},"effectiveAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"sourceRefs":{"$ref":"#/$defs/sourceRefs"}}},{"oneOf":[{"properties":{"evidenceState":{"const":"projected"},"formula":{"$ref":"#/$defs/nonEmptyString"},"assumptions":{"minItems":1},"confidence":{"enum":["high","medium","low"]},"boundType":{"enum":["hard_max","practical_upper","outer_ceiling"]},"projectedCapacity":{"$ref":"#/$defs/entitlementCapacity"},"sourceRefs":{"minItems":1}}},{"properties":{"evidenceState":{"const":"provider_stated"},"formula":{"type":"null"},"assumptions":{"maxItems":0},"confidence":{"type":"null"},"sourceRefs":{"minItems":1}}},{"properties":{"evidenceState":{"const":"dynamic_unknown"},"formula":{"type":"null"},"assumptions":{"maxItems":0},"confidence":{"type":"null"},"boundType":{"const":"unknown"},"projectedCapacity":{"type":"null"}}}]}],"unevaluatedProperties":false},
+    "subscriptionCostLineItem":{"type":"object","additionalProperties":false,"required":["kind","modelSlug","routeId","pricingTierId","tokens","rateMicroDollarsPerMillion","costMicroDollars"],"properties":{"kind":{"enum":["standard_input","cache_read","cache_write","output"]},"modelSlug":{"$ref":"#/$defs/safeModelSlug"},"routeId":{"$ref":"#/$defs/routeIdentifier"},"pricingTierId":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"tokens":{"$ref":"#/$defs/safeInteger"},"rateMicroDollarsPerMillion":{"$ref":"#/$defs/safeInteger"},"costMicroDollars":{"$ref":"#/$defs/safeInteger"}}},
+    "subscriptionCalculation":{"type":"object","additionalProperties":false,"required":["selectedPlanId","selectedTiers","derivedWorkload","lineItems","monthlyApiCostMicroDollars","monthlySubscriptionCostMicroDollars","differenceMicroDollars","cheaper","breakEvenMessagesPerDay","crossoverTokenVolume","crossoverApiCostMicroDollars","crossoverTokens","crossoverDomain","entitlement","methodologyVersion"],"properties":{"selectedPlanId":{"$ref":"#/$defs/identifier"},"selectedTiers":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["modelSlug","routeId","pricingTierId","tierContextTokens"],"properties":{"modelSlug":{"$ref":"#/$defs/safeModelSlug"},"routeId":{"$ref":"#/$defs/routeIdentifier"},"pricingTierId":{"oneOf":[{"$ref":"#/$defs/identifier"},{"type":"null"}]},"tierContextTokens":{"$ref":"#/$defs/safeInteger"}}},"uniqueItems":true},"derivedWorkload":{"type":"object","additionalProperties":false,"required":["monthlyMessages","monthlyInputTokens","monthlyOutputTokens"],"properties":{"monthlyMessages":{"$ref":"#/$defs/safeInteger"},"monthlyInputTokens":{"$ref":"#/$defs/safeInteger"},"monthlyOutputTokens":{"$ref":"#/$defs/safeInteger"}}},"lineItems":{"type":"array","items":{"$ref":"#/$defs/subscriptionCostLineItem"},"uniqueItems":true},"monthlyApiCostMicroDollars":{"$ref":"#/$defs/safeInteger"},"monthlySubscriptionCostMicroDollars":{"$ref":"#/$defs/safeInteger"},"differenceMicroDollars":{"type":"integer","minimum":-9007199254740991,"maximum":9007199254740991},"cheaper":{"enum":["subscription","api","equal"]},"breakEvenMessagesPerDay":{"oneOf":[{"type":"number","minimum":0,"maximum":1000000000},{"type":"null"}]},"crossoverTokenVolume":{"type":"integer","minimum":0,"maximum":300000000},"crossoverApiCostMicroDollars":{"$ref":"#/$defs/safeInteger"},"crossoverTokens":{"oneOf":[{"$ref":"#/$defs/safeInteger"},{"type":"null"}]},"crossoverDomain":{"type":"array","minItems":8,"maxItems":10,"items":{"type":"object","additionalProperties":false,"required":["tokenVolume","apiCostMicroDollars","subscriptionCostMicroDollars"],"properties":{"tokenVolume":{"type":"integer","minimum":0,"maximum":300000000},"apiCostMicroDollars":{"$ref":"#/$defs/safeInteger"},"subscriptionCostMicroDollars":{"$ref":"#/$defs/safeInteger"}}},"uniqueItems":true},"entitlement":{"$ref":"#/$defs/entitlementProjection"},"methodologyVersion":{"$ref":"#/$defs/identifier"}}},
+    "subscriptionData":{"allOf":[{"type":"object","required":["operation","plans","routes","entitlementProjections","calculation"],"properties":{"operation":{"enum":["catalog","calculate"]},"plans":{"type":"array","items":{"$ref":"#/$defs/subscriptionPlanFact"},"uniqueItems":true},"routes":{"type":"array","items":{"$ref":"#/$defs/routeFact"},"uniqueItems":true},"entitlementProjections":{"type":"array","items":{"$ref":"#/$defs/entitlementProjection"},"uniqueItems":true},"calculation":{"oneOf":[{"$ref":"#/$defs/subscriptionCalculation"},{"type":"null"}]}}},{"oneOf":[{"properties":{"operation":{"const":"catalog"},"calculation":{"type":"null"}}},{"properties":{"operation":{"const":"calculate"},"calculation":{"$ref":"#/$defs/subscriptionCalculation"}}}]}],"unevaluatedProperties":false},
+    "envelopeBase":{"type":"object","required":["contractVersion","method","request","status","reason","fetchedAt","effectiveAt","data","revisions","freshness","sources","warnings","provenance"],"properties":{"contractVersion":{"const":"ui-data-contract/v1"},"method":{"enum":["models","profile","lifecycle","rankings","comparison","subscription"]},"request":true,"status":{"enum":["available","partial","unavailable"]},"reason":{"oneOf":[{"$ref":"#/$defs/nonEmptyString"},{"type":"null"}]},"fetchedAt":{"$ref":"#/$defs/utcTimestamp"},"effectiveAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"data":true,"revisions":{"$ref":"#/$defs/revisions"},"freshness":{"$ref":"#/$defs/freshness"},"sources":{"type":"array","items":{"$ref":"#/$defs/sourceAttribution"},"uniqueItems":true},"warnings":{"type":"array","items":{"$ref":"#/$defs/dataWarning"},"uniqueItems":true},"provenance":{"type":"array","items":{"$ref":"#/$defs/provenance"},"uniqueItems":true}},"oneOf":[{"properties":{"status":{"const":"available"},"reason":{"type":"null"},"effectiveAt":{"oneOf":[{"$ref":"#/$defs/utcTimestamp"},{"type":"null"}]},"data":{"type":"object"},"sources":{"minItems":1}}},{"properties":{"status":{"const":"partial"},"reason":{"type":"null"},"data":{"type":"object"},"sources":{"minItems":1}}},{"properties":{"status":{"const":"unavailable"},"reason":{"$ref":"#/$defs/nonEmptyString"},"effectiveAt":{"type":"null"},"data":{"type":"null"}}}]},
+    "modelsEnvelope":{"allOf":[{"$ref":"#/$defs/envelopeBase"},{"properties":{"method":{"const":"models"},"request":{"$ref":"#/$defs/modelsRequest"}}},{"if":{"properties":{"status":{"const":"unavailable"}}},"then":{"properties":{"data":{"type":"null"}}},"else":{"properties":{"data":{"$ref":"#/$defs/modelsData"}}}}],"unevaluatedProperties":false},
+    "profileEnvelope":{"allOf":[{"$ref":"#/$defs/envelopeBase"},{"properties":{"method":{"const":"profile"},"request":{"$ref":"#/$defs/profileRequest"}}},{"if":{"properties":{"status":{"const":"unavailable"}}},"then":{"properties":{"data":{"type":"null"}}},"else":{"properties":{"data":{"$ref":"#/$defs/profileData"}}}}],"unevaluatedProperties":false},
+    "lifecycleEnvelope":{"allOf":[{"$ref":"#/$defs/envelopeBase"},{"properties":{"method":{"const":"lifecycle"},"request":{"$ref":"#/$defs/lifecycleRequest"}}},{"if":{"properties":{"status":{"const":"unavailable"}}},"then":{"properties":{"data":{"type":"null"}}},"else":{"properties":{"data":{"$ref":"#/$defs/lifecycleData"}}}}],"unevaluatedProperties":false},
+    "rankingsEnvelope":{"allOf":[{"$ref":"#/$defs/envelopeBase"},{"properties":{"method":{"const":"rankings"},"request":{"$ref":"#/$defs/rankingsRequest"}}},{"if":{"properties":{"status":{"const":"unavailable"}}},"then":{"properties":{"data":{"type":"null"}}},"else":{"oneOf":[{"properties":{"request":{"$ref":"#/$defs/leaderboardRankingsRequest"},"data":{"$ref":"#/$defs/leaderboardRankingsData"}}},{"properties":{"request":{"$ref":"#/$defs/customRankingsRequest"},"data":{"$ref":"#/$defs/customRankingsData"}}}]}}],"unevaluatedProperties":false},
+    "comparisonEnvelope":{"allOf":[{"$ref":"#/$defs/envelopeBase"},{"properties":{"method":{"const":"comparison"},"request":{"$ref":"#/$defs/comparisonRequest"}}},{"if":{"properties":{"status":{"const":"unavailable"}}},"then":{"properties":{"data":{"type":"null"}}},"else":{"properties":{"data":{"$ref":"#/$defs/comparisonData"}}}}],"unevaluatedProperties":false},
+    "subscriptionEnvelope":{"allOf":[{"$ref":"#/$defs/envelopeBase"},{"properties":{"method":{"const":"subscription"},"request":{"$ref":"#/$defs/subscriptionRequest"},"revisions":{"properties":{"benchmark":{"type":"null"}}},"freshness":{"properties":{"benchmarkReleasedAt":{"type":"null"},"benchmarkCheckedAt":{"type":"null"}}}}},{"if":{"properties":{"status":{"const":"unavailable"}}},"then":{"properties":{"data":{"type":"null"}}},"else":{"oneOf":[{"properties":{"request":{"$ref":"#/$defs/subscriptionCatalogRequest"},"data":{"allOf":[{"$ref":"#/$defs/subscriptionData"},{"properties":{"operation":{"const":"catalog"}}}]}}},{"properties":{"request":{"$ref":"#/$defs/subscriptionCalculateRequest"},"data":{"allOf":[{"$ref":"#/$defs/subscriptionData"},{"properties":{"operation":{"const":"calculate"}}}]}}}]}}],"unevaluatedProperties":false}
   }
 }

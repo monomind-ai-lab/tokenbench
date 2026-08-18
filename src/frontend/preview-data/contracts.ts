@@ -1,10 +1,10 @@
 export interface Provenance {
   readonly id: string;
-  /** A UI-visible attribution label. Fixture records use `Illustrative prototype data`. */
+  /** A UI-visible attribution label. */
   readonly label: string;
-  readonly kind: 'illustrative_prototype' | 'approved_manual';
-  /** The time the source fact applied, not the adapter fetch time. */
-  readonly effectiveAt: string;
+  readonly kind: 'illustrative_prototype' | 'approved_manual' | 'accepted_pipeline';
+  /** The source fact time, which remains null when the accepted producer made it unknown. */
+  readonly effectiveAt: string | null;
   readonly note: string;
 }
 
@@ -109,6 +109,9 @@ export interface ModelDirectoryQuery {
   readonly search?: string;
   readonly access?: ModelAccess;
   readonly provider?: string;
+  readonly cursor?: string | null;
+  readonly limit?: number;
+  readonly providerIds?: readonly string[];
 }
 
 export interface ModelDirectoryData {
@@ -139,8 +142,31 @@ export interface LifecycleData {
   readonly models: readonly LifecycleModel[];
 }
 
+export interface RankingFilters {
+  readonly access?: 'all' | 'open' | 'closed';
+  readonly excludeDerivativeFinetunes?: boolean;
+  readonly maxInputMicroDollarsPerMillion?: number | null;
+  readonly maxOutputMicroDollarsPerMillion?: number | null;
+  readonly maxTtftP50Ms?: number | null;
+  readonly minContextWindowTokens?: number | null;
+  readonly minMaxOutputTokens?: number | null;
+  readonly minTpsP50?: number | null;
+  readonly openWeights?: 'all' | 'open' | 'closed';
+  readonly organizationIds?: readonly string[];
+  readonly providerIds?: readonly string[];
+  readonly requiredInputModalities?: readonly string[];
+}
+
 export interface RankingQuery {
   readonly limit?: number;
+  readonly cursor?: string | null;
+  readonly operation?: 'leaderboard' | 'custom';
+  readonly releaseId?: string | null;
+  readonly dimensionSetRevision?: string;
+  readonly filters?: RankingFilters;
+  readonly includeIneligible?: boolean;
+  /** Submitted weights are transported verbatim; the gateway never rebuilds them from UI state. */
+  readonly weights?: Readonly<Record<string, number>>;
 }
 
 export interface RankingEntry {
@@ -162,8 +188,27 @@ export interface CompareData {
 }
 
 export interface SubscriptionQuery {
+  readonly operation?: 'catalog' | 'calculate';
   readonly modelId?: string;
   readonly seats?: number;
+  readonly planId?: string;
+  readonly cacheReadShareBasisPoints?: number;
+  readonly cacheWriteShareBasisPoints?: number;
+  readonly crossoverTokenVolume?: number;
+  readonly modelMix?: readonly {
+    readonly modelSlug: string;
+    readonly pricingTierId: string | null;
+    readonly routeId: string;
+    readonly shareBasisPoints: number;
+    readonly tierContextTokens: number;
+  }[];
+  readonly workload?: {
+    readonly activeDaysPerMonth: number;
+    readonly conversationsPerDay: number;
+    readonly inputTokensPerMessage: number;
+    readonly messagesPerConversation: number;
+    readonly outputTokensPerMessage: number;
+  };
 }
 
 export interface SubscriptionPlan {

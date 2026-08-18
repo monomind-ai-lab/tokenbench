@@ -1,61 +1,15 @@
 {
   "contractVersion": "ui-data-contract/v1",
-  "status": "partial",
-  "fetchedAt": "2026-08-17T00:00:00.000Z",
-  "effectiveAt": "2026-08-10T00:00:00.000Z",
-  "data": {
-    "plans": [
-      {
-        "id": "illustrative-openai-individual",
-        "provider": {
-          "availability": "available",
-          "value": "OpenAI",
-          "provenance": {
-            "id": "illustrative-subscription-plans",
-            "label": "Illustrative prototype data",
-            "kind": "illustrative_prototype",
-            "effectiveAt": "2026-08-10T00:00:00.000Z",
-            "note": "Representative subscription-plan fixture from the approved preview."
-          }
-        },
-        "displayName": {
-          "availability": "available",
-          "value": "Individual plan",
-          "provenance": {
-            "id": "illustrative-subscription-plans",
-            "label": "Illustrative prototype data",
-            "kind": "illustrative_prototype",
-            "effectiveAt": "2026-08-10T00:00:00.000Z",
-            "note": "Representative subscription-plan fixture from the approved preview."
-          }
-        },
-        "monthlyUsd": {
-          "availability": "available",
-          "value": 20,
-          "provenance": {
-            "id": "illustrative-subscription-plans",
-            "label": "Illustrative prototype data",
-            "kind": "illustrative_prototype",
-            "effectiveAt": "2026-08-10T00:00:00.000Z",
-            "note": "Representative subscription-plan fixture from the approved preview."
-          }
-        },
-        "includedUsage": { "availability": "unavailable", "reason": "No approved plan entitlement source" }
-      }
-    ],
-    "models": [],
-    "selectedModelTaskEconomics": {
-      "availability": "unavailable",
-      "reason": "No approved model task-economics source"
-    }
-  },
-  "provenance": [
-    {
-      "id": "illustrative-subscription-plans",
-      "label": "Illustrative prototype data",
-      "kind": "illustrative_prototype",
-      "effectiveAt": "2026-08-10T00:00:00.000Z",
-      "note": "Representative subscription-plan fixture from the approved preview."
-    }
-  ]
+  "method": "subscription",
+  "request": { "operation": "catalog" },
+  "status": "available",
+  "reason": null,
+  "fetchedAt": "2026-08-18T08:00:00.000Z",
+  "effectiveAt": "2026-08-18T07:00:00.000Z",
+  "data": { "operation": "catalog", "plans": [], "routes": [], "entitlementProjections": [], "calculation": null },
+  "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": null, "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
+  "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": null, "benchmarkCheckedAt": null },
+  "sources": [{ "sourceRef": "illustrative-source", "fieldGroup": "/data", "sourceId": "illustrative-source", "sourceRevision": "illustrative-revision-v1", "label": "Illustrative prototype data", "url": "https://example.com/tokenbench-ui-data-contract-v1", "licenseId": null, "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" }],
+  "warnings": [],
+  "provenance": [{ "sourceRef": "illustrative-source", "label": "Illustrative prototype data", "effectiveAt": "2026-08-18T07:00:00.000Z", "note": "Illustrative prototype data source revision illustrative-revision-v1." }]
 }

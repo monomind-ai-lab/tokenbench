@@ -1,60 +1,30 @@
 {
   "contractVersion": "ui-data-contract/v1",
-  "status": "partial",
-  "fetchedAt": "2026-08-17T00:00:00.000Z",
+  "method": "rankings",
+  "request": { "operation": "custom", "dimensionSetRevision": "illustrative-dimensions-v1", "weights": { "quality": 100 }, "filters": { "access": "all", "providerIds": [], "excludeDerivativeFinetunes": false, "requiredInputModalities": [], "maxInputMicroDollarsPerMillion": null, "maxOutputMicroDollarsPerMillion": null, "minTpsP50": null, "maxTtftP50Ms": null, "minContextWindowTokens": null, "minMaxOutputTokens": null }, "includeIneligible": true, "limit": 50 },
+  "status": "available",
+  "reason": null,
+  "fetchedAt": "2026-08-18T08:00:00.000Z",
   "effectiveAt": null,
   "data": {
-    "models": [
-      {
-        "model": {
-          "id": "gpt-4o",
-          "identity": {
-            "availability": "available",
-            "value": { "slug": "gpt-4o", "name": "GPT-4o", "provider": "OpenAI" },
-            "provenance": {
-              "id": "illustrative-model-identity",
-              "label": "Illustrative prototype data",
-              "kind": "illustrative_prototype",
-              "effectiveAt": "2026-08-15T00:00:00.000Z",
-              "note": "Representative model identity and access fixture from the approved preview."
-            }
-          },
-          "access": { "availability": "unavailable", "reason": "No approved source for illustrative access evidence" },
-          "benchmark": { "availability": "unavailable", "reason": "No approved source for illustrative benchmark evidence" },
-          "capability": { "availability": "unavailable", "reason": "No approved source for illustrative capability evidence" },
-          "routePricing": { "availability": "unavailable", "reason": "No approved source for illustrative route pricing" },
-          "taskEconomics": { "availability": "unavailable", "reason": "No approved source for illustrative task economics" },
-          "runtime": { "availability": "unavailable", "reason": "No approved source for illustrative runtime evidence" },
-          "lifecycle": { "availability": "unavailable", "reason": "No approved source for illustrative lifecycle evidence" }
-        },
-        "rank": {
-          "availability": "unavailable",
-          "reason": "No approved source for final ranking",
-          "provenance": {
-            "id": "illustrative-benchmark",
-            "label": "Illustrative prototype data",
-            "kind": "illustrative_prototype",
-            "effectiveAt": "2026-08-14T00:00:00.000Z",
-            "note": "Representative benchmark release and subtask fixture from the approved preview."
-          }
-        }
-      }
-    ]
+    "operation": "custom",
+    "dimensionSet": { "revision": "illustrative-dimensions-v1", "transformationVersion": "utility-v1", "dimensions": [{ "dimensionId": "quality", "label": "Quality", "kind": "benchmark", "unit": "score", "utilityAnchor": { "best": 100, "worst": 0, "transform": "identity" } }] },
+    "submittedWeights": { "quality": 100 },
+    "normalizedWeights": { "quality": 1 },
+    "rows": [],
+    "totalEligible": 0,
+    "totalIneligible": 0,
+    "truncated": false
   },
+  "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": "illustrative-benchmark-v1", "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
+  "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": "2026-08-17T00:00:00.000Z", "benchmarkCheckedAt": "2026-08-18T07:45:00.000Z" },
+  "sources": [
+    { "sourceRef": "illustrative-catalog", "fieldGroup": "/data", "sourceId": "illustrative-catalog", "sourceRevision": "illustrative-catalog-v1", "label": "Illustrative catalog prototype", "url": "https://example.com/tokenbench-ui-data-contract-v1/catalog", "licenseId": null, "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" },
+    { "sourceRef": "illustrative-benchmark", "fieldGroup": "/data", "sourceId": "illustrative-benchmark", "sourceRevision": "illustrative-benchmark-v1", "label": "Illustrative benchmark prototype", "url": "https://example.com/tokenbench-ui-data-contract-v1/benchmark", "licenseId": "CDLA-Permissive-2.0", "observedAt": "2026-08-18T07:30:00.000Z", "effectiveAt": "2026-08-17T00:00:00.000Z" }
+  ],
+  "warnings": [],
   "provenance": [
-    {
-      "id": "illustrative-model-identity",
-      "label": "Illustrative prototype data",
-      "kind": "illustrative_prototype",
-      "effectiveAt": "2026-08-15T00:00:00.000Z",
-      "note": "Representative model identity and access fixture from the approved preview."
-    },
-    {
-      "id": "illustrative-benchmark",
-      "label": "Illustrative prototype data",
-      "kind": "illustrative_prototype",
-      "effectiveAt": "2026-08-14T00:00:00.000Z",
-      "note": "Representative benchmark release and subtask fixture from the approved preview."
-    }
+    { "sourceRef": "illustrative-catalog", "label": "Illustrative catalog prototype", "effectiveAt": "2026-08-18T07:00:00.000Z", "note": "Illustrative catalog prototype source revision illustrative-catalog-v1." },
+    { "sourceRef": "illustrative-benchmark", "label": "Illustrative benchmark prototype", "effectiveAt": "2026-08-17T00:00:00.000Z", "note": "Illustrative benchmark prototype source revision illustrative-benchmark-v1." }
   ]
 }

@@ -1,0 +1,575 @@
+{
+  "contractVersion": "ui-data-contract/v1",
+  "data": {
+    "calculation": {
+      "breakEvenMessagesPerDay": 354,
+      "cheaper": "api",
+      "crossoverApiCostMicroDollars": 150773800,
+      "crossoverDomain": [
+        {
+          "apiCostMicroDollars": 0,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 0
+        },
+        {
+          "apiCostMicroDollars": 40000007,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 10610970
+        },
+        {
+          "apiCostMicroDollars": 94233800,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 25000000
+        },
+        {
+          "apiCostMicroDollars": 150773800,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 40000000
+        },
+        {
+          "apiCostMicroDollars": 188466700,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 50000000
+        },
+        {
+          "apiCostMicroDollars": 376933800,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 100000000
+        },
+        {
+          "apiCostMicroDollars": 565400000,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 150000000
+        },
+        {
+          "apiCostMicroDollars": 753866700,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 200000000
+        },
+        {
+          "apiCostMicroDollars": 942333800,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 250000000
+        },
+        {
+          "apiCostMicroDollars": 1130800000,
+          "subscriptionCostMicroDollars": 40000000,
+          "tokenVolume": 300000000
+        }
+      ],
+      "crossoverTokenVolume": 40000000,
+      "crossoverTokens": 10610970,
+      "derivedWorkload": {
+        "monthlyInputTokens": 1000000,
+        "monthlyMessages": 1000,
+        "monthlyOutputTokens": 500000
+      },
+      "differenceMicroDollars": -34346000,
+      "entitlement": {
+        "assumptions": [
+          "Published plan terms remain current."
+        ],
+        "boundType": "practical_upper",
+        "caveats": [
+          "Provider limits may change."
+        ],
+        "confidence": "medium",
+        "effectiveAt": "2026-08-18T00:00:00.000Z",
+        "evidenceState": "projected",
+        "formula": "Deterministic capacity estimate for the selected workload.",
+        "methodologyVersion": "subscription-v1",
+        "planId": "fixture-pro",
+        "projectedCapacity": {
+          "maximum": 2000,
+          "minimum": 1000,
+          "unit": "messages",
+          "window": "monthly"
+        },
+        "projectionId": "fixture-pro-capacity",
+        "sensitivity": {
+          "maximum": 2500,
+          "minimum": 800,
+          "unit": "messages"
+        },
+        "sourceRefs": [
+          "fixture:primary-2026-08-18"
+        ],
+        "workloadShape": {
+          "activeDaysPerMonth": 20,
+          "cacheReadShareBasisPoints": 2000,
+          "cacheWriteShareBasisPoints": 1000,
+          "conversationsPerDay": 10,
+          "inputTokensPerMessage": 1000,
+          "messagesPerConversation": 5,
+          "outputTokensPerMessage": 500
+        }
+      },
+      "lineItems": [
+        {
+          "costMicroDollars": 840000,
+          "kind": "standard_input",
+          "modelSlug": "alpha",
+          "pricingTierId": "alpha-direct-standard",
+          "rateMicroDollarsPerMillion": 2000000,
+          "routeId": "alpha-direct",
+          "tokens": 420000
+        },
+        {
+          "costMicroDollars": 60000,
+          "kind": "cache_read",
+          "modelSlug": "alpha",
+          "pricingTierId": "alpha-direct-standard",
+          "rateMicroDollarsPerMillion": 500000,
+          "routeId": "alpha-direct",
+          "tokens": 120000
+        },
+        {
+          "costMicroDollars": 60000,
+          "kind": "cache_write",
+          "modelSlug": "alpha",
+          "pricingTierId": "alpha-direct-standard",
+          "rateMicroDollarsPerMillion": 1000000,
+          "routeId": "alpha-direct",
+          "tokens": 60000
+        },
+        {
+          "costMicroDollars": 2400000,
+          "kind": "output",
+          "modelSlug": "alpha",
+          "pricingTierId": "alpha-direct-standard",
+          "rateMicroDollarsPerMillion": 8000000,
+          "routeId": "alpha-direct",
+          "tokens": 300000
+        },
+        {
+          "costMicroDollars": 588000,
+          "kind": "standard_input",
+          "modelSlug": "beta",
+          "pricingTierId": "beta-direct-standard",
+          "rateMicroDollarsPerMillion": 2100000,
+          "routeId": "beta-direct",
+          "tokens": 280000
+        },
+        {
+          "costMicroDollars": 44000,
+          "kind": "cache_read",
+          "modelSlug": "beta",
+          "pricingTierId": "beta-direct-standard",
+          "rateMicroDollarsPerMillion": 550000,
+          "routeId": "beta-direct",
+          "tokens": 80000
+        },
+        {
+          "costMicroDollars": 42000,
+          "kind": "cache_write",
+          "modelSlug": "beta",
+          "pricingTierId": "beta-direct-standard",
+          "rateMicroDollarsPerMillion": 1050000,
+          "routeId": "beta-direct",
+          "tokens": 40000
+        },
+        {
+          "costMicroDollars": 1620000,
+          "kind": "output",
+          "modelSlug": "beta",
+          "pricingTierId": "beta-direct-standard",
+          "rateMicroDollarsPerMillion": 8100000,
+          "routeId": "beta-direct",
+          "tokens": 200000
+        }
+      ],
+      "methodologyVersion": "subscription-v1",
+      "monthlyApiCostMicroDollars": 5654000,
+      "monthlySubscriptionCostMicroDollars": 40000000,
+      "selectedPlanId": "fixture-pro",
+      "selectedTiers": [
+        {
+          "modelSlug": "alpha",
+          "pricingTierId": "alpha-direct-standard",
+          "routeId": "alpha-direct",
+          "tierContextTokens": 32000
+        },
+        {
+          "modelSlug": "beta",
+          "pricingTierId": "beta-direct-standard",
+          "routeId": "beta-direct",
+          "tierContextTokens": 32000
+        }
+      ]
+    },
+    "entitlementProjections": [
+      {
+        "assumptions": [
+          "Published plan terms remain current."
+        ],
+        "boundType": "practical_upper",
+        "caveats": [
+          "Provider limits may change."
+        ],
+        "confidence": "medium",
+        "effectiveAt": "2026-08-18T00:00:00.000Z",
+        "evidenceState": "projected",
+        "formula": "Deterministic capacity estimate for the selected workload.",
+        "methodologyVersion": "subscription-v1",
+        "planId": "fixture-pro",
+        "projectedCapacity": {
+          "maximum": 2000,
+          "minimum": 1000,
+          "unit": "messages",
+          "window": "monthly"
+        },
+        "projectionId": "fixture-pro-capacity",
+        "sensitivity": {
+          "maximum": 2500,
+          "minimum": 800,
+          "unit": "messages"
+        },
+        "sourceRefs": [
+          "fixture:primary-2026-08-18"
+        ],
+        "workloadShape": {
+          "activeDaysPerMonth": 20,
+          "cacheReadShareBasisPoints": 2000,
+          "cacheWriteShareBasisPoints": 1000,
+          "conversationsPerDay": 10,
+          "inputTokensPerMessage": 1000,
+          "messagesPerConversation": 5,
+          "outputTokensPerMessage": 500
+        }
+      }
+    ],
+    "operation": "calculate",
+    "plans": [
+      {
+        "displayName": "Fixture Pro",
+        "monthlyCostMicroDollars": 20000000,
+        "planId": "fixture-pro",
+        "providerId": "fixture-provider",
+        "sourceRefs": [
+          "fixture:primary-2026-08-18"
+        ],
+        "supportedModelSlugs": [
+          "alpha",
+          "beta"
+        ]
+      }
+    ],
+    "routes": [
+      {
+        "cacheReadMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 500000
+        },
+        "cacheWriteMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 1000000
+        },
+        "contextWindowTokens": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 128000
+        },
+        "inputMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 2000000
+        },
+        "inputModalities": [
+          "text"
+        ],
+        "maxOutputTokens": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 16384
+        },
+        "outputMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 8000000
+        },
+        "outputModalities": [
+          "text"
+        ],
+        "pricingTiers": [
+          {
+            "cacheReadMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 500000
+            },
+            "cacheWriteMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 1000000
+            },
+            "inputMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 2000000
+            },
+            "maximumContextTokens": null,
+            "minimumContextTokens": 0,
+            "outputMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 8000000
+            },
+            "pricingTierId": "alpha-direct-standard"
+          }
+        ],
+        "providerId": "provider-0",
+        "routeId": "alpha-direct",
+        "runtimeObservation": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": {
+            "sampleSize": 100,
+            "tpsPercentile": "p50",
+            "ttftPercentile": "p50",
+            "windowEndedAt": "2026-08-18T00:00:00.000Z",
+            "windowStartedAt": "2026-08-17T00:00:00.000Z"
+          }
+        },
+        "status": "available",
+        "tpsP50": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 100
+        },
+        "ttftP50Ms": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 200
+        },
+        "uptimeBasisPoints": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 9999
+        }
+      },
+      {
+        "cacheReadMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 550000
+        },
+        "cacheWriteMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 1050000
+        },
+        "contextWindowTokens": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 128000
+        },
+        "inputMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 2100000
+        },
+        "inputModalities": [
+          "text"
+        ],
+        "maxOutputTokens": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 16384
+        },
+        "outputMicroDollarsPerMillion": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 8100000
+        },
+        "outputModalities": [
+          "text"
+        ],
+        "pricingTiers": [
+          {
+            "cacheReadMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 550000
+            },
+            "cacheWriteMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 1050000
+            },
+            "inputMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 2100000
+            },
+            "maximumContextTokens": null,
+            "minimumContextTokens": 0,
+            "outputMicroDollarsPerMillion": {
+              "availability": "available",
+              "sourceRefs": [
+                "fixture:primary-2026-08-18"
+              ],
+              "value": 8100000
+            },
+            "pricingTierId": "beta-direct-standard"
+          }
+        ],
+        "providerId": "provider-1",
+        "routeId": "beta-direct",
+        "runtimeObservation": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": {
+            "sampleSize": 100,
+            "tpsPercentile": "p50",
+            "ttftPercentile": "p50",
+            "windowEndedAt": "2026-08-18T00:00:00.000Z",
+            "windowStartedAt": "2026-08-17T00:00:00.000Z"
+          }
+        },
+        "status": "available",
+        "tpsP50": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 95
+        },
+        "ttftP50Ms": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 210
+        },
+        "uptimeBasisPoints": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 9999
+        }
+      }
+    ]
+  },
+  "effectiveAt": "2026-08-18T00:00:00.000Z",
+  "fetchedAt": "2026-08-18T00:00:00.000Z",
+  "freshness": {
+    "benchmarkCheckedAt": null,
+    "benchmarkReleasedAt": null,
+    "catalogObservedAt": "2026-08-18T00:00:00.000Z",
+    "runtimeObservedAt": "2026-08-18T00:00:00.000Z"
+  },
+  "method": "subscription",
+  "provenance": [
+    {
+      "effectiveAt": "2026-08-18T00:00:00.000Z",
+      "label": "Deterministic primary contract fixture",
+      "note": "Deterministic primary contract fixture source revision fixture-primary-r1.",
+      "sourceRef": "fixture:primary-2026-08-18"
+    }
+  ],
+  "reason": null,
+  "request": {
+    "cacheReadShareBasisPoints": 2000,
+    "cacheWriteShareBasisPoints": 1000,
+    "crossoverTokenVolume": 40000000,
+    "modelMix": [
+      {
+        "modelSlug": "alpha",
+        "pricingTierId": null,
+        "routeId": "alpha-direct",
+        "shareBasisPoints": 6000,
+        "tierContextTokens": 32000
+      },
+      {
+        "modelSlug": "beta",
+        "pricingTierId": null,
+        "routeId": "beta-direct",
+        "shareBasisPoints": 4000,
+        "tierContextTokens": 32000
+      }
+    ],
+    "operation": "calculate",
+    "planId": "fixture-pro",
+    "seats": 2,
+    "workload": {
+      "activeDaysPerMonth": 20,
+      "conversationsPerDay": 10,
+      "inputTokensPerMessage": 1000,
+      "messagesPerConversation": 5,
+      "outputTokensPerMessage": 500
+    }
+  },
+  "revisions": {
+    "benchmark": null,
+    "catalog": "ui-data-contract-v1-fixture-catalog",
+    "projection": "ui-data-contract-v1-fixture-projection",
+    "projectionMethodology": "ui-data-contract-v1-fixture-methodology",
+    "runtimeObservationSet": "ui-data-contract-v1-fixture-runtime"
+  },
+  "sources": [
+    {
+      "effectiveAt": "2026-08-18T00:00:00.000Z",
+      "fieldGroup": "/data",
+      "label": "Deterministic primary contract fixture",
+      "licenseId": "CDLA-Permissive-2.0",
+      "observedAt": "2026-08-18T00:00:00.000Z",
+      "sourceId": "fixture-primary",
+      "sourceRef": "fixture:primary-2026-08-18",
+      "sourceRevision": "fixture-primary-r1",
+      "url": "https://example.com/tokenbench/ui-data-contract-v1/primary"
+    }
+  ],
+  "status": "available",
+  "warnings": []
+}
