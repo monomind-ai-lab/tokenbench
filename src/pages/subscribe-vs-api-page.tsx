@@ -3,7 +3,6 @@ import { toPng } from 'html-to-image';
 import type { ConversationWorkload, CrossoverDomainPoint } from '../catalog/subscription-api-calculator';
 import { CrossoverChart } from '../frontend/crossover-chart';
 import { encodeCalculatorShareState, type CalculatorShareState } from '../frontend/calculator-share-state';
-import { fixtureAdapter } from '../frontend/preview-data/adapter';
 import type { CachePricing, EvidenceValue, PreviewDataAdapter, PreviewModel, RoutePricing, SubscriptionCalculation, SubscriptionData, SubscriptionPlan, SubscriptionQuery, UiDataContractV1 } from '../frontend/preview-data/contracts';
 import type { PreviewPageProps } from '../preview/route-types';
 
@@ -38,7 +37,7 @@ interface SubscribeVsApiState {
 type ActionState = { readonly tone: 'info' | 'error'; readonly message: string } | null;
 
 interface SubscribeVsApiPageProps extends PreviewPageProps {
-  readonly adapter?: PreviewDataAdapter;
+  readonly adapter: PreviewDataAdapter;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -400,7 +399,19 @@ function SourceProvenance({ plan, selected }: { readonly plan: SubscriptionPlan 
   </section>;
 }
 
-export function SubscribeVsApiPage({ match, data, adapter = fixtureAdapter }: SubscribeVsApiPageProps) {
+function unavailableSubscriptionContract(reason: string): UiDataContractV1<SubscriptionData> {
+  return {
+    contractVersion: 'ui-data-contract/v1',
+    status: 'unavailable',
+    reason,
+    fetchedAt: new Date().toISOString(),
+    effectiveAt: null,
+    data: null,
+    provenance: [],
+  };
+}
+
+export function SubscribeVsApiPage({ match, data, adapter }: SubscribeVsApiPageProps) {
   const staticContract = parseSubscribeVsApiPageData(data);
   const staticData = staticContract?.data ?? null;
   const [catalogContract, setCatalogContract] = useState<UiDataContractV1<SubscriptionData> | null>(null);
@@ -413,6 +424,8 @@ export function SubscribeVsApiPage({ match, data, adapter = fixtureAdapter }: Su
   }, match.search));
   const [actionState, setActionState] = useState<ActionState>(null);
   const exportRef = useRef<HTMLElement>(null);
+  const catalogRequestId = useRef(0);
+  const calculationRequestId = useRef(0);
   const pageData = staticData ?? catalogContract?.data ?? null;
   const plans = pageData?.plans.filter((plan) => planPrice(plan) !== null) ?? [];
   const models = pageData?.models.filter((model) => modelPricing(model) !== null) ?? [];
@@ -431,13 +444,33 @@ export function SubscribeVsApiPage({ match, data, adapter = fixtureAdapter }: Su
       ? calculation.reason
       : null;
 
+  const requestCalculation = (query: SubscriptionQuery): void => {
+    const requestId = ++calculationRequestId.current;
+    void adapter.subscription(query)
+      .then((next) => {
+        if (calculationRequestId.current === requestId) setCalculationContract(next);
+      })
+      .catch(() => {
+        if (calculationRequestId.current === requestId) setCalculationContract(unavailableSubscriptionContract('Subscription calculation request failed.'));
+      });
+  };
+
   useEffect(() => {
     let active = true;
-    void adapter.subscription({ operation: 'catalog' }).then((next) => {
-      if (!active) return;
-      setCatalogContract(next);
-      if (staticData === null && next.data !== null) setState(initialState(next.data, match.search));
-    });
+    const requestId = ++catalogRequestId.current;
+    const calculationIdAtStart = calculationRequestId.current;
+    void adapter.subscription({ operation: 'catalog' })
+      .then((next) => {
+        if (!active || catalogRequestId.current !== requestId) return;
+        setCatalogContract(next);
+        if (staticData === null && next.data !== null) setState(initialState(next.data, match.search));
+      })
+      .catch(() => {
+        if (!active || catalogRequestId.current !== requestId) return;
+        const failure = unavailableSubscriptionContract('Subscription catalog request failed.');
+        setCatalogContract(failure);
+        if (calculationRequestId.current === calculationIdAtStart) setCalculationContract(failure);
+      });
     return () => { active = false; };
   }, [adapter, match.search, staticData]);
 
@@ -445,9 +478,7 @@ export function SubscribeVsApiPage({ match, data, adapter = fixtureAdapter }: Su
     if (match.search.toString().length === 0 || pageData === null) return;
     const query = calculationQuery(pageData, state);
     if (query === null) return;
-    let active = true;
-    void adapter.subscription(query).then((next) => { if (active) setCalculationContract(next); });
-    return () => { active = false; };
+    requestCalculation(query);
   }, [adapter, match.search, pageData, state]);
 
   const submitCalculation = (next: SubscribeVsApiState) => {
@@ -457,7 +488,7 @@ export function SubscribeVsApiPage({ match, data, adapter = fixtureAdapter }: Su
       setActionState({ tone: 'error', message: 'Choose a source-priced plan and a complete model mix to calculate the crossover.' });
       return;
     }
-    void adapter.subscription(query).then((response) => setCalculationContract(response));
+    requestCalculation(query);
   };
 
   const update = (next: SubscribeVsApiState) => {

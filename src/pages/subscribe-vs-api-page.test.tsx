@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
 import { ACCEPTED_SUBSCRIPTION_QUERY, type SubscriptionQuery, type UiDataContractV1, type SubscriptionData } from '../frontend/preview-data/contracts';
@@ -16,7 +16,34 @@ function calculationAdapter(data: UiDataContractV1<SubscriptionData>) {
   return { adapter: { ...fixtureAdapter, subscription }, subscription };
 }
 
+function unavailableSubscription(reason: string): UiDataContractV1<SubscriptionData> {
+  return {
+    contractVersion: 'ui-data-contract/v1',
+    status: 'unavailable',
+    reason,
+    fetchedAt: '2026-08-18T00:00:00.000Z',
+    effectiveAt: null,
+    data: null,
+    provenance: [],
+  };
+}
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((next) => { resolve = next; });
+  return { promise, resolve };
+}
+
 describe('SubscribeVsApiPage', () => {
+  it('requires explicit adapter injection at the page boundary', () => {
+    const match = { routeId: 'subscribe-vs-api' as const, pathname: '/subscribe-vs-api', search: new URLSearchParams(), hash: '', params: {} };
+
+    // @ts-expect-error The page must never silently fall back to fixture transport data.
+    const element = <SubscribeVsApiPage match={match} data={null} />;
+
+    expect(element.type).toBe(SubscribeVsApiPage);
+  });
+
   it('delivers a typed React crossover analysis with matching semantic values', async () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'subscribe-vs-api');
     const match = route?.match(new URL('https://tokenbench.test/subscribe-vs-api'));
@@ -141,5 +168,58 @@ describe('SubscribeVsApiPage', () => {
     await waitFor(() => expect(subscription).toHaveBeenCalledWith({ operation: 'catalog' }));
     fireEvent.change(screen.getByRole('slider', { name: 'Subscription seats' }), { target: { value: '3' } });
     expect(await screen.findByRole('alert')).toHaveTextContent('No accepted calculation evidence matches this scenario.');
+  });
+
+  it('clears an initial calculation and renders an explicit error when catalog loading rejects', async () => {
+    const data = await acceptedSubscriptionData();
+    const subscription = vi.fn(async () => { throw new Error('catalog network failure'); });
+    const adapter = { ...fixtureAdapter, subscription };
+    const match = { routeId: 'subscribe-vs-api' as const, pathname: '/subscribe-vs-api', search: new URLSearchParams(), hash: '', params: {} };
+
+    render(<SubscribeVsApiPage match={match} data={data} adapter={adapter} />);
+
+    expect(screen.getByRole('table', { name: 'Exact API and Monthly subscription crossover values' })).toBeInTheDocument();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Subscription catalog request failed.');
+    expect(screen.queryByRole('table', { name: 'Exact API and Monthly subscription crossover values' })).not.toBeInTheDocument();
+  });
+
+  it('clears a stale calculation and renders an explicit error when calculate rejects', async () => {
+    const data = await acceptedSubscriptionData();
+    const subscription = vi.fn(async (query: SubscriptionQuery) => {
+      if (query.operation === 'catalog') return data;
+      throw new Error('calculation network failure');
+    });
+    const adapter = { ...fixtureAdapter, subscription };
+    const match = { routeId: 'subscribe-vs-api' as const, pathname: '/subscribe-vs-api', search: new URLSearchParams(), hash: '', params: {} };
+
+    render(<SubscribeVsApiPage match={match} data={data} adapter={adapter} />);
+
+    expect(screen.getByRole('table', { name: 'Exact API and Monthly subscription crossover values' })).toBeInTheDocument();
+    fireEvent.change(screen.getByRole('slider', { name: 'Subscription seats' }), { target: { value: '3' } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Subscription calculation request failed.');
+    expect(screen.queryByRole('table', { name: 'Exact API and Monthly subscription crossover values' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the newest calculation response when older requests resolve later', async () => {
+    const data = await acceptedSubscriptionData();
+    const calculations: ReturnType<typeof deferred<UiDataContractV1<SubscriptionData>>>[] = [];
+    const subscription = vi.fn((query: SubscriptionQuery) => {
+      if (query.operation === 'catalog') return Promise.resolve(data);
+      const request = deferred<UiDataContractV1<SubscriptionData>>();
+      calculations.push(request);
+      return request.promise;
+    });
+    const adapter = { ...fixtureAdapter, subscription };
+    const match = { routeId: 'subscribe-vs-api' as const, pathname: '/subscribe-vs-api', search: new URLSearchParams(), hash: '', params: {} };
+
+    render(<SubscribeVsApiPage match={match} data={data} adapter={adapter} />);
+
+    fireEvent.change(screen.getByRole('slider', { name: 'Subscription seats' }), { target: { value: '3' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Subscription seats' }), { target: { value: '4' } });
+    await waitFor(() => expect(calculations).toHaveLength(2));
+    await act(async () => { calculations[1]!.resolve(unavailableSubscription('Newest calculation result.')); });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Newest calculation result.');
+    await act(async () => { calculations[0]!.resolve(unavailableSubscription('Older calculation result.')); });
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Newest calculation result.'));
   });
 });
