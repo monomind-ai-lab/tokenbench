@@ -141,11 +141,21 @@ function mapIdentity(value: unknown, envelope: AcceptedUiDataContractV1, path: s
   };
 }
 
+function lifecycleStatus(value: string): ModelLifecycle['status'] | null {
+  switch (value.toLocaleLowerCase()) {
+    case 'current': return 'Current';
+    case 'sunset_scheduled': return 'Retirement scheduled';
+    case 'retired': return 'Retired';
+    default: return null;
+  }
+}
+
 function mapModelLifecycle(value: unknown, envelope: AcceptedUiDataContractV1, path: string): EvidenceValue<ModelLifecycle> {
   return rawEvidence(value, envelope, path, (candidate, candidatePath) => {
-    const status = string(candidate, candidatePath);
+    const status = lifecycleStatus(string(candidate, candidatePath));
+    if (status === null) return null;
     return {
-      status: status.toLocaleLowerCase() === 'current' ? 'Current' : 'Retirement scheduled',
+      status,
       sunsetOn: unavailable('No accepted sunset date is available.'),
     };
   });
@@ -276,6 +286,128 @@ function rootContract<T>(envelope: AcceptedUiDataContractV1, data: T | null): Ui
   };
 }
 
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left)
+      && Array.isArray(right)
+      && left.length === right.length
+      && left.every((value, index) => sameJsonValue(value, right[index]));
+  }
+  if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) return false;
+  const leftRecord = left as JsonRecord;
+  const rightRecord = right as JsonRecord;
+  const leftKeys = Object.keys(leftRecord).sort();
+  const rightKeys = Object.keys(rightRecord).sort();
+  return leftKeys.length === rightKeys.length
+    && leftKeys.every((key, index) => key === rightKeys[index] && sameJsonValue(leftRecord[key], rightRecord[key]));
+}
+
+function normalizedModelsRequest(query: ModelDirectoryQuery): JsonRecord {
+  const providerIds = query.providerIds
+    ? [...query.providerIds, ...(query.provider === undefined ? [] : [query.provider])]
+    : query.provider === undefined ? [] : [query.provider];
+  return {
+    search: query.search ?? null,
+    access: query.access === 'Open weights' ? 'open_weights' : query.access === 'Proprietary' ? 'proprietary' : 'all',
+    providerIds: [...new Set(providerIds)],
+    limit: query.limit ?? 3,
+    cursor: query.cursor ?? null,
+  };
+}
+
+function normalizedLifecycleRequest(query: LifecycleQuery): JsonRecord {
+  return { asOf: query.asOf, horizonDays: query.horizonDays };
+}
+
+function normalizedLeaderboardRequest(query: RankingQuery): JsonRecord {
+  const filters = query.filters;
+  return {
+    operation: 'leaderboard',
+    releaseId: query.releaseId ?? null,
+    filters: {
+      organizationIds: filters?.organizationIds ?? [],
+      openWeights: filters?.openWeights ?? 'all',
+      excludeDerivativeFinetunes: filters?.excludeDerivativeFinetunes ?? false,
+    },
+    limit: query.limit ?? 50,
+    cursor: query.cursor ?? null,
+  };
+}
+
+function normalizedCustomRankingRequest(query: RankingQuery): JsonRecord {
+  const filters = query.filters;
+  const access = filters?.access === 'open' ? 'open_weights' : filters?.access === 'closed' ? 'proprietary' : filters?.access ?? 'all';
+  return {
+    operation: 'custom',
+    dimensionSetRevision: query.dimensionSetRevision ?? null,
+    weights: query.weights ?? null,
+    filters: {
+      access,
+      providerIds: filters?.providerIds ?? [],
+      excludeDerivativeFinetunes: filters?.excludeDerivativeFinetunes ?? false,
+      requiredInputModalities: filters?.requiredInputModalities ?? [],
+      maxInputMicroDollarsPerMillion: filters?.maxInputMicroDollarsPerMillion ?? null,
+      maxOutputMicroDollarsPerMillion: filters?.maxOutputMicroDollarsPerMillion ?? null,
+      minTpsP50: filters?.minTpsP50 ?? null,
+      maxTtftP50Ms: filters?.maxTtftP50Ms ?? null,
+      minContextWindowTokens: filters?.minContextWindowTokens ?? null,
+      minMaxOutputTokens: filters?.minMaxOutputTokens ?? null,
+    },
+    includeIneligible: query.includeIneligible ?? false,
+    limit: query.limit ?? 50,
+  };
+}
+
+function normalizedRankingsRequest(query: RankingQuery): JsonRecord {
+  return query.operation === 'custom' ? normalizedCustomRankingRequest(query) : normalizedLeaderboardRequest(query);
+}
+
+function normalizedComparisonRequest(query: CompareQuery): JsonRecord {
+  return { modelSlugs: [...query.modelIds] };
+}
+
+function normalizedSubscriptionRequest(query: SubscriptionQuery): JsonRecord {
+  if (query.operation !== 'calculate') return { operation: 'catalog' };
+  return {
+    operation: 'calculate',
+    planId: query.planId ?? null,
+    seats: query.seats ?? null,
+    modelMix: query.modelMix ?? null,
+    workload: query.workload ?? null,
+    cacheReadShareBasisPoints: query.cacheReadShareBasisPoints ?? null,
+    cacheWriteShareBasisPoints: query.cacheWriteShareBasisPoints ?? null,
+    crossoverTokenVolume: query.crossoverTokenVolume ?? null,
+  };
+}
+
+function normalizedRequest(method: UiDataContractV1Method, query: unknown): JsonRecord {
+  switch (method) {
+    case 'models': return normalizedModelsRequest(query as ModelDirectoryQuery);
+    case 'profile': return { slug: (query as { readonly slug: string }).slug };
+    case 'lifecycle': return normalizedLifecycleRequest(query as LifecycleQuery);
+    case 'rankings': return normalizedRankingsRequest(query as RankingQuery);
+    case 'comparison': return normalizedComparisonRequest(query as CompareQuery);
+    case 'subscription': return normalizedSubscriptionRequest(query as SubscriptionQuery);
+  }
+}
+
+function requestMatches(envelope: AcceptedUiDataContractV1, query: unknown): boolean {
+  return sameJsonValue(envelope.request, normalizedRequest(envelope.method, query));
+}
+
+function unmatchedRequest<T>(envelope: AcceptedUiDataContractV1): UiDataContractV1<T> {
+  return {
+    contractVersion: 'ui-data-contract/v1',
+    status: 'unavailable',
+    reason: `Accepted ${envelope.method} evidence request does not match the requested query.`,
+    fetchedAt: envelope.fetchedAt,
+    effectiveAt: null,
+    data: null,
+    provenance: [],
+  };
+}
+
 function mapModels(envelope: AcceptedUiDataContractV1<'models'>): UiDataContractV1<ModelDirectoryData> {
   if (envelope.data === null) return rootContract(envelope, null);
   const models = array(envelope.data.models, 'data.models').map((model, index) => mapSummary(model, envelope, `data.models[${index}]`));
@@ -301,10 +433,11 @@ function mapLifecycleModel(value: unknown, envelope: AcceptedUiDataContractV1, p
   const events = array(item.events, `${path}.events`);
   const firstEvent = events.length > 0 ? record(events[0], `${path}.events[0]`) : null;
   const lifecycle: EvidenceValue<ModelLifecycle> = rawEvidence<ModelLifecycle>(item.status, envelope, `${path}.status`, (candidate, candidatePath) => {
-    const status = string(candidate, candidatePath);
+    const status = lifecycleStatus(string(candidate, candidatePath));
+    if (status === null) return null;
     const eventDate = firstEvent === null ? null : dateFromTimestamp(firstEvent.effectiveAt);
     return {
-      status: status.toLocaleLowerCase() === 'current' ? 'Current' as const : 'Retirement scheduled' as const,
+      status,
       sunsetOn: eventDate === null
         ? unavailable('No accepted sunset date is available.')
         : { availability: 'available' as const, value: eventDate, provenance: provenance(envelope.sources[0] ?? fail('sources', 'requires source')) },
@@ -420,22 +553,28 @@ function mapSubscription(envelope: AcceptedUiDataContractV1<'subscription'>): Ui
 export function createValidatedPreviewDataAdapter(transport: PreviewDataTransport): PreviewDataAdapter {
   return {
     async models(query: ModelDirectoryQuery) {
-      return mapModels(parseUiDataContractV1(await transport.request('models', query), 'models'));
+      const envelope = parseUiDataContractV1(await transport.request('models', query), 'models');
+      return requestMatches(envelope, query) ? mapModels(envelope) : unmatchedRequest<ModelDirectoryData>(envelope);
     },
     async profile(slug: string) {
-      return mapProfile(parseUiDataContractV1(await transport.request('profile', { slug }), 'profile'));
+      const envelope = parseUiDataContractV1(await transport.request('profile', { slug }), 'profile');
+      return requestMatches(envelope, { slug }) ? mapProfile(envelope) : unmatchedRequest<PreviewModelProfileData>(envelope);
     },
     async lifecycle(query: LifecycleQuery) {
-      return mapLifecycle(parseUiDataContractV1(await transport.request('lifecycle', query), 'lifecycle'));
+      const envelope = parseUiDataContractV1(await transport.request('lifecycle', query), 'lifecycle');
+      return requestMatches(envelope, query) ? mapLifecycle(envelope) : unmatchedRequest<LifecycleData>(envelope);
     },
     async rankings(query: RankingQuery) {
-      return mapRankings(parseUiDataContractV1(await transport.request('rankings', query), 'rankings'));
+      const envelope = parseUiDataContractV1(await transport.request('rankings', query), 'rankings');
+      return requestMatches(envelope, query) ? mapRankings(envelope) : unmatchedRequest<RankingData>(envelope);
     },
     async comparison(query: CompareQuery) {
-      return mapComparison(parseUiDataContractV1(await transport.request('comparison', query), 'comparison'), query);
+      const envelope = parseUiDataContractV1(await transport.request('comparison', query), 'comparison');
+      return requestMatches(envelope, query) ? mapComparison(envelope, query) : unmatchedRequest<CompareData>(envelope);
     },
     async subscription(query: SubscriptionQuery) {
-      return mapSubscription(parseUiDataContractV1(await transport.request('subscription', query), 'subscription'));
+      const envelope = parseUiDataContractV1(await transport.request('subscription', query), 'subscription');
+      return requestMatches(envelope, query) ? mapSubscription(envelope) : unmatchedRequest<SubscriptionData>(envelope);
     },
   };
 }

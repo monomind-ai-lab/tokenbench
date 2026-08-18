@@ -68,7 +68,7 @@ function previewModel(value: unknown): boolean {
     && finiteNumber(candidate.outputTokensPerSecond)
     && text(candidate.conditions);
   const lifecycle = (candidate: unknown) => isRecord(candidate)
-    && (candidate.status === 'Current' || candidate.status === 'Retirement scheduled')
+    && (candidate.status === 'Current' || candidate.status === 'Retirement scheduled' || candidate.status === 'Retired')
     && evidence(candidate.sunsetOn, text);
   return isRecord(value)
     && text(value.id)
@@ -156,7 +156,7 @@ function ProfileBody({ model }: { readonly model: PreviewModel }) {
 }
 
 export function PreviewModelProfilePage({ match, data, adapter = fixtureAdapter }: PreviewModelProfilePageProps) {
-  const requestedSlug = match.search.get('model')?.trim() || 'gpt-4o';
+  const requestedSlug = match.search.get('model')?.trim() || 'alpha';
   const [contract, setContract] = useState<ProfileContract | null>(() => parsePreviewModelProfilePageData(data));
   useEffect(() => {
     let active = true;

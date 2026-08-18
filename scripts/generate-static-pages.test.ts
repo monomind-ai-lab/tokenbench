@@ -54,8 +54,8 @@ describe('crawlable static-page generator', () => {
     expect(home).toContain('<script type="application/ld+json">');
     expect(home).toContain('TokenBench');
 
-    expect(compareHub).toContain('<h1>Compare models<br/> side by side</h1>');
-    expect(compareHub).toContain('Compare evidence, not a fabricated universal score');
+    expect(compareHub).toContain('<h1 id="compare-page-heading">Compare models</h1>');
+    expect(compareHub).toContain('Choose 2–4 models, then inspect capability, runtime, cost, context and lifecycle differences');
 
     expect(leaderboardDirectory).toContain('<h1>Model leaderboards</h1>');
     expect(leaderboardDirectory).toContain('Explore current model leaders by capability, workload, cost, and human preference.');
@@ -78,7 +78,7 @@ describe('crawlable static-page generator', () => {
     expect(knowledge).toContain('<meta property="og:url" content="https://tokenbench.monomind.one/leaderboards/llm/knowledge/">');
 
     expect(popularModels).toContain('<h1 id="popular-models-heading" class="leaderboard-page-hero-title">Popular models leaderboard</h1>');
-    expect(popularModels).toContain('<span class="popular-models-fixture-badge leaderboard-page-hero-fixture">Illustrative prototype data</span>');
+    expect(popularModels).toContain('Pipeline-accepted evidence · missing values remain unavailable.');
     expect(popularModels).toContain('https://tokenbench.monomind.one/popular-models/');
 
     expect(home).not.toContain('href="/sources/"');

@@ -20,15 +20,18 @@ function comparisonUrl(baseUrl: string, query: CompareQuery): string {
 function modelsUrl(baseUrl: string, query: ModelDirectoryQuery): string {
   const parameters = new URLSearchParams();
   if (query.search !== undefined) parameters.set('search', query.search);
-  if (query.access !== undefined) parameters.set('access', query.access === 'Open weights' ? 'open' : 'closed');
-  if (query.providerIds?.length) parameters.set('providerIds', query.providerIds.join(','));
+  if (query.access !== undefined) parameters.set('access', query.access === 'Open weights' ? 'open_weights' : 'proprietary');
+  const providerIds = query.providerIds
+    ? [...query.providerIds, ...(query.provider === undefined ? [] : [query.provider])]
+    : query.provider === undefined ? [] : [query.provider];
+  if (providerIds.length) parameters.set('providerIds', [...new Set(providerIds)].join(','));
   if (query.cursor !== undefined && query.cursor !== null) parameters.set('cursor', query.cursor);
   if (query.limit !== undefined) parameters.set('limit', String(query.limit));
   return queryUrl(baseUrl, '/api/benchmarks/models', parameters);
 }
 
 function lifecycleUrl(baseUrl: string, query: LifecycleQuery): string {
-  return queryUrl(baseUrl, '/api/benchmarks/lifecycle', new URLSearchParams({ horizonDays: String(query.horizonDays) }));
+  return queryUrl(baseUrl, '/api/benchmarks/lifecycle', new URLSearchParams({ asOf: query.asOf, horizonDays: String(query.horizonDays) }));
 }
 
 function leaderboardUrl(baseUrl: string, query: RankingQuery): string {
@@ -36,6 +39,11 @@ function leaderboardUrl(baseUrl: string, query: RankingQuery): string {
   if (query.limit !== undefined) parameters.set('limit', String(query.limit));
   if (query.cursor !== undefined && query.cursor !== null) parameters.set('cursor', query.cursor);
   if (query.releaseId !== undefined && query.releaseId !== null) parameters.set('releaseId', query.releaseId);
+  if (query.filters?.openWeights !== undefined) parameters.set('openWeights', query.filters.openWeights);
+  if (query.filters?.organizationIds?.length) parameters.set('organizationIds', query.filters.organizationIds.join(','));
+  if (query.filters?.excludeDerivativeFinetunes !== undefined) {
+    parameters.set('excludeDerivativeFinetunes', String(query.filters.excludeDerivativeFinetunes));
+  }
   return queryUrl(baseUrl, '/api/benchmarks/rankings', parameters);
 }
 
@@ -45,7 +53,16 @@ function subscriptionCatalogUrl(baseUrl: string): string {
 
 async function jsonResponse(fetchImpl: FetchLike, input: RequestInfo | URL, init?: RequestInit): Promise<unknown> {
   const response = await fetchImpl(input, init);
-  return response.json();
+  const payload = await response.json();
+  if (response.ok || response.status === 404 && isUnavailableEnvelope(payload)) return payload;
+  throw new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);
+}
+
+function isUnavailableEnvelope(value: unknown): boolean {
+  return typeof value === 'object'
+    && value !== null
+    && !Array.isArray(value)
+    && (value as { readonly status?: unknown }).status === 'unavailable';
 }
 
 /**

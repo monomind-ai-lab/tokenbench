@@ -1,6 +1,7 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
+import { ACCEPTED_LIFECYCLE_AS_OF } from '../frontend/preview-data/contracts';
 import { previewRoutes } from '../preview/route-manifest';
 import { LifecycleRadarPage, parseLifecycleRadarPageData } from './lifecycle-radar-page';
 
@@ -18,7 +19,7 @@ describe('LifecycleRadarPage', () => {
   it('delivers the lifecycle radar through React with explicit unavailable replacement evidence', async () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'model-lifecycle');
     const match = route?.match(new URL('https://tokenbench.test/model-lifecycle'));
-    const data = await fixtureAdapter.lifecycle({ horizonDays: 90 });
+    const data = await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 });
     if (!route || !match) throw new Error('Lifecycle preview route is unavailable');
 
     render(<LifecycleRadarPage match={match} data={data} />);
@@ -33,7 +34,7 @@ describe('LifecycleRadarPage', () => {
   });
 
   it('switches between lifecycle cards and the semantic table without inferring a replacement', async () => {
-    const data = await fixtureAdapter.lifecycle({ horizonDays: 90 });
+    const data = await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 });
     const match = {
       routeId: 'model-lifecycle' as const,
       pathname: '/model-lifecycle',
@@ -49,5 +50,23 @@ describe('LifecycleRadarPage', () => {
     expect(screen.getByRole('cell', { name: 'No approved replacement source' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cards view' }));
     expect(screen.queryByRole('table', { name: 'Lifecycle events' })).toBeNull();
+  });
+
+  it('bounds the all-notices control to the accepted lifecycle request limit', async () => {
+    const data = await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 });
+    const lifecycle = vi.fn(async () => data);
+    const match = {
+      routeId: 'model-lifecycle' as const,
+      pathname: '/model-lifecycle',
+      search: new URLSearchParams(),
+      hash: '',
+      params: {},
+    };
+
+    render(<LifecycleRadarPage match={match} data={data} adapter={{ ...fixtureAdapter, lifecycle }} />);
+
+    await waitFor(() => expect(lifecycle).toHaveBeenCalledWith({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 }));
+    fireEvent.change(screen.getByLabelText('Horizon'), { target: { value: 'all' } });
+    await waitFor(() => expect(lifecycle).toHaveBeenLastCalledWith({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 3650 }));
   });
 });

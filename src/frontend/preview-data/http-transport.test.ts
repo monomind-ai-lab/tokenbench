@@ -63,6 +63,39 @@ describe('HTTP preview data transport', () => {
     });
   });
 
+  it('rejects HTTP failures other than the accepted unavailable-envelope status', async () => {
+    const adapter = createPreviewDataGateway(createHttpTransport(async () => new Response(JSON.stringify(evidence('responses/models.json')), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    }), 'https://tokenbench.test'));
+
+    await expect(adapter.models({})).rejects.toThrow('HTTP 500');
+  });
+
+  it('encodes accepted models, lifecycle, and leaderboard filter request semantics', async () => {
+    const requests: string[] = [];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      requests.push(input.toString());
+      return new Response(JSON.stringify(evidence('responses/models.json')), { status: 200, headers: { 'content-type': 'application/json' } });
+    });
+    const transport = createHttpTransport(fetchImpl, 'https://tokenbench.test');
+
+    await transport.request('models', { access: 'Open weights', provider: 'provider-1', limit: 7, cursor: 'next' });
+    await transport.request('lifecycle', { asOf: '2026-08-18T00:00:00.000Z', horizonDays: 30 });
+    await transport.request('rankings', {
+      operation: 'leaderboard',
+      cursor: 'next',
+      limit: 7,
+      releaseId: 'release-1',
+      filters: { excludeDerivativeFinetunes: true, openWeights: 'only', organizationIds: ['provider-1'] },
+    });
+
+    const [models, lifecycle, rankings] = requests.map((value) => new URL(value));
+    expect(Object.fromEntries(models?.searchParams ?? [])).toMatchObject({ access: 'open_weights', providerIds: 'provider-1', limit: '7', cursor: 'next' });
+    expect(Object.fromEntries(lifecycle?.searchParams ?? [])).toMatchObject({ asOf: '2026-08-18T00:00:00.000Z', horizonDays: '30' });
+    expect(Object.fromEntries(rankings?.searchParams ?? [])).toMatchObject({ operation: 'leaderboard', cursor: 'next', limit: '7', releaseId: 'release-1', openWeights: 'only', organizationIds: 'provider-1', excludeDerivativeFinetunes: 'true' });
+  });
+
   it('propagates network and invalid-contract failures instead of falling back to accepted evidence', async () => {
     const unavailableNetwork = createPreviewDataGateway(createHttpTransport(async () => {
       throw new Error('network unavailable');

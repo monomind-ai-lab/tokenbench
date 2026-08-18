@@ -112,7 +112,7 @@ function runtimeSla(value: unknown): boolean {
 
 function lifecycle(value: unknown): boolean {
   return isRecord(value)
-    && (value.status === 'Current' || value.status === 'Retirement scheduled')
+    && (value.status === 'Current' || value.status === 'Retirement scheduled' || value.status === 'Retired')
     && evidence(value.sunsetOn, text);
 }
 

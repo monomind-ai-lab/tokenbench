@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { previewRoutes } from './route-manifest';
 import { renderPreviewDocument } from './route-document';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
+import { ACCEPTED_LIFECYCLE_AS_OF } from '../frontend/preview-data/contracts';
 import { SITE_CONFIG } from '../brand/site-config';
 
 describe('renderPreviewDocument', () => {
@@ -41,7 +42,7 @@ describe('renderPreviewDocument', () => {
     if (!profile || !lifecycle || !profileMatch || !lifecycleMatch) throw new Error('Model metadata preview routes are unavailable');
 
     const profileHtml = renderPreviewDocument(profile, profileMatch, await fixtureAdapter.profile('GPT 5.6/Sol'));
-    const lifecycleHtml = renderPreviewDocument(lifecycle, lifecycleMatch, await fixtureAdapter.lifecycle({ horizonDays: 90 }));
+    const lifecycleHtml = renderPreviewDocument(lifecycle, lifecycleMatch, await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 }));
 
     expect(profileHtml).toContain(`<link rel="canonical" href="${SITE_CONFIG.origin}/model-profile?model=GPT%205.6%2FSol">`);
     expect(profileHtml).toContain(`<meta property="og:url" content="${SITE_CONFIG.origin}/model-profile?model=GPT%205.6%2FSol">`);

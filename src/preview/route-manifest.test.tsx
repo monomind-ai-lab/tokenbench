@@ -192,7 +192,7 @@ describe('preview route manifest', () => {
       contractVersion: 'ui-data-contract/v1',
       data: { models: expect.any(Array) },
     });
-    await expect(profile.staticData(profile.match(new URL('https://tokenbench.test/model-profile?model=gpt-4o'))!)).resolves.toMatchObject({
+    await expect(profile.staticData(profile.match(new URL('https://tokenbench.test/model-profile?model=alpha'))!)).resolves.toMatchObject({
       contractVersion: 'ui-data-contract/v1',
       data: { model: expect.any(Object) },
     });

@@ -1,14 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
-import type { LifecycleData, LifecycleModel, PreviewDataAdapter, UiDataContractV1 } from '../frontend/preview-data/contracts';
+import { ACCEPTED_LIFECYCLE_AS_OF, type LifecycleData, type LifecycleModel, type PreviewDataAdapter, type UiDataContractV1 } from '../frontend/preview-data/contracts';
 import type { PreviewPageProps } from '../preview/route-types';
 
 type LifecycleContract = UiDataContractV1<LifecycleData>;
 type LifecycleView = 'cards' | 'table';
-type LifecycleHorizon = 'all' | '90' | '60';
+type LifecycleHorizon = 'all' | '90' | '60' | '30';
 
 interface LifecycleRadarPageProps extends PreviewPageProps {
   readonly adapter?: PreviewDataAdapter;
+  /** Lets the static accepted-evidence route retain its response's 30-day horizon. */
+  readonly initialHorizon?: LifecycleHorizon;
 }
 
 function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
@@ -36,7 +38,7 @@ function evidence(value: unknown, validValue: (candidate: unknown) => boolean): 
 
 function lifecycle(value: unknown): boolean {
   return isRecord(value)
-    && (value.status === 'Current' || value.status === 'Retirement scheduled')
+    && (value.status === 'Current' || value.status === 'Retirement scheduled' || value.status === 'Retired')
     && evidence(value.sunsetOn, text);
 }
 
@@ -99,16 +101,16 @@ function LifecycleTable({ models }: { readonly models: readonly LifecycleModel[]
 }
 
 function horizonDays(horizon: LifecycleHorizon): number {
-  return horizon === 'all' ? 36500 : Number(horizon);
+  return horizon === 'all' ? 3650 : Number(horizon);
 }
 
-export function LifecycleRadarPage({ data, adapter = fixtureAdapter }: LifecycleRadarPageProps) {
-  const [horizon, setHorizon] = useState<LifecycleHorizon>('90');
+export function LifecycleRadarPage({ data, adapter = fixtureAdapter, initialHorizon = '90' }: LifecycleRadarPageProps) {
+  const [horizon, setHorizon] = useState<LifecycleHorizon>(initialHorizon);
   const [view, setView] = useState<LifecycleView>('cards');
   const [contract, setContract] = useState<LifecycleContract | null>(() => parseLifecycleRadarPageData(data));
   useEffect(() => {
     let active = true;
-    void adapter.lifecycle({ horizonDays: horizonDays(horizon) }).then((next) => { if (active) setContract(next); });
+    void adapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: horizonDays(horizon) }).then((next) => { if (active) setContract(next); });
     return () => { active = false; };
   }, [adapter, horizon]);
   if (contract === null) return <p role="status">Loading lifecycle evidence.</p>;
@@ -116,7 +118,7 @@ export function LifecycleRadarPage({ data, adapter = fixtureAdapter }: Lifecycle
   const models = contract.data.models;
   return <div className="content-stack lifecycle-radar-page">
     <header className="panel"><p className="eyebrow">Models / Lifecycle radar</p><h1>Production model lifecycle &amp; retirement radar</h1><p>See retirement deadlines, sourced replacement paths and the operational delta before an endpoint disappears.</p><p className="fixture">Illustrative prototype data · unavailable replacements remain unavailable rather than inferred.</p></header>
-    <section className="panel" aria-labelledby="retirement-watchlist-heading"><div className="panel-heading"><div><h2 id="retirement-watchlist-heading">Retirement watchlist</h2><p>A replacement is a sourced route, not an automatic recommendation.</p></div></div><label htmlFor="lifecycle-horizon">Horizon</label><select id="lifecycle-horizon" value={horizon} onChange={(event) => setHorizon(event.currentTarget.value as LifecycleHorizon)}><option value="all">All notices</option><option value="90">Next 90 days</option><option value="60">Next 60 days</option></select><button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Cards view</button><button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>Table view</button><p className="fixture" role="status">{models.length} source-backed illustrative notice{models.length === 1 ? '' : 's'} shown.</p>{models.length === 0 ? <p role="status">No illustrative notices fall inside this horizon.</p> : view === 'cards' ? <LifecycleCards models={models} /> : <LifecycleTable models={models} />}</section>
+    <section className="panel" aria-labelledby="retirement-watchlist-heading"><div className="panel-heading"><div><h2 id="retirement-watchlist-heading">Retirement watchlist</h2><p>A replacement is a sourced route, not an automatic recommendation.</p></div></div><label htmlFor="lifecycle-horizon">Horizon</label><select id="lifecycle-horizon" value={horizon} onChange={(event) => setHorizon(event.currentTarget.value as LifecycleHorizon)}><option value="all">All notices</option><option value="90">Next 90 days</option><option value="60">Next 60 days</option><option value="30">Next 30 days</option></select><button type="button" aria-pressed={view === 'cards'} onClick={() => setView('cards')}>Cards view</button><button type="button" aria-pressed={view === 'table'} onClick={() => setView('table')}>Table view</button><p className="fixture" role="status">{models.length} source-backed illustrative notice{models.length === 1 ? '' : 's'} shown.</p>{models.length === 0 ? <p role="status">No illustrative notices fall inside this horizon.</p> : view === 'cards' ? <LifecycleCards models={models} /> : <LifecycleTable models={models} />}</section>
     <section className="grid-2"><section className="panel" aria-labelledby="lifecycle-timeline-heading"><h2 id="lifecycle-timeline-heading">Release timeline</h2><ol aria-label="Lifecycle timeline">{models.map((model) => <li key={model.modelId}><time dateTime={sunset(model) ?? undefined}>{sunset(model) ?? 'Unavailable'}</time><div><strong>{identity(model)?.name ?? model.modelId}</strong><p>{model.lifecycle.availability === 'available' ? model.lifecycle.value.status : 'Lifecycle unavailable'}</p>{source(model)}</div></li>)}</ol></section><section className="panel"><h2>Evidence boundary</h2><dl><div><dt>Lifecycle authority</dt><dd>Provider announcement or changelog snapshot</dd></div><div><dt>Unknown replacements</dt><dd>Shown as unavailable; never inferred from disappearance.</dd></div><div><dt>Freshness</dt><dd>Per-event effective time, not page-build time.</dd></div></dl></section></section>
   </div>;
 }

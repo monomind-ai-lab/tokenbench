@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { ACCEPTED_LIFECYCLE_AS_OF } from './contracts';
 import { createFixtureAdapter, fixtureAdapter } from './fixture-adapter';
 
 describe('fixtureAdapter', () => {
   it('preserves unavailable facts instead of inventing values', async () => {
-    const result = await fixtureAdapter.lifecycle({ horizonDays: 90 });
+    const result = await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 });
 
     expect(result.contractVersion).toBe('ui-data-contract/v1');
     expect(result.data?.models[0]?.replacement).toEqual({
@@ -29,10 +30,10 @@ describe('fixtureAdapter', () => {
   it('filters lifecycle records from the fetched reference time', async () => {
     const adapter = createFixtureAdapter(() => new Date('2026-08-16T00:00:00.000Z'));
 
-    expect((await adapter.lifecycle({ horizonDays: 44 })).data?.models).toEqual([]);
-    expect((await adapter.lifecycle({ horizonDays: 45 })).data?.models).toHaveLength(1);
+    expect((await adapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 44 })).data?.models).toEqual([]);
+    expect((await adapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 45 })).data?.models).toHaveLength(1);
     const expired = await createFixtureAdapter(() => new Date('2026-10-01T00:00:00.000Z'))
-      .lifecycle({ horizonDays: 90 });
+      .lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 });
     expect(expired).toMatchObject({
       data: { models: [] },
       provenance: [],

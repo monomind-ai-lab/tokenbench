@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createValidatedPreviewDataAdapter, type PreviewDataTransport } from './api-adapter';
+import { ACCEPTED_CUSTOM_RANKING_QUERY, ACCEPTED_LIFECYCLE_AS_OF, ACCEPTED_SUBSCRIPTION_QUERY } from './contracts';
 
 function evidence<T>(path: string): T {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'contracts/ui-data-contract/v1/evidence', path), 'utf8')) as T;
@@ -31,10 +32,10 @@ describe('validated preview data adapter', () => {
       const queries = {
         models: {},
         profile: 'alpha',
-        lifecycle: { horizonDays: 30 },
+        lifecycle: { asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 30 },
         rankings: {},
         comparison: { modelIds: ['alpha', 'beta', 'gamma'] },
-        subscription: {},
+        subscription: ACCEPTED_SUBSCRIPTION_QUERY,
       } as const;
 
       const result = await adapter[method](queries[method] as never);
@@ -48,7 +49,7 @@ describe('validated preview data adapter', () => {
   it('preserves ordered comparison slugs and each mixed-source effective time through the page view model', async () => {
     const adapter = createValidatedPreviewDataAdapter(acceptedTransport());
     const comparison = await adapter.comparison({ modelIds: ['alpha', 'beta', 'gamma'] });
-    const rankings = await adapter.rankings({});
+    const rankings = await adapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY);
 
     expect(comparison.data?.models.map((model) => model.id)).toEqual(['alpha', 'beta', 'gamma']);
     expect(rankings.effectiveAt).toBeNull();
@@ -56,5 +57,33 @@ describe('validated preview data adapter', () => {
       '2026-08-18T00:00:00.000Z',
       '2026-08-17T00:00:00.000Z',
     ]));
+  });
+
+  it('preserves an accepted retired lifecycle state without relabeling it as scheduled', async () => {
+    const lifecycle = evidence<Record<string, unknown>>('responses/lifecycle.json');
+    lifecycle.data = {
+      asOf: '2026-08-18T00:00:00.000Z',
+      horizonDays: 30,
+      models: [{
+        identity: { configurationId: 'provider-0:alpha', displayName: 'ALPHA', organization: 'Provider 0', slug: 'alpha' },
+        status: { availability: 'available', sourceRefs: ['fixture:primary-2026-08-18'], value: 'retired' },
+        events: [],
+        replacement: {
+          availability: 'unavailable',
+          value: null,
+          reason: 'No accepted replacement evidence.',
+          sourceRefs: ['fixture:primary-2026-08-18'],
+        },
+      }],
+    };
+    const adapter = createValidatedPreviewDataAdapter({
+      request(method) {
+        return Promise.resolve(method === 'lifecycle' ? lifecycle : evidence('responses/models.json'));
+      },
+    });
+
+    await expect(adapter.lifecycle({ asOf: '2026-08-18T00:00:00.000Z', horizonDays: 30 })).resolves.toMatchObject({
+      data: { models: [expect.objectContaining({ lifecycle: expect.objectContaining({ value: expect.objectContaining({ status: 'Retired' }) }) })] },
+    });
   });
 });

@@ -88,7 +88,7 @@ export interface RuntimeSla {
 }
 
 export interface ModelLifecycle {
-  readonly status: 'Current' | 'Retirement scheduled';
+  readonly status: 'Current' | 'Retirement scheduled' | 'Retired';
   readonly sunsetOn: EvidenceValue<string>;
 }
 
@@ -123,8 +123,13 @@ export interface PreviewModelProfileData {
 }
 
 export interface LifecycleQuery {
+  /** The UTC reference time required by the accepted lifecycle request. */
+  readonly asOf: string;
   readonly horizonDays: number;
 }
+
+/** UTC reference time retained by the accepted lifecycle response. */
+export const ACCEPTED_LIFECYCLE_AS_OF = '2026-08-18T00:00:00.000Z';
 
 export interface LifecycleReplacement {
   readonly modelId: string;
@@ -151,7 +156,7 @@ export interface RankingFilters {
   readonly minContextWindowTokens?: number | null;
   readonly minMaxOutputTokens?: number | null;
   readonly minTpsP50?: number | null;
-  readonly openWeights?: 'all' | 'open' | 'closed';
+  readonly openWeights?: 'all' | 'only' | 'exclude';
   readonly organizationIds?: readonly string[];
   readonly providerIds?: readonly string[];
   readonly requiredInputModalities?: readonly string[];
@@ -231,6 +236,27 @@ export interface SubscriptionQuery {
     readonly outputTokensPerMessage: number;
   };
 }
+
+/** Exact calculate request retained by the accepted subscription evidence manifest. */
+export const ACCEPTED_SUBSCRIPTION_QUERY = {
+  operation: 'calculate',
+  planId: 'fixture-pro',
+  seats: 2,
+  modelMix: [
+    { modelSlug: 'alpha', pricingTierId: null, routeId: 'alpha-direct', shareBasisPoints: 6000, tierContextTokens: 32000 },
+    { modelSlug: 'beta', pricingTierId: null, routeId: 'beta-direct', shareBasisPoints: 4000, tierContextTokens: 32000 },
+  ],
+  workload: {
+    activeDaysPerMonth: 20,
+    conversationsPerDay: 10,
+    inputTokensPerMessage: 1000,
+    messagesPerConversation: 5,
+    outputTokensPerMessage: 500,
+  },
+  cacheReadShareBasisPoints: 2000,
+  cacheWriteShareBasisPoints: 1000,
+  crossoverTokenVolume: 40000000,
+} as const satisfies SubscriptionQuery;
 
 export interface SubscriptionPlan {
   readonly id: string;

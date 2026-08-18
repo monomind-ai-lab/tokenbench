@@ -68,7 +68,7 @@ describe('approved preview bundle', () => {
     expect(document).toContain('<link rel="canonical" href="https://tokenbench.monomind.one/popular-models/">');
     expect(document).toContain('<meta name="description" content="Explore an interactive TokenBench prototype for comparing popular AI models across quality, category performance, and cost per successful task.">');
     expect(document).toContain('<h1 id="popular-models-heading" class="leaderboard-page-hero-title">Popular models leaderboard</h1>');
-    expect(document).toContain('Every name, score, cost, verbosity value');
+    expect(document).toContain('Pipeline-accepted evidence · missing values remain unavailable.');
     expect(document).toContain('<script id="popular-models-initial-data" type="application/json">');
     expect(document).not.toContain('data-popular-models-workbench');
   }, 30_000);

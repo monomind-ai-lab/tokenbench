@@ -9,7 +9,7 @@ import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
 import { createEvidenceTransport } from '../frontend/preview-data/evidence-transport';
 import { createPreviewDataGateway } from '../frontend/preview-data/gateway';
-import { ACCEPTED_CUSTOM_RANKING_QUERY } from '../frontend/preview-data/contracts';
+import { ACCEPTED_CUSTOM_RANKING_QUERY, ACCEPTED_LIFECYCLE_AS_OF, ACCEPTED_SUBSCRIPTION_QUERY } from '../frontend/preview-data/contracts';
 import { DEFAULT_COMPARE_STATE } from '../frontend/preview-workbench/compare-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
@@ -294,7 +294,7 @@ const articlesPage = ArticlesRoutePage as ComponentType<PreviewPageProps>;
 const articleDetailPage = ArticleDetailRoutePage as ComponentType<PreviewPageProps>;
 const modelsPage = ((props: PreviewPageProps) => <PreviewModelsPage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
 const modelProfilePage = ((props: PreviewPageProps) => <PreviewModelProfilePage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
-const lifecyclePage = ((props: PreviewPageProps) => <LifecycleRadarPage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
+const lifecyclePage = ((props: PreviewPageProps) => <LifecycleRadarPage {...props} adapter={staticPreviewAdapter} initialHorizon="30" />) as ComponentType<PreviewPageProps>;
 const comparePage = ((props: PreviewPageProps) => <PreviewComparePage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
 const makeItYoursPage = ((props: PreviewPageProps) => <MakeItYoursPage {...props} adapter={staticCustomRankingAdapter} />) as ComponentType<PreviewPageProps>;
 const subscribeVsApiPage = SubscribeVsApiPage as ComponentType<PreviewPageProps>;
@@ -366,7 +366,7 @@ const manifestRoutes = [
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: (match) => previewQueryProfileMetadata(match.search.get('model') ?? 'model'),
     structuredData,
-    staticData: async (match) => staticPreviewAdapter.profile(match.search.get('model') ?? 'gpt-4o'),
+    staticData: async (match) => staticPreviewAdapter.profile(match.search.get('model') ?? 'alpha'),
     payload: modelProfilePayload,
     Page: modelProfilePage,
     prototypeBundle: [],
@@ -380,7 +380,7 @@ const manifestRoutes = [
     shell: { activePage: 'models', ...defaultSkipLink },
     metadata: () => previewLifecycleMetadata,
     structuredData,
-    staticData: async () => staticPreviewAdapter.lifecycle({ horizonDays: 90 }),
+    staticData: async () => staticPreviewAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 30 }),
     payload: lifecyclePayload,
     Page: lifecyclePage,
     prototypeBundle: [],
@@ -436,7 +436,7 @@ const manifestRoutes = [
     shell: { activePage: 'calculator', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'calculator' }),
     structuredData,
-    staticData: async () => staticPreviewAdapter.subscription({}),
+    staticData: async () => staticPreviewAdapter.subscription(ACCEPTED_SUBSCRIPTION_QUERY),
     payload: subscribeVsApiPayload,
     Page: subscribeVsApiPage,
     prototypeBundle: [],
