@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { ChartConfiguration } from 'chart.js';
 import { PopularChartCanvas } from '../frontend/popular-models/chart-canvas';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
-import type { PreviewDataAdapter, PreviewModel, RankingData, UiDataContractV1 } from '../frontend/preview-data/contracts';
+import { ACCEPTED_CUSTOM_RANKING_QUERY, type PreviewDataAdapter, type PreviewModel, type RankingData, type UiDataContractV1 } from '../frontend/preview-data/contracts';
 import { buildWeightedRanking, WEIGHTED_RANKING_CAPABILITIES, type WeightedRankingCapability, type WeightedRankingModel, type WeightedRankingRow } from '../frontend/preview-workbench/weighted-ranking';
 import { copyWeightedRankingLink, downloadWeightedRankingCsv, downloadWeightedRankingPng, weightedRankingShareUrl } from '../frontend/preview-workbench/weighted-ranking-export';
 import { DEFAULT_WEIGHTED_RANKING_STATE, encodeWeightedRankingState, normalizeWeightedRankingSelection, weightedRankingStateFromQuery, type WeightedRankingState } from '../frontend/preview-workbench/weighted-ranking-state';
@@ -116,7 +116,7 @@ export function MakeItYoursPage({ match, data, adapter = fixtureAdapter }: MakeI
   const [actionState, setActionState] = useState<ActionState>(null);
   const exportRef = useRef<HTMLElement>(null);
   useEffect(() => { setState(weightedRankingStateFromQuery(match.search)); }, [match.search]);
-  useEffect(() => { let active = true; void adapter.rankings({}).then((next) => { if (active) setContract(next); }); return () => { active = false; }; }, [adapter]);
+  useEffect(() => { let active = true; void adapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY).then((next) => { if (active) setContract(next); }); return () => { active = false; }; }, [adapter]);
   useEffect(() => { updateUrl(state); }, [state]);
 
   const dataModels = useMemo(() => rankingModels(contract), [contract]);

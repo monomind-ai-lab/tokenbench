@@ -169,6 +169,27 @@ export interface RankingQuery {
   readonly weights?: Readonly<Record<string, number>>;
 }
 
+/** Exact submitted custom-ranking matrix retained by the accepted evidence manifest. */
+export const ACCEPTED_CUSTOM_RANKING_QUERY = {
+  operation: 'custom',
+  dimensionSetRevision: 'ui-data-contract-v1-fixture-dimensions',
+  filters: {
+    access: 'all',
+    excludeDerivativeFinetunes: false,
+    maxInputMicroDollarsPerMillion: null,
+    maxOutputMicroDollarsPerMillion: null,
+    maxTtftP50Ms: null,
+    minContextWindowTokens: null,
+    minMaxOutputTokens: null,
+    minTpsP50: null,
+    providerIds: [],
+    requiredInputModalities: [],
+  },
+  includeIneligible: true,
+  limit: 50,
+  weights: { capability: 20, efficiency: 50, reliability: 30 },
+} as const satisfies RankingQuery;
+
 export interface RankingEntry {
   readonly model: PreviewModel;
   readonly rank: EvidenceValue<number>;

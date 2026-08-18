@@ -9,6 +9,7 @@ import { PricePerformanceApp } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
 import { createEvidenceTransport } from '../frontend/preview-data/evidence-transport';
 import { createPreviewDataGateway } from '../frontend/preview-data/gateway';
+import { ACCEPTED_CUSTOM_RANKING_QUERY } from '../frontend/preview-data/contracts';
 import { DEFAULT_COMPARE_STATE } from '../frontend/preview-workbench/compare-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
@@ -407,25 +408,7 @@ const manifestRoutes = [
     shell: { activePage: 'leaderboards', ...defaultSkipLink },
     metadata: () => previewMakeItYoursMetadata,
     structuredData,
-    staticData: async () => staticCustomRankingAdapter.rankings({
-      operation: 'custom',
-      dimensionSetRevision: 'ui-data-contract-v1-fixture-dimensions',
-      filters: {
-        access: 'all',
-        excludeDerivativeFinetunes: false,
-        maxInputMicroDollarsPerMillion: null,
-        maxOutputMicroDollarsPerMillion: null,
-        maxTtftP50Ms: null,
-        minContextWindowTokens: null,
-        minMaxOutputTokens: null,
-        minTpsP50: null,
-        providerIds: [],
-        requiredInputModalities: [],
-      },
-      includeIneligible: true,
-      limit: 50,
-      weights: { capability: 20, efficiency: 50, reliability: 30 },
-    }),
+    staticData: async () => staticCustomRankingAdapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY),
     payload: makeItYoursPayload,
     Page: makeItYoursPage,
     prototypeBundle: [],

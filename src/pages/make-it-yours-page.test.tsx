@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
+import { ACCEPTED_CUSTOM_RANKING_QUERY, type PreviewDataAdapter, type RankingQuery } from '../frontend/preview-data/contracts';
 import { previewRoutes } from '../preview/route-manifest';
 import { MakeItYoursPage, parseMakeItYoursPageData } from './make-it-yours-page';
 
@@ -50,6 +51,24 @@ describe('MakeItYoursPage', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent('At least one capability weight must be greater than zero.');
     expect(screen.getByText('Ranking is paused until at least one capability weight is above zero.')).toBeInTheDocument();
+  });
+
+  it('submits the accepted custom ranking matrix verbatim instead of rebuilding it from slider DOM state', async () => {
+    const requests: RankingQuery[] = [];
+    const adapter: PreviewDataAdapter = {
+      ...fixtureAdapter,
+      rankings(query) {
+        requests.push(query);
+        return fixtureAdapter.rankings(query);
+      },
+    };
+    const data = await fixtureAdapter.rankings({});
+    const match = { routeId: 'make-it-yours' as const, pathname: '/make-it-yours/', search: new URLSearchParams(), hash: '', params: {} };
+
+    render(<MakeItYoursPage match={match} data={data} adapter={adapter} />);
+    fireEvent.change(screen.getByRole('slider', { name: 'Agentic weight' }), { target: { value: '100' } });
+
+    await waitFor(() => expect(requests).toEqual([ACCEPTED_CUSTOM_RANKING_QUERY]));
   });
 
   it('uses direct-loaded model selections for the 2–4 model tray and in-depth comparison link', async () => {
