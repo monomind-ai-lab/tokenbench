@@ -40,6 +40,10 @@ interface EvidenceManifest {
   readonly producerCommitSha: string;
 }
 
+const ACCEPTANCE_COMMIT_SHA = '413d0307fc4662a30967d8b3f9fb06f042861a0d';
+const PRODUCER_COMMIT_SHA = 'ac42000893fa2e15d0ae76f7f83ebcea5745f7b5';
+const FRONTEND_BASELINE_SHA = '5d649d315a0bdb052e90bb96d6b7e94544f9ad31';
+
 function readContractFile<T>(path: string): T {
   const relativePath = path.startsWith('contracts/ui-data-contract/v1/')
     ? path.slice('contracts/ui-data-contract/v1/'.length)
@@ -102,6 +106,18 @@ describe('parseUiDataContractV1 accepted pipeline boundary', () => {
 
     const unavailable = parseUiDataContractV1(readContractFile<unknown>('evidence/responses/profile.unavailable.json'), 'profile');
     expect(unavailable).toMatchObject({ status: 'unavailable', effectiveAt: null, data: null });
+  });
+
+  it('retains the acceptance commit together with its producer and frontend baseline linkage', () => {
+    const acceptanceRecord = readFileSync(resolve(contractRoot, 'ACCEPTANCE.md'), 'utf8');
+
+    expect(acceptanceRecord).toContain(`Acceptance commit: ${ACCEPTANCE_COMMIT_SHA}`);
+    expect(acceptanceRecord).toContain(`Producer commit: ${PRODUCER_COMMIT_SHA}`);
+    expect(acceptanceRecord).toContain(`Frontend baseline: ${FRONTEND_BASELINE_SHA}`);
+    expect(manifest).toMatchObject({
+      producerCommitSha: PRODUCER_COMMIT_SHA,
+      frontendBaselineCommit: FRONTEND_BASELINE_SHA,
+    });
   });
 
   it.each(rejectedArtifacts)('rejects $id with the stable $expected.errorCode code', (artifact) => {

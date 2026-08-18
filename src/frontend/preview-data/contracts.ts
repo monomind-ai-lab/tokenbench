@@ -266,11 +266,48 @@ export interface SubscriptionPlan {
   readonly includedUsage: EvidenceValue<string>;
 }
 
+/** Page-facing normalized input that produced a validated subscription calculation. */
+export interface SubscriptionCalculationRequest {
+  readonly planId: string;
+  readonly seats: number;
+  readonly modelMix: readonly {
+    readonly modelSlug: string;
+    readonly pricingTierId: string | null;
+    readonly routeId: string;
+    readonly shareBasisPoints: number;
+    readonly tierContextTokens: number;
+  }[];
+  readonly workload: NonNullable<SubscriptionQuery['workload']>;
+  readonly cacheReadShareBasisPoints: number;
+  readonly cacheWriteShareBasisPoints: number;
+  readonly crossoverTokenVolume: number;
+}
+
+export interface SubscriptionCalculation {
+  readonly request: SubscriptionCalculationRequest;
+  readonly monthlySubscriptionUsd: number;
+  readonly selectedVolumeApiUsd: number;
+  readonly crossoverTokens: number | null;
+  readonly domain: readonly {
+    readonly tokens: number;
+    readonly apiUsd: number;
+    readonly monthlySubscriptionUsd: number;
+  }[];
+  readonly lineItems: readonly {
+    readonly id: string;
+    readonly tokens: number;
+    readonly rateUsdPerMillion: number;
+    readonly costUsd: number;
+  }[];
+}
+
 export interface SubscriptionData {
   readonly plans: readonly SubscriptionPlan[];
   /** Route-pricing evidence available to the subscription comparison surface. */
   readonly models: readonly PreviewModel[];
   readonly selectedModelTaskEconomics: EvidenceValue<TaskEconomics>;
+  /** Explicitly unavailable for catalog responses, available only for validated calculate responses. */
+  readonly calculation: EvidenceValue<SubscriptionCalculation>;
 }
 
 export interface PreviewDataAdapter {

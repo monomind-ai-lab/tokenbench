@@ -157,6 +157,7 @@ export function createFixtureAdapter(now: () => Date = () => new Date()): Previe
         plans: PREVIEW_FIXTURE_SUBSCRIPTION_PLANS,
         models: PREVIEW_FIXTURE_MODELS,
         selectedModelTaskEconomics,
+        calculation: { availability: 'unavailable', reason: 'No approved fixture calculation is available.' },
       }, provenance, now().toISOString());
     },
   };

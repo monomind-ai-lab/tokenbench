@@ -21,6 +21,7 @@ import type {
   RankingData,
   RankingQuery,
   RoutePricing,
+  SubscriptionCalculation,
   SubscriptionData,
   SubscriptionPlan,
   SubscriptionQuery,
@@ -520,6 +521,72 @@ function mapSubscriptionModel(slug: string, route: unknown, envelope: AcceptedUi
   };
 }
 
+function mapSubscriptionCalculation(envelope: AcceptedUiDataContractV1<'subscription'>): EvidenceValue<SubscriptionCalculation> {
+  if (envelope.data === null || envelope.data.calculation === null) {
+    return unavailable('This subscription response does not include a calculation.');
+  }
+  const calculation = record(envelope.data.calculation, 'data.calculation');
+  const request = record(envelope.request, 'request');
+  const modelMix = array(request.modelMix, 'request.modelMix').map((candidate, index) => {
+    const item = record(candidate, `request.modelMix[${index}]`);
+    return {
+      modelSlug: string(item.modelSlug, `request.modelMix[${index}].modelSlug`),
+      pricingTierId: item.pricingTierId === null ? null : string(item.pricingTierId, `request.modelMix[${index}].pricingTierId`),
+      routeId: string(item.routeId, `request.modelMix[${index}].routeId`),
+      shareBasisPoints: finiteNumber(item.shareBasisPoints, `request.modelMix[${index}].shareBasisPoints`),
+      tierContextTokens: finiteNumber(item.tierContextTokens, `request.modelMix[${index}].tierContextTokens`),
+    };
+  });
+  const workload = record(request.workload, 'request.workload');
+  const crossoverTokenVolume = finiteNumber(request.crossoverTokenVolume, 'request.crossoverTokenVolume');
+  const domain = array(calculation.crossoverDomain, 'data.calculation.crossoverDomain').map((candidate, index) => {
+    const point = record(candidate, `data.calculation.crossoverDomain[${index}]`);
+    return {
+      tokens: finiteNumber(point.tokenVolume, `data.calculation.crossoverDomain[${index}].tokenVolume`),
+      apiUsd: finiteNumber(point.apiCostMicroDollars, `data.calculation.crossoverDomain[${index}].apiCostMicroDollars`) / 1_000_000,
+      monthlySubscriptionUsd: finiteNumber(point.subscriptionCostMicroDollars, `data.calculation.crossoverDomain[${index}].subscriptionCostMicroDollars`) / 1_000_000,
+    };
+  });
+  const selectedVolume = domain.find((point) => point.tokens === crossoverTokenVolume);
+  if (!selectedVolume) return unavailable('The validated subscription calculation does not include the selected token volume.');
+  const lineItems = array(calculation.lineItems, 'data.calculation.lineItems').map((candidate, index) => {
+    const item = record(candidate, `data.calculation.lineItems[${index}]`);
+    return {
+      id: `${string(item.modelSlug, `data.calculation.lineItems[${index}].modelSlug`)}-${string(item.kind, `data.calculation.lineItems[${index}].kind`)}`,
+      tokens: finiteNumber(item.tokens, `data.calculation.lineItems[${index}].tokens`),
+      rateUsdPerMillion: finiteNumber(item.rateMicroDollarsPerMillion, `data.calculation.lineItems[${index}].rateMicroDollarsPerMillion`) / 1_000_000,
+      costUsd: finiteNumber(item.costMicroDollars, `data.calculation.lineItems[${index}].costMicroDollars`) / 1_000_000,
+    };
+  });
+  const source = provenance(envelope.sources[0] ?? fail('sources', 'requires source'));
+  return {
+    availability: 'available',
+    value: {
+      request: {
+        planId: string(request.planId, 'request.planId'),
+        seats: finiteNumber(request.seats, 'request.seats'),
+        modelMix,
+        workload: {
+          activeDaysPerMonth: finiteNumber(workload.activeDaysPerMonth, 'request.workload.activeDaysPerMonth'),
+          conversationsPerDay: finiteNumber(workload.conversationsPerDay, 'request.workload.conversationsPerDay'),
+          inputTokensPerMessage: finiteNumber(workload.inputTokensPerMessage, 'request.workload.inputTokensPerMessage'),
+          messagesPerConversation: finiteNumber(workload.messagesPerConversation, 'request.workload.messagesPerConversation'),
+          outputTokensPerMessage: finiteNumber(workload.outputTokensPerMessage, 'request.workload.outputTokensPerMessage'),
+        },
+        cacheReadShareBasisPoints: finiteNumber(request.cacheReadShareBasisPoints, 'request.cacheReadShareBasisPoints'),
+        cacheWriteShareBasisPoints: finiteNumber(request.cacheWriteShareBasisPoints, 'request.cacheWriteShareBasisPoints'),
+        crossoverTokenVolume,
+      },
+      monthlySubscriptionUsd: finiteNumber(calculation.monthlySubscriptionCostMicroDollars, 'data.calculation.monthlySubscriptionCostMicroDollars') / 1_000_000,
+      selectedVolumeApiUsd: selectedVolume.apiUsd,
+      crossoverTokens: calculation.crossoverTokens === null ? null : finiteNumber(calculation.crossoverTokens, 'data.calculation.crossoverTokens'),
+      domain,
+      lineItems,
+    },
+    provenance: source,
+  };
+}
+
 function mapSubscription(envelope: AcceptedUiDataContractV1<'subscription'>): UiDataContractV1<SubscriptionData> {
   if (envelope.data === null) return rootContract(envelope, null);
   const plans = array(envelope.data.plans, 'data.plans').map((candidate, index): SubscriptionPlan => {
@@ -547,6 +614,7 @@ function mapSubscription(envelope: AcceptedUiDataContractV1<'subscription'>): Ui
     plans,
     models,
     selectedModelTaskEconomics: unavailable('No accepted selected-model task-economics evidence is available.'),
+    calculation: mapSubscriptionCalculation(envelope),
   });
 }
 

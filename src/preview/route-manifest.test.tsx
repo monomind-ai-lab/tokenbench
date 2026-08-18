@@ -174,7 +174,13 @@ describe('preview route manifest', () => {
     expect(modelsData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { models: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]) } });
     expect(profileData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { model: expect.objectContaining({ id: 'alpha' }) } });
     expect(rankingsData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { models: expect.arrayContaining([expect.any(Object)]) } });
-    expect(subscriptionData).toMatchObject({ contractVersion: 'ui-data-contract/v1', data: { models: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]) } });
+    expect(subscriptionData).toMatchObject({
+      contractVersion: 'ui-data-contract/v1',
+      data: {
+        models: expect.arrayContaining([expect.objectContaining({ id: 'alpha' })]),
+        calculation: expect.objectContaining({ availability: 'available' }),
+      },
+    });
     for (const data of [modelsData, profileData, rankingsData, subscriptionData]) {
       expect(data).not.toHaveProperty('method');
       expect(data).not.toHaveProperty('sources');

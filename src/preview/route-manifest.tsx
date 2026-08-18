@@ -297,7 +297,7 @@ const modelProfilePage = ((props: PreviewPageProps) => <PreviewModelProfilePage 
 const lifecyclePage = ((props: PreviewPageProps) => <LifecycleRadarPage {...props} adapter={staticPreviewAdapter} initialHorizon="30" />) as ComponentType<PreviewPageProps>;
 const comparePage = ((props: PreviewPageProps) => <PreviewComparePage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
 const makeItYoursPage = ((props: PreviewPageProps) => <MakeItYoursPage {...props} adapter={staticCustomRankingAdapter} />) as ComponentType<PreviewPageProps>;
-const subscribeVsApiPage = SubscribeVsApiPage as ComponentType<PreviewPageProps>;
+const subscribeVsApiPage = ((props: PreviewPageProps) => <SubscribeVsApiPage {...props} adapter={staticPreviewAdapter} />) as ComponentType<PreviewPageProps>;
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
