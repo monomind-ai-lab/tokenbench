@@ -653,16 +653,24 @@ describe('responsive calculator app shell', () => {
     expect(screen.getByRole('combobox', { name: /Language/i })).toHaveValue('zh-TW');
   });
 
-  it('shows actionable retry UI for a failed catalog request', async () => {
+  it('recovers from a failed catalog request when the retry response is delayed', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
     render(<App />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/catalog/i);
     const retry = screen.getByRole('button', { name: /Retry loading catalog/i });
-    respondWithCatalog();
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 1_250));
+      return new Response(JSON.stringify(FRONTEND_TEST_CATALOG), {
+        status: 200,
+        headers: { 'content-type': 'application/json', etag: `"${FRONTEND_TEST_CATALOG.revision}"` },
+      });
+    }));
     fireEvent.click(retry);
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(await screen.findByRole('heading', { name: 'API-equivalent monthly cost' })).toBeInTheDocument();
+    await waitFor(
+      () => expect(screen.getByRole('checkbox', { name: /Alpha Direct/i })).toBeChecked(),
+      { timeout: 5_000 },
+    );
   });
 
   it('announces one recovery banner when the fallback notice duplicates the catalog error', () => {

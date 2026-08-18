@@ -22,7 +22,7 @@ export default defineConfig({
     video: 'off',
   },
   webServer: {
-    command: 'npx wrangler pages dev dist --ip 127.0.0.1 --port 4175',
+    command: 'npx wrangler pages dev dist --ip 127.0.0.1 --port 4175 --binding CF_PAGES_BRANCH=ui-revamp-3',
     env: webServerEnv,
     url: 'http://127.0.0.1:4175',
     reuseExistingServer: false,
