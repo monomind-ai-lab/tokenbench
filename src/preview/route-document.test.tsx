@@ -4,6 +4,8 @@ import { renderPreviewDocument } from './route-document';
 import { fixtureAdapter } from '../frontend/preview-data/adapter';
 import { ACCEPTED_LIFECYCLE_AS_OF } from '../frontend/preview-data/contracts';
 import { SITE_CONFIG } from '../brand/site-config';
+import { FRONTEND_ASSETS } from '../routing/frontend-assets';
+import type { PreviewRoute, PreviewRouteMatch } from './route-types';
 
 describe('renderPreviewDocument', () => {
   it('renders a React shell with metadata and escapes a closing script payload', () => {
@@ -34,6 +36,24 @@ describe('renderPreviewDocument', () => {
     expect(html.match(/id="page-content"/gu)).toHaveLength(1);
   });
 
+  it('uses supplied stable frontend assets when a Pages Function renders a document', () => {
+    const route = previewRoutes.find((candidate) => candidate.id === 'home');
+    const match = route?.match(new URL('https://tokenbench.test/'));
+    if (!route || !match) throw new Error('Home preview route is unavailable');
+
+    const renderWithAssets = renderPreviewDocument as unknown as (
+      route: PreviewRoute,
+      match: PreviewRouteMatch,
+      data: unknown,
+      options: { assets: typeof FRONTEND_ASSETS },
+    ) => string;
+    const html = renderWithAssets(route, match, undefined, { assets: FRONTEND_ASSETS });
+
+    expect(html).toContain(`<link rel="stylesheet" href="${FRONTEND_ASSETS.stylesheet}">`);
+    expect(html).toContain(`<script type="module" src="${FRONTEND_ASSETS.script}"></script>`);
+    expect(html).not.toContain('/src/main.tsx');
+  });
+
   it('emits the preview query-profile and lifecycle canonical and Open Graph URLs in their documents', async () => {
     const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
     const lifecycle = previewRoutes.find((candidate) => candidate.id === 'model-lifecycle');
@@ -48,5 +68,23 @@ describe('renderPreviewDocument', () => {
     expect(profileHtml).toContain(`<meta property="og:url" content="${SITE_CONFIG.origin}/model-profile?model=GPT%205.6%2FSol">`);
     expect(lifecycleHtml).toContain(`<link rel="canonical" href="${SITE_CONFIG.origin}/model-lifecycle">`);
     expect(lifecycleHtml).toContain(`<meta property="og:url" content="${SITE_CONFIG.origin}/model-lifecycle">`);
+  });
+
+  it('renders non-default profile and reordered comparison queries as unavailable without leaking default evidence', async () => {
+    const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
+    const compare = previewRoutes.find((candidate) => candidate.id === 'compare');
+    const profileMatch = profile?.match(new URL('https://tokenbench.test/model-profile?model=beta'));
+    const compareMatch = compare?.match(new URL('https://tokenbench.test/compare?models=beta,alpha'));
+    if (!profile || !compare || !profileMatch || !compareMatch) throw new Error('Query preview routes are unavailable');
+
+    const profileHtml = renderPreviewDocument(profile, profileMatch, await profile.staticData(profileMatch));
+    const compareHtml = renderPreviewDocument(compare, compareMatch, await compare.staticData(compareMatch));
+
+    expect(profileHtml).toContain('<h1>Model profile unavailable</h1>');
+    expect(profileHtml).not.toContain('<h1>ALPHA</h1>');
+    expect(compareHtml).toContain('Unavailable model (beta)');
+    expect(compareHtml).toContain('Unavailable model (alpha)');
+    expect(compareHtml).toContain('Accepted comparison evidence request does not match the requested query.');
+    expect(compareHtml).not.toContain('Capability comparison radar for ALPHA, BETA, GAMMA');
   });
 });

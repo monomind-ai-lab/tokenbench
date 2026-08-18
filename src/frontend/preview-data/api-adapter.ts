@@ -1,8 +1,7 @@
-import {
-  parseUiDataContractV1,
-  type AcceptedSourceAttribution,
-  type AcceptedUiDataContractV1,
-  type UiDataContractV1Method,
+import type {
+  AcceptedSourceAttribution,
+  AcceptedUiDataContractV1,
+  UiDataContractV1Method,
 } from './contract-v1';
 import type {
   CompareData,
@@ -33,6 +32,11 @@ type JsonRecord = Record<string, unknown>;
 
 export interface PreviewDataTransport {
   request(method: UiDataContractV1Method, query: unknown): Promise<unknown>;
+}
+
+async function parseAcceptedContract<M extends UiDataContractV1Method>(candidate: unknown, expectedMethod: M): Promise<AcceptedUiDataContractV1<M>> {
+  const { parseUiDataContractV1 } = await import('./contract-v1');
+  return parseUiDataContractV1(candidate, expectedMethod);
 }
 
 function fail(path: string, message: string): never {
@@ -618,30 +622,48 @@ function mapSubscription(envelope: AcceptedUiDataContractV1<'subscription'>): Ui
   });
 }
 
+/**
+ * Maps compile-time retained evidence for Workers without loading Ajv's dynamic
+ * schema compiler. The source artifact is still validated by the accepted
+ * contract pipeline before it is committed.
+ */
+export function mapRetainedProfileEvidence(candidate: AcceptedUiDataContractV1<'profile'>, slug: string): UiDataContractV1<PreviewModelProfileData> {
+  return requestMatches(candidate, { slug })
+    ? mapProfile(candidate)
+    : unmatchedRequest<PreviewModelProfileData>(candidate);
+}
+
+/** See mapRetainedProfileEvidence for the retained-evidence boundary. */
+export function mapRetainedComparisonEvidence(candidate: AcceptedUiDataContractV1<'comparison'>, query: CompareQuery): UiDataContractV1<CompareData> {
+  return requestMatches(candidate, query)
+    ? mapComparison(candidate, query)
+    : unmatchedRequest<CompareData>(candidate);
+}
+
 export function createValidatedPreviewDataAdapter(transport: PreviewDataTransport): PreviewDataAdapter {
   return {
     async models(query: ModelDirectoryQuery) {
-      const envelope = parseUiDataContractV1(await transport.request('models', query), 'models');
+      const envelope = await parseAcceptedContract(await transport.request('models', query), 'models');
       return requestMatches(envelope, query) ? mapModels(envelope) : unmatchedRequest<ModelDirectoryData>(envelope);
     },
     async profile(slug: string) {
-      const envelope = parseUiDataContractV1(await transport.request('profile', { slug }), 'profile');
+      const envelope = await parseAcceptedContract(await transport.request('profile', { slug }), 'profile');
       return requestMatches(envelope, { slug }) ? mapProfile(envelope) : unmatchedRequest<PreviewModelProfileData>(envelope);
     },
     async lifecycle(query: LifecycleQuery) {
-      const envelope = parseUiDataContractV1(await transport.request('lifecycle', query), 'lifecycle');
+      const envelope = await parseAcceptedContract(await transport.request('lifecycle', query), 'lifecycle');
       return requestMatches(envelope, query) ? mapLifecycle(envelope) : unmatchedRequest<LifecycleData>(envelope);
     },
     async rankings(query: RankingQuery) {
-      const envelope = parseUiDataContractV1(await transport.request('rankings', query), 'rankings');
+      const envelope = await parseAcceptedContract(await transport.request('rankings', query), 'rankings');
       return requestMatches(envelope, query) ? mapRankings(envelope) : unmatchedRequest<RankingData>(envelope);
     },
     async comparison(query: CompareQuery) {
-      const envelope = parseUiDataContractV1(await transport.request('comparison', query), 'comparison');
+      const envelope = await parseAcceptedContract(await transport.request('comparison', query), 'comparison');
       return requestMatches(envelope, query) ? mapComparison(envelope, query) : unmatchedRequest<CompareData>(envelope);
     },
     async subscription(query: SubscriptionQuery) {
-      const envelope = parseUiDataContractV1(await transport.request('subscription', query), 'subscription');
+      const envelope = await parseAcceptedContract(await transport.request('subscription', query), 'subscription');
       return requestMatches(envelope, query) ? mapSubscription(envelope) : unmatchedRequest<SubscriptionData>(envelope);
     },
   };

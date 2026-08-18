@@ -224,6 +224,25 @@ describe('preview route manifest', () => {
     expect(compare.payload).not.toBeNull();
   });
 
+  it('does not present default retained evidence as an answer to a non-default profile or comparison query', async () => {
+    const profile = previewRoutes.find((candidate) => candidate.id === 'model-profile');
+    const compare = previewRoutes.find((candidate) => candidate.id === 'compare');
+    const betaProfile = profile?.match(new URL('https://tokenbench.test/model-profile?model=beta'));
+    const reorderedSubset = compare?.match(new URL('https://tokenbench.test/compare?models=beta,alpha'));
+    if (!profile || !compare || !betaProfile || !reorderedSubset) throw new Error('Query preview routes are unavailable');
+
+    await expect(profile.staticData(betaProfile)).resolves.toMatchObject({
+      status: 'unavailable',
+      data: null,
+      reason: expect.stringMatching(/does not match/i),
+    });
+    await expect(compare.staticData(reorderedSubset)).resolves.toMatchObject({
+      status: 'unavailable',
+      data: null,
+      reason: expect.stringMatching(/does not match/i),
+    });
+  });
+
   it('rejects incomplete Home model rows before hydration', () => {
     const route = previewRoutes.find((candidate) => candidate.id === 'home');
 

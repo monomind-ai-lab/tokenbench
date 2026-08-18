@@ -12,6 +12,16 @@ vi.mock('../frontend/popular-models/chart-canvas', () => ({
 const toPngMock = vi.hoisted(() => vi.fn());
 vi.mock('html-to-image', () => ({ toPng: toPngMock }));
 
+async function blobText(blob: Blob): Promise<string> {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener('load', () => resolve(String(reader.result)));
+    reader.addEventListener('error', () => reject(reader.error));
+    reader.readAsText(blob);
+  });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   toPngMock.mockReset();
@@ -159,7 +169,7 @@ describe('PreviewComparePage', () => {
     ]);
 
     fireEvent.click(screen.getByRole('button', { name: 'Download comparison data as CSV' }));
-    const csv = await (createObjectUrl.mock.calls[0]?.[0] as Blob).text();
+    const csv = await blobText(createObjectUrl.mock.calls[0]?.[0] as Blob);
     expect(csv).toContain('Metric,Unavailable model (unknown-model),DeepSeek V3,GPT-4o');
     expect(csv).toContain('Reasoning,Unavailable — No approved fixture for unknown-model,83.0,91.0');
 

@@ -73,6 +73,11 @@ function staticCompareState(value: unknown): CompareState {
   return modelIds.length >= 2 ? { modelIds } : DEFAULT_COMPARE_STATE;
 }
 
+function initialCompareState(match: PreviewPageProps['match'], data: unknown): CompareState {
+  const fallback = staticCompareState(data);
+  return match.search.has('models') ? compareStateFromQuery(match.search, fallback) : fallback;
+}
+
 function evidenceValue<T>(value: EvidenceValue<T>): T | null {
   return value.availability === 'available' ? value.value : null;
 }
@@ -361,11 +366,11 @@ function throughput(model: PreviewModel): number | null {
 }
 
 export function PreviewComparePage({ match, data, adapter = fixtureAdapter }: PreviewComparePageProps) {
-  const [state, setState] = useState<CompareState>(() => staticCompareState(data));
+  const [state, setState] = useState<CompareState>(() => initialCompareState(match, data));
   const [routeStateApplied, setRouteStateApplied] = useState(false);
   const [contract, setContract] = useState<CompareContract | null>(() => parsePreviewComparePageData(data));
   const [directoryModels, setDirectoryModels] = useState<readonly PreviewModel[]>([]);
-  const [resultsVisible, setResultsVisible] = useState(() => staticCompareState(data).modelIds.length >= 2);
+  const [resultsVisible, setResultsVisible] = useState(() => initialCompareState(match, data).modelIds.length >= 2);
   const [revealResults, setRevealResults] = useState(false);
   const [actionState, setActionState] = useState<CompareActionState>(null);
   const resultRef = useRef<HTMLElement>(null);

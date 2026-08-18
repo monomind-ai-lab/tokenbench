@@ -9,7 +9,7 @@ import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/
 import { createEvidenceTransport } from '../frontend/preview-data/evidence-transport';
 import { createPreviewDataGateway } from '../frontend/preview-data/gateway';
 import { ACCEPTED_CUSTOM_RANKING_QUERY, ACCEPTED_LIFECYCLE_AS_OF, ACCEPTED_SUBSCRIPTION_QUERY } from '../frontend/preview-data/contracts';
-import { DEFAULT_COMPARE_STATE } from '../frontend/preview-workbench/compare-state';
+import { compareStateFromQuery } from '../frontend/preview-workbench/compare-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
 import { ArticlesPage } from '../pages/articles-page';
@@ -34,6 +34,7 @@ const readyReactDocument: PreviewDocumentReadiness = { status: 'ready' };
 /** Static preview selects retained evidence deliberately; HTTP remains an unselected Task 14 transport. */
 const staticPreviewAdapter = createPreviewDataGateway(createEvidenceTransport());
 const staticCustomRankingAdapter = createPreviewDataGateway(createEvidenceTransport({ rankings: 'mixed-source' }));
+const acceptedStaticCompareState = { modelIds: ['alpha', 'beta', 'gamma'] } as const;
 
 interface PreviewMetadataDefinition {
   readonly title: string;
@@ -398,7 +399,7 @@ const manifestRoutes = [
     shell: { activePage: 'compare', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'compareHub' }),
     structuredData,
-    staticData: async () => staticPreviewAdapter.comparison({ modelIds: ['alpha', 'beta', 'gamma'] }),
+    staticData: async (match) => staticPreviewAdapter.comparison(compareStateFromQuery(match.search, acceptedStaticCompareState)),
     payload: comparePayload,
     Page: comparePage,
   },

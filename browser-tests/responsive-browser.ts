@@ -1,11 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
+import { ARTICLE_BY_SLUG } from '../src/articles/content';
 import type { CatalogResponse } from '../src/catalog/contracts';
 import { parseComparisonViewModel } from '../src/frontend/comparison-contracts';
 import { FRONTEND_TEST_CATALOG } from '../src/frontend/test-fixtures';
 import { themeBootstrapMarkup } from '../src/brand/theme-bootstrap';
 import { buildBlankTestCheatsheetPdf } from '../src/newsletter/test-cheatsheet';
 import { previewRoutes, previewStaticEntries } from '../src/preview/route-manifest';
+import type { PreviewRouteId } from '../src/preview/route-types';
 import {
   HANDLER_COMPARISON_PATH,
   HANDLER_SPARSE_COMPARISON_PATH,
@@ -63,6 +65,23 @@ function colorAlpha(color: string): number {
 const CALCULATOR_PATH = '/subscribe-vs-api/';
 const CATALOG_CACHE_KEY = 'tokenbench:catalog:v2';
 const CATALOG_FIXTURE_IDENTITY_HEADER = 'x-tokenbench-browser-catalog-fixture';
+
+const productionRouteDocumentExpectations: Readonly<Record<PreviewRouteId, {
+  readonly heading: string;
+  readonly semanticText: string;
+}>> = {
+  home: { heading: 'Transparent AI Costs. Verified Benchmarks.', semanticText: 'Discover & filter models' },
+  models: { heading: 'Models workbench', semanticText: 'Price–performance frontier' },
+  'model-profile': { heading: 'ALPHA', semanticText: 'Illustrative profile summary' },
+  'model-lifecycle': { heading: 'Production model lifecycle & retirement radar', semanticText: 'Retirement watchlist' },
+  'popular-models': { heading: 'Popular models leaderboard', semanticText: 'Accepted leaderboard rankings' },
+  'make-it-yours': { heading: 'Make it yours', semanticText: 'Capability weighting matrix' },
+  compare: { heading: 'Compare models', semanticText: 'Choose 2–4 models' },
+  'subscribe-vs-api': { heading: 'Should you subscribe or pay as you go?', semanticText: 'Choose a provider and plan' },
+  articles: { heading: 'Articles for the AI bill you can explain.', semanticText: 'Find the next useful answer' },
+  'article-detail': { heading: 'A hybrid router for high-stakes agentic work', semanticText: 'What you’ll learn' },
+  'llm-price-performance': { heading: 'LLM Price vs. Performance Benchmark', semanticText: 'Availability and evidence' },
+};
 
 interface CatalogFixture {
   expectNextDelivery: () => Promise<void>;
@@ -420,22 +439,94 @@ async function activateSkipLinkAndAssertTarget(page: Page, targetId: string): Pr
 }
 
 test.describe('responsive calculator browser harness', () => {
-  test('serves every manifest route as a direct React document without prototype assets', async ({ request }) => {
+  test('serves every manifest and generated article as a substantive no-JavaScript document', async ({ browser, request }) => {
     test.skip(!usesProductionPreviewAssets(), 'This assertion exercises the Pages production artifact.');
-    const paths = [...new Set([
-      ...previewRoutes.map((route) => route.outputPathname),
-      ...previewStaticEntries().map((entry) => entry.outputPathname),
-    ])];
+    const page = await browser.newPage({ javaScriptEnabled: false });
+    try {
+      for (const route of previewRoutes) {
+        const expectation = productionRouteDocumentExpectations[route.id];
+        const response = await page.goto(route.outputPathname, { waitUntil: 'domcontentloaded' });
+        const html = await page.content();
 
-    for (const pathname of paths) {
-      const response = await request.get(pathname);
-      const html = await response.text();
-      expect(response.ok(), pathname).toBe(true);
-      expect(html, pathname).toContain('<header');
-      expect(html, pathname).toContain('<footer');
-      expect(html, pathname).toContain('<h1');
-      expect(html, pathname).not.toMatch(/prototypes\/ui-revamp-3|ui-revamp-3-assets|(?:^|\/)common\.js(?:[?"'])/u);
+        expect(response?.ok(), route.outputPathname).toBe(true);
+        await expect(page.getByRole('banner'), route.outputPathname).toBeVisible();
+        await expect(page.getByRole('contentinfo'), route.outputPathname).toBeVisible();
+        await expect(page.locator('main'), route.outputPathname).toHaveCount(1);
+        await expect(page.getByRole('heading', { name: expectation.heading, level: 1 }), route.outputPathname).toBeVisible();
+        await expect(page.locator('body'), route.outputPathname).toContainText(expectation.semanticText);
+        expect(html, route.outputPathname).not.toMatch(/prototypes\/ui-revamp-3|ui-revamp-3-assets|(?:^|\/)(?:common|data|chart\.umd)\.js(?:[?"'])/u);
+      }
+
+      for (const entry of previewStaticEntries()) {
+        const slug = entry.match.params.slug;
+        const article = slug ? ARTICLE_BY_SLUG.get(slug) : undefined;
+        if (!article) throw new Error(`Missing article content for ${entry.outputPathname}`);
+
+        const response = await page.goto(entry.outputPathname, { waitUntil: 'domcontentloaded' });
+        const html = await page.content();
+        expect(response?.ok(), entry.outputPathname).toBe(true);
+        await expect(page.getByRole('banner'), entry.outputPathname).toBeVisible();
+        await expect(page.getByRole('contentinfo'), entry.outputPathname).toBeVisible();
+        await expect(page.getByRole('heading', { name: article.title, level: 1 }), entry.outputPathname).toBeVisible();
+        await expect(page.locator('article.guide-article'), entry.outputPathname).toContainText(article.dek);
+        expect(html, entry.outputPathname).not.toMatch(/prototypes\/ui-revamp-3|ui-revamp-3-assets|(?:^|\/)(?:common|data|chart\.umd)\.js(?:[?"'])/u);
+      }
+    } finally {
+      await page.close();
     }
+
+    for (const { source, destination } of [
+      { source: '/cost', destination: '/subscribe-vs-api/' },
+      { source: '/cost/calculator', destination: '/subscribe-vs-api/' },
+      { source: '/guides/track-claude-code-usage/', destination: '/articles/track-claude-code-usage/' },
+    ] as const) {
+      const response = await request.get(source, { maxRedirects: 0 });
+      expect(response.status(), source).toBe(301);
+      expect(response.headers().location, source).toBe(destination);
+    }
+  });
+
+  test('keeps non-default profile and comparison query documents truthful without JavaScript', async ({ browser }) => {
+    test.skip(!usesProductionPreviewAssets(), 'This assertion exercises the Pages production artifact.');
+    const page = await browser.newPage({ javaScriptEnabled: false });
+    try {
+      for (const expectation of [
+        {
+          path: '/model-profile?model=beta',
+          required: ['Model profile unavailable', 'does not match the requested query'],
+          forbidden: ['<h1>ALPHA</h1>'],
+        },
+        {
+          path: '/compare?models=beta,alpha',
+          required: ['Unavailable model (beta)', 'Unavailable model (alpha)', 'does not match the requested query'],
+          forbidden: ['Capability comparison radar for ALPHA, BETA, GAMMA'],
+        },
+      ] as const) {
+        const response = await page.goto(expectation.path, { waitUntil: 'domcontentloaded' });
+        expect(response?.ok(), expectation.path).toBe(true);
+        const html = await page.content();
+        for (const text of expectation.required) expect(html, expectation.path).toContain(text);
+        for (const text of expectation.forbidden) expect(html, expectation.path).not.toContain(text);
+        await expect(page.getByRole('banner'), expectation.path).toBeVisible();
+        await expect(page.getByRole('contentinfo'), expectation.path).toBeVisible();
+      }
+    } finally {
+      await page.close();
+    }
+  });
+
+  test('keeps non-default profile and comparison query documents truthful after hydration', async ({ page }) => {
+    test.skip(!usesProductionPreviewAssets(), 'This assertion exercises the Pages production artifact.');
+
+    await page.goto('/model-profile?model=beta', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Model profile unavailable' })).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('ALPHA');
+
+    await page.goto('/compare?models=beta,alpha', { waitUntil: 'networkidle' });
+    await expect(page.getByText('Unavailable model (beta)', { exact: true })).toBeVisible();
+    await expect(page.getByText('Unavailable model (alpha)', { exact: true })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('does not match the requested query');
+    await expect(page.locator('body')).not.toContainText('Capability comparison radar for ALPHA, BETA, GAMMA');
   });
 
   test('serves the calculator as a crawlable React document with shared chrome and a usable skip link', async ({ page, request }) => {

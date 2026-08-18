@@ -1,6 +1,26 @@
 import '@testing-library/jest-dom/vitest';
+import { TextDecoder as NodeTextDecoder, TextEncoder as NodeTextEncoder } from 'node:util';
 import { cleanup } from '@testing-library/react';
 import { afterEach } from 'vitest';
+
+const NodeUint8Array = new NodeTextEncoder().encode('').constructor;
+
+Object.defineProperties(globalThis, {
+  TextDecoder: { configurable: true, value: NodeTextDecoder, writable: true },
+  TextEncoder: { configurable: true, value: NodeTextEncoder, writable: true },
+  Uint8Array: { configurable: true, value: NodeUint8Array, writable: true },
+});
+
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  configurable: true,
+  value: () => null,
+});
+
+const consoleError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  if (args.some((arg) => typeof arg === 'string' && arg.includes("Failed to create chart: can't acquire context from the given item"))) return;
+  consoleError(...args);
+};
 
 afterEach(() => cleanup());
 

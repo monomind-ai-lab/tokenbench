@@ -44,3 +44,43 @@ Vite continues to warn that `assets/main.js` is 1.09 MB minified. Route-level la
 ## Scope and ownership
 
 Known unrelated changes remain uncommitted: the Task 7 report, `index.html`, generated/untracked page directories, and `test-results/`. The Task 14 commit contains only the cutover implementation, tests, and this report.
+
+## Fix round 1 — query-truthful Pages documents and test-runtime remediation
+
+### Root cause and red evidence
+
+- Static Vite output cannot vary by request query. It served Alpha/default comparison evidence for `/model-profile?model=beta` and `/compare?models=beta,alpha` when JavaScript was disabled.
+- The retained-evidence adapter already rejected those requests correctly; the regression was the static document boundary, not the request-correlation gate.
+- Added focused manifest/document tests and a JavaScript-disabled Pages test. Before the fix, the focused unit run and Pages browser test failed by rendering the default Alpha/profile and Alpha/Beta/Gamma comparison evidence.
+- The first Pages Function implementation imported the entire route manifest. `wrangler pages dev` then returned 500 because Ajv's runtime schema compiler is not permitted in the Worker isolate. This was reproduced by the production browser test.
+
+### Green implementation and tests
+
+- Added narrow `/functions/model-profile.ts` and `/functions/compare.ts` handlers backed only by compile-time retained evidence artifacts.
+- The Worker helper preserves the existing exact request-correlation behavior: `model=alpha` and `models=alpha,beta,gamma` render accepted evidence; unsupported `model=beta` and reordered `models=beta,alpha` render explicit unavailable contracts.
+- Kept the normal adapter's full accepted-contract validation by deferring its Ajv import. Pages Functions use the same pure mapper and correlation gate over prevalidated committed artifacts, avoiding dynamic Worker compilation.
+- Added direct handler tests for both accepted and unavailable branches; focused suite: 5 files, 47 tests passed.
+- Expanded the Pages production no-JavaScript matrix to cover every manifest route, every generated article's title/dek/article landmark, shared header/footer, asset bans, default profile/compare documents, the two query regressions, hydration truthfulness, and preserved redirects.
+- `npm run test:browser:production` passed: 8 Pages assertions passed; 95 source-only fixture/prototype assertions skipped by design.
+
+### Test environment security remediation
+
+- Changed Vitest from `happy-dom` to the already-installed `jsdom@26.1.0`; removed `happy-dom` from `package.json` and the lockfile, then pruned the extraneous local package.
+- jsdom exposed cross-realm `TextEncoder`/`Uint8Array`, Blob-text, and canvas gaps. The shared test setup restores Node binary primitives and provides a safe no-context canvas shim; the export test uses a `FileReader` fallback. No application behavior was changed for this compatibility work.
+- `npm ls happy-dom jsdom` now lists jsdom only.
+- `npm audit --json` reports 0 vulnerabilities (including 0 high and 0 critical).
+
+### Final verification and review
+
+- `npm test` — PASS: 170 files, 1,803 tests.
+- `npm run lint` — PASS.
+- `npm run build` — PASS.
+- `npm run test:browser:production` — PASS: 8 passed, 95 skipped.
+- `npm audit --json` — PASS: 0 vulnerabilities.
+- `git diff --check` — PASS.
+- Built-output scan found no prototype asset paths. Its sole `data.js` textual match is embedded Ajv source text inside `assets/contract-v1-*.js`, not a served asset reference.
+- Self-review: Pages handlers make no HTTP, D1/R2, environment, or fallback-data calls; request matching remains exact; the unrelated Task 7 report, `index.html`, generated page directories, and `test-results/` remain outside scope.
+
+### Remaining advisory
+
+Vite still warns that `assets/main.js` is approximately 917 KB minified (253 KB gzip). Route-level lazy loading is a separate performance follow-up and was not included in this narrowly scoped fix.
