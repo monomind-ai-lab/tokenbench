@@ -324,7 +324,7 @@ export function HomePage({ data }: HomePageProps = {}) {
       </section>
 
       <section className="home-feature-section" aria-labelledby="home-guides-heading">
-        <div className="panel-heading"><div><span className="eyebrow">Practical guides</span><h2 id="home-guides-heading">Make the next decision with less guessing</h2><p>Curated operating guides for cost control, routing, and usage visibility.</p></div><a href={ROUTE_PATHS.guides}>Browse all guides <ArrowRight aria-hidden="true" size={14} /></a></div>
+        <div className="panel-heading"><div><span className="eyebrow">Practical guides</span><h2 id="home-guides-heading">Make the next decision with less guessing</h2><p>Curated operating guides for cost control, routing, and usage visibility.</p></div><a href={ROUTE_PATHS.articles}>Browse all guides <ArrowRight aria-hidden="true" size={14} /></a></div>
         <div className="home-feature-grid home-guide-grid" role="list">
           {CURATED_GUIDE_SLUGS.map((slug) => GUIDE_BY_SLUG.get(slug)).filter((guide) => guide !== undefined).map((guide) => <article className="panel" role="listitem" key={guide.slug}>
             <span className="eyebrow">{guide.category}</span>

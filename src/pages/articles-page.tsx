@@ -18,7 +18,7 @@ function formatArticleDate(value: string): string {
   return new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
 }
 
-function normalChannel(value: string | null | undefined): ArticleChannelFilter {
+export function articleChannelFromSearch(value: string | null | undefined): ArticleChannelFilter {
   return CHANNELS.some((channel) => channel.value === value) ? value as ArticleChannelFilter : 'all';
 }
 
@@ -45,12 +45,12 @@ export interface ArticlesPageProps {
 }
 
 export function ArticlesPage({ articles, initialChannel }: ArticlesPageProps) {
-  const [channel, setChannel] = useState<ArticleChannelFilter>(() => normalChannel(initialChannel ?? new URLSearchParams(window.location.search).get('channel')));
+  const [channel, setChannel] = useState<ArticleChannelFilter>(() => articleChannelFromSearch(initialChannel ?? (typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('channel'))));
   const [type, setType] = useState<string>('all');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ArticleSort>('newest');
   useEffect(() => {
-    const channelFromUrl = normalChannel(new URLSearchParams(window.location.search).get('channel'));
+    const channelFromUrl = articleChannelFromSearch(new URLSearchParams(window.location.search).get('channel'));
     setChannel((current) => current === channelFromUrl ? current : channelFromUrl);
   }, []);
   const channelCounts = useMemo(() => new Map(CHANNELS.map(({ value }) => [value, value === 'all' ? articles.length : articles.filter((article) => article.channel === value).length])), [articles]);

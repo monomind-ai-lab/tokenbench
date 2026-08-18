@@ -369,8 +369,6 @@ const hydrationMatrix: readonly HydrationMatrixRoute[] = [
   { path: '/leaderboards/media/text-to-image/', heading: 'Text to image', hydratedClientMarker: '.leaderboard-results[aria-label="Text to image"]' },
   ...(usesProductionPreviewAssets() ? [] : [{ path: '/compare/', heading: 'Compare models side by side', hydratedClientMarker: '.comparison-hub-page' }]),
   { path: HANDLER_COMPARISON_PATH, heading: 'Alpha vs Beta', hydratedClientMarker: '.comparison-detail-page[data-client-hydrated="true"]' },
-  { path: '/guides/', heading: 'Spend smarter on AI', hydratedClientMarker: '.app-shell main.guides-main:not(.article-main)' },
-  { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', hydratedClientMarker: '.app-shell main.guides-main.article-main' },
 ];
 
 const hydrationThemes = ['dark', 'light'] as const;
@@ -478,6 +476,8 @@ test.describe('responsive calculator browser harness', () => {
     for (const { source, destination } of [
       { source: '/cost', destination: '/subscribe-vs-api/' },
       { source: '/cost/calculator', destination: '/subscribe-vs-api/' },
+      { source: '/guides', destination: '/articles/' },
+      { source: '/guides/', destination: '/articles/' },
       { source: '/guides/track-claude-code-usage/', destination: '/articles/track-claude-code-usage/' },
     ] as const) {
       const response = await request.get(source, { maxRedirects: 0 });
@@ -486,7 +486,7 @@ test.describe('responsive calculator browser harness', () => {
     }
   });
 
-  test('keeps non-default profile and comparison query documents truthful without JavaScript', async ({ browser }) => {
+  test('keeps non-default query documents truthful without JavaScript', async ({ browser }) => {
     test.skip(!usesProductionPreviewAssets(), 'This assertion exercises the Pages production artifact.');
     const page = await browser.newPage({ javaScriptEnabled: false });
     try {
@@ -500,6 +500,26 @@ test.describe('responsive calculator browser harness', () => {
           path: '/compare?models=beta,alpha',
           required: ['Unavailable model (beta)', 'Unavailable model (alpha)', 'does not match the requested query'],
           forbidden: ['Capability comparison radar for ALPHA, BETA, GAMMA'],
+        },
+        {
+          path: '/models?provider=OpenAI',
+          required: ['Model data unavailable', 'does not match the requested query'],
+          forbidden: ['ALPHA'],
+        },
+        {
+          path: '/articles?channel=guides',
+          required: ['article-tab-guides', 'aria-selected="true"'],
+          forbidden: ['id="article-tab-all" aria-controls="article-index" aria-selected="true"'],
+        },
+        {
+          path: '/make-it-yours/?access=open',
+          required: ['does not match the requested query'],
+          forbidden: ['Weighted score ranking'],
+        },
+        {
+          path: '/subscribe-vs-api?seats=1',
+          required: ['does not match the requested query'],
+          forbidden: ['Monthly subscription'],
         },
       ] as const) {
         const response = await page.goto(expectation.path, { waitUntil: 'domcontentloaded' });
@@ -515,7 +535,7 @@ test.describe('responsive calculator browser harness', () => {
     }
   });
 
-  test('keeps non-default profile and comparison query documents truthful after hydration', async ({ page }) => {
+  test('keeps non-default query documents truthful after hydration', async ({ page }) => {
     test.skip(!usesProductionPreviewAssets(), 'This assertion exercises the Pages production artifact.');
 
     await page.goto('/model-profile?model=beta', { waitUntil: 'networkidle' });
@@ -527,6 +547,23 @@ test.describe('responsive calculator browser harness', () => {
     await expect(page.getByText('Unavailable model (alpha)', { exact: true })).toBeVisible();
     await expect(page.getByRole('alert')).toContainText('does not match the requested query');
     await expect(page.locator('body')).not.toContainText('Capability comparison radar for ALPHA, BETA, GAMMA');
+
+    await page.goto('/models?provider=OpenAI', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Model data unavailable' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('does not match the requested query');
+    await expect(page.locator('body')).not.toContainText('ALPHA');
+
+    await page.goto('/articles?channel=guides', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('tab', { name: /^Guides/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('body')).toContainText('6 articles shown');
+
+    await page.goto('/make-it-yours/?access=open', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('alert')).toContainText('does not match the requested query');
+    await expect(page.locator('body')).not.toContainText('Weighted score ranking');
+
+    await page.goto('/subscribe-vs-api?seats=1', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('alert')).toContainText('does not match the requested query');
+    await expect(page.locator('body')).not.toContainText('Monthly subscription');
   });
 
   test('serves the calculator as a crawlable React document with shared chrome and a usable skip link', async ({ page, request }) => {
@@ -1547,8 +1584,8 @@ test.describe('motion and named call-to-action coverage', () => {
   test('respects reduced-motion preferences for animated and transitional UI', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await blockExternalRequests(page);
-    await page.goto('/guides/');
-    await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
+    await page.goto('/articles');
+    await expect(page.getByRole('heading', { name: 'Articles for the AI bill you can explain.', level: 1 })).toBeVisible();
     const motion = await page.locator('.guide-card').first().evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -1603,71 +1640,6 @@ test.describe('motion and named call-to-action coverage', () => {
       }
       await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
     }
-  });
-});
-
-test.describe('guides browser harness', () => {
-  test.skip(usesProductionPreviewAssets(), 'Pages preserves the /guides/* redirect contract; these source-route checks run in the Vite suite.');
-
-  for (const width of [320, 768, 1440]) {
-    test(`${width}px guide hub stays readable without horizontal overflow`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 1000 });
-      await blockExternalRequests(page);
-      await page.goto('/guides/');
-
-      await expect(page.getByRole('heading', { name: 'Spend smarter on AI', level: 1 })).toBeVisible();
-      await expect(page.locator('.guide-card')).toHaveCount(5);
-      const menu = page.getByRole('button', { name: 'Open navigation' });
-      if (await menu.isVisible()) {
-        await menu.focus();
-        await page.keyboard.press('Enter');
-        await expect(page.getByRole('button', { name: 'Close navigation' })).toHaveAttribute('aria-expanded', 'true');
-      }
-      await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'Articles', exact: true })).toHaveAttribute('aria-current', 'page');
-      await expect(page.getByRole('link', { name: 'Powered by MonoMind AI Lab' })).toHaveAttribute('href', 'https://monomind.one/');
-      await expect(page.getByRole('link', { name: 'Sources', exact: true })).toHaveCount(0);
-      await expect(page.getByRole('link', { name: 'Data sources', exact: true })).toHaveCount(0);
-      const dimensions = await page.evaluate(() => ({ clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
-      expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
-    });
-  }
-
-  test('article ships crawlable body, unique metadata, structured data, and cross-links', async ({ page, request }) => {
-    const path = '/guides/track-claude-code-usage/';
-    const response = await request.get(path);
-    const rawHtml = await response.text();
-    expect(rawHtml).toContain('<h1>How to Track Claude Code Usage, Tokens, and Spend</h1>');
-    expect(rawHtml).toContain('Official references');
-    expect(rawHtml).toContain('application/ld+json');
-
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await blockExternalRequests(page);
-    await page.goto(path);
-    await expect(page.getByRole('heading', { name: 'How to Track Claude Code Usage, Tokens, and Spend', level: 1 })).toBeVisible();
-    await expect(page.locator('h1')).toHaveCount(1);
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', `https://tokenbench.monomind.one${path}`);
-    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /subscription limits differ from API billing/i);
-    await expect(page.locator('script[type="application/ld+json"]')).toHaveCount(2);
-    await expect(page.getByRole('link', { name: /Models, usage, and limits/i })).toHaveAttribute('href', /^https:\/\/support\.claude\.com/);
-    await expect(page.getByRole('heading', { name: 'Related guides' })).toBeVisible();
-  });
-
-  test('guide theme control defaults dark and persists both theme choices', async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 1000 });
-    await blockExternalRequests(page);
-    await page.goto('/guides/openrouter-guide-model-routing-cost-controls/');
-
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await page.getByRole('button', { name: 'Toggle light theme' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('light');
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
-    await page.getByRole('button', { name: 'Toggle dark theme' }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('tokenbench:theme'))).toBe('dark');
-    await page.reload();
-    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   });
 });
 
@@ -3633,20 +3605,6 @@ test.describe('keyboard and chart accessibility regressions', () => {
       releaseCatalogRequest?.();
     }
   });
-
-  for (const guide of [
-    { path: '/guides/', heading: 'Spend smarter on AI', name: 'guide hub' },
-    { path: '/guides/track-claude-code-usage/', heading: 'How to Track Claude Code Usage, Tokens, and Spend', name: 'guide article' },
-  ]) {
-    test(`moves focus to guide content when the ${guide.name} skip link is activated`, async ({ page }) => {
-      await page.setViewportSize({ width: 390, height: 1000 });
-      await blockExternalRequests(page);
-      await page.goto(guide.path);
-      await expect(page.getByRole('heading', { name: guide.heading, level: 1 })).toBeVisible();
-
-      await activateSkipLinkAndAssertTarget(page, 'guide-content');
-    });
-  }
 
   test('closes the compact navigation when Escape is pressed from the focused toggle', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 1000 });

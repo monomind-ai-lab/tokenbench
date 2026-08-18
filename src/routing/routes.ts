@@ -6,7 +6,7 @@ export { previewPaths, previewPaths as PREVIEW_ROUTE_PATHS } from '../preview/ro
 
 export const ROUTE_PATHS = {
   home: '/',
-  guides: '/guides/',
+  articles: '/articles/',
   tools: '/tools/',
   calculator: '/subscribe-vs-api/',
   pricePerformance: '/llm-price-performance/',
@@ -17,6 +17,8 @@ export const ROUTE_PATHS = {
   newsletterConfirmed: '/newsletter/confirmed/',
   welcome: '/welcome/',
 } as const;
+
+const LEGACY_GUIDES_PATH = '/guides/';
 
 export function previewModelProfilePath(slug: string): string {
   return previewPaths.modelProfile(slug);
@@ -199,7 +201,6 @@ export interface FixedRouteDefinition {
 
 const basicFixedRoutes: readonly FixedRouteDefinition[] = [
   { id: 'home', pathname: ROUTE_PATHS.home, route: { kind: 'home' } },
-  { id: 'guides', pathname: ROUTE_PATHS.guides, route: { kind: 'guides' } },
   ...GUIDES.map((guide) => ({
     id: `guide-${guide.slug}`,
     pathname: articlePath(guide.slug),
@@ -248,7 +249,7 @@ export function pathnameForRoute(route: AppRoute): string | null {
     case 'calculator': return ROUTE_PATHS.calculator;
     case 'pricePerformance': return ROUTE_PATHS.pricePerformance;
     case 'methodologyBenchAlign': return null;
-    case 'guides': return route.slug ? articlePath(route.slug) : ROUTE_PATHS.guides;
+    case 'guides': return route.slug ? articlePath(route.slug) : ROUTE_PATHS.articles;
     case 'compareHub': return ROUTE_PATHS.compareHub;
     case 'models': return ROUTE_PATHS.models;
     case 'popularModels': return ROUTE_PATHS.popularModels;
@@ -271,7 +272,7 @@ export function matchRoute(pathname: string): AppRoute {
   if (normalizedPathname === ROUTE_PATHS.tools) return { kind: 'tools' };
   if (normalizedPathname === ROUTE_PATHS.calculator) return { kind: 'calculator' };
   if (normalizedPathname === ROUTE_PATHS.pricePerformance) return { kind: 'pricePerformance' };
-  if (normalizedPathname === ROUTE_PATHS.guides) return { kind: 'guides' };
+  if (normalizedPathname === LEGACY_GUIDES_PATH) return { kind: 'redirect', to: ROUTE_PATHS.articles };
   if (normalizedPathname === ROUTE_PATHS.compareHub) return { kind: 'compareHub' };
   if (normalizedPathname === ROUTE_PATHS.models) return { kind: 'models' };
   if (normalizedPathname === ROUTE_PATHS.popularModels) return { kind: 'popularModels' };

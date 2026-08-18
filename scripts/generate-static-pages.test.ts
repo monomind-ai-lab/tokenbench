@@ -1,16 +1,12 @@
-import { execFile, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FIXED_ROUTES } from '../src/routing/routes';
 import { generateStaticPages } from './generate-static-pages';
 
 const outputRoots: string[] = [];
-const execFileAsync = promisify(execFile);
-const requireFromTest = createRequire(import.meta.url);
 const THEME_BOOTSTRAP = "<script>try{var theme=localStorage.getItem('tokenbench:theme'),explicit=localStorage.getItem('tokenbench:theme:explicit')==='true';if(theme&&explicit){document.documentElement.dataset.theme=theme}else{if(theme)localStorage.removeItem('tokenbench:theme');document.documentElement.dataset.theme='dark'}}catch(e){document.documentElement.dataset.theme='dark'}</script>";
 
 function gitCheckIgnoreStatus(pathname: string): number | null {
@@ -188,21 +184,8 @@ describe('crawlable static-page generator', () => {
     await expect(readFile(unrelatedTool, 'utf8')).resolves.toBe('keep this tool');
   });
 
-  it('preserves unowned guide files when the guide CLI runs directly', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'tokenbench-guide-pages-'));
-    outputRoots.push(root);
-    const sentinel = join(root, 'guides', 'editor-notes.txt');
-    await mkdir(join(root, 'guides'), { recursive: true });
-    await writeFile(sentinel, 'keep this guide note');
-
-    const scriptPath = resolve(process.cwd(), 'scripts/generate-guide-pages.ts');
-    await execFileAsync(process.execPath, ['--import', requireFromTest.resolve('tsx'), scriptPath], { cwd: root });
-
-    await expect(readFile(sentinel, 'utf8')).resolves.toBe('keep this guide note');
-  });
-
   it('ignores every owned generated page without hiding unowned index pages', () => {
-    expect(FIXED_ROUTES).toHaveLength(29);
+    expect(FIXED_ROUTES).toHaveLength(28);
     expect(gitCheckIgnoreStatus('index.html'), 'tracked root source shell').toBe(1);
 
     const generatedPages = FIXED_ROUTES

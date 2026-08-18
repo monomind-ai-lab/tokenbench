@@ -46,7 +46,7 @@ export interface GuideArticle {
 
 const publishedAt = '2026-08-04';
 
-/** Source content retained for the legacy `/guides/` hub and unified article records. */
+/** Source content retained for unified article records and legacy detail redirects. */
 export const GUIDES: readonly GuideArticle[] = [
   {
     slug: 'track-claude-code-usage',

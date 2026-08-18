@@ -116,7 +116,12 @@ export function MakeItYoursPage({ match, data, adapter = fixtureAdapter }: MakeI
   const [actionState, setActionState] = useState<ActionState>(null);
   const exportRef = useRef<HTMLElement>(null);
   useEffect(() => { setState(weightedRankingStateFromQuery(match.search)); }, [match.search]);
-  useEffect(() => { let active = true; void adapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY).then((next) => { if (active) setContract(next); }); return () => { active = false; }; }, [adapter]);
+  useEffect(() => {
+    if (staticContract?.status === 'unavailable' || staticContract?.data === null) return;
+    let active = true;
+    void adapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY).then((next) => { if (active) setContract(next); });
+    return () => { active = false; };
+  }, [adapter, staticContract]);
   useEffect(() => { updateUrl(state); }, [state]);
 
   const dataModels = useMemo(() => rankingModels(contract), [contract]);

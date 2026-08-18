@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://tokenbench.monomind.one</loc></url>
-  <url><loc>https://tokenbench.monomind.one/guides/</loc></url>
   <url><loc>https://tokenbench.monomind.one/articles/track-claude-code-usage/</loc></url>
   <url><loc>https://tokenbench.monomind.one/articles/monitor-openai-codex-usage/</loc></url>
   <url><loc>https://tokenbench.monomind.one/articles/openrouter-guide-model-routing-cost-controls/</loc></url>

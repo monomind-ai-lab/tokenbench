@@ -100,14 +100,14 @@ describe('startPreviewRoute', () => {
     expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
   });
 
-  it('hydrates a direct Models filter URL from the unfiltered static document before applying its query state', async () => {
+  it('hydrates a direct Models filter URL with that URL’s filter state', async () => {
     const models = await fixtureAdapter.models({});
     document.body.innerHTML = `<div id="root"><main data-server-models>Server models</main></div><script id="models-initial-data" type="application/json">${JSON.stringify(models)}</script>`;
     window.history.replaceState({}, '', '/models?provider=DeepSeek');
 
     expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'models' });
     const hydrated = renderToStaticMarkup(hydrateRootMock.mock.calls[0]?.[1] as ReactNode);
-    expect(hydrated).toContain('GPT-4o');
+    expect(hydrated).not.toContain('GPT-4o');
     expect(hydrated).toContain('DeepSeek V3');
     expect(window.location.search).toBe('?provider=DeepSeek');
   });

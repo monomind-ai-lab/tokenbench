@@ -30,7 +30,7 @@ function envelope(): ModelDirectoryEnvelope {
 }
 
 describe('popular models SSR handler', () => {
-  it('lets the ui-revamp-3 branch serve its rebuilt static models workbench', async () => {
+  it('renders a retained-evidence query document for the ui-revamp-3 models workbench', async () => {
     const staticPreview = new Response('<h1>Models workbench</h1>', { headers: { 'content-type': 'text/html' } });
     const next = vi.fn().mockResolvedValue(staticPreview);
 
@@ -40,8 +40,8 @@ describe('popular models SSR handler', () => {
       next,
     });
 
-    expect(response).toBe(staticPreview);
-    expect(next).toHaveBeenCalledOnce();
+    expect(await response.text()).toContain('<h1 id="models-workbench-heading">Models workbench</h1>');
+    expect(next).not.toHaveBeenCalled();
     expect(readModelDirectory).not.toHaveBeenCalled();
   });
 

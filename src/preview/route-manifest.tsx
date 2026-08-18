@@ -10,9 +10,10 @@ import { createEvidenceTransport } from '../frontend/preview-data/evidence-trans
 import { createPreviewDataGateway } from '../frontend/preview-data/gateway';
 import { ACCEPTED_CUSTOM_RANKING_QUERY, ACCEPTED_LIFECYCLE_AS_OF, ACCEPTED_SUBSCRIPTION_QUERY } from '../frontend/preview-data/contracts';
 import { compareStateFromQuery } from '../frontend/preview-workbench/compare-state';
+import { decodeModelWorkbenchState, modelDirectoryQueryForWorkbenchState } from '../frontend/preview-workbench/model-state';
 import { parseModelProfileViewModel, type ModelProfileViewModel } from '../frontend/model-profile-contracts';
 import { ArticleDetailPage, articleJsonLd } from '../pages/article-detail-page';
-import { ArticlesPage } from '../pages/articles-page';
+import { articleChannelFromSearch, ArticlesPage } from '../pages/articles-page';
 import { LifecycleRadarPage, parseLifecycleRadarPageData } from '../pages/lifecycle-radar-page';
 import { PreviewModelProfilePage, parsePreviewModelProfilePageData } from '../pages/preview-model-profile-page';
 import { PreviewModelsPage, parsePreviewModelsPageData } from '../pages/preview-models-page';
@@ -321,7 +322,7 @@ const manifestRoutes = [
     shell: { activePage: 'home', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'home' }),
     structuredData,
-    staticData: async () => staticPreviewAdapter.models({}),
+    staticData: async (match) => staticPreviewAdapter.models(modelDirectoryQueryForWorkbenchState(decodeModelWorkbenchState(match.search))),
     payload: homePayload,
     Page: homePage,
   },
@@ -386,7 +387,7 @@ const manifestRoutes = [
     shell: { activePage: 'leaderboards', ...defaultSkipLink },
     metadata: () => previewMakeItYoursMetadata,
     structuredData,
-    staticData: async () => staticCustomRankingAdapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY),
+    staticData: async (match) => staticCustomRankingAdapter.rankings(match.search.toString().length === 0 ? ACCEPTED_CUSTOM_RANKING_QUERY : { operation: 'custom' }),
     payload: makeItYoursPayload,
     Page: makeItYoursPage,
   },
@@ -412,7 +413,7 @@ const manifestRoutes = [
     shell: { activePage: 'calculator', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'calculator' }),
     structuredData,
-    staticData: async () => staticPreviewAdapter.subscription(ACCEPTED_SUBSCRIPTION_QUERY),
+    staticData: async (match) => staticPreviewAdapter.subscription(match.search.toString().length === 0 ? ACCEPTED_SUBSCRIPTION_QUERY : { operation: 'catalog' }),
     payload: subscribeVsApiPayload,
     Page: subscribeVsApiPage,
   },
@@ -425,7 +426,7 @@ const manifestRoutes = [
     shell: { activePage: 'guides', skipLinkTarget: 'article-content', skipLinkLabel: 'Skip to articles' },
     metadata: () => previewArticleMetadata.articles,
     structuredData,
-    staticData: async () => ({ channel: 'all' }),
+    staticData: async (match) => ({ channel: articleChannelFromSearch(match.search.get('channel')) }),
     payload: articlesPayload,
     Page: articlesPage,
   },

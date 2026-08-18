@@ -84,3 +84,34 @@ Known unrelated changes remain uncommitted: the Task 7 report, `index.html`, gen
 ### Remaining advisory
 
 Vite still warns that `assets/main.js` is approximately 917 KB minified (253 KB gzip). Route-level lazy loading is a separate performance follow-up and was not included in this narrowly scoped fix.
+
+## Final consolidated fix wave — complete query truthfulness and legacy hub retirement
+
+### Red evidence
+
+- A focused red run of `functions/_shared/preview-query-document.test.ts`, `functions/models/index.test.ts`, `src/routing/routes.test.ts`, and `scripts/generate-guide-pages.test.ts` failed in 10 places before implementation. It showed that `/models`, `/articles`, `/make-it-yours`, and `/subscribe-vs-api` had no query-aware Worker document route; `/models` delegated the preview branch to the query-agnostic static document; and `/guides` still matched a hub, generated an index page, and remained a Vite input.
+- The fault was traced to the static-document boundary. The retained adapter already performs exact correlation, but Vite output embeds one default payload and the affected page state was previously applied after hydration. That lets a direct request display another query's retained result before or during hydration.
+
+### Green implementation
+
+- Added Worker-safe retained mappers for Models, Rankings, and Subscription evidence. They share the existing exact normalized-request gate and do not import Ajv's runtime compiler.
+- Expanded `functions/_shared/preview-query-document.ts` to render exact retained/neutral documents for `/models`, `/articles`, `/make-it-yours`, and `/subscribe-vs-api`, while retaining Profile and Compare behavior. New route Functions dispatch the latter three paths; the Models handler uses retained SSR for the preview branch or when the directory binding is absent, never falling back to D1 in that boundary.
+- Models now initializes from its request URL before its first render. Articles transports the requested channel in its SSR payload. Make It Yours and Subscribe vs API retain an explicit unavailable contract for a direct non-retained query, so hydration cannot replace it with default factual results.
+- Removed legacy `/guides/` content ownership: the hub Vite input, generator/script/tests, old Guide app/page/tests, sitemap entry, ignored generated hub paths, and home navigation destination are gone. `/guides` and `/guides/` now directly redirect to `/articles/`; known legacy detail redirects remain.
+
+### Verification
+
+- Focused green suite: 9 files, 69 tests passed (Worker documents, Models branch behavior, route/generator ownership, page state, and hydration).
+- `npm test` — PASS: 167 files, 1,799 tests.
+- `npm run lint` — PASS.
+- `npm run build` — PASS; it generated 28 fixed pages and no `guides/index.html`.
+- `npm run test:browser:production` — PASS: 8 Pages assertions passed, 88 source-only scenarios skipped. It includes no-JavaScript and hydrated non-default requests for Models (`provider=OpenAI`), Articles (`channel=guides`), Make It Yours (`access=open`), Subscribe vs API (`seats=1`), Profile, and Compare.
+- `npm audit --json` — PASS: 0 vulnerabilities.
+- Direct artifact inspection confirmed `public/sitemaps/static.xml` has no `/guides/` location, redirects map both hub spellings to `/articles/`, and no generated legacy hub index exists. The asset-reference scan found no prototype/common/data/chart asset reference. Its only `data.js` text is Ajv source text in `dist/assets/contract-v1-*.js` (a JSON-schema reference), not an emitted or referenced asset.
+
+### Self-review
+
+- Functions make no external HTTP, D1/R2, or environment reads in the retained query-rendering paths. Unsupported query documents contain the explicit correlation reason rather than default data.
+- Retained request matching remains exact for evidence-bearing state, while Articles' supported channel remains serialized into both server markup and hydration data.
+- The removed Guide hub does not remove canonical React article pages or known legacy detail redirects.
+- Unrelated Task 7 report changes, `index.html`, pre-existing generated/untracked page directories, and `test-results/` remain outside the scoped commit.

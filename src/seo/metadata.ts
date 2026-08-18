@@ -161,9 +161,9 @@ export function metadataForRoute(route: AppRoute): PageMetadata {
       return makeMetadata(definition.pathname, definition.seo);
     }
     case 'guides': {
-      if (!route.slug) return makeMetadata('/guides/', pageDefinitions.guides);
+      if (!route.slug) return makeMetadata('/articles/', pageDefinitions.guides);
       const guide = GUIDE_BY_SLUG.get(route.slug);
-      if (!guide) return makeMetadata('/guides/', pageDefinitions.notFound);
+      if (!guide) return makeMetadata('/articles/', pageDefinitions.notFound);
       return makeMetadata(articlePath(guide.slug), {
         title: `${guide.seoTitle} | ${SITE_CONFIG.name}`,
         description: guide.description,

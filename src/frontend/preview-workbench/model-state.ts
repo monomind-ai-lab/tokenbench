@@ -1,4 +1,4 @@
-import type { ModelAccess } from '../preview-data/contracts';
+import type { ModelAccess, ModelDirectoryQuery } from '../preview-data/contracts';
 
 export type ModelWorkbenchSort = 'capability-desc' | 'cost-asc' | 'name-asc';
 export type ModelWorkbenchView = 'cards' | 'table';
@@ -80,6 +80,15 @@ export function encodeModelWorkbenchState(state: ModelWorkbenchState): URLSearch
   if (state.sort !== DEFAULT_MODEL_WORKBENCH_STATE.sort) params.set('sort', state.sort);
   if (state.view !== DEFAULT_MODEL_WORKBENCH_STATE.view) params.set('view', state.view);
   return params;
+}
+
+/** Translates only the evidence-bearing workbench inputs into a retained request. */
+export function modelDirectoryQueryForWorkbenchState(state: ModelWorkbenchState): ModelDirectoryQuery {
+  return {
+    search: state.search || undefined,
+    access: state.access ?? undefined,
+    provider: state.provider ?? undefined,
+  };
 }
 
 export function profileHref(slug: string): string {

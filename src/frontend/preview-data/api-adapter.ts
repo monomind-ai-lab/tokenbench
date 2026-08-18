@@ -640,6 +640,27 @@ export function mapRetainedComparisonEvidence(candidate: AcceptedUiDataContractV
     : unmatchedRequest<CompareData>(candidate);
 }
 
+/** See mapRetainedProfileEvidence for the retained-evidence boundary. */
+export function mapRetainedModelsEvidence(candidate: AcceptedUiDataContractV1<'models'>, query: ModelDirectoryQuery): UiDataContractV1<ModelDirectoryData> {
+  return requestMatches(candidate, query)
+    ? mapModels(candidate)
+    : unmatchedRequest<ModelDirectoryData>(candidate);
+}
+
+/** See mapRetainedProfileEvidence for the retained-evidence boundary. */
+export function mapRetainedRankingsEvidence(candidate: AcceptedUiDataContractV1<'rankings'>, query: RankingQuery): UiDataContractV1<RankingData> {
+  return requestMatches(candidate, query)
+    ? mapRankings(candidate)
+    : unmatchedRequest<RankingData>(candidate);
+}
+
+/** See mapRetainedProfileEvidence for the retained-evidence boundary. */
+export function mapRetainedSubscriptionEvidence(candidate: AcceptedUiDataContractV1<'subscription'>, query: SubscriptionQuery): UiDataContractV1<SubscriptionData> {
+  return requestMatches(candidate, query)
+    ? mapSubscription(candidate)
+    : unmatchedRequest<SubscriptionData>(candidate);
+}
+
 export function createValidatedPreviewDataAdapter(transport: PreviewDataTransport): PreviewDataAdapter {
   return {
     async models(query: ModelDirectoryQuery) {

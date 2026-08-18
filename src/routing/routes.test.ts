@@ -21,7 +21,7 @@ const APPROVED_LEADERBOARD_TITLES = {
 
 const fixedRouteCases = [
   ['/', { kind: 'home' }],
-  ['/guides', { kind: 'guides' }],
+  ['/guides', { kind: 'redirect', to: '/articles/' }],
   ['/articles/track-claude-code-usage', { kind: 'guides', slug: 'track-claude-code-usage' }],
   ['/articles/monitor-openai-codex-usage', { kind: 'guides', slug: 'monitor-openai-codex-usage' }],
   ['/articles/openrouter-guide-model-routing-cost-controls', { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }],
@@ -91,6 +91,8 @@ describe('TokenBench route registry', () => {
   });
 
   it('redirects legacy guide detail URLs to their canonical article routes', () => {
+    expect(matchRoute('/guides')).toEqual({ kind: 'redirect', to: '/articles/' });
+    expect(matchRoute('/guides/')).toEqual({ kind: 'redirect', to: '/articles/' });
     expect(matchRoute('/guides/track-claude-code-usage/')).toEqual({ kind: 'redirect', to: '/articles/track-claude-code-usage/' });
     expect(matchRoute('/guides/reduce-llm-api-costs-caching-batch-output-limits/')).toEqual({ kind: 'redirect', to: '/articles/reduce-llm-api-costs-caching-batch-output-limits/' });
   });
@@ -131,7 +133,6 @@ describe('TokenBench route registry', () => {
       '/generated-tokenbench/articles/reduce-llm-api-costs-caching-batch-output-limits/index.html',
       '/generated-tokenbench/articles/track-claude-code-usage/index.html',
       '/generated-tokenbench/compare/index.html',
-      '/generated-tokenbench/guides/index.html',
       '/generated-tokenbench/index.html',
       '/generated-tokenbench/leaderboards/index.html',
       '/generated-tokenbench/leaderboards/llm/agentic/index.html',

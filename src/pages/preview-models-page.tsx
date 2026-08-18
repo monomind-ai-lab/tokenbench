@@ -4,7 +4,6 @@ import { fixtureAdapter } from '../frontend/preview-data/adapter';
 import type {
   EvidenceValue,
   ModelDirectoryData,
-  ModelDirectoryQuery,
   ModelAccess,
   PreviewDataAdapter,
   PreviewModel,
@@ -14,6 +13,7 @@ import {
   decodeModelWorkbenchState,
   DEFAULT_MODEL_WORKBENCH_STATE,
   encodeModelWorkbenchState,
+  modelDirectoryQueryForWorkbenchState,
   profileHref,
   type ModelWorkbenchState,
 } from '../frontend/preview-workbench/model-state';
@@ -202,14 +202,6 @@ function frontierRows(rows: readonly ModelRow[]): readonly ModelRow[] {
     .sort((left, right) => left.taskCost! - right.taskCost! || right.capability! - left.capability! || left.name.localeCompare(right.name));
 }
 
-function queryFor(state: ModelWorkbenchState): ModelDirectoryQuery {
-  return {
-    search: state.search || undefined,
-    access: state.access ?? undefined,
-    provider: state.provider ?? undefined,
-  };
-}
-
 function replaceWorkbenchUrl(state: ModelWorkbenchState): void {
   if (typeof window === 'undefined') return;
   const query = encodeModelWorkbenchState(state).toString();
@@ -290,10 +282,7 @@ function EvidenceBoundary({ contract, children }: {
 }
 
 export function PreviewModelsPage({ match, data, adapter = fixtureAdapter }: PreviewModelsPageProps) {
-  // The generated document is always the unfiltered /models payload. Apply a
-  // direct URL's filters only after hydration so its first client tree matches
-  // that static document exactly.
-  const [state, setState] = useState<ModelWorkbenchState>(DEFAULT_MODEL_WORKBENCH_STATE);
+  const [state, setState] = useState<ModelWorkbenchState>(() => decodeModelWorkbenchState(match.search));
   const [routeStateApplied, setRouteStateApplied] = useState(false);
   const [contract, setContract] = useState<ModelsContract | null>(() => parsePreviewModelsPageData(data));
 
@@ -303,7 +292,7 @@ export function PreviewModelsPage({ match, data, adapter = fixtureAdapter }: Pre
   }, [match.search]);
   useEffect(() => {
     let active = true;
-    void adapter.models(queryFor(state)).then((next) => { if (active) setContract(next); });
+    void adapter.models(modelDirectoryQueryForWorkbenchState(state)).then((next) => { if (active) setContract(next); });
     return () => { active = false; };
   }, [adapter, state.access, state.provider, state.search]);
   useEffect(() => {

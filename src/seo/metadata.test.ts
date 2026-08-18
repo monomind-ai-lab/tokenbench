@@ -25,7 +25,7 @@ const APPROVED_LEADERBOARD_TITLES = {
 
 const fixedRouteCases: Array<{ route: AppRoute; canonical: string }> = [
   { route: { kind: 'home' }, canonical: origin },
-  { route: { kind: 'guides' }, canonical: `${origin}/guides/` },
+  { route: { kind: 'guides' }, canonical: `${origin}/articles/` },
   { route: { kind: 'guides', slug: 'track-claude-code-usage' }, canonical: `${origin}/articles/track-claude-code-usage/` },
   { route: { kind: 'guides', slug: 'monitor-openai-codex-usage' }, canonical: `${origin}/articles/monitor-openai-codex-usage/` },
   { route: { kind: 'guides', slug: 'openrouter-guide-model-routing-cost-controls' }, canonical: `${origin}/articles/openrouter-guide-model-routing-cost-controls/` },

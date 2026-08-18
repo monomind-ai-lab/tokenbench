@@ -20,6 +20,7 @@ import type { BenchmarkModel, EvidenceStatus } from '../../src/benchmarks/contra
 import type { ModelDirectoryStatus } from '../../src/benchmarks/model-directory';
 import { metadataForRoute } from '../../src/seo/metadata';
 import type { BenchmarkApiEnv } from '../_shared/benchmark-db';
+import { renderPreviewQueryDocument } from '../_shared/preview-query-document';
 
 const ALLOWED_PARAMETERS = new Set(['q', 'creator', 'sourceType', 'evidenceStatus', 'status', 'limit', 'cursor']);
 const MODELS_PATH = '/models/';
@@ -177,8 +178,8 @@ function unavailableResponse(): Response {
 
 export async function onRequestGet({ request, env, next }: ModelsPageContext): Promise<Response> {
   const url = new URL(request.url);
-  if (env.CF_PAGES_BRANCH === 'ui-revamp-3' && next && (url.pathname === '/models' || url.pathname === MODELS_PATH)) {
-    return next();
+  if ((env.CF_PAGES_BRANCH === 'ui-revamp-3' || !env.CATALOG_DB) && (url.pathname === '/models' || url.pathname === MODELS_PATH)) {
+    return renderPreviewQueryDocument(request, 'models');
   }
   if (url.pathname === '/models') return new Response(null, { status: 301, headers: { Location: MODELS_PATH } });
   if (url.pathname !== MODELS_PATH || !env.CATALOG_DB) return unavailableResponse();

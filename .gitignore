@@ -2,12 +2,6 @@ node_modules/
 .wrangler/
 build/
 dist/
-/guides/index.html
-/guides/track-claude-code-usage/index.html
-/guides/monitor-openai-codex-usage/index.html
-/guides/reduce-llm-api-costs-caching-batch-output-limits/index.html
-/guides/openrouter-guide-model-routing-cost-controls/index.html
-/guides/legitimate-free-ai-api-access-credits/index.html
 /articles/track-claude-code-usage/index.html
 /articles/monitor-openai-codex-usage/index.html
 /articles/reduce-llm-api-costs-caching-batch-output-limits/index.html

@@ -7,7 +7,8 @@
 /cost/calculator/ /subscribe-vs-api/ 301
 /cost/breakeven /subscribe-vs-api/ 301
 /cost/breakeven/ /subscribe-vs-api/ 301
-/guides /guides/ 301
+/guides /articles/ 301
+/guides/ /articles/ 301
 /guides/track-claude-code-usage /articles/track-claude-code-usage/ 301
 /guides/track-claude-code-usage/ /articles/track-claude-code-usage/ 301
 /guides/monitor-openai-codex-usage /articles/monitor-openai-codex-usage/ 301
