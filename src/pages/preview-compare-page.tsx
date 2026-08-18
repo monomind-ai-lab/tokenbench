@@ -372,9 +372,10 @@ export function PreviewComparePage({ match, data, adapter = fixtureAdapter }: Pr
   const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const fallback = staticCompareState(data);
     setState(match.search.has('models')
-      ? compareStateFromQuery(match.search)
-      : staticCompareState(data));
+      ? compareStateFromQuery(match.search, fallback)
+      : fallback);
     setResultsVisible(true);
     setRouteStateApplied(true);
   }, [match.search]);

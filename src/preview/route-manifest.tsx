@@ -2,10 +2,9 @@ import type { ComponentType } from 'react';
 import { ComparisonDetailApp, ModelProfileApp } from '../App.tsx';
 import { ARTICLE_BY_SLUG, ARTICLES, articlePath, type Article, type ArticleChannel } from '../articles/content';
 import { SITE_CONFIG } from '../brand/site-config';
-import { parsePricePerformanceEnvelope } from '../benchmarks/price-performance-contracts';
 import { HomePage, type HomePageData } from '../pages/home-page';
 import { PopularModelsRoutePage, parsePopularModelsPageData } from '../pages/popular-models-page';
-import { PricePerformanceApp } from '../pages/price-performance-page';
+import { StaticPricePerformanceUnavailablePage } from '../pages/price-performance-page';
 import { parseComparisonViewModel, type ComparisonViewModel } from '../frontend/comparison-contracts';
 import { createEvidenceTransport } from '../frontend/preview-data/evidence-transport';
 import { createPreviewDataGateway } from '../frontend/preview-data/gateway';
@@ -31,26 +30,10 @@ const defaultSkipLink = {
   skipLinkLabel: 'Skip to page content',
 } as const;
 
-const pendingReactDocument: PreviewDocumentReadiness = {
-  status: 'blocked',
-  reason: 'The substantive React page and static data have not been migrated.',
-};
-
 const readyReactDocument: PreviewDocumentReadiness = { status: 'ready' };
 /** Static preview selects retained evidence deliberately; HTTP remains an unselected Task 14 transport. */
 const staticPreviewAdapter = createPreviewDataGateway(createEvidenceTransport());
 const staticCustomRankingAdapter = createPreviewDataGateway(createEvidenceTransport({ rankings: 'mixed-source' }));
-
-interface PrototypeBundleDefinition {
-  readonly outputPathname: string;
-  readonly output: readonly string[];
-  readonly document: string;
-  readonly clearOutputDirectory: boolean;
-}
-
-interface PreviewManifestRoute extends PreviewRoute {
-  readonly prototypeBundle: readonly PrototypeBundleDefinition[];
-}
 
 interface PreviewMetadataDefinition {
   readonly title: string;
@@ -288,7 +271,7 @@ function HomeRoutePage({ data }: PreviewPageProps) {
 
 const prototypeFallbackPage = HomePage as ComponentType<PreviewPageProps>;
 const homePage = HomeRoutePage as ComponentType<PreviewPageProps>;
-const pricePerformancePage = PricePerformanceApp as ComponentType<PreviewPageProps>;
+const pricePerformancePage = StaticPricePerformanceUnavailablePage as ComponentType<PreviewPageProps>;
 const popularModelsPage = PopularModelsRoutePage as ComponentType<PreviewPageProps>;
 const articlesPage = ArticlesRoutePage as ComponentType<PreviewPageProps>;
 const articleDetailPage = ArticleDetailRoutePage as ComponentType<PreviewPageProps>;
@@ -301,7 +284,6 @@ const subscribeVsApiPage = ((props: PreviewPageProps) => <SubscribeVsApiPage {..
 
 const comparisonDetailPayload = { key: 'comparison-initial-data', parse: parseComparisonViewModel } as const;
 const modelProfileDetailPayload = { key: 'model-profile-initial-data', parse: parseModelProfileViewModel } as const;
-const pricePerformancePayload = { key: 'price-performance-initial-data', parse: parsePricePerformanceEnvelope } as const;
 const homePayload = { key: 'home-initial-data', parse: parseHomePageData } as const;
 const popularModelsPayload = { key: 'popular-models-initial-data', parse: parsePopularModelsPageData } as const;
 const articlesPayload = { key: 'articles-initial-data', parse: parseArticlesPayload } as const;
@@ -341,7 +323,6 @@ const manifestRoutes = [
     staticData: async () => staticPreviewAdapter.models({}),
     payload: homePayload,
     Page: homePage,
-    prototypeBundle: [{ outputPathname: '/', output: ['index.html'], document: 'home.html', clearOutputDirectory: false }],
   },
   {
     id: 'models',
@@ -355,7 +336,6 @@ const manifestRoutes = [
     staticData: async () => staticPreviewAdapter.models({}),
     payload: modelsPayload,
     Page: modelsPage,
-    prototypeBundle: [],
   },
   {
     id: 'model-profile',
@@ -369,7 +349,6 @@ const manifestRoutes = [
     staticData: async (match) => staticPreviewAdapter.profile(match.search.get('model') ?? 'alpha'),
     payload: modelProfilePayload,
     Page: modelProfilePage,
-    prototypeBundle: [],
   },
   {
     id: 'model-lifecycle',
@@ -383,7 +362,6 @@ const manifestRoutes = [
     staticData: async () => staticPreviewAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 30 }),
     payload: lifecyclePayload,
     Page: lifecyclePage,
-    prototypeBundle: [],
   },
   {
     id: 'popular-models',
@@ -397,7 +375,6 @@ const manifestRoutes = [
     staticData: async () => staticPreviewAdapter.rankings({ operation: 'leaderboard', limit: 50 }),
     payload: popularModelsPayload,
     Page: popularModelsPage,
-    prototypeBundle: [{ outputPathname: '/popular-models/', output: ['popular-models', 'index.html'], document: 'popular-models.html', clearOutputDirectory: false }],
   },
   {
     id: 'make-it-yours',
@@ -411,7 +388,6 @@ const manifestRoutes = [
     staticData: async () => staticCustomRankingAdapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY),
     payload: makeItYoursPayload,
     Page: makeItYoursPage,
-    prototypeBundle: [],
   },
   {
     id: 'compare',
@@ -425,7 +401,6 @@ const manifestRoutes = [
     staticData: async () => staticPreviewAdapter.comparison({ modelIds: ['alpha', 'beta', 'gamma'] }),
     payload: comparePayload,
     Page: comparePage,
-    prototypeBundle: [],
   },
   {
     id: 'subscribe-vs-api',
@@ -439,7 +414,6 @@ const manifestRoutes = [
     staticData: async () => staticPreviewAdapter.subscription(ACCEPTED_SUBSCRIPTION_QUERY),
     payload: subscribeVsApiPayload,
     Page: subscribeVsApiPage,
-    prototypeBundle: [],
   },
   {
     id: 'articles',
@@ -453,7 +427,6 @@ const manifestRoutes = [
     staticData: async () => ({ channel: 'all' }),
     payload: articlesPayload,
     Page: articlesPage,
-    prototypeBundle: [],
   },
   {
     id: 'article-detail',
@@ -470,23 +443,21 @@ const manifestRoutes = [
     staticData: async (match) => ({ slug: match.params.slug }),
     payload: articlePayload,
     Page: articleDetailPage,
-    prototypeBundle: [],
   },
   {
     id: 'llm-price-performance',
     match: exactPathMatcher('llm-price-performance', '/llm-price-performance/'),
     outputPathname: '/llm-price-performance/',
-    delivery: 'prototype',
-    documentReadiness: pendingReactDocument,
+    delivery: 'react',
+    documentReadiness: readyReactDocument,
     shell: { activePage: 'pricePerformance', ...defaultSkipLink },
     metadata: () => metadataForRoute({ kind: 'pricePerformance' }),
     structuredData,
     staticData: async () => undefined,
-    payload: pricePerformancePayload,
+    payload: null,
     Page: pricePerformancePage,
-    prototypeBundle: [],
   },
-] as const satisfies readonly PreviewManifestRoute[];
+] as const satisfies readonly PreviewRoute[];
 
 export const previewRoutes: readonly PreviewRoute[] = manifestRoutes;
 
@@ -530,27 +501,13 @@ export const previewPaths = {
 } as const;
 
 export function previewStaticEntries(): readonly PreviewStaticEntry[] {
-  return previewRoutes.flatMap((route) => {
-    const manifestRoute = manifestRoutes.find((candidate) => candidate.id === route.id);
-    const prototypeBundle = manifestRoute?.prototypeBundle.map((entry) => ({
-      routeId: route.id,
-      delivery: route.delivery,
-      source: 'prototype-bundle' as const,
-      ...entry,
-      match: routeMatch(route.id, new URL(entry.outputPathname, 'https://tokenbench.test')),
-    })) ?? [];
-    if (route.id === 'article-detail') {
-      return [...prototypeBundle, ...ARTICLES.filter((article) => article.slug !== 'hybrid-router').map((article) => ({
-        routeId: route.id,
-        delivery: route.delivery,
-        source: 'generated-guide' as const,
-        outputPathname: articlePath(article.slug),
-        output: ['articles', article.slug, 'index.html'],
-        document: undefined,
-        clearOutputDirectory: false,
-        match: routeMatch(route.id, new URL(articlePath(article.slug), 'https://tokenbench.test'), { slug: article.slug }),
-      }))];
-    }
-    return prototypeBundle;
-  });
+  const route = previewRoutes.find((candidate) => candidate.id === 'article-detail');
+  if (!route) return [];
+  return ARTICLES.filter((article) => article.slug !== 'hybrid-router').map((article) => ({
+    routeId: route.id,
+    source: 'generated-guide' as const,
+    outputPathname: articlePath(article.slug),
+    output: ['articles', article.slug, 'index.html'],
+    match: routeMatch(route.id, new URL(articlePath(article.slug), 'https://tokenbench.test'), { slug: article.slug }),
+  }));
 }

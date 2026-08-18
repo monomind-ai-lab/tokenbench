@@ -9,6 +9,6 @@ export const FRONTEND_ASSETS = {
 /** Vite keeps stable asset filenames for Pages Functions; version their HTML references. */
 export function versionFrontendAssetReferences(html: string): string {
   return html
-    .replaceAll('/assets/main.js', FRONTEND_ASSETS.script)
-    .replaceAll('/assets/tokenbench.css', FRONTEND_ASSETS.stylesheet);
+    .replace(/\/assets\/main\.js(?:\?[^"'\s<>]*)?/gu, FRONTEND_ASSETS.script)
+    .replace(/\/assets\/tokenbench\.css(?:\?[^"'\s<>]*)?/gu, FRONTEND_ASSETS.stylesheet);
 }

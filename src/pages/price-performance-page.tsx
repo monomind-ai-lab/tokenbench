@@ -377,6 +377,23 @@ export interface PricePerformanceAppProps {
   readonly chartAvailable?: boolean;
 }
 
+/** Static preview stays explicitly unavailable until a validated projection is accepted. */
+export function StaticPricePerformanceUnavailablePage() {
+  return <div className="content-stack price-performance-page">
+    <section className="panel price-performance-hero" aria-labelledby="price-performance-heading">
+      <span className="eyebrow">TokenBench decision surface</span>
+      <h1 id="price-performance-heading">LLM Price vs. Performance Benchmark</h1>
+      <p>The current static preview does not include a validated price-performance projection.</p>
+      <p role="status">This view remains unavailable rather than fetching unaccepted live benchmark data or substituting a sample.</p>
+      <p><a className="button button-secondary" href="/models">Browse model evidence</a></p>
+    </section>
+    <section className="panel" aria-labelledby="price-performance-availability-heading">
+      <h2 id="price-performance-availability-heading">Availability and evidence</h2>
+      <p>When a supported projection is published, TokenBench will show its source attribution, effective time, methodology, and unavailable facts with the result.</p>
+    </section>
+  </div>;
+}
+
 export function PricePerformanceApp({ initialEnvelope, chartAvailable = true }: PricePerformanceAppProps) {
   const [envelope, setEnvelope] = useState<PricePerformanceEnvelope | undefined>(initialEnvelope);
   const [error, setError] = useState<string | null>(null);

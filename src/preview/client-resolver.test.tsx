@@ -7,15 +7,13 @@ const createRootMock = vi.hoisted(() => vi.fn(() => ({ render: rootRenderer })))
 const hydrateRootMock = vi.hoisted(() => vi.fn());
 const parseComparisonViewModelMock = vi.hoisted(() => vi.fn());
 const parseModelProfileViewModelMock = vi.hoisted(() => vi.fn());
-const parsePricePerformanceEnvelopeMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-dom/client', () => ({ createRoot: createRootMock, hydrateRoot: hydrateRootMock }));
 vi.mock('../App.tsx', () => ({
   ComparisonDetailApp: ({ viewModel }: { readonly viewModel: { readonly revision: string } }) => <div data-comparison-detail-app>{viewModel.revision}</div>,
   ModelProfileApp: ({ viewModel }: { readonly viewModel: { readonly revision: string } }) => <div data-model-profile-app>{viewModel.revision}</div>,
 }));
-vi.mock('../pages/price-performance-page', () => ({ PricePerformanceApp: () => <div data-price-performance-app /> }));
-vi.mock('../benchmarks/price-performance-contracts', () => ({ parsePricePerformanceEnvelope: parsePricePerformanceEnvelopeMock }));
+vi.mock('../pages/price-performance-page', () => ({ StaticPricePerformanceUnavailablePage: () => <div data-price-performance-unavailable /> }));
 vi.mock('../frontend/comparison-contracts', () => ({ parseComparisonViewModel: parseComparisonViewModelMock }));
 vi.mock('../frontend/model-profile-contracts', () => ({ parseModelProfileViewModel: parseModelProfileViewModelMock }));
 
@@ -29,7 +27,6 @@ describe('startPreviewRoute', () => {
     vi.clearAllMocks();
     parseComparisonViewModelMock.mockReset();
     parseModelProfileViewModelMock.mockReset();
-    parsePricePerformanceEnvelopeMock.mockReset();
     document.body.innerHTML = '<div id="root"><section>Server fallback</section></div><script id="popular-models-initial-data" type="application/json">{"models":[],"disclaimer":"Illustrative prototype data"}</script>';
     window.history.replaceState({}, '', '/popular-models/');
   });
@@ -184,25 +181,17 @@ describe('startPreviewRoute', () => {
     expect(createRootMock).not.toHaveBeenCalled();
   });
 
-  it('hydrates price-performance SSR evidence with its validated manifest payload', () => {
+  it('mounts the static unavailable price-performance document without fetching a live projection', () => {
     document.body.innerHTML = '<div id="root"><main data-server-price-performance>Server price-performance</main></div><script id="price-performance-initial-data" type="application/json">{"revision":"price-r1"}</script>';
     window.history.replaceState({}, '', '/llm-price-performance/?lane=coding');
-    parsePricePerformanceEnvelopeMock.mockReturnValue({ revision: 'price-r1' });
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
 
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'hydrated', routeId: 'llm-price-performance' });
-    expect(parsePricePerformanceEnvelopeMock).toHaveBeenCalledWith({ revision: 'price-r1' });
-    expect(document.querySelector('[data-server-price-performance]')).toBeInTheDocument();
-    expect(createRootMock).not.toHaveBeenCalled();
-  });
-
-  it('preserves price-performance SSR evidence when its embedded payload is malformed', () => {
-    document.body.innerHTML = '<div id="root"><main data-server-price-performance>Server price-performance</main></div><script id="price-performance-initial-data" type="application/json">not-json</script>';
-    window.history.replaceState({}, '', '/llm-price-performance/');
-
-    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'preserved-invalid-payload', routeId: 'llm-price-performance' });
-    expect(document.querySelector('[data-server-price-performance]')).toBeInTheDocument();
-    expect(hydrateRootMock).not.toHaveBeenCalled();
-    expect(createRootMock).not.toHaveBeenCalled();
+    expect(startPreviewRoute(document, window.location)).toEqual({ kind: 'mounted', routeId: 'llm-price-performance' });
+    expect(document.getElementById('root')).toBeEmptyDOMElement();
+    expect(createRootMock).toHaveBeenCalledWith(document.getElementById('root'));
+    expect(renderToStaticMarkup(rootRenderer.mock.calls[0]?.[0] as ReactNode)).toContain('data-price-performance-unavailable');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('retains the standalone transactional confirmation route', () => {

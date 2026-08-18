@@ -117,6 +117,16 @@ describe('PreviewComparePage', () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
+  it('preserves the static payload order when a direct comparison query is incomplete', async () => {
+    const data = await fixtureAdapter.comparison({ modelIds: ['deepseek-v3', 'gpt-4o'] });
+    window.history.replaceState({}, '', '/compare?models=gpt-4o');
+
+    render(<PreviewComparePage match={{ routeId: 'compare', pathname: '/compare', search: new URLSearchParams('models=gpt-4o'), hash: '', params: {} }} data={data} />);
+
+    await waitFor(() => expect(window.location.search).toBe('?models=deepseek-v3%2Cgpt-4o'));
+    expect(screen.getByRole('heading', { level: 2, name: 'DeepSeek V3 vs GPT-4o' })).toBeInTheDocument();
+  });
+
   it('preserves unavailable selected IDs in every comparison column and captured export content', async () => {
     const data = await fixtureAdapter.comparison({ modelIds: ['gpt-4o', 'deepseek-v3'] });
     const createObjectUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:comparison');

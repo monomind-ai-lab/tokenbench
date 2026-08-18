@@ -160,6 +160,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .static-policy .policy-effective-date { font-family: var(--font-label); font-size: 0.78rem; }
 
 .home-page, .tools-page { gap: clamp(48px, 7vw, 96px); }
+.home-model-table { min-width: 0; overflow-x: auto; }
+.home-model-table table { width: 100%; min-width: 468px; }
 .home-hero, .tools-hero { position: relative; isolation: isolate; overflow: hidden; padding: clamp(36px, 7vw, 72px); border-color: color-mix(in srgb, var(--primary) 44%, var(--outline)); border-radius: calc(var(--radius) + 4px); background: radial-gradient(circle at 50% 74%, color-mix(in srgb, var(--primary) 32%, transparent), transparent 48%), var(--surface); box-shadow: var(--shadow); }
 .home-hero::before, .tools-hero::before { content: ''; position: absolute; inset: 0; z-index: -1; background: radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--primary) 22%, transparent), transparent 52%); pointer-events: none; }
 .home-hero > *, .tools-hero > * { position: relative; z-index: 1; }

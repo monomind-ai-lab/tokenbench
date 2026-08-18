@@ -24,9 +24,9 @@ export function decodeCompareState(params: URLSearchParams): CompareState {
 }
 
 /** Applies only complete two-to-four model queries; all other URL state keeps the static default. */
-export function compareStateFromQuery(params: URLSearchParams): CompareState {
+export function compareStateFromQuery(params: URLSearchParams, fallback: CompareState = DEFAULT_COMPARE_STATE): CompareState {
   const state = decodeCompareState(params);
-  return state.modelIds.length >= 2 ? state : DEFAULT_COMPARE_STATE;
+  return state.modelIds.length >= 2 ? state : fallback;
 }
 
 export function encodeCompareState(state: CompareState): URLSearchParams {

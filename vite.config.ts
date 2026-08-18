@@ -5,11 +5,12 @@ import {defineConfig} from 'vite';
 import { versionFrontendAssetReferences } from './src/routing/frontend-assets';
 import { staticHtmlEntries } from './src/routing/routes';
 import { previewHtmlEntries } from './scripts/generate-preview-documents';
-import { makeItYoursPreviewPlugin } from './scripts/make-it-yours-preview';
 
+const previewInputs = previewHtmlEntries(__dirname);
+const previewDocuments = new Set(Object.values(previewInputs));
 const generatedHtmlInputs = {
-  ...staticHtmlEntries(__dirname),
-  ...previewHtmlEntries(__dirname),
+  ...Object.fromEntries(Object.entries(staticHtmlEntries(__dirname)).filter(([, input]) => !previewDocuments.has(input))),
+  ...previewInputs,
 };
 
 export default defineConfig(async ({ command, mode }) => {
@@ -23,7 +24,6 @@ export default defineConfig(async ({ command, mode }) => {
     plugins: [
       react(),
       tailwindcss(),
-      makeItYoursPreviewPlugin(),
       ...localPreviewPlugins,
       {
         name: 'version-stable-frontend-assets',

@@ -55,7 +55,7 @@ export interface PreviewRoute {
   readonly id: PreviewRouteId;
   readonly match: (url: URL) => PreviewRouteMatch | null;
   readonly outputPathname: string;
-  readonly delivery: 'prototype' | 'react';
+  readonly delivery: 'react';
   readonly documentReadiness: PreviewDocumentReadiness;
   readonly shell: {
     readonly activePage: SiteNavigationPage;
@@ -79,11 +79,8 @@ export interface PreviewRuntimeRoute {
 
 export interface PreviewStaticEntry {
   readonly routeId: PreviewRouteId;
-  readonly delivery: 'prototype' | 'react';
-  readonly source: 'prototype-bundle' | 'generated-guide';
+  readonly source: 'generated-guide';
   readonly outputPathname: string;
   readonly output: readonly string[];
-  readonly document: string | undefined;
-  readonly clearOutputDirectory: boolean;
   readonly match: PreviewRouteMatch;
 }

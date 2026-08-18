@@ -185,4 +185,19 @@ describe('message-level subscription versus API calculator', () => {
       expect.objectContaining({ tokens: 120_000_000, monthlySubscriptionUsd: 240 }),
     ]));
   });
+
+  it.each([
+    [1, 0, 20, 0],
+    [50, 300_000_000, 1_000, 1_050],
+  ] as const)('keeps the documented %i-seat and %i-token crossover boundary exact', (seats, tokenVolume, monthlySubscriptionUsd, selectedVolumeApiUsd) => {
+    const result = calculateSubscriptionApiResult(fixture({ seats, tokenVolume }));
+
+    expect(result.monthlySubscriptionUsd).toBe(monthlySubscriptionUsd);
+    expect(result.selectedVolumeApiUsd).toBe(selectedVolumeApiUsd);
+    expect(result.domain).toContainEqual({
+      tokens: tokenVolume,
+      monthlySubscriptionUsd,
+      apiUsd: selectedVolumeApiUsd,
+    });
+  });
 });

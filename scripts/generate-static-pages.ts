@@ -98,8 +98,8 @@ function structuredDataFor(route: AppRoute, metadata: PageMetadata): unknown[] {
 function staticSitemap(): string {
   // Indexable canonical pages only; noindex,follow transactional routes such
   // as the confirmation page are generated but never advertised in the sitemap.
-  // The calculator is copied by the preview bundle after this generator runs,
-  // so advertise its canonical route here without recreating a second page.
+  // React preview documents own the calculator and price-performance routes,
+  // so advertise their canonicals without creating parallel static pages.
   const urls = [
     ...FIXED_ROUTES
     .map(({ route }) => metadataForRoute(route))

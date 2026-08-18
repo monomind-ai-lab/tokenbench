@@ -53,7 +53,6 @@ import {
   PRICE_PERFORMANCE_ARCHIVED_LIMIT,
   pricePerformanceEnvelopeData,
 } from '../functions/_shared/price-performance-db';
-import { renderPricePerformanceDocument } from '../functions/llm-price-performance';
 
 const SAMPLE_TIMESTAMP = '2000-01-01T00:00:00.000Z';
 const SAMPLE_REVISION_ID = 'local-sample-preview-r1';
@@ -653,23 +652,6 @@ function serveLocalModelDocument(
   return true;
 }
 
-function serveLocalPricePerformanceDocument(
-  url: URL,
-  response: ServerResponse,
-  headOnly: boolean,
-): boolean {
-  if (url.pathname === '/llm-price-performance') {
-    writeRedirect(response, 301, '/llm-price-performance/');
-    return true;
-  }
-  if (url.pathname !== '/llm-price-performance/') return false;
-  const envelope = samplePricePerformanceResponse(false);
-  writeHtml(response, 200, renderPricePerformanceDocument(envelope), headOnly, {
-    'X-Robots-Tag': 'index, follow',
-  });
-  return true;
-}
-
 function methodologyHeader(key: LeaderboardKey): string {
   switch (LEADERBOARD_DEFINITIONS[key].kind) {
     case 'benchlm':
@@ -703,8 +685,7 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', `http://${request.headers.host ?? '127.0.0.1'}`);
   const isModelDocument = url.pathname === '/models' || url.pathname === '/models/' || /^\/models\/[^/]+\/?$/u.test(url.pathname);
-  const isPricePerformanceDocument = url.pathname === '/llm-price-performance' || url.pathname === '/llm-price-performance/';
-  if (!isModelDocument && !isPricePerformanceDocument && url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
+  if (!isModelDocument && url.pathname !== '/api/benchmarks' && !url.pathname.startsWith('/api/benchmarks/')) {
     next();
     return;
   }
@@ -714,7 +695,6 @@ function localPreviewMiddleware(request: IncomingMessage, response: ServerRespon
   }
   const headOnly = method === 'HEAD';
   if (isModelDocument && serveLocalModelDocument(url, response, headOnly)) return;
-  if (isPricePerformanceDocument && serveLocalPricePerformanceDocument(url, response, headOnly)) return;
   const previewState = request.headers[LOCAL_PREVIEW_STATE_HEADER];
   if (previewState === '503') {
     writeJson(response, 503, { error: 'Local preview benchmark refresh unavailable.' }, headOnly);

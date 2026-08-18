@@ -46,6 +46,7 @@ describe('preview route manifest', () => {
       'subscribe-vs-api',
       'articles',
       'article-detail',
+      'llm-price-performance',
     ]);
   });
 
@@ -265,14 +266,8 @@ describe('preview route manifest', () => {
     ]));
   });
 
-  it('owns only the remaining prototype bundle output set', () => {
-    const prototypeEntries = previewStaticEntries()
-      .filter((entry) => entry.source === 'prototype-bundle')
-      .map((entry) => `${entry.output.join('/')} <= ${entry.document}`);
-
-    expect(prototypeEntries.sort()).toEqual([
-      'index.html <= home.html',
-      'popular-models/index.html <= popular-models.html',
-    ].sort());
+  it('keeps generated article documents as the only auxiliary static output', () => {
+    expect(previewRoutes.every((route) => route.delivery === 'react')).toBe(true);
+    expect(previewStaticEntries().every((entry) => entry.source === 'generated-guide')).toBe(true);
   });
 });

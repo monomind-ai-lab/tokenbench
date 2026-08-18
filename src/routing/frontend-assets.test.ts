@@ -16,4 +16,12 @@ describe('stable frontend asset URLs', () => {
     expect(versioned).toContain(`src="${FRONTEND_ASSETS.script}"`);
     expect(versioned).not.toMatch(/["']\/assets\/(?:main\.js|tokenbench\.css)["']/);
   });
+
+  it('replaces an existing stable-asset revision instead of appending a second query string', () => {
+    const versioned = versionFrontendAssetReferences('<link href="/assets/tokenbench.css?v=stale"><script src="/assets/main.js?v=stale"></script>');
+
+    expect(versioned).toContain(`href="${FRONTEND_ASSETS.stylesheet}"`);
+    expect(versioned).toContain(`src="${FRONTEND_ASSETS.script}"`);
+    expect(versioned).not.toContain('?v=stale?v=');
+  });
 });

@@ -4,6 +4,7 @@ import type { ConversationWorkload, CrossoverDomainPoint } from '../catalog/subs
 import { CrossoverChart } from '../frontend/crossover-chart';
 import { encodeCalculatorShareState, type CalculatorShareState } from '../frontend/calculator-share-state';
 import type { CachePricing, EvidenceValue, PreviewDataAdapter, PreviewModel, RoutePricing, SubscriptionCalculation, SubscriptionData, SubscriptionPlan, SubscriptionQuery, UiDataContractV1 } from '../frontend/preview-data/contracts';
+import { createRequestGate } from '../frontend/preview-data/request-gate';
 import type { PreviewPageProps } from '../preview/route-types';
 
 const DEFAULT_WORKLOAD: ConversationWorkload = {
@@ -425,7 +426,8 @@ export function SubscribeVsApiPage({ match, data, adapter }: SubscribeVsApiPageP
   const [actionState, setActionState] = useState<ActionState>(null);
   const exportRef = useRef<HTMLElement>(null);
   const catalogRequestId = useRef(0);
-  const calculationRequestId = useRef(0);
+  const calculationRequestGate = useRef(createRequestGate()).current;
+  const calculationStarted = useRef(false);
   const pageData = staticData ?? catalogContract?.data ?? null;
   const plans = pageData?.plans.filter((plan) => planPrice(plan) !== null) ?? [];
   const models = pageData?.models.filter((model) => modelPricing(model) !== null) ?? [];
@@ -445,20 +447,23 @@ export function SubscribeVsApiPage({ match, data, adapter }: SubscribeVsApiPageP
       : null;
 
   const requestCalculation = (query: SubscriptionQuery): void => {
-    const requestId = ++calculationRequestId.current;
+    calculationStarted.current = true;
+    const requestId = calculationRequestGate.begin();
     void adapter.subscription(query)
       .then((next) => {
-        if (calculationRequestId.current === requestId) setCalculationContract(next);
+        if (calculationRequestGate.isCurrent(requestId)) setCalculationContract(next);
       })
       .catch(() => {
-        if (calculationRequestId.current === requestId) setCalculationContract(unavailableSubscriptionContract('Subscription calculation request failed.'));
+        if (calculationRequestGate.isCurrent(requestId)) setCalculationContract(unavailableSubscriptionContract('Subscription calculation request failed.'));
       });
   };
+
+  useEffect(() => () => calculationRequestGate.dispose(), [calculationRequestGate]);
 
   useEffect(() => {
     let active = true;
     const requestId = ++catalogRequestId.current;
-    const calculationIdAtStart = calculationRequestId.current;
+    const calculationStartedAtStart = calculationStarted.current;
     void adapter.subscription({ operation: 'catalog' })
       .then((next) => {
         if (!active || catalogRequestId.current !== requestId) return;
@@ -469,10 +474,10 @@ export function SubscribeVsApiPage({ match, data, adapter }: SubscribeVsApiPageP
         if (!active || catalogRequestId.current !== requestId) return;
         const failure = unavailableSubscriptionContract('Subscription catalog request failed.');
         setCatalogContract(failure);
-        if (calculationRequestId.current === calculationIdAtStart) setCalculationContract(failure);
+        if (!calculationStartedAtStart && !calculationStarted.current) setCalculationContract(failure);
       });
     return () => { active = false; };
-  }, [adapter, match.search, staticData]);
+  }, [adapter, calculationRequestGate, match.search, staticData]);
 
   useEffect(() => {
     if (match.search.toString().length === 0 || pageData === null) return;

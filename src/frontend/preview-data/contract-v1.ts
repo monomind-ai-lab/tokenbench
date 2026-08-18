@@ -1,6 +1,6 @@
-import Ajv2020 from 'ajv/dist/2020';
-import acceptedMetaSchema from '../../../contracts/ui-data-contract/v1/meta-schema.json';
-import acceptedSchema from '../../../contracts/ui-data-contract/v1/schema.json';
+import Ajv2020 from 'ajv/dist/2020.js';
+import acceptedMetaSchema from '../../../contracts/ui-data-contract/v1/meta-schema.json' with { type: 'json' };
+import acceptedSchema from '../../../contracts/ui-data-contract/v1/schema.json' with { type: 'json' };
 import type { PreviewDataAdapter } from './contracts';
 
 export type UiDataContractV1Method = keyof Pick<

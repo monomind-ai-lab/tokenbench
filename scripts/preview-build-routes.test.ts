@@ -1,6 +1,7 @@
 import { resolveConfig } from 'vite';
 import { describe, expect, it } from 'vitest';
 import { previewHtmlEntries } from './generate-preview-documents';
+import { previewRoutes } from '../src/preview/route-manifest';
 
 describe('preview build routes', () => {
   it('provides Vite HTML inputs for every React-delivered static route, including articles', async () => {
@@ -28,6 +29,7 @@ describe('preview build routes', () => {
       'preview-article-detail-articles-hybrid-router-index-html',
       'preview-article-detail-articles-routing-decision-record-index-html',
     ]));
-    expect(Object.keys(inputs)).not.toContain('preview-llm-price-performance-llm-price-performance-index-html');
+    expect(previewRoutes.every((route) => route.delivery === 'react')).toBe(true);
+    expect(Object.keys(inputs)).toContain('preview-llm-price-performance-llm-price-performance-index-html');
   });
 });

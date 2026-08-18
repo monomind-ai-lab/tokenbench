@@ -25,6 +25,7 @@ import {
 
 const ALL_FIXTURE_PROVENANCE = Object.values(PREVIEW_FIXTURE_PROVENANCE);
 const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1_000;
+const STATIC_FIXTURE_FETCHED_AT = '2026-08-16T00:00:00.000Z';
 
 function commonEffectiveAt(provenance: readonly Provenance[]): string | null {
   const effectiveTimes = new Set(provenance.map((source) => source.effectiveAt));
@@ -163,4 +164,5 @@ export function createFixtureAdapter(now: () => Date = () => new Date()): Previe
   };
 }
 
-export const fixtureAdapter = createFixtureAdapter();
+/** The default adapter is static evidence, never a wall-clock-derived response. */
+export const fixtureAdapter = createFixtureAdapter(() => new Date(STATIC_FIXTURE_FETCHED_AT));

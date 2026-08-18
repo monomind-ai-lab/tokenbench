@@ -53,6 +53,15 @@ describe('MakeItYoursPage', () => {
     expect(screen.getByText('Ranking is paused until at least one capability weight is above zero.')).toBeInTheDocument();
   });
 
+  it('labels the reset action with the actual established default distribution', async () => {
+    const data = await fixtureAdapter.rankings({});
+    const match = { routeId: 'make-it-yours' as const, pathname: '/make-it-yours/', search: new URLSearchParams(), hash: '', params: {} };
+
+    render(<MakeItYoursPage match={match} data={data} />);
+
+    expect(screen.getByRole('button', { name: 'Reset default weights' })).toBeInTheDocument();
+  });
+
   it('submits the accepted custom ranking matrix verbatim instead of rebuilding it from slider DOM state', async () => {
     const requests: RankingQuery[] = [];
     const adapter: PreviewDataAdapter = {

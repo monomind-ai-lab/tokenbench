@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ACCEPTED_LIFECYCLE_AS_OF } from './contracts';
 import { createFixtureAdapter, fixtureAdapter } from './fixture-adapter';
 
 describe('fixtureAdapter', () => {
+  afterEach(() => vi.useRealTimers());
+
   it('preserves unavailable facts instead of inventing values', async () => {
     const result = await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 90 });
 
@@ -38,6 +40,16 @@ describe('fixtureAdapter', () => {
       data: { models: [] },
       provenance: [],
     });
+  });
+
+  it('pins the default fixture clock so static lifecycle evidence does not drift with the wall clock', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-01T00:00:00.000Z'));
+
+    const result = await fixtureAdapter.lifecycle({ asOf: ACCEPTED_LIFECYCLE_AS_OF, horizonDays: 45 });
+
+    expect(result.fetchedAt).toBe('2026-08-16T00:00:00.000Z');
+    expect(result.data?.models).toHaveLength(1);
   });
 
   it('returns an unavailable profile contract for an unknown slug', async () => {

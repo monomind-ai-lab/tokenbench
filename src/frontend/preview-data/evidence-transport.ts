@@ -1,11 +1,11 @@
-import comparisonEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/comparison.json';
-import lifecycleEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/lifecycle.json';
-import modelsEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/models.json';
-import profileEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/profile.json';
-import unavailableProfileEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/profile.unavailable.json';
-import leaderboardRankingsEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/rankings.json';
-import mixedSourceRankingsEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/rankings.mixed-source.json';
-import subscriptionEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/subscription.json';
+import comparisonEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/comparison.json' with { type: 'json' };
+import lifecycleEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/lifecycle.json' with { type: 'json' };
+import modelsEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/models.json' with { type: 'json' };
+import profileEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/profile.json' with { type: 'json' };
+import unavailableProfileEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/profile.unavailable.json' with { type: 'json' };
+import leaderboardRankingsEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/rankings.json' with { type: 'json' };
+import mixedSourceRankingsEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/rankings.mixed-source.json' with { type: 'json' };
+import subscriptionEvidence from '../../../contracts/ui-data-contract/v1/evidence/responses/subscription.json' with { type: 'json' };
 import type { PreviewDataTransport } from './api-adapter';
 import type { UiDataContractV1Method } from './contract-v1';
 
