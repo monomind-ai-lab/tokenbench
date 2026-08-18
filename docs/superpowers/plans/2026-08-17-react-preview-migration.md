@@ -871,63 +871,93 @@ git commit -m "feat: publish preview data contract proposal"
 ### Task 13: Accept pipeline artifacts and integrate the API adapter
 
 **Files:**
-- Modify: `contracts/ui-data-contract/v1/ACCEPTANCE.md`
-- Create: accepted pipeline snapshots under `contracts/ui-data-contract/v1/accepted/`
+- Replace only: `contracts/ui-data-contract/v1/` from accepted pipeline commit `413d0307fc4662a30967d8b3f9fb06f042861a0d`
+- Modify: `src/frontend/preview-data/contract-v1.ts`
+- Modify: `src/frontend/preview-data/contract-v1.test.ts`
+- Create: `src/frontend/preview-data/gateway.ts`
+- Create: `src/frontend/preview-data/gateway.test.ts`
+- Create: `src/frontend/preview-data/evidence-transport.ts`
+- Create: `src/frontend/preview-data/evidence-transport.test.ts`
+- Create: `src/frontend/preview-data/http-transport.ts`
+- Create: `src/frontend/preview-data/http-transport.test.ts`
 - Create: `src/frontend/preview-data/api-adapter.ts`
 - Create: `src/frontend/preview-data/api-adapter.test.ts`
 - Modify: `src/frontend/preview-data/contracts.ts`
 - Modify: `src/frontend/preview-data/adapter.ts`
+- Modify: `src/preview/route-manifest.tsx`
 - Modify: data-heavy page tests under `src/pages/`
 
 **Interfaces:**
-- Consumes: pipeline-approved artifacts that conform to the Task 12 proposal or a reviewed, versioned amendment.
-- Produces: an API-backed `PreviewDataAdapter` with the same return types as the fixture adapter.
+- Consumes: pipeline-approved producer `ac42000893fa2e15d0ae76f7f83ebcea5745f7b5` and immediate-child acceptance `413d0307fc4662a30967d8b3f9fb06f042861a0d`, which record frontend baseline `5d649d315a0bdb052e90bb96d6b7e94544f9ad31`.
+- Produces: one typed gateway with an evidence transport and HTTP transport behind the existing page-facing `PreviewDataAdapter` interface. Pages receive validated view models, never raw pipeline envelopes.
 
-- [ ] **Step 1: Verify and record the external acceptance gate before editing runtime code**
+- [ ] **Step 1: Verify, record, and path-sync the accepted contract tree**
 
-The pipeline task must provide an accepted schema and representative responses for `models`, `profile`, `lifecycle`, `rankings`, `comparison`, and `subscription`; mixed-source and unavailable cases; invalid/unsupported-version behavior; a stable artifact path; and a pipeline commit SHA. Record those exact references in `ACCEPTANCE.md`. If any item is missing, stop without changing runtime code.
+Verify that `413d030^` equals producer `ac42000`, that the pipeline worktree is clean, and that its acceptance records frontend baseline `5d649d3`. Then sync only the accepted contract tree; never cherry-pick the pipeline branch:
 
-- [ ] **Step 2: Save accepted snapshots and write failing API-adapter tests**
+```bash
+git restore --source=413d0307fc4662a30967d8b3f9fb06f042861a0d -- contracts/ui-data-contract/v1
+```
+
+The retained tree must include the schema/meta-schema, acceptance record, manifest/schema, six primary responses, mixed-source rankings, unavailable profile, invalid timestamp, and unsupported version. Stable rejection codes are lowercase `invalid_timestamp` and `unsupported_contract_version`.
+
+- [ ] **Step 2: Write failing gateway, transport, and page-boundary tests**
 
 ```ts
 it.each(['models', 'profile', 'lifecycle', 'rankings', 'comparison', 'subscription'] as const)(
-  'parses the accepted %s payload without page-specific transformation',
-  async (method) => expect((await apiAdapter[method](queries[method])).contractVersion).toBe('ui-data-contract/v1'),
+  'validates and maps accepted %s evidence through the page-facing adapter',
+  async (method) => expect((await evidenceAdapter[method](queries[method])).contractVersion).toBe('ui-data-contract/v1'),
 );
 
 it('never substitutes fixture facts for an unavailable API response', async () => {
-  const result = await apiAdapter.rankings(query);
+  const result = await httpAdapter.profile('missing-model');
   expect(result.status).toBe('unavailable');
   expect(result.data).toBeNull();
 });
+
+it('preserves ordered comparison slugs and exact custom ranking inputs', async () => {
+  await httpAdapter.comparison({ modelIds: ['alpha', 'beta', 'gamma'] });
+  await httpAdapter.rankings(customRankingQuery);
+  expect(fetchRequests).toContainEqual(expect.objectContaining({ url: expect.stringContaining('models=alpha%2Cbeta%2Cgamma') }));
+  expect(fetchRequests).toContainEqual(expect.objectContaining({ body: expect.stringContaining('normalizedWeights') }));
+});
 ```
 
-- [ ] **Step 3: Implement strict transport parsing and adapter selection**
+- [ ] **Step 3: Implement the accepted parser, two transports, gateway, and view-model mapping**
 
-Reuse Task 12's parser. Reject unsupported versions and invalid timestamps without clearing server content. Keep the fixture adapter available only for explicit preview/test configuration. Preserve every provenance item and unavailable reason verbatim.
+Update Task 12's parser to the accepted envelope: `method`, normalized `request`, `status`, nullable `reason`, `fetchedAt`, nullable `effectiveAt`, `data`, `revisions`, `freshness`, `sources`, `warnings`, and `provenance`. Mixed-source rankings may be `status: available` with `effectiveAt: null`; preserve every source's own time. Unknown values remain null and numeric zero remains valid.
+
+The evidence transport reads only the retained accepted artifacts for deterministic preview/tests. The HTTP transport implements the manifest's exact routes and methods under `/api/benchmarks/*`. The gateway validates every raw transport response before mapping it to the existing page-facing `PreviewDataAdapter` view models. It emits stable lowercase rejection codes and never exposes raw pipeline/storage shapes to pages.
+
+The HTTP transport must preserve 2–4 ordered distinct comparison slugs, send the exact submitted custom-ranking weight/filter matrix, and support subscription catalog/calculate operations. A network, HTTP, invalid-contract, or unavailable response must remain explicit; production HTTP mode never falls back to evidence or fixture facts.
 
 ```ts
-export function createPreviewDataAdapter(mode: 'api' | 'fixture'): PreviewDataAdapter {
-  return mode === 'api' ? createApiAdapter(fetch) : fixtureAdapter;
+export function createPreviewDataGateway(transport: PreviewDataTransport): PreviewDataAdapter {
+  return createValidatedPreviewDataAdapter(transport);
 }
 ```
 
-- [ ] **Step 4: Run contract and all data-heavy page tests**
+- [ ] **Step 4: Wire data-heavy routes to the gateway boundary and run integration tests**
 
-Run: `npm test -- src/frontend/preview-data/*.test.ts src/pages/preview-models-page.test.tsx src/pages/preview-model-profile-page.test.tsx src/pages/lifecycle-radar-page.test.tsx src/pages/popular-models-page.test.tsx src/pages/preview-compare-page.test.tsx src/pages/make-it-yours-page.test.tsx src/pages/subscribe-vs-api-page.test.tsx`
+Models consumes models/profile/lifecycle; Popular Models consumes leaderboard rankings; Make It Yours consumes custom rankings; Compare consumes ordered comparison; Subscribe vs API consumes subscription catalog/calculate. Static/test preview may select the evidence transport explicitly. Live HTTP activation and deployment remain Task 14 gates; page code must not require another rewrite when the transport switches.
+
+Run: `npm test -- src/frontend/preview-data/*.test.ts src/pages/preview-models-page.test.tsx src/pages/preview-model-profile-page.test.tsx src/pages/lifecycle-radar-page.test.tsx src/pages/popular-models-page.test.tsx src/pages/preview-compare-page.test.tsx src/pages/make-it-yours-page.test.tsx src/pages/subscribe-vs-api-page.test.tsx src/preview/route-manifest.test.tsx`
 
 Run: `npm run lint`
 
-Expected: PASS for full, partial, unavailable, stale, mixed-source, invalid, and unsupported-version payloads.
+Run: `npm run build`
+
+Expected: PASS for six accepted responses, mixed-source timing, unavailable profile, invalid timestamp, unsupported version, exact HTTP requests, explicit failures, and every data-heavy page boundary. No live HTTP request is made during static generation or tests unless explicitly injected.
 
 - [ ] **Step 5: Commit accepted pipeline integration**
 
 ```bash
 git add contracts/ui-data-contract/v1 src/frontend/preview-data src/pages
-git commit -m "feat: connect React previews to accepted UI data contract"
+git add src/preview/route-manifest.tsx src/preview/route-manifest.test.tsx
+git commit -m "feat: integrate accepted preview data gateway"
 ```
 
-**Reviewer gate:** Reject without a recorded pipeline commit/artifact path, if accepted snapshots diverge from the reviewed schema without a versioned amendment, or if any API-unavailable state silently falls back to fixture data.
+**Reviewer gate:** Reject unless producer/acceptance/baseline SHAs and paths are retained, accepted artifacts validate at both boundaries, page components receive only mapped view models, comparison/custom/subscription requests preserve exact input semantics, invalid/unavailable states never fall back silently, or live HTTP cutover/deployment occurs before Task 14.
 
 ---
 
