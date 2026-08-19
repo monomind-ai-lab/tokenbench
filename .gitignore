@@ -38,5 +38,6 @@ coverage/
 .worktrees/
 .DS_Store
 *.log
+.impeccable/config.local.json
 .env*
 !.env.example
