@@ -27,7 +27,7 @@ This is a hybrid static/SSR/hydration architecture—not a conventional SPA rout
 
 `functions/` is the Cloudflare Pages Functions surface. It serves catalog and benchmark endpoints under `functions/api/`, plus dynamic comparison/model pages, articles, newsletter, privacy, methodology, and sitemap functions. API consumers use root frontend hooks/caches (for example `src/frontend/use-catalog.ts`, `src/frontend/use-benchmarks.ts`, `src/frontend/*-cache.ts`) and validate response envelopes before rendering.
 
-Pages request paths favor materialized responses or bounded indexed D1 reads to stay inside CPU limits; they must not rebuild a full fact graph or fetch a benchmark provider during a browser request.
+Pages request paths favor materialized responses or bounded indexed D1 reads to stay inside CPU limits; they must not rebuild a full fact graph or fetch a benchmark provider during a browser request. The in-progress UI-data v1 API branch selects the LiveBench-backed models/profile path through `Accept: application/vnd.tokenbench.ui-data.v1+json`; shared HTTP composition sends that media type. Rankings and comparison handlers are present on that branch, while lifecycle/subscription intentionally return unavailable until their independent facts exist (`functions/_shared/livebench-*.ts`, `functions/api/benchmarks/`).
 
 ## Data plane
 
@@ -36,7 +36,7 @@ The same bindings are used by Pages and both Workers:
 - D1 binding `CATALOG_DB`: published revisioned catalog and benchmark facts, durable model directory/profile data, ingestion receipts, and response-cache pointers.
 - R2 binding `SOURCE_SNAPSHOTS`: immutable upstream or sanitized evidence snapshots and hashes.
 
-Bindings are declared in root `wrangler.toml` and worker-specific Wrangler files. Root migrations are append-only and establish the revision/publication/cache model (`migrations/0001_catalog.sql`, `0004_benchmarks.sql`, `0005_api_response_cache.sql`, `0009_model_directory.sql`, `0010_ingestion_cycles.sql`).
+Bindings are declared in root `wrangler.toml` and worker-specific Wrangler files. Root migrations are append-only and establish the revision/publication/cache model (`migrations/0001_catalog.sql`, `0004_benchmarks.sql`, `0005_api_response_cache.sql`, `0009_model_directory.sql`, `0010_ingestion_cycles.sql`). The current working tree extends that foundation with source/projection manifests (`0013_pipeline_foundation.sql`) and an attempt-owned LiveBench release, artifact, fact, and active-pointer model (`0014_livebench.sql`); neither migration is evidence that remote D1 has been changed.
 
 The cache is not incidental: API response bodies are revision-scoped, structurally checked, ETag-capable, and chunked for D1 limits. Publication ownership triggers prevent an API cache pointer from referring to a different underlying revision.
 

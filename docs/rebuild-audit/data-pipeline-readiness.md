@@ -16,7 +16,9 @@ Checked: 2026-08-19
   wholesale over the newer BenchLM/catalog implementation.
 
 The retained evidence and schema are the accepted artifacts. MM4P `main` adds
-only the acceptance SHA/provenance note to `ACCEPTANCE.md`.
+only the acceptance SHA/provenance note to `ACCEPTANCE.md`. The additive v1
+producer foundations have now been ported into this rebuild without replacing
+the newer BenchLM/catalog pipeline.
 
 ## Contracted surfaces
 
@@ -58,38 +60,87 @@ The accepted evidence set also covers:
 | --- | --- | --- |
 | Accepted schema and retained evidence | Ready | `contracts/ui-data-contract/v1` |
 | Validated parser, page adapter, and request-echo boundary | Ready on authoritative base | `src/frontend/preview-data` |
-| Deterministic preview evidence transport | Ready and integrated in the prior React preview | explicit retained evidence selection |
-| HTTP transport with no fallback | Ready but not selected | `src/frontend/preview-data/http-transport.ts` |
-| Next pages using the validated gateway | Not wired | current Next pages still import local fixture arrays |
+| Deterministic preview evidence transport | Ready and isolated from production | explicit retained evidence selection |
+| HTTP transport with no fallback | Ready and sends the v1 media type | `src/frontend/preview-data/http-transport.ts` |
+| Next pages using the validated gateway | Not wired yet | current Next pages still import local design-fixture arrays |
 | Current BenchLM/catalog APIs | Healthy but legacy | focused API/contract suite passes; response shapes predate UI contract v1 |
-| LiveBench ingestion cadence/source/checkpoint contracts | Implemented on accepted producer branch | producer source contracts and tests |
-| LiveBench artifact discovery/parser/publication worker | Not present in the accepted producer tree | implementation remains plan-only |
-| Contracted lifecycle/rankings/comparison/subscription HTTP endpoints | Not present on current rebuild branch | do not activate HTTP mode yet |
+| LiveBench ingestion cadence/source/checkpoint contracts | Ready on this branch | accepted producer foundations plus six-hour discovery cadence |
+| LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned four-artifact retrieval, bounded parsing, R2 evidence, bulk D1 staging/validation, monotonic current pointer |
+| `rankings` GET | Production-capable after migration and first ingestion | pinned LiveBench global-average projection, task economics, filters, bounded pagination, ETag |
+| Custom `rankings` POST | LiveBench capability ranking ready | active release publishes its exact category dimension-set revision; submitted weights are echoed and applied exactly; unavailable route/runtime SLA filters make candidates ineligible rather than inventing facts |
+| `models`, `profile`, `comparison` v1 | Benchmark-backed partial responses ready | LiveBench capability/economics are real; catalog routes, runtime, and lifecycle remain explicitly unavailable |
+| `lifecycle`, `subscription` | Contract-valid unavailable responses only | no fixture fallback; source joins/calculators still need implementation |
 | Deployment/cutover | Not authorized | no live infrastructure changes |
 
-The accepted artifacts are contract fixtures: their revisions are `fixture-*` and
-their source URLs use `example.com`. They prove the boundary, not production data.
+The retained acceptance artifacts are contract fixtures: their revisions are
+`fixture-*` and their source URLs use `example.com`. They prove the boundary,
+not production data. Production LiveBench projection reads only the active D1
+revision built from commit-pinned source evidence.
+
+## LiveBench implementation receipt
+
+- Upstream repository: `LiveBench/new-livebench`
+- Verified source commit: `fb3db47fd22d40740d2e6949623bd4bcca9182dd`
+- Latest complete release observed: `2026-06-25`
+- Parsed taxonomy: 7 categories and 23 tasks
+- Parsed configurations: 44 models
+- Parsed task facts: 1,012 scores and 1,012 economics rows
+- Discovery follows the last entry in upstream `src/lib/constants.js#RELEASES`;
+  a complete but unannounced filename bundle is not published.
+- Discovery fingerprints the release control, three dated release files,
+  `modelLinks.js`, and the two methodology implementations that control
+  aggregation behavior.
+- The reviewed `compute.js` and `Averaging.js` blobs are pinned. An upstream
+  methodology change stops publication for review instead of silently applying
+  stale math. The current two explicit upstream global-average overrides are
+  reproduced by the projection.
+- Retrieval verifies every immutable Git blob SHA before parsing, then stores a
+  content-hashed source manifest and artifacts before D1 publication.
+- Fact staging uses D1 `json_each()` bulk inserts. The 44 × 23 regression case
+  stages 1,012 scores and 1,012 economics rows below the 50-query free-plan
+  per-invocation ceiling; the SQL is also exercised against real SQLite.
+- Concurrent refresh calls are single-flighted in the coordinator, and pointer
+  promotion is conditional on a published candidate and a non-regressing
+  timestamp. A slow older candidate cannot replace a newer active revision.
+- Cold/no-source responses remain contract-valid 404 unavailable envelopes;
+  D1 or projection faults return 503 and propagate through the HTTP transport.
+- Custom category rankings use revision
+  `livebench-<release>-benchmark-dimensions-v1`, validate that exact dimension
+  set, preserve the submitted matrix, and calculate deterministic utility,
+  rank, and Pareto results from the active release.
+- The project-owner-validated `CDLA-Permissive-2.0` classification is
+  authoritative for this integration. It is retained as attribution and
+  provenance and is not an unresolved ingestion gate.
+- A release missing its cost artifact is quarantined as incomplete because the
+  v1 leaderboard contract requires complete task economics.
 
 ## Frontend decision
 
-Adapt the existing `src/frontend/preview-data` gateway into Next server data
-composition rather than copying or redesigning the accepted contract. Continue
-section-by-section design against its explicit evidence transport, then replace
-transport mode—not page contracts—when the LiveBench-backed HTTP producer is
-integrated. Any component that currently displays invented scores, prices, TTFT,
-throughput, uptime, lifecycle events, or subscription facts must be rewired to
-the gateway or labeled as a design fixture before production.
+Use the existing `src/frontend/preview-data` gateway as the Next server data
+composition boundary rather than copying or redesigning the accepted contract.
+The production transport can now exercise real LiveBench-backed rankings,
+models, profiles, and comparisons after local D1 ingestion. Pages must still
+treat catalog-route, runtime, lifecycle, and subscription fields as unavailable
+until their own sources are joined. Custom category weights are available;
+route/runtime SLA filters remain explicitly ineligible until those facts join.
+Any component that currently
+displays invented scores, prices, TTFT, throughput, uptime, lifecycle events, or
+subscription facts must be rewired to the gateway or labeled as a design fixture
+before production.
 
 ## Remaining data work before production
 
-1. Port only the additive LiveBench source, identity, checkpoint, and producer
-   pieces still needed by MM4P `main`; do not overwrite the newer BenchLM path.
-2. Implement the actual LiveBench release discovery, licensed immutable snapshot,
-   parser, normalization, identity review, and atomic publication flow.
-3. Materialize the six contracted endpoints from one coherent revision tuple.
-4. Run accepted schema/runtime validation and request-echo checks on every response.
-5. Exercise the shared HTTP transport through Next in local preview, then obtain separate
-   authorization for any deployment or cutover.
+1. Join reviewed canonical catalog identities and provider-route pricing to the
+   source-only LiveBench configurations; do not guess model mappings.
+2. Add independently revisioned runtime observations for TTFT, throughput, and
+   uptime, then publish coherent mixed-source projection tuples.
+3. Materialize the lifecycle source and subscription catalog/calculator instead
+   of returning explicit unavailable envelopes; extend custom rankings with the
+   independently sourced catalog/runtime dimensions.
+4. Wire each Next route through the production HTTP-only composition and remove
+   its local design fixtures only when the corresponding v1 response is ready.
+5. Exercise the shared HTTP transport through a local Next preview, then obtain
+   separate authorization for any deployment or cutover.
 
 ## Verification receipt
 
@@ -97,9 +148,11 @@ the gateway or labeled as a design fixture before production.
 - Accepted preview gateway: 7 files, 43 tests passed.
 - Catalog and benchmark full-cycle ingestion: 2 tests passed.
 - Leaderboard boundary refactor: 8 files, 152 tests passed.
-- Root TypeScript, both worker TypeScript projects, legacy production build,
-  Next ESLint, and Next production build passed.
-- Repository-wide test run: 1,798/1,799 passed under four-worker contention.
-  The sole 200-page LMArena safety-cap test exceeded its 60-second suite timeout;
-  the exact test passed alone in 47.2 seconds (1 passed, 70 skipped).
+- Final LiveBench storage/discovery/projection/API regression slice: 58 tests passed.
+- Repository-wide test run after integration: 190 files and 2,083 tests passed.
+- The current upstream LiveBench release was retrieved and projected locally:
+  44 leaderboard rows with schema-valid partial evidence envelopes.
+- Root TypeScript, both worker TypeScript projects, generated Worker binding
+  checks, migration sequence through `0014`, Next ESLint, and the Next
+  production build passed after integration.
 - No deployment, endpoint activation, or live infrastructure change occurred.

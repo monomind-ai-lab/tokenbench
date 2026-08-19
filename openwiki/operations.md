@@ -6,7 +6,7 @@ Cloudflare configuration is authoritative in checked-in Wrangler files:
 
 - Root `wrangler.toml`: Pages output `dist`, D1 `CATALOG_DB`, R2 `SOURCE_SNAPSHOTS`.
 - `workers/catalog-ingest/wrangler.toml`: catalog Worker, `CatalogIngestCoordinator`, daily cron.
-- `workers/benchmark-ingest/wrangler.toml`: benchmark Worker, `BenchmarkIngestCoordinator`, weekly cron and cache-only republish guidance.
+- `workers/benchmark-ingest/wrangler.toml`: benchmark Worker, `BenchmarkIngestCoordinator`, weekly cycle, six-hour LiveBench discovery (working-tree implementation), and cache-only republish guidance.
 
 Pages and both Workers must use the same approved D1 database and R2 bucket under exactly those binding names. Do not create divergent dashboard-only bindings or document credentials. The detailed deployment/runbook sources are `docs/catalog-deployment.md` and `docs/tokenbench-deployment.md`.
 
@@ -25,13 +25,13 @@ npm run inspect:ingestion -- --scope catalog
 npm run inspect:ingestion -- --scope benchmarks
 ```
 
-A publication failure must leave active pointers unchanged. Verify active revision, source records, R2 snapshot reachability, and relevant error state after an authorized cycle. There is intentionally no public HTTP endpoint to trigger benchmark ingestion.
+A publication failure must leave active pointers unchanged. Verify active revision, source records, R2 snapshot reachability, and relevant error state after an authorized cycle. The in-progress LiveBench path reports unchanged, incomplete-upstream-release, or published outcomes; it retains the prior pointer unless a complete, verified, source-manifest-backed release passes conditional publication. There is intentionally no public HTTP endpoint to trigger benchmark ingestion.
 
 For response incidents, maintain strict recovery order: active complete materialization, active revision reconstruction, exact-query historical complete response, then unavailable. Keep logs bounded and safe: no bodies, emails, cookies, authorization data, full URLs, or raw D1 errors in structured fallback events.
 
 ## Schedules and capacity constraints
 
-Catalog is daily at `20 0 * * *`; benchmarks weekly at `15 2 * * SUN`. Both coordinators use alarm-driven bounded steps to fit Workers limits. A source artifact gets at most three requests per cycle; rate-limit resets are persisted and resumed later with bounded jitter. Benchmark cycles freeze a catalog revision and should not overlap catalog scheduling in a way that violates that invariant.
+Catalog is daily at `20 0 * * *`; benchmarks weekly at `15 2 * * SUN`. The uncommitted LiveBench addition schedules a separate direct refresh at `17 */6 * * *`, with a 12-hour freshness window, a six-hour deduplication bucket, ETag state, and forced weekly verification (`src/ingestion/cadence.ts`, `workers/benchmark-ingest/src/coordinator.ts`). Unlike the weekly benchmark cycle, this path is not alarm/checkpoint/retry driven: a refresh error rejects the scheduled invocation and leaves its prior discovery state unchanged. The weekly/catalog coordinators use alarm-driven bounded steps; their source artifacts get at most three requests per cycle, and persisted rate-limit resets resume later with bounded jitter. Benchmark cycles freeze a catalog revision and should not overlap catalog scheduling in a way that violates that invariant.
 
 The benchmark cache-only republish mechanism is only for projection/cache corrections. It cannot broaden the ingested cohort, regenerate immutable profiles, or revise normalized ranks—those require a complete new publication cycle.
 
