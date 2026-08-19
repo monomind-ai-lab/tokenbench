@@ -79,6 +79,10 @@ const gpt4o: PreviewModel = {
     route: 'OpenAI native · fixture',
     inputUsdPerMillion: 2.5,
     outputUsdPerMillion: 10,
+    contextWindowTokens: unavailable('No approved context-window source'),
+    maxOutputTokens: unavailable('No approved maximum-output source'),
+    inputModalities: ['text'],
+    outputModalities: ['text'],
     longContextInputUsdPerMillion: available(5, PREVIEW_FIXTURE_PROVENANCE.economics),
     cache: available({
       readUsdPerMillion: available(1.25, PREVIEW_FIXTURE_PROVENANCE.economics),
@@ -117,6 +121,10 @@ const deepseekV3: PreviewModel = {
     route: 'DeepSeek native · fixture',
     inputUsdPerMillion: 0.27,
     outputUsdPerMillion: 1.1,
+    contextWindowTokens: unavailable('No approved context-window source'),
+    maxOutputTokens: unavailable('No approved maximum-output source'),
+    inputModalities: ['text'],
+    outputModalities: ['text'],
     cache: available({
       readUsdPerMillion: available(0.07, PREVIEW_FIXTURE_PROVENANCE.economics),
       writeUsdPerMillion: unavailable('No approved cache-write price source'),
@@ -229,6 +237,10 @@ function weightedRankingModel(record: WeightedRankingFixtureRecord): PreviewMode
       route: `${record.provider} illustrative prototype route`,
       inputUsdPerMillion: record.inputPrice,
       outputUsdPerMillion: record.outputPrice,
+      contextWindowTokens: unavailable('No approved context-window source'),
+      maxOutputTokens: unavailable('No approved maximum-output source'),
+      inputModalities: ['text'],
+      outputModalities: ['text'],
       blendedUsdPerMillion: available(record.cost, PREVIEW_FIXTURE_PROVENANCE.economics),
       cache: available({
         readUsdPerMillion: record.cacheRead === null ? unavailable('No approved cache-read price source') : available(record.cacheRead, PREVIEW_FIXTURE_PROVENANCE.economics),

@@ -69,6 +69,10 @@ export interface RoutePricing {
   readonly route: string;
   readonly inputUsdPerMillion: number;
   readonly outputUsdPerMillion: number;
+  readonly contextWindowTokens: EvidenceValue<number>;
+  readonly maxOutputTokens: EvidenceValue<number>;
+  readonly inputModalities: readonly string[];
+  readonly outputModalities: readonly string[];
   /** Optional only because the directory fixture does not claim a blended route price. */
   readonly blendedUsdPerMillion?: EvidenceValue<number>;
   /** Optional because many providers do not publish a distinct long-context input tier. */

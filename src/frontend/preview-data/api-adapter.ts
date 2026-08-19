@@ -167,6 +167,7 @@ function mapModelLifecycle(value: unknown, envelope: AcceptedUiDataContractV1, p
 }
 
 function mapRoutePricing(value: unknown, envelope: AcceptedUiDataContractV1, path: string): EvidenceValue<RoutePricing> {
+  if (value === null) return unavailable('No accepted route price is available.');
   const route = record(value, path);
   if (route.status !== 'available') return unavailable('No accepted route price is available.');
   const input = numericEvidence(route.inputMicroDollarsPerMillion, envelope, `${path}.inputMicroDollarsPerMillion`);
@@ -180,6 +181,10 @@ function mapRoutePricing(value: unknown, envelope: AcceptedUiDataContractV1, pat
       route: string(route.routeId, `${path}.routeId`),
       inputUsdPerMillion: input.value / 1_000_000,
       outputUsdPerMillion: output.value / 1_000_000,
+      contextWindowTokens: numericEvidence(route.contextWindowTokens, envelope, `${path}.contextWindowTokens`),
+      maxOutputTokens: numericEvidence(route.maxOutputTokens, envelope, `${path}.maxOutputTokens`),
+      inputModalities: array(route.inputModalities, `${path}.inputModalities`).map((candidate, index) => string(candidate, `${path}.inputModalities[${index}]`)),
+      outputModalities: array(route.outputModalities, `${path}.outputModalities`).map((candidate, index) => string(candidate, `${path}.outputModalities[${index}]`)),
       cache: {
         availability: 'available',
         value: {
@@ -200,6 +205,7 @@ function mapRoutePricing(value: unknown, envelope: AcceptedUiDataContractV1, pat
 }
 
 function mapRuntime(value: unknown, envelope: AcceptedUiDataContractV1, path: string): EvidenceValue<{ readonly ttftP50Seconds: number; readonly outputTokensPerSecond: number; readonly conditions: string }> {
+  if (value === null) return unavailable('No accepted runtime observation is available.');
   const route = record(value, path);
   const ttft = numericEvidence(route.ttftP50Ms, envelope, `${path}.ttftP50Ms`);
   const tps = numericEvidence(route.tpsP50, envelope, `${path}.tpsP50`);

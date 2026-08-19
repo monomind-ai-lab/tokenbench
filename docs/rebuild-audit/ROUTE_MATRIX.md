@@ -17,7 +17,7 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/popular-models/` | audited | pending | 22-model ranking; desktop table/mobile cards; filters; metric chips; expanded subskills; insight charts; 2–4 comparison tray; copy/PNG/CSV |
 | `/make-it-yours/` | audited | pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | implemented and QA-checked | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
-| `/leaderboards/` and 14 published child routes | audited | directory design approved 2026-08-19; child routes pending | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior |
+| `/leaderboards/` and 14 published child routes | audited | directory design approved 2026-08-19; child routes implemented and QA-checked, awaiting design approval | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior |
 | `/compare/` | audited | implemented and QA-checked | URL-backed 2–4 distinct selections; invalid/duplicate cleanup and four-model truncation; capability radar/table; three economics charts; decision table; provenance; copy/PNG/CSV |
 | `/compare/<pair>` | audited | pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
 | `/subscribe-vs-api/` | audited | implemented and QA-checked | Existing simulator preserved: provider/plan; 1–4-model mix; exact URL contract; message and character workload; cache priority; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy |
@@ -65,6 +65,7 @@ The Next.js foundation currently renders this complete order with the approved A
 - Multimodal and media routes preserve their route-specific chart counts, evidence notes, ranking rows, and `profile=balanced&sort=rank-asc` default where published.
 - Desktop results use full tables while mobile results use the immutable card presentation; this responsive behavior is not satisfied by merely scrolling a desktop table.
 - CSV downloads retain active query state. Share URLs preserve non-default state while omitting the default profile where the immutable site does so.
+- The Next child routes read the strict `ui-data-contract/v1` rankings gateway. LiveBench-backed exact overall/category evidence renders when published; selected-route value/pricing views require their own verified route join; LMArena human-preference and media lenses remain explicit unavailable surfaces until their producer exists.
 
 ## Compare workbench contract
 

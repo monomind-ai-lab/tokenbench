@@ -86,4 +86,31 @@ describe('validated preview data adapter', () => {
       data: { models: [expect.objectContaining({ lifecycle: expect.objectContaining({ value: expect.objectContaining({ status: 'Retired' }) }) })] },
     });
   });
+
+  it('keeps benchmark-only ranking rows usable when no catalog route has been joined', async () => {
+    const rankings = evidence<Record<string, unknown>>('responses/rankings.json');
+    const data = rankings.data as { rows: { model: Record<string, unknown> }[] };
+    for (const row of data.rows) {
+      row.model.selectedRouteId = null;
+      row.model.selectedRoute = null;
+    }
+    const adapter = createValidatedPreviewDataAdapter({
+      request(method) {
+        return Promise.resolve(method === 'rankings' ? rankings : evidence('responses/models.json'));
+      },
+    });
+
+    const result = await adapter.rankings({});
+
+    expect(result.data?.models).toHaveLength(3);
+    expect(result.data?.models[0]?.model.capability.availability).toBe('available');
+    expect(result.data?.models[0]?.model.routePricing).toEqual({
+      availability: 'unavailable',
+      reason: 'No accepted route price is available.',
+    });
+    expect(result.data?.models[0]?.model.runtime).toEqual({
+      availability: 'unavailable',
+      reason: 'No accepted runtime observation is available.',
+    });
+  });
 });

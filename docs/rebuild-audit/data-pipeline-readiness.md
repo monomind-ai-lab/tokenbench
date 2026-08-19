@@ -62,7 +62,7 @@ The accepted evidence set also covers:
 | Validated parser, page adapter, and request-echo boundary | Ready on authoritative base | `src/frontend/preview-data` |
 | Deterministic preview evidence transport | Ready and isolated from production | explicit retained evidence selection |
 | HTTP transport with no fallback | Ready and sends the v1 media type | `src/frontend/preview-data/http-transport.ts` |
-| Next pages using the validated gateway | Not wired yet | current Next pages still import local design-fixture arrays |
+| Next pages using the validated gateway | Leaderboard children wired; remaining Next surfaces pending | all 14 child leaderboard routes use the strict rankings adapter; local design evidence is explicit and production has no fixture fallback |
 | Current BenchLM/catalog APIs | Healthy but legacy | focused API/contract suite passes; response shapes predate UI contract v1 |
 | LiveBench ingestion cadence/source/checkpoint contracts | Ready on this branch | accepted producer foundations plus six-hour discovery cadence |
 | LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned four-artifact retrieval, bounded parsing, R2 evidence, bulk D1 staging/validation, monotonic current pointer |
@@ -137,8 +137,9 @@ before production.
 3. Materialize the lifecycle source and subscription catalog/calculator instead
    of returning explicit unavailable envelopes; extend custom rankings with the
    independently sourced catalog/runtime dimensions.
-4. Wire each Next route through the production HTTP-only composition and remove
-   its local design fixtures only when the corresponding v1 response is ready.
+4. Continue wiring the remaining Next route families through the production
+   HTTP-only composition. The leaderboard child family is complete; its local
+   evidence mode is explicit, development-only, and never a production fallback.
 5. Exercise the shared HTTP transport through a local Next preview, then obtain
    separate authorization for any deployment or cutover.
 

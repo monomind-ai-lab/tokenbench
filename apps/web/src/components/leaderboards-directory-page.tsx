@@ -77,15 +77,15 @@ const GROUPS = [
 }[];
 
 const SOURCE_BY_ROUTE: Record<LeaderboardKey, string> = {
-  "llm-overall": "BenchLM",
-  "llm-coding": "BenchLM",
-  "llm-agentic": "BenchLM",
-  "llm-reasoning": "BenchLM",
-  "llm-knowledge": "BenchLM",
+  "llm-overall": "LiveBench",
+  "llm-coding": "LiveBench",
+  "llm-agentic": "LiveBench",
+  "llm-reasoning": "LiveBench",
+  "llm-knowledge": "LiveBench",
   "llm-human-preference": "LMArena",
   "llm-value": "TokenBench",
   "llm-pricing-context": "OpenRouter",
-  "multimodal-vision-documents": "LMArena",
+  "multimodal-vision-documents": "LiveBench + LMArena",
   "media-text-to-image": "LMArena",
   "media-image-editing": "LMArena",
   "media-text-to-video": "LMArena",

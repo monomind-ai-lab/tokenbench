@@ -94,10 +94,10 @@ export function ResultActions({
 
   return (
     <div aria-label={label} className="flex flex-wrap items-center gap-2" role="group">
-      <Button onClick={copyLink} size="sm" variant="outline"><Clipboard />Copy link</Button>
-      <Button onClick={downloadImage} size="sm" variant="outline"><ImageDown />Download image</Button>
-      <Button onClick={downloadCsv} size="sm" variant="outline"><Download />Export CSV</Button>
-      {includePrint ? <Button onClick={() => window.print()} size="sm" variant="outline"><Printer />Print</Button> : null}
+      <Button className="min-h-11" onClick={copyLink} size="sm" variant="outline"><Clipboard />Copy link</Button>
+      <Button className="min-h-11" onClick={downloadImage} size="sm" variant="outline"><ImageDown />Download image</Button>
+      <Button className="min-h-11" onClick={downloadCsv} size="sm" variant="outline"><Download />Export CSV</Button>
+      {includePrint ? <Button className="min-h-11" onClick={() => window.print()} size="sm" variant="outline"><Printer />Print</Button> : null}
       <span aria-live="polite" className={cn("min-h-5 text-xs text-muted-foreground", feedback === "error" && "text-destructive")}>
         {feedback === "copied" ? <span className="flex items-center gap-1"><Check className="size-3" />Link copied</span> : null}
         {feedback === "csv" ? "CSV downloaded" : null}
@@ -111,8 +111,8 @@ export function ResultActions({
 export function ViewModeToggle({ mode, onChange, label = "Result view" }: { mode: "cards" | "list"; onChange: (mode: "cards" | "list") => void; label?: string }) {
   return (
     <div aria-label={label} className="inline-flex rounded-xl border border-border bg-card p-1" role="group">
-      <button aria-pressed={mode === "cards"} className={cn("flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "cards" && "bg-muted text-foreground")} onClick={() => onChange("cards")} type="button"><Grid2X2 className="size-3.5" />Cards</button>
-      <button aria-pressed={mode === "list"} className={cn("flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "list" && "bg-muted text-foreground")} onClick={() => onChange("list")} type="button"><List className="size-3.5" />List</button>
+      <button aria-pressed={mode === "cards"} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "cards" && "bg-muted text-foreground")} onClick={() => onChange("cards")} type="button"><Grid2X2 className="size-3.5" />Cards</button>
+      <button aria-pressed={mode === "list"} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "list" && "bg-muted text-foreground")} onClick={() => onChange("list")} type="button"><List className="size-3.5" />List</button>
     </div>
   );
 }

@@ -239,7 +239,7 @@ function LanguageDialog({ language, onClose, onLanguage }: { language: string; o
             <h2 className="text-sm font-semibold">Language</h2>
             <p className="mt-1 text-xs text-muted-foreground">Translate this page</p>
           </div>
-          <Button aria-label="Close language selector" onClick={onClose} size="icon-sm" variant="ghost"><X /></Button>
+          <Button aria-label="Close language selector" className="size-11" onClick={onClose} size="icon-sm" variant="ghost"><X /></Button>
         </div>
         <label className="m-4 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5" htmlFor="language-search">
           <Search className="size-4 text-muted-foreground" />
@@ -262,7 +262,7 @@ function LanguageList({ active, items, label, onLanguage }: { active: string; it
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[.16em] text-muted-foreground">{label}</p>
       <div aria-label={label} className="grid grid-cols-2 gap-1" role="menu">
         {items.map((item) => (
-          <button aria-checked={active === item.code} className={cn("flex min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-muted", active === item.code && "bg-muted text-foreground")} key={item.code} onClick={() => onLanguage(item.code)} role="menuitemradio" type="button">
+          <button aria-checked={active === item.code} className={cn("flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-muted", active === item.code && "bg-muted text-foreground")} key={item.code} onClick={() => onLanguage(item.code)} role="menuitemradio" type="button">
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             <span className="font-mono text-[10px] text-muted-foreground">{item.code === "en" ? "" : item.code}</span>
             {active === item.code ? <Check className="size-3" /> : null}
@@ -290,11 +290,11 @@ function MarketingForm() {
       <h2 className="text-sm font-semibold">LLM API Cost &amp; Benchmark Cheatsheet</h2>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">Get monthly model costs, context windows, and category rankings in one downloadable PDF or CSV.</p>
       <form className="mt-5 grid gap-3" noValidate onSubmit={submit}>
-        <label className="grid gap-1 text-xs">First name<input className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="firstName" required /></label>
-        <label className="grid gap-1 text-xs">Company<input className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="company" required /></label>
-        <label className="grid gap-1 text-xs">Email<input className="rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" name="email" required type="email" /></label>
-        <label className="flex items-start gap-2 text-xs leading-5 text-muted-foreground"><input className="mt-1" name="consent" type="checkbox" />Notify me when new models are added to TokenBench.</label>
-        <Button className="mt-1 rounded-full" type="submit">Preview signup</Button>
+        <label className="grid gap-1 text-xs">First name<input className="min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="firstName" required /></label>
+        <label className="grid gap-1 text-xs">Company<input className="min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="company" required /></label>
+        <label className="grid gap-1 text-xs">Email<input className="min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" name="email" required type="email" /></label>
+        <label className="flex min-h-11 items-start gap-2 text-xs leading-5 text-muted-foreground"><input className="mt-1" name="consent" type="checkbox" />Notify me when new models are added to TokenBench.</label>
+        <Button className="mt-1 min-h-11 rounded-full" type="submit">Preview signup</Button>
         {status === "error" ? <p role="alert" className="text-xs text-destructive">Enter a valid first name, company, and email address.</p> : null}
         {status === "success" ? <p role="status" className="text-xs text-emerald-500">Preview captured. No production request was sent.</p> : null}
       </form>
@@ -319,7 +319,7 @@ function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLangua
   }, []);
 
   const navButton = (name: Exclude<MenuName, null>, label: string) => (
-    <button aria-expanded={menu === name} className="flex items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={() => setMenu((current) => current === name ? null : name)} type="button">
+    <button aria-expanded={menu === name} className="flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={() => setMenu((current) => current === name ? null : name)} type="button">
       {label}<ChevronDown className={cn("size-3.5 transition-transform", menu === name && "rotate-180")} />
     </button>
   );
@@ -327,35 +327,35 @@ function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLangua
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-5 sm:px-8 lg:px-10">
-        <Link aria-label="TokenBench home" className="flex items-center gap-2" href="/">
+        <Link aria-label="TokenBench home" className="flex min-h-11 items-center gap-2" href="/">
           <span className="grid size-7 place-items-center rounded-lg border border-foreground/15 bg-foreground text-[10px] font-black text-background">TB</span>
           <span className="font-semibold tracking-tight">TokenBench</span>
         </Link>
         <nav aria-label="Primary" className="ml-auto hidden items-center gap-1 lg:flex">
-          <Link className={cn("rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", pathname === "/" && "bg-muted text-foreground")} href="/">Home</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", pathname === "/" && "bg-muted text-foreground")} href="/">Home</Link>
           {navButton("models", "Models")}
           {navButton("leaderboards", "Leaderboards")}
-          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-muted text-foreground")} href={href} key={href} onClick={() => setMenu(null)}>{label}</Link>)}
+          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-muted text-foreground")} href={href} key={href} onClick={() => setMenu(null)}>{label}</Link>)}
           {navButton("articles", "Articles")}
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-3">
-          <Button aria-label="Choose language" onClick={onLanguage} size="icon-sm" variant="ghost"><Languages /></Button>
-          <Button aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick={onTheme} size="icon-sm" variant="ghost">{theme === "dark" ? <Sun /> : <Moon />}</Button>
-          <Button aria-controls="mobile-site-navigation" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Close navigation" : "Open navigation"} className="lg:hidden" onClick={() => setMobileOpen((open) => !open)} size="icon-sm" variant="ghost">{mobileOpen ? <X /> : <Menu />}</Button>
+          <Button aria-label="Choose language" className="size-11" onClick={onLanguage} size="icon-sm" variant="ghost"><Languages /></Button>
+          <Button aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} className="size-11" onClick={onTheme} size="icon-sm" variant="ghost">{theme === "dark" ? <Sun /> : <Moon />}</Button>
+          <Button aria-controls="mobile-site-navigation" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Close navigation" : "Open navigation"} className="size-11 lg:hidden" onClick={() => setMobileOpen((open) => !open)} size="icon-sm" variant="ghost">{mobileOpen ? <X /> : <Menu />}</Button>
         </div>
       </div>
       {menu ? <div className="hidden border-t border-border bg-background lg:block"><div className="mx-auto max-w-7xl px-10 py-6"><NavigationMenu close={() => setMenu(null)} name={menu} /></div></div> : null}
       {mobileOpen ? (
         <nav aria-label="Mobile navigation" className="grid gap-1 border-t border-border bg-background px-4 py-4 lg:hidden" id="mobile-site-navigation">
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/" onClick={() => setMobileOpen(false)}>Home</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/models/" onClick={() => setMobileOpen(false)}>Models</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/model-lifecycle/" onClick={() => setMobileOpen(false)}>Model lifecycle</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/leaderboards/" onClick={() => setMobileOpen(false)}>Leaderboards</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/popular-models/" onClick={() => setMobileOpen(false)}>Popular models</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/make-it-yours/" onClick={() => setMobileOpen(false)}>Make it yours</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/compare/" onClick={() => setMobileOpen(false)}>Compare</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/subscribe-vs-api/" onClick={() => setMobileOpen(false)}>Subscribe vs API</Link>
-          <Link className="rounded-lg px-3 py-2 text-sm" href="/articles/" onClick={() => setMobileOpen(false)}>Articles</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/" onClick={() => setMobileOpen(false)}>Home</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/models/" onClick={() => setMobileOpen(false)}>Models</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/model-lifecycle/" onClick={() => setMobileOpen(false)}>Model lifecycle</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/leaderboards/" onClick={() => setMobileOpen(false)}>Leaderboards</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/popular-models/" onClick={() => setMobileOpen(false)}>Popular models</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/make-it-yours/" onClick={() => setMobileOpen(false)}>Make it yours</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/compare/" onClick={() => setMobileOpen(false)}>Compare</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/subscribe-vs-api/" onClick={() => setMobileOpen(false)}>Subscribe vs API</Link>
+          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/articles/" onClick={() => setMobileOpen(false)}>Articles</Link>
         </nav>
       ) : null}
     </header>
