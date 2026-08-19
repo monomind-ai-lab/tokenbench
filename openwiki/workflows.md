@@ -28,16 +28,18 @@ Dynamic model, comparison, and sitemap routes use targeted D1 reads. Canonical c
 
 The preservation contract (`docs/rebuild-audit/PRESERVATION_CONTRACT.md`) requires all published route families and interactive sections to survive the Next rebuild: filters, charts, URL state, actions, themes, language selector, responsive behavior, SEO/no-JS usefulness, and newsletter/global shell.
 
-The accepted `contracts/ui-data-contract/v1` and existing `src/frontend/preview-data/` gateway are the integration boundary. The readiness audit directs engineers to adapt that gateway to Next server data composition, use deterministic evidence transport during UI reconstruction, and replace transport mode—not page contracts—when HTTP producer endpoints are ready.
+The accepted `contracts/ui-data-contract/v1` and existing `src/frontend/preview-data/` gateway are the integration boundary. The gateway now exposes two explicit compositions: `composition-evidence.ts` supplies deterministic accepted evidence for design previews/tests only, while `composition-http.ts` creates production HTTP composition and requires an explicit `http`/`https` base URL. Next wraps those in server-only entrypoints: `apps/web/src/lib/ui-data-preview.server.ts` for local design evidence and `ui-data-production.server.ts` for the separately deployed v1 producer configured by `TOKENBENCH_UI_DATA_BASE_URL`.
 
-Current gaps are material:
+The modes are intentionally non-interchangeable: production cannot select evidence mode, and HTTP failures propagate rather than falling back to retained evidence or local fixtures. The new entrypoints are not yet consumed by a Next page; current pages still use local fixture arrays in places.
 
-- Next pages still use local fixture arrays in places.
+Other gaps remain material:
+
 - Current root API shapes predate UI contract v1.
 - Contracted lifecycle/rankings/comparison/subscription HTTP endpoints are not yet present on the rebuild branch.
+- The `/leaderboards/` directory is implemented locally, but its fourteen published child routes and custom ranking remain pending.
 - No deployment/cutover is authorized.
 
-Do not solve this by silently falling back to fixtures in production. Preserve contract validation, request echoes, explicit availability, and revision separation.
+Preserve contract validation, request echoes, explicit availability, and revision separation; do not solve a production failure with fixtures.
 
 ## 5. Newsletter and generated content
 

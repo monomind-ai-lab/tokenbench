@@ -44,6 +44,7 @@ npm run test:browser:production
 | Ingestion or migrations | relevant worker tests, `test:ingestion:cycles`, worker type/lint checks, local D1 migration gate |
 | Model directory/profile | model-directory/profile tests and local-preview browser grep described in `docs/catalog-deployment.md` |
 | Next rebuild component/page | from `apps/web/`: `npm run lint` and `npm run build`; also validate preservation requirements and fixture labeling |
+| UI-data composition | `npm test -- src/frontend/preview-data/composition.test.ts`; verify preview-only evidence mode, an explicit HTTP(S) production base URL, and propagation of production transport failure without fixture fallback |
 | Release candidate | root tests/lint/build, appropriate browser suite(s), `git diff --check`, `git status --short`; follow deployment runbook evidence |
 
 ## Known validation context

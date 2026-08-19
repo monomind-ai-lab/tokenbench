@@ -39,5 +39,6 @@ coverage/
 .DS_Store
 *.log
 .impeccable/config.local.json
+.impeccable/review/
 .env*
 !.env.example
