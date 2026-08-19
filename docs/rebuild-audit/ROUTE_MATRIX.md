@@ -17,7 +17,7 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/popular-models/` | audited | pending | 22-model ranking; desktop table/mobile cards; filters; metric chips; expanded subskills; insight charts; 2–4 comparison tray; copy/PNG/CSV |
 | `/make-it-yours/` | audited | pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | implemented and QA-checked | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
-| `/leaderboards/` and 14 published child routes | audited | directory implemented and QA-checked; child routes pending | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior |
+| `/leaderboards/` and 14 published child routes | audited | directory design approved 2026-08-19; child routes pending | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior |
 | `/compare/` | audited | implemented and QA-checked | URL-backed 2–4 distinct selections; invalid/duplicate cleanup and four-model truncation; capability radar/table; three economics charts; decision table; provenance; copy/PNG/CSV |
 | `/compare/<pair>` | audited | pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
 | `/subscribe-vs-api/` | audited | implemented and QA-checked | Existing simulator preserved: provider/plan; 1–4-model mix; exact URL contract; message and character workload; cache priority; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy |
@@ -60,6 +60,7 @@ The Next.js foundation currently renders this complete order with the approved A
 ## Leaderboard variation contract
 
 - `/leaderboards/` remains a decision-method directory, not a generic leaderboard instance.
+- The user approved the Next.js directory's visual design and information architecture on 2026-08-19, including its three evidence groups, list/card language, category icons, and responsive presentation. This approval does not mark any child leaderboard route complete.
 - LLM child routes preserve their individual visualizations and default query contracts: overall uses `profile=balanced&sort=score-desc`, value uses `profile=balanced&sort=pareto-score-desc`, pricing context uses `profile=balanced&sort=price-asc`, and human-preference uses `profile=balanced&sort=rank-asc`.
 - Multimodal and media routes preserve their route-specific chart counts, evidence notes, ranking rows, and `profile=balanced&sort=rank-asc` default where published.
 - Desktop results use full tables while mobile results use the immutable card presentation; this responsive behavior is not satisfied by merely scrolling a desktop table.
