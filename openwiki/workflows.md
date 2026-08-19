@@ -14,8 +14,6 @@ The benchmark Worker (`workers/benchmark-ingest/`) starts weekly on `15 2 * * SU
 
 The workflow is checkpointed: a SQLite Durable Object runs bounded steps and persists cycle/step receipts in D1. It retries each source artifact at most three times, persists retry timing, and preserves last-good publication on expiry/failure. Benchmark freshness is eight days. A cache-only republish exists for materialized response corrections; it cannot change cohort membership, profile snapshots, or persisted ranks (`workers/benchmark-ingest/wrangler.toml`).
 
-The current working tree also adds a separate six-hour LiveBench discovery path (`17 */6 * * *`). It resolves a complete, commit-pinned release bundle, verifies source artifacts before attempt-owned D1 staging, and advances the current-release pointer only after validation. Incomplete releases, unverified licensing, or changed pinned methodology remain unpublished; the prior valid release stays public. This is uncommitted implementation work, not evidence of a deployed schedule or migrated database (`workers/benchmark-ingest/src/livebench-discovery.ts`, `livebench-refresh.ts`, `migrations/0014_livebench.sql`).
-
 `src/benchmarks/` contains projections and derived decision logic; `functions/api/benchmarks*` and nested leaderboard/model handlers expose it. Leaderboard routes now live in `src/routing/leaderboard-routes.ts` so shared API/worker/route consumers have a focused dependency.
 
 **When changing:** distinguish upstream evidence, normalized facts, derived ranks/projections, cached response bodies, and browser rendering. A cache fix is not evidence republishing.
@@ -37,7 +35,7 @@ The modes are intentionally non-interchangeable: production cannot select eviden
 Other gaps remain material:
 
 - Current root API shapes predate UI contract v1.
-- The working tree provides header-negotiated v1 models/profile, rankings, and comparison endpoints; models/profile/comparison are explicitly partial because LiveBench does not supply catalog, runtime, lifecycle, or subscription facts. Lifecycle and subscription currently return schema-valid unavailable responses. The Next app has not adopted these endpoints.
+- Contracted lifecycle/rankings/comparison/subscription HTTP endpoints are not yet present on the rebuild branch.
 - The `/leaderboards/` directory is implemented locally, but its fourteen published child routes and custom ranking remain pending.
 - No deployment/cutover is authorized.
 

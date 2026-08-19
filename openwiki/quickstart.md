@@ -14,7 +14,7 @@ TokenBench helps people and teams choose AI subscriptions, API routes, and model
 
 The root application is the established delivery path: `src/main.tsx` starts the preview route resolver, Vite generates static/SSR documents, Pages Functions serve APIs and dynamic pages, and Workers publish revisioned data. Root scripts in `package.json` build and test this system.
 
-`apps/web/` is a separate Next.js App Router rebuild. It contains page/components and local data arrays, while its own `package.json` has independent Next commands. Do **not** treat it as a completed replacement: the working tree now contains partial LiveBench-backed UI-data v1 endpoints, but Next pages are still not wired through the validated gateway and cutover is not authorized ([`docs/rebuild-audit/data-pipeline-readiness.md`](../docs/rebuild-audit/data-pipeline-readiness.md)).
+`apps/web/` was added in the current `4991758` commit as a separate Next.js App Router rebuild. It contains page/components and local data arrays, while its own `package.json` has independent Next commands. Do **not** treat it as a completed replacement: the readiness audit says Next pages are not wired through the validated gateway, the v1 HTTP producer endpoints are not all present, and cutover is not authorized ([`docs/rebuild-audit/data-pipeline-readiness.md`](../docs/rebuild-audit/data-pipeline-readiness.md)).
 
 ## Local development
 

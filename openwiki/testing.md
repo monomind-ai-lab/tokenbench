@@ -30,9 +30,9 @@ npm run test:browser:production
 
 - **Routing/static delivery:** `src/routing/*.test.ts`, `src/preview/*test.tsx`, `scripts/*preview*.test.ts`, `scripts/generate-static-pages.test.ts`.
 - **Frontend data behavior:** `src/frontend/**/*test.ts(x)`, including caches, adapters, gateway, contracts, request gate, and preview workbench state.
-- **Domain/projections:** `src/catalog/*.test.ts`, `src/benchmarks/*.test.ts`, `src/pipeline/ui-data-contract-v1-*.test.ts`, working-tree LiveBench parser/contract tests under `src/livebench/*.test.ts`, and page tests under `src/pages/`.
-- **Pages APIs:** `functions/**/*.test.ts` and endpoint-adjacent tests, including working-tree `functions/_shared/livebench-*.test.ts` and `functions/api/benchmarks/{rankings,comparison,lifecycle,subscription}.test.ts`.
-- **Ingestion/publication:** `workers/catalog-ingest/src/*test.ts`, `workers/benchmark-ingest/src/*test.ts`, including working-tree `livebench-discovery.test.ts` and `livebench-refresh.test.ts`, especially full-cycle/cache partition/model-directory tests.
+- **Domain/projections:** `src/catalog/*.test.ts`, `src/benchmarks/*.test.ts`, page tests under `src/pages/`.
+- **Pages APIs:** `functions/**/*.test.ts` and endpoint-adjacent tests.
+- **Ingestion/publication:** `workers/catalog-ingest/src/*test.ts`, `workers/benchmark-ingest/src/*test.ts`, especially full-cycle/cache partition/model-directory tests.
 - **Browser/responsive behavior:** `browser-tests/responsive-browser.ts` and Playwright config files.
 
 ## Change-oriented checks
@@ -41,7 +41,7 @@ npm run test:browser:production
 | --- | --- |
 | Route/SSR/hydration behavior | routing + route-manifest/document/client-resolver tests; static generation; browser route coverage |
 | Catalog/benchmark API | endpoint + projection/cache tests; contract validation; exact filtered/cursor fallback behavior |
-| Ingestion or migrations | relevant worker tests, `test:ingestion:cycles`, worker type/lint checks, and local D1 migration gate through the latest applicable migration (currently `0014_livebench.sql` in the working tree) |
+| Ingestion or migrations | relevant worker tests, `test:ingestion:cycles`, worker type/lint checks, local D1 migration gate |
 | Model directory/profile | model-directory/profile tests and local-preview browser grep described in `docs/catalog-deployment.md` |
 | Next rebuild component/page | from `apps/web/`: `npm run lint` and `npm run build`; also validate preservation requirements and fixture labeling |
 | UI-data composition | `npm test -- src/frontend/preview-data/composition.test.ts`; verify preview-only evidence mode, an explicit HTTP(S) production base URL, and propagation of production transport failure without fixture fallback |

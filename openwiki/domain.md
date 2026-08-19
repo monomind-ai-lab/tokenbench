@@ -24,9 +24,6 @@ Permitted benchmark/catalog roles are documented in `docs/data-sources.md`:
 | OpenRouter | attributed catalog, hosted-route price, context, modality, parameter facts |
 | LiteLLM | price/context corroboration only |
 | TokenBench | disclosed workload costs, Pareto frontiers, and comparison eligibility |
-| LiveBench (working-tree integration) | source-attributed capability scores, taxonomy, and evaluation economics only |
-
-LiveBench release artifacts are commit-pinned and verified before publication. Its source-only model configurations remain identity proposals until a catalog mapping is reviewed; do not infer provider routes, pricing, runtime/SLA, lifecycle, subscription, or canonical identity facts from benchmark evidence. The in-progress integration relies on a project-approved CDLA-Permissive-2.0 registry record, not a license inferred by the parser (`migrations/0014_livebench.sql`).
 
 Visible source attribution is required wherever a source contributes a fact. Review-bound alias maps, comparison allowlists, and model-to-plan mappings are exact/case-sensitive and initially empty; no fuzzy identity fallback is permitted.
 
@@ -36,7 +33,7 @@ Visible source attribution is required wherever a source contributes a fact. Rev
 
 `contracts/ui-data-contract/v1/` is an accepted evidence-backed contract for models, profiles, lifecycle, rankings, comparisons, and subscription calculations. It has versioned envelopes, availability wrappers, provenance, and retained positive/rejection fixtures. It proves client/server boundary behavior; its `fixture-*` revisions and `example.com` URLs are not production facts.
 
-The validated root frontend boundary is in `src/frontend/preview-data/`: gateway, parser/contracts, evidence transport, fixture adapter, HTTP transport, and tests. HTTP transport intentionally has no silent evidence/fixture fallback and requests `application/vnd.tokenbench.ui-data.v1+json`. The working-tree LiveBench projection can serve partial models, profiles, comparisons, and rankings; lifecycle/subscription remain explicitly unavailable, rather than fabricated. The new Next app must reuse/adapt this boundary rather than clone schemas or treat its local arrays as authoritative.
+The validated root frontend boundary is in `src/frontend/preview-data/`: gateway, parser/contracts, evidence transport, fixture adapter, HTTP transport, and tests. HTTP transport intentionally has no silent evidence/fixture fallback. The new Next app must reuse/adapt this boundary rather than clone schemas or treat its local arrays as authoritative.
 
 ## Product-specific decision logic
 
