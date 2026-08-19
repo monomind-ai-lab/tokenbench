@@ -796,7 +796,7 @@ export function parseComparisonQuery(url: URL): ComparisonRequest {
   if (values.length !== 1 || values[0].length > 1_024) {
     failRequest('$/request/modelSlugs', 'comparison models query is invalid');
   }
-  const modelSlugs = [...new Set(values[0].split(',').map((value) => value.trim()))];
+  const modelSlugs = values[0].split(',').map((value) => value.trim());
   return normalizeComparisonRequest({ modelSlugs });
 }
 

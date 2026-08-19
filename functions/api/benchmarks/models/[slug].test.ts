@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelProfileReadResult } from '../../../_shared/model-directory-db';
+import { parseUiDataContractV1Runtime } from '../../../../src/pipeline/ui-data-contract-v1';
+import { UI_DATA_CONTRACT_V1_MEDIA_TYPE } from '../../../_shared/livebench-v1-api';
 
 const reads = vi.hoisted(() => ({
   profile: vi.fn(),
@@ -79,6 +81,33 @@ describe('durable model profile API', () => {
     });
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toEqual({ error: 'Benchmark model not found' });
+  });
+
+  it('selects the v1 profile boundary through its explicit media type', async () => {
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/models/alpha', {
+        headers: { accept: UI_DATA_CONTRACT_V1_MEDIA_TYPE },
+      }),
+      env: {},
+      params: { slug: 'alpha' },
+    });
+    const payload = await response.json();
+    expect(response.status).toBe(404);
+    expect(parseUiDataContractV1Runtime(payload, 'profile')).toMatchObject({ status: 'unavailable' });
+  });
+
+  it('keeps a v1 profile read fault distinct from an unknown model', async () => {
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/models/alpha', {
+        headers: { accept: UI_DATA_CONTRACT_V1_MEDIA_TYPE },
+      }),
+      env: { CATALOG_DB: {
+        prepare() { throw new Error('D1 unavailable'); },
+      } },
+      params: { slug: 'alpha' },
+    });
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'service_unavailable' } });
   });
 
   it('serves a durable profile with attribution and exact ETag revalidation', async () => {

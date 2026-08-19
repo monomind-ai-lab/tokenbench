@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createPreviewDataGateway } from './gateway';
-import { createHttpTransport } from './http-transport';
+import { createHttpTransport, UI_DATA_CONTRACT_V1_MEDIA_TYPE } from './http-transport';
 
 function evidence<T>(path: string): T {
   return JSON.parse(readFileSync(resolve(process.cwd(), 'contracts/ui-data-contract/v1/evidence', path), 'utf8')) as T;
@@ -45,6 +45,7 @@ describe('HTTP preview data transport', () => {
     await transport.request('rankings', customRankingQuery);
 
     expect(fetchRequests).toContainEqual(expect.objectContaining({ url: 'https://tokenbench.test/api/benchmarks/comparison?models=alpha%2Cbeta%2Cgamma' }));
+    expect(fetchRequests.every((request) => new Headers(request.init?.headers).get('accept') === UI_DATA_CONTRACT_V1_MEDIA_TYPE)).toBe(true);
     const rankingRequest = fetchRequests.find((request) => request.url.endsWith('/api/benchmarks/rankings'));
     expect(rankingRequest?.init).toMatchObject({ method: 'POST' });
     expect(JSON.parse(String(rankingRequest?.init?.body))).toEqual(customRankingQuery);

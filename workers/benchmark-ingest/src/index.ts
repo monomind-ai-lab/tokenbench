@@ -77,7 +77,11 @@ import {
 import { parseLiteLlmPrices } from './litellm';
 import { parseOpenRouterModels, projectOpenRouterModelsPayload } from '../../catalog-ingest/src/index';
 import { parquetReadObjects } from 'hyparquet';
-import { BENCHMARK_FRESHNESS_WINDOW_MS } from '../../../src/ingestion/cadence';
+import {
+  BENCHMARK_FRESHNESS_WINDOW_MS,
+  LIVEBENCH_DISCOVERY_CRON,
+} from '../../../src/ingestion/cadence';
+import type { LiveBenchRefreshResult } from './livebench-refresh';
 import { deriveComparisonPairs } from './comparison-derivation';
 import { mergeNormalizedBatches } from './normalized-merge';
 
@@ -114,6 +118,7 @@ export interface BenchmarkIngestEnv {
     getByName(name: string): {
       start(input: { scheduledTime: number; force?: boolean }): Promise<unknown>;
       republishCache?(): Promise<{ status: 'republished' | 'no-active-revision'; revision: string | null }>;
+      refreshLiveBench?(input: { scheduledTime: number }): Promise<LiveBenchRefreshResult>;
     };
   };
 }
@@ -2698,6 +2703,11 @@ export default {
   ): Promise<void> {
     if (!env.INGEST_COORDINATOR) throw new Error('Benchmark ingest coordinator binding is required');
     const coordinator = env.INGEST_COORDINATOR.getByName('weekly-benchmarks');
+    if (controller.cron === LIVEBENCH_DISCOVERY_CRON) {
+      if (!coordinator.refreshLiveBench) throw new Error('Benchmark ingest coordinator cannot refresh LiveBench');
+      await coordinator.refreshLiveBench({ scheduledTime: controller.scheduledTime ?? Date.now() });
+      return;
+    }
     // A dedicated cron rebuilds the published API response cache from the
     // active revision without any upstream fetch. It is cadence-independent, so
     // a cache-served derivation fix does not wait for the next weekly window.

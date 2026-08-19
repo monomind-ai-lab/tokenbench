@@ -1,6 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { parquetReadObjects } from 'hyparquet';
 import { benchmarkCadenceKey } from '../../../src/ingestion/cadence';
+import type { LiveBenchDiscoveryState } from '../../../src/livebench';
 import {
   assertCycleTransition,
   nextRetryAlarmAt,
@@ -66,6 +67,13 @@ import {
   publishBenchmarkCandidate,
   validateCompleteBenchmarkCandidate,
 } from './final-publication';
+import {
+  ACCEPTED_LIVEBENCH_LICENSE,
+  refreshLiveBenchRelease as runLiveBenchRefresh,
+  type LiveBenchRefreshResult,
+} from './livebench-refresh';
+import type { LiveBenchD1Database } from '../../../functions/_shared/livebench-db';
+import type { CandidateEvidenceBucket } from '../../_shared/candidate-evidence';
 
 // ---------------------------------------------------------------------------
 // Environment bindings
@@ -90,6 +98,7 @@ export interface BenchmarkD1Database {
 export interface BenchmarkCoordinatorNamespace {
   getByName(name: string): {
     start(input: { scheduledTime: number; force?: boolean }): Promise<StartCycleResult>;
+    refreshLiveBench?(input: { scheduledTime: number }): Promise<LiveBenchRefreshResult>;
   };
 }
 
@@ -288,6 +297,7 @@ export type BenchmarkCyclePhase = typeof BENCHMARK_CYCLE_PHASES[number];
 
 const CYCLE_STORAGE_KEY = 'benchmark-cycle';
 const CHECKPOINT_STORAGE_KEY = 'benchmark-checkpoint';
+const LIVEBENCH_DISCOVERY_STORAGE_KEY = 'livebench-discovery-state';
 
 /** Phases that make a bounded upstream request and may retry a transient fault. */
 const RETRYABLE_PHASES: Record<string, true> = {
@@ -1290,6 +1300,7 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
   private readonly durable: CoordinatorStorage;
   private readonly coordinatorEnv: BenchmarkIngestEnv;
   private readonly deps: CoordinatorDependencies;
+  private liveBenchRefreshInFlight: Promise<LiveBenchRefreshResult> | null = null;
 
   constructor(state: CoordinatorState, env: BenchmarkIngestEnv, deps: Partial<CoordinatorDependencies> = {}) {
     super(state as never, env);
@@ -1340,6 +1351,54 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
 
   async status(): Promise<IngestionCycle | null> {
     return await this.durable.get<IngestionCycle>(CYCLE_STORAGE_KEY) ?? null;
+  }
+
+  /**
+   * Run the lightweight six-hour LiveBench discovery and, only for a changed
+   * complete bundle, validate and atomically publish a new current revision.
+   * A single-flight guard prevents overlapping external I/O from interleaving
+   * two refreshes in the same Durable Object instance.
+   */
+  async refreshLiveBench(input: { scheduledTime: number }): Promise<LiveBenchRefreshResult> {
+    if (this.liveBenchRefreshInFlight) return this.liveBenchRefreshInFlight;
+    const refresh = this.performLiveBenchRefresh(input);
+    this.liveBenchRefreshInFlight = refresh;
+    try {
+      return await refresh;
+    } finally {
+      if (this.liveBenchRefreshInFlight === refresh) this.liveBenchRefreshInFlight = null;
+    }
+  }
+
+  private async performLiveBenchRefresh(input: { scheduledTime: number }): Promise<LiveBenchRefreshResult> {
+    const checkedAt = iso(Number.isFinite(input.scheduledTime) ? input.scheduledTime : this.deps.now());
+    const previous = await this.durable.get<LiveBenchDiscoveryState>(LIVEBENCH_DISCOVERY_STORAGE_KEY) ?? {
+      etag: null,
+      headCommit: null,
+      fingerprint: null,
+      verifiedIsoWeek: null,
+    };
+    const result = await runLiveBenchRefresh({
+      env: {
+        CATALOG_DB: this.coordinatorEnv.CATALOG_DB as unknown as LiveBenchD1Database,
+        SOURCE_SNAPSHOTS: this.coordinatorEnv.SOURCE_SNAPSHOTS as unknown as CandidateEvidenceBucket,
+      },
+      previous,
+      checkedAt,
+      forceWeeklyVerification: previous.verifiedIsoWeek !== benchmarkCadenceKey(checkedAt),
+      license: ACCEPTED_LIVEBENCH_LICENSE,
+      fetchImpl: this.deps.fetchImpl,
+      attemptId: this.deps.randomUUID,
+    });
+    await this.durable.put(LIVEBENCH_DISCOVERY_STORAGE_KEY, result.state);
+    this.deps.log({
+      event: 'livebench_refresh_completed',
+      status: result.status,
+      checkedAt,
+      ...('revision' in result ? { revision: result.revision } : {}),
+      ...('releaseId' in result ? { releaseId: result.releaseId } : {}),
+    });
+    return result;
   }
 
   /**

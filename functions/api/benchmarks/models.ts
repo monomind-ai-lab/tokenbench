@@ -14,6 +14,9 @@ import {
   unavailableBenchmarkResponse,
   type BenchmarkApiEnv,
 } from '../../_shared/benchmark-db';
+import type { LiveBenchD1Database } from '../../_shared/livebench-db';
+import { onLiveBenchModelsGet } from '../../_shared/livebench-models-api';
+import { acceptsUiDataContractV1 } from '../../_shared/livebench-v1-api';
 
 const ALLOWED_PARAMETERS = new Set(['q', 'creator', 'sourceType', 'evidenceStatus', 'status', 'limit', 'cursor']);
 
@@ -73,6 +76,12 @@ export async function onRequestGet({
   request: Request;
   env: BenchmarkApiEnv;
 }): Promise<Response> {
+  if (acceptsUiDataContractV1(request)) {
+    return onLiveBenchModelsGet({
+      request,
+      db: env.CATALOG_DB as unknown as LiveBenchD1Database | undefined,
+    });
+  }
   if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
   let query: ModelDirectoryQuery;
   try {

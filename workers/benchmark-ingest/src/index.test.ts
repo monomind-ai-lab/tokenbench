@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import type { BenchmarkComparisonPair, NormalizedSourceBatch } from '../../../src/benchmarks/contracts';
-import { BENCHMARK_CRON } from '../../../src/ingestion/cadence';
+import { BENCHMARK_CRON, LIVEBENCH_DISCOVERY_CRON } from '../../../src/ingestion/cadence';
 import * as benchmarkIngest from './index';
 import worker, {
   BENCHMARK_CACHE_REPUBLISH_CRON,
@@ -2788,5 +2788,27 @@ describe('atomic benchmark ingestion', () => {
       waitUntil: () => undefined,
     });
     expect(response.status).toBe(405);
+  });
+
+  it('routes the six-hour discovery cron only to the LiveBench refresh RPC', async () => {
+    const { env } = seededEnvironment();
+    const start = vi.fn(async () => undefined);
+    const refreshLiveBench = vi.fn(async (_input: { scheduledTime: number }) => ({
+      status: 'unchanged' as const,
+      state: { etag: null, headCommit: null, fingerprint: null, verifiedIsoWeek: null },
+      revision: null,
+    }));
+    const scheduledEnv = env as Parameters<typeof worker.scheduled>[1];
+    scheduledEnv.INGEST_COORDINATOR = { getByName: () => ({ start, refreshLiveBench }) };
+
+    await worker.scheduled(
+      { cron: LIVEBENCH_DISCOVERY_CRON, scheduledTime: Date.parse('2026-08-19T06:17:00.000Z'), noRetry: () => undefined },
+      scheduledEnv,
+      { waitUntil: () => undefined },
+    );
+
+    expect(refreshLiveBench).toHaveBeenCalledTimes(1);
+    expect(refreshLiveBench).toHaveBeenCalledWith({ scheduledTime: Date.parse('2026-08-19T06:17:00.000Z') });
+    expect(start).not.toHaveBeenCalled();
   });
 });

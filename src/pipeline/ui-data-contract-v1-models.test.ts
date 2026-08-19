@@ -169,9 +169,10 @@ describe('UI data contract v1 model methods', () => {
       .toEqual({ asOf: '2026-08-18T00:00:00.000Z', horizonDays: 90 });
   });
 
-  it('deduplicates comparison transport before enforcing two to four models', () => {
-    expect(parseComparisonQuery(new URL('https://tokenbench.test/api/v2/compare?models=gpt-4o%2Cgpt-4o%2Cclaude-3-5-sonnet')))
-      .toEqual({ modelSlugs: ['gpt-4o', 'claude-3-5-sonnet'] });
+  it('rejects duplicate comparison transport values instead of rewriting the echoed request', () => {
+    expect(() => parseComparisonQuery(new URL(
+      'https://tokenbench.test/api/v2/compare?models=gpt-4o%2Cgpt-4o%2Cclaude-3-5-sonnet',
+    ))).toThrowError(expect.objectContaining({ code: 'invalid_request' }));
     expect(() => parseComparisonQuery(new URL('https://tokenbench.test/api/v2/compare?models=gpt-4o%2Cgpt-4o')))
       .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
   });

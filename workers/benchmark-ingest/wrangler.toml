@@ -45,4 +45,4 @@ storage = "sqlite"
 # from D1, and they are immutable per revision), or rewrite persisted
 # normalized metric ranks. Each of those still requires a full cycle that
 # publishes a new revision.
-crons = ["15 2 * * SUN"]
+crons = ["15 2 * * SUN", "17 */6 * * *"]

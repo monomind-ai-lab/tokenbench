@@ -22,6 +22,9 @@ import {
   BENCHMARK_FRESHNESS_WINDOW_MS,
   BENCHMARK_STALE_MESSAGE,
 } from '../../../../src/ingestion/cadence';
+import type { LiveBenchD1Database } from '../../../_shared/livebench-db';
+import { onLiveBenchProfileGet } from '../../../_shared/livebench-models-api';
+import { acceptsUiDataContractV1 } from '../../../_shared/livebench-v1-api';
 
 function compareText(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -86,6 +89,13 @@ export async function onRequestGet({
   env: BenchmarkApiEnv;
   params?: { slug?: string };
 }): Promise<Response> {
+  if (acceptsUiDataContractV1(request)) {
+    return onLiveBenchProfileGet({
+      request,
+      slug: params?.slug,
+      db: env.CATALOG_DB as unknown as LiveBenchD1Database | undefined,
+    });
+  }
   if (!env.CATALOG_DB) return unavailableBenchmarkResponse();
 
   const slug = params?.slug;

@@ -4,6 +4,8 @@ import type { UiDataContractV1Method } from './contract-v1';
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
+export const UI_DATA_CONTRACT_V1_MEDIA_TYPE = 'application/vnd.tokenbench.ui-data.v1+json';
+
 function queryUrl(baseUrl: string, pathname: string, parameters: URLSearchParams): string {
   const url = new URL(pathname, baseUrl);
   url.search = parameters.toString();
@@ -52,7 +54,9 @@ function subscriptionCatalogUrl(baseUrl: string): string {
 }
 
 async function jsonResponse(fetchImpl: FetchLike, input: RequestInfo | URL, init?: RequestInit): Promise<unknown> {
-  const response = await fetchImpl(input, init);
+  const headers = new Headers(init?.headers);
+  headers.set('accept', UI_DATA_CONTRACT_V1_MEDIA_TYPE);
+  const response = await fetchImpl(input, { ...init, headers });
   const payload = await response.json();
   if (response.ok || response.status === 404 && isUnavailableEnvelope(payload)) return payload;
   throw new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);
