@@ -414,13 +414,13 @@ function unmatchedRequest<T>(envelope: AcceptedUiDataContractV1): UiDataContract
 }
 
 function mapModels(envelope: AcceptedUiDataContractV1<'models'>): UiDataContractV1<ModelDirectoryData> {
-  if (envelope.data === null) return rootContract(envelope, null);
+  if (envelope.data === null) return rootContract<ModelDirectoryData>(envelope, null);
   const models = array(envelope.data.models, 'data.models').map((model, index) => mapSummary(model, envelope, `data.models[${index}]`));
   return rootContract(envelope, { models });
 }
 
 function mapProfile(envelope: AcceptedUiDataContractV1<'profile'>): UiDataContractV1<PreviewModelProfileData> {
-  if (envelope.data === null) return rootContract(envelope, null);
+  if (envelope.data === null) return rootContract<PreviewModelProfileData>(envelope, null);
   const profile = record(envelope.data.model, 'data.model');
   const summary = record(profile.summary, 'data.model.summary');
   const tasks = array(profile.tasks, 'data.model.tasks');
@@ -464,14 +464,14 @@ function mapLifecycleModel(value: unknown, envelope: AcceptedUiDataContractV1, p
 }
 
 function mapLifecycle(envelope: AcceptedUiDataContractV1<'lifecycle'>): UiDataContractV1<LifecycleData> {
-  if (envelope.data === null) return rootContract(envelope, null);
+  if (envelope.data === null) return rootContract<LifecycleData>(envelope, null);
   return rootContract(envelope, {
     models: array(envelope.data.models, 'data.models').map((model, index) => mapLifecycleModel(model, envelope, `data.models[${index}]`)),
   });
 }
 
 function mapRankings(envelope: AcceptedUiDataContractV1<'rankings'>): UiDataContractV1<RankingData> {
-  if (envelope.data === null) return rootContract(envelope, null);
+  if (envelope.data === null) return rootContract<RankingData>(envelope, null);
   const rows = array(envelope.data.rows, 'data.rows');
   return rootContract(envelope, {
     models: rows.map((candidate, index) => {
@@ -490,7 +490,7 @@ function mapComparison(envelope: AcceptedUiDataContractV1<'comparison'>, query: 
   if (query.modelIds.length < 2 || query.modelIds.length > 4 || new Set(query.modelIds).size !== query.modelIds.length) {
     throw new RangeError('comparison requires 2–4 ordered distinct model slugs');
   }
-  if (envelope.data === null) return rootContract(envelope, null);
+  if (envelope.data === null) return rootContract<CompareData>(envelope, null);
   const profiles = array(envelope.data.models, 'data.models').map((candidate, index) => record(candidate, `data.models[${index}]`));
   const modelsBySlug = new Map(profiles.map((profile, index) => {
     const summary = record(profile.summary, `data.models[${index}].summary`);
@@ -592,7 +592,7 @@ function mapSubscriptionCalculation(envelope: AcceptedUiDataContractV1<'subscrip
 }
 
 function mapSubscription(envelope: AcceptedUiDataContractV1<'subscription'>): UiDataContractV1<SubscriptionData> {
-  if (envelope.data === null) return rootContract(envelope, null);
+  if (envelope.data === null) return rootContract<SubscriptionData>(envelope, null);
   const plans = array(envelope.data.plans, 'data.plans').map((candidate, index): SubscriptionPlan => {
     const plan = record(candidate, `data.plans[${index}]`);
     const sourceRefs = array(plan.sourceRefs, `data.plans[${index}].sourceRefs`);
