@@ -4,6 +4,12 @@ Date: 2026-08-19
 Branch: `codex/frontend-rebuild`  
 Deployment: not performed or authorized
 
+## Design approval
+
+Daren approved the shared leaderboard child-route design on 2026-08-19. The
+approval covers the desktop and mobile visual system represented by the saved
+previews, while retaining the existing source-truth and unavailable-state rules.
+
 ## Outcome
 
 All 14 immutable leaderboard child paths now resolve through one Next.js App
