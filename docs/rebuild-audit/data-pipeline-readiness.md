@@ -62,11 +62,11 @@ The accepted evidence set also covers:
 | Validated parser, page adapter, and request-echo boundary | Ready on authoritative base | `src/frontend/preview-data` |
 | Deterministic preview evidence transport | Ready and isolated from production | explicit retained evidence selection |
 | HTTP transport with no fallback | Ready and sends the v1 media type | `src/frontend/preview-data/http-transport.ts` |
-| Next pages using the validated gateway | Leaderboard children wired; remaining Next surfaces pending | all 14 child leaderboard routes use the strict rankings adapter; local design evidence is explicit and production has no fixture fallback |
+| Next pages using the validated gateway | Leaderboard children and `/popular-models/` wired; remaining Next surfaces pending | all 14 child leaderboard routes and `/popular-models/` use the strict rankings adapter; local design evidence is explicit and production has no fixture fallback |
 | Current BenchLM/catalog APIs | Healthy but legacy | focused API/contract suite passes; response shapes predate UI contract v1 |
 | LiveBench ingestion cadence/source/checkpoint contracts | Ready on this branch | accepted producer foundations plus six-hour discovery cadence |
 | LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned four-artifact retrieval, bounded parsing, R2 evidence, bulk D1 staging/validation, monotonic current pointer |
-| `rankings` GET | Production-capable after migration and first ingestion | pinned LiveBench global-average projection, task economics, filters, bounded pagination, ETag |
+| `rankings` GET | Production-capable after migration and first ingestion | pinned LiveBench global-average projection, release/taxonomy/total/cursor receipt, task economics, filters, bounded pagination, ETag |
 | Custom `rankings` POST | LiveBench capability ranking ready | active release publishes its exact category dimension-set revision; submitted weights are echoed and applied exactly; unavailable route/runtime SLA filters make candidates ineligible rather than inventing facts |
 | `models`, `profile`, `comparison` v1 | Benchmark-backed partial responses ready | LiveBench capability/economics are real; catalog routes, runtime, and lifecycle remain explicitly unavailable |
 | `lifecycle`, `subscription` | Contract-valid unavailable responses only | no fixture fallback; source joins/calculators still need implementation |
@@ -128,6 +128,18 @@ displays invented scores, prices, TTFT, throughput, uptime, lifecycle events, or
 subscription facts must be rewired to the gateway or labeled as a design fixture
 before production.
 
+`/popular-models/` now calls the leaderboard operation through that boundary and
+projects its strict-v1 receipt without a fixture-only popularity cutoff. It
+retains the published release, dynamic taxonomy, total, next cursor, source
+rank, aggregate cost-per-success/mean-output/Pareto facts, and every task
+economics row. Selected-route pricing remains independent, runtime remains
+explicitly unavailable when absent, and lifecycle is intentionally not inferred
+by this ranking projection.
+
+`TOKENBENCH_UI_DATA_MODE=evidence` is local-development-only and visibly labeled
+as design evidence. `TOKENBENCH_UI_DATA_MODE=http` is the production HTTP-only
+mode and has no evidence fallback; production builds reject evidence mode.
+
 ## Remaining data work before production
 
 1. Join reviewed canonical catalog identities and provider-route pricing to the
@@ -138,10 +150,16 @@ before production.
    of returning explicit unavailable envelopes; extend custom rankings with the
    independently sourced catalog/runtime dimensions.
 4. Continue wiring the remaining Next route families through the production
-   HTTP-only composition. The leaderboard child family is complete; its local
-   evidence mode is explicit, development-only, and never a production fallback.
+   HTTP-only composition. The leaderboard child family and `/popular-models/`
+   are wired; their local evidence mode is explicit, development-only, and never
+   a production fallback.
 5. Exercise the shared HTTP transport through a local Next preview, then obtain
    separate authorization for any deployment or cutover.
+6. After the first real production ranking response is wired, run a mandatory
+   full cross-page review of `/popular-models/`, `/leaderboards/`, `/models/`,
+   model profiles, `/compare/`, and `/model-lifecycle/`. Recheck the common
+   source meanings, unavailable boundaries, shell, query behavior, actions, and
+   desktop/mobile rendering before changing any route-level approval state.
 
 ## Verification receipt
 
@@ -150,10 +168,24 @@ before production.
 - Catalog and benchmark full-cycle ingestion: 2 tests passed.
 - Leaderboard boundary refactor: 8 files, 152 tests passed.
 - Final LiveBench storage/discovery/projection/API regression slice: 58 tests passed.
-- Repository-wide test run after integration: 190 files and 2,083 tests passed.
+- Repository-wide test run after the Popular Models integration: 192 files and
+  2,093 tests passed.
 - The current upstream LiveBench release was retrieved and projected locally:
   44 leaderboard rows with schema-valid partial evidence envelopes.
 - Root TypeScript, both worker TypeScript projects, generated Worker binding
   checks, migration sequence through `0014`, Next ESLint, and the Next
   production build passed after integration.
+- Popular Models focused contract/adapter/transport run: 4 files and 24 tests
+  passed; the shared result-action Node test passed 4 tests separately.
+- Next ESLint and the Next production build passed with `/popular-models/` as a
+  request-time dynamic route.
+- Local design-evidence browser check: at 390×844 the desktop table was hidden
+  and equivalent result cards rendered; at 1280×720 the table rendered. The
+  check observed the skip link, labeled filters/comboboxes, live result state,
+  labeled chart images, focusable overflow regions, source-detail disclosure,
+  search/query persistence, and ordered `alpha,beta,gamma` comparison handoff.
+- The shared result-action test uses a `.node-test.ts` filename so root Vitest
+  does not collect the Next-only alias boundary; its dedicated `tsx --test` run
+  covers CSV formula hardening, UTF-8 BOM output, PNG control exclusion, and the
+  accessible action group.
 - No deployment, endpoint activation, or live infrastructure change occurred.

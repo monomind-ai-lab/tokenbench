@@ -14,7 +14,7 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/models/` | audited | implemented and QA-checked | Hero metrics; frontier chart and toggles; 2–4 quick comparison; search/access/provider/sort/reset; 30-card catalog; card/list views; selection tray; copy/PNG/CSV; lifecycle context; release timeline |
 | `/model-profile?model=<slug>` | audited | implemented and QA-checked | Distinct fixture profile; explicit invalid ID state; capability/runtime charts; exact values; limits/lifecycle; endpoint pricing; workload example; history/conflicts; copy/PNG/CSV |
 | `/models/<slug>/` | audited | pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
-| `/popular-models/` | audited | pending | 22-model ranking; desktop table/mobile cards; filters; metric chips; expanded subskills; insight charts; 2–4 comparison tray; copy/PNG/CSV |
+| `/popular-models/` | audited | implemented; route-level visual approval pending | Strict-v1 LiveBench capability workbench; dynamic taxonomy and release/total/cursor receipt; source rank/economics/task detail; desktop table/mobile cards; filters, 2–4 comparison, copy/PNG/CSV; selected-route/runtime/lifecycle boundaries |
 | `/make-it-yours/` | audited | pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | implemented and QA-checked | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
 | `/leaderboards/` and 14 published child routes | audited | directory and child-route designs approved 2026-08-19; implemented and QA-checked | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior |
@@ -50,6 +50,32 @@ The Next.js foundation currently renders this complete order with the approved A
 - Result actions: copy the current link, download the result section as PNG, and export the filtered records as CSV.
 - Closing sections: lifecycle migration context and recent release timeline.
 - Immutable catalog filter state is local to the page rather than query-backed; only the ordered comparison selection becomes URL state.
+
+## Popular Models strict-v1 workbench
+
+- `/popular-models/` is now a source-backed capability workbench, not a fixed
+  22-model popularity list. It projects only strict `ui-data-contract/v1`
+  leaderboard rows, retains published source rank/order, and never applies a
+  local popularity cutoff or replaces unavailable values with zero.
+- The current receipt carries the source release (including provenance/license),
+  source total, and next-cursor state when published. A cursor is displayed as
+  receipt evidence; the route does not pretend that an incomplete page is a
+  complete ranking.
+- Category controls derive from the current source radar axes, while the
+  published taxonomy and task labels remain separately inspectable. Aggregate
+  LiveBench cost per successful evaluation, mean output, Pareto state, and each
+  task-economics row stay source facts.
+- Search, provider, access, category, sort, reset, card/list, expanded evidence,
+  Chart.js insights, ordered two-to-four-model comparison, copy-link, PNG, and
+  CSV actions are present. The comparison selection and visible controls retain
+  their supported query state.
+- Selected-route pricing is separate evidence; its disclosed 50/50 input/output
+  view is never substituted for LiveBench economics. Runtime is explicit when
+  unavailable. Lifecycle is not inferred by the ranking surface and remains a
+  separate lifecycle-source dependency.
+- Focused implementation and local design-evidence checks are recorded in
+  `popular-models-next.md`. They do not constitute route-level visual approval;
+  a full cross-page review is mandatory after real production data wiring.
 
 ## Model profile distinction
 

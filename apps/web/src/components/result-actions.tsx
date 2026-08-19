@@ -15,13 +15,27 @@ type Feedback = "copied" | "csv" | "image" | "error" | null;
 function csvValue(value: CsvCell) {
   if (value === null || value === undefined) return "";
   const text = String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+  const formulaSafe = /^[\t\r\n=+\-@]|^ +[=+\-@]/.test(text) ? `'${text}` : text;
+  return /[",\r\n]/.test(formulaSafe) ? `"${formulaSafe.replaceAll('"', '""')}"` : formulaSafe;
 }
 
 export function rowsToCsv(rows: CsvRow[]) {
   if (!rows.length) return "";
   const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
   return [headers.map(csvValue).join(","), ...rows.map((row) => headers.map((header) => csvValue(row[header])).join(","))].join("\r\n");
+}
+
+export function csvDownloadText(rows: CsvRow[]) {
+  return `\uFEFF${rowsToCsv(rows)}`;
+}
+
+export function resultImageOptions(backgroundColor: string, pixelRatio: number) {
+  return {
+    backgroundColor,
+    cacheBust: true,
+    filter: (node: Node) => !(node instanceof HTMLElement && node.dataset.exportAction === "true"),
+    pixelRatio,
+  };
 }
 
 function downloadDataUrl(dataUrl: string, filename: string) {
@@ -82,18 +96,18 @@ export function ResultActions({
     const node = document.getElementById(targetId);
     if (!node) throw new Error("Result section not found");
     const backgroundColor = getComputedStyle(document.body).backgroundColor;
-    const dataUrl = await toPng(node, { backgroundColor, cacheBust: true, pixelRatio: Math.min(window.devicePixelRatio || 1, 2) });
+    const dataUrl = await toPng(node, resultImageOptions(backgroundColor, Math.min(window.devicePixelRatio || 1, 2)));
     downloadDataUrl(dataUrl, `${filename}.png`);
     return "image" as const;
   });
 
   const downloadCsv = () => run(() => {
-    downloadText(rowsToCsv(rows), `${filename}.csv`);
+    downloadText(csvDownloadText(rows), `${filename}.csv`);
     return "csv" as const;
   });
 
   return (
-    <div aria-label={label} className="flex flex-wrap items-center gap-2" role="group">
+    <div aria-label={label} className="flex flex-wrap items-center gap-2" data-export-action="true" role="group">
       <Button className="min-h-11" onClick={copyLink} size="sm" variant="outline"><Clipboard />Copy link</Button>
       <Button className="min-h-11" onClick={downloadImage} size="sm" variant="outline"><ImageDown />Download image</Button>
       <Button className="min-h-11" onClick={downloadCsv} size="sm" variant="outline"><Download />Export CSV</Button>

@@ -59,6 +59,19 @@ describe('validated preview data adapter', () => {
     ]));
   });
 
+  it('keeps leaderboard-only receipts absent from custom rankings', async () => {
+    const adapter = createValidatedPreviewDataAdapter(acceptedTransport());
+    const rankings = await adapter.rankings(ACCEPTED_CUSTOM_RANKING_QUERY);
+
+    expect(rankings.data).not.toHaveProperty('release');
+    expect(rankings.data).not.toHaveProperty('taxonomy');
+    expect(rankings.data).not.toHaveProperty('total');
+    expect(rankings.data).not.toHaveProperty('nextCursor');
+    expect(rankings.data?.models[0]).not.toHaveProperty('sourceRank');
+    expect(rankings.data?.models[0]).not.toHaveProperty('aggregate');
+    expect(rankings.data?.models[0]).not.toHaveProperty('taskEconomics');
+  });
+
   it('preserves an accepted retired lifecycle state without relabeling it as scheduled', async () => {
     const lifecycle = evidence<Record<string, unknown>>('responses/lifecycle.json');
     lifecycle.data = {
@@ -111,6 +124,105 @@ describe('validated preview data adapter', () => {
     expect(result.data?.models[0]?.model.runtime).toEqual({
       availability: 'unavailable',
       reason: 'No accepted runtime observation is available.',
+    });
+  });
+
+  it('retains the complete leaderboard receipt and task economics without inventing unavailable values', async () => {
+    const rankings = evidence<Record<string, unknown>>('responses/rankings.json');
+    const data = rankings.data as {
+      readonly taxonomy: Array<{
+        categoryId: string;
+        label: string;
+        tasks: Array<{ taskId: string; label: string }>;
+      }>;
+      readonly rows: Array<{
+        taskEconomics: Array<Record<string, unknown>>;
+      }>;
+    };
+    data.rows[0]!.taskEconomics[0]!.meanOutputTokens = {
+      availability: 'unavailable',
+      value: null,
+      reason: 'The publisher did not provide a mean output token count.',
+      sourceRefs: ['fixture:primary-2026-08-18'],
+    };
+    data.taxonomy.push({
+      categoryId: 'reasoning',
+      label: 'Reasoning',
+      tasks: [{ taskId: 'alpha-reasoning', label: 'ALPHA reasoning' }],
+    });
+    data.rows[0]!.taskEconomics.push({
+      ...data.rows[0]!.taskEconomics[0]!,
+      taskId: 'alpha-reasoning',
+      label: 'ALPHA reasoning',
+      categoryId: 'reasoning',
+      meanOutputTokens: {
+        availability: 'available',
+        value: 800,
+        sourceRefs: ['fixture:primary-2026-08-18'],
+      },
+    });
+    const adapter = createValidatedPreviewDataAdapter({
+      request(method) {
+        return Promise.resolve(method === 'rankings' ? rankings : evidence('responses/models.json'));
+      },
+    });
+
+    const result = await adapter.rankings({});
+
+    expect(result.data?.release).toMatchObject({
+      releaseId: 'fixture-release-2026-08-01',
+      releaseOn: '2026-08-01',
+      licenseId: 'CDLA-Permissive-2.0',
+      provenance: [expect.objectContaining({ id: 'fixture:primary-2026-08-18' })],
+    });
+    expect(result.data?.taxonomy).toEqual([{
+      categoryId: 'coding',
+      label: 'Coding',
+      tasks: [{ taskId: 'alpha-coding', label: 'ALPHA coding' }],
+    }, {
+      categoryId: 'reasoning',
+      label: 'Reasoning',
+      tasks: [{ taskId: 'alpha-reasoning', label: 'ALPHA reasoning' }],
+    }]);
+    expect(result.data?.total).toBe(3);
+    expect(result.data?.nextCursor).toBeNull();
+    expect(result.data?.models[0]).toMatchObject({
+      sourceRank: 1,
+      aggregate: {
+        costPerSuccessfulEvaluationUsd: expect.objectContaining({ availability: 'available', value: 0.014 }),
+        meanOutputTokens: expect.objectContaining({ availability: 'available', value: 800 }),
+        pareto: true,
+      },
+      taskEconomics: [expect.objectContaining({
+        taskId: 'alpha-coding',
+        label: 'ALPHA coding',
+        categoryId: 'coding',
+        score: expect.objectContaining({ availability: 'available', value: 91 }),
+        questionCount: expect.objectContaining({ availability: 'available', value: 100 }),
+        evaluationCostUsd: expect.objectContaining({ availability: 'available', value: 1.25 }),
+        inputPriceUsdPerMillion: expect.objectContaining({ availability: 'available', value: 2.5 }),
+        outputPriceUsdPerMillion: expect.objectContaining({ availability: 'available', value: 10 }),
+        equivalentSuccesses: expect.objectContaining({ availability: 'available', value: 91 }),
+        costPerSuccessfulEvaluationUsd: expect.objectContaining({ availability: 'available', value: 0.014 }),
+        meanInputTokens: expect.objectContaining({ availability: 'available', value: 4000 }),
+        meanOutputTokens: {
+          availability: 'unavailable',
+          reason: 'The publisher did not provide a mean output token count.',
+          provenance: expect.objectContaining({ id: 'fixture:primary-2026-08-18' }),
+        },
+      }), expect.anything()],
+    });
+    expect(result.data?.models[0]?.taskEconomics).toHaveLength(2);
+    expect(result.data?.models[0]?.taskEconomics?.[0]?.meanOutputTokens).toEqual({
+      availability: 'unavailable',
+      reason: 'The publisher did not provide a mean output token count.',
+      provenance: expect.objectContaining({ id: 'fixture:primary-2026-08-18' }),
+    });
+    expect(result.data?.models[0]?.taskEconomics?.[1]).toMatchObject({
+      taskId: 'alpha-reasoning',
+      label: 'ALPHA reasoning',
+      categoryId: 'reasoning',
+      meanOutputTokens: expect.objectContaining({ availability: 'available', value: 800 }),
     });
   });
 });

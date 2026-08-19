@@ -202,10 +202,68 @@ export const ACCEPTED_CUSTOM_RANKING_QUERY = {
 export interface RankingEntry {
   readonly model: PreviewModel;
   readonly rank: EvidenceValue<number>;
+  /** Present only for a source-published leaderboard row. */
+  readonly sourceRank?: number;
+  /** Present only for a source-published leaderboard row. */
+  readonly aggregate?: RankingAggregateEconomics;
+  /** Present only for a source-published leaderboard row; preserves every published task fact. */
+  readonly taskEconomics?: readonly RankingTaskEconomics[];
+}
+
+/** Source receipt for a published leaderboard release. */
+export interface RankingReleaseReceipt {
+  readonly releaseId: string;
+  readonly releaseOn: string;
+  readonly licenseId: string;
+  readonly provenance: readonly Provenance[];
+}
+
+/** A source-published taxonomy task, retained so the workbench need not infer categories from model rows. */
+export interface RankingTaxonomyTask {
+  readonly taskId: string;
+  readonly label: string;
+}
+
+/** A source-published taxonomy category and its ordered tasks. */
+export interface RankingTaxonomyCategory {
+  readonly categoryId: string;
+  readonly label: string;
+  readonly tasks: readonly RankingTaxonomyTask[];
+}
+
+/** Row-level aggregate facts published with a leaderboard result. */
+export interface RankingAggregateEconomics {
+  readonly costPerSuccessfulEvaluationUsd: EvidenceValue<number>;
+  readonly meanOutputTokens: EvidenceValue<number>;
+  readonly pareto: boolean;
+}
+
+/** Full source-published task economics; unavailable measurements remain evidence values rather than defaults. */
+export interface RankingTaskEconomics {
+  readonly taskId: string;
+  readonly label: string;
+  readonly categoryId: string;
+  readonly score: EvidenceValue<number>;
+  readonly questionCount: EvidenceValue<number>;
+  readonly evaluationCostUsd: EvidenceValue<number>;
+  readonly inputPriceUsdPerMillion: EvidenceValue<number>;
+  readonly outputPriceUsdPerMillion: EvidenceValue<number>;
+  readonly equivalentSuccesses: EvidenceValue<number>;
+  readonly costPerSuccessfulEvaluationUsd: EvidenceValue<number>;
+  readonly meanInputTokens: EvidenceValue<number>;
+  readonly meanOutputTokens: EvidenceValue<number>;
 }
 
 export interface RankingData {
   readonly models: readonly RankingEntry[];
+  /** Present only for the strict v1 leaderboard operation. */
+  readonly release?: RankingReleaseReceipt;
+  /** Present only for the strict v1 leaderboard operation. */
+  readonly taxonomy?: readonly RankingTaxonomyCategory[];
+  /** Present only for the strict v1 leaderboard operation. */
+  readonly total?: number;
+  /** Present only for the strict v1 leaderboard operation; null is an explicit end-of-page receipt. */
+  readonly nextCursor?: string | null;
 }
 
 export interface CompareQuery {

@@ -1,0 +1,222 @@
+import { describe, expect, it } from "vitest";
+
+import {
+  projectPopularModelsV1,
+} from "./popular-models-v1";
+import type {
+  EvidenceValue,
+  PreviewModel,
+  Provenance,
+  RankingData,
+  RoutePricing,
+  UiDataContractV1,
+} from "./preview-data/contracts";
+
+const provenance: Provenance = {
+  id: "source-release",
+  label: "Verified source release",
+  kind: "accepted_pipeline",
+  effectiveAt: "2026-08-19T00:00:00.000Z",
+  note: "Test-only source receipt.",
+};
+
+function available<T>(value: T): EvidenceValue<T> {
+  return { availability: "available", value, provenance };
+}
+
+function unavailable<T>(reason: string): EvidenceValue<T> {
+  return { availability: "unavailable", reason };
+}
+
+function model(
+  id: string,
+  options: {
+    readonly capability?: PreviewModel["capability"];
+    readonly identity?: PreviewModel["identity"];
+    readonly pricing?: EvidenceValue<RoutePricing>;
+  } = {},
+): PreviewModel {
+  return {
+    id,
+    identity: options.identity ?? available({ slug: id, name: `Model ${id}`, provider: "Acme" }),
+    access: available("Proprietary"),
+    benchmark: available({
+      releaseOn: "2026-08-19",
+      subtasks: [{ id: "task-a", label: "Published task A" }],
+    }),
+    capability: options.capability ?? available({
+      compositeScore: 90,
+      radar: [{ key: "reasoning", label: "Source reasoning", percentile: 91, rank: 2, fieldSize: 40 }],
+    }),
+    routePricing: options.pricing ?? unavailable("No verified selected route price"),
+    taskEconomics: unavailable("No verified task economics"),
+    runtime: unavailable("No verified runtime evidence"),
+    lifecycle: unavailable("No verified lifecycle evidence"),
+  };
+}
+
+function envelope(
+  models: RankingData["models"],
+  status: UiDataContractV1<RankingData>["status"] = "available",
+  details: Omit<RankingData, "models"> = {},
+): UiDataContractV1<RankingData> {
+  return {
+    contractVersion: "ui-data-contract/v1",
+    status,
+    fetchedAt: "2026-08-19T00:00:00.000Z",
+    effectiveAt: "2026-08-19T00:00:00.000Z",
+    data: { models, ...details },
+    provenance: [provenance],
+  };
+}
+
+describe("Popular Models v1 projection", () => {
+  it("uses published radar axes and retains unavailable values instead of substituting zero", () => {
+    const alpha = model("alpha", {
+      capability: available({
+        compositeScore: 96.5,
+        radar: [
+          { key: "reasoning", label: "Source reasoning", percentile: 98, rank: 1, fieldSize: 40 },
+          { key: "tool-use", label: "Source tool use", percentile: null, rank: null, fieldSize: null },
+        ],
+      }),
+      pricing: unavailable("Verified route pricing has not been joined"),
+    });
+    const beta = model("beta", {
+      capability: unavailable("No published capability projection"),
+      pricing: available({
+        route: "beta/direct",
+        inputUsdPerMillion: 2,
+        outputUsdPerMillion: 3,
+        contextWindowTokens: unavailable("No published context window"),
+        maxOutputTokens: available(16_000),
+        inputModalities: ["text"],
+        outputModalities: ["text"],
+        cache: unavailable("No cache price"),
+      }),
+    });
+
+    const view = projectPopularModelsV1(envelope([
+      { model: beta, rank: unavailable("No source position") },
+      { model: alpha, rank: available(1) },
+    ], "partial"));
+
+    expect(view.categories).toEqual([
+      { key: "reasoning", label: "Source reasoning" },
+      { key: "tool-use", label: "Source tool use" },
+    ]);
+    expect(view.models.map((item) => item.id)).toEqual(["alpha", "beta"]);
+    expect(view.models[0]).toMatchObject({
+      rank: 1,
+      overallScore: 96.5,
+      axes: [
+        { key: "reasoning", percentile: 98, rank: 1, fieldSize: 40 },
+        { key: "tool-use", percentile: null, rank: null, fieldSize: null },
+      ],
+      routePricing: { availability: "unavailable", reason: "Verified route pricing has not been joined" },
+    });
+    expect(view.models[1]).toMatchObject({
+      rank: null,
+      overallScore: null,
+      capabilityUnavailableReason: "No published capability projection",
+      routePricing: {
+        availability: "available",
+        route: "beta/direct",
+        inputUsdPerMillion: 2,
+        outputUsdPerMillion: 3,
+        blendedUsdPerMillion: 2.5,
+        contextWindowTokens: null,
+        maxOutputTokens: 16_000,
+      },
+      runtimeUnavailableReason: "No verified runtime evidence",
+      taskEconomicsUnavailableReason: "No verified task economics",
+    });
+  });
+
+  it("retains every strict loader row in published-rank order without inventing a popularity cutoff", () => {
+    const rows = Array.from({ length: 25 }, (_, index) => {
+      const rank = 25 - index;
+      return { model: model(`model-${rank}`), rank: available(rank) };
+    });
+
+    const view = projectPopularModelsV1(envelope(rows));
+
+    expect(view.models).toHaveLength(25);
+    expect(view.models.map((item) => item.rank)).toEqual(
+      Array.from({ length: 25 }, (_, index) => index + 1),
+    );
+  });
+
+  it("preserves the enriched leaderboard receipt, source rank, aggregate economics, and every task measurement", () => {
+    const alpha = model("alpha");
+    const view = projectPopularModelsV1(envelope([
+      {
+        model: alpha,
+        rank: available(99),
+        sourceRank: 4,
+        aggregate: {
+          costPerSuccessfulEvaluationUsd: available(0.01875),
+          meanOutputTokens: unavailable("The release did not publish mean output tokens."),
+          pareto: true,
+        },
+        taskEconomics: [{
+          taskId: "coding-a",
+          label: "Published coding task",
+          categoryId: "coding",
+          score: available(84.2),
+          questionCount: available(40),
+          evaluationCostUsd: available(1.5),
+          inputPriceUsdPerMillion: available(2),
+          outputPriceUsdPerMillion: available(8),
+          equivalentSuccesses: unavailable("No equivalent-success count was published."),
+          costPerSuccessfulEvaluationUsd: available(0.044),
+          meanInputTokens: available(3_200),
+          meanOutputTokens: available(850),
+        }],
+      },
+    ], "available", {
+      release: {
+        releaseId: "fixture-release-2026-08-01",
+        releaseOn: "2026-08-01",
+        licenseId: "CC-BY-4.0",
+        provenance: [provenance],
+      },
+      taxonomy: [{ categoryId: "coding", label: "Published coding", tasks: [{ taskId: "coding-a", label: "Published coding task" }] }],
+      total: 87,
+      nextCursor: null,
+    }));
+
+    expect(view.models[0]).toMatchObject({
+      rank: 4,
+      aggregate: {
+        costPerSuccessfulEvaluationUsd: { value: 0.01875, unavailableReason: null },
+        meanOutputTokens: { value: null, unavailableReason: "The release did not publish mean output tokens." },
+        pareto: true,
+      },
+      taskEconomics: [{
+        taskId: "coding-a",
+        categoryId: "coding",
+        evaluationCostUsd: { value: 1.5, unavailableReason: null },
+        equivalentSuccesses: { value: null, unavailableReason: "No equivalent-success count was published." },
+        meanOutputTokens: { value: 850, unavailableReason: null },
+      }],
+    });
+    expect(view).toMatchObject({
+      release: { releaseId: "fixture-release-2026-08-01", licenseId: "CC-BY-4.0" },
+      taxonomy: [{ categoryId: "coding", tasks: [{ taskId: "coding-a" }] }],
+      total: 87,
+      pagination: { availability: "available", nextCursor: null },
+    });
+  });
+
+  it("keeps a loader failure explicitly unavailable rather than falling back to other data", () => {
+    const view = projectPopularModelsV1(null, "The verified ranking service could not complete this request.");
+
+    expect(view).toMatchObject({
+      sourceStatus: "unavailable",
+      models: [],
+      categories: [],
+      unavailableReason: "The verified ranking service could not complete this request.",
+    });
+  });
+});

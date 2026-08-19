@@ -17,8 +17,13 @@ import type {
   PreviewModel,
   PreviewModelProfileData,
   Provenance,
+  RankingAggregateEconomics,
   RankingData,
+  RankingEntry,
   RankingQuery,
+  RankingReleaseReceipt,
+  RankingTaskEconomics,
+  RankingTaxonomyCategory,
   RoutePricing,
   SubscriptionCalculation,
   SubscriptionData,
@@ -83,6 +88,10 @@ function provenanceByReference(envelope: AcceptedUiDataContractV1, reference: st
   return provenance(source);
 }
 
+function provenancesByReference(value: unknown, envelope: AcceptedUiDataContractV1, path: string): readonly Provenance[] {
+  return array(value, path).map((reference, index) => provenanceByReference(envelope, string(reference, `${path}[${index}]`)));
+}
+
 function evidenceSource(value: JsonRecord, envelope: AcceptedUiDataContractV1, path: string): Provenance {
   const sourceRefs = array(value.sourceRefs, `${path}.sourceRefs`);
   const sourceRef = string(sourceRefs[0], `${path}.sourceRefs[0]`);
@@ -105,6 +114,17 @@ function rawEvidence<T>(
 
 function numericEvidence(value: unknown, envelope: AcceptedUiDataContractV1, path: string): EvidenceValue<number> {
   return rawEvidence(value, envelope, path, (candidate, candidatePath) => finiteNumber(candidate, candidatePath));
+}
+
+function rankingNumericEvidence(value: unknown, envelope: AcceptedUiDataContractV1, path: string): EvidenceValue<number> {
+  const item = record(value, path);
+  if (item.availability !== 'unavailable') return numericEvidence(item, envelope, path);
+  const reason = string(item.reason, `${path}.reason`);
+  const sourceRefs = array(item.sourceRefs, `${path}.sourceRefs`);
+  const sourceRef = sourceRefs[0];
+  return sourceRef === undefined
+    ? unavailable(reason)
+    : { availability: 'unavailable', reason, provenance: provenanceByReference(envelope, string(sourceRef, `${path}.sourceRefs[0]`)) };
 }
 
 function textEvidence(value: unknown, envelope: AcceptedUiDataContractV1, path: string): EvidenceValue<string> {
@@ -476,19 +496,95 @@ function mapLifecycle(envelope: AcceptedUiDataContractV1<'lifecycle'>): UiDataCo
   });
 }
 
+function mapRankingTaskEconomics(value: unknown, envelope: AcceptedUiDataContractV1, path: string): RankingTaskEconomics {
+  const task = record(value, path);
+  return {
+    taskId: string(task.taskId, `${path}.taskId`),
+    label: string(task.label, `${path}.label`),
+    categoryId: string(task.categoryId, `${path}.categoryId`),
+    score: rankingNumericEvidence(task.score, envelope, `${path}.score`),
+    questionCount: rankingNumericEvidence(task.questionCount, envelope, `${path}.questionCount`),
+    evaluationCostUsd: rankingNumericEvidence(task.evaluationCostUsd, envelope, `${path}.evaluationCostUsd`),
+    inputPriceUsdPerMillion: rankingNumericEvidence(task.inputPriceUsdPerMillion, envelope, `${path}.inputPriceUsdPerMillion`),
+    outputPriceUsdPerMillion: rankingNumericEvidence(task.outputPriceUsdPerMillion, envelope, `${path}.outputPriceUsdPerMillion`),
+    equivalentSuccesses: rankingNumericEvidence(task.equivalentSuccesses, envelope, `${path}.equivalentSuccesses`),
+    costPerSuccessfulEvaluationUsd: rankingNumericEvidence(task.costPerSuccessfulEvaluationUsd, envelope, `${path}.costPerSuccessfulEvaluationUsd`),
+    meanInputTokens: rankingNumericEvidence(task.meanInputTokens, envelope, `${path}.meanInputTokens`),
+    meanOutputTokens: rankingNumericEvidence(task.meanOutputTokens, envelope, `${path}.meanOutputTokens`),
+  };
+}
+
+function mapRankingAggregate(row: JsonRecord, envelope: AcceptedUiDataContractV1, path: string): RankingAggregateEconomics {
+  if (typeof row.pareto !== 'boolean') return fail(`${path}.pareto`, 'must be a boolean');
+  return {
+    costPerSuccessfulEvaluationUsd: rankingNumericEvidence(row.costPerSuccessfulEvaluationUsd, envelope, `${path}.costPerSuccessfulEvaluationUsd`),
+    meanOutputTokens: rankingNumericEvidence(row.meanOutputTokens, envelope, `${path}.meanOutputTokens`),
+    pareto: row.pareto,
+  };
+}
+
+function mapLeaderboardRelease(data: JsonRecord, envelope: AcceptedUiDataContractV1): RankingReleaseReceipt {
+  const release = record(data.release, 'data.release');
+  return {
+    releaseId: string(release.releaseId, 'data.release.releaseId'),
+    releaseOn: calendarDate(release.releaseOn) ?? fail('data.release.releaseOn', 'must be a calendar date'),
+    licenseId: string(release.licenseId, 'data.release.licenseId'),
+    provenance: provenancesByReference(release.sourceRefs, envelope, 'data.release.sourceRefs'),
+  };
+}
+
+function mapLeaderboardTaxonomy(data: JsonRecord): readonly RankingTaxonomyCategory[] {
+  return array(data.taxonomy, 'data.taxonomy').map((candidate, categoryIndex) => {
+    const category = record(candidate, `data.taxonomy[${categoryIndex}]`);
+    return {
+      categoryId: string(category.categoryId, `data.taxonomy[${categoryIndex}].categoryId`),
+      label: string(category.label, `data.taxonomy[${categoryIndex}].label`),
+      tasks: array(category.tasks, `data.taxonomy[${categoryIndex}].tasks`).map((taskCandidate, taskIndex) => {
+        const task = record(taskCandidate, `data.taxonomy[${categoryIndex}].tasks[${taskIndex}]`);
+        return {
+          taskId: string(task.taskId, `data.taxonomy[${categoryIndex}].tasks[${taskIndex}].taskId`),
+          label: string(task.label, `data.taxonomy[${categoryIndex}].tasks[${taskIndex}].label`),
+        };
+      }),
+    };
+  });
+}
+
+function mapRankingRows(
+  rows: readonly unknown[],
+  envelope: AcceptedUiDataContractV1<'rankings'>,
+  leaderboard: boolean,
+): readonly RankingEntry[] {
+  return rows.map((candidate, index): RankingEntry => {
+    const path = `data.rows[${index}]`;
+    const row = record(candidate, path);
+    const tasks = leaderboard ? array(row.taskEconomics, `${path}.taskEconomics`) : [];
+    const model = mapSummary(row.model, envelope, `${path}.model`, { task: tasks[0] });
+    const rawRank = row.rank ?? row.sourceRank;
+    const rank = typeof rawRank === 'number' && Number.isFinite(rawRank)
+      ? { availability: 'available' as const, value: rawRank, provenance: provenance(envelope.sources[0] ?? fail('sources', 'requires source')) }
+      : unavailable<number>('No accepted ranking position is available.');
+    if (!leaderboard) return { model, rank };
+    return {
+      model,
+      rank,
+      sourceRank: finiteNumber(row.sourceRank, `${path}.sourceRank`),
+      aggregate: mapRankingAggregate(row, envelope, path),
+      taskEconomics: tasks.map((task, taskIndex) => mapRankingTaskEconomics(task, envelope, `${path}.taskEconomics[${taskIndex}]`)),
+    };
+  });
+}
+
 function mapRankings(envelope: AcceptedUiDataContractV1<'rankings'>): UiDataContractV1<RankingData> {
   if (envelope.data === null) return rootContract<RankingData>(envelope, null);
   const rows = array(envelope.data.rows, 'data.rows');
+  if (envelope.data.operation !== 'leaderboard') return rootContract(envelope, { models: mapRankingRows(rows, envelope, false) });
   return rootContract(envelope, {
-    models: rows.map((candidate, index) => {
-      const row = record(candidate, `data.rows[${index}]`);
-      const model = mapSummary(row.model, envelope, `data.rows[${index}].model`, { task: Array.isArray(row.taskEconomics) ? row.taskEconomics[0] : undefined });
-      const rawRank = row.rank ?? row.sourceRank;
-      const rank = typeof rawRank === 'number' && Number.isFinite(rawRank)
-        ? { availability: 'available' as const, value: rawRank, provenance: provenance(envelope.sources[0] ?? fail('sources', 'requires source')) }
-        : unavailable<number>('No accepted ranking position is available.');
-      return { model, rank };
-    }),
+    models: mapRankingRows(rows, envelope, true),
+    release: mapLeaderboardRelease(envelope.data, envelope),
+    taxonomy: mapLeaderboardTaxonomy(envelope.data),
+    total: finiteNumber(envelope.data.total, 'data.total'),
+    nextCursor: envelope.data.nextCursor === null ? null : string(envelope.data.nextCursor, 'data.nextCursor'),
   });
 }
 
