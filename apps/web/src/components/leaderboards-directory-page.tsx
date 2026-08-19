@@ -1,11 +1,26 @@
 import {
   ArrowRight,
   Binary,
+  BookOpen,
+  Bot,
+  Brain,
   Braces,
   ChartNoAxesCombined,
+  Clapperboard,
+  Code2,
+  DollarSign,
+  Eye,
   FileImage,
   Gauge,
+  Image,
+  Images,
+  Scale,
+  Scissors,
   SlidersHorizontal,
+  Trophy,
+  Users,
+  WandSparkles,
+  type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -78,14 +93,37 @@ const SOURCE_BY_ROUTE: Record<LeaderboardKey, string> = {
   "media-video-editing": "LMArena",
 };
 
+const ICON_BY_ROUTE: Record<LeaderboardKey, LucideIcon> = {
+  "llm-overall": Trophy,
+  "llm-coding": Code2,
+  "llm-agentic": Bot,
+  "llm-reasoning": Brain,
+  "llm-knowledge": BookOpen,
+  "llm-human-preference": Users,
+  "llm-value": Scale,
+  "llm-pricing-context": DollarSign,
+  "multimodal-vision-documents": Eye,
+  "media-text-to-image": Image,
+  "media-image-editing": WandSparkles,
+  "media-text-to-video": Clapperboard,
+  "media-image-to-video": Images,
+  "media-video-editing": Scissors,
+};
+
 function LeaderboardRow({ routeKey, index }: { routeKey: LeaderboardKey; index: number }) {
   const route = LEADERBOARD_ROUTES[routeKey];
+  const Icon = ICON_BY_ROUTE[routeKey];
   return (
     <Link
-      className="group grid gap-4 border-t border-border px-4 py-5 transition-colors first:border-t-0 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[64px_minmax(0,1fr)_auto] sm:items-center sm:px-6"
+      className="group grid gap-4 border-t border-border px-4 py-5 transition-colors first:border-t-0 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[92px_minmax(0,1fr)_auto] sm:items-center sm:px-6"
       href={route.pathname}
     >
-      <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Lens {String(index + 1).padStart(2, "0")}</span>
+      <span className="flex items-center gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-border bg-muted/60 text-muted-foreground transition-colors group-hover:bg-background group-hover:text-foreground">
+          <Icon aria-hidden="true" className="size-4" />
+        </span>
+        <span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Lens {String(index + 1).padStart(2, "0")}</span>
+      </span>
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-2">
           <span className="text-base font-medium tracking-tight">{route.seo.h1}</span>
