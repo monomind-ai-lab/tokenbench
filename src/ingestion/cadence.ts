@@ -9,12 +9,16 @@
 
 export const CATALOG_CRON = '20 0 * * *';
 export const BENCHMARK_CRON = '15 2 * * SUN';
+export const LIVEBENCH_DISCOVERY_CRON = '17 */6 * * *';
 
 /** Catalog evidence is fresh for 36 hours. */
 export const CATALOG_FRESHNESS_WINDOW_MS = 36 * 60 * 60 * 1_000;
 
 /** Benchmark-derived evidence is fresh for exactly 8 days. */
 export const BENCHMARK_FRESHNESS_WINDOW_MS = 8 * 24 * 60 * 60 * 1_000;
+
+/** LiveBench discovery runs four times per UTC day; two missed windows are stale. */
+export const LIVEBENCH_FRESHNESS_WINDOW_MS = 12 * 60 * 60 * 1_000;
 
 export const BENCHMARK_STALE_MESSAGE =
   'Published weekly benchmark evidence has not refreshed within 8 days.';
@@ -52,6 +56,13 @@ export function benchmarkCadenceKey(timestamp: string): string {
     (thursday.getTime() - firstThursday.getTime()) / (7 * 86_400_000),
   ) + 1;
   return `${isoYear}-W${pad2(week)}`;
+}
+
+/** Six-hour UTC bucket used to deduplicate LiveBench discovery alarms. */
+export function liveBenchCadenceKey(timestamp: string): string {
+  const date = new Date(timestamp);
+  const bucketHour = Math.floor(date.getUTCHours() / 6) * 6;
+  return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}T${pad2(bucketHour)}`;
 }
 
 /**

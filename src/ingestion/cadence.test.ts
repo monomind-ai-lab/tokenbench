@@ -4,20 +4,25 @@ import {
   BENCHMARK_FRESHNESS_WINDOW_MS,
   CATALOG_CRON,
   CATALOG_FRESHNESS_WINDOW_MS,
+  LIVEBENCH_DISCOVERY_CRON,
+  LIVEBENCH_FRESHNESS_WINDOW_MS,
   benchmarkCadenceKey,
   catalogCadenceKey,
   cycleDue,
+  liveBenchCadenceKey,
 } from './cadence';
 
 describe('cadence constants', () => {
   it('exports the exact cron schedules', () => {
     expect(CATALOG_CRON).toBe('20 0 * * *');
     expect(BENCHMARK_CRON).toBe('15 2 * * SUN');
+    expect(LIVEBENCH_DISCOVERY_CRON).toBe('17 */6 * * *');
   });
 
   it('exports the exact freshness windows', () => {
     expect(CATALOG_FRESHNESS_WINDOW_MS).toBe(36 * 60 * 60 * 1_000);
     expect(BENCHMARK_FRESHNESS_WINDOW_MS).toBe(8 * 24 * 60 * 60 * 1_000);
+    expect(LIVEBENCH_FRESHNESS_WINDOW_MS).toBe(12 * 60 * 60 * 1_000);
   });
 });
 
@@ -52,6 +57,15 @@ describe('benchmarkCadenceKey', () => {
   it('supports ISO week 53 without negative or zero week numbers', () => {
     expect(benchmarkCadenceKey('2020-12-31T23:59:59.999Z')).toBe('2020-W53');
     expect(benchmarkCadenceKey('2021-01-01T00:00:00.000Z')).toBe('2020-W53');
+  });
+});
+
+describe('liveBenchCadenceKey', () => {
+  it('derives stable six-hour UTC discovery buckets', () => {
+    expect(liveBenchCadenceKey('2026-08-19T00:17:00.000Z')).toBe('2026-08-19T00');
+    expect(liveBenchCadenceKey('2026-08-19T05:59:59.999Z')).toBe('2026-08-19T00');
+    expect(liveBenchCadenceKey('2026-08-19T06:17:00.000Z')).toBe('2026-08-19T06');
+    expect(liveBenchCadenceKey('2026-08-19T23:59:59.999Z')).toBe('2026-08-19T18');
   });
 });
 
