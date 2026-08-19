@@ -125,8 +125,8 @@ export function ResultActions({
 export function ViewModeToggle({ mode, onChange, label = "Result view" }: { mode: "cards" | "list"; onChange: (mode: "cards" | "list") => void; label?: string }) {
   return (
     <div aria-label={label} className="inline-flex rounded-xl border border-border bg-card p-1" role="group">
-      <button aria-pressed={mode === "cards"} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "cards" && "bg-muted text-foreground")} onClick={() => onChange("cards")} type="button"><Grid2X2 className="size-3.5" />Cards</button>
-      <button aria-pressed={mode === "list"} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "list" && "bg-muted text-foreground")} onClick={() => onChange("list")} type="button"><List className="size-3.5" />List</button>
+      <button aria-pressed={mode === "cards"} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "cards" && "bg-active-control text-active-control-foreground")} onClick={() => onChange("cards")} type="button"><Grid2X2 className="size-3.5" />Cards</button>
+      <button aria-pressed={mode === "list"} className={cn("flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-muted-foreground transition-colors", mode === "list" && "bg-active-control text-active-control-foreground")} onClick={() => onChange("list")} type="button"><List className="size-3.5" />List</button>
     </div>
   );
 }

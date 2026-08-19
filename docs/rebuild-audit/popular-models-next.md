@@ -6,7 +6,9 @@ Deployment: not performed or authorized
 
 ## Approval state
 
-No route-level Next visual approval has been recorded. This receipt documents
+No route-level Next visual approval has been recorded. Exact immutable
+three-section parity is implemented, but real HTTP/live data and the final
+cross-page review remain required before approval. This receipt documents
 implementation and verification boundaries only.
 
 ## Outcome
@@ -16,17 +18,20 @@ strict `ui-data-contract/v1` leaderboard operation. It is a LiveBench capability
 workbench, not a hard-coded popularity ranking: every returned source row is
 kept in published rank order and unavailable source evidence is never made zero.
 
-The route preserves:
+The exact immutable section sequence is implemented:
 
-1. Hero, strict-v1 receipt, and a source-scope statement.
-2. Search, provider, access, dynamic category, sort, reset, and card/list
-   controls with retained query state.
-3. Desktop evidence table and equivalent mobile cards, each with expanded source
-   details.
-4. Source-published aggregate-economics and selected-route Chart.js views.
-5. Ordered inline two-to-four-model comparison, source radar/matrices, and a
-   handoff to `/compare/?models=...`.
-6. Copy-link, PNG, and CSV actions for the visible result surface.
+1. `01` **Leaderboard** — hero/strict-v1 receipt, source-scope statement,
+   controls, and the master evidence table (with equivalent mobile cards and
+   expanded source detail).
+2. `02` **Insights** — exactly two source-aware charts, with published
+   aggregate economics and selected-route evidence kept distinct.
+3. `03` **Compare** — ordered two-to-four-model comparison, source
+   radar/matrices, and exactly three economics charts before the handoff to
+   `/compare/?models=...`.
+
+Copy-link, PNG, and CSV actions remain attached to the visible result surface.
+Search, provider, access, dynamic category, sort, reset, and card/list controls
+retain their supported query state.
 
 ## Strict-v1 receipt and source scope
 
@@ -83,12 +88,15 @@ The route preserves:
 
 ## Verification receipt
 
-- Focused contract/adapter transport run — 4 files and 24 tests passed.
-- Shared result-action Node test — 4 tests passed; its `.node-test.ts` filename
+- Focused Popular Models projection/adapter run — 2 files and 21 tests passed.
+- Shared result-action Node test — 5 tests passed; its `.node-test.ts` filename
   intentionally keeps the Next-only alias boundary out of root Vitest discovery.
-- Repository-wide Vitest — 192 files and 2,093 tests passed.
+- Chart accent/frontier Node test — 3 tests passed.
+- Repository-wide Vitest — 192 files and 2,099 tests passed.
 - Next ESLint: passed.
 - Next production build: passed; `/popular-models/` is request-time dynamic.
+- Final browser parity review: passed at desktop and true mobile-card widths with
+  five Chart.js canvases, no page-level overflow, and no current app-origin error.
 - No deployment, endpoint activation, or live infrastructure change occurred.
 
 ## Remaining dependencies and next gate
@@ -100,6 +108,6 @@ The route preserves:
    and lifecycle data independently; do not infer them from LiveBench rows.
 3. Add an app-level Next test configuration for the action component and run
    end-to-end copy/PNG/CSV checks.
-4. After real production wiring, run a mandatory full cross-page review across
-   `/popular-models/`, leaderboard routes, models/profiles, compare, and lifecycle
-   before changing route-level approval status.
+4. After real HTTP/live-data wiring, run a mandatory final cross-page review
+   across `/popular-models/`, leaderboard routes, models/profiles, compare, and
+   lifecycle before changing route-level approval status.

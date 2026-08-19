@@ -143,7 +143,7 @@ export function LeaderboardsDirectoryPage() {
   return (
     <div>
       <section className="relative overflow-hidden border-b border-border">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_16%,rgba(84,137,214,.15),transparent_29%),radial-gradient(circle_at_16%_92%,rgba(217,119,87,.08),transparent_24%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_16%,color-mix(in_srgb,var(--primary)_15%,transparent),transparent_29%),radial-gradient(circle_at_16%_92%,rgba(217,119,87,.08),transparent_24%)]" />
         <div className="relative mx-auto grid max-w-7xl gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.08fr_.92fr] lg:px-10 lg:py-24">
           <div className="max-w-3xl">
             <h1 className="text-balance text-5xl font-semibold leading-[.98] tracking-[-.04em] sm:text-6xl">Choose the evidence lens before the winner.</h1>

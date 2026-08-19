@@ -121,7 +121,7 @@ function ProviderDot({ provider }: { provider: string }) {
 
 function LeaderboardRowCard({ row, position, pricingOnly }: { row: LeaderboardDisplayRow; position: number; pricingOnly: boolean }) {
   return (
-    <Card className={cn("transition-colors hover:ring-foreground/20", row.frontier && "ring-1 ring-blue-500/35")}>
+    <Card className={cn("transition-colors hover:ring-foreground/20", row.frontier && "ring-1 ring-primary/35")}>
       <CardContent>
         <div className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-border bg-muted/60 font-mono text-xs text-muted-foreground">
@@ -260,7 +260,7 @@ export function LeaderboardDetailPage({
   return (
     <div>
       <section aria-labelledby="leaderboard-heading" className="relative overflow-hidden border-b border-border">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,rgba(84,137,214,.14),transparent_30%),radial-gradient(circle_at_15%_90%,rgba(217,119,87,.07),transparent_24%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,color-mix(in_srgb,var(--primary)_14%,transparent),transparent_30%),radial-gradient(circle_at_15%_90%,rgba(217,119,87,.07),transparent_24%)]" />
         <div className="relative mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1fr_390px] lg:items-end lg:px-10">
           <div>
             <Link className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground" href="/leaderboards/"><ArrowLeft className="size-4" />All leaderboards</Link>
@@ -316,7 +316,7 @@ export function LeaderboardDetailPage({
             <label className="space-y-1.5 text-xs text-muted-foreground" htmlFor="leaderboard-sort">Sort<select className="mt-1.5 block h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" id="leaderboard-sort" onChange={(event) => update("sort", event.target.value as LeaderboardSort)} value={filters.sort}>{definition.sortOptions.map((sort) => <option key={sort} value={sort}>{SORT_LABELS[sort]}</option>)}</select></label>
             <Button className="min-h-11" onClick={reset} type="button" variant="outline"><RotateCcw />Reset</Button>
           </form>
-          {definition.supportsProfile ? <fieldset className="mt-4 rounded-2xl border border-border bg-card p-4"><legend className="px-1 text-xs text-muted-foreground">Workload profile</legend><div className="flex flex-wrap gap-2">{(Object.keys(PROFILE_LABELS) as (keyof typeof PROFILE_LABELS)[]).map((profile) => <label className={cn("flex min-h-11 cursor-pointer items-center rounded-xl border border-border px-4 text-sm transition-colors", filters.profile === profile && "border-foreground bg-foreground text-background")} key={profile}><input checked={filters.profile === profile} className="sr-only" name="workload-profile" onChange={() => update("profile", profile)} type="radio" value={profile} />{PROFILE_LABELS[profile]}</label>)}</div><p className="mt-3 text-xs text-muted-foreground">Input-heavy is 75% input / 25% output, balanced is 50% / 50%, and output-heavy is 25% / 75%.</p></fieldset> : null}
+          {definition.supportsProfile ? <fieldset className="mt-4 rounded-2xl border border-border bg-card p-4"><legend className="px-1 text-xs text-muted-foreground">Workload profile</legend><div className="flex flex-wrap gap-2">{(Object.keys(PROFILE_LABELS) as (keyof typeof PROFILE_LABELS)[]).map((profile) => <label className={cn("flex min-h-11 cursor-pointer items-center rounded-xl border px-4 text-sm transition-colors", filters.profile === profile ? "border-active-control bg-active-control text-active-control-foreground" : "border-border")} key={profile}><input checked={filters.profile === profile} className="sr-only" name="workload-profile" onChange={() => update("profile", profile)} type="radio" value={profile} />{PROFILE_LABELS[profile]}</label>)}</div><p className="mt-3 text-xs text-muted-foreground">Input-heavy is 75% input / 25% output, balanced is 50% / 50%, and output-heavy is 25% / 75%.</p></fieldset> : null}
         </div>
       </section>
 

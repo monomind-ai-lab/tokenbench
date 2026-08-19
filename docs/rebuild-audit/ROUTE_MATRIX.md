@@ -1,33 +1,40 @@
 # TokenBench immutable route matrix
 
-Last audited: 2026-08-19
+Last reconciled: 2026-08-20
 
 Immutable authority: `https://8bf19b96.tokenbench-27t.pages.dev/`
 
 Production canonical: `https://tokenbench.monomind.one`
 
-Status legend: `audited` means the immutable behavior is recorded; it does not mean the Next.js rebuild is complete.
+Status legend: `audited` means the immutable behavior is recorded; it does not mean the Next.js rebuild or visual approval is complete. Only the explicitly marked design approvals below are closed to visual redesign.
 
 | Route family | Audit | Next.js rebuild | Core preservation gate |
 | --- | --- | --- | --- |
-| `/` | audited | foundation implemented | Hero plus sections 01–05 in the immutable order; four workbench filters; radar; subscription slider; three research cards; latest global shell/footer form |
-| `/models/` | audited | implemented and QA-checked | Hero metrics; frontier chart and toggles; 2–4 quick comparison; search/access/provider/sort/reset; 30-card catalog; card/list views; selection tray; copy/PNG/CSV; lifecycle context; release timeline |
-| `/model-profile?model=<slug>` | audited | implemented and QA-checked | Distinct fixture profile; explicit invalid ID state; capability/runtime charts; exact values; limits/lifecycle; endpoint pricing; workload example; history/conflicts; copy/PNG/CSV |
-| `/models/<slug>/` | audited | pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
-| `/popular-models/` | audited | implemented; route-level visual approval pending | Strict-v1 LiveBench capability workbench; dynamic taxonomy and release/total/cursor receipt; source rank/economics/task detail; desktop table/mobile cards; filters, 2–4 comparison, copy/PNG/CSV; selected-route/runtime/lifecycle boundaries |
-| `/make-it-yours/` | audited | pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
-| `/model-lifecycle/` | audited | implemented and QA-checked | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
-| `/leaderboards/` and 14 published child routes | audited | directory and child-route designs approved 2026-08-19; implemented and QA-checked | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior |
-| `/compare/` | audited | implemented and QA-checked | URL-backed 2–4 distinct selections; invalid/duplicate cleanup and four-model truncation; capability radar/table; three economics charts; decision table; provenance; copy/PNG/CSV |
-| `/compare/<pair>` | audited | pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
-| `/subscribe-vs-api/` | audited | implemented and QA-checked | Existing simulator preserved: provider/plan; 1–4-model mix; exact URL contract; message and character workload; cache priority; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy |
-| `/cost` | audited | implemented; build-checked | Redirect-only to the fully parameterized default subscribe-versus-API scenario; discard arbitrary query parameters |
-| `/tools/` | audited | implemented; build-checked | Static tool directory; one subscription-versus-API card; no embedded replacement calculator |
-| `/llm-price-performance/` | audited | pending | URL-backed lane/creator/price filters; interactive Pareto chart and model dialog; full leaderboard/details; null/zero semantics |
-| `/articles/` | audited | implemented and QA-checked | Eight index cards; six substantive guides plus two prototype insight concepts; tabs 8/6/2/0; topics; search; sort; prototype disclosure; empty state |
-| `/articles/<six published slugs>` | audited | implemented and QA-checked | Breadcrumb, learning summary, numbered sections, dual CTAs, desktop TOC, related content, latest global shell, Article/Breadcrumb JSON-LD |
-| `/guides/` | audited | implemented and QA-checked | Five field-guide cards and subscribe-versus-API CTA |
-| `/guides/<five published slugs>/` | audited | implemented and redirect-checked | Redirect to canonical `/articles/<slug>/` detail |
+| `/` | audited | foundation implemented; design approval pending | Hero plus sections 01–05 in the immutable order; four workbench filters; radar; subscription slider; three research cards; latest global shell/footer form |
+| `/models/` | audited | implemented and QA-checked; design approval pending | Hero metrics; frontier chart and toggles; 2–4 quick comparison; search/access/provider/sort/reset; 30-card catalog; card/list views; selection tray; copy/PNG/CSV; lifecycle context; release timeline |
+| `/model-profile?model=<slug>` | audited | implemented and QA-checked; design approval pending | Distinct fixture profile; explicit invalid ID state; capability/runtime charts; exact values; limits/lifecycle; endpoint pricing; workload example; history/conflicts; copy/PNG/CSV |
+| `/models/<slug>/` | audited | pending; design approval pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
+| `/popular-models/` | audited | exact three-section parity implemented; design approval pending | `01` Leaderboard master table; `02` Insights with two charts; `03` Compare with three economics charts; strict-v1 unavailable slots; real HTTP/live data and final cross-page review remain |
+| `/make-it-yours/` | audited | pending; design approval pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
+| `/model-lifecycle/` | audited | implemented and QA-checked; design approval pending | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
+| `/leaderboards/` and 14 published child routes | audited | visual design approved; do not reopen | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior; only data wiring/availability verification remains |
+| `/compare/` | audited | implemented and QA-checked; design approval pending | URL-backed 2–4 distinct selections; invalid/duplicate cleanup and four-model truncation; capability radar/table; three economics charts; decision table; provenance; copy/PNG/CSV |
+| `/compare/<pair>` | audited | pending; design approval pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
+| `/subscribe-vs-api/` | audited | visual design approved; do not reopen | Existing simulator preserved: provider/plan; 1–4-model mix; exact URL contract; message and character workload; cache priority; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy; only data wiring remains |
+| `/cost` | audited | implemented; build-checked; design approval pending | Redirect-only to the fully parameterized default subscribe-versus-API scenario; discard arbitrary query parameters |
+| `/tools/` | audited | implemented; build-checked; design approval pending | Static tool directory; one subscription-versus-API card; no embedded replacement calculator |
+| `/llm-price-performance/` | audited | pending; design approval pending | URL-backed lane/creator/price filters; interactive Pareto chart and model dialog; full leaderboard/details; null/zero semantics |
+| `/articles/` | audited | implemented and QA-checked; design approval pending | Eight index cards; six substantive guides plus two prototype insight concepts; tabs 8/6/2/0; topics; search; sort; prototype disclosure; empty state |
+| `/articles/<six published slugs>` | audited | implemented and QA-checked; design approval pending | Breadcrumb, learning summary, numbered sections, dual CTAs, desktop TOC, related content, latest global shell, Article/Breadcrumb JSON-LD |
+| `/guides/` | audited | implemented and QA-checked; design approval pending | Five field-guide cards and subscribe-versus-API CTA |
+| `/guides/<five published slugs>/` | audited | implemented and redirect-checked; design approval pending | Redirect to canonical `/articles/<slug>/` detail |
+
+## Finalized approval policy
+
+- The user-approved visual designs for `/leaderboards/` and all 14 published leaderboard children are closed to redesign. Preserve them; only strict-v1 data wiring, unavailable-state truthfulness, and verification remain.
+- The user-approved visual design for `/subscribe-vs-api/` is likewise closed to redesign. Preserve every section, input, calculation/result slot, and action while data sources are wired.
+- Every other matrix entry remains subject to immutable-parity approval. New Next.js tokens may restyle a preserved section; they may not remove, merge, replace, or fabricate its content, controls, charts, outputs, URL semantics, or explicit unavailable state.
+- The ordered implementation/acceptance queue is maintained in `unapproved-page-parity-backlog.md`.
 
 ## Landing page: immutable section order
 
@@ -53,7 +60,10 @@ The Next.js foundation currently renders this complete order with the approved A
 
 ## Popular Models strict-v1 workbench
 
-- `/popular-models/` is now a source-backed capability workbench, not a fixed
+- Exact immutable section order is implemented: `01` **Leaderboard** with its
+  master table, `02` **Insights** with its two charts, and `03` **Compare** with
+  its three economics charts. This is parity implementation, not design approval.
+- `/popular-models/` is a source-backed capability workbench, not a fixed
   22-model popularity list. It projects only strict `ui-data-contract/v1`
   leaderboard rows, retains published source rank/order, and never applies a
   local popularity cutoff or replaces unavailable values with zero.
@@ -86,8 +96,7 @@ The Next.js foundation currently renders this complete order with the approved A
 ## Leaderboard variation contract
 
 - `/leaderboards/` remains a decision-method directory, not a generic leaderboard instance.
-- The user approved the Next.js directory's visual design and information architecture on 2026-08-19, including its three evidence groups, list/card language, category icons, and responsive presentation. That directory-only approval did not by itself mark any child leaderboard route complete.
-- The user approved the shared child-route design on 2026-08-19, including its evidence receipt, Chart.js result views, filter panel, desktop table/mobile cards, methodology state, and related-lens presentation.
+- The user approved the Next.js directory visual design and information architecture, and the visual design of every published child route. Do not reopen either visual design; data wiring and explicit unavailable-state verification remain open.
 - LLM child routes preserve their individual visualizations and default query contracts: overall uses `profile=balanced&sort=score-desc`, value uses `profile=balanced&sort=pareto-score-desc`, pricing context uses `profile=balanced&sort=price-asc`, and human-preference uses `profile=balanced&sort=rank-asc`.
 - Multimodal and media routes preserve their route-specific chart counts, evidence notes, ranking rows, and `profile=balanced&sort=rank-asc` default where published.
 - Desktop results use full tables while mobile results use the immutable card presentation; this responsive behavior is not satisfied by merely scrolling a desktop table.
@@ -105,6 +114,8 @@ The Next.js foundation currently renders this complete order with the approved A
 - Unknown pairs render an explicit comparison-not-found page.
 
 ## Subscribe-versus-API URL contract
+
+The visual design is approved and is not a redesign target. Preserve this complete contract while reviewed provider/catalog data is wired; data work must not replace any simulator section or interaction.
 
 Default canonical parameters:
 

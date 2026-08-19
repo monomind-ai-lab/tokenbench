@@ -21,80 +21,122 @@ import type { CatalogModel } from "@/lib/model-catalog";
 
 ChartJS.register(BarElement, CategoryScale, Filler, LinearScale, LogarithmicScale, PointElement, RadialLinearScale, LineElement, Tooltip, Legend);
 
-const chartData = {
-  datasets: [
-    {
-      label: "OpenAI",
-      data: [
-        { x: 0.15, y: 86 },
-        { x: 1.25, y: 92 },
-        { x: 2.5, y: 96 },
-      ],
-      backgroundColor: "#f4f4f5",
-      borderColor: "#f4f4f5",
-      pointRadius: 5,
-      pointHoverRadius: 7,
-    },
-    {
-      label: "Anthropic",
-      data: [
-        { x: 0.8, y: 88 },
-        { x: 3, y: 95 },
-        { x: 5, y: 98 },
-      ],
-      backgroundColor: "#d97757",
-      borderColor: "#d97757",
-      pointRadius: 5,
-      pointHoverRadius: 7,
-    },
-    {
-      label: "Google",
-      data: [
-        { x: 0.1, y: 84 },
-        { x: 0.35, y: 90 },
-        { x: 2, y: 97 },
-      ],
-      backgroundColor: "#5489d6",
-      borderColor: "#5489d6",
-      pointRadius: 5,
-      pointHoverRadius: 7,
-    },
-  ],
-};
+const MONOMIND_CHART_ACCENT = "#1111ff";
+
+interface ChartTheme {
+  readonly accent: string;
+  readonly accentFill: string;
+  readonly grid: string;
+  readonly muted: string;
+  readonly reducedMotion: boolean;
+  readonly strong: string;
+  readonly tooltip: string;
+  readonly tooltipBorder: string;
+}
+
+function fallbackChartTheme(dark: boolean, reducedMotion: boolean): ChartTheme {
+  const accent = dark ? "#9696ff" : MONOMIND_CHART_ACCENT;
+  return dark ? {
+    accent,
+    accentFill: "rgba(150,150,255,.20)",
+    grid: "rgba(255,255,255,.07)",
+    muted: "#a1a1aa",
+    reducedMotion,
+    strong: "#fafafa",
+    tooltip: "#18181b",
+    tooltipBorder: accent,
+  } : {
+    accent,
+    accentFill: "rgba(17,17,255,.14)",
+    grid: "rgba(0,0,0,.09)",
+    muted: "#71717a",
+    reducedMotion,
+    strong: "#18181b",
+    tooltip: "#ffffff",
+    tooltipBorder: accent,
+  };
+}
+
+function chartThemeFromRoot(root: HTMLElement, reducedMotion: boolean): ChartTheme {
+  const fallback = fallbackChartTheme(root.classList.contains("dark"), reducedMotion);
+  const styles = window.getComputedStyle(root);
+  const semanticColor = (name: string, value: string) => styles.getPropertyValue(name).trim() || value;
+  return {
+    ...fallback,
+    grid: semanticColor("--border", fallback.grid),
+    muted: semanticColor("--muted-foreground", fallback.muted),
+    strong: semanticColor("--foreground", fallback.strong),
+    tooltip: semanticColor("--popover", fallback.tooltip),
+  };
+}
 
 function useChartTheme() {
-  const [dark, setDark] = useState(true);
+  const [theme, setTheme] = useState<ChartTheme>(() => fallbackChartTheme(true, false));
 
   useEffect(() => {
     const root = document.documentElement;
-    const sync = () => setDark(root.classList.contains("dark"));
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setTheme(chartThemeFromRoot(root, motion.matches));
     sync();
     const observer = new MutationObserver(sync);
     observer.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
-    return () => observer.disconnect();
+    motion.addEventListener("change", sync);
+    return () => { observer.disconnect(); motion.removeEventListener("change", sync); };
   }, []);
 
-  return dark ? {
-    grid: "rgba(255,255,255,.07)",
-    muted: "#a1a1aa",
-    strong: "#fafafa",
-    tooltip: "#18181b",
-    tooltipBorder: "#3f3f46",
-  } : {
-    grid: "rgba(0,0,0,.09)",
-    muted: "#71717a",
-    strong: "#18181b",
-    tooltip: "#ffffff",
-    tooltipBorder: "#d4d4d8",
+  return theme;
+}
+
+function tokenBenchChartData() {
+  return {
+    datasets: [
+      {
+        label: "OpenAI",
+        data: [
+          { x: 0.15, y: 86 },
+          { x: 1.25, y: 92 },
+          { x: 2.5, y: 96 },
+        ],
+        backgroundColor: "#7c8fd1",
+        borderColor: "#7c8fd1",
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      },
+      {
+        label: "Anthropic",
+        data: [
+          { x: 0.8, y: 88 },
+          { x: 3, y: 95 },
+          { x: 5, y: 98 },
+        ],
+        backgroundColor: "#d97757",
+        borderColor: "#d97757",
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      },
+      {
+        label: "Google",
+        data: [
+          { x: 0.1, y: 84 },
+          { x: 0.35, y: 90 },
+          { x: 2, y: 97 },
+        ],
+        backgroundColor: "#5489d6",
+        borderColor: "#5489d6",
+        pointRadius: 5,
+        pointHoverRadius: 7,
+      },
+    ],
   };
 }
 
 export function TokenBenchChart() {
   const theme = useChartTheme();
+  const data = useMemo(() => tokenBenchChartData(), []);
   const options = useMemo<ChartOptions<"scatter">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 500 },
+    animation: theme.reducedMotion ? false : { duration: 500 },
     interaction: { intersect: false, mode: "nearest" },
     plugins: {
       legend: {
@@ -141,29 +183,52 @@ export function TokenBenchChart() {
 
   return (
     <div className="h-[280px] w-full" role="img" aria-label="Price versus evidence score scatter chart">
-      <Scatter data={chartData} options={options} />
+      <Scatter data={data} options={options} />
     </div>
   );
+}
+
+export function modelFrontierDatasets(models: readonly CatalogModel[], accent: string) {
+  const plottedModels = models.filter((model) => model.inputPrice !== null && model.score !== null);
+  const providers = Array.from(new Set(plottedModels.map((model) => model.provider)));
+  const frontierModels = plottedModels.filter((model) => model.frontier);
+  const providerDatasets = providers.map((provider) => {
+    const providerModels = plottedModels.filter((model) => model.provider === provider && !model.frontier);
+    return {
+      label: provider,
+      data: providerModels.map((model) => ({ x: model.inputPrice as number, y: model.score as number, model: model.name, frontier: false })),
+      backgroundColor: providerModels[0]?.color ?? "#a1a1aa",
+      borderColor: providerModels[0]?.color ?? "#a1a1aa",
+      pointRadius: 5,
+      pointHoverRadius: 8,
+      pointStyle: "circle" as const,
+    };
+  }).filter((dataset) => dataset.data.length > 0);
+
+  return frontierModels.length === 0 ? providerDatasets : [
+    ...providerDatasets,
+    {
+      label: "Value frontier",
+      data: frontierModels.map((model) => ({ x: model.inputPrice as number, y: model.score as number, model: model.name, frontier: true })),
+      backgroundColor: accent,
+      borderColor: accent,
+      pointRadius: 8,
+      pointHoverRadius: 10,
+      pointStyle: "rectRot" as const,
+      borderWidth: 2,
+    },
+  ];
 }
 
 export function ModelFrontierChart({ models, logScale }: { models: CatalogModel[]; logScale: boolean }) {
   const theme = useChartTheme();
   const data = useMemo(() => ({
-    datasets: Array.from(new Set(models.map((model) => model.provider))).map((provider) => ({
-      label: provider,
-      data: models
-        .filter((model) => model.provider === provider && model.inputPrice !== null && model.score !== null)
-        .map((model) => ({ x: model.inputPrice as number, y: model.score as number, model: model.name })),
-      backgroundColor: models.find((model) => model.provider === provider)?.color ?? "#a1a1aa",
-      borderColor: models.find((model) => model.provider === provider)?.color ?? "#a1a1aa",
-      pointRadius: 5,
-      pointHoverRadius: 8,
-    })),
-  }), [models]);
+    datasets: modelFrontierDatasets(models, theme.accent),
+  }), [models, theme.accent]);
   const options = useMemo<ChartOptions<"scatter">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 450 },
+    animation: theme.reducedMotion ? false : { duration: 450 },
     interaction: { intersect: false, mode: "nearest" },
     plugins: {
       legend: {
@@ -177,6 +242,7 @@ export function ModelFrontierChart({ models, logScale }: { models: CatalogModel[
         callbacks: {
           title: (items) => String((items[0]?.raw as { model?: string } | undefined)?.model ?? items[0]?.dataset.label ?? "Model"),
           label: (context) => `$${context.parsed.x}/1M input · evidence ${context.parsed.y}`,
+          afterLabel: (context) => (context.raw as { frontier?: boolean }).frontier ? "Value frontier" : "",
         },
         displayColors: false,
         titleColor: theme.strong,
@@ -206,41 +272,46 @@ export function ModelFrontierChart({ models, logScale }: { models: CatalogModel[
   return (
     <div className="h-[360px] w-full" role="img" aria-label="Model price and evidence frontier">
       <Scatter data={data} options={options} />
-      <p className="sr-only">The frontier chart plots model input price against evidence score. Models without published price or score are excluded rather than plotted as zero.</p>
+      <p className="sr-only">The frontier chart plots model input price against evidence score. Value-frontier models use larger diamonds and are also labelled in the chart legend and tooltip. Models without published price or score are excluded rather than plotted as zero.</p>
     </div>
   );
 }
 
-const radarData = {
-  labels: ["Agentic", "Coding", "Reasoning", "Math", "Multimodal", "Throughput"],
-  datasets: [
-    {
-      label: "GPT-4o",
-      data: [89, 90, 89, 88, 92, 82],
-      borderColor: "#f4f4f5",
-      backgroundColor: "rgba(244,244,245,.08)",
-      pointBackgroundColor: "#f4f4f5",
-      pointRadius: 3,
-      borderWidth: 2,
-    },
-    {
-      label: "DeepSeek V3",
-      data: [87, 92, 89, 89, 75, 68],
-      borderColor: "#5489d6",
-      backgroundColor: "rgba(84,137,214,.10)",
-      pointBackgroundColor: "#5489d6",
-      pointRadius: 3,
-      borderWidth: 2,
-    },
-  ],
-};
+function capabilityRadarData() {
+  return {
+    labels: ["Agentic", "Coding", "Reasoning", "Math", "Multimodal", "Throughput"],
+    datasets: [
+      {
+        label: "GPT-4o",
+        data: [89, 90, 89, 88, 92, 82],
+        borderColor: "#7c8fd1",
+        backgroundColor: "rgba(124,143,209,.10)",
+        pointBackgroundColor: "#7c8fd1",
+        pointRadius: 3,
+        pointStyle: "circle" as const,
+        borderWidth: 2,
+      },
+      {
+        label: "DeepSeek V3",
+        data: [87, 92, 89, 89, 75, 68],
+        borderColor: "#d97757",
+        backgroundColor: "rgba(217,119,87,.10)",
+        pointBackgroundColor: "#d97757",
+        pointRadius: 3,
+        pointStyle: "circle" as const,
+        borderWidth: 2,
+      },
+    ],
+  };
+}
 
 export function CapabilityRadarChart() {
   const theme = useChartTheme();
+  const data = useMemo(() => capabilityRadarData(), []);
   const options = useMemo<ChartOptions<"radar">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 500 },
+    animation: theme.reducedMotion ? false : { duration: 500 },
     plugins: {
       legend: {
         position: "bottom",
@@ -269,7 +340,7 @@ export function CapabilityRadarChart() {
 
   return (
     <div className="h-[340px] w-full" role="img" aria-label="GPT-4o and DeepSeek V3 capability comparison">
-      <Radar data={radarData} options={options} />
+      <Radar data={data} options={options} />
       <p className="sr-only">GPT-4o: Agentic 89, Coding 90, Reasoning 89, Math 88, Multimodal 92, Throughput 82. DeepSeek V3: Agentic 87, Coding 92, Reasoning 89, Math 89, Multimodal 75, Throughput 68.</p>
     </div>
   );
@@ -283,11 +354,12 @@ export function ModelCapabilityRadar({ model }: { model: CatalogModel }) {
   }, [model]);
   const data = useMemo(() => ({
     labels: ["Agentic", "Coding", "Reasoning", "Knowledge", "Multimodal", "Throughput"],
-    datasets: [{ label: model.name, data: values, borderColor: model.color, backgroundColor: `${model.color}20`, pointBackgroundColor: model.color, pointRadius: 3, borderWidth: 2 }],
-  }), [model, values]);
+    datasets: [{ label: model.name, data: values, borderColor: theme.accent, backgroundColor: theme.accentFill, pointBackgroundColor: theme.accent, pointRadius: 4, pointStyle: "rectRot" as const, borderWidth: 3 }],
+  }), [model.name, theme.accent, theme.accentFill, values]);
   const options = useMemo<ChartOptions<"radar">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: theme.reducedMotion ? false : { duration: 400 },
     plugins: { legend: { display: false }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, displayColors: false, titleColor: theme.strong, bodyColor: theme.muted } },
     scales: { r: { beginAtZero: true, max: 100, min: 0, angleLines: { color: theme.grid }, grid: { color: theme.grid }, pointLabels: { color: theme.muted, font: { size: 11 } }, ticks: { display: false } } },
   }), [theme]);
@@ -306,13 +378,14 @@ export function ModelSlaHistoryChart({ model }: { model: CatalogModel }) {
   const data = useMemo(() => ({
     labels: ["Mar", "Apr", "May", "Jun", "Jul", "Aug"],
     datasets: [
-      { label: "TTFT (seconds)", data: ttft, borderColor: model.color, backgroundColor: `${model.color}22`, pointRadius: 3, tension: 0.35, yAxisID: "y" },
+      { label: "TTFT (seconds)", data: ttft, borderColor: theme.accent, backgroundColor: theme.accentFill, pointRadius: 4, pointStyle: "rectRot" as const, tension: 0.35, yAxisID: "y" },
       { label: "Throughput (tokens/s)", data: throughput, borderColor: "#8b9cc5", backgroundColor: "rgba(139,156,197,.16)", pointRadius: 3, tension: 0.35, yAxisID: "y1" },
     ],
-  }), [model, throughput, ttft]);
+  }), [theme.accent, theme.accentFill, throughput, ttft]);
   const options = useMemo<ChartOptions<"line">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: theme.reducedMotion ? false : { duration: 400 },
     interaction: { intersect: false, mode: "index" },
     plugins: { legend: { position: "bottom", labels: { color: theme.muted, pointStyle: "circle", usePointStyle: true } }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, titleColor: theme.strong, bodyColor: theme.muted } },
     scales: {
@@ -333,34 +406,36 @@ export function ComparisonRadarChart({ models }: { models: CatalogModel[] }) {
   const theme = useChartTheme();
   const data = useMemo(() => ({
     labels: ["Agentic", "Coding", "Reasoning", "Knowledge", "Multimodal", "Throughput"],
-    datasets: models.map((model) => ({
+    datasets: models.map((model, index) => ({
       label: model.name,
       data: comparisonCapabilityValues(model),
-      borderColor: model.color,
-      backgroundColor: `${model.color}12`,
-      pointBackgroundColor: model.color,
-      pointRadius: 3,
-      borderWidth: 2,
+      borderColor: index === 0 ? theme.accent : model.color,
+      backgroundColor: index === 0 ? theme.accentFill : `${model.color}12`,
+      pointBackgroundColor: index === 0 ? theme.accent : model.color,
+      pointRadius: index === 0 ? 4 : 3,
+      pointStyle: index === 0 ? "rectRot" as const : "circle" as const,
+      borderWidth: index === 0 ? 3 : 2,
       spanGaps: false,
     })),
-  }), [models]);
+  }), [models, theme.accent, theme.accentFill]);
   const options = useMemo<ChartOptions<"radar">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: theme.reducedMotion ? false : { duration: 400 },
     plugins: { legend: { position: "bottom", labels: { color: theme.muted, pointStyle: "circle", usePointStyle: true } }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, titleColor: theme.strong, bodyColor: theme.muted } },
     scales: { r: { beginAtZero: true, max: 100, min: 0, angleLines: { color: theme.grid }, grid: { color: theme.grid }, pointLabels: { color: theme.muted, font: { size: 11 } }, ticks: { display: false } } },
   }), [theme]);
-  return <div aria-label={`${models.map((model) => model.name).join(", ")} capability radar`} className="h-[380px] w-full" role="img"><Radar data={data} options={options} /><p className="sr-only">Exact capability values are available in the adjacent table. Unavailable throughput values are left empty rather than set to zero.</p></div>;
+  return <div aria-label={`${models.map((model) => model.name).join(", ")} capability radar`} className="h-[380px] w-full" role="img"><Radar data={data} options={options} /><p className="sr-only">The first selected model uses a thicker diamond marker; the other selected models use circles. Exact capability values are available in the adjacent table. Unavailable throughput values are left empty rather than set to zero.</p></div>;
 }
 
 export function ComparisonEconomicsCharts({ models }: { models: CatalogModel[] }) {
   const theme = useChartTheme();
-  const colors = models.map((model) => model.color);
+  const colors = models.map((model, index) => index === 0 ? theme.accent : model.color);
   const labels = models.map((model) => model.name);
   const optionFor = (axisTitle: string, money = false): ChartOptions<"bar"> => ({
     responsive: true,
     maintainAspectRatio: false,
-    animation: { duration: 400 },
+    animation: theme.reducedMotion ? false : { duration: 400 },
     plugins: { legend: { display: false }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, displayColors: false, titleColor: theme.strong, bodyColor: theme.muted } },
     scales: {
       x: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted, maxRotation: 0 } },
@@ -389,9 +464,10 @@ export function SubscriptionBreakevenChart({ costPerMillion, subscriptionCost, c
   const options = useMemo<ChartOptions<"line">>(() => ({
     responsive: true,
     maintainAspectRatio: false,
+    animation: theme.reducedMotion ? false : { duration: 400 },
     interaction: { intersect: false, mode: "index" },
     plugins: { legend: { position: "bottom", labels: { color: theme.muted, pointStyle: "circle", usePointStyle: true } }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, callbacks: { title: (items) => `${items[0]?.label}M monthly tokens`, label: (context) => `${context.dataset.label}: $${Number(context.parsed.y).toFixed(2)}` }, titleColor: theme.strong, bodyColor: theme.muted } },
     scales: { x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value, index) => `${volumes[index]}M` }, title: { color: theme.muted, display: true, text: "Monthly token volume" } }, y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => `$${value}` }, title: { color: theme.muted, display: true, text: "Monthly USD" } } },
   }), [theme, volumes]);
-  return <div aria-label="API versus subscription breakeven chart" className="h-[360px] w-full" role="img"><Line data={data} options={options} /><p className="sr-only">API cost rises with monthly token volume while the selected subscription remains flat at ${subscriptionCost.toFixed(2)}. {crossoverMillions === null ? "No crossover is available." : `The estimated crossover is ${crossoverMillions.toFixed(2)} million tokens.`}</p></div>;
+  return <div aria-label="API versus subscription breakeven chart" className="h-[360px] w-full" role="img"><Line data={data} options={options} /><p className="sr-only">The subscription line uses dashes. API cost rises with monthly token volume while the selected subscription remains flat at ${subscriptionCost.toFixed(2)}. {crossoverMillions === null ? "No crossover is available." : `The estimated crossover is ${crossoverMillions.toFixed(2)} million tokens.`}</p></div>;
 }

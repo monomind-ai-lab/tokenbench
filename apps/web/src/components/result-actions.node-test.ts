@@ -3,7 +3,7 @@ import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { csvDownloadText, ResultActions, resultImageOptions, rowsToCsv } from "./result-actions";
+import { csvDownloadText, ResultActions, resultImageOptions, rowsToCsv, ViewModeToggle } from "./result-actions";
 
 test("rowsToCsv neutralizes spreadsheet formula starters before serializing cells", () => {
   const csv = rowsToCsv([{
@@ -59,4 +59,15 @@ test("ResultActions retains its accessible action group while identifying export
   assert.match(markup, /aria-label="Share and export result"/);
   assert.match(markup, /role="group"/);
   assert.match(markup, /aria-live="polite"/);
+});
+
+test("ViewModeToggle gives its pressed view the semantic active-control treatment", () => {
+  const markup = renderToStaticMarkup(createElement(ViewModeToggle, {
+    mode: "cards",
+    onChange: () => {},
+  }));
+
+  assert.match(markup, /aria-pressed="true"/);
+  assert.match(markup, /bg-active-control text-active-control-foreground/);
+  assert.doesNotMatch(markup, /bg-muted text-foreground/);
 });

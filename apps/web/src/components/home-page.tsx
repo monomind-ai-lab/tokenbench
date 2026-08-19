@@ -90,7 +90,7 @@ function ModelWorkbenchPreview() {
   return (
     <div className="mt-8">
       <div aria-label="Model workbench filters" className="mb-5 flex flex-wrap gap-2" role="group">
-        {([ ["all", "All models"], ["open", "Open-weight"], ["latency", "Low-latency"], ["throughput", "High-throughput"] ] as const).map(([id, label]) => <button aria-pressed={filter === id} className={cn("rounded-full border border-border px-4 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", filter === id && "bg-foreground text-background hover:bg-foreground hover:text-background")} key={id} onClick={() => setFilter(id)} type="button">{label}</button>)}
+        {([ ["all", "All models"], ["open", "Open-weight"], ["latency", "Low-latency"], ["throughput", "High-throughput"] ] as const).map(([id, label]) => <button aria-pressed={filter === id} className={cn("rounded-full border px-4 py-2 text-xs transition-colors", filter === id ? "border-active-control bg-active-control text-active-control-foreground hover:bg-active-control" : "border-border text-muted-foreground hover:bg-muted hover:text-foreground")} key={id} onClick={() => setFilter(id)} type="button">{label}</button>)}
       </div>
       <div aria-label="Model workbench preview" className="overflow-x-auto rounded-2xl border border-border bg-card" role="region">
         <table className="min-w-[760px] w-full border-collapse text-sm">
@@ -119,7 +119,7 @@ function SubscriptionPreview() {
       </div>
       <Card><CardContent className="p-6">
         <div className="flex items-end justify-between gap-4"><div><label className="text-xs text-muted-foreground" htmlFor="monthly-prompts">Monthly prompts sent</label><output className="mt-2 block font-mono text-3xl" htmlFor="monthly-prompts">{prompts.toLocaleString()}</output></div><Badge variant={apiLower ? "secondary" : "default"}>{apiLower ? "API lower" : "Subscription lower"}</Badge></div>
-        <input aria-label="Monthly prompts sent" className="mt-7 w-full accent-foreground" id="monthly-prompts" max={4000} min={0} onChange={(event) => setPrompts(Number(event.target.value))} step={50} type="range" value={prompts} />
+        <input aria-label="Monthly prompts sent" className="mt-7 w-full accent-primary" id="monthly-prompts" max={4000} min={0} onChange={(event) => setPrompts(Number(event.target.value))} step={50} type="range" value={prompts} />
         <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground"><span>0</span><span>4,000</span></div>
         <p className="mt-5 text-sm leading-6 text-muted-foreground">{apiLower ? "API remains lower" : "A fixed subscription becomes lower"} at this workload. The illustrative crossover is approximately {crossover.toLocaleString()} prompts.</p>
       </CardContent></Card>
@@ -131,7 +131,7 @@ export function HomePage() {
   return (
     <>
       <section className="relative overflow-hidden border-b border-border">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_8%,rgba(84,137,214,.16),transparent_28%),radial-gradient(circle_at_92%_62%,rgba(217,119,87,.12),transparent_24%)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_78%_8%,color-mix(in_srgb,var(--primary)_16%,transparent),transparent_28%),radial-gradient(circle_at_92%_62%,rgba(217,119,87,.12),transparent_24%)]" />
         <div className="relative mx-auto grid min-h-[690px] max-w-7xl items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.02fr_.98fr] lg:px-10">
           <div>
             <Badge className="mb-6 gap-2 rounded-full px-3 py-1 font-mono text-[11px]" variant="secondary"><Sparkles className="size-3" />Independent evidence layer</Badge>

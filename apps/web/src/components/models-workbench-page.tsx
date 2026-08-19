@@ -24,7 +24,7 @@ function SelectionButton({ model, selected, onChange }: { model: CatalogModel; s
     <button
       aria-label={`${selected ? "Remove" : "Add"} ${model.name} ${selected ? "from" : "to"} comparison`}
       aria-pressed={selected}
-      className={cn("grid size-7 shrink-0 place-items-center rounded-full border border-border bg-background text-muted-foreground transition hover:text-foreground", selected && "border-foreground bg-foreground text-background hover:text-background")}
+      className={cn("grid size-7 shrink-0 place-items-center rounded-full border transition", selected ? "border-active-control bg-active-control text-active-control-foreground hover:text-active-control-foreground" : "border-border bg-background text-muted-foreground hover:text-foreground")}
       onClick={onChange}
       type="button"
     >
@@ -77,7 +77,7 @@ function ModelPicker({ selected, onToggle, onClose }: { selected: string[]; onTo
                   <span className="block font-medium">{model.name}</span>
                   <span className="block text-xs text-muted-foreground">{model.provider} · {model.category}</span>
                 </span>
-                <span className={cn("grid size-6 place-items-center rounded-full border border-border", isSelected && "border-foreground bg-foreground text-background")}>{isSelected ? <Check className="size-3" /> : <Plus className="size-3" />}</span>
+                <span className={cn("grid size-6 place-items-center rounded-full border", isSelected ? "border-active-control bg-active-control text-active-control-foreground" : "border-border")}>{isSelected ? <Check className="size-3" /> : <Plus className="size-3" />}</span>
               </button>
             );
           })}

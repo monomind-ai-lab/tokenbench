@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  filterPopularModels,
+  normalizePopularModelsComparisonIds,
+  popularModelsCategoryWinnerIds,
+  popularModelsLeaderboardColumns,
   projectPopularModelsV1,
+  sortPopularModels,
 } from "./popular-models-v1";
 import type {
   EvidenceValue,
@@ -38,17 +43,30 @@ function model(
 ): PreviewModel {
   return {
     id,
-    identity: options.identity ?? available({ slug: id, name: `Model ${id}`, provider: "Acme" }),
+    identity:
+      options.identity ??
+      available({ slug: id, name: `Model ${id}`, provider: "Acme" }),
     access: available("Proprietary"),
     benchmark: available({
       releaseOn: "2026-08-19",
       subtasks: [{ id: "task-a", label: "Published task A" }],
     }),
-    capability: options.capability ?? available({
-      compositeScore: 90,
-      radar: [{ key: "reasoning", label: "Source reasoning", percentile: 91, rank: 2, fieldSize: 40 }],
-    }),
-    routePricing: options.pricing ?? unavailable("No verified selected route price"),
+    capability:
+      options.capability ??
+      available({
+        compositeScore: 90,
+        radar: [
+          {
+            key: "reasoning",
+            label: "Source reasoning",
+            percentile: 91,
+            rank: 2,
+            fieldSize: 40,
+          },
+        ],
+      }),
+    routePricing:
+      options.pricing ?? unavailable("No verified selected route price"),
     taskEconomics: unavailable("No verified task economics"),
     runtime: unavailable("No verified runtime evidence"),
     lifecycle: unavailable("No verified lifecycle evidence"),
@@ -71,13 +89,59 @@ function envelope(
 }
 
 describe("Popular Models v1 projection", () => {
+  it("keeps every source-published category available for an Overall leaderboard, including taxonomy categories without a radar value", () => {
+    const alpha = model("alpha", {
+      capability: available({
+        compositeScore: 92,
+        radar: [
+          {
+            key: "reasoning",
+            label: "Source reasoning",
+            percentile: 96,
+            rank: 1,
+            fieldSize: 40,
+          },
+        ],
+      }),
+    });
+
+    const view = projectPopularModelsV1(
+      envelope([{ model: alpha, rank: available(1) }], "available", {
+        taxonomy: [
+          {
+            categoryId: "coding",
+            label: "Published coding",
+            tasks: [{ taskId: "coding-a", label: "Published coding task" }],
+          },
+        ],
+      }),
+    );
+
+    expect(view.categories).toEqual([
+      { key: "reasoning", label: "Source reasoning" },
+      { key: "coding", label: "Published coding" },
+    ]);
+  });
+
   it("uses published radar axes and retains unavailable values instead of substituting zero", () => {
     const alpha = model("alpha", {
       capability: available({
         compositeScore: 96.5,
         radar: [
-          { key: "reasoning", label: "Source reasoning", percentile: 98, rank: 1, fieldSize: 40 },
-          { key: "tool-use", label: "Source tool use", percentile: null, rank: null, fieldSize: null },
+          {
+            key: "reasoning",
+            label: "Source reasoning",
+            percentile: 98,
+            rank: 1,
+            fieldSize: 40,
+          },
+          {
+            key: "tool-use",
+            label: "Source tool use",
+            percentile: null,
+            rank: null,
+            fieldSize: null,
+          },
         ],
       }),
       pricing: unavailable("Verified route pricing has not been joined"),
@@ -96,10 +160,15 @@ describe("Popular Models v1 projection", () => {
       }),
     });
 
-    const view = projectPopularModelsV1(envelope([
-      { model: beta, rank: unavailable("No source position") },
-      { model: alpha, rank: available(1) },
-    ], "partial"));
+    const view = projectPopularModelsV1(
+      envelope(
+        [
+          { model: beta, rank: unavailable("No source position") },
+          { model: alpha, rank: available(1) },
+        ],
+        "partial",
+      ),
+    );
 
     expect(view.categories).toEqual([
       { key: "reasoning", label: "Source reasoning" },
@@ -113,7 +182,10 @@ describe("Popular Models v1 projection", () => {
         { key: "reasoning", percentile: 98, rank: 1, fieldSize: 40 },
         { key: "tool-use", percentile: null, rank: null, fieldSize: null },
       ],
-      routePricing: { availability: "unavailable", reason: "Verified route pricing has not been joined" },
+      routePricing: {
+        availability: "unavailable",
+        reason: "Verified route pricing has not been joined",
+      },
     });
     expect(view.models[1]).toMatchObject({
       rank: null,
@@ -149,60 +221,92 @@ describe("Popular Models v1 projection", () => {
 
   it("preserves the enriched leaderboard receipt, source rank, aggregate economics, and every task measurement", () => {
     const alpha = model("alpha");
-    const view = projectPopularModelsV1(envelope([
-      {
-        model: alpha,
-        rank: available(99),
-        sourceRank: 4,
-        aggregate: {
-          costPerSuccessfulEvaluationUsd: available(0.01875),
-          meanOutputTokens: unavailable("The release did not publish mean output tokens."),
-          pareto: true,
+    const view = projectPopularModelsV1(
+      envelope(
+        [
+          {
+            model: alpha,
+            rank: available(99),
+            sourceRank: 4,
+            aggregate: {
+              costPerSuccessfulEvaluationUsd: available(0.01875),
+              meanOutputTokens: unavailable(
+                "The release did not publish mean output tokens.",
+              ),
+              pareto: true,
+            },
+            taskEconomics: [
+              {
+                taskId: "coding-a",
+                label: "Published coding task",
+                categoryId: "coding",
+                score: available(84.2),
+                questionCount: available(40),
+                evaluationCostUsd: available(1.5),
+                inputPriceUsdPerMillion: available(2),
+                outputPriceUsdPerMillion: available(8),
+                equivalentSuccesses: unavailable(
+                  "No equivalent-success count was published.",
+                ),
+                costPerSuccessfulEvaluationUsd: available(0.044),
+                meanInputTokens: available(3_200),
+                meanOutputTokens: available(850),
+              },
+            ],
+          },
+        ],
+        "available",
+        {
+          release: {
+            releaseId: "fixture-release-2026-08-01",
+            releaseOn: "2026-08-01",
+            licenseId: "CC-BY-4.0",
+            provenance: [provenance],
+          },
+          taxonomy: [
+            {
+              categoryId: "coding",
+              label: "Published coding",
+              tasks: [{ taskId: "coding-a", label: "Published coding task" }],
+            },
+          ],
+          total: 87,
+          nextCursor: null,
         },
-        taskEconomics: [{
-          taskId: "coding-a",
-          label: "Published coding task",
-          categoryId: "coding",
-          score: available(84.2),
-          questionCount: available(40),
-          evaluationCostUsd: available(1.5),
-          inputPriceUsdPerMillion: available(2),
-          outputPriceUsdPerMillion: available(8),
-          equivalentSuccesses: unavailable("No equivalent-success count was published."),
-          costPerSuccessfulEvaluationUsd: available(0.044),
-          meanInputTokens: available(3_200),
-          meanOutputTokens: available(850),
-        }],
-      },
-    ], "available", {
-      release: {
-        releaseId: "fixture-release-2026-08-01",
-        releaseOn: "2026-08-01",
-        licenseId: "CC-BY-4.0",
-        provenance: [provenance],
-      },
-      taxonomy: [{ categoryId: "coding", label: "Published coding", tasks: [{ taskId: "coding-a", label: "Published coding task" }] }],
-      total: 87,
-      nextCursor: null,
-    }));
+      ),
+    );
 
     expect(view.models[0]).toMatchObject({
       rank: 4,
       aggregate: {
-        costPerSuccessfulEvaluationUsd: { value: 0.01875, unavailableReason: null },
-        meanOutputTokens: { value: null, unavailableReason: "The release did not publish mean output tokens." },
+        costPerSuccessfulEvaluationUsd: {
+          value: 0.01875,
+          unavailableReason: null,
+        },
+        meanOutputTokens: {
+          value: null,
+          unavailableReason: "The release did not publish mean output tokens.",
+        },
         pareto: true,
       },
-      taskEconomics: [{
-        taskId: "coding-a",
-        categoryId: "coding",
-        evaluationCostUsd: { value: 1.5, unavailableReason: null },
-        equivalentSuccesses: { value: null, unavailableReason: "No equivalent-success count was published." },
-        meanOutputTokens: { value: 850, unavailableReason: null },
-      }],
+      taskEconomics: [
+        {
+          taskId: "coding-a",
+          categoryId: "coding",
+          evaluationCostUsd: { value: 1.5, unavailableReason: null },
+          equivalentSuccesses: {
+            value: null,
+            unavailableReason: "No equivalent-success count was published.",
+          },
+          meanOutputTokens: { value: 850, unavailableReason: null },
+        },
+      ],
     });
     expect(view).toMatchObject({
-      release: { releaseId: "fixture-release-2026-08-01", licenseId: "CC-BY-4.0" },
+      release: {
+        releaseId: "fixture-release-2026-08-01",
+        licenseId: "CC-BY-4.0",
+      },
       taxonomy: [{ categoryId: "coding", tasks: [{ taskId: "coding-a" }] }],
       total: 87,
       pagination: { availability: "available", nextCursor: null },
@@ -210,13 +314,239 @@ describe("Popular Models v1 projection", () => {
   });
 
   it("keeps a loader failure explicitly unavailable rather than falling back to other data", () => {
-    const view = projectPopularModelsV1(null, "The verified ranking service could not complete this request.");
+    const view = projectPopularModelsV1(
+      null,
+      "The verified ranking service could not complete this request.",
+    );
 
     expect(view).toMatchObject({
       sourceStatus: "unavailable",
       models: [],
       categories: [],
-      unavailableReason: "The verified ranking service could not complete this request.",
+      unavailableReason:
+        "The verified ranking service could not complete this request.",
     });
+  });
+
+  it("filters real-time queries and provider selections without changing source-rank evidence", () => {
+    const alpha = model("alpha", {
+      identity: available({
+        slug: "alpha",
+        name: "Atlas One",
+        provider: "Atlas",
+      }),
+    });
+    const beta = model("beta", {
+      identity: available({
+        slug: "beta",
+        name: "Beacon Two",
+        provider: "Beacon",
+      }),
+    });
+    const view = projectPopularModelsV1(
+      envelope([
+        { model: alpha, rank: available(2), sourceRank: 2 },
+        { model: beta, rank: available(1), sourceRank: 1 },
+      ]),
+    );
+
+    const result = filterPopularModels(view.models, {
+      query: "beacon",
+      providers: ["Beacon"],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      id: "beta",
+      rank: 1,
+      provider: "Beacon",
+    });
+  });
+
+  it("sorts a selected source category while retaining each model's immutable published source rank", () => {
+    const alpha = model("alpha", {
+      capability: available({
+        compositeScore: 90,
+        radar: [
+          {
+            key: "coding",
+            label: "Coding",
+            percentile: 91,
+            rank: 2,
+            fieldSize: 20,
+          },
+        ],
+      }),
+    });
+    const beta = model("beta", {
+      capability: available({
+        compositeScore: 95,
+        radar: [
+          {
+            key: "coding",
+            label: "Coding",
+            percentile: 82,
+            rank: 4,
+            fieldSize: 20,
+          },
+        ],
+      }),
+    });
+    const gamma = model("gamma", {
+      capability: available({
+        compositeScore: 88,
+        radar: [
+          {
+            key: "coding",
+            label: "Coding",
+            percentile: 97,
+            rank: 1,
+            fieldSize: 20,
+          },
+        ],
+      }),
+    });
+    const view = projectPopularModelsV1(
+      envelope([
+        { model: alpha, rank: available(2), sourceRank: 2 },
+        { model: beta, rank: available(1), sourceRank: 1 },
+        { model: gamma, rank: available(3), sourceRank: 3 },
+      ]),
+    );
+
+    const sorted = sortPopularModels(view.models, "category:coding", "desc");
+
+    expect(sorted.map((item) => item.id)).toEqual(["gamma", "alpha", "beta"]);
+    expect(sorted.map((item) => item.rank)).toEqual([3, 2, 1]);
+  });
+
+  it("uses source category measurements for winner marks and leaves unavailable values out of the winner set", () => {
+    const alpha = model("alpha", {
+      capability: available({
+        compositeScore: 90,
+        radar: [
+          {
+            key: "reasoning",
+            label: "Reasoning",
+            percentile: 94,
+            rank: 2,
+            fieldSize: 20,
+          },
+        ],
+      }),
+    });
+    const beta = model("beta", {
+      capability: available({
+        compositeScore: 95,
+        radar: [
+          {
+            key: "reasoning",
+            label: "Reasoning",
+            percentile: 99,
+            rank: 1,
+            fieldSize: 20,
+          },
+        ],
+      }),
+    });
+    const gamma = model("gamma", {
+      capability: available({
+        compositeScore: 88,
+        radar: [
+          {
+            key: "reasoning",
+            label: "Reasoning",
+            percentile: null,
+            rank: null,
+            fieldSize: null,
+          },
+        ],
+      }),
+    });
+    const view = projectPopularModelsV1(
+      envelope([
+        { model: alpha, rank: available(2), sourceRank: 2 },
+        { model: beta, rank: available(1), sourceRank: 1 },
+        { model: gamma, rank: available(3), sourceRank: 3 },
+      ]),
+    );
+
+    expect(popularModelsCategoryWinnerIds(view.models, "reasoning", 2)).toEqual(
+      new Set(["beta", "alpha"]),
+    );
+  });
+
+  it("builds all source category columns in Overall mode and source taxonomy task columns for a selected category", () => {
+    const alpha = model("alpha", {
+      capability: available({
+        compositeScore: 90,
+        radar: [
+          {
+            key: "reasoning",
+            label: "Reasoning",
+            percentile: 94,
+            rank: 2,
+            fieldSize: 20,
+          },
+          {
+            key: "coding",
+            label: "Coding",
+            percentile: 89,
+            rank: 3,
+            fieldSize: 20,
+          },
+        ],
+      }),
+    });
+    const view = projectPopularModelsV1(
+      envelope([{ model: alpha, rank: available(1) }], "available", {
+        taxonomy: [
+          {
+            categoryId: "coding",
+            label: "Coding",
+            tasks: [{ taskId: "coding-a", label: "Coding A" }],
+          },
+        ],
+      }),
+    );
+
+    expect(
+      popularModelsLeaderboardColumns(view, null).map((column) => column.key),
+    ).toEqual(["overall", "category:reasoning", "category:coding"]);
+    expect(
+      popularModelsLeaderboardColumns(view, "coding").map(
+        (column) => column.key,
+      ),
+    ).toEqual(["category:coding", "task:coding:coding-a"]);
+  });
+
+  it("normalizes a URL-backed comparison to two through four searchable source models in caller order", () => {
+    const alpha = model("alpha");
+    const beta = model("beta");
+    const gamma = model("gamma");
+    const unavailableModel = model("unavailable", {
+      identity: unavailable("No profile link"),
+    });
+    const view = projectPopularModelsV1(
+      envelope([
+        { model: alpha, rank: available(1) },
+        { model: beta, rank: available(2) },
+        { model: gamma, rank: available(3) },
+        { model: unavailableModel, rank: available(4) },
+      ]),
+    );
+
+    expect(
+      normalizePopularModelsComparisonIds(view.models, [
+        "gamma",
+        "alpha",
+        "gamma",
+        "unavailable",
+        "beta",
+      ]),
+    ).toEqual(["gamma", "alpha", "beta"]);
+    expect(normalizePopularModelsComparisonIds(view.models, ["gamma"])).toEqual(
+      ["alpha", "beta"],
+    );
   });
 });

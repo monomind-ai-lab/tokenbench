@@ -10,6 +10,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -153,7 +154,7 @@ function NavigationMenu({ name, close }: { name: Exclude<MenuName, null>; close:
               ["/models/#catalog", "Model catalog", "Search, filter and compare model evidence"],
               ["/model-lifecycle/", "Lifecycle radar", "Retirements, sunset dates and migration paths"],
             ].map(([href, title, copy]) => (
-              <Link className="rounded-xl border border-transparent px-3 py-2 transition-colors hover:border-border hover:bg-muted" href={href} key={href} onClick={close}>
+              <Link className="rounded-xl border border-transparent px-3 py-2 transition-colors hover:border-primary/25 hover:bg-accent" href={href} key={href} onClick={close}>
                 <span className="block text-sm font-medium">{title}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">{copy}</span>
               </Link>
@@ -167,7 +168,7 @@ function NavigationMenu({ name, close }: { name: Exclude<MenuName, null>; close:
           </div>
           <div className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
             {TOP_MODELS.map(([slug, model, provider, score], index) => (
-              <Link className="flex items-center gap-3 bg-card px-3 py-2.5 transition-colors hover:bg-muted" href={`/model-profile?model=${slug}`} key={slug} onClick={close}>
+              <Link className="flex items-center gap-3 bg-card px-3 py-2.5 transition-colors hover:bg-accent" href={`/model-profile?model=${slug}`} key={slug} onClick={close}>
                 <span className="w-6 font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs font-medium">{model}</span>
@@ -192,7 +193,7 @@ function NavigationMenu({ name, close }: { name: Exclude<MenuName, null>; close:
             ["/make-it-yours/", "Make it yours", "Adjust six capability weights and SLA thresholds."],
             ["/leaderboards/", "All leaderboards", "Open every evidence-backed ranking surface."],
           ].map(([href, title, copy]) => (
-            <Link className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted" href={href} key={href} onClick={close}>
+            <Link className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
               <span className="text-sm font-medium">{title}</span>
               <span className="mt-2 block text-xs leading-5 text-muted-foreground">{copy}</span>
             </Link>
@@ -212,7 +213,7 @@ function NavigationMenu({ name, close }: { name: Exclude<MenuName, null>; close:
           ["/articles/?channel=insights", "Insights"],
           ["/articles/?channel=news", "News"],
         ].map(([href, label]) => (
-          <Link className="rounded-xl border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-muted" href={href} key={href} onClick={close}>{label}</Link>
+          <Link className="rounded-xl border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-accent" href={href} key={href} onClick={close}>{label}</Link>
         ))}
       </div>
     </div>
@@ -262,7 +263,7 @@ function LanguageList({ active, items, label, onLanguage }: { active: string; it
       <p className="mb-3 font-mono text-[10px] uppercase tracking-[.16em] text-muted-foreground">{label}</p>
       <div aria-label={label} className="grid grid-cols-2 gap-1" role="menu">
         {items.map((item) => (
-          <button aria-checked={active === item.code} className={cn("flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-muted", active === item.code && "bg-muted text-foreground")} key={item.code} onClick={() => onLanguage(item.code)} role="menuitemradio" type="button">
+          <button aria-checked={active === item.code} className={cn("flex min-h-11 min-w-0 items-center gap-2 rounded-lg px-3 py-2 text-left text-xs transition-colors hover:bg-accent", active === item.code && "bg-active-control text-active-control-foreground")} key={item.code} onClick={() => onLanguage(item.code)} role="menuitemradio" type="button">
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             <span className="font-mono text-[10px] text-muted-foreground">{item.code === "en" ? "" : item.code}</span>
             {active === item.code ? <Check className="size-3" /> : null}
@@ -319,7 +320,7 @@ function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLangua
   }, []);
 
   const navButton = (name: Exclude<MenuName, null>, label: string) => (
-    <button aria-expanded={menu === name} className="flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" onClick={() => setMenu((current) => current === name ? null : name)} type="button">
+    <button aria-expanded={menu === name} className={cn("flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", menu === name && "bg-active-control text-active-control-foreground")} onClick={() => setMenu((current) => current === name ? null : name)} type="button">
       {label}<ChevronDown className={cn("size-3.5 transition-transform", menu === name && "rotate-180")} />
     </button>
   );
@@ -327,15 +328,17 @@ function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLangua
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-5 sm:px-8 lg:px-10">
-        <Link aria-label="TokenBench home" className="flex min-h-11 items-center gap-2" href="/">
-          <span className="grid size-7 place-items-center rounded-lg border border-foreground/15 bg-foreground text-[10px] font-black text-background">TB</span>
+        <Link aria-label="TokenBench home" className="flex min-h-11 items-center gap-2 rounded-lg" href="/">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-card p-1 dark:border-white/70 dark:bg-white">
+            <Image alt="" className="size-6 object-contain" height={512} preload sizes="24px" src="/brand/monomind-tokenbench.png" width={512} />
+          </span>
           <span className="font-semibold tracking-tight">TokenBench</span>
         </Link>
         <nav aria-label="Primary" className="ml-auto hidden items-center gap-1 lg:flex">
-          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", pathname === "/" && "bg-muted text-foreground")} href="/">Home</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname === "/" && "bg-active-control text-active-control-foreground")} href="/">Home</Link>
           {navButton("models", "Models")}
           {navButton("leaderboards", "Leaderboards")}
-          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-muted text-foreground")} href={href} key={href} onClick={() => setMenu(null)}>{label}</Link>)}
+          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-active-control text-active-control-foreground")} href={href} key={href} onClick={() => setMenu(null)}>{label}</Link>)}
           {navButton("articles", "Articles")}
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-3">
@@ -347,15 +350,15 @@ function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLangua
       {menu ? <div className="hidden border-t border-border bg-background lg:block"><div className="mx-auto max-w-7xl px-10 py-6"><NavigationMenu close={() => setMenu(null)} name={menu} /></div></div> : null}
       {mobileOpen ? (
         <nav aria-label="Mobile navigation" className="grid gap-1 border-t border-border bg-background px-4 py-4 lg:hidden" id="mobile-site-navigation">
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/" onClick={() => setMobileOpen(false)}>Home</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/models/" onClick={() => setMobileOpen(false)}>Models</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/model-lifecycle/" onClick={() => setMobileOpen(false)}>Model lifecycle</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/leaderboards/" onClick={() => setMobileOpen(false)}>Leaderboards</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/popular-models/" onClick={() => setMobileOpen(false)}>Popular models</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/make-it-yours/" onClick={() => setMobileOpen(false)}>Make it yours</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/compare/" onClick={() => setMobileOpen(false)}>Compare</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/subscribe-vs-api/" onClick={() => setMobileOpen(false)}>Subscribe vs API</Link>
-          <Link className="flex min-h-11 items-center rounded-lg px-3 py-2 text-sm" href="/articles/" onClick={() => setMobileOpen(false)}>Articles</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname === "/" && "bg-active-control text-active-control-foreground")} href="/" onClick={() => setMobileOpen(false)}>Home</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/models") && "bg-active-control text-active-control-foreground")} href="/models/" onClick={() => setMobileOpen(false)}>Models</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/model-lifecycle") && "bg-active-control text-active-control-foreground")} href="/model-lifecycle/" onClick={() => setMobileOpen(false)}>Model lifecycle</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/leaderboards") && "bg-active-control text-active-control-foreground")} href="/leaderboards/" onClick={() => setMobileOpen(false)}>Leaderboards</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/popular-models") && "bg-active-control text-active-control-foreground")} href="/popular-models/" onClick={() => setMobileOpen(false)}>Popular models</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/make-it-yours") && "bg-active-control text-active-control-foreground")} href="/make-it-yours/" onClick={() => setMobileOpen(false)}>Make it yours</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/compare") && "bg-active-control text-active-control-foreground")} href="/compare/" onClick={() => setMobileOpen(false)}>Compare</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/subscribe-vs-api") && "bg-active-control text-active-control-foreground")} href="/subscribe-vs-api/" onClick={() => setMobileOpen(false)}>Subscribe vs API</Link>
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith("/articles") && "bg-active-control text-active-control-foreground")} href="/articles/" onClick={() => setMobileOpen(false)}>Articles</Link>
         </nav>
       ) : null}
     </header>
@@ -367,27 +370,35 @@ function SiteFooter() {
     <footer className="border-t border-border bg-card/35">
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:px-8 md:grid-cols-2 lg:grid-cols-[1.1fr_.75fr_.65fr_1.25fr] lg:px-10">
         <section aria-label="About TokenBench">
-          <p className="font-semibold">TokenBench</p>
+          <Link aria-label="TokenBench home" className="inline-flex min-h-11 items-center gap-3 rounded-lg" href="/">
+            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-card p-1.5 dark:border-white/70 dark:bg-white">
+              <Image alt="" className="size-7 object-contain" height={512} sizes="28px" src="/brand/monomind-tokenbench.png" width={512} />
+            </span>
+            <span>
+              <span className="block font-semibold tracking-tight">TokenBench</span>
+              <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">MonoMind AI Lab</span>
+            </span>
+          </Link>
           <p className="mt-3 max-w-xs text-sm leading-6 text-muted-foreground">Source-aware model, pricing, and workload evidence for practical AI decisions.</p>
           <p className="mt-3 text-xs text-muted-foreground">Verify provider evidence before purchasing.</p>
         </section>
         <nav aria-label="Explore" className="grid content-start gap-2 text-sm">
           <p className="mb-1 text-xs font-medium">Explore</p>
-          <Link className="text-muted-foreground hover:text-foreground" href="/models/">Models workbench</Link>
-          <Link className="text-muted-foreground hover:text-foreground" href="/subscribe-vs-api/">Subscribe vs API</Link>
-          <Link className="text-muted-foreground hover:text-foreground" href="/popular-models/">Popular models</Link>
-          <Link className="text-muted-foreground hover:text-foreground" href="/make-it-yours/">Make it yours</Link>
-          <Link className="text-muted-foreground hover:text-foreground" href="/compare/">Compare models</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/models/">Models workbench</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/subscribe-vs-api/">Subscribe vs API</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/popular-models/">Popular models</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/make-it-yours/">Make it yours</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/compare/">Compare models</Link>
         </nav>
         <nav aria-label="Articles" className="grid content-start gap-2 text-sm">
           <p className="mb-1 text-xs font-medium">Articles</p>
-          <Link className="text-muted-foreground hover:text-foreground" href="/articles/?channel=guides">Guides</Link>
-          <Link className="text-muted-foreground hover:text-foreground" href="/articles/?channel=insights">Insights</Link>
-          <Link className="text-muted-foreground hover:text-foreground" href="/articles/?channel=news">News</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/articles/?channel=guides">Guides</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/articles/?channel=insights">Insights</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/articles/?channel=news">News</Link>
         </nav>
         <MarketingForm />
       </div>
-      <div className="border-t border-border px-5 py-5 text-center text-[11px] text-muted-foreground"><a className="hover:text-foreground" href="https://monomind.one/">Powered by MonoMind AI Lab</a></div>
+      <div className="border-t border-border px-5 py-5 text-center text-[11px] text-muted-foreground"><a className="transition-colors hover:text-link" href="https://monomind.one/">Powered by MonoMind AI Lab</a></div>
     </footer>
   );
 }
