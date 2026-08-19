@@ -18,8 +18,6 @@
     "../../src/cache/**/*.ts",
     "../../src/catalog/**/*.ts",
     "../../src/ingestion/**/*.ts",
-    "../../src/routing/**/*.ts",
-    "../../functions/_shared/**/*.ts",
     "../../functions/api/catalog.ts"
   ]
 }

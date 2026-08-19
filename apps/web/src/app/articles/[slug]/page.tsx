@@ -1,0 +1,31 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+
+import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
+import { publishedArticles } from "@/lib/articles";
+
+export function generateStaticParams() { return publishedArticles.map((article) => ({ slug: article.slug })); }
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const article = publishedArticles.find((entry) => entry.slug === slug);
+  if (!article) return {};
+  return { title: article.title, description: article.dek, alternates: { canonical: `/articles/${article.slug}/` }, openGraph: { title: article.title, description: article.dek, type: "article", publishedTime: article.date }, twitter: { card: "summary_large_image", title: article.title, description: article.dek } };
+}
+
+export default async function ArticleDetailPage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const article = publishedArticles.find((entry) => entry.slug === slug);
+  if (!article) notFound();
+  const related = publishedArticles.filter((entry) => entry.slug !== slug).slice(0, 3);
+  const jsonLd = { "@context": "https://schema.org", "@type": "Article", headline: article.title, description: article.dek, datePublished: article.date, dateModified: article.date, author: { "@type": "Organization", name: "TokenBench" }, publisher: { "@type": "Organization", name: "TokenBench" }, mainEntityOfPage: `https://tokenbench.monomind.one/articles/${article.slug}/` };
+  const breadcrumbLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Articles", item: "https://tokenbench.monomind.one/articles/" }, { "@type": "ListItem", position: 2, name: article.title, item: `https://tokenbench.monomind.one/articles/${article.slug}/` }] };
+  return <main><script dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} type="application/ld+json" /><script dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} type="application/ld+json" />
+    <article><header className="border-b border-border px-4 py-14 sm:px-6 sm:py-20"><div className="mx-auto max-w-5xl"><nav aria-label="Breadcrumb" className="text-xs text-muted-foreground"><Link className="hover:text-foreground" href="/articles/">Articles</Link> <span className="px-2">/</span> <span aria-current="page">{article.topic}</span></nav><Badge className="mt-8" variant="secondary">{article.category}</Badge><h1 className="mt-5 max-w-4xl text-balance text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">{article.title}</h1><p className="mt-5 max-w-3xl text-pretty text-lg leading-8 text-muted-foreground">{article.dek}</p><div className="mt-7 flex flex-wrap gap-3 text-xs text-muted-foreground"><span>By TokenBench Research</span><span>·</span><time dateTime={article.date}>{article.date}</time><span>·</span><span>{article.readTime}</span></div></div></header>
+      <div className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto grid max-w-5xl gap-12 lg:grid-cols-[1fr_240px]"><div><section className="rounded-2xl border border-border bg-muted/25 p-6"><h2 className="text-xl font-semibold">What you’ll learn</h2><ul className="mt-4 space-y-3">{article.learn.map((item) => <li className="flex gap-3 text-sm leading-6 text-muted-foreground" key={item}><span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground" />{item}</li>)}</ul></section><div className="mt-12 space-y-12">{article.sections.map((section, index) => <section id={`section-${index + 1}`} key={section.heading}><p className="font-mono text-xs text-muted-foreground">{String(index + 1).padStart(2, "0")}</p><h2 className="mt-2 text-2xl font-semibold tracking-tight">{section.heading}</h2>{section.paragraphs.map((paragraph) => <p className="mt-4 text-base leading-8 text-muted-foreground" key={paragraph}>{paragraph}</p>)}{section.bullets ? <ul className="mt-5 space-y-2 rounded-xl border border-border bg-card p-5">{section.bullets.map((item) => <li className="flex gap-3 text-sm text-muted-foreground" key={item}><span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground" />{item}</li>)}</ul> : null}</section>)}</div><section className="mt-12 grid gap-4 sm:grid-cols-2"><div className="rounded-xl border border-border bg-card p-5"><h2 className="font-medium">Make it yours</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Reweight the decision criteria for your own workload and evidence tolerance.</p><Link className="mt-4 inline-flex text-xs font-medium hover:underline" href="/make-it-yours/">Build a custom ranking →</Link></div><div className="rounded-xl border border-border bg-card p-5"><h2 className="font-medium">Subscription vs API</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">Translate model and workload assumptions into a shareable cost scenario.</p><Link className="mt-4 inline-flex text-xs font-medium hover:underline" href="/subscribe-vs-api/">Open the simulator →</Link></div></section></div><aside className="h-fit lg:sticky lg:top-24"><p className="font-mono text-xs text-muted-foreground">ON THIS PAGE</p><ol className="mt-4 space-y-3">{article.sections.map((section, index) => <li key={section.heading}><a className="text-xs leading-5 text-muted-foreground hover:text-foreground" href={`#section-${index + 1}`}>{String(index + 1).padStart(2, "0")} {section.heading}</a></li>)}</ol></aside></div></div>
+      <section className="border-y border-border bg-muted/25 px-4 py-12 sm:px-6"><div className="mx-auto max-w-5xl"><h2 className="text-2xl font-semibold">Related field guides</h2><div className="mt-6 grid gap-3 md:grid-cols-3">{related.map((entry) => <Link className="rounded-xl border border-border bg-card p-4 transition hover:border-foreground/25" href={`/articles/${entry.slug}/`} key={entry.slug}><Badge variant="outline">{entry.topic}</Badge><p className="mt-4 font-medium">{entry.title}</p><p className="mt-2 text-xs text-muted-foreground">{entry.readTime}</p></Link>)}</div><Link className={`${buttonVariants({ variant: "outline" })} mt-7`} href="/articles/">Browse all articles</Link></div></section>
+    </article>
+  </main>;
+}

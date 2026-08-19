@@ -34,6 +34,7 @@ dist/
 /privacy/index.html
 /newsletter-artifacts/
 coverage/
+**/graphify-out/
 .worktrees/
 .DS_Store
 *.log

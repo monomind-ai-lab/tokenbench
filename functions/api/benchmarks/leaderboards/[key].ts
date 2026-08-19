@@ -18,7 +18,7 @@ import {
   isValidLeaderboardCursor,
   leaderboardFilterIdentity,
 } from '../../../../src/benchmarks/leaderboard-cursor';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../src/routing/leaderboard-routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../src/benchmarks/value';
 import {
   benchmarkCorrelationId,

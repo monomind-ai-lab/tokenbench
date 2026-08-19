@@ -19,7 +19,7 @@ import {
   type LeaderboardResult,
 } from './leaderboards';
 import { materializeDecisionPicks } from './decision-picks';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/leaderboard-routes';
 import { primaryHostedPriceForModel, type WorkloadProfile } from './value';
 import { COMPARISON_ALLOWLIST } from './comparison-allowlist';
 

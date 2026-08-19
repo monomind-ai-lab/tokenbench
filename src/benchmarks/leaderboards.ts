@@ -4,7 +4,7 @@ import type {
   BenchmarkPriceCheck,
   BenchmarkSourceId,
 } from './contracts';
-import type { LeaderboardKey } from '../routing/routes';
+import type { LeaderboardKey } from '../routing/leaderboard-routes';
 import {
   isWorkloadProfile,
   paretoFrontier,

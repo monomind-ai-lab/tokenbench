@@ -9,7 +9,7 @@ import {
   type LeaderboardQueryState,
 } from '../../../../../src/benchmarks/leaderboard-query';
 import { LEADERBOARD_DEFINITIONS } from '../../../../../src/benchmarks/leaderboards';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../../src/routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../../../src/routing/leaderboard-routes';
 import { isWorkloadProfile, type WorkloadProfile } from '../../../../../src/benchmarks/value';
 import { readCompleteLeaderboardProjection } from '../../../../_shared/benchmark-leaderboard-projection';
 import {

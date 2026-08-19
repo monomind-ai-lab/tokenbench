@@ -1,4 +1,4 @@
-import type { LeaderboardKey } from '../routing/routes';
+import type { LeaderboardKey } from '../routing/leaderboard-routes';
 import type { WorkloadProfile } from './value';
 
 /** A revision-scoped response that powers the compare and leaderboard hubs. */

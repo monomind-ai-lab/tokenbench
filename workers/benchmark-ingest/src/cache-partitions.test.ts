@@ -11,7 +11,7 @@ import {
   benchmarkPricePerformanceProjectionCacheKey,
 } from '../../../src/benchmarks/api-response-cache-keys';
 import { LEADERBOARD_DEFINITIONS } from '../../../src/benchmarks/leaderboards';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/leaderboard-routes';
 import { WORKLOAD_PROFILES, type WorkloadProfile } from '../../../src/benchmarks/value';
 import type {
   ActiveBenchmarkSnapshot,

@@ -5,7 +5,7 @@ import {
   LEADERBOARD_DEFINITIONS,
   sortLeaderboardEntries,
 } from './leaderboards';
-import { LEADERBOARD_ROUTES } from '../routing/routes';
+import { LEADERBOARD_ROUTES } from '../routing/leaderboard-routes';
 
 function model(overrides: Partial<BenchmarkModel> = {}): BenchmarkModel {
   return {

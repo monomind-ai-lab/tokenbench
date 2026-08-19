@@ -2,7 +2,7 @@ import type { BenchmarkPriceCheck, BenchmarkSourceRecord } from './contracts';
 import type { BenchmarkProjectionSnapshot } from './api-projections';
 import { buildLeaderboard, type LeaderboardEntry } from './leaderboards';
 import { primaryHostedPriceForModel, type PrimaryHostedPrice } from './value';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../routing/leaderboard-routes';
 
 export interface DecisionPickEntry {
   /** Published source rank; null when the source does not rank the row. */

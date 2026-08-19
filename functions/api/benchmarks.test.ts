@@ -16,7 +16,7 @@ import {
   materializeLeaderboard,
 } from '../../src/benchmarks/api-projections';
 import { benchmarkLeaderboardProjectionCacheKey } from '../../src/benchmarks/api-response-cache-keys';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../src/routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../src/routing/leaderboard-routes';
 import { isWorkloadProfile } from '../../src/benchmarks/value';
 import { onRequestGet as getLeaderboard } from './benchmarks/leaderboards/[key]';
 import { onRequestGet as getModel } from './benchmarks/models/[slug]';

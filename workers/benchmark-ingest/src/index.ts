@@ -32,7 +32,7 @@ import { createLeaderboardQueryCapabilities } from '../../../src/benchmarks/lead
 import { resolveCanonicalModelKey, sourceSpecificModelKey } from '../../../src/benchmarks/model-aliases';
 import { LEADERBOARD_DEFINITIONS } from '../../../src/benchmarks/leaderboards';
 import { buildPricePerformanceProjection } from '../../../src/benchmarks/price-performance';
-import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/routes';
+import { LEADERBOARD_ROUTES, type LeaderboardKey } from '../../../src/routing/leaderboard-routes';
 import { WORKLOAD_PROFILES, type WorkloadProfile } from '../../../src/benchmarks/value';
 import {
   PRICE_PERFORMANCE_CACHE_PARAMETERS,

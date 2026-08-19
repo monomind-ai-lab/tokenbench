@@ -17,7 +17,7 @@ import {
   type LeaderboardEntry,
   type LeaderboardResult,
 } from '../../src/benchmarks/leaderboards';
-import { type LeaderboardKey } from '../../src/routing/routes';
+import { type LeaderboardKey } from '../../src/routing/leaderboard-routes';
 import {
   blendedCostPerMillion,
   isPrimaryHostedRoute,

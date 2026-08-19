@@ -19,7 +19,6 @@
     "../../src/catalog/**/*.ts",
     "../../src/cache/**/*.ts",
     "../../src/ingestion/**/*.ts",
-    "../../functions/api/catalog.ts",
-    "../../functions/_shared/**/*.ts"
+    "../../functions/api/catalog.ts"
   ]
 }
