@@ -117,9 +117,12 @@ function statusFor(
   model: BenchmarkModel,
 ): PricePerformanceStatus {
   const statusByModelKey = input.statusByModelKey;
-  const fromMap = statusByModelKey instanceof Map
-    ? statusByModelKey.get(model.modelKey)
-    : statusByModelKey?.[model.modelKey];
+  const mapGetter = statusByModelKey === undefined
+    ? undefined
+    : (statusByModelKey as ReadonlyMap<string, PricePerformanceStatus>).get;
+  const fromMap = typeof mapGetter === 'function'
+    ? mapGetter.call(statusByModelKey, model.modelKey)
+    : (statusByModelKey as Readonly<Record<string, PricePerformanceStatus>> | undefined)?.[model.modelKey];
   if (fromMap === 'current' || fromMap === 'archived') return fromMap;
   const fromDirectory = input.directoryRecords?.find((record) => record.modelKey === model.modelKey)?.status;
   if (fromDirectory === 'current' || fromDirectory === 'archived') return fromDirectory;

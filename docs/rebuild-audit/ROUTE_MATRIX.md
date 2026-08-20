@@ -1,6 +1,6 @@
 # TokenBench immutable route matrix
 
-Last reconciled: 2026-08-20
+Last reconciled: 2026-08-21
 
 Immutable authority: `https://8bf19b96.tokenbench-27t.pages.dev/`
 
@@ -13,17 +13,17 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/` | audited | foundation implemented; design approval pending | Hero plus sections 01–05 in the immutable order; four workbench filters; radar; subscription slider; three research cards; latest global shell/footer form |
 | `/models/` | audited | implemented and QA-checked; design approval pending | Hero metrics; frontier chart and toggles; 2–4 quick comparison; search/access/provider/sort/reset; 30-card catalog; card/list views; selection tray; copy/PNG/CSV; lifecycle context; release timeline |
 | `/model-profile?model=<slug>` | audited | implemented and QA-checked; design approval pending | Distinct fixture profile; explicit invalid ID state; capability/runtime charts; exact values; limits/lifecycle; endpoint pricing; workload example; history/conflicts; copy/PNG/CSV |
-| `/models/<slug>/` | audited | pending; design approval pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
+| `/models/<slug>/` | audited | implemented and build-checked; design approval and production data review pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
 | `/popular-models/` | audited | exact three-section parity implemented; design approval pending | `01` Leaderboard with one-row controls, fixed category tags, and complete compact table; `02` Insights with two charts; full-width `03` Compare with three economics charts; unavailable slots; real HTTP/live data and final cross-page review remain |
-| `/make-it-yours/` | audited | pending; design approval pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
+| `/make-it-yours/` | audited | implemented and evidence-preview checked; design approval and production data review pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | implemented and QA-checked; design approval pending | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
 | `/leaderboards/` and 14 published child routes | audited | visual design approved; do not reopen | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior; only data wiring/availability verification remains |
 | `/compare/` | audited | implemented and QA-checked; design approval pending | URL-backed 2–4 distinct selections; invalid/duplicate cleanup and four-model truncation; capability radar/table; three economics charts; decision table; provenance; copy/PNG/CSV |
-| `/compare/<pair>` | audited | pending; design approval pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
+| `/compare/<pair>` | audited | implemented and build-checked; design approval and exact-pair production data review pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
 | `/subscribe-vs-api/` | audited | visual design approved; do not reopen | Existing simulator preserved: provider/plan; 1–4-model mix; exact URL contract; message and character workload; cache priority; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy; only data wiring remains |
 | `/cost` | audited | implemented; build-checked; design approval pending | Redirect-only to the fully parameterized default subscribe-versus-API scenario; discard arbitrary query parameters |
 | `/tools/` | audited | implemented; build-checked; design approval pending | Static tool directory; one subscription-versus-API card; no embedded replacement calculator |
-| `/llm-price-performance/` | audited | pending; design approval pending | URL-backed lane/creator/price filters; interactive Pareto chart and model dialog; full leaderboard/details; null/zero semantics |
+| `/llm-price-performance/` | audited | implemented and build-checked; design approval and validated endpoint review pending | URL-backed lane/creator/price filters; interactive Pareto chart and model dialog; full leaderboard/details; null/zero semantics |
 | `/articles/` | audited | implemented and QA-checked; design approval pending | Eight index cards; six substantive guides plus two prototype insight concepts; tabs 8/6/2/0; topics; search; sort; prototype disclosure; empty state |
 | `/articles/<six published slugs>` | audited | implemented and QA-checked; design approval pending | Breadcrumb, learning summary, numbered sections, dual CTAs, desktop TOC, related content, latest global shell, Article/Breadcrumb JSON-LD |
 | `/guides/` | audited | implemented and QA-checked; design approval pending | Five field-guide cards and subscribe-versus-API CTA |

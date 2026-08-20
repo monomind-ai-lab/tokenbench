@@ -1,6 +1,6 @@
 # Unapproved page parity backlog
 
-Last reconciled: 2026-08-20  
+Last reconciled: 2026-08-21
 Immutable authority: `https://8bf19b96.tokenbench-27t.pages.dev/`
 
 ## Policy
@@ -19,17 +19,21 @@ reopened. Their data wiring remains a separate non-visual task.
 
 ## Ordered backlog
 
-1. **Route coverage first — P0.** Add immutable-structure shells for
+1. **Route coverage first — completed 2026-08-21.** Immutable-structure Next
+   routes now cover
    `/models/<slug>/` (4,455 profiles), `/compare/<pair>` (29 pairs),
    `/make-it-yours/`, and `/llm-price-performance/`. Each must render its
    complete source/unavailable/not-found state before live facts are available.
+   Production endpoint availability and cross-page data review remain in the
+   data-wiring checkpoint; see `checkpoint-3-route-coverage.md`.
 2. **Model decision core — P0.** Rewire `/models/`,
    `/model-profile?model=<slug>`, `/models/<slug>/`, `/compare/`, and
    `/compare/<pair>` from local catalog/derived chart fixtures to the strict-v1
    models, profile, and comparison boundaries. Preserve two-to-four ordering,
    canonical cleanup, source ledgers, route-specific pricing, and visible
    unavailable measurements.
-3. **Custom ranking — P0.** Build `/make-it-yours/` with the exact six-weight
+3. **Custom ranking — implementation complete; production review pending.**
+   `/make-it-yours/` now carries the exact six-weight
    matrix, access/provider/SLA filters, charts plus semantic tables, ordered
    comparison tray, exports, and shareable state. Submit the exact custom
    ranking matrix; do not normalize or invent runtime values locally.
@@ -38,7 +42,8 @@ reopened. Their data wiring remains a separate non-visual task.
    expiration, and observed removal, not vendor retirement or a successor;
    unavailable successor slots remain visible. Preserve the horizon controls,
    card/table switch, actions, timeline, and evidence boundary.
-5. **Price-performance — P0.** Recreate `/llm-price-performance/` with its
+5. **Price-performance — implementation complete; endpoint review pending.**
+   `/llm-price-performance/` now carries its
    lane/creator/price filters, Pareto chart/dialog, accessible table fallback,
    detail rows, URL state, freshness, and exact null-versus-zero handling.
 6. **Popular Models closeout — P1.** The `01` Leaderboard master table, `02`

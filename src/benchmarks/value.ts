@@ -187,7 +187,9 @@ export function paretoFrontier(candidates: readonly ValueCandidate[]): readonly 
 }
 
 function isUsableContextWindow(contextWindowTokens: number | null): contextWindowTokens is number {
-  return Number.isSafeInteger(contextWindowTokens) && contextWindowTokens > 0;
+  return contextWindowTokens !== null
+    && Number.isSafeInteger(contextWindowTokens)
+    && contextWindowTokens > 0;
 }
 
 /**
