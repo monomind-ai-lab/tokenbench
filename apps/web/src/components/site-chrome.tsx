@@ -26,7 +26,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type ThemeMode = "dark" | "light";
-type MenuName = "models" | "leaderboards" | "articles" | null;
+type NavigationMenuName = "models" | "leaderboards" | "articles";
+type MenuName = NavigationMenuName | "language" | null;
 
 type LanguageOption = {
   code: string;
@@ -142,7 +143,7 @@ function readLanguageCookie() {
   return match?.split("=")[1]?.split("/").at(-1) || "en";
 }
 
-function NavigationMenu({ name, close }: { name: Exclude<MenuName, null>; close: () => void }) {
+function NavigationMenu({ name, close }: { name: NavigationMenuName; close: () => void }) {
   if (name === "models") {
     return (
       <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr]" role="region" aria-label="Models">
@@ -220,7 +221,7 @@ function NavigationMenu({ name, close }: { name: Exclude<MenuName, null>; close:
   );
 }
 
-function LanguageDialog({ language, onClose, onLanguage }: { language: string; onClose: () => void; onLanguage: (code: string) => void }) {
+function LanguageMenu({ language, onClose, onLanguage }: { language: string; onClose: () => void; onLanguage: (code: string) => void }) {
   const [query, setQuery] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const normalizedQuery = query.trim().toLocaleLowerCase();
@@ -233,27 +234,25 @@ function LanguageDialog({ language, onClose, onLanguage }: { language: string; o
   useEffect(() => searchRef.current?.focus(), []);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/50 p-3 backdrop-blur-sm sm:p-6" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section aria-label="Choose language" aria-modal="true" className="ml-auto flex max-h-[min(760px,calc(100vh-1.5rem))] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-2xl sm:max-h-[min(760px,calc(100vh-3rem))]" role="dialog">
-        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
-          <div>
-            <h2 className="text-sm font-semibold">Language</h2>
-            <p className="mt-1 text-xs text-muted-foreground">Translate this page</p>
-          </div>
-          <Button aria-label="Close language selector" className="size-11" onClick={onClose} size="icon-sm" variant="ghost"><X /></Button>
+    <section aria-label="Choose language" className="absolute right-0 top-full z-[60] mt-2 flex max-h-[min(34rem,calc(100vh-5.5rem))] w-[min(32rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-popover shadow-soft" id="site-menu-language" role="dialog">
+      <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold">Language</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Translate this page</p>
         </div>
-        <label className="m-4 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5" htmlFor="language-search">
-          <Search className="size-4 text-muted-foreground" />
-          <span className="sr-only">Search languages</span>
-          <input className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" id="language-search" onChange={(event) => setQuery(event.target.value)} placeholder="Search languages" ref={searchRef} type="search" value={query} />
-        </label>
-        <div className="overflow-y-auto px-4 pb-5">
-          {preferred.length ? <LanguageList active={language} items={preferred} label="Preferred languages" onLanguage={onLanguage} /> : null}
-          {more.length ? <div className="mt-6"><LanguageList active={language} items={more} label="More languages supported by Google Translate" onLanguage={onLanguage} /></div> : null}
-          {!preferred.length && !more.length ? <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No languages match “{query}”.</p> : null}
-        </div>
-      </section>
-    </div>
+        <Button aria-label="Close language selector" className="size-11" onClick={onClose} size="icon-sm" variant="ghost"><X /></Button>
+      </div>
+      <label className="m-4 flex items-center gap-3 rounded-xl border border-border bg-card px-3 py-2.5" htmlFor="language-search">
+        <Search className="size-4 text-muted-foreground" />
+        <span className="sr-only">Search languages</span>
+        <input className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground" id="language-search" onChange={(event) => setQuery(event.target.value)} placeholder="Search languages" ref={searchRef} type="search" value={query} />
+      </label>
+      <div className="overflow-y-auto px-4 pb-5">
+        {preferred.length ? <LanguageList active={language} items={preferred} label="Preferred languages" onLanguage={onLanguage} /> : null}
+        {more.length ? <div className="mt-6"><LanguageList active={language} items={more} label="More languages supported by Google Translate" onLanguage={onLanguage} /></div> : null}
+        {!preferred.length && !more.length ? <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No languages match “{query}”.</p> : null}
+      </div>
+    </section>
   );
 }
 
@@ -287,15 +286,15 @@ function MarketingForm() {
   };
 
   return (
-    <section aria-label="LLM API Cost and Benchmark Cheatsheet" className="rounded-2xl border border-border bg-card p-5 md:col-span-2 lg:col-span-1">
+    <section aria-label="LLM API Cost and Benchmark Cheatsheet" className="footer-marketing-form rounded-2xl p-5 md:col-span-2 lg:col-span-1">
       <h2 className="text-sm font-semibold">LLM API Cost &amp; Benchmark Cheatsheet</h2>
       <p className="mt-2 text-xs leading-5 text-muted-foreground">Get monthly model costs, context windows, and category rankings in one downloadable PDF or CSV.</p>
       <form className="mt-5 grid gap-3" noValidate onSubmit={submit}>
-        <label className="grid gap-1 text-xs">First name<input className="min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="firstName" required /></label>
-        <label className="grid gap-1 text-xs">Company<input className="min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="company" required /></label>
-        <label className="grid gap-1 text-xs">Email<input className="min-h-11 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" name="email" required type="email" /></label>
-        <label className="flex min-h-11 items-start gap-2 text-xs leading-5 text-muted-foreground"><input className="mt-1" name="consent" type="checkbox" />Notify me when new models are added to TokenBench.</label>
-        <Button className="mt-1 min-h-11 rounded-full" type="submit">Preview signup</Button>
+        <label className="grid gap-1 text-xs font-medium">First name<input className="footer-marketing-input min-h-11 rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="firstName" required /></label>
+        <label className="grid gap-1 text-xs font-medium">Company<input className="footer-marketing-input min-h-11 rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="company" required /></label>
+        <label className="grid gap-1 text-xs font-medium">Email<input className="footer-marketing-input min-h-11 rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" name="email" required type="email" /></label>
+        <label className="flex min-h-11 items-start gap-2 text-xs leading-5 text-muted-foreground"><input className="mt-1 size-4 shrink-0 accent-primary" name="consent" type="checkbox" />Notify me when new models are added to TokenBench.</label>
+        <Button className="mt-1 min-h-11 rounded-lg" type="submit">Preview signup</Button>
         {status === "error" ? <p role="alert" className="text-xs text-destructive">Enter a valid first name, company, and email address.</p> : null}
         {status === "success" ? <p role="status" className="text-xs text-emerald-500">Preview captured. No production request was sent.</p> : null}
       </form>
@@ -303,34 +302,57 @@ function MarketingForm() {
   );
 }
 
-function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLanguage: () => void; onTheme: () => void }) {
+function SiteHeader({ language, theme, onLanguage, onLanguageOpen, onTheme }: { language: string; theme: ThemeMode; onLanguage: (code: string) => void; onLanguageOpen: () => void; onTheme: () => void }) {
   const pathname = usePathname();
   const [menu, setMenu] = useState<MenuName>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+
+  const closeMenu = () => setMenu(null);
+
+  useEffect(() => {
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!headerRef.current?.contains(event.target as Node)) setMenu(null);
+    };
+    window.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => window.removeEventListener("pointerdown", closeOnOutsidePointer);
+  }, []);
 
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMenu(null);
-        setMobileOpen(false);
+        if (event.key === "Escape") {
+          setMenu(null);
+          setMobileOpen(false);
       }
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, []);
 
-  const navButton = (name: Exclude<MenuName, null>, label: string) => (
-    <button aria-expanded={menu === name} className={cn("flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", menu === name && "bg-active-control text-active-control-foreground")} onClick={() => setMenu((current) => current === name ? null : name)} type="button">
-      {label}<ChevronDown className={cn("size-3.5 transition-transform", menu === name && "rotate-180")} />
-    </button>
+  const toggleMenu = (name: MenuName) => () => {
+    if (name === "language" && menu !== "language") onLanguageOpen();
+    setMenu((current) => current === name ? null : name);
+  };
+  const panelWidth = (name: NavigationMenuName) => name === "models"
+    ? "w-[min(44rem,calc(100vw-2rem))]"
+    : name === "leaderboards"
+      ? "w-[min(38rem,calc(100vw-2rem))]"
+      : "w-[min(28rem,calc(100vw-2rem))]";
+  const navButton = (name: NavigationMenuName, label: string) => (
+    <div className="relative">
+      <button aria-controls={`site-menu-${name}`} aria-expanded={menu === name} className={cn("flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", menu === name && "bg-active-control text-active-control-foreground")} onClick={toggleMenu(name)} type="button">
+        {label}<ChevronDown className={cn("size-3.5 transition-transform", menu === name && "rotate-180")} />
+      </button>
+      {menu === name ? <div className={cn("absolute left-1/2 top-full z-[60] mt-2 max-h-[calc(100vh-5.5rem)] -translate-x-1/2 overflow-y-auto rounded-2xl border border-border bg-popover p-5 shadow-soft", panelWidth(name))} id={`site-menu-${name}`}><NavigationMenu close={closeMenu} name={name} /></div> : null}
+    </div>
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl" ref={headerRef}>
       <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-5 sm:px-8 lg:px-10">
         <Link aria-label="TokenBench home" className="flex min-h-11 items-center gap-2 rounded-lg" href="/">
-          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-lg border border-border bg-card p-1 dark:border-white/70 dark:bg-white">
-            <Image alt="" className="size-6 object-contain" height={512} preload sizes="24px" src="/brand/monomind-tokenbench.png" width={512} />
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center">
+            <Image alt="" className="size-7 object-contain" height={512} preload sizes="28px" src="/brand/monomind-tokenbench.png" width={512} />
           </span>
           <span className="font-semibold tracking-tight">TokenBench</span>
         </Link>
@@ -338,16 +360,18 @@ function SiteHeader({ theme, onLanguage, onTheme }: { theme: ThemeMode; onLangua
           <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname === "/" && "bg-active-control text-active-control-foreground")} href="/">Home</Link>
           {navButton("models", "Models")}
           {navButton("leaderboards", "Leaderboards")}
-          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-active-control text-active-control-foreground")} href={href} key={href} onClick={() => setMenu(null)}>{label}</Link>)}
+          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-active-control text-active-control-foreground")} href={href} key={href} onClick={closeMenu}>{label}</Link>)}
           {navButton("articles", "Articles")}
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-3">
-          <Button aria-label="Choose language" className="size-11" onClick={onLanguage} size="icon-sm" variant="ghost"><Languages /></Button>
+          <div className="relative">
+            <Button aria-controls="site-menu-language" aria-expanded={menu === "language"} aria-label="Choose language" className={cn("size-11", menu === "language" && "bg-active-control text-active-control-foreground")} onClick={toggleMenu("language")} size="icon-sm" variant="ghost"><Languages /></Button>
+            {menu === "language" ? <LanguageMenu language={language} onClose={closeMenu} onLanguage={(code) => { onLanguage(code); closeMenu(); }} /> : null}
+          </div>
           <Button aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} className="size-11" onClick={onTheme} size="icon-sm" variant="ghost">{theme === "dark" ? <Sun /> : <Moon />}</Button>
-          <Button aria-controls="mobile-site-navigation" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Close navigation" : "Open navigation"} className="size-11 lg:hidden" onClick={() => setMobileOpen((open) => !open)} size="icon-sm" variant="ghost">{mobileOpen ? <X /> : <Menu />}</Button>
+          <Button aria-controls="mobile-site-navigation" aria-expanded={mobileOpen} aria-label={mobileOpen ? "Close navigation" : "Open navigation"} className="size-11 lg:hidden" onClick={() => { closeMenu(); setMobileOpen((open) => !open); }} size="icon-sm" variant="ghost">{mobileOpen ? <X /> : <Menu />}</Button>
         </div>
       </div>
-      {menu ? <div className="hidden border-t border-border bg-background lg:block"><div className="mx-auto max-w-7xl px-10 py-6"><NavigationMenu close={() => setMenu(null)} name={menu} /></div></div> : null}
       {mobileOpen ? (
         <nav aria-label="Mobile navigation" className="grid gap-1 border-t border-border bg-background px-4 py-4 lg:hidden" id="mobile-site-navigation">
           <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground", pathname === "/" && "bg-active-control text-active-control-foreground")} href="/" onClick={() => setMobileOpen(false)}>Home</Link>
@@ -371,8 +395,8 @@ function SiteFooter() {
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:px-8 md:grid-cols-2 lg:grid-cols-[1.1fr_.75fr_.65fr_1.25fr] lg:px-10">
         <section aria-label="About TokenBench">
           <Link aria-label="TokenBench home" className="inline-flex min-h-11 items-center gap-3 rounded-lg" href="/">
-            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl border border-border bg-card p-1.5 dark:border-white/70 dark:bg-white">
-              <Image alt="" className="size-7 object-contain" height={512} sizes="28px" src="/brand/monomind-tokenbench.png" width={512} />
+            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center">
+              <Image alt="" className="size-8 object-contain" height={512} sizes="32px" src="/brand/monomind-tokenbench.png" width={512} />
             </span>
             <span>
               <span className="block font-semibold tracking-tight">TokenBench</span>
@@ -414,7 +438,6 @@ export function SiteChrome({ children }: { children: ReactNode }) {
     () => "dark",
   );
   const [language, setLanguage] = useState("en");
-  const [languageOpen, setLanguageOpen] = useState(false);
 
   const toggleTheme = () => {
     const next = theme === "dark" ? "light" : "dark";
@@ -432,16 +455,14 @@ export function SiteChrome({ children }: { children: ReactNode }) {
       translateSelect.value = code;
       translateSelect.dispatchEvent(new Event("change"));
     }
-    setLanguageOpen(false);
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <a className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground transition-transform focus:translate-y-0" href="#page-content">Skip to page content</a>
-      <SiteHeader onLanguage={() => { setLanguage(readLanguageCookie()); setLanguageOpen(true); }} onTheme={toggleTheme} theme={theme} />
+      <SiteHeader language={language} onLanguage={changeLanguage} onLanguageOpen={() => setLanguage(readLanguageCookie())} onTheme={toggleTheme} theme={theme} />
       <main id="page-content" tabIndex={-1}>{children}</main>
       <SiteFooter />
-      {languageOpen ? <LanguageDialog language={language} onClose={() => setLanguageOpen(false)} onLanguage={changeLanguage} /> : null}
     </div>
   );
 }

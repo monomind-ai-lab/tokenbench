@@ -801,8 +801,8 @@ function ModelTable({
             const evidenceId = `popular-model-evidence-${model.id}`;
             return (
               <Fragment key={model.id}>
-                <tr className="border-t border-border align-top transition-colors hover:bg-muted/30">
-                  <td className="px-1.5 py-2.5">
+                <tr className="border-t border-border align-middle transition-colors hover:bg-muted/30">
+                  <td className="align-middle px-1.5 py-2.5">
                     <button
                       aria-controls={evidenceId}
                       aria-expanded={expanded}
@@ -818,7 +818,7 @@ function ModelTable({
                       )}
                     </button>
                   </td>
-                  <td className="px-1.5 py-2.5 font-mono text-xs text-muted-foreground">
+                  <td className="align-middle px-1.5 py-2.5 font-mono text-xs text-muted-foreground">
                     <span
                       aria-label={
                         model.rank === null
@@ -829,11 +829,11 @@ function ModelTable({
                       {model.rank ?? "—"}
                     </span>
                   </td>
-                  <td className="px-2 py-2.5">
+                  <td className="align-middle px-2 py-2.5">
                     <ModelLink model={model} />
                   </td>
                   {showProviders ? (
-                    <td className="px-2 py-2.5">
+                    <td className="align-middle px-2 py-2.5">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <ProviderDot provider={model.provider} />
                         <span className="truncate">{providerName(model)}</span>
@@ -841,7 +841,7 @@ function ModelTable({
                     </td>
                   ) : null}
                   {metricColumns.map((column) => (
-                    <td className="px-1.5 py-2.5 text-right" key={column.key}>
+                    <td className="align-middle px-1.5 py-2.5 text-right" key={column.key}>
                       <ScoreCell
                         column={column}
                         model={model}
@@ -849,7 +849,7 @@ function ModelTable({
                       />
                     </td>
                   ))}
-                  <td className="px-2 py-2.5 text-right">
+                  <td className="align-middle px-2 py-2.5 text-right">
                     <AggregateCost
                       model={model}
                       winner={costWinnerIds.has(model.id)}
@@ -1976,7 +1976,7 @@ export function PopularModelsPage({
     setInsightCategoryKey(null);
     setExpandedIds(new Set());
   };
-  const compareHref = `/compare/?models=${comparisonIds.map((id) => encodeURIComponent(id)).join(",")}`;
+  const compareHref = `/compare?models=${comparisonIds.map((id) => encodeURIComponent(id)).join(",")}`;
   const sharedTableProps = {
     categoryKey,
     costWinnerIds,
@@ -2135,12 +2135,12 @@ export function PopularModelsPage({
               className="-mx-1 overflow-x-auto pb-1"
               role="group"
             >
-              <div className="flex min-w-max gap-2 px-1">
+              <div className="flex min-w-max flex-nowrap gap-2 px-1">
                 {POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.map((category) => (
                   <button
                     aria-pressed={categoryKey === category.key}
                     className={cn(
-                      "popular-models-category-tag",
+                      "popular-models-category-tag shrink-0 whitespace-nowrap",
                       categoryKey === category.key
                         ? "border-active-control bg-active-control text-active-control-foreground"
                         : "border-border bg-card text-muted-foreground hover:text-foreground",
@@ -2260,12 +2260,12 @@ export function PopularModelsPage({
               className="mt-3 -mx-1 overflow-x-auto pb-1"
               role="group"
             >
-              <div className="flex min-w-max gap-2 px-1">
+              <div className="flex min-w-max flex-nowrap gap-2 px-1">
                 {POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.map((category) => (
                   <button
                     aria-pressed={insightCategoryKey === category.key}
                     className={cn(
-                      "popular-models-category-tag",
+                      "popular-models-category-tag shrink-0 whitespace-nowrap",
                       insightCategoryKey === category.key
                         ? "border-active-control bg-active-control text-active-control-foreground"
                         : "border-border bg-card text-muted-foreground hover:text-foreground",
@@ -2321,22 +2321,24 @@ export function PopularModelsPage({
             className="mt-14 border-t border-border pt-14"
             id="popular-models-comparison"
           >
-            <div>
-              <h2
-                className="font-mono text-xs text-primary"
-                id="popular-models-comparison-heading"
-              >
-                03 Compare popular models
-              </h2>
-              <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Build a 2–4 model decision set
-              </p>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-                The tray preserves selection order in this URL as canonical
-                catalog IDs. Legacy catalog slugs are normalized before
-                navigation so the comparison route receives the IDs it accepts.
-              </p>
-              <div className="mt-5">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2
+                  className="font-mono text-xs text-primary"
+                  id="popular-models-comparison-heading"
+                >
+                  03 Compare popular models
+                </h2>
+                <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                  Build a 2–4 model decision set
+                </p>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+                  The tray preserves selection order in this URL as canonical
+                  catalog IDs. Legacy catalog slugs are normalized before
+                  navigation so the comparison route receives the IDs it accepts.
+                </p>
+              </div>
+              <div className="max-w-full shrink-0">
                 <ResultActions
                   filename="tokenbench-popular-models-comparison"
                   label="Share and export popular model comparison"

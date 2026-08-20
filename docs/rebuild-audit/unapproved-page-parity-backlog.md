@@ -61,8 +61,10 @@ reopened. Their data wiring remains a separate non-visual task.
   model/profile/comparison facts stay in their distinct strict-v1 operations.
 - OpenRouter is endpoint availability/deprecation and route-pricing evidence,
   not global model-lifecycle or subscription evidence.
-- AI Pricing Guru is not a subscription-plan or entitlement source and must not
-  become the primary public-pricing source without separate permission.
+- Subscription UI scope is limited to ChatGPT/OpenAI, Claude/Anthropic,
+  Gemini/Google, Grok/xAI, GLM Coding/Z.ai, Perplexity, and Microsoft Copilot.
+  Official provider pages are primary; AI Pricing Guru is approved only as a
+  discrepancy cross-check and never overrides first-party evidence.
 - Production is HTTP-only. Local evidence/fixtures may support design checks
   only when visibly labeled and never silently fall back in production.
 

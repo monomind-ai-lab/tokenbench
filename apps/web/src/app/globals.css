@@ -270,3 +270,58 @@ nextjs-portal {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+/* The footer conversion form needs to read as the actionable conclusion, not another link column. */
+.footer-marketing-form {
+  background:
+    radial-gradient(
+      circle at 100% 0,
+      color-mix(in srgb, var(--primary) 16%, transparent),
+      transparent 52%
+    ),
+    var(--card);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  box-shadow: 0 14px 30px color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+.footer-marketing-input {
+  background: color-mix(in srgb, var(--background) 88%, var(--card));
+  color: var(--foreground);
+}
+
+.footer-marketing-input::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* Preserve every price column while using the desktop grid width instead of a nested scrollbar. */
+@media (min-width: 1280px) {
+  #subscription-result div:has(> table:has(caption)) {
+    overflow-x: visible;
+  }
+
+  #subscription-result table:has(caption) {
+    min-width: 0;
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  #subscription-result table:has(caption) caption {
+    padding: 0.625rem 0.75rem;
+  }
+
+  #subscription-result table:has(caption) th,
+  #subscription-result table:has(caption) td {
+    padding: 0.5rem 0.625rem;
+  }
+
+  #subscription-result table:has(caption) th:first-child,
+  #subscription-result table:has(caption) td:first-child {
+    overflow-wrap: anywhere;
+    width: 31%;
+  }
+
+  #subscription-result table:has(caption) th:not(:first-child),
+  #subscription-result table:has(caption) td:not(:first-child) {
+    white-space: nowrap;
+  }
+}
