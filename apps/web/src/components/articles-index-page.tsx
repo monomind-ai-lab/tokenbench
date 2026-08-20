@@ -65,17 +65,17 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
 
       <section className="px-4 py-10 sm:px-6 sm:py-14">
         <div className="mx-auto max-w-7xl">
-          <nav aria-label="Article channels" className="grid grid-cols-4 border-b border-border">
+          <nav aria-label="Article channels" className="flex flex-wrap items-end gap-1 border-b border-border">
             {channels.map(({ value, label, count }) => {
               const selected = channel === value;
 
               return (
                 <button
                   aria-pressed={selected}
-                  className={`flex min-h-11 items-center justify-center gap-1.5 border-b-2 px-2 py-2.5 text-xs font-medium transition-colors sm:justify-start sm:px-4 sm:text-sm ${
+                  className={`flex min-h-11 w-[100px] items-center justify-center gap-1.5 rounded-t-[8px] rounded-b-none border border-b-0 px-2 py-[7px] text-xs font-bold leading-[14px] transition-colors ${
                     selected
                       ? "border-primary bg-primary text-primary-foreground"
-                      : "border-transparent text-muted-foreground hover:bg-accent hover:text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-foreground"
                   }`}
                   key={value}
                   onClick={() => selectChannel(value)}
@@ -93,14 +93,14 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
               <h2 className="text-2xl font-semibold tracking-[-0.03em]" id="article-filters-heading">
                 Find the next useful answer
               </h2>
-              <div aria-label="Article topics" className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" role="group">
+              <div aria-label="Article topics" className="mt-4 flex flex-wrap items-center gap-2" role="group">
                 {topics.map((value) => {
                   const selected = topic === value;
 
                   return (
                     <button
                       aria-pressed={selected}
-                      className={`min-h-11 rounded-lg border px-3 py-2 text-left text-xs font-medium leading-4 transition-colors ${
+                      className={`inline-flex min-h-11 items-center justify-center rounded-[50px] border px-2.5 py-[7px] text-center text-[11px] font-bold leading-[14px] transition-colors ${
                         selected
                           ? "border-primary bg-primary text-primary-foreground"
                           : "border-border bg-background text-muted-foreground hover:border-primary/35 hover:text-foreground"
@@ -155,7 +155,7 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
               return (
                 <Card className="h-full transition-colors hover:ring-primary/35 focus-within:ring-primary/50" key={entry.slug}>
                   <CardHeader className="gap-4">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] leading-4 text-primary">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] leading-4 text-brand-secondary">
                       <span>{prototype ? "Prototype insight" : entry.date}</span>
                       <span aria-hidden="true">·</span>
                       <span>{prototype ? entry.topic : `${entry.category} · ${entry.topic}`}</span>
@@ -188,7 +188,7 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
                         Review disclosure <ArrowRight className="size-3.5 transition-transform group-hover/cta:translate-x-0.5" />
                       </a>
                     ) : (
-                      <Link className="group/cta inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline" href={href}>
+                      <Link className="group/cta inline-flex min-h-11 items-center gap-1 text-xs font-medium text-brand-secondary hover:underline" href={href}>
                         Read field guide <ArrowRight className="size-3.5 transition-transform group-hover/cta:translate-x-0.5" />
                       </Link>
                     )}

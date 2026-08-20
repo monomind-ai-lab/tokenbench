@@ -204,15 +204,15 @@ function NavigationMenu({
     return (
       <div role="region" aria-label="Leaderboards">
         <p className="font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground">Leaderboards · rank and re-rank models</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <div className="mt-4 grid gap-2">
           {[
             ["/popular-models/", "Popular models", "Browse top models by quality, performance, and cost."],
             ["/make-it-yours/", "Make it yours", "Adjust six capability weights and SLA thresholds."],
             ["/leaderboards/", "All leaderboards", "Open every evidence-backed ranking surface."],
           ].map(([href, title, copy]) => (
-            <Link className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
+            <Link className="grid min-h-14 grid-cols-[minmax(8rem,.42fr)_minmax(0,.58fr)] items-start gap-4 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
               <span className="text-sm font-medium">{title}</span>
-              <span className="mt-2 block text-xs leading-5 text-muted-foreground">{copy}</span>
+              <span className="text-xs leading-5 text-muted-foreground">{copy}</span>
             </Link>
           ))}
         </div>
@@ -223,14 +223,17 @@ function NavigationMenu({
   return (
     <div role="region" aria-label="Articles">
       <p className="font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground">Articles · everything about AI models</p>
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mt-4 grid gap-2">
         {[
-          ["/articles/", "All"],
-          ["/articles/?channel=guides", "Guides"],
-          ["/articles/?channel=insights", "Insights"],
-          ["/articles/?channel=news", "News"],
-        ].map(([href, label]) => (
-          <Link className="rounded-xl border border-border bg-card px-4 py-3 text-sm transition-colors hover:bg-accent" href={href} key={href} onClick={close}>{label}</Link>
+          ["/articles/", "All", "Browse every published guide and clearly labeled prototype."],
+          ["/articles/?channel=guides", "Guides", "Practical workflows for model, access, usage, and cost decisions."],
+          ["/articles/?channel=insights", "Insights", "Explore clearly labeled prototype research directions."],
+          ["/articles/?channel=news", "News", "Check the publication slot for verified product and data updates."],
+        ].map(([href, label, copy]) => (
+          <Link className="grid min-h-14 grid-cols-[5.5rem_minmax(0,1fr)] items-start gap-4 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
+            <span className="text-sm font-medium">{label}</span>
+            <span className="text-xs leading-5 text-muted-foreground">{copy}</span>
+          </Link>
         ))}
       </div>
     </div>
@@ -364,7 +367,7 @@ function SiteHeader({ language, theme, onLanguage, onLanguageOpen, onTheme, topM
     ? topModels?.length ? "w-[min(56rem,calc(100vw-2rem))]" : "w-[min(42rem,calc(100vw-2rem))]"
     : name === "leaderboards"
       ? "w-[min(38rem,calc(100vw-2rem))]"
-      : "w-[min(28rem,calc(100vw-2rem))]";
+      : "w-[min(38rem,calc(100vw-2rem))]";
   const panelPosition = (name: NavigationMenuName) => name === "models" && topModels?.length
     ? "left-1/2 -translate-x-1/2 xl:left-[-15.5rem] xl:translate-x-0"
     : "left-1/2 -translate-x-1/2";
