@@ -517,7 +517,7 @@ export function ModelsWorkbenchPage({
         </div>
       </section>
 
-      <section className="px-4 py-14 sm:px-6 sm:py-20">
+      <section className="scroll-mt-20 px-4 py-14 sm:px-6 sm:py-20" id="model-catalog">
         <div className="mx-auto max-w-7xl">
           <div className="mb-7">
             <p className="font-mono text-xs text-muted-foreground">

@@ -152,7 +152,7 @@ function NavigationMenu({ name, close }: { name: NavigationMenuName; close: () =
           <div className="mt-4 grid gap-2">
             {[
               ["/models/", "Models workbench", "Price, performance and catalog filters"],
-              ["/models/#catalog", "Model catalog", "Search, filter and compare model evidence"],
+              ["/models/#model-catalog", "Model catalog", "Search, filter and compare model evidence"],
               ["/model-lifecycle/", "Lifecycle radar", "Retirements, sunset dates and migration paths"],
             ].map(([href, title, copy]) => (
               <Link className="rounded-xl border border-transparent px-3 py-2 transition-colors hover:border-primary/25 hover:bg-accent" href={href} key={href} onClick={close}>
