@@ -8,6 +8,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-brand: var(--brand);
+  --color-brand-secondary: var(--brand-secondary);
   --color-brand-foreground: var(--brand-foreground);
   --font-sans: var(--font-inter-tight);
   --font-mono: var(--font-jetbrains-mono);
@@ -56,9 +57,10 @@
   --brand: #1111ff;
   --brand-hover: #0d0ddd;
   --brand-active: #0909bc;
+  --brand-secondary: #2727a8;
   --brand-foreground: #ffffff;
   --brand-subtle: #e9e9ff;
-  --brand-subtle-foreground: #2727a8;
+  --brand-subtle-foreground: var(--brand-secondary);
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -79,7 +81,7 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: var(--brand);
-  --link: var(--brand);
+  --link: var(--brand-secondary);
   --active-control: var(--brand-subtle);
   --active-control-foreground: var(--brand-subtle-foreground);
   --selection: #ced0ff;
@@ -101,12 +103,13 @@
 }
 
 .dark {
-  --brand: #8f8fff;
-  --brand-hover: #a3a3ff;
-  --brand-active: #7474e8;
-  --brand-foreground: #101021;
+  --brand: #1111ff;
+  --brand-hover: #3838ff;
+  --brand-active: #0808d5;
+  --brand-secondary: #9dabff;
+  --brand-foreground: #ffffff;
   --brand-subtle: #282855;
-  --brand-subtle-foreground: #c2c2ff;
+  --brand-subtle-foreground: var(--brand-secondary);
   --background: oklch(0.145 0.012 265);
   --foreground: oklch(0.985 0.006 265);
   --card: oklch(0.205 0.016 265);
@@ -126,10 +129,10 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(0.34 0.016 265 / 72%);
   --input: oklch(0.23 0.018 265);
-  --ring: #a7a7ff;
-  --link: #b5b5ff;
+  --ring: var(--brand-secondary);
+  --link: var(--brand-secondary);
   --active-control: var(--brand-subtle);
-  --active-control-foreground: var(--brand-subtle-foreground);
+  --active-control-foreground: var(--brand-secondary);
   --selection: #38387f;
   --selection-foreground: #ffffff;
   --caret: var(--brand);

@@ -2,11 +2,14 @@ import "server-only";
 
 import {
   ACCEPTED_CUSTOM_RANKING_QUERY,
+  type PreviewDataAdapter,
   type RankingData,
+  type RankingQuery,
   type UiDataContractV1,
 } from "@tokenbench/frontend/preview-data/contracts";
 import { createEvidencePreviewDataComposition } from "@tokenbench/frontend/preview-data/composition-evidence";
 
+import { projectMakeItYoursModels } from "@/lib/make-it-yours-projector";
 import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
 
 export type MakeItYoursDataMode = "evidence" | "production" | "unconfigured";
@@ -17,19 +20,74 @@ export interface MakeItYoursRankingSnapshot {
   readonly error: string | null;
 }
 
-function safeErrorMessage(error: unknown): string {
-  if (!(error instanceof Error)) return "The custom ranking request failed.";
-  if (error.message.includes("TOKENBENCH_UI_DATA_BASE_URL")) {
-    return "The production custom-ranking service is not configured for this environment.";
+/**
+ * The production producer currently owns the published leaderboard contract,
+ * not a stable six-axis custom-ranking dimension contract. This request
+ * deliberately omits fixture-only dimension revisions and weights so the HTTP
+ * transport selects the valid leaderboard GET operation.
+ */
+export const PUBLISHED_CANDIDATE_LEADERBOARD_QUERY = {
+  operation: "leaderboard",
+  releaseId: null,
+  filters: {
+    organizationIds: [],
+    openWeights: "all",
+    excludeDerivativeFinetunes: false,
+  },
+  limit: 100,
+  cursor: null,
+} as const satisfies RankingQuery;
+
+function safeErrorMessage(error: unknown, mode: "evidence" | "production"): string {
+  if (!(error instanceof Error)) {
+    return mode === "production"
+      ? "The published leaderboard request failed."
+      : "The retained custom-ranking evidence could not be loaded.";
   }
-  return "The verified custom-ranking service could not complete this request.";
+  if (error.message.includes("TOKENBENCH_UI_DATA_BASE_URL")) {
+    return "The production leaderboard service is not configured for this environment.";
+  }
+  return mode === "production"
+    ? "The verified leaderboard service could not complete this request."
+    : "The retained custom-ranking evidence could not be loaded.";
+}
+
+function producerCapabilityUnavailable(
+  envelope: UiDataContractV1<RankingData>,
+): string | null {
+  const projection = projectMakeItYoursModels(envelope);
+  if (projection.models.length > 0 || projection.unavailableCount === 0) return null;
+  return "Producer capability unavailable: the published leaderboard response does not include the complete six-axis, route-price, and runtime facts required for client-side re-ranking.";
 }
 
 /**
- * This route deliberately submits the accepted custom-ranking request intact.
- * Preview mode reads the retained accepted custom-ranking envelope that
- * matches this query; it never substitutes an illustrative fixture for a
- * missing production response.
+ * Evidence keeps its retained exact custom request. Production requests only
+ * source-published leaderboard candidates, then the workbench applies its
+ * six-axis weights and filters locally to complete candidate facts.
+ */
+export async function loadMakeItYoursRankingFromAdapter(
+  mode: "evidence" | "production",
+  adapter: Pick<PreviewDataAdapter, "rankings">,
+): Promise<MakeItYoursRankingSnapshot> {
+  const query = mode === "evidence"
+    ? ACCEPTED_CUSTOM_RANKING_QUERY
+    : PUBLISHED_CANDIDATE_LEADERBOARD_QUERY;
+
+  try {
+    const envelope = await adapter.rankings(query);
+    return {
+      mode,
+      envelope,
+      error: mode === "production" ? producerCapabilityUnavailable(envelope) : null,
+    };
+  } catch (error) {
+    return { mode, envelope: null, error: safeErrorMessage(error, mode) };
+  }
+}
+
+/**
+ * Preview mode reads the retained exact custom-ranking envelope. Production
+ * never posts that fixture request or treats it as a fallback for live data.
  */
 export async function loadMakeItYoursRanking(): Promise<MakeItYoursRankingSnapshot> {
   const configuredMode = process.env.TOKENBENCH_UI_DATA_MODE;
@@ -44,17 +102,16 @@ export async function loadMakeItYoursRanking(): Promise<MakeItYoursRankingSnapsh
     }
 
     try {
+      return loadMakeItYoursRankingFromAdapter(
+        "evidence",
+        createEvidencePreviewDataComposition({ rankings: "mixed-source" }),
+      );
+    } catch {
       return {
         mode: "evidence",
-        envelope: await createEvidencePreviewDataComposition({
-          rankings: "mixed-source",
-        }).rankings(
-          ACCEPTED_CUSTOM_RANKING_QUERY,
-        ),
-        error: null,
+        envelope: null,
+        error: "The retained custom-ranking evidence could not be loaded.",
       };
-    } catch (error) {
-      return { mode: "evidence", envelope: null, error: safeErrorMessage(error) };
     }
   }
 
@@ -67,14 +124,15 @@ export async function loadMakeItYoursRanking(): Promise<MakeItYoursRankingSnapsh
   }
 
   try {
+    return loadMakeItYoursRankingFromAdapter(
+      "production",
+      createProductionUiDataAdapter(),
+    );
+  } catch {
     return {
       mode: "production",
-      envelope: await createProductionUiDataAdapter().rankings(
-        ACCEPTED_CUSTOM_RANKING_QUERY,
-      ),
-      error: null,
+      envelope: null,
+      error: "The production leaderboard service is not configured for this environment.",
     };
-  } catch (error) {
-    return { mode: "production", envelope: null, error: safeErrorMessage(error) };
   }
 }

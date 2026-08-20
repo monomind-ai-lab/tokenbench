@@ -2316,11 +2316,15 @@ export function PopularModelsPage({
               </CardContent>
             </Card>
           </div>
-          <section
-            aria-labelledby="popular-models-comparison-heading"
-            className="mt-14 border-t border-border pt-14"
-            id="popular-models-comparison"
-          >
+        </div>
+      </section>
+
+      <section
+        aria-labelledby="popular-models-comparison-heading"
+        className="border-b border-border px-5 py-14 sm:px-8 sm:py-16 lg:px-10"
+        id="popular-models-comparison"
+      >
+        <div className="mx-auto max-w-7xl">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2
@@ -2460,7 +2464,6 @@ export function PopularModelsPage({
                   )}
                 </CardFooter>
               </Card>
-          </section>
         </div>
       </section>
     </div>

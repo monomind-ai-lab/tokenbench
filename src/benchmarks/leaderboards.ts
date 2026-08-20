@@ -159,7 +159,7 @@ function isFiniteMetric(metric: BenchmarkMetric): boolean {
 }
 
 function isPositiveRank(rank: number | null): rank is number {
-  return Number.isSafeInteger(rank) && rank > 0;
+  return rank !== null && Number.isSafeInteger(rank) && rank > 0;
 }
 
 function isSupportedBenchLmMetric(model: BenchmarkModel, metric: BenchmarkMetric, metricKey: string): boolean {
@@ -239,7 +239,7 @@ function sourceRank(metric: BenchmarkMetric | null): number | null {
 }
 
 function validContextWindow(value: number | null): number | null {
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
+  return value !== null && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 function makeEntry(

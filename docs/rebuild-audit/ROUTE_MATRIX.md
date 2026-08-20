@@ -14,17 +14,17 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/models/` | audited | strict data wired and build-checked; design approval pending | Hero metrics; frontier chart and toggles; 2–4 quick comparison; search/access/provider/sort/reset; response-backed catalog; card/list views; selection tray; copy/PNG/CSV; lifecycle context; release timeline |
 | `/model-profile?model=<slug>` | audited | strict data wired and build-checked; design approval pending | Exact requested profile; explicit invalid ID state; capability/runtime charts; exact values; limits/lifecycle; endpoint pricing; workload example; provenance; copy/PNG/CSV |
 | `/models/<slug>/` | audited | implemented and build-checked; design approval and production data review pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
-| `/popular-models/` | audited | exact three-section parity implemented; design approval pending | `01` Leaderboard with one-row controls, fixed category tags, and complete compact table; `02` Insights with two charts; full-width `03` Compare with three economics charts; unavailable slots; real HTTP/live data and final cross-page review remain |
+| `/popular-models/` | audited | exact three-section parity and live weekly/strict merge implemented; design approval pending | `01` Leaderboard with one-row controls, fixed category tags, and complete compact table; `02` Insights with two charts; full-width `03` Compare with three economics charts; weekly popularity order; strict capability/economics enrichment; unavailable slots; deployed-data review remains |
 | `/make-it-yours/` | audited | implemented and evidence-preview checked; design approval and production data review pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | catalog lifecycle wired; design approval and deployed-data review pending | Metrics; response-backed expiration events; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
 | `/leaderboards/` and 14 published child routes | audited | visual design approved; do not reopen | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior; only data wiring/availability verification remains |
 | `/compare/` | audited | strict data wired and build-checked; design approval pending | URL-backed 2–4 distinct selections; invalid/duplicate rejection and four-model bound; capability chart/table; economics charts; decision table; provenance; copy/PNG/CSV |
 | `/compare/<pair>` | audited | implemented and build-checked; design approval and exact-pair production data review pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
 | `/subscribe-vs-api/` | audited | visual design approved; reviewed catalog/calculation wired | Existing simulator preserved: seven provider slots; reviewed plan/usage-limit facts; exact direct-route model mix; URL-backed workload/cache/seats/volume; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy |
-| `/cost` | audited | implemented; build-checked; design approval pending | Redirect-only to the fully parameterized default subscribe-versus-API scenario; discard arbitrary query parameters |
+| `/cost` | audited | implemented and build-checked | Redirect-only to `/subscribe-vs-api/`; do not assert a stale default provider, plan, model, or price in the redirect |
 | `/tools/` | audited | implemented; build-checked; design approval pending | Static tool directory; one subscription-versus-API card; no embedded replacement calculator |
 | `/llm-price-performance/` | audited | validated endpoint wired; design approval pending | URL-backed lane/creator/price filters; interactive Pareto chart and model dialog; full leaderboard/details; null/zero semantics |
-| `/articles/` | audited | implemented and QA-checked; design approval pending | Eight index cards; six substantive guides plus two prototype insight concepts; tabs 8/6/2/0; topics; search; sort; prototype disclosure; empty state |
+| `/articles/` | audited | immutable-style cover/chrome adaptation implemented and QA-checked; design approval pending | Eight index cards; six substantive guides plus two prototype insight concepts; tabs 8/6/2/0; topics; search; compact sort; clickable titles; prototype disclosure; empty state |
 | `/articles/<six published slugs>` | audited | implemented and QA-checked; design approval pending | Breadcrumb, learning summary, numbered sections, dual CTAs, desktop TOC, related content, latest global shell, Article/Breadcrumb JSON-LD |
 | `/guides/` | audited | implemented and QA-checked; design approval pending | Five field-guide cards and subscribe-versus-API CTA |
 | `/guides/<five published slugs>/` | audited | implemented and redirect-checked; design approval pending | Redirect to canonical `/articles/<slug>/` detail |
@@ -63,10 +63,12 @@ The Next.js foundation currently renders this complete order with the approved A
 - Exact immutable section order is implemented: `01` **Leaderboard** with its
   master table, `02` **Insights** with its two charts, and `03` **Compare** with
   its three economics charts. This is parity implementation, not design approval.
-- `/popular-models/` is a data-backed capability workbench, not a fixed
-  22-model popularity list. It projects only strict `ui-data-contract/v1`
-  leaderboard rows, retains published source rank/order, and never applies a
-  local popularity cutoff or replaces unavailable values with zero.
+- `/popular-models/` is a weekly-popularity workbench rather than a fixed local
+  list. Production order and displayed rank come only from the validated weekly
+  directory response. Exact slug/model-ID matches may enrich those rows with
+  strict `ui-data-contract/v1` capability, taxonomy, task-economics, release,
+  route, and runtime facts. A strict benchmark rank is never relabeled as a
+  popularity rank, and a missing weekly source makes the route unavailable.
 - The underlying contract retains release, provenance/license, total, and
   next-cursor state when published, but the visible route uses neutral benchmark
   language. Dataset and contract names are reserved for a future credits route.
@@ -100,7 +102,12 @@ The Next.js foundation currently renders this complete order with the approved A
 - Multimodal and media routes preserve their route-specific chart counts, evidence notes, ranking rows, and `profile=balanced&sort=rank-asc` default where published.
 - Desktop results use full tables while mobile results use the immutable card presentation; this responsive behavior is not satisfied by merely scrolling a desktop table.
 - CSV downloads retain active query state. Share URLs preserve non-default state while omitting the default profile where the immutable site does so.
-- The Next child routes read the strict `ui-data-contract/v1` rankings gateway. LiveBench-backed exact overall/category evidence renders when published; selected-route value/pricing views require their own verified route join; LMArena human-preference and media lenses remain explicit unavailable surfaces until their producer exists.
+- In evidence mode the Next child routes retain the exact strict
+  `ui-data-contract/v1` preview path. In HTTP/production mode each child loads
+  its published `/api/benchmarks/leaderboards/:key` response, validates the
+  route/profile/pagination/capability receipt, and projects the complete page
+  without falling back to a generic ranking. Unsupported LMArena/media source
+  lenses remain explicit unavailable surfaces until their producers exist.
 
 ## Compare workbench contract
 
@@ -180,3 +187,7 @@ Required global behavior:
 - Searchable language dialog with preferred and extended languages in two columns.
 - Footer marketing form with first name, company, email, and optional notification consent.
 - Skip link and responsive, keyboard-accessible controls.
+- Compact immutable-style desktop navigation, bounded menus, and the
+  transparent MonoMind mark without a white backing swatch.
+- Top-model menu rows must reuse the verified Popular Models order/rank; array
+  order and benchmark rank may not be presented as weekly popularity.

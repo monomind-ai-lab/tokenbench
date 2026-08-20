@@ -38,6 +38,14 @@ function model(id: string): PreviewModel {
   return { id } as PreviewModel;
 }
 
+function rankedModel(id: string, rank: number) {
+  return {
+    model: model(id),
+    rank: { availability: "available", value: rank },
+    sourceRank: rank,
+  } as RankingData["models"][number];
+}
+
 function adapter(overrides: Partial<PreviewDataAdapter> = {}): PreviewDataAdapter {
   return {
     models: async () => envelope<ModelDirectoryData>(null),
@@ -94,12 +102,14 @@ test("the retained evidence adapter accepts every Home evidence request", async 
   assert.equal(snapshot.subscription.envelope?.status, "available");
 });
 
-test("production comparison IDs come from the HTTP directory response and never use retained evidence IDs", async () => {
+test("production comparison IDs come from accepted published ranks and never from directory order", async () => {
   let comparisonQuery: unknown;
   let subscriptionQuery: unknown;
   const snapshot = await loadHomeDataFromAdapter("production", adapter({
-    models: async () => envelope<ModelDirectoryData>({ models: [model("live-one"), model("live-two"), model("live-three")] }),
-    rankings: async () => envelope<RankingData>({ models: [] }),
+    models: async () => envelope<ModelDirectoryData>({ models: [model("directory-first"), model("directory-second")] }),
+    rankings: async () => envelope<RankingData>({
+      models: [rankedModel("live-three", 3), rankedModel("live-one", 1), rankedModel("live-two", 2)],
+    }),
     comparison: async (query) => {
       comparisonQuery = query;
       return envelope<CompareData>({ models: [], unavailableModelIds: [] });
@@ -119,11 +129,11 @@ test("production comparison IDs come from the HTTP directory response and never 
   assert.deepEqual(subscriptionQuery, { operation: "catalog" });
 });
 
-test("production leaves comparison unavailable when fewer than two HTTP model records are accepted", async () => {
+test("production leaves comparison unavailable when fewer than two ranked records are accepted", async () => {
   let comparisonCalls = 0;
   const snapshot = await loadHomeDataFromAdapter("production", adapter({
-    models: async () => envelope<ModelDirectoryData>({ models: [model("only-live-record")] }),
-    rankings: async () => envelope<RankingData>({ models: [] }),
+    models: async () => envelope<ModelDirectoryData>({ models: [model("directory-record"), model("another-directory-record")] }),
+    rankings: async () => envelope<RankingData>({ models: [rankedModel("only-ranked-record", 1)] }),
     comparison: async () => {
       comparisonCalls += 1;
       return envelope<CompareData>({ models: [], unavailableModelIds: [] });

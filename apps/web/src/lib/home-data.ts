@@ -74,12 +74,28 @@ async function capture<T>(operation: () => Promise<UiDataContractV1<T>>): Promis
   }
 }
 
-function productionComparisonQuery(models: HomeOperationSnapshot<ModelDirectoryData>): CompareQuery | null {
-  const ids = Array.from(new Set(
-    (models.envelope?.data?.models ?? [])
-      .map((model) => model.id)
-      .filter((id) => id.length > 0),
-  )).slice(0, 3);
+function productionComparisonQuery(
+  rankings: HomeOperationSnapshot<RankingData>,
+): CompareQuery | null {
+  const ids = Array.from(
+    new Set(
+      (rankings.envelope?.data?.models ?? [])
+        .map((entry) => ({
+          id: entry.model.id,
+          rank:
+            entry.sourceRank ??
+            (entry.rank.availability === "available" ? entry.rank.value : null),
+        }))
+        .filter(
+          (entry): entry is { id: string; rank: number } =>
+            entry.id.length > 0 &&
+            entry.rank !== null &&
+            Number.isFinite(entry.rank),
+        )
+        .sort((left, right) => left.rank - right.rank)
+        .map((entry) => entry.id),
+    ),
+  ).slice(0, 3);
   return ids.length >= 2 ? { modelIds: ids } : null;
 }
 
@@ -102,7 +118,7 @@ export async function loadHomeDataFromAdapter(
 
   const comparisonQuery = mode === "evidence"
     ? HOME_EVIDENCE_COMPARISON_QUERY
-    : productionComparisonQuery(models);
+    : productionComparisonQuery(rankings);
   const comparison = comparisonQuery === null
     ? unavailable<CompareData>("At least two accepted model records are required for a dynamic comparison.")
     : await capture(() => adapter.comparison(comparisonQuery));

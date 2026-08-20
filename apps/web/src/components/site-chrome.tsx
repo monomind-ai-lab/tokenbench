@@ -34,6 +34,18 @@ type LanguageOption = {
   label: string;
 };
 
+/**
+ * A client-safe ranking row supplied by the server shell. The rank is the
+ * accepted source rank, not a position inferred from the rendered array.
+ */
+export type SiteChromeTopModel = {
+  readonly modelId: string;
+  readonly name: string;
+  readonly provider: string;
+  readonly score: number | string;
+  readonly rank: number;
+};
+
 const PREFERRED_LANGUAGES: LanguageOption[] = [
   { code: "en", label: "English" },
   { code: "ko", label: "Korean" },
@@ -118,19 +130,6 @@ const MORE_LANGUAGES: LanguageOption[] = [
   { code: "zu", label: "Zulu" },
 ];
 
-const TOP_MODELS = [
-  ["claude-mythos-5", "Claude Mythos 5", "Anthropic", "82.9"],
-  ["claude-opus-5", "Claude Opus 5", "Anthropic", "82.8"],
-  ["claude-fable", "Claude Fable 5", "Anthropic", "82.6"],
-  ["gpt-5-6-sol", "GPT-5.6 Sol", "OpenAI", "81.8"],
-  ["kimi-3", "Kimi K3", "Moonshot AI", "80.2"],
-  ["qwen3-8-max", "Qwen3.8 Max", "Alibaba", "79.6"],
-  ["claude-opus-4-8", "Claude Opus 4.8", "Anthropic", "76.8"],
-  ["muse-spark-1-1", "Muse Spark 1.1", "Meta", "76.6"],
-  ["grok-4-5", "Grok 4.5", "xAI", "75.1"],
-  ["gemini-3-6-flash", "Gemini 3.6 Flash", "Google", "75.3"],
-] as const;
-
 const SIMPLE_NAV = [
   ["/", "Home"],
   ["/compare/", "Compare"],
@@ -143,19 +142,32 @@ function readLanguageCookie() {
   return match?.split("=")[1]?.split("/").at(-1) || "en";
 }
 
-function NavigationMenu({ name, close }: { name: NavigationMenuName; close: () => void }) {
+function NavigationMenu({
+  name,
+  close,
+  topModels,
+  topModelsLabel,
+}: {
+  name: NavigationMenuName;
+  close: () => void;
+  topModels?: readonly SiteChromeTopModel[];
+  topModelsLabel?: string;
+}) {
   if (name === "models") {
     return (
-      <div className="grid gap-8 lg:grid-cols-[.8fr_1.2fr]" role="region" aria-label="Models">
+      <div className="grid gap-6 md:grid-cols-[.8fr_1.2fr]" role="region" aria-label="Models">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground">Explore models</p>
-          <div className="mt-4 grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold">Explore models</p>
+            <span className="font-mono text-[10px] text-muted-foreground">Decision surfaces</span>
+          </div>
+          <div className="mt-3 grid divide-y divide-border">
             {[
               ["/models/", "Models workbench", "Price, performance and catalog filters"],
               ["/models/#model-catalog", "Model catalog", "Search, filter and compare model evidence"],
               ["/model-lifecycle/", "Lifecycle radar", "Retirements, sunset dates and migration paths"],
             ].map(([href, title, copy]) => (
-              <Link className="rounded-xl border border-transparent px-3 py-2 transition-colors hover:border-primary/25 hover:bg-accent" href={href} key={href} onClick={close}>
+              <Link className="rounded-lg px-1 py-3 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
                 <span className="block text-sm font-medium">{title}</span>
                 <span className="mt-1 block text-xs text-muted-foreground">{copy}</span>
               </Link>
@@ -164,21 +176,25 @@ function NavigationMenu({ name, close }: { name: NavigationMenuName; close: () =
         </div>
         <div>
           <div className="flex items-center justify-between gap-4">
-            <p className="font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground">Top models</p>
-            <span className="text-[10px] text-muted-foreground">Live weekly rank · 12 Aug 2026</span>
+            <p className="text-sm font-semibold">Top models</p>
+            <span className="font-mono text-[10px] text-muted-foreground">{topModelsLabel?.trim() || "Current ranking"}</span>
           </div>
-          <div className="mt-4 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-            {TOP_MODELS.map(([slug, model, provider, score], index) => (
-              <Link className="flex items-center gap-3 bg-card px-3 py-2.5 transition-colors hover:bg-accent" href={`/model-profile?model=${slug}`} key={slug} onClick={close}>
-                <span className="w-6 font-mono text-[10px] text-muted-foreground">#{index + 1}</span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium">{model}</span>
-                  <span className="block truncate text-[10px] text-muted-foreground">{provider}</span>
-                </span>
-                <span className="font-mono text-[10px]">{score}</span>
-              </Link>
-            ))}
-          </div>
+          {topModels?.length ? (
+            <div className="mt-3 grid gap-x-4 sm:grid-cols-2">
+              {topModels.map((model) => (
+                <Link className="flex items-center gap-3 border-b border-border px-1 py-2.5 transition-colors hover:bg-accent" href={`/model-profile?model=${encodeURIComponent(model.modelId)}`} key={model.modelId} onClick={close}>
+                  <span className="w-6 font-mono text-[10px] text-muted-foreground">#{model.rank}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-medium">{model.name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">{model.provider}</span>
+                  </span>
+                  <span className="font-mono text-[10px]">{model.score}</span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-lg border border-dashed border-border bg-muted/30 px-3 py-3 text-xs leading-5 text-muted-foreground" role="status">Top-model ranking is unavailable.</p>
+          )}
         </div>
       </div>
     );
@@ -302,7 +318,18 @@ function MarketingForm() {
   );
 }
 
-function SiteHeader({ language, theme, onLanguage, onLanguageOpen, onTheme }: { language: string; theme: ThemeMode; onLanguage: (code: string) => void; onLanguageOpen: () => void; onTheme: () => void }) {
+function BrandLockup() {
+  return (
+    <>
+      <Image alt="" className="block size-7 shrink-0 bg-transparent object-contain" height={512} sizes="28px" src="/brand/monomind-tokenbench.png" width={512} />
+      <span className="min-w-0">
+        <span className="block text-[15px] font-semibold leading-none tracking-[-0.025em]">TokenBench</span>
+      </span>
+    </>
+  );
+}
+
+function SiteHeader({ language, theme, onLanguage, onLanguageOpen, onTheme, topModels, topModelsLabel }: { language: string; theme: ThemeMode; onLanguage: (code: string) => void; onLanguageOpen: () => void; onTheme: () => void; topModels?: readonly SiteChromeTopModel[]; topModelsLabel?: string }) {
   const pathname = usePathname();
   const [menu, setMenu] = useState<MenuName>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -334,36 +361,36 @@ function SiteHeader({ language, theme, onLanguage, onLanguageOpen, onTheme }: { 
     setMenu((current) => current === name ? null : name);
   };
   const panelWidth = (name: NavigationMenuName) => name === "models"
-    ? "w-[min(44rem,calc(100vw-2rem))]"
+    ? topModels?.length ? "w-[min(56rem,calc(100vw-2rem))]" : "w-[min(42rem,calc(100vw-2rem))]"
     : name === "leaderboards"
       ? "w-[min(38rem,calc(100vw-2rem))]"
       : "w-[min(28rem,calc(100vw-2rem))]";
+  const panelPosition = (name: NavigationMenuName) => name === "models" && topModels?.length
+    ? "left-1/2 -translate-x-1/2 xl:left-[-15.5rem] xl:translate-x-0"
+    : "left-1/2 -translate-x-1/2";
   const navButton = (name: NavigationMenuName, label: string) => (
     <div className="relative">
-      <button aria-controls={`site-menu-${name}`} aria-expanded={menu === name} className={cn("flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", menu === name && "bg-active-control text-active-control-foreground")} onClick={toggleMenu(name)} type="button">
+      <button aria-controls={`site-menu-${name}`} aria-expanded={menu === name} className={cn("flex min-h-11 items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", menu === name && "bg-active-control text-active-control-foreground")} onClick={toggleMenu(name)} type="button">
         {label}<ChevronDown className={cn("size-3.5 transition-transform", menu === name && "rotate-180")} />
       </button>
-      {menu === name ? <div className={cn("absolute left-1/2 top-full z-[60] mt-2 max-h-[calc(100vh-5.5rem)] -translate-x-1/2 overflow-y-auto rounded-2xl border border-border bg-popover p-5 shadow-soft", panelWidth(name))} id={`site-menu-${name}`}><NavigationMenu close={closeMenu} name={name} /></div> : null}
+      {menu === name ? <div className={cn("absolute top-full z-[60] mt-2 max-h-[calc(100vh-5.5rem)] overflow-y-auto rounded-xl border border-border bg-popover p-4 shadow-soft", panelWidth(name), panelPosition(name))} id={`site-menu-${name}`}><NavigationMenu close={closeMenu} name={name} topModels={topModels} topModelsLabel={topModelsLabel} /></div> : null}
     </div>
   );
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background/90 backdrop-blur-xl" ref={headerRef}>
-      <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-5 sm:px-8 lg:px-10">
-        <Link aria-label="TokenBench home" className="flex min-h-11 items-center gap-2 rounded-lg" href="/">
-          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center">
-            <Image alt="" className="size-7 object-contain" height={512} preload sizes="28px" src="/brand/monomind-tokenbench.png" width={512} />
-          </span>
-          <span className="font-semibold tracking-tight">TokenBench</span>
+      <div className="mx-auto flex h-14 max-w-7xl items-center gap-2 px-5 sm:px-8 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:px-10">
+        <Link aria-label="TokenBench home" className="flex min-h-11 items-center gap-2 rounded-lg bg-transparent lg:justify-self-start" href="/">
+          <BrandLockup />
         </Link>
-        <nav aria-label="Primary" className="ml-auto hidden items-center gap-1 lg:flex">
-          <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname === "/" && "bg-active-control text-active-control-foreground")} href="/">Home</Link>
+        <nav aria-label="Primary" className="ml-auto hidden items-center gap-1 lg:ml-0 lg:flex lg:justify-self-center">
+          <Link className={cn("flex min-h-11 items-center rounded-lg px-2.5 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname === "/" && "bg-active-control text-active-control-foreground")} href="/">Home</Link>
           {navButton("models", "Models")}
           {navButton("leaderboards", "Leaderboards")}
-          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-active-control text-active-control-foreground")} href={href} key={href} onClick={closeMenu}>{label}</Link>)}
+          {SIMPLE_NAV.slice(1).map(([href, label]) => <Link className={cn("flex min-h-11 items-center rounded-lg px-2.5 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", pathname.startsWith(href.replace(/\/$/, "")) && "bg-active-control text-active-control-foreground")} href={href} key={href} onClick={closeMenu}>{label}</Link>)}
           {navButton("articles", "Articles")}
         </nav>
-        <div className="ml-auto flex items-center gap-1 lg:ml-3">
+        <div className="ml-auto flex items-center gap-1 lg:ml-0 lg:justify-self-end">
           <div className="relative">
             <Button aria-controls="site-menu-language" aria-expanded={menu === "language"} aria-label="Choose language" className={cn("size-11", menu === "language" && "bg-active-control text-active-control-foreground")} onClick={toggleMenu("language")} size="icon-sm" variant="ghost"><Languages /></Button>
             {menu === "language" ? <LanguageMenu language={language} onClose={closeMenu} onLanguage={(code) => { onLanguage(code); closeMenu(); }} /> : null}
@@ -394,17 +421,11 @@ function SiteFooter() {
     <footer className="border-t border-border bg-card/35">
       <div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 sm:px-8 md:grid-cols-2 lg:grid-cols-[1.1fr_.75fr_.65fr_1.25fr] lg:px-10">
         <section aria-label="About TokenBench">
-          <Link aria-label="TokenBench home" className="inline-flex min-h-11 items-center gap-3 rounded-lg" href="/">
-            <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center">
-              <Image alt="" className="size-8 object-contain" height={512} sizes="32px" src="/brand/monomind-tokenbench.png" width={512} />
-            </span>
-            <span>
-              <span className="block font-semibold tracking-tight">TokenBench</span>
-              <span className="mt-0.5 block text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">MonoMind AI Lab</span>
-            </span>
+          <Link aria-label="TokenBench home" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-transparent" href="/">
+            <BrandLockup />
           </Link>
           <p className="mt-3 max-w-xs text-sm leading-6 text-muted-foreground">Source-aware model, pricing, and workload evidence for practical AI decisions.</p>
-          <p className="mt-3 text-xs text-muted-foreground">Verify provider evidence before purchasing.</p>
+          <p className="mt-3 text-xs font-medium text-brand-secondary">Verify provider evidence before purchasing.</p>
         </section>
         <nav aria-label="Explore" className="grid content-start gap-2 text-sm">
           <p className="mb-1 text-xs font-medium">Explore</p>
@@ -427,7 +448,7 @@ function SiteFooter() {
   );
 }
 
-export function SiteChrome({ children }: { children: ReactNode }) {
+export function SiteChrome({ children, topModels, topModelsLabel }: { children: ReactNode; topModels?: readonly SiteChromeTopModel[]; topModelsLabel?: string }) {
   const theme = useSyncExternalStore<ThemeMode>(
     (onStoreChange) => {
       const observer = new MutationObserver(onStoreChange);
@@ -460,7 +481,7 @@ export function SiteChrome({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <a className="fixed left-3 top-3 z-[100] -translate-y-20 rounded-full bg-primary px-4 py-2 text-sm text-primary-foreground transition-transform focus:translate-y-0" href="#page-content">Skip to page content</a>
-      <SiteHeader language={language} onLanguage={changeLanguage} onLanguageOpen={() => setLanguage(readLanguageCookie())} onTheme={toggleTheme} theme={theme} />
+      <SiteHeader language={language} onLanguage={changeLanguage} onLanguageOpen={() => setLanguage(readLanguageCookie())} onTheme={toggleTheme} theme={theme} topModels={topModels} topModelsLabel={topModelsLabel} />
       <main id="page-content" tabIndex={-1}>{children}</main>
       <SiteFooter />
     </div>

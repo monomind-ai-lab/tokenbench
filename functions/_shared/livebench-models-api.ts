@@ -7,7 +7,6 @@ import {
 import { encodeOpaqueValue } from './benchmark-db';
 import type { LiveBenchD1Database } from './livebench-db';
 import {
-  buildLiveBenchMethodEnvelope,
   buildUnavailableUiDataEnvelope,
   jsonUiDataResponse,
   jsonUiDataServiceUnavailable,
@@ -18,6 +17,10 @@ import {
   buildLiveBenchProfileData,
   LiveBenchRequestBindingError,
 } from './livebench-ui-data';
+import {
+  buildStrictModelJoinEnvelope,
+  readStrictModelJoin,
+} from './strict-model-join';
 
 const MODELS_PARAMETERS = new Set(['search', 'access', 'providerIds', 'limit', 'cursor']);
 
@@ -53,8 +56,20 @@ function invalidRequest(): Response {
   return jsonUiDataResponse({ error: { code: 'invalid_request', message: 'The model request is invalid.' } }, 400);
 }
 
-function etag(revision: string, method: 'models' | 'profile', request: unknown): string {
-  return `"ui-data-${encodeOpaqueValue([revision, method, request])}"`;
+function etag(input: {
+  readonly liveBenchRevision: string;
+  readonly catalogRevision: string | null;
+  readonly modalityBenchmarkRevision: string | null;
+  readonly method: 'models' | 'profile';
+  readonly request: unknown;
+}): string {
+  return `"ui-data-${encodeOpaqueValue([
+    input.liveBenchRevision,
+    input.catalogRevision,
+    input.modalityBenchmarkRevision,
+    input.method,
+    input.request,
+  ])}"`;
 }
 
 export async function onLiveBenchModelsGet(input: {
@@ -78,9 +93,37 @@ export async function onLiveBenchModelsGet(input: {
       method: 'models', request: normalized, fetchedAt,
       reason: 'No verified current LiveBench release is available.',
     }), 404);
-    const data = buildLiveBenchModelsData({ bundle: context.bundle, request: normalized, source: context.source });
-    const envelope = buildLiveBenchMethodEnvelope({ method: 'models', request: normalized, data, context, fetchedAt });
-    const responseEtag = etag(context.release.revision, 'models', normalized);
+    const join = await readStrictModelJoin({
+      db: input.db,
+      liveBenchRevision: context.release.revision,
+      asOf: fetchedAt,
+    });
+    const data = buildLiveBenchModelsData({
+      bundle: context.bundle,
+      request: normalized,
+      source: context.source,
+      join,
+    });
+    const envelope = buildStrictModelJoinEnvelope({
+      method: 'models',
+      request: normalized,
+      data,
+      context: {
+        revision: context.release.revision,
+        releasedAt: context.release.releasedAt,
+        checkedAt: context.release.checkedAt,
+        source: context.source,
+      },
+      join,
+      fetchedAt,
+    });
+    const responseEtag = etag({
+      liveBenchRevision: context.release.revision,
+      catalogRevision: join.catalogRevision,
+      modalityBenchmarkRevision: join.modalityBenchmarkRevision,
+      method: 'models',
+      request: normalized,
+    });
     if (input.request.headers.get('if-none-match') === responseEtag) {
       return new Response(null, { status: 304, headers: { ETag: responseEtag, 'Cache-Control': 'public, max-age=0, must-revalidate' } });
     }
@@ -113,13 +156,41 @@ export async function onLiveBenchProfileGet(input: {
       method: 'profile', request: normalized, fetchedAt,
       reason: 'No verified current LiveBench release is available.',
     }), 404);
-    const data = buildLiveBenchProfileData({ bundle: context.bundle, request: normalized, source: context.source });
+    const join = await readStrictModelJoin({
+      db: input.db,
+      liveBenchRevision: context.release.revision,
+      asOf: fetchedAt,
+    });
+    const data = buildLiveBenchProfileData({
+      bundle: context.bundle,
+      request: normalized,
+      source: context.source,
+      join,
+    });
     if (!data) return jsonUiDataResponse(buildUnavailableUiDataEnvelope({
       method: 'profile', request: normalized, fetchedAt,
       reason: `Model ${normalized.slug} is not present in the active LiveBench release.`,
     }), 404);
-    const envelope = buildLiveBenchMethodEnvelope({ method: 'profile', request: normalized, data, context, fetchedAt });
-    const responseEtag = etag(context.release.revision, 'profile', normalized);
+    const envelope = buildStrictModelJoinEnvelope({
+      method: 'profile',
+      request: normalized,
+      data,
+      context: {
+        revision: context.release.revision,
+        releasedAt: context.release.releasedAt,
+        checkedAt: context.release.checkedAt,
+        source: context.source,
+      },
+      join,
+      fetchedAt,
+    });
+    const responseEtag = etag({
+      liveBenchRevision: context.release.revision,
+      catalogRevision: join.catalogRevision,
+      modalityBenchmarkRevision: join.modalityBenchmarkRevision,
+      method: 'profile',
+      request: normalized,
+    });
     if (input.request.headers.get('if-none-match') === responseEtag) {
       return new Response(null, { status: 304, headers: { ETag: responseEtag, 'Cache-Control': 'public, max-age=0, must-revalidate' } });
     }

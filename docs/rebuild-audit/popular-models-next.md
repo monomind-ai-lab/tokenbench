@@ -7,16 +7,17 @@ Deployment: not performed or authorized
 ## Approval state
 
 No route-level Next visual approval has been recorded. Exact immutable
-three-section parity is implemented, but real HTTP/live data and the final
-cross-page review remain required before approval. This receipt documents
-implementation and verification boundaries only.
+three-section parity and the production weekly/strict merge are implemented,
+but a deployed-data cross-page review remains required before approval. This
+receipt documents implementation and verification boundaries only.
 
 ## Outcome
 
-`/popular-models/` now resolves as a dynamic Next App Router page backed by the
-strict `ui-data-contract/v1` leaderboard operation. It is a benchmark
-workbench, not a hard-coded popularity ranking: every returned row keeps its
-published rank and unavailable evidence is never made zero.
+`/popular-models/` now resolves as a dynamic Next App Router page backed by a
+validated weekly popularity directory plus exact strict
+`ui-data-contract/v1` enrichment. It is not a hard-coded list: weekly rows own
+identity, order, and displayed popularity rank; strict matches may add
+capability/economics facts. Unavailable evidence is never made zero.
 
 The exact immutable section sequence is implemented:
 
@@ -41,19 +42,23 @@ use neutral benchmark language. Dataset/provider-of-record and contract names
 are deliberately not presented on the page; data-source credits will be handled
 by a dedicated future route. The underlying provenance fields remain intact.
 
-## Strict-v1 receipt and source scope
+## Weekly and strict-v1 receipt scope
 
-- The projector consumes only the strict leaderboard envelope. It retains the
-  source release, release date/license/provenance, source total, and next cursor
-  when those values are published.
+- The production loader requires the validated weekly directory. It concurrently
+  requests the strict leaderboard and merges only an exact canonical slug or
+  model-ID match.
+- The weekly response exclusively owns displayed popularity identity, order,
+  and rank. A strict benchmark rank is never relabeled as popularity.
+- Exact strict matches retain source release, release
+  date/license/provenance, source total, and next cursor when published.
 - A published next cursor is shown as a receipt, not silently followed or
   discarded; a missing receipt remains unavailable.
 - The workbench reserves the immutable `All` plus seven category controls and
   table slots: Reasoning, Coding, Agentic coding, Mathematics, Data analysis,
   Language, and Instruction following. Published category IDs/labels map into
   those slots; missing measurements stay visible as unavailable.
-- `sourceRank` wins over a derived rank. The page does not relabel the result as
-  a popularity list or apply a client-side top-N cutoff.
+- `weeklyRank` wins over every strict rank field. The page does not apply a
+  client-side top-N cutoff.
 
 ## Economics and evidence boundaries
 
@@ -75,8 +80,10 @@ by a dedicated future route. The underlying provenance fields remain intact.
 
 - `TOKENBENCH_UI_DATA_MODE=evidence` is permitted only outside production and is
   visibly labeled with a source-neutral `Preview data` disclosure.
-- `TOKENBENCH_UI_DATA_MODE=http` uses the production HTTP-only adapter. It
-  requires the configured v1 service and has no design-evidence fallback.
+- `TOKENBENCH_UI_DATA_MODE=http` uses the weekly directory and production
+  HTTP-only strict adapter. A strict failure leaves an honest partial weekly
+  result; a weekly failure makes the route unavailable. Neither path has a
+  design-evidence fallback.
 - A production build with evidence mode returns an explicit unconfigured state;
   loader errors stay visible instead of falling back to fixtures.
 
@@ -107,6 +114,7 @@ by a dedicated future route. The underlying provenance fields remain intact.
 - Repository-wide Vitest — 192 files and 2,102 tests passed.
 - Next ESLint: passed.
 - Next production build: passed; `/popular-models/` is request-time dynamic.
+- Weekly/strict live-feed parser and exact-merge tests: 6 passed.
 - Impeccable layout detector: no findings on the changed Popular Models route,
   page, charts, and projection files.
 - Final browser parity review: passed at 1691px desktop and 390px mobile with all
@@ -117,11 +125,11 @@ by a dedicated future route. The underlying provenance fields remain intact.
 
 ## Remaining dependencies and next gate
 
-1. Wire a real HTTP LiveBench ranking response and exercise the receipt,
-   taxonomy, total/cursor, unavailable selected-route/runtime/lifecycle states,
-   and charts against it.
-2. Join reviewed catalog identities, selected-route pricing, runtime observations,
-   and lifecycle data independently; do not infer them from LiveBench rows.
+1. Deploy and exercise the weekly/strict merge against the separately
+   authorized producer origin, including partial and unavailable states.
+2. Add independently revisioned runtime observations; the exact reviewed
+   catalog route/pricing/lifecycle join is implemented, but runtime remains
+   unavailable until its own source exists.
 3. Add an app-level Next test configuration for the action component and run
    end-to-end copy/PNG/CSV checks.
 4. After real HTTP/live-data wiring, run a mandatory final cross-page review

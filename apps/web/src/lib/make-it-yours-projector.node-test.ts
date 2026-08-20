@@ -83,6 +83,36 @@ test("the make-it-yours projector requires all exact six axes and does not use a
   assert.deepEqual(incomplete, { models: [], unavailableCount: 1 });
 });
 
+test("the projector retains published zero prices while incomplete candidates remain excluded", () => {
+  const zeroPriced = model({
+    routePricing: available({
+      route: "direct",
+      inputUsdPerMillion: 0,
+      outputUsdPerMillion: 0,
+      blendedUsdPerMillion: available(0),
+      contextWindowTokens: available(128000),
+      maxOutputTokens: available(8192),
+      inputModalities: ["text"],
+      outputModalities: ["text"],
+      cache: available({ readUsdPerMillion: available(0), writeUsdPerMillion: available(0) }),
+    }),
+  });
+  const incomplete = model({
+    capability: available({
+      compositeScore: 99,
+      radar: [{ key: "agentic", label: "Agentic", percentile: 81, rank: 1, fieldSize: 2 }],
+    }),
+  });
+
+  const projection = projectMakeItYoursModels(envelope([zeroPriced, incomplete]));
+
+  assert.equal(projection.models.length, 1);
+  assert.equal(projection.models[0]?.cost, 0);
+  assert.equal(projection.models[0]?.inputUsdPerMillion, 0);
+  assert.equal(projection.models[0]?.outputUsdPerMillion, 0);
+  assert.equal(projection.unavailableCount, 1);
+});
+
 test("the projected raw SLA and published blended cost flow into ranked CSV rows", () => {
   const projection = projectMakeItYoursModels(envelope([model()]));
   const ranking = buildWeightedRanking({

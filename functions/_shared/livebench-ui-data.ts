@@ -32,6 +32,7 @@ import type {
 } from '../../src/pipeline/ui-data-contract-v1-core';
 import { buildUiDataContractV1Envelope } from '../../src/pipeline/ui-data-contract-v1-core';
 import { decodeOpaqueValue, encodeOpaqueValue } from './benchmark-db';
+import type { StrictModelJoin } from './strict-model-join';
 
 type RankedScore = {
   readonly score: number;
@@ -456,6 +457,40 @@ function allLiveBenchRows(
   return rows;
 }
 
+function modelMethodSources(source: SourceAttribution, join: StrictModelJoin | undefined): readonly SourceAttribution[] {
+  const seen = new Set<string>();
+  return [source, ...(join?.sources ?? [])].filter((candidate) => {
+    if (seen.has(candidate.sourceRef)) return false;
+    seen.add(candidate.sourceRef);
+    return true;
+  });
+}
+
+function joinedModel(model: ModelSummary, join: StrictModelJoin | undefined): ModelSummary {
+  const joined = join?.modelsByConfigurationId.get(model.identity.configurationId);
+  if (!joined) return model;
+  return {
+    ...model,
+    selectedRouteId: joined.selectedRoute?.routeId ?? null,
+    selectedRoutePolicy: joined.selectedRoute === null
+      ? 'No exact reviewed catalog route has been joined.'
+      : joined.selectedRoutePolicy,
+    selectedRoute: joined.selectedRoute,
+    lifecycleStatus: joined.lifecycleStatus,
+  };
+}
+
+function joinedRows(
+  bundle: LiveBenchReleaseBundle,
+  source: SourceAttribution,
+  join: StrictModelJoin | undefined,
+): readonly LeaderboardRow[] {
+  return allLiveBenchRows(bundle, source).map((row) => {
+    const model = joinedModel(row.model, join);
+    return model === row.model ? row : { ...row, model };
+  });
+}
+
 export function buildLiveBenchRankingDimensionSet(
   bundle: LiveBenchReleaseBundle,
 ): RankingDimensionSet {
@@ -540,28 +575,34 @@ function modelsNextCursor(
   } satisfies ModelsCursorPayload);
 }
 
-/** Build a benchmark-backed directory page while catalog-route joins remain unavailable. */
+/** Build the current LiveBench directory with only exact reviewed catalog joins. */
 export function buildLiveBenchModelsData(input: {
   readonly bundle: LiveBenchReleaseBundle;
   readonly request: ModelsRequest;
   readonly source: SourceAttribution;
+  readonly join?: StrictModelJoin;
 }): ModelsData {
   const search = input.request.search?.toLocaleLowerCase() ?? null;
-  const filtered = allLiveBenchRows(input.bundle, input.source)
-    .map((row) => row.model)
-    .filter((model) => search === null || [
-      model.identity.slug,
-      model.identity.displayName,
-      model.identity.organization,
+  const filtered = joinedRows(input.bundle, input.source, input.join)
+    .filter((row) => search === null || [
+      row.model.identity.slug,
+      row.model.identity.displayName,
+      row.model.identity.organization,
     ].some((value) => value.toLocaleLowerCase().includes(search)))
-    .filter((model) => {
+    .filter((row) => {
+      const model = row.model;
       if (input.request.access === 'all') return true;
       if (model.openWeights.availability !== 'available') return false;
       return input.request.access === 'open_weights' ? model.openWeights.value : !model.openWeights.value;
     })
-    // A provider filter is a catalog-route constraint. A benchmark-only model
-    // has no matching provider route and must not be guessed into the result.
-    .filter(() => input.request.providerIds.length === 0)
+    .filter((row) => {
+      if (input.request.providerIds.length === 0) return true;
+      // Provider filtering is a catalog-route constraint. A benchmark-only
+      // row stays out rather than being associated by a similar model name.
+      const joined = input.join?.modelsByConfigurationId.get(row.model.identity.configurationId);
+      return joined?.routes.some((route) => input.request.providerIds.includes(route.providerId)) ?? false;
+    })
+    .map((row) => row.model)
     .sort((left, right) => compareText(left.identity.slug, right.identity.slug));
   const offset = modelsCursorOffset(input.request, input.bundle.releaseId);
   if (offset > filtered.length) throw new LiveBenchRequestBindingError('invalid LiveBench models cursor');
@@ -576,7 +617,7 @@ export function buildLiveBenchModelsData(input: {
       filtered.length,
     ),
   };
-  validateModelMethodData('models', data, input.request, [input.source]);
+  validateModelMethodData('models', data, input.request, modelMethodSources(input.source, input.join));
   return data;
 }
 
@@ -584,16 +625,19 @@ function profileForSlug(
   bundle: LiveBenchReleaseBundle,
   source: SourceAttribution,
   slug: string,
+  join: StrictModelJoin | undefined,
 ): ModelProfile | null {
-  const row = allLiveBenchRows(bundle, source).find((candidate) => candidate.model.identity.slug === slug);
+  const row = joinedRows(bundle, source, join).find((candidate) => candidate.model.identity.slug === slug);
   if (!row) return null;
+  const joined = join?.modelsByConfigurationId.get(row.model.identity.configurationId);
   return {
     summary: row.model,
     releaseOn: bundle.releaseId,
     tasks: row.taskEconomics,
-    routes: [],
-    lifecycleEvents: [],
-    replacement: unavailable('LiveBench is not a lifecycle or replacement source.', source.sourceRef),
+    routes: joined?.routes ?? [],
+    lifecycleEvents: joined?.lifecycleEvents ?? [],
+    replacement: joined?.replacement
+      ?? unavailable('LiveBench is not a lifecycle or replacement source.', source.sourceRef),
   };
 }
 
@@ -601,11 +645,12 @@ export function buildLiveBenchProfileData(input: {
   readonly bundle: LiveBenchReleaseBundle;
   readonly request: ProfileRequest;
   readonly source: SourceAttribution;
+  readonly join?: StrictModelJoin;
 }): ProfileData | null {
-  const model = profileForSlug(input.bundle, input.source, input.request.slug);
+  const model = profileForSlug(input.bundle, input.source, input.request.slug, input.join);
   if (!model) return null;
   const data: ProfileData = { model };
-  validateModelMethodData('profile', data, input.request, [input.source]);
+  validateModelMethodData('profile', data, input.request, modelMethodSources(input.source, input.join));
   return data;
 }
 
@@ -613,14 +658,20 @@ export function buildLiveBenchComparisonData(input: {
   readonly bundle: LiveBenchReleaseBundle;
   readonly request: ComparisonRequest;
   readonly source: SourceAttribution;
+  readonly join?: StrictModelJoin;
 }): ComparisonData | null {
-  const models = input.request.modelSlugs.map((slug) => profileForSlug(input.bundle, input.source, slug));
+  const models = input.request.modelSlugs.map((slug) => profileForSlug(
+    input.bundle,
+    input.source,
+    slug,
+    input.join,
+  ));
   if (models.some((model) => model === null)) return null;
   const data: ComparisonData = {
     requestedModelSlugs: [...input.request.modelSlugs],
     models: models as ModelProfile[],
   };
-  validateModelMethodData('comparison', data, input.request, [input.source]);
+  validateModelMethodData('comparison', data, input.request, modelMethodSources(input.source, input.join));
   return data;
 }
 

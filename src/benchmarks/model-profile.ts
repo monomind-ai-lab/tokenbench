@@ -894,7 +894,10 @@ export function hashModelProfileSnapshotJson(profileJson: string): string {
 
 /** Uses the runtime's native Web Crypto implementation for bulk publication. */
 export async function hashModelProfileSnapshotJsonAsync(profileJson: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', profileBytes(profileJson));
+  const source = profileBytes(profileJson);
+  const digestInput = new Uint8Array(source.byteLength);
+  digestInput.set(source);
+  const digest = await crypto.subtle.digest('SHA-256', digestInput);
   const hexadecimal = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
   return `sha256:${hexadecimal}`;
 }

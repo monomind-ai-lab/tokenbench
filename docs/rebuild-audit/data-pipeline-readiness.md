@@ -68,7 +68,7 @@ The accepted evidence set also covers:
 | LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned four-artifact retrieval, bounded parsing, R2 evidence, bulk D1 staging/validation, monotonic current pointer |
 | `rankings` GET | Production-capable after migration and first ingestion | pinned LiveBench global-average projection, release/taxonomy/total/cursor receipt, task economics, filters, bounded pagination, ETag |
 | Custom `rankings` POST | LiveBench capability ranking ready | active release publishes its exact category dimension-set revision; submitted weights are echoed and applied exactly; unavailable route/runtime SLA filters make candidates ineligible rather than inventing facts |
-| `models`, `profile`, `comparison` v1 | Benchmark-backed partial responses ready | LiveBench capability/economics are real; catalog routes, runtime, and lifecycle remain explicitly unavailable |
+| `models`, `profile`, `comparison` v1 | Strict mixed-source join implemented locally | LiveBench capability/economics plus exact reviewed canonical catalog route, pricing, modality, and expiration facts; runtime and cache-write remain explicitly unavailable |
 | `lifecycle` | Production-capable after migration and catalog refresh | the endpoint catalog expiration date is revisioned and projected into scheduled/retired events; replacements remain unavailable unless published |
 | `subscription` | Reviewed catalog and bounded calculation implemented | exactly seven provider slots; reviewed plan/usage limits; exact direct-route bindings; positive cache allocations require independently published rates |
 | Deployment/cutover | Not authorized | no live infrastructure changes |
@@ -126,14 +126,13 @@ explicitly unavailable until those independent joins exist. The Next decision
 routes no longer use the hard-coded model catalog or browser-side price math as
 factual fallbacks.
 
-`/popular-models/` now calls the leaderboard operation through that boundary and
-projects its strict-v1 receipt without a fixture-only popularity cutoff. It
-retains the published release, taxonomy, total, next cursor, source rank,
-aggregate cost-per-success/mean-output/Pareto facts, and every task-economics
-row. The visible workbench maps published taxonomy aliases into the immutable
-seven category slots and keeps absent measurements unavailable. Selected-route
-pricing remains independent, runtime remains explicitly unavailable when
-absent, and lifecycle is intentionally not inferred by this ranking projection.
+`/popular-models/` now loads the validated weekly directory and strict
+leaderboard concurrently in HTTP mode. Weekly rows exclusively own popularity
+identity, order, and displayed rank. Exact slug/model-ID matches enrich them
+with the strict release, taxonomy, total, cursor, capability, aggregate
+cost-per-success/mean-output/Pareto, task-economics, route, and runtime fields.
+If strict data is absent the weekly result remains honestly partial; if weekly
+data is absent the route is unavailable and never relabels a benchmark rank.
 
 `TOKENBENCH_UI_DATA_MODE=evidence` is local-development-only and visibly labeled
 with a source-neutral preview-data notice. `TOKENBENCH_UI_DATA_MODE=http` is the production HTTP-only
@@ -141,15 +140,17 @@ mode and has no evidence fallback; production builds reject evidence mode.
 
 ## Remaining data work before production
 
-1. Join reviewed canonical catalog identities and provider-route pricing to the
-   source-only LiveBench configurations; do not guess model mappings.
+1. Deploy and exercise the exact reviewed canonical catalog join with the active
+   LiveBench/catalog revisions. The code is ready locally; no live cutover has
+   been authorized.
 2. Add independently revisioned runtime observations for TTFT, throughput, and
    uptime, then publish coherent mixed-source projection tuples.
 3. Add reviewed Perplexity/Microsoft subscription plan facts and independently
    sourced cache-write rates; keep positive unknown allocations unavailable.
-4. Implement/activate the production custom-ranking POST surface. The canonical
-   hosted endpoint currently returns 405 for this operation, so Make It Yours
-   remains unavailable outside retained exact evidence.
+4. Implement/activate the production custom-ranking POST surface if server-side
+   custom ranking remains desired. The Next route no longer sends the retained
+   fixture query in production: it GETs published candidates and re-ranks only
+   candidates with all required six-axis, route-price, and runtime facts.
 5. Exercise the shared HTTP transport through a local Next preview, then obtain
    separate authorization for any deployment or cutover.
 6. After the first real production ranking response is wired, run a mandatory
@@ -179,6 +180,13 @@ mode and has no evidence fallback; production builds reject evidence mode.
   passed; the shared result-action Node test passed 4 tests separately.
 - Next ESLint and the Next production build passed with `/popular-models/` as a
   request-time dynamic route.
+- The live weekly Popular Models projector and exact strict enrichment merge
+  passed six focused tests; a missing weekly source remains unavailable.
+- Per-key leaderboard HTTP projection passed four focused parser/projector
+  tests and the Next production build.
+- The strict catalog join and model/profile/comparison API slice passed 29
+  focused tests after lifecycle aggregation was hardened against partial-route
+  retirement inference.
 - Local design-evidence browser check: at 390×844 the desktop table was hidden,
   equivalent result cards rendered, and the fixed category controls used a
   contained horizontal strip. At 1691×1324 all 13 master-table columns fit the

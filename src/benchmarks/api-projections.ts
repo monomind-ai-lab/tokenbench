@@ -418,7 +418,7 @@ function hasExactEstimatedBenchLmMetric(
 }
 
 function validContextWindow(value: number | null): number | null {
-  return Number.isSafeInteger(value) && value > 0 ? value : null;
+  return value !== null && Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 export function estimatedLeaderboardEntries(

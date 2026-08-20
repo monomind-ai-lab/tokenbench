@@ -32,7 +32,7 @@ function available<T>(value: EvidenceValue<T>): T | null {
 
 /**
  * The workbench is deliberately strict: a row participates only when the
- * custom-ranking response supplies every named axis, raw SLA measurement, and
+ * returned candidate facts supply every named axis, raw SLA measurement, and
  * a published blended route cost. A composite score is never used as a stand-in.
  */
 function projectModel(model: PreviewModel): MakeItYoursProjectedModel | null {

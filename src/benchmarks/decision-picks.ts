@@ -77,7 +77,7 @@ export const DECISION_PICK_CATEGORIES: readonly DecisionPickCategory[] = [
 ];
 
 function isPositiveInteger(value: number | null): value is number {
-  return Number.isSafeInteger(value) && value > 0;
+  return value !== null && Number.isSafeInteger(value) && value > 0;
 }
 
 function isFiniteIsoTimestamp(value: string): boolean {

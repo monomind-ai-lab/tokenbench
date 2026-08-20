@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { LeaderboardDetailPage } from "@/components/leaderboard-detail-page";
+import { loadLeaderboardRouteLiveSnapshot } from "@/lib/leaderboard-route-live.server";
 import { loadLeaderboardRankings } from "@/lib/ui-data.server";
 import {
   leaderboardDetailDefinition,
@@ -32,13 +33,16 @@ export default async function LeaderboardChildRoute({ params, searchParams }: Le
   const key = leaderboardKeyFromSegments((await params).segments);
   if (key === null) notFound();
   const definition = leaderboardDetailDefinition(key);
-  const [snapshot, parameters] = await Promise.all([
-    loadLeaderboardRankings(),
-    searchParams,
-  ]);
+  const parameters = await searchParams;
+  const initialFilters = parseLeaderboardFilters(definition, parameters);
+  // Retained evidence remains the exact accepted strict-v1 preview path. Every
+  // other deployed path resolves the published endpoint for this route key.
+  const snapshot = process.env.TOKENBENCH_UI_DATA_MODE === "evidence"
+    ? await loadLeaderboardRankings()
+    : await loadLeaderboardRouteLiveSnapshot(key, initialFilters.profile);
   return (
     <LeaderboardDetailPage
-      initialFilters={parseLeaderboardFilters(definition, parameters)}
+      initialFilters={initialFilters}
       routeKey={key}
       snapshot={snapshot}
     />
