@@ -6,7 +6,6 @@ import {
   CircleAlert,
   GitCompareArrows,
   Plus,
-  RotateCcw,
   Search,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,7 +25,6 @@ import {
   popularProviderColor,
 } from "@/components/popular-models-charts";
 import { ResultActions, type CsvRow } from "@/components/result-actions";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -40,9 +38,12 @@ import { cn } from "@/lib/utils";
 import {
   filterPopularModels,
   normalizePopularModelsComparisonIds,
+  POPULAR_MODELS_CATEGORY_CONTROL_SLOTS,
   popularModelsColumnValue,
   popularModelsColumnWinnerIds,
+  popularModelsCategorySlotKey,
   popularModelsDefaultSortDirection,
+  popularModelsFieldUnavailableLabel,
   popularModelsLeaderboardColumns,
   popularModelsMetricValue,
   sortPopularModels,
@@ -126,17 +127,15 @@ function controlsFromParameters(
   viewModel: PopularModelsV1ViewModel,
 ): InitialControls {
   const requestedCategory = firstParameter(parameters.category);
-  const categoryKey = viewModel.categories.some(
-    (category) => category.key === requestedCategory,
-  )
-    ? (requestedCategory ?? null)
-    : null;
+  const categoryKey =
+    requestedCategory === undefined || requestedCategory === "all"
+      ? null
+      : popularModelsCategorySlotKey(requestedCategory);
   const requestedInsight = firstParameter(parameters.insight);
-  const insightCategoryKey = viewModel.categories.some(
-    (category) => category.key === requestedInsight,
-  )
-    ? (requestedInsight ?? null)
-    : null;
+  const insightCategoryKey =
+    requestedInsight === undefined || requestedInsight === "all"
+      ? null
+      : popularModelsCategorySlotKey(requestedInsight);
   const fallbackSort: PopularModelsSortKeyV1 =
     categoryKey === null ? "overall" : `category:${categoryKey}`;
   const sortKey =
@@ -209,7 +208,7 @@ function formatEvidenceNumber(
   formatter: (value: number) => string = formatExactNumber,
 ): string {
   return measurement.value === null
-    ? `Unavailable${measurement.unavailableReason === null ? "" : `: ${measurement.unavailableReason}`}`
+    ? popularModelsFieldUnavailableLabel(measurement.unavailableReason)
     : formatter(measurement.value);
 }
 
@@ -236,10 +235,10 @@ function ProviderDot({ provider }: { provider: string | null }) {
 
 function ModelLink({ model }: { model: PopularModelV1 }) {
   if (model.slug === null)
-    return <span className="font-medium">{modelName(model)}</span>;
+    return <span className="block truncate font-medium">{modelName(model)}</span>;
   return (
     <Link
-      className="font-medium transition-colors hover:text-primary hover:underline"
+      className="block truncate font-medium transition-colors hover:text-primary hover:underline"
       href={`/model-profile?model=${encodeURIComponent(model.id)}`}
     >
       {modelName(model)}
@@ -249,11 +248,7 @@ function ModelLink({ model }: { model: PopularModelV1 }) {
 
 function RoutePrice({ model }: { model: PopularModelV1 }) {
   if (model.routePricing.availability === "unavailable")
-    return (
-      <span className="text-muted-foreground" title={model.routePricing.reason}>
-        Unavailable
-      </span>
-    );
+    return <span className="text-muted-foreground">Unavailable</span>;
   return (
     <span className="font-mono">
       {formatPrice(model.routePricing.blendedUsdPerMillion)}
@@ -273,7 +268,7 @@ function AggregateCost({
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-end gap-1.5 font-mono",
+        "inline-flex items-center justify-end gap-1 font-mono",
         winner && "font-semibold text-primary",
       )}
     >
@@ -284,8 +279,12 @@ function AggregateCost({
         )}
       </span>
       {winner ? (
-        <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-sans text-[9px] font-semibold uppercase tracking-[.08em]">
-          Lowest 5
+        <span
+          aria-label="Among the five lowest published evaluation costs"
+          className="font-sans text-xs font-bold text-primary"
+          title="Among the five lowest published evaluation costs"
+        >
+          ↓
         </span>
       ) : null}
     </span>
@@ -306,14 +305,18 @@ function ScoreCell({
   return (
     <span
       className={cn(
-        "inline-flex min-h-7 items-center gap-1.5 font-mono text-xs",
+        "inline-flex min-h-7 items-center gap-1 font-mono text-xs",
         winner && "font-semibold text-primary",
       )}
     >
       <span>{value === null ? "Unavailable" : formatExactNumber(value)}</span>
       {winner ? (
-        <span className="rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-sans text-[9px] font-semibold uppercase tracking-[.08em]">
-          Top 5
+        <span
+          aria-label="Among the five highest published values"
+          className="font-sans text-xs font-bold text-primary"
+          title="Among the five highest published values"
+        >
+          ★
         </span>
       ) : null}
     </span>
@@ -334,21 +337,26 @@ function EvidenceDetails({
   const axes =
     selectedCategoryKey === null
       ? model.axes
-      : model.axes.filter((axis) => axis.key === selectedCategoryKey);
+      : model.axes.filter(
+          (axis) =>
+            popularModelsCategorySlotKey(axis.key, axis.label) ===
+            selectedCategoryKey,
+        );
   const tasks =
     selectedCategoryKey === null
       ? model.taskEconomics
       : model.taskEconomics.filter(
-          (task) => task.categoryId === selectedCategoryKey,
+          (task) =>
+            popularModelsCategorySlotKey(task.categoryId) === selectedCategoryKey,
         );
   const axisScope =
     selectedCategoryKey === null
-      ? "Published radar axes"
-      : "Selected category axis";
+      ? "Published capability categories"
+      : "Selected benchmark category";
   const taskScope =
     selectedCategoryKey === null
-      ? "Exact LiveBench task economics"
-      : "Exact selected-category LiveBench task economics";
+      ? "Published task measurements"
+      : "Selected-category task measurements";
 
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-3 text-xs">
@@ -361,7 +369,7 @@ function EvidenceDetails({
         </div>
         <div>
           <dt className="font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">
-            Immutable source rank
+            Published rank
           </dt>
           <dd className="mt-1 font-mono">{rankLabel(model)}</dd>
         </div>
@@ -371,7 +379,7 @@ function EvidenceDetails({
           </dt>
           <dd className="mt-1 font-mono">
             {model.access ??
-              `Unavailable${model.accessUnavailableReason === null ? "" : `: ${model.accessUnavailableReason}`}`}
+              popularModelsFieldUnavailableLabel(model.accessUnavailableReason)}
           </dd>
         </div>
       </dl>
@@ -403,14 +411,13 @@ function EvidenceDetails({
             </dl>
           ) : (
             <p className="mt-2 leading-5 text-muted-foreground">
-              {model.capabilityUnavailableReason ??
-                "No source-published measurement is available for this category."}
+              Unavailable for this category.
             </p>
           )}
         </section>
-        <section aria-label="Published release subtasks">
+        <section aria-label="Published task labels">
           <p className="font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">
-            Published release subtasks
+            Published task labels
           </p>
           {model.subtasks.length ? (
             <ul className="mt-2 space-y-2">
@@ -425,21 +432,19 @@ function EvidenceDetails({
             </ul>
           ) : (
             <p className="mt-2 leading-5 text-muted-foreground">
-              {model.benchmarkUnavailableReason ??
-                "The published release lists no subtask labels."}
+              No published task labels are available.
             </p>
           )}
         </section>
       </div>
       <div className="mt-4 grid gap-3 border-t border-border pt-4 lg:grid-cols-3">
-        <section aria-label="LiveBench aggregate economics">
+        <section aria-label="Evaluation cost">
           <p className="font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">
-            LiveBench aggregate economics
+            Evaluation cost
           </p>
           {aggregate === null ? (
             <p className="mt-2 leading-5 text-muted-foreground">
-              Unavailable: the source row did not publish aggregate economics.
-              Selected-route pricing is separate evidence.
+              Unavailable. Selected-route pricing is separate published data.
             </p>
           ) : (
             <dl className="mt-2 grid grid-cols-2 gap-2">
@@ -461,7 +466,7 @@ function EvidenceDetails({
                 </dd>
               </div>
               <div className="col-span-2">
-                <dt className="text-muted-foreground">Source Pareto mark</dt>
+                <dt className="text-muted-foreground">Published Pareto mark</dt>
                 <dd className="mt-1 font-mono">
                   {aggregate.pareto ? "Yes" : "No"}
                 </dd>
@@ -508,29 +513,29 @@ function EvidenceDetails({
             </dl>
           ) : (
             <p className="mt-2 leading-5 text-muted-foreground">
-              Unavailable: {pricing.reason}
+              Unavailable for the selected route.
             </p>
           )}
         </section>
-        <section aria-label="Independent evidence boundaries">
+        <section aria-label="Data coverage">
           <p className="font-mono text-[10px] uppercase tracking-[.12em] text-muted-foreground">
-            Independent evidence boundaries
+            Data coverage
           </p>
           <dl className="mt-2 space-y-2 leading-5">
             <div>
               <dt className="font-medium">Runtime</dt>
               <dd className="text-muted-foreground">
-                {model.runtimeUnavailableReason ??
-                  "Published runtime evidence is present, but this route does not project a runtime metric."}
+                {model.runtimeUnavailableReason === null
+                  ? "Published data is available; no runtime metric is shown."
+                  : "Unavailable"}
               </dd>
             </div>
             <div>
               <dt className="font-medium">Task economics</dt>
               <dd className="text-muted-foreground">
                 {tasks.length
-                  ? `${tasks.length} exact source task row${tasks.length === 1 ? "" : "s"} shown below.`
-                  : (model.taskEconomicsUnavailableReason ??
-                    "The source row did not publish task economics.")}
+                  ? `${tasks.length} published task row${tasks.length === 1 ? "" : "s"} shown below.`
+                  : "Unavailable"}
               </dd>
             </div>
             {pricing.availability === "available" &&
@@ -538,7 +543,7 @@ function EvidenceDetails({
               <div>
                 <dt className="font-medium">Context capacity</dt>
                 <dd className="text-muted-foreground">
-                  {pricing.contextWindowUnavailableReason ?? "Unavailable"}
+                  Unavailable
                 </dd>
               </div>
             ) : null}
@@ -547,7 +552,7 @@ function EvidenceDetails({
               <div>
                 <dt className="font-medium">Maximum output</dt>
                 <dd className="text-muted-foreground">
-                  {pricing.maxOutputUnavailableReason ?? "Unavailable"}
+                  Unavailable
                 </dd>
               </div>
             ) : null}
@@ -563,7 +568,7 @@ function EvidenceDetails({
         </p>
         {tasks.length ? (
           <div
-            aria-label="Exact LiveBench task economics table. Scroll horizontally for all columns."
+            aria-label="Published task measurements table. Scroll horizontally for all columns."
             className="mt-3 w-full min-w-0 max-w-full overflow-x-auto"
             tabIndex={0}
           >
@@ -641,9 +646,7 @@ function EvidenceDetails({
           </div>
         ) : (
           <p className="mt-2 leading-5 text-muted-foreground">
-            Unavailable:{" "}
-            {model.taskEconomicsUnavailableReason ??
-              "the source row did not publish task economics for this scope."}
+            Unavailable for this scope.
           </p>
         )}
       </section>
@@ -716,7 +719,7 @@ function ModelTable({
   sortKey,
   winnerIdsByColumn,
 }: TableProps) {
-  const columnCount = 5 + metricColumns.length + (showProviders ? 1 : 0);
+  const columnCount = 4 + metricColumns.length + (showProviders ? 1 : 0);
   const ariaSort = (key: PopularModelsSortKeyV1) =>
     sortKey === key
       ? sortDirection === "asc"
@@ -725,18 +728,18 @@ function ModelTable({
       : "none";
   return (
     <div
-      aria-label="Published model evidence table. Scroll horizontally for all columns."
+      aria-label="Published benchmark table. Scroll horizontally only when the current task columns require it."
       className="hidden overflow-x-auto rounded-2xl border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:block"
       tabIndex={0}
     >
-      <table className="w-full min-w-[1580px] border-collapse text-sm">
-        <thead className="bg-muted/60 text-xs text-muted-foreground">
+      <table className="w-full min-w-[1110px] table-fixed border-collapse text-xs">
+        <thead className="bg-muted/60 text-[11px] text-muted-foreground">
           <tr>
-            <th className="w-12 px-3 py-3 text-left">
+            <th className="w-9 px-1.5 py-2 text-left">
               <span className="sr-only">Expand evidence</span>
             </th>
-            <th className="px-3 py-3 text-left">#</th>
-            <th aria-sort={ariaSort("model")} className="px-3 py-3 text-left">
+            <th className="w-9 px-1.5 py-2 text-left">#</th>
+            <th aria-sort={ariaSort("model")} className="w-40 px-2 py-2 text-left">
               <SortHeader
                 activeKey={sortKey}
                 direction={sortDirection}
@@ -749,7 +752,7 @@ function ModelTable({
             {showProviders ? (
               <th
                 aria-sort={ariaSort("provider")}
-                className="px-3 py-3 text-left"
+                className="w-28 px-2 py-2 text-left"
               >
                 <SortHeader
                   activeKey={sortKey}
@@ -764,7 +767,7 @@ function ModelTable({
             {metricColumns.map((column) => (
               <th
                 aria-sort={ariaSort(column.key)}
-                className="px-3 py-3 text-right"
+                className="w-[4.5rem] px-1.5 py-2 text-right leading-3"
                 key={column.key}
               >
                 <SortHeader
@@ -779,7 +782,7 @@ function ModelTable({
             ))}
             <th
               aria-sort={ariaSort("cost-per-success")}
-              className="px-3 py-3 text-right"
+              className="w-24 px-2 py-2 text-right"
             >
               <SortHeader
                 activeKey={sortKey}
@@ -799,12 +802,12 @@ function ModelTable({
             return (
               <Fragment key={model.id}>
                 <tr className="border-t border-border align-top transition-colors hover:bg-muted/30">
-                  <td className="px-3 py-4">
+                  <td className="px-1.5 py-2.5">
                     <button
                       aria-controls={evidenceId}
                       aria-expanded={expanded}
-                      aria-label={`${expanded ? "Collapse" : "Expand"} ${modelName(model)} source evidence`}
-                      className="grid size-10 place-items-center rounded-lg border border-border bg-card transition-colors hover:bg-muted"
+                      aria-label={`${expanded ? "Collapse" : "Expand"} ${modelName(model)} published data`}
+                      className="grid size-8 place-items-center rounded-md border border-border bg-card transition-colors hover:bg-muted"
                       onClick={() => onToggleEvidence(model.id)}
                       type="button"
                     >
@@ -815,22 +818,30 @@ function ModelTable({
                       )}
                     </button>
                   </td>
-                  <td className="px-3 py-4 font-mono text-xs text-muted-foreground">
-                    {index + 1}
+                  <td className="px-1.5 py-2.5 font-mono text-xs text-muted-foreground">
+                    <span
+                      aria-label={
+                        model.rank === null
+                          ? "Published rank unavailable"
+                          : `Published rank ${model.rank}`
+                      }
+                    >
+                      {model.rank ?? "—"}
+                    </span>
                   </td>
-                  <td className="px-3 py-4">
+                  <td className="px-2 py-2.5">
                     <ModelLink model={model} />
                   </td>
                   {showProviders ? (
-                    <td className="px-3 py-4">
-                      <span className="flex items-center gap-2">
+                    <td className="px-2 py-2.5">
+                      <span className="flex min-w-0 items-center gap-1.5">
                         <ProviderDot provider={model.provider} />
-                        {providerName(model)}
+                        <span className="truncate">{providerName(model)}</span>
                       </span>
                     </td>
                   ) : null}
                   {metricColumns.map((column) => (
-                    <td className="px-3 py-4 text-right" key={column.key}>
+                    <td className="px-1.5 py-2.5 text-right" key={column.key}>
                       <ScoreCell
                         column={column}
                         model={model}
@@ -838,7 +849,7 @@ function ModelTable({
                       />
                     </td>
                   ))}
-                  <td className="px-3 py-4 text-right">
+                  <td className="px-2 py-2.5 text-right">
                     <AggregateCost
                       model={model}
                       winner={costWinnerIds.has(model.id)}
@@ -850,7 +861,7 @@ function ModelTable({
                     className="border-t border-border bg-muted/10"
                     id={evidenceId}
                   >
-                    <td className="p-4" colSpan={columnCount}>
+                    <td className="p-3" colSpan={columnCount}>
                       <EvidenceDetails
                         model={model}
                         selectedCategoryKey={categoryKey}
@@ -893,7 +904,15 @@ function ModelCards({
             <CardHeader className="pb-4">
               <div className="flex items-start gap-3">
                 <span className="grid min-h-9 min-w-9 place-items-center rounded-xl border border-border bg-muted/60 px-2 font-mono text-xs text-muted-foreground">
-                  {index + 1}
+                  <span
+                    aria-label={
+                      model.rank === null
+                        ? "Published rank unavailable"
+                        : `Published rank ${model.rank}`
+                    }
+                  >
+                    {model.rank ?? "—"}
+                  </span>
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -911,7 +930,7 @@ function ModelCards({
                 <button
                   aria-controls={evidenceId}
                   aria-expanded={expanded}
-                  aria-label={`${expanded ? "Collapse" : "Expand"} ${modelName(model)} source evidence`}
+                  aria-label={`${expanded ? "Collapse" : "Expand"} ${modelName(model)} published data`}
                   className="grid size-10 shrink-0 place-items-center rounded-lg border border-border bg-card"
                   onClick={() => onToggleEvidence(model.id)}
                   type="button"
@@ -942,7 +961,7 @@ function ModelCards({
                 ))}
                 <div className="bg-muted/55 p-3">
                   <dt className="text-[10px] text-muted-foreground">
-                    LiveBench cost / success
+                    Evaluation cost / success
                   </dt>
                   <dd className="mt-1 text-sm">
                     <AggregateCost
@@ -979,6 +998,10 @@ function ProviderMultiSelect({
   onChange: (providers: readonly string[]) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
   const visibleProviders = providers.filter((provider) =>
     provider.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
   );
@@ -988,66 +1011,122 @@ function ProviderMultiSelect({
         ? selectedProviders.filter((item) => item !== provider)
         : [...selectedProviders, provider].sort((left, right) =>
             left.localeCompare(right),
-          ),
+        ),
     );
+  const close = (returnFocus = false) => {
+    setOpen(false);
+    if (returnFocus)
+      window.requestAnimationFrame(() => trigger.current?.focus());
+  };
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (root.current !== null && !root.current.contains(event.target as Node))
+        close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const frame = window.requestAnimationFrame(() => searchInput.current?.focus());
+    return () => window.cancelAnimationFrame(frame);
+  }, [open]);
   return (
-    <details className="rounded-lg border border-input bg-background">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-md px-3 text-sm outline-none marker:content-none focus-visible:ring-2 focus-visible:ring-ring">
+    <div
+      className="relative min-w-0"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          close(true);
+        }
+      }}
+      ref={root}
+    >
+      <Button
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label={`Providers, ${selectedProviders.length ? `${selectedProviders.length} selected` : "all selected"}`}
+        className="flex min-h-11 w-full justify-between gap-3"
+        onClick={() => setOpen((current) => !current)}
+        ref={trigger}
+        type="button"
+        variant="outline"
+      >
         <span>Providers</span>
         <span className="font-mono text-xs text-muted-foreground">
           {selectedProviders.length
             ? `${selectedProviders.length} selected`
             : "All"}
         </span>
-      </summary>
-      <div className="border-t border-border p-3">
-        <label className="relative block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <span className="sr-only">Search providers</span>
-          <Input
-            className="h-10 pl-9"
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search providers"
-            type="search"
-            value={search}
-          />
-        </label>
-        <fieldset className="mt-3 max-h-44 space-y-1 overflow-y-auto">
-          <legend className="sr-only">Choose one or more providers</legend>
-          {visibleProviders.map((provider) => (
-            <label
-              className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 text-sm hover:bg-muted"
-              key={provider}
+      </Button>
+      {open ? (
+        <div
+          aria-label="Choose one or more providers"
+          className="absolute left-0 top-full z-30 mt-2 w-[min(22rem,calc(100vw-2.5rem))] rounded-xl border border-border bg-popover p-3 shadow-soft"
+          role="dialog"
+        >
+          <label className="relative block">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <span className="sr-only">Search providers</span>
+            <Input
+              className="h-10 pl-9"
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search providers"
+              ref={searchInput}
+              type="search"
+              value={search}
+            />
+          </label>
+          <fieldset className="mt-3 max-h-52 space-y-1 overflow-y-auto">
+            <legend className="sr-only">Choose one or more providers</legend>
+            {visibleProviders.map((provider) => (
+              <label
+                className="flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-2 text-sm hover:bg-muted"
+                key={provider}
+              >
+                <input
+                  checked={selectedProviders.includes(provider)}
+                  className="size-4 accent-primary"
+                  onChange={() => toggle(provider)}
+                  type="checkbox"
+                />
+                <ProviderDot provider={provider} />
+                {provider}
+              </label>
+            ))}
+            {visibleProviders.length === 0 ? (
+              <p className="px-2 py-3 text-sm text-muted-foreground">
+                No providers match this search.
+              </p>
+            ) : null}
+          </fieldset>
+          <div className="mt-3 flex items-center justify-between gap-3">
+            {selectedProviders.length ? (
+              <Button
+                className="min-h-10"
+                onClick={() => onChange([])}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                Clear
+              </Button>
+            ) : (
+              <span className="text-xs text-muted-foreground">All providers</span>
+            )}
+            <Button
+              className="min-h-10"
+              onClick={() => close(true)}
+              size="sm"
+              type="button"
+              variant="ghost"
             >
-              <input
-                checked={selectedProviders.includes(provider)}
-                className="size-4 accent-primary"
-                onChange={() => toggle(provider)}
-                type="checkbox"
-              />
-              <ProviderDot provider={provider} />
-              {provider}
-            </label>
-          ))}
-          {visibleProviders.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">
-              No providers match this search.
-            </p>
-          ) : null}
-        </fieldset>
-        {selectedProviders.length ? (
-          <Button
-            className="mt-3 min-h-10"
-            onClick={() => onChange([])}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            All providers
-          </Button>
-        ) : null}
-      </div>
-    </details>
+              Close
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -1091,7 +1170,7 @@ function ComparisonPicker({
   if (selectedIds.length >= 4)
     return (
       <p className="text-sm text-muted-foreground">
-        Maximum of four source models selected.
+        Maximum of four published models selected.
       </p>
     );
   return (
@@ -1119,7 +1198,7 @@ function ComparisonPicker({
               className="sr-only"
               htmlFor="popular-models-comparison-picker"
             >
-              Search and add a source model
+              Search and add a published model
             </label>
             <Input
               aria-activedescendant={
@@ -1197,7 +1276,7 @@ function ComparisonPicker({
               ))
             ) : (
               <p className="px-3 py-3 text-sm text-muted-foreground">
-                No source models match.
+                No published models match.
               </p>
             )}
           </div>
@@ -1260,9 +1339,9 @@ function ComparisonMatrices({
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="font-medium">Source capability radar</h3>
+            <h3 className="font-medium">Capability radar</h3>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              A profile is drawn only when every current source radar axis has a
+              A profile is drawn only when every current benchmark category has a
               value; missing values are not plotted as zero.
             </p>
           </div>
@@ -1280,17 +1359,17 @@ function ComparisonMatrices({
         </div>
         {categories.length < 3 ? (
           <p className="mt-4 text-sm text-muted-foreground">
-            Unavailable: fewer than three source radar axes are published.
+            Unavailable: fewer than three benchmark categories are published.
           </p>
         ) : (
           <div className="mt-3 grid min-w-0 gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
             <svg
-              aria-label="Comparison radar of source capability axes"
+              aria-label="Comparison radar of benchmark capability categories"
               className="mx-auto size-[220px]"
               role="img"
               viewBox="0 0 200 200"
             >
-              <title>Comparison radar of source capability axes</title>
+              <title>Comparison radar of benchmark capability categories</title>
               {categories.map((category, index) => {
                 const angle =
                   (Math.PI * 2 * index) / categories.length - Math.PI / 2;
@@ -1328,8 +1407,8 @@ function ComparisonMatrices({
             <div className="min-w-0 text-xs leading-5 text-muted-foreground">
               <p>
                 {plottedModels.length} of {models.length} selected models have
-                complete values across all {categories.length} current source
-                axes.
+                complete values across all {categories.length} benchmark
+                categories.
               </p>
               {plottedModels.length !== models.length ? (
                 <p className="mt-2">
@@ -1373,7 +1452,7 @@ function ComparisonMatrices({
               </tr>
               <tr className="border-t border-border">
                 <th className="py-2 pr-4 text-left font-medium">
-                  Immutable source rank
+                  Published rank
                 </th>
                 {models.map((model) => (
                   <MatrixValue key={model.id}>{rankLabel(model)}</MatrixValue>
@@ -1384,7 +1463,9 @@ function ComparisonMatrices({
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
                     {model.access ??
-                      `Unavailable: ${model.accessUnavailableReason ?? "not published"}`}
+                      popularModelsFieldUnavailableLabel(
+                        model.accessUnavailableReason,
+                      )}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1396,7 +1477,9 @@ function ComparisonMatrices({
                   <MatrixValue key={model.id}>
                     {model.routePricing.availability === "available"
                       ? model.routePricing.route
-                      : `Unavailable: ${model.routePricing.reason}`}
+                      : popularModelsFieldUnavailableLabel(
+                          model.routePricing.reason,
+                        )}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1415,7 +1498,7 @@ function ComparisonMatrices({
           Exact capability matrix
         </h3>
         <div
-          aria-label="Metric-first source capability matrix. Scroll horizontally for all columns."
+          aria-label="Metric-first benchmark capability matrix. Scroll horizontally for all columns."
           className="mt-4 w-full min-w-0 max-w-full overflow-x-auto"
           tabIndex={0}
         >
@@ -1450,10 +1533,10 @@ function ComparisonMatrices({
         aria-labelledby="popular-models-evidence-matrix-heading"
       >
         <h3 className="font-medium" id="popular-models-evidence-matrix-heading">
-          Exact source evidence matrix
+          Exact published data matrix
         </h3>
         <div
-          aria-label="Metric-first source economics and evidence matrix. Scroll horizontally for all columns."
+          aria-label="Metric-first evaluation cost and data coverage matrix. Scroll horizontally for all columns."
           className="mt-4 w-full min-w-0 max-w-full overflow-x-auto"
           tabIndex={0}
         >
@@ -1467,7 +1550,7 @@ function ComparisonMatrices({
             <tbody>
               <tr className="border-t border-border">
                 <th className="py-2 pr-4 text-left font-medium">
-                  LiveBench cost / successful evaluation
+                  Evaluation cost / successful evaluation
                 </th>
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
@@ -1494,7 +1577,7 @@ function ComparisonMatrices({
               </tr>
               <tr className="border-t border-border">
                 <th className="py-2 pr-4 text-left font-medium">
-                  Source Pareto mark
+                  Published Pareto mark
                 </th>
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
@@ -1513,7 +1596,9 @@ function ComparisonMatrices({
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
                     {model.taskEconomics.length ||
-                      `Unavailable: ${model.taskEconomicsUnavailableReason ?? "not published"}`}
+                      popularModelsFieldUnavailableLabel(
+                        model.taskEconomicsUnavailableReason,
+                      )}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1521,7 +1606,9 @@ function ComparisonMatrices({
                 <th className="py-2 pr-4 text-left font-medium">Runtime</th>
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
-                    {model.runtimeUnavailableReason ?? "Present; not projected"}
+                    {model.runtimeUnavailableReason === null
+                      ? "Available; not projected"
+                      : "Unavailable"}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1556,11 +1643,11 @@ function ComparisonEconomicsCharts({
       <Card>
         <CardContent className="pt-6">
           <h3 className="font-medium">
-            LiveBench cost / successful evaluation
+            Evaluation cost / successful evaluation
           </h3>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Aggregate source economics only; selected-route pricing never
-            substitutes for an unavailable LiveBench measurement.
+            Aggregate published evaluation cost only; selected-route pricing
+            never substitutes for an unavailable benchmark measurement.
           </p>
           <PopularModelsComparisonEconomicsChart
             metric="cost-per-success"
@@ -1585,7 +1672,7 @@ function ComparisonEconomicsCharts({
         <CardContent className="pt-6">
           <h3 className="font-medium">Mean output tokens</h3>
           <p className="mt-1 text-xs leading-5 text-muted-foreground">
-            Source-published aggregate output volume for this exact ordered
+            Published aggregate output volume for this exact ordered
             selection.
           </p>
           <PopularModelsComparisonEconomicsChart
@@ -1603,17 +1690,17 @@ function csvRows(
   viewModel: PopularModelsV1ViewModel,
   columns: readonly PopularModelsLeaderboardColumnV1[],
 ): CsvRow[] {
-  const sourceReceipt = {
-    sourceReleaseId: viewModel.release?.releaseId ?? null,
-    sourceReleaseOn: viewModel.release?.releaseOn ?? null,
-    sourceLicenseId: viewModel.release?.licenseId ?? null,
-    sourceTotalRows: viewModel.total,
-    sourcePaginationStatus: viewModel.pagination.availability,
-    sourceNextCursor:
+  const dataCoverage = {
+    dataReleaseId: viewModel.release?.releaseId ?? null,
+    dataReleaseOn: viewModel.release?.releaseOn ?? null,
+    dataLicenseId: viewModel.release?.licenseId ?? null,
+    publishedTotalRows: viewModel.total,
+    dataCoverageStatus: viewModel.pagination.availability,
+    dataCoverageNextCursor:
       viewModel.pagination.availability === "available"
         ? viewModel.pagination.nextCursor
         : null,
-    sourcePaginationReason:
+    dataCoverageReason:
       viewModel.pagination.availability === "unavailable"
         ? viewModel.pagination.reason
         : null,
@@ -1624,18 +1711,18 @@ function csvRows(
         status: "unavailable",
         reason:
           viewModel.unavailableReason ??
-          "No source-published ranking rows are available.",
-        ...sourceReceipt,
+          "No published ranking rows are available.",
+        ...dataCoverage,
       },
     ];
   return models.map((model) => {
     const pricing = model.routePricing;
     const aggregate = model.aggregate;
     return {
-      ...sourceReceipt,
-      sourceRank: model.rank,
-      sourceModelId: model.id,
-      sourceModelSlug: model.slug,
+      ...dataCoverage,
+      publishedRank: model.rank,
+      modelId: model.id,
+      modelSlug: model.slug,
       model: model.name,
       provider: model.provider,
       access: model.access,
@@ -1662,19 +1749,19 @@ function csvRows(
         pricing.availability === "available"
           ? pricing.blendedUsdPerMillion
           : null,
-      livebenchAggregateEconomicsStatus:
+      evaluationCostStatus:
         aggregate === null ? "unavailable" : "published",
-      livebenchCostPerSuccessfulEvaluationUsd:
+      evaluationCostPerSuccessfulEvaluationUsd:
         aggregate?.costPerSuccessfulEvaluationUsd.value ?? null,
-      livebenchCostPerSuccessfulEvaluationReason:
+      evaluationCostPerSuccessfulEvaluationReason:
         aggregate?.costPerSuccessfulEvaluationUsd.unavailableReason ??
         "Aggregate economics were not published for this row.",
-      livebenchMeanOutputTokens: aggregate?.meanOutputTokens.value ?? null,
-      livebenchMeanOutputReason:
+      evaluationMeanOutputTokens: aggregate?.meanOutputTokens.value ?? null,
+      evaluationMeanOutputReason:
         aggregate?.meanOutputTokens.unavailableReason ??
         "Aggregate economics were not published for this row.",
-      livebenchPareto: aggregate?.pareto ?? null,
-      livebenchTaskEconomicsCount: model.taskEconomics.length,
+      publishedPareto: aggregate?.pareto ?? null,
+      publishedTaskMeasurementCount: model.taskEconomics.length,
       runtimeStatus:
         model.runtimeUnavailableReason === null
           ? "present but not projected"
@@ -1904,7 +1991,7 @@ export function PopularModelsPage({
   return (
     <div>
       <p aria-live="polite" className="sr-only">
-        {visibleModels.length} of {viewModel.models.length} source ranking rows
+        {visibleModels.length} of {viewModel.models.length} published ranking rows
         visible. {selectedIds.length} models selected for comparison.
       </p>
       <section
@@ -1912,125 +1999,40 @@ export function PopularModelsPage({
         className="relative overflow-hidden border-b border-border"
       >
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_82%_18%,color-mix(in_srgb,var(--primary)_14%,transparent),transparent_30%),radial-gradient(circle_at_15%_90%,rgba(217,119,87,.07),transparent_24%)]" />
-        <div className="relative mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:px-8 sm:py-20 lg:px-10 xl:grid-cols-[minmax(0,1fr)_390px] xl:items-end">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge
-                className="font-mono text-[10px] uppercase tracking-[.16em]"
-                variant="secondary"
-              >
-                LiveBench capability workbench
-              </Badge>
-              <Badge variant="outline">Strict v1 ranking evidence</Badge>
-              <Badge
-                variant={dataMode === "evidence" ? "destructive" : "outline"}
-              >
-                {dataMode === "evidence"
-                  ? "Design-only evidence · not live data"
-                  : dataMode === "production"
-                    ? "Production source response"
-                    : "Source mode unconfigured"}
-              </Badge>
-              {viewModel.sourceStatus === "partial" ? (
-                <Badge variant="outline">Partial source coverage</Badge>
-              ) : null}
-            </div>
-            <h1
-              className="mt-6 max-w-4xl text-balance text-5xl font-semibold leading-[.98] tracking-[-.04em] sm:text-6xl"
-              id="popular-models-heading"
+        <div className="relative mx-auto max-w-7xl px-5 py-16 sm:px-8 sm:py-20 lg:px-10">
+          <h1
+            className="max-w-4xl text-balance text-5xl font-semibold leading-[.98] tracking-[-.04em] sm:text-6xl"
+            id="popular-models-heading"
+          >
+            Popular models · benchmark workbench
+          </h1>
+          <p className="mt-6 max-w-3xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
+            Browse published benchmark data across fixed capability categories,
+            inspect task measurements, and compare a decision set without
+            deriving values for unavailable fields or changing published rank.
+          </p>
+          <p className="mt-5 max-w-3xl text-sm leading-6 text-muted-foreground">
+            Data coverage and provenance stay explicit throughout the
+            workbench. Evaluation cost and route pricing remain separate
+            measurements.
+          </p>
+          {dataMode === "evidence" ? (
+            <div
+              className="mt-7 flex max-w-3xl items-start gap-3 rounded-xl border border-border bg-muted/45 p-4 text-sm leading-6 text-muted-foreground"
+              role="status"
             >
-              Popular models · LiveBench capability workbench
-            </h1>
-            <p className="mt-6 max-w-3xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">
-              Browse the source-published capability ranking, inspect its
-              dynamic categories and released task evidence, and compare a
-              decision set without filling unavailable facts or relabeling a
-              source rank.
-            </p>
-          </div>
-          <div className="overflow-hidden rounded-2xl border border-border bg-card/90 shadow-soft">
-            <div className="border-b border-border px-5 py-4">
-              <p className="text-sm font-medium">Strict v1 evidence receipt</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Source release, total, and pagination appear only when
-                published. Route pricing remains independent evidence.
+              <CircleAlert
+                aria-hidden="true"
+                className="mt-0.5 size-4 shrink-0 text-primary"
+              />
+              <p>
+                <span className="font-medium text-foreground">Preview data.</span>{" "}
+                Values shown here are for interface review only; they are not
+                live benchmark results or pricing guidance.
               </p>
             </div>
-            <dl className="grid grid-cols-2 gap-px bg-border md:grid-cols-3">
-              <div className="bg-card p-4">
-                <dt className="font-mono text-[10px] uppercase text-muted-foreground">
-                  Status
-                </dt>
-                <dd className="mt-2 text-sm font-medium capitalize">
-                  {viewModel.sourceStatus}
-                </dd>
-              </div>
-              <div className="bg-card p-4">
-                <dt className="font-mono text-[10px] uppercase text-muted-foreground">
-                  Rows in receipt
-                </dt>
-                <dd className="mt-2 font-mono text-sm">
-                  {viewModel.models.length}
-                </dd>
-              </div>
-              <div className="bg-card p-4">
-                <dt className="font-mono text-[10px] uppercase text-muted-foreground">
-                  Source total
-                </dt>
-                <dd className="mt-2 font-mono text-sm">
-                  {viewModel.total === null ? "Unavailable" : viewModel.total}
-                </dd>
-              </div>
-              <div className="bg-card p-4">
-                <dt className="font-mono text-[10px] uppercase text-muted-foreground">
-                  Release
-                </dt>
-                <dd className="mt-2 break-all font-mono text-xs">
-                  {viewModel.release === null
-                    ? "Unavailable"
-                    : viewModel.release.releaseId}
-                </dd>
-                {viewModel.release === null ? null : (
-                  <dd className="mt-1 text-xs text-muted-foreground">
-                    {viewModel.release.releaseOn} ·{" "}
-                    {viewModel.release.licenseId}
-                  </dd>
-                )}
-              </div>
-              <div className="bg-card p-4">
-                <dt className="font-mono text-[10px] uppercase text-muted-foreground">
-                  Pagination
-                </dt>
-                <dd className="mt-2 text-xs">
-                  {viewModel.pagination.availability === "unavailable"
-                    ? "Unavailable"
-                    : viewModel.pagination.nextCursor === null
-                      ? "No next cursor"
-                      : "Next cursor published"}
-                </dd>
-              </div>
-              <div className="bg-card p-4">
-                <dt className="font-mono text-[10px] uppercase text-muted-foreground">
-                  Categories
-                </dt>
-                <dd className="mt-2 font-mono text-sm">
-                  {viewModel.categories.length}
-                </dd>
-              </div>
-            </dl>
-          </div>
+          ) : null}
         </div>
-        <p className="mx-auto max-w-7xl px-5 pb-5 text-xs text-muted-foreground sm:px-8 lg:px-10">
-          Ranking scope: {viewModel.models.length} receipt rows
-          {viewModel.total === null
-            ? "; source total unavailable."
-            : ` of ${viewModel.total} source rows.`}{" "}
-          {viewModel.pagination.availability === "available"
-            ? viewModel.pagination.nextCursor === null
-              ? "The source receipt publishes no next cursor."
-              : "The source receipt publishes a next cursor; this is not a complete load."
-            : "The source receipt does not publish pagination state."}
-        </p>
       </section>
 
       <section
@@ -2051,8 +2053,8 @@ export function PopularModelsPage({
                 Published model evidence
               </p>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-                Search and sort a master table without recomputing the source
-                rank. Overall shows every published category; a selected
+                Search and sort a master table without recomputing published
+                rank. All shows every fixed category; a selected
                 category exposes its published task columns and exact evidence
                 drawer.
               </p>
@@ -2066,19 +2068,20 @@ export function PopularModelsPage({
           </div>
           <form
             aria-label="Popular model leaderboard filters"
-            className="mt-7 grid gap-3 rounded-2xl border border-border bg-card p-4 md:grid-cols-2 xl:grid-cols-[1.3fr_1fr_1fr_1fr_auto] xl:items-end"
+            className="mt-7 grid gap-3 rounded-2xl border border-border bg-card p-4 lg:grid-cols-[minmax(16rem,1.6fr)_minmax(11rem,1fr)_auto_auto_auto] lg:items-center"
             onSubmit={(event) => event.preventDefault()}
           >
-            <label
-              className="space-y-1.5 text-xs text-muted-foreground"
-              htmlFor="popular-models-search"
-            >
-              Search model or provider
+            <label className="relative min-w-0" htmlFor="popular-models-search">
+              <span className="sr-only">Search model or provider</span>
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              />
               <Input
-                className="mt-1.5 h-11"
+                className="h-11 pl-9"
                 id="popular-models-search"
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Model, provider, or source ID"
+                placeholder="Model, provider, or model ID"
                 type="search"
                 value={query}
               />
@@ -2088,112 +2091,83 @@ export function PopularModelsPage({
               providers={providers}
               selectedProviders={selectedProviders}
             />
-            <fieldset className="grid gap-2">
-              <legend className="sr-only">
-                Access and provider visibility
-              </legend>
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 text-sm">
-                <input
-                  checked={openWeightsOnly}
-                  className="size-4 accent-primary"
-                  onChange={(event) => setOpenWeightsOnly(event.target.checked)}
-                  type="checkbox"
-                />
-                Open weights only
-              </label>
-              <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 text-sm">
-                <input
-                  checked={showProviders}
-                  className="size-4 accent-primary"
-                  onChange={(event) => setShowProviders(event.target.checked)}
-                  type="checkbox"
-                />
-                Show provider column
-              </label>
-            </fieldset>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 text-sm whitespace-nowrap">
+              <input
+                checked={openWeightsOnly}
+                className="size-4 accent-primary"
+                onChange={(event) => setOpenWeightsOnly(event.target.checked)}
+                type="checkbox"
+              />
+              Open weights
+            </label>
             <label
-              className="flex min-h-11 cursor-not-allowed items-center gap-2 rounded-lg border border-dashed border-border px-3 text-xs text-muted-foreground"
-              title="Unavailable: strict ranking rows do not publish a derivative-finetune flag."
+              className="flex min-h-11 cursor-not-allowed items-center gap-2 rounded-lg border border-dashed border-border px-3 text-sm text-muted-foreground whitespace-nowrap"
+              title="Unavailable: published data does not include a finetune flag."
             >
               <input
-                aria-describedby="popular-models-derivative-unavailable"
+                aria-describedby="popular-models-finetune-unavailable"
                 className="size-4"
                 disabled
                 type="checkbox"
               />
-              Exclude derivative finetunes
+              Exclude finetunes
               <span
                 className="sr-only"
-                id="popular-models-derivative-unavailable"
+                id="popular-models-finetune-unavailable"
               >
-                Unavailable because strict ranking rows do not publish a
-                derivative-finetune flag.
+                Unavailable because published data does not include a finetune
+                flag.
               </span>
             </label>
-            <Button
-              className="min-h-11"
-              onClick={reset}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <RotateCcw />
-              Reset
-            </Button>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg border border-input bg-background px-3 text-sm whitespace-nowrap">
+              <input
+                checked={showProviders}
+                className="size-4 accent-primary"
+                onChange={(event) => setShowProviders(event.target.checked)}
+                type="checkbox"
+              />
+              Show provider
+            </label>
           </form>
-          <div className="mt-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div>
-              <p className="text-sm text-muted-foreground">
-                <span className="font-mono text-foreground">
-                  {visibleModels.length}
-                </span>{" "}
-                of {viewModel.models.length} source rows visible · order:{" "}
-                <span className="font-medium text-foreground">
-                  {sortDirection === "asc" ? "ascending" : "descending"}
-                </span>
-              </p>
-              <div
-                aria-label="Published capability categories"
-                className="mt-3 -mx-1 overflow-x-auto pb-1"
-                role="group"
-              >
-                <div className="flex min-w-max gap-2 px-1">
+          <div className="mt-5 border-t border-border pt-5">
+            <div
+              aria-label="Benchmark categories"
+              className="-mx-1 overflow-x-auto pb-1"
+              role="group"
+            >
+              <div className="flex min-w-max gap-2 px-1">
+                {POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.map((category) => (
                   <button
-                    aria-pressed={categoryKey === null}
+                    aria-pressed={categoryKey === category.key}
                     className={cn(
                       "popular-models-category-tag",
-                      categoryKey === null
+                      categoryKey === category.key
                         ? "border-active-control bg-active-control text-active-control-foreground"
                         : "border-border bg-card text-muted-foreground hover:text-foreground",
                     )}
-                    onClick={() => selectCategory(null)}
+                    key={category.label}
+                    onClick={() => selectCategory(category.key)}
                     type="button"
                   >
-                    Overall
+                    {category.label}
                   </button>
-                  {viewModel.categories.map((category) => (
-                    <button
-                      aria-pressed={categoryKey === category.key}
-                      className={cn(
-                        "popular-models-category-tag",
-                        categoryKey === category.key
-                          ? "border-active-control bg-active-control text-active-control-foreground"
-                          : "border-border bg-card text-muted-foreground hover:text-foreground",
-                      )}
-                      key={category.key}
-                      onClick={() => selectCategory(category.key)}
-                      type="button"
-                    >
-                      {category.label}
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
             </div>
-            <p className="max-w-sm text-xs leading-5 text-muted-foreground">
-              Winner marks reflect the five highest source-published score or
-              task measurements, and five lowest source costs, across the full
-              receipt—not the current filter result.
+            <div
+              aria-live="polite"
+              className="mt-3 text-sm text-muted-foreground"
+            >
+              <span className="font-mono text-foreground">{visibleModels.length}</span>{" "}
+              of {viewModel.models.length} published rows ·{" "}
+              <span className="font-medium text-foreground">
+                {sortDirection === "asc" ? "ascending" : "descending"}
+              </span>
+            </div>
+            <p className="mt-2 text-xs leading-5 text-muted-foreground">
+              A star marks one of the five highest published values; a down
+              arrow marks one of the five lowest evaluation costs across all
+              loaded data, not the current filter result.
             </p>
           </div>
           {viewModel.models.length === 0 ? (
@@ -2201,11 +2175,10 @@ export function PopularModelsPage({
               <div>
                 <CircleAlert className="mx-auto size-6 text-muted-foreground" />
                 <h3 className="mt-3 font-medium">
-                  LiveBench capability evidence is unavailable
+                  Benchmark data is unavailable
                 </h3>
                 <p className="mt-1 max-w-lg text-sm leading-6 text-muted-foreground">
-                  {viewModel.unavailableReason ??
-                    "The strict v1 rankings loader did not return a usable source snapshot."}
+                  Published data coverage is unavailable for this view.
                 </p>
               </div>
             </div>
@@ -2214,7 +2187,7 @@ export function PopularModelsPage({
               <div>
                 <CircleAlert className="mx-auto size-6 text-muted-foreground" />
                 <h3 className="mt-3 font-medium">
-                  No source rows match these filters
+                  No published rows match these filters
                 </h3>
                 <p className="mt-1 text-sm text-muted-foreground">
                   Broaden the search or reset the workbench controls.
@@ -2259,13 +2232,13 @@ export function PopularModelsPage({
                 02 Insights
               </h2>
               <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                Quality and LiveBench evaluation economics
+                Quality and evaluation cost
               </p>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
                 The independent selector below changes only the insight axis.
-                Both charts use every source receipt row and source-published
-                LiveBench aggregate cost per successful evaluation;
-                selected-route prices never fill an unavailable source value.
+                Both charts use every published row and its published
+                evaluation cost; selected-route prices never fill an
+                unavailable benchmark value.
               </p>
             </div>
             <ResultActions
@@ -2288,20 +2261,7 @@ export function PopularModelsPage({
               role="group"
             >
               <div className="flex min-w-max gap-2 px-1">
-                <button
-                  aria-pressed={insightCategoryKey === null}
-                  className={cn(
-                    "popular-models-category-tag",
-                    insightCategoryKey === null
-                      ? "border-active-control bg-active-control text-active-control-foreground"
-                      : "border-border bg-card text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => setInsightCategoryKey(null)}
-                  type="button"
-                >
-                  Overall
-                </button>
-                {viewModel.categories.map((category) => (
+                {POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.map((category) => (
                   <button
                     aria-pressed={insightCategoryKey === category.key}
                     className={cn(
@@ -2310,7 +2270,7 @@ export function PopularModelsPage({
                         ? "border-active-control bg-active-control text-active-control-foreground"
                         : "border-border bg-card text-muted-foreground hover:text-foreground",
                     )}
-                    key={category.key}
+                    key={category.label}
                     onClick={() => setInsightCategoryKey(category.key)}
                     type="button"
                   >
@@ -2325,10 +2285,10 @@ export function PopularModelsPage({
               <CardContent className="pt-6">
                 <div className="mb-5">
                   <h3 className="font-medium">
-                    {insightCategoryLabel} versus LiveBench cost
+                    {insightCategoryLabel} versus evaluation cost
                   </h3>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    A strict source-measurement Pareto frontier is traced across
+                    A published-data Pareto frontier is traced across
                     cost-ascending, score-improving rows. Tooltips and exact
                     profile-linked values preserve unavailable states.
                   </p>
@@ -2345,8 +2305,8 @@ export function PopularModelsPage({
                 <div className="mb-5">
                   <h3 className="font-medium">Cost ranking</h3>
                   <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                    Ranks only rows with source-published cost per successful
-                    evaluation. Mean output and source Pareto evidence remain
+                    Ranks only rows with published cost per successful
+                    evaluation. Mean output and published Pareto data remain
                     explicit.
                   </p>
                 </div>
@@ -2361,33 +2321,31 @@ export function PopularModelsPage({
             className="mt-14 border-t border-border pt-14"
             id="popular-models-comparison"
           >
-            <div className="grid gap-7 lg:grid-cols-[.8fr_1.2fr] lg:items-start">
-              <div>
-                <h2
-                  className="font-mono text-xs text-primary"
-                  id="popular-models-comparison-heading"
-                >
-                  03 Compare popular models
-                </h2>
-                <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                  Build a 2–4 model decision set
-                </p>
-                <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-                  The tray preserves selection order in this URL as canonical
-                  catalog IDs. Legacy source slugs are normalized to IDs before
-                  navigation so the comparison route receives exactly the format
-                  it accepts.
-                </p>
-                <div className="mt-5">
-                  <ResultActions
-                    filename="tokenbench-popular-models-comparison"
-                    label="Share and export popular model comparison"
-                    rows={csvRows(selectedModels, viewModel, metricColumns)}
-                    targetId="popular-models-comparison"
-                  />
-                </div>
+            <div>
+              <h2
+                className="font-mono text-xs text-primary"
+                id="popular-models-comparison-heading"
+              >
+                03 Compare popular models
+              </h2>
+              <p className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                Build a 2–4 model decision set
+              </p>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
+                The tray preserves selection order in this URL as canonical
+                catalog IDs. Legacy catalog slugs are normalized before
+                navigation so the comparison route receives the IDs it accepts.
+              </p>
+              <div className="mt-5">
+                <ResultActions
+                  filename="tokenbench-popular-models-comparison"
+                  label="Share and export popular model comparison"
+                  rows={csvRows(selectedModels, viewModel, metricColumns)}
+                  targetId="popular-models-comparison"
+                />
               </div>
-              <Card>
+            </div>
+            <Card className="mt-7">
                 <CardHeader>
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -2458,7 +2416,7 @@ export function PopularModelsPage({
                   </div>
                   {selectedModels.length === 0 ? (
                     <p className="mt-4 text-sm text-muted-foreground">
-                      Unavailable: no source models are available to start a
+                      Unavailable: no published models are available to start a
                       comparison.
                     </p>
                   ) : (
@@ -2500,7 +2458,6 @@ export function PopularModelsPage({
                   )}
                 </CardFooter>
               </Card>
-            </div>
           </section>
         </div>
       </section>

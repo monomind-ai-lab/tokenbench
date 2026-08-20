@@ -16,6 +16,46 @@ export interface PopularModelsCategoryV1 {
   readonly label: string;
 }
 
+export interface PopularModelsCategoryControlSlotV1 {
+  readonly key: string | null;
+  readonly label: string;
+}
+
+/**
+ * The workbench always reserves these published-capability slots. Source axes
+ * and taxonomy IDs are mapped into them, while an absent measurement remains
+ * unavailable rather than disappearing or becoming a derived zero.
+ */
+export const POPULAR_MODELS_CATEGORY_SLOTS: readonly PopularModelsCategoryV1[] =
+  [
+    { key: "reasoning", label: "Reasoning" },
+    { key: "coding", label: "Coding" },
+    { key: "agentic-coding", label: "Agentic coding" },
+    { key: "mathematics", label: "Mathematics" },
+    { key: "data-analysis", label: "Data analysis" },
+    { key: "language", label: "Language" },
+    { key: "instruction-following", label: "Instruction following" },
+  ];
+
+export const POPULAR_MODELS_CATEGORY_CONTROL_SLOTS: readonly PopularModelsCategoryControlSlotV1[] =
+  [{ key: null, label: "All" }, ...POPULAR_MODELS_CATEGORY_SLOTS];
+
+const CATEGORY_SLOT_ALIASES: Readonly<
+  Record<(typeof POPULAR_MODELS_CATEGORY_SLOTS)[number]["key"], readonly string[]>
+> = {
+  reasoning: ["reasoning", "reason"],
+  coding: ["coding", "code"],
+  "agentic-coding": ["agentic-coding", "agentic", "agentic-code"],
+  mathematics: ["mathematics", "math", "mathematical"],
+  "data-analysis": ["data-analysis", "data-analytics", "data"],
+  language: ["language", "languages", "linguistic"],
+  "instruction-following": [
+    "instruction-following",
+    "instruction",
+    "if",
+  ],
+};
+
 export interface PopularModelsAxisV1 {
   readonly key: string;
   readonly label: string;
@@ -53,7 +93,7 @@ export interface PopularModelsEvidenceNumberV1 {
   readonly unavailableReason: string | null;
 }
 
-/** Aggregate economics published alongside a LiveBench leaderboard row, not route pricing. */
+/** Aggregate economics published alongside a benchmark row, not route pricing. */
 export interface PopularModelsAggregateEconomicsV1 {
   readonly costPerSuccessfulEvaluationUsd: PopularModelsEvidenceNumberV1;
   readonly meanOutputTokens: PopularModelsEvidenceNumberV1;
@@ -156,6 +196,48 @@ function reasonOrNull<T>(evidence: EvidenceValue<T>): string | null {
 
 function finiteOrNull(value: number): number | null {
   return Number.isFinite(value) ? value : null;
+}
+
+function normalizedCategoryKey(value: string): string {
+  return value
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Maps a published axis/taxonomy identifier into one immutable UI slot. */
+export function popularModelsCategorySlotKey(
+  key: string,
+  label: string | null = null,
+): string | null {
+  const candidates = new Set(
+    [key, label]
+      .filter((value): value is string => value !== null)
+      .map(normalizedCategoryKey),
+  );
+  const slot = POPULAR_MODELS_CATEGORY_SLOTS.find((item) =>
+    CATEGORY_SLOT_ALIASES[item.key]?.some((alias) =>
+      candidates.has(normalizedCategoryKey(alias)),
+    ),
+  );
+  return slot?.key ?? null;
+}
+
+function isPublishedCategoryInSlot(
+  key: string,
+  slotKey: string,
+  label: string | null = null,
+): boolean {
+  return popularModelsCategorySlotKey(key, label) === slotKey;
+}
+
+/** A field-level UI state intentionally never exposes a raw provenance reason. */
+export function popularModelsFieldUnavailableLabel(
+  _rawReason: string | null | undefined = null,
+): string {
+  return "Unavailable";
 }
 
 function taskParts(
@@ -304,26 +386,8 @@ function comparePublishedRank(
   return left.sourceIndex - right.sourceIndex;
 }
 
-function sourceCategories(
-  models: readonly PopularModelV1[],
-  taxonomy: readonly RankingTaxonomyCategory[],
-): readonly PopularModelsCategoryV1[] {
-  const categories = new Map<string, PopularModelsCategoryV1>();
-  for (const model of models) {
-    for (const axis of model.axes) {
-      if (!categories.has(axis.key))
-        categories.set(axis.key, { key: axis.key, label: axis.label });
-    }
-  }
-  for (const category of taxonomy) {
-    if (!categories.has(category.categoryId)) {
-      categories.set(category.categoryId, {
-        key: category.categoryId,
-        label: category.label,
-      });
-    }
-  }
-  return [...categories.values()];
+function sourceCategories(): readonly PopularModelsCategoryV1[] {
+  return POPULAR_MODELS_CATEGORY_SLOTS;
 }
 
 /**
@@ -353,7 +417,7 @@ export function projectPopularModelsV1(
         availability: "unavailable",
         reason: "No strict v1 ranking receipt is available.",
       },
-      categories: [],
+      categories: sourceCategories(),
       models: [],
     };
   }
@@ -384,7 +448,7 @@ export function projectPopularModelsV1(
               "The strict v1 ranking receipt did not publish pagination state.",
           }
         : { availability: "available", nextCursor: envelope.data.nextCursor },
-    categories: sourceCategories(models, envelope.data.taxonomy ?? []),
+    categories: sourceCategories(),
     models,
   };
 }
@@ -395,9 +459,10 @@ export function popularModelsMetricValue(
   categoryKey: string | null,
 ): number | null {
   if (categoryKey === null) return model.overallScore;
-  return (
-    model.axes.find((axis) => axis.key === categoryKey)?.percentile ?? null
+  const axes = model.axes.filter((axis) =>
+    isPublishedCategoryInSlot(axis.key, categoryKey, axis.label),
   );
+  return axes.find((axis) => axis.percentile !== null)?.percentile ?? null;
 }
 
 /** Returns an exact source measurement for a displayed leaderboard column. */
@@ -425,7 +490,8 @@ export function popularModelsColumnValue(
   return (
     model.taskEconomics.find(
       (item) =>
-        item.categoryId === task.categoryId && item.taskId === task.taskId,
+        isPublishedCategoryInSlot(item.categoryId, task.categoryId) &&
+        item.taskId === task.taskId,
     )?.score.value ?? null
   );
 }
@@ -463,14 +529,24 @@ export function popularModelsLeaderboardColumns(
     (item) => item.key === categoryKey,
   );
   const taskLabels = new Map<string, string>();
-  for (const task of viewModel.taxonomy.find(
-    (item) => item.categoryId === categoryKey,
-  )?.tasks ?? []) {
-    taskLabels.set(task.taskId, task.label);
+  for (const taxonomyCategory of viewModel.taxonomy) {
+    if (
+      !isPublishedCategoryInSlot(
+        taxonomyCategory.categoryId,
+        categoryKey,
+        taxonomyCategory.label,
+      )
+    )
+      continue;
+    for (const task of taxonomyCategory.tasks)
+      taskLabels.set(task.taskId, task.label);
   }
   for (const model of viewModel.models) {
     for (const task of model.taskEconomics) {
-      if (task.categoryId === categoryKey && !taskLabels.has(task.taskId))
+      if (
+        isPublishedCategoryInSlot(task.categoryId, categoryKey) &&
+        !taskLabels.has(task.taskId)
+      )
         taskLabels.set(task.taskId, task.label);
     }
   }

@@ -14,7 +14,7 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/models/` | audited | implemented and QA-checked; design approval pending | Hero metrics; frontier chart and toggles; 2–4 quick comparison; search/access/provider/sort/reset; 30-card catalog; card/list views; selection tray; copy/PNG/CSV; lifecycle context; release timeline |
 | `/model-profile?model=<slug>` | audited | implemented and QA-checked; design approval pending | Distinct fixture profile; explicit invalid ID state; capability/runtime charts; exact values; limits/lifecycle; endpoint pricing; workload example; history/conflicts; copy/PNG/CSV |
 | `/models/<slug>/` | audited | pending; design approval pending | Dynamic profile coverage for all 4,455 sitemap entries; source/price ledger; comparison links; explicit unavailable states |
-| `/popular-models/` | audited | exact three-section parity implemented; design approval pending | `01` Leaderboard master table; `02` Insights with two charts; `03` Compare with three economics charts; strict-v1 unavailable slots; real HTTP/live data and final cross-page review remain |
+| `/popular-models/` | audited | exact three-section parity implemented; design approval pending | `01` Leaderboard with one-row controls, fixed category tags, and complete compact table; `02` Insights with two charts; full-width `03` Compare with three economics charts; unavailable slots; real HTTP/live data and final cross-page review remain |
 | `/make-it-yours/` | audited | pending; design approval pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | implemented and QA-checked; design approval pending | Metrics; two retirement records; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
 | `/leaderboards/` and 14 published child routes | audited | visual design approved; do not reopen | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior; only data wiring/availability verification remains |
@@ -63,22 +63,21 @@ The Next.js foundation currently renders this complete order with the approved A
 - Exact immutable section order is implemented: `01` **Leaderboard** with its
   master table, `02` **Insights** with its two charts, and `03` **Compare** with
   its three economics charts. This is parity implementation, not design approval.
-- `/popular-models/` is a source-backed capability workbench, not a fixed
+- `/popular-models/` is a data-backed capability workbench, not a fixed
   22-model popularity list. It projects only strict `ui-data-contract/v1`
   leaderboard rows, retains published source rank/order, and never applies a
   local popularity cutoff or replaces unavailable values with zero.
-- The current receipt carries the source release (including provenance/license),
-  source total, and next-cursor state when published. A cursor is displayed as
-  receipt evidence; the route does not pretend that an incomplete page is a
-  complete ranking.
-- Category controls derive from the current source radar axes, while the
-  published taxonomy and task labels remain separately inspectable. Aggregate
-  LiveBench cost per successful evaluation, mean output, Pareto state, and each
-  task-economics row stay source facts.
-- Search, provider, access, category, sort, reset, card/list, expanded evidence,
-  Chart.js insights, ordered two-to-four-model comparison, copy-link, PNG, and
-  CSV actions are present. The comparison selection and visible controls retain
-  their supported query state.
+- The underlying contract retains release, provenance/license, total, and
+  next-cursor state when published, but the visible route uses neutral benchmark
+  language. Dataset and contract names are reserved for a future credits route.
+- Category controls and table slots are fixed to `All`, Reasoning, Coding,
+  Agentic coding, Mathematics, Data analysis, Language, and Instruction
+  following. Published aliases map into those slots; missing values remain
+  visible as unavailable rather than collapsing the table.
+- Search, provider, open-weights, disabled finetune availability, provider
+  visibility, category, sort, expanded evidence, Chart.js insights, ordered
+  two-to-four-model comparison, copy-link, PNG, and CSV actions are present.
+  The comparison selection and supported controls retain query state.
 - Selected-route pricing is separate evidence; its disclosed 50/50 input/output
   view is never substituted for LiveBench economics. Runtime is explicit when
   unavailable. Lifecycle is not inferred by the ranking surface and remains a

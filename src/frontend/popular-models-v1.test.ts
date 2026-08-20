@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   filterPopularModels,
   normalizePopularModelsComparisonIds,
+  POPULAR_MODELS_CATEGORY_CONTROL_SLOTS,
   popularModelsCategoryWinnerIds,
+  popularModelsFieldUnavailableLabel,
   popularModelsLeaderboardColumns,
+  popularModelsMetricValue,
   projectPopularModelsV1,
   sortPopularModels,
 } from "./popular-models-v1";
@@ -118,9 +121,102 @@ describe("Popular Models v1 projection", () => {
     );
 
     expect(view.categories).toEqual([
-      { key: "reasoning", label: "Source reasoning" },
-      { key: "coding", label: "Published coding" },
+      { key: "reasoning", label: "Reasoning" },
+      { key: "coding", label: "Coding" },
+      { key: "agentic-coding", label: "Agentic coding" },
+      { key: "mathematics", label: "Mathematics" },
+      { key: "data-analysis", label: "Data analysis" },
+      { key: "language", label: "Language" },
+      { key: "instruction-following", label: "Instruction following" },
     ]);
+  });
+
+  it("uses the immutable All-through-instruction-following category slots and maps published taxonomy aliases into their slots", () => {
+    const alpha = model("alpha", {
+      capability: available({
+        compositeScore: 92,
+        radar: [
+          {
+            key: "agenticCoding",
+            label: "Agentic work",
+            percentile: 88,
+            rank: 3,
+            fieldSize: 40,
+          },
+          {
+            key: "math",
+            label: "Math",
+            percentile: 95,
+            rank: 1,
+            fieldSize: 40,
+          },
+        ],
+      }),
+    });
+    const view = projectPopularModelsV1(
+      envelope([{ model: alpha, rank: available(1) }], "available", {
+        taxonomy: [
+          {
+            categoryId: "dataAnalysis",
+            label: "Data analysis",
+            tasks: [{ taskId: "data-a", label: "Data A" }],
+          },
+          {
+            categoryId: "math",
+            label: "Math",
+            tasks: [{ taskId: "math-a", label: "Math A" }],
+          },
+        ],
+      }),
+    );
+
+    expect(POPULAR_MODELS_CATEGORY_CONTROL_SLOTS).toEqual([
+      { key: null, label: "All" },
+      { key: "reasoning", label: "Reasoning" },
+      { key: "coding", label: "Coding" },
+      { key: "agentic-coding", label: "Agentic coding" },
+      { key: "mathematics", label: "Mathematics" },
+      { key: "data-analysis", label: "Data analysis" },
+      { key: "language", label: "Language" },
+      { key: "instruction-following", label: "Instruction following" },
+    ]);
+    expect(view.categories).toEqual(
+      POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.slice(1),
+    );
+    expect(popularModelsMetricValue(view.models[0]!, "agentic-coding")).toBe(
+      88,
+    );
+    expect(popularModelsMetricValue(view.models[0]!, "mathematics")).toBe(95);
+    expect(
+      popularModelsLeaderboardColumns(view, "mathematics").map(
+        (column) => column.key,
+      ),
+    ).toEqual(["category:mathematics", "task:mathematics:math-a"]);
+  });
+
+  it("keeps fixed category columns and missing source measurements unavailable instead of inventing zero", () => {
+    const view = projectPopularModelsV1(
+      envelope([{ model: model("alpha"), rank: available(1) }]),
+    );
+
+    expect(popularModelsMetricValue(view.models[0]!, "language")).toBeNull();
+    expect(
+      popularModelsLeaderboardColumns(view, null).map((column) => column.key),
+    ).toContain("category:language");
+    expect(
+      popularModelsLeaderboardColumns(view, "language")[0],
+    ).toMatchObject({
+      key: "category:language",
+      label: "Language",
+    });
+  });
+
+  it("uses a neutral field-level unavailable label rather than reflecting raw provenance text", () => {
+    expect(
+      popularModelsFieldUnavailableLabel(
+        "A named publication did not publish this field.",
+      ),
+    ).toBe("Unavailable");
   });
 
   it("uses published radar axes and retains unavailable values instead of substituting zero", () => {
@@ -170,10 +266,9 @@ describe("Popular Models v1 projection", () => {
       ),
     );
 
-    expect(view.categories).toEqual([
-      { key: "reasoning", label: "Source reasoning" },
-      { key: "tool-use", label: "Source tool use" },
-    ]);
+    expect(view.categories).toEqual(
+      POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.slice(1),
+    );
     expect(view.models.map((item) => item.id)).toEqual(["alpha", "beta"]);
     expect(view.models[0]).toMatchObject({
       rank: 1,
@@ -322,7 +417,7 @@ describe("Popular Models v1 projection", () => {
     expect(view).toMatchObject({
       sourceStatus: "unavailable",
       models: [],
-      categories: [],
+      categories: POPULAR_MODELS_CATEGORY_CONTROL_SLOTS.slice(1),
       unavailableReason:
         "The verified ranking service could not complete this request.",
     });
@@ -512,7 +607,16 @@ describe("Popular Models v1 projection", () => {
 
     expect(
       popularModelsLeaderboardColumns(view, null).map((column) => column.key),
-    ).toEqual(["overall", "category:reasoning", "category:coding"]);
+    ).toEqual([
+      "overall",
+      "category:reasoning",
+      "category:coding",
+      "category:agentic-coding",
+      "category:mathematics",
+      "category:data-analysis",
+      "category:language",
+      "category:instruction-following",
+    ]);
     expect(
       popularModelsLeaderboardColumns(view, "coding").map(
         (column) => column.key,

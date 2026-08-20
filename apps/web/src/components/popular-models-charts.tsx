@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Bar, Scatter } from "react-chartjs-2";
 
 import {
+  popularModelsFieldUnavailableLabel,
   popularModelsMetricValue,
   type PopularModelV1,
 } from "@tokenbench/frontend/popular-models-v1";
@@ -145,7 +146,7 @@ export function popularProviderColor(provider: string | null): string {
 
 /**
  * Cost-ascending, strictly score-improving frontier derived from the exact
- * source measurements plotted in the chart. It does not infer values for rows
+ * published measurements plotted in the chart. It does not infer values for rows
  * with unavailable economics or capability measurements.
  */
 export function popularAggregateQualityCostFrontier(
@@ -185,7 +186,7 @@ export function popularAggregateChartDatasets(
     }))
     .filter((dataset) => dataset.data.length > 0);
 
-  const sourceParetoDataset =
+  const publishedParetoDataset =
     paretoPoints.length === 0
       ? []
       : [
@@ -220,7 +221,7 @@ export function popularAggregateChartDatasets(
         ];
   return [
     ...providerDatasets,
-    ...sourceParetoDataset,
+    ...publishedParetoDataset,
     ...computedFrontierDataset,
   ];
 }
@@ -255,13 +256,13 @@ function formatTokens(value: number): string {
   );
 }
 
-function formatSourceValue(
+function formatPublishedValue(
   value: number | null,
   unavailableReason: string | null,
   formatter: (value: number) => string,
 ): string {
   return value === null
-    ? `Unavailable${unavailableReason === null ? "" : `: ${unavailableReason}`}`
+    ? popularModelsFieldUnavailableLabel(unavailableReason)
     : formatter(value);
 }
 
@@ -274,9 +275,8 @@ function ChartUnavailable({ children }: { children: React.ReactNode }) {
 }
 
 function aggregateCostLabel(model: PopularModelV1): string {
-  if (model.aggregate === null)
-    return "Unavailable: the source row did not publish aggregate economics.";
-  return formatSourceValue(
+  if (model.aggregate === null) return "Unavailable";
+  return formatPublishedValue(
     model.aggregate.costPerSuccessfulEvaluationUsd.value,
     model.aggregate.costPerSuccessfulEvaluationUsd.unavailableReason,
     formatUsd,
@@ -284,9 +284,8 @@ function aggregateCostLabel(model: PopularModelV1): string {
 }
 
 function aggregateMeanOutputLabel(model: PopularModelV1): string {
-  if (model.aggregate === null)
-    return "Unavailable: the source row did not publish aggregate economics.";
-  return formatSourceValue(
+  if (model.aggregate === null) return "Unavailable";
+  return formatPublishedValue(
     model.aggregate.meanOutputTokens.value,
     model.aggregate.meanOutputTokens.unavailableReason,
     formatTokens,
@@ -299,7 +298,7 @@ function capabilityLabel(
 ): string {
   const value = popularModelsMetricValue(model, categoryKey);
   return value === null
-    ? `Unavailable${model.capabilityUnavailableReason === null ? "" : `: ${model.capabilityUnavailableReason}`}`
+    ? popularModelsFieldUnavailableLabel(model.capabilityUnavailableReason)
     : formatScore(value);
 }
 
@@ -315,10 +314,10 @@ function AggregateExactValues({
   return (
     <details className="mt-4 rounded-xl border border-border bg-muted/20 p-4 text-sm">
       <summary className="flex min-h-11 cursor-pointer items-center rounded-md font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        Exact LiveBench aggregate economics values
+        Exact evaluation cost values
       </summary>
       <div
-        aria-label="Exact LiveBench aggregate economics values. Scroll horizontally for all columns."
+        aria-label="Exact evaluation cost values. Scroll horizontally for all columns."
         className="mt-4 w-full min-w-0 max-w-full overflow-x-auto"
         tabIndex={0}
       >
@@ -392,7 +391,7 @@ function AggregateCostExactRanking({
   return (
     <details className="mt-4 rounded-xl border border-border bg-muted/20 p-4 text-sm">
       <summary className="flex min-h-11 cursor-pointer items-center rounded-md font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        Exact LiveBench aggregate cost ranking
+        Exact evaluation cost ranking
       </summary>
       <ol className="mt-4 space-y-2 text-xs">
         {ranked.map((model, index) => {
@@ -775,7 +774,7 @@ export function PopularModelsCostRankingChart({
   );
 }
 
-/** Uses only row-level LiveBench aggregate economics, never selected-route pricing. */
+/** Uses only row-level published evaluation cost, never selected-route pricing. */
 export function PopularModelsAggregateQualityCostChart({
   categoryKey,
   categoryLabel,
@@ -875,7 +874,7 @@ export function PopularModelsAggregateQualityCostChart({
             afterLabel: (context) => {
               const point = context.raw as PopularAggregateChartPoint;
               return [
-                `Mean output: ${formatSourceValue(point.meanOutputTokens, point.meanOutputUnavailableReason, formatTokens)} tokens`,
+                `Mean output: ${formatPublishedValue(point.meanOutputTokens, point.meanOutputUnavailableReason, formatTokens)} tokens`,
                 `Pareto: ${point.pareto ? "yes" : "no"}`,
               ];
             },
@@ -894,7 +893,7 @@ export function PopularModelsAggregateQualityCostChart({
           title: {
             color: theme.muted,
             display: true,
-            text: "LiveBench cost / successful evaluation (log scale)",
+            text: "Evaluation cost / successful evaluation (log scale)",
           },
         },
         y: {
@@ -911,18 +910,18 @@ export function PopularModelsAggregateQualityCostChart({
   const chart =
     economicModels.length === 0 ? (
       <ChartUnavailable>
-        LiveBench aggregate cost per successful evaluation is unavailable for
-        the source receipt. Selected-route pricing is not used as a replacement.
+        Published evaluation cost is unavailable for this benchmark. Selected-route
+        pricing is not used as a replacement.
       </ChartUnavailable>
     ) : points.length === 0 ? (
       <ChartUnavailable>
-        LiveBench aggregate economics are published for some source rows, but
+        Published evaluation cost is available for some rows, but
         none also have a positive logarithmic cost and the selected{" "}
         {categoryLabel.toLocaleLowerCase()} measurement.
       </ChartUnavailable>
     ) : (
       <div
-        aria-label={`${categoryLabel} versus LiveBench aggregate evaluation cost`}
+        aria-label={`${categoryLabel} versus published evaluation cost`}
         className="h-[340px] w-full"
         role="img"
       >
@@ -942,7 +941,7 @@ export function PopularModelsAggregateQualityCostChart({
   );
 }
 
-/** Ordered by the source-published aggregate evaluation cost, with source output/Pareto details. */
+/** Ordered by published aggregate evaluation cost, with output/Pareto details. */
 export function PopularModelsAggregateCostRankingChart({
   models,
 }: {
@@ -970,7 +969,7 @@ export function PopularModelsAggregateCostRankingChart({
       labels: economicModels.map(modelName),
       datasets: [
         {
-          label: "LiveBench cost / successful evaluation",
+          label: "Evaluation cost / successful evaluation",
           data: economicModels.map(
             (model) =>
               model.aggregate?.costPerSuccessfulEvaluationUsd.value ?? null,
@@ -1014,7 +1013,7 @@ export function PopularModelsAggregateCostRankingChart({
               const aggregate = economicModels[context.dataIndex]?.aggregate;
               if (!aggregate) return "";
               return [
-                `Mean output: ${formatSourceValue(aggregate.meanOutputTokens.value, aggregate.meanOutputTokens.unavailableReason, formatTokens)} tokens`,
+                `Mean output: ${formatPublishedValue(aggregate.meanOutputTokens.value, aggregate.meanOutputTokens.unavailableReason, formatTokens)} tokens`,
                 `Pareto: ${aggregate.pareto ? "yes" : "no"}`,
               ];
             },
@@ -1033,7 +1032,7 @@ export function PopularModelsAggregateCostRankingChart({
           title: {
             color: theme.muted,
             display: true,
-            text: "LiveBench cost / successful evaluation",
+            text: "Evaluation cost / successful evaluation",
           },
         },
         y: {
@@ -1049,12 +1048,12 @@ export function PopularModelsAggregateCostRankingChart({
   const chart =
     economicModels.length === 0 ? (
       <ChartUnavailable>
-        LiveBench aggregate cost per successful evaluation is unavailable for
-        the source receipt, so no aggregate-economics ranking can be shown.
+        Published evaluation cost is unavailable, so no cost ranking can be
+        shown.
       </ChartUnavailable>
     ) : (
       <div
-        aria-label="LiveBench aggregate cost ranking"
+        aria-label="Published evaluation cost ranking"
         className="h-[340px] w-full"
         role="img"
       >
@@ -1095,15 +1094,15 @@ function comparisonEconomicsDefinition(
   switch (metric) {
     case "cost-per-success":
       return {
-        exactLabel: "LiveBench aggregate",
-        title: "LiveBench cost / successful evaluation",
+        exactLabel: "Published evaluation cost",
+        title: "Evaluation cost / successful evaluation",
         format: formatUsd,
         valueFor: (model) =>
           model.aggregate === null
             ? {
                 value: null,
                 unavailableReason:
-                  "The source row did not publish aggregate economics.",
+                  "Aggregate evaluation cost is unavailable.",
               }
             : model.aggregate.costPerSuccessfulEvaluationUsd,
       };
@@ -1129,7 +1128,7 @@ function comparisonEconomicsDefinition(
       };
     case "mean-output":
       return {
-        exactLabel: "LiveBench aggregate",
+        exactLabel: "Published aggregate",
         title: "Mean output tokens",
         format: formatTokens,
         valueFor: (model) =>
@@ -1137,14 +1136,14 @@ function comparisonEconomicsDefinition(
             ? {
                 value: null,
                 unavailableReason:
-                  "The source row did not publish aggregate economics.",
+                  "Published aggregate data is unavailable.",
               }
             : model.aggregate.meanOutputTokens,
       };
   }
 }
 
-function comparisonEconomicsSourceLabel(
+function comparisonEconomicsDataLabel(
   model: PopularModelV1,
   metric: PopularModelsComparisonEconomicsMetric,
   definition: ComparisonEconomicsDefinition,
@@ -1233,7 +1232,7 @@ export function PopularModelsComparisonEconomicsChart({
               const row = plottedRows[context.dataIndex];
               return row === undefined
                 ? ""
-                : `${providerName(row.model)} · ${comparisonEconomicsSourceLabel(row.model, metric, definition)}`;
+                : `${providerName(row.model)} · ${comparisonEconomicsDataLabel(row.model, metric, definition)}`;
             },
           },
         },
@@ -1265,8 +1264,8 @@ export function PopularModelsComparisonEconomicsChart({
   const chart =
     plottedRows.length === 0 ? (
       <ChartUnavailable>
-        {definition.title} is unavailable for this selected source set. Exact
-        unavailable reasons remain below.
+        {definition.title} is unavailable for this selected model set. Field
+        availability remains below.
       </ChartUnavailable>
     ) : (
       <div
@@ -1283,7 +1282,7 @@ export function PopularModelsComparisonEconomicsChart({
       {chart}
       <details className="mt-4 rounded-xl border border-border bg-muted/20 p-3 text-xs">
         <summary className="flex min-h-10 cursor-pointer items-center rounded-md font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          Exact values and source status
+          Exact values and data coverage
         </summary>
         <div
           aria-label={`${definition.title} exact comparison values. Scroll horizontally for all columns.`}
@@ -1296,7 +1295,7 @@ export function PopularModelsComparisonEconomicsChart({
                 <th className="pb-2 pr-3">Model</th>
                 <th className="pb-2 pr-3">Provider</th>
                 <th className="pb-2 pr-3">Exact value</th>
-                <th className="pb-2">Source</th>
+                <th className="pb-2">Coverage</th>
               </tr>
             </thead>
             <tbody>
@@ -1316,11 +1315,13 @@ export function PopularModelsComparisonEconomicsChart({
                     <td className="py-2 pr-3">{providerName(row.model)}</td>
                     <td className="py-2 pr-3 font-mono">
                       {row.value === null
-                        ? `Unavailable${row.unavailableReason === null ? "" : `: ${row.unavailableReason}`}`
+                        ? popularModelsFieldUnavailableLabel(
+                            row.unavailableReason,
+                          )
                         : definition.format(row.value)}
                     </td>
                     <td className="py-2 text-muted-foreground">
-                      {comparisonEconomicsSourceLabel(
+                      {comparisonEconomicsDataLabel(
                         row.model,
                         metric,
                         definition,

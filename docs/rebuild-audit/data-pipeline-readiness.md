@@ -130,14 +130,15 @@ before production.
 
 `/popular-models/` now calls the leaderboard operation through that boundary and
 projects its strict-v1 receipt without a fixture-only popularity cutoff. It
-retains the published release, dynamic taxonomy, total, next cursor, source
-rank, aggregate cost-per-success/mean-output/Pareto facts, and every task
-economics row. Selected-route pricing remains independent, runtime remains
-explicitly unavailable when absent, and lifecycle is intentionally not inferred
-by this ranking projection.
+retains the published release, taxonomy, total, next cursor, source rank,
+aggregate cost-per-success/mean-output/Pareto facts, and every task-economics
+row. The visible workbench maps published taxonomy aliases into the immutable
+seven category slots and keeps absent measurements unavailable. Selected-route
+pricing remains independent, runtime remains explicitly unavailable when
+absent, and lifecycle is intentionally not inferred by this ranking projection.
 
 `TOKENBENCH_UI_DATA_MODE=evidence` is local-development-only and visibly labeled
-as design evidence. `TOKENBENCH_UI_DATA_MODE=http` is the production HTTP-only
+with a source-neutral preview-data notice. `TOKENBENCH_UI_DATA_MODE=http` is the production HTTP-only
 mode and has no evidence fallback; production builds reject evidence mode.
 
 ## Remaining data work before production
@@ -168,8 +169,8 @@ mode and has no evidence fallback; production builds reject evidence mode.
 - Catalog and benchmark full-cycle ingestion: 2 tests passed.
 - Leaderboard boundary refactor: 8 files, 152 tests passed.
 - Final LiveBench storage/discovery/projection/API regression slice: 58 tests passed.
-- Repository-wide test run after the Popular Models integration: 192 files and
-  2,093 tests passed.
+- Repository-wide test run after the Popular Models parity update: 192 files and
+  2,102 tests passed.
 - The current upstream LiveBench release was retrieved and projected locally:
   44 leaderboard rows with schema-valid partial evidence envelopes.
 - Root TypeScript, both worker TypeScript projects, generated Worker binding
@@ -179,11 +180,13 @@ mode and has no evidence fallback; production builds reject evidence mode.
   passed; the shared result-action Node test passed 4 tests separately.
 - Next ESLint and the Next production build passed with `/popular-models/` as a
   request-time dynamic route.
-- Local design-evidence browser check: at 390×844 the desktop table was hidden
-  and equivalent result cards rendered; at 1280×720 the table rendered. The
-  check observed the skip link, labeled filters/comboboxes, live result state,
-  labeled chart images, focusable overflow regions, source-detail disclosure,
-  search/query persistence, and ordered `alpha,beta,gamma` comparison handoff.
+- Local design-evidence browser check: at 390×844 the desktop table was hidden,
+  equivalent result cards rendered, and the fixed category controls used a
+  contained horizontal strip. At 1691×1324 all 13 master-table columns fit the
+  content region without horizontal scroll. The check observed the skip link,
+  single-row desktop filters, provider picker, category/sort state, row
+  disclosure, labeled chart images, source-neutral copy, and ordered
+  `alpha,beta,gamma` comparison handoff.
 - The shared result-action test uses a `.node-test.ts` filename so root Vitest
   does not collect the Next-only alias boundary; its dedicated `tsx --test` run
   covers CSV formula hardening, UTF-8 BOM output, PNG control exclusion, and the

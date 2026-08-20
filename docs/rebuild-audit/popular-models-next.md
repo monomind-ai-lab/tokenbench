@@ -1,6 +1,6 @@
 # Next Popular Models route — implementation receipt
 
-Date: 2026-08-19  
+Date: 2026-08-20  
 Branch: `codex/frontend-rebuild`  
 Deployment: not performed or authorized
 
@@ -14,24 +14,32 @@ implementation and verification boundaries only.
 ## Outcome
 
 `/popular-models/` now resolves as a dynamic Next App Router page backed by the
-strict `ui-data-contract/v1` leaderboard operation. It is a LiveBench capability
-workbench, not a hard-coded popularity ranking: every returned source row is
-kept in published rank order and unavailable source evidence is never made zero.
+strict `ui-data-contract/v1` leaderboard operation. It is a benchmark
+workbench, not a hard-coded popularity ranking: every returned row keeps its
+published rank and unavailable evidence is never made zero.
 
 The exact immutable section sequence is implemented:
 
-1. `01` **Leaderboard** — hero/strict-v1 receipt, source-scope statement,
-   controls, and the master evidence table (with equivalent mobile cards and
-   expanded source detail).
-2. `02` **Insights** — exactly two source-aware charts, with published
-   aggregate economics and selected-route evidence kept distinct.
-3. `03` **Compare** — ordered two-to-four-model comparison, source
-   radar/matrices, and exactly three economics charts before the handoff to
+1. `01` **Leaderboard** — one desktop control row matching the immutable
+   search/provider/access/visibility functions, a separate fixed category-tag
+   row, and the complete compact master table (with equivalent mobile cards and
+   expandable detail).
+2. `02` **Insights** — exactly two charts, with published aggregate economics
+   and selected-route evidence kept distinct.
+3. `03` **Compare** — a full-content-width ordered two-to-four-model workspace,
+   capability matrices, and exactly three economics charts before the handoff to
    `/compare/?models=...`.
 
-Copy-link, PNG, and CSV actions remain attached to the visible result surface.
-Search, provider, access, dynamic category, sort, reset, and card/list controls
-retain their supported query state.
+Copy-link, PNG, and CSV actions remain attached to every result section.
+Search, provider, open-weights, provider-column visibility, category, sort,
+expand, and comparison controls retain their supported query state. The
+finetune control remains visible but disabled because the current contract does
+not publish that fact.
+
+The rendered page, accessible labels, chart labels, metadata, and CSV headers
+use neutral benchmark language. Dataset/provider-of-record and contract names
+are deliberately not presented on the page; data-source credits will be handled
+by a dedicated future route. The underlying provenance fields remain intact.
 
 ## Strict-v1 receipt and source scope
 
@@ -40,9 +48,10 @@ retain their supported query state.
   when those values are published.
 - A published next cursor is shown as a receipt, not silently followed or
   discarded; a missing receipt remains unavailable.
-- The workbench derives category chips from current source radar axes and
-  displays the published taxonomy/task list separately. It does not freeze a
-  historical category list.
+- The workbench reserves the immutable `All` plus seven category controls and
+  table slots: Reasoning, Coding, Agentic coding, Mathematics, Data analysis,
+  Language, and Instruction following. Published category IDs/labels map into
+  those slots; missing measurements stay visible as unavailable.
 - `sourceRank` wins over a derived rank. The page does not relabel the result as
   a popularity list or apply a client-side top-N cutoff.
 
@@ -65,7 +74,7 @@ retain their supported query state.
 ## Data-mode boundary
 
 - `TOKENBENCH_UI_DATA_MODE=evidence` is permitted only outside production and is
-  visibly labeled `Design-only evidence · not live data`.
+  visibly labeled with a source-neutral `Preview data` disclosure.
 - `TOKENBENCH_UI_DATA_MODE=http` uses the production HTTP-only adapter. It
   requires the configured v1 service and has no design-evidence fallback.
 - A production build with evidence mode returns an explicit unconfigured state;
@@ -73,30 +82,37 @@ retain their supported query state.
 
 ## Responsive and accessibility check
 
-- Local design-evidence rendering was checked at 390×844 and 1280×720. The
-  desktop evidence table was hidden at the mobile breakpoint while equivalent
-  model cards rendered; the table rendered on desktop.
+- Local design-evidence rendering was checked at 390×844 and 1691×1324 in light
+  and dark themes. The desktop table fits the 1280px content region without
+  internal horizontal scroll; the mobile breakpoint renders equivalent cards
+  and a contained horizontal category strip with no page-level overflow.
 - The checked DOM exposed a skip link, named regions/forms/groups, labeled
   search/select/combobox controls, live result state, labeled Chart.js images,
   focusable overflow regions, and expandable source evidence.
-- Search reduced three rows to one and preserved its query state. Reset restored
-  the set; the ordered tray retained `alpha,beta,gamma` and linked to the matching
-  comparison URL.
+- Search reduced three rows to one and preserved its query state. Category and
+  sort controls changed the expected columns/order, row disclosure expanded,
+  and the provider picker opened and closed correctly. The ordered tray added
+  and removed `gamma`, updating the canonical comparison query and returning to
+  `alpha,beta`.
 - This is not an assistive-technology, automated accessibility, touch-target, or
   production-payload certification. Those checks remain part of the production
   review gate.
 
 ## Verification receipt
 
-- Focused Popular Models projection/adapter run — 2 files and 21 tests passed.
+- Focused Popular Models projection/adapter run — 2 files and 24 tests passed.
 - Shared result-action Node test — 5 tests passed; its `.node-test.ts` filename
   intentionally keeps the Next-only alias boundary out of root Vitest discovery.
 - Chart accent/frontier Node test — 3 tests passed.
-- Repository-wide Vitest — 192 files and 2,099 tests passed.
+- Repository-wide Vitest — 192 files and 2,102 tests passed.
 - Next ESLint: passed.
 - Next production build: passed; `/popular-models/` is request-time dynamic.
-- Final browser parity review: passed at desktop and true mobile-card widths with
-  five Chart.js canvases, no page-level overflow, and no current app-origin error.
+- Impeccable layout detector: no findings on the changed Popular Models route,
+  page, charts, and projection files.
+- Final browser parity review: passed at 1691px desktop and 390px mobile with all
+  13 default master-table columns, eight category controls, five Chart.js
+  canvases, a full-width comparison workspace, no page-level overflow, and no
+  rendered source/contract names.
 - No deployment, endpoint activation, or live infrastructure change occurred.
 
 ## Remaining dependencies and next gate
