@@ -97,6 +97,8 @@ export interface ModelOffer {
   contextWindowTokens?: number;
   maxOutputTokens?: number;
   availability?: 'available' | 'limited' | 'deprecated';
+  /** Official endpoint expiration/deprecation date when the source publishes one. */
+  expirationDate?: string;
   sourceId: string;
 }
 

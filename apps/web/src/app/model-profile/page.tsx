@@ -1,20 +1,31 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { ModelProfilePage } from "@/components/model-profile-page";
-import { catalogModels } from "@/lib/model-catalog";
+import { RouteEvidenceUnavailableState } from "@/components/route-evidence-ui";
+import { loadModelSurfaceProfile } from "@/lib/model-surface-data.server";
+import { projectSurfaceProfile } from "@tokenbench/frontend/model-surface-projectors";
+import { isRouteEvidenceSlug } from "@tokenbench/frontend/route-evidence-projectors";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Model Profile",
-  description: "Inspect an AI model's capability evidence, runtime history, limits, price routes, workload economics, and source conflicts.",
+  description: "Inspect an exact model evidence response across capability, route pricing, runtime, lifecycle, and source provenance.",
 };
 
 export default async function ModelProfileRoute({ searchParams }: { searchParams: Promise<{ model?: string | string[] }> }) {
   const query = await searchParams;
-  const requested = Array.isArray(query.model) ? query.model[0] : query.model;
-  const model = catalogModels.find((candidate) => candidate.id === requested);
-  if (!model) {
-    return <main className="px-4 py-24 sm:px-6"><div className="mx-auto max-w-2xl rounded-2xl border border-border bg-card p-8 sm:p-12"><p className="font-mono text-xs text-muted-foreground">MODEL PROFILE</p><h1 className="mt-4 text-3xl font-semibold tracking-tight">Choose a published model</h1><p className="mt-3 text-sm leading-6 text-muted-foreground">{requested ? `“${requested}” is not available in the current model-profile fixture.` : "This route needs a model query parameter."} Unknown identifiers are not silently replaced with a different model.</p><Link className="mt-7 inline-flex h-9 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground" href="/models/">Open the model workbench</Link></div></main>;
+  const requested = Array.isArray(query.model) ? null : query.model;
+  if (requested === undefined || requested === null || !isRouteEvidenceSlug(requested)) {
+    return <RouteEvidenceUnavailableState detail="Provide one valid model slug in the model query. Multiple or invalid identifiers are not normalized into another profile." heading="Model evidence unavailable" />;
   }
-  return <ModelProfilePage model={model} />;
+  const snapshot = await loadModelSurfaceProfile(requested);
+  if (snapshot.envelope === null || snapshot.mode === "unconfigured") {
+    return <RouteEvidenceUnavailableState detail={snapshot.error ?? "The requested model evidence could not be loaded."} heading="Model evidence is not configured" />;
+  }
+  const projection = projectSurfaceProfile(snapshot.envelope);
+  if (projection.data === null) {
+    return <RouteEvidenceUnavailableState detail="No accepted profile evidence was returned for this exact slug. It was not replaced with a catalog model." heading="Model evidence unavailable" />;
+  }
+  return <ModelProfilePage mode={projection.mode} model={projection.data} sources={projection.provenance} status={projection.status} />;
 }

@@ -17,7 +17,8 @@ function baseUrlFor(mode: LlmPricePerformanceDataMode): string | null {
   const value =
     mode === "preview"
       ? process.env.TOKENBENCH_PRICE_PERFORMANCE_PREVIEW_BASE_URL
-      : process.env.TOKENBENCH_PRICE_PERFORMANCE_BASE_URL;
+      : process.env.TOKENBENCH_PRICE_PERFORMANCE_BASE_URL ??
+        process.env.TOKENBENCH_UI_DATA_BASE_URL;
   if (!value?.trim()) return null;
 
   try {

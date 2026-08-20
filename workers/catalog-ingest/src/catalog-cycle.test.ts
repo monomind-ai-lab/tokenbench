@@ -69,6 +69,7 @@ function sqliteD1() {
     '0010_ingestion_cycles.sql',
     '0011_catalog_publication_ownership.sql',
     '0012_benchmark_metric_rank_field_size.sql',
+    '0015_catalog_model_expiration.sql',
   ]) {
     sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations', file), 'utf8'));
   }

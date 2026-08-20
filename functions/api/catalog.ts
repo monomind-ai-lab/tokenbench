@@ -19,7 +19,7 @@ interface Env {
 interface RevisionRow { revision: string; published_at: string; checked_at: string }
 interface SourceRow { id: string; provider_id: string; source_url: string; observed_at: string; source_kind: SourceProvenance['sourceKind']; confidence: SourceProvenance['confidence']; snapshot_key: string | null; content_hash: string | null; parser_version: string | null; evidence_locator: string | null; review_status: SourceProvenance['reviewStatus'] | null }
 interface PlanRow { id: string; provider_id: string; display_name: string; monthly_cost_micro_dollars: number; currency: 'USD'; entitlement_json: string; entitlement_evidence_json: string | null; billing_cycle: PlanOffer['billingCycle'] | null; supported_model_ids_json: string | null; source_id: string }
-interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; output_micro_dollars_per_million: number; context_window_tokens: number | null; max_output_tokens: number | null; availability: ModelOffer['availability'] | null; source_id: string }
+interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; output_micro_dollars_per_million: number; context_window_tokens: number | null; max_output_tokens: number | null; availability: ModelOffer['availability'] | null; expiration_date: string | null; source_id: string }
 
 /**
  * Revisions published before the entitlement-evidence migration carry no
@@ -109,7 +109,7 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
       pricingBasis: model.pricing_basis, route: model.route, currency: model.currency, unit: model.unit,
       inputMicroDollarsPerMillion: model.input_micro_dollars_per_million,
       ...(model.cached_input_micro_dollars_per_million === null ? {} : { cachedInputMicroDollarsPerMillion: model.cached_input_micro_dollars_per_million }),
-      outputMicroDollarsPerMillion: model.output_micro_dollars_per_million, ...(model.context_window_tokens === null ? {} : { contextWindowTokens: model.context_window_tokens }), ...(model.max_output_tokens === null ? {} : { maxOutputTokens: model.max_output_tokens }), ...(model.availability ? { availability: model.availability } : {}), sourceId: model.source_id,
+      outputMicroDollarsPerMillion: model.output_micro_dollars_per_million, ...(model.context_window_tokens === null ? {} : { contextWindowTokens: model.context_window_tokens }), ...(model.max_output_tokens === null ? {} : { maxOutputTokens: model.max_output_tokens }), ...(model.availability ? { availability: model.availability } : {}), ...(model.expiration_date ? { expirationDate: model.expiration_date } : {}), sourceId: model.source_id,
     })),
   });
 }

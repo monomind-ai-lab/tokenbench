@@ -673,7 +673,13 @@ export function MakeItYoursWorkbench({
     }
     return { ...current, selectedModelIds };
   });
-  const unavailable = envelope === null || envelope.data === null;
+  const missingRequiredFacts = projection.models.length === 0 && projection.unavailableCount > 0;
+  const unavailable = envelope === null || envelope.data === null || missingRequiredFacts;
+  const unavailableReason = loaderError
+    ?? envelope?.reason
+    ?? (missingRequiredFacts
+      ? "The returned rows omit the required six-axis, raw SLA, or explicit blended-cost facts."
+      : "The custom ranking is unavailable. Check the configured verified data service and try again.");
   const passingCount = ranking.candidates.filter((row) => row.meetsSla).length;
 
   return (
@@ -682,14 +688,14 @@ export function MakeItYoursWorkbench({
         <div className="mx-auto max-w-7xl px-5 py-14 sm:px-8 sm:py-18 lg:px-10">
           <h1 className="max-w-4xl text-balance text-5xl font-semibold leading-[.98] tracking-[-.04em] sm:text-6xl" id="make-it-yours-heading">Make it yours</h1>
           <p className="mt-5 max-w-3xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">Make a custom ranking reflect a deployment priority. The six capability weights remain visible, while access, provider, and service-level constraints stay independent.</p>
-          {dataMode === "evidence" ? <div className="mt-6 flex max-w-3xl items-start gap-3 rounded-xl border border-border bg-muted/45 p-4 text-sm leading-6 text-muted-foreground" role="status"><CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" /><p><span className="font-medium text-foreground">Preview evidence.</span> Values shown here are retained for interface review only; they are not live benchmark results or pricing guidance.</p></div> : null}
+          {dataMode === "evidence" ? <div className="mt-6 flex max-w-3xl items-start gap-3 rounded-xl border border-border bg-muted/45 p-4 text-sm leading-6 text-muted-foreground" role="status"><CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" /><p><span className="font-medium text-foreground">Preview evidence.</span> Retained accepted evidence is used for interface review only; it is never a production fallback, and unavailable facts remain unavailable.</p></div> : null}
           {dataMode === "production" && envelope?.status === "partial" ? <div className="mt-6 flex max-w-3xl items-start gap-3 rounded-xl border border-border bg-muted/45 p-4 text-sm leading-6 text-muted-foreground" role="status"><CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" /><p><span className="font-medium text-foreground">Partial verified response.</span> The workbench keeps any incomplete row out of the custom score and reports it below.</p></div> : null}
         </div>
       </section>
 
       <div className="mx-auto max-w-7xl space-y-8 px-5 py-10 sm:px-8 sm:py-12 lg:px-10">
-        {unavailable ? <Card><CardHeader><CardTitle>Custom ranking unavailable</CardTitle><CardDescription>The route received no complete custom-ranking envelope, so it cannot show a score, cost, or SLA result.</CardDescription></CardHeader><CardContent><p className="rounded-lg border border-border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground" role="alert">{loaderError ?? envelope?.reason ?? "The custom ranking is unavailable. Check the configured verified data service and try again."}</p></CardContent></Card> : <>
-          <section aria-labelledby="weighting-title">
+        {unavailable ? <Card><CardHeader><CardTitle>Custom ranking unavailable</CardTitle><CardDescription>The route received no complete custom-ranking result, so a weighted score, cost, or SLA result cannot be shown.</CardDescription></CardHeader><CardContent><p className="rounded-lg border border-border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground" role="alert">{unavailableReason}</p></CardContent></Card> : null}
+        <section aria-labelledby="weighting-title">
             <Card>
               <CardHeader className="gap-5 sm:flex sm:flex-row sm:items-start sm:justify-between">
                 <div><CardTitle id="weighting-title">Capability weighting matrix</CardTitle><CardDescription className="mt-2 max-w-3xl leading-6">Composite = Σ(domain score × entered weight) / Σ(entered weights). Values are applied exactly as set; the inputs are not forced to add up to 100 or silently rebalanced. Raw throughput remains a separate SLA measurement.</CardDescription></div>
@@ -721,7 +727,7 @@ export function MakeItYoursWorkbench({
             <div id="make-it-yours-ranking-output" className="mt-5 space-y-6 rounded-xl border border-border bg-card p-4 sm:p-5">
               {projection.unavailableCount > 0 ? <p className="rounded-lg border border-border bg-muted/35 p-3 text-sm leading-6 text-muted-foreground" role="status">{projection.unavailableCount} returned model{projection.unavailableCount === 1 ? "" : "s"} lack a complete six-axis, raw SLA, or explicit blended-cost fact and remain unavailable for this custom ranking.</p> : null}
               {message ? <p className={cn("rounded-lg border p-3 text-sm", message.tone === "error" ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border bg-muted/35 text-muted-foreground")} role="status">{message.text}</p> : null}
-              {!ranking.valid ? <p className="rounded-lg border border-border bg-muted/35 p-4 text-sm text-muted-foreground" role="status">Ranking is paused until at least one capability weight is above zero.</p> : ranking.rows.length === 0 ? <p className="rounded-lg border border-border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground" role="status">No visible weighted results match the current filters. Reset an access or provider filter, relax an SLA threshold, or show outside-SLA models to restore evidence.</p> : <>
+              {!ranking.valid ? <p className="rounded-lg border border-border bg-muted/35 p-4 text-sm text-muted-foreground" role="status">Ranking is paused until at least one capability weight is above zero.</p> : ranking.rows.length === 0 ? <p className="rounded-lg border border-border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground" role="status">{missingRequiredFacts ? "No complete returned model can be ranked until the verified source publishes the required capability, SLA, and cost facts." : "No visible weighted results match the current filters. Reset an access or provider filter, relax an SLA threshold, or show outside-SLA models to restore evidence."}</p> : <>
                 <p className="font-mono text-xs leading-5 text-muted-foreground" role="status">Live result: <span className="font-semibold text-foreground">{ranking.rows[0]?.name}</span> leads at {ranking.rows[0]?.score.toFixed(1)}. Showing {ranking.rows.length} of {ranking.candidates.length} filtered candidates; {passingCount} meet both SLA thresholds.</p>
                 <div className="grid gap-5 xl:grid-cols-[1.08fr_.92fr]">
                   <section aria-labelledby="weighted-chart-title" className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold" id="weighted-chart-title">Weighted score ranking</h3><p className="mt-1 text-sm text-muted-foreground">Provider color identifies the source organization; ranking uses the exact current matrix.</p><div className="mt-5"><MakeItYoursRankChart rows={ranking.chartRows} /></div></section>
@@ -742,8 +748,7 @@ export function MakeItYoursWorkbench({
                 <section aria-labelledby="ranked-output-title"><div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-2xl font-semibold tracking-tight" id="ranked-output-title">Ranked output</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Switch views on larger screens; small screens use the equivalent ordered cards so no column is hidden behind page-wide scrolling.</p></div><ViewModeToggle label="Ranked output view" mode={state.view === "cards" ? "cards" : "list"} onChange={(mode) => patchState({ view: mode === "cards" ? "cards" : "rows" })} /></div><div className="mt-5">{state.view === "cards" ? <MakeItYoursRankingCards modelsById={modelsById} onToggle={toggleSelected} rows={ranking.rows} selectedIds={state.selectedModelIds} /> : <><div className="hidden lg:block"><MakeItYoursRankingTable modelsById={modelsById} onToggle={toggleSelected} rows={ranking.tableRows} selectedIds={state.selectedModelIds} tableLabel="Weighted ranking evidence" /></div><div className="lg:hidden"><MakeItYoursRankingCards modelsById={modelsById} onToggle={toggleSelected} rows={ranking.rows} selectedIds={state.selectedModelIds} /></div></>}</div></section>
               </>}
             </div>
-          </section>
-        </>}
+        </section>
       </div>
     </div>
   );

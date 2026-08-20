@@ -77,20 +77,20 @@ const GROUPS = [
 }[];
 
 const SOURCE_BY_ROUTE: Record<LeaderboardKey, string> = {
-  "llm-overall": "LiveBench",
-  "llm-coding": "LiveBench",
-  "llm-agentic": "LiveBench",
-  "llm-reasoning": "LiveBench",
-  "llm-knowledge": "LiveBench",
-  "llm-human-preference": "LMArena",
+  "llm-overall": "Capability benchmark",
+  "llm-coding": "Capability benchmark",
+  "llm-agentic": "Capability benchmark",
+  "llm-reasoning": "Capability benchmark",
+  "llm-knowledge": "Capability benchmark",
+  "llm-human-preference": "Preference benchmark",
   "llm-value": "TokenBench",
-  "llm-pricing-context": "OpenRouter",
-  "multimodal-vision-documents": "LiveBench + LMArena",
-  "media-text-to-image": "LMArena",
-  "media-image-editing": "LMArena",
-  "media-text-to-video": "LMArena",
-  "media-image-to-video": "LMArena",
-  "media-video-editing": "LMArena",
+  "llm-pricing-context": "Route catalog",
+  "multimodal-vision-documents": "Mixed benchmark evidence",
+  "media-text-to-image": "Media preference benchmark",
+  "media-image-editing": "Media preference benchmark",
+  "media-text-to-video": "Media preference benchmark",
+  "media-image-to-video": "Media preference benchmark",
+  "media-video-editing": "Media preference benchmark",
 };
 
 const ICON_BY_ROUTE: Record<LeaderboardKey, LucideIcon> = {

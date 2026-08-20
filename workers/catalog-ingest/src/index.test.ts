@@ -444,6 +444,21 @@ describe('catalog ingestion', () => {
       .toMatchObject({ modelOffers: [{ id: 'openai:openai/gpt-4o:openrouter', inputMicroDollarsPerMillion: 2_500_000, cachedInputMicroDollarsPerMillion: 1_250_000, outputMicroDollarsPerMillion: 10_000_000, contextWindowTokens: 128_000, maxOutputTokens: 16_000, availability: 'available' }] });
   });
 
+  it('retains official OpenRouter expiration dates and derives availability at observation time', () => {
+    const parsed = parseOpenRouterModels({ data: [
+      { id: 'openai/future', name: 'Future model', expiration_date: '2026-09-30', pricing: { prompt: '0.000001', completion: '0.000002' } },
+      { id: 'openai/expired', name: 'Expired model', expiration_date: '2026-08-01', pricing: { prompt: '0.000001', completion: '0.000002' } },
+    ] }, '2026-08-21T00:00:00.000Z');
+
+    expect(parsed.modelOffers).toEqual([
+      expect.objectContaining({ modelId: 'openai/future', expirationDate: '2026-09-30', availability: 'available' }),
+      expect.objectContaining({ modelId: 'openai/expired', expirationDate: '2026-08-01', availability: 'deprecated' }),
+    ]);
+    expect(() => parseOpenRouterModels({ data: [
+      { id: 'openai/invalid', name: 'Invalid model', expiration_date: '2026-02-30', pricing: { prompt: '0.000001', completion: '0.000002' } },
+    ] }, '2026-08-21T00:00:00.000Z')).toThrow('expiration_date must be a valid calendar date or null');
+  });
+
   it('rejects malformed official adapter payloads', () => {
     expect(() => parseOpenCodeCatalog({ data: [{ object: 'model' }] }, openCodePricingHtml, '2026-08-03T00:00:00.000Z'))
       .toThrow('OpenCode model id is required');

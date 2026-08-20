@@ -646,6 +646,46 @@ describe('UI data contract v1 subscription', () => {
     })).toThrow(/cache read.*available/i);
   });
 
+  it('permits an unavailable cache-write rate only when its allocation is exactly zero', () => {
+    const unavailableCacheWriteRoute: RouteFact = {
+      ...alphaRoute,
+      cacheWriteMicroDollarsPerMillion: {
+        availability: 'unavailable',
+        value: null,
+        reason: 'The provider does not publish a cache-write price.',
+        sourceRefs: [source.sourceRef],
+      },
+      pricingTiers: alphaRoute.pricingTiers.map((tier) => ({
+        ...tier,
+        cacheWriteMicroDollarsPerMillion: {
+          availability: 'unavailable' as const,
+          value: null,
+          reason: 'The provider does not publish a cache-write price.',
+          sourceRefs: [source.sourceRef],
+        },
+      })),
+    };
+    const noCacheWrite = normalizedCalculate({
+      modelMix: [mix('alpha', 'route-a', 10_000)],
+      cacheReadShareBasisPoints: 0,
+      cacheWriteShareBasisPoints: 0,
+    });
+
+    const result = buildSubscriptionCalculation(noCacheWrite, factsForRequest(noCacheWrite, {
+      routes: [unavailableCacheWriteRoute],
+    }));
+    expect(result.lineItems.some((line) => line.kind === 'cache_write')).toBe(false);
+
+    const positiveCacheWrite = normalizedCalculate({
+      modelMix: [mix('alpha', 'route-a', 10_000)],
+      cacheReadShareBasisPoints: 0,
+      cacheWriteShareBasisPoints: 1,
+    });
+    expect(() => buildSubscriptionCalculation(positiveCacheWrite, factsForRequest(positiveCacheWrite, {
+      routes: [unavailableCacheWriteRoute],
+    }))).toThrow(/cache write price must be available when its allocation is positive/i);
+  });
+
   it('rejects a projection whose workload shape differs from the calculation request', () => {
     const request = normalizeSubscriptionRequest(calculateRequest());
     if (request.operation !== 'calculate') throw new Error('Expected a calculation request.');

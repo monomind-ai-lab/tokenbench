@@ -340,6 +340,7 @@ export function buildCatalogCandidateStatements(input: {
     model.contextWindowTokens ?? null,
     model.maxOutputTokens ?? null,
     model.availability ?? null,
+    model.expirationDate ?? null,
     model.sourceId,
   ]));
   return [
@@ -363,7 +364,8 @@ export function buildCatalogCandidateStatements(input: {
       (revision, id, provider_id, display_name, model_id, pricing_basis,
        route, currency, unit, input_micro_dollars_per_million,
        cached_input_micro_dollars_per_million, output_micro_dollars_per_million,
-       context_window_tokens, max_output_tokens, availability, source_id) VALUES`, modelRows, 16),
+       context_window_tokens, max_output_tokens, availability, expiration_date,
+       source_id) VALUES`, modelRows, 17),
     ...cacheCandidateStatements({ db, catalog, cacheRevision, createdAt }),
   ] as BoundStatement[];
 }

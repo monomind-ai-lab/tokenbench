@@ -168,7 +168,7 @@ function parseModels(
   };
   const modelOffers = (payload as { data: unknown[] }).data.flatMap((entry): ModelOffer[] => {
     if (!entry || typeof entry !== 'object') throw new Error(`${label} model must be an object`);
-    const model = entry as { id?: unknown; name?: unknown; pricing?: Record<string, unknown>; context_length?: unknown; top_provider?: { max_completion_tokens?: unknown } };
+    const model = entry as { id?: unknown; name?: unknown; pricing?: Record<string, unknown>; context_length?: unknown; expiration_date?: unknown; top_provider?: { max_completion_tokens?: unknown } };
     if (typeof model.id !== 'string' || !model.id || typeof model.name !== 'string' || !model.name) throw new Error(`${label} model id and name are required`);
     const pricing = model.pricing;
     if (!pricing) throw new Error(`${label} model pricing is required`);
@@ -176,6 +176,13 @@ function parseModels(
     const input = pricing.prompt ?? pricing.input;
     const output = pricing.completion ?? pricing.output;
     const cached = pricing.input_cache_read ?? pricing.cached_input;
+    const expirationDate = model.expiration_date === null || model.expiration_date === undefined
+      ? null
+      : typeof model.expiration_date === 'string'
+        && /^\d{4}-\d{2}-\d{2}$/.test(model.expiration_date)
+        && new Date(`${model.expiration_date}T00:00:00.000Z`).toISOString().slice(0, 10) === model.expiration_date
+          ? model.expiration_date
+          : (() => { throw new Error(`${label} model expiration_date must be a valid calendar date or null`); })();
     if (input === '-1' && output === '-1' && model.id.startsWith('openrouter/')) return [];
     return [{
       id: `${providerId}:${model.id}:${route}`, providerId, displayName: model.name, modelId: model.id,
@@ -186,7 +193,8 @@ function parseModels(
       outputMicroDollarsPerMillion: microDollarsPerMillion(output, label), sourceId,
       ...(Number.isInteger(model.context_length) && (model.context_length as number) >= 0 ? { contextWindowTokens: model.context_length as number } : {}),
       ...(Number.isInteger(model.top_provider?.max_completion_tokens) && (model.top_provider?.max_completion_tokens as number) >= 0 ? { maxOutputTokens: model.top_provider?.max_completion_tokens as number } : {}),
-      availability: 'available',
+      availability: expirationDate !== null && expirationDate <= observedAt.slice(0, 10) ? 'deprecated' : 'available',
+      ...(expirationDate === null ? {} : { expirationDate }),
     }];
   });
   if (modelOffers.length === 0) throw new Error(`${label} payload must contain at least one model offer`);
@@ -490,11 +498,11 @@ export async function publishValidatedSource({
     db.prepare('INSERT INTO catalog_revisions (revision, published_at, checked_at, publication_state) VALUES (?, ?, ?, ?)').bind(revision, now, now, 'pending'),
     db.prepare("INSERT INTO source_records (revision, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key, content_hash, parser_version, evidence_locator, review_status) SELECT ?, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key, content_hash, parser_version, evidence_locator, review_status FROM source_records WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND id != ?").bind(revision, source.source.id),
     db.prepare("INSERT INTO plan_offers (revision, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, entitlement_evidence_json, billing_cycle, supported_model_ids_json, source_id) SELECT ?, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, entitlement_evidence_json, billing_cycle, supported_model_ids_json, source_id FROM plan_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
-    db.prepare("INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, source_id) SELECT ?, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, source_id FROM model_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
+    db.prepare("INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, expiration_date, source_id) SELECT ?, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, expiration_date, source_id FROM model_offers WHERE revision = (SELECT revision FROM catalog_revisions WHERE publication_state = 'published' ORDER BY published_at DESC LIMIT 1) AND source_id != ?").bind(revision, source.source.id),
     db.prepare('INSERT INTO source_records (revision, id, provider_id, source_url, observed_at, source_kind, confidence, snapshot_key, content_hash, parser_version, evidence_locator, review_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, source.source.id, source.source.providerId, source.source.sourceUrl, source.source.observedAt, source.source.sourceKind, source.source.confidence, snapshotKey, source.source.contentHash ?? `sha256:${hash}`, source.source.parserVersion ?? 'adapter-v1', source.source.evidenceLocator ?? null, source.source.reviewStatus ?? 'verified'),
   ];
   for (const plan of source.plans) statements.push(db.prepare('INSERT INTO plan_offers (revision, id, provider_id, display_name, monthly_cost_micro_dollars, currency, entitlement_json, entitlement_evidence_json, billing_cycle, supported_model_ids_json, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, plan.id, plan.providerId, plan.displayName, plan.monthlyCostMicroDollars, plan.currency, JSON.stringify(plan.entitlement), JSON.stringify(plan.entitlementEvidence), plan.billingCycle ?? null, plan.supportedModelIds ? JSON.stringify(plan.supportedModelIds) : null, plan.sourceId));
-  for (const model of source.modelOffers) statements.push(db.prepare('INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, model.id, model.providerId, model.displayName, model.modelId, model.pricingBasis, model.route, model.currency, model.unit, model.inputMicroDollarsPerMillion, model.cachedInputMicroDollarsPerMillion ?? null, model.outputMicroDollarsPerMillion, model.contextWindowTokens ?? null, model.maxOutputTokens ?? null, model.availability ?? null, model.sourceId));
+  for (const model of source.modelOffers) statements.push(db.prepare('INSERT INTO model_offers (revision, id, provider_id, display_name, model_id, pricing_basis, route, currency, unit, input_micro_dollars_per_million, cached_input_micro_dollars_per_million, output_micro_dollars_per_million, context_window_tokens, max_output_tokens, availability, expiration_date, source_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(revision, model.id, model.providerId, model.displayName, model.modelId, model.pricingBasis, model.route, model.currency, model.unit, model.inputMicroDollarsPerMillion, model.cachedInputMicroDollarsPerMillion ?? null, model.outputMicroDollarsPerMillion, model.contextWindowTokens ?? null, model.maxOutputTokens ?? null, model.availability ?? null, model.expirationDate ?? null, model.sourceId));
   statements.push(
     db.prepare("UPDATE catalog_revisions SET publication_state = 'superseded' WHERE publication_state = 'published'").bind(),
     db.prepare("UPDATE catalog_revisions SET publication_state = 'published' WHERE revision = ?").bind(revision),

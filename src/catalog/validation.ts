@@ -128,6 +128,12 @@ function validateModelOffer(value: unknown, index: number, sourceIds: Set<string
   if (offer.contextWindowTokens !== undefined) requireNonNegativeInteger(offer.contextWindowTokens, `${name}.contextWindowTokens`);
   if (offer.maxOutputTokens !== undefined) requireNonNegativeInteger(offer.maxOutputTokens, `${name}.maxOutputTokens`);
   if (offer.availability !== undefined && !['available', 'limited', 'deprecated'].includes(offer.availability)) fail(`${name}.availability is invalid`);
+  if (offer.expirationDate !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(offer.expirationDate)
+      || new Date(`${offer.expirationDate}T00:00:00.000Z`).toISOString().slice(0, 10) !== offer.expirationDate) {
+      fail(`${name}.expirationDate must be a valid calendar date`);
+    }
+  }
   if (!sourceIds.has(offer.sourceId)) fail(`${name}.sourceId must refer to provenance`);
 }
 

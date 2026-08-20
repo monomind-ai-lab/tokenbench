@@ -53,6 +53,13 @@ publishes these records. Never deploy the publishing Worker first: an otherwise
 valid benchmark publication must not fail after staging because its durable
 tables are absent.
 
+Migration [../migrations/0015_catalog_model_expiration.sql](../migrations/0015_catalog_model_expiration.sql)
+adds the reviewed endpoint expiration calendar date to revisioned model offers.
+Apply it before deploying catalog-ingest code that retains `expiration_date` or
+Pages code that serves `/api/benchmarks/lifecycle`. The change is additive; a
+missing column is treated as an operational projection failure, never as a cold
+or empty lifecycle source.
+
 For Release 3, first apply the full migration sequence to the isolated local
 preview database and run the deterministic directory/profile gate:
 

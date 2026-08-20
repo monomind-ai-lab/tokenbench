@@ -5,7 +5,7 @@ import {
   type RankingData,
   type UiDataContractV1,
 } from "@tokenbench/frontend/preview-data/contracts";
-import { fixtureAdapter } from "@tokenbench/frontend/preview-data/fixture-adapter";
+import { createEvidencePreviewDataComposition } from "@tokenbench/frontend/preview-data/composition-evidence";
 
 import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
 
@@ -27,7 +27,9 @@ function safeErrorMessage(error: unknown): string {
 
 /**
  * This route deliberately submits the accepted custom-ranking request intact.
- * Its explicitly labelled local fixture is never used as a production fallback.
+ * Preview mode reads the retained accepted custom-ranking envelope that
+ * matches this query; it never substitutes an illustrative fixture for a
+ * missing production response.
  */
 export async function loadMakeItYoursRanking(): Promise<MakeItYoursRankingSnapshot> {
   const configuredMode = process.env.TOKENBENCH_UI_DATA_MODE;
@@ -44,7 +46,9 @@ export async function loadMakeItYoursRanking(): Promise<MakeItYoursRankingSnapsh
     try {
       return {
         mode: "evidence",
-        envelope: await fixtureAdapter.rankings(
+        envelope: await createEvidencePreviewDataComposition({
+          rankings: "mixed-source",
+        }).rankings(
           ACCEPTED_CUSTOM_RANKING_QUERY,
         ),
         error: null,

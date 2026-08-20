@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
 import { CompareWorkbenchPage } from "@/components/compare-workbench-page";
-import { catalogModels } from "@/lib/model-catalog";
+import { loadModelSurfaceComparison, loadModelSurfaceDirectory } from "@/lib/model-surface-data.server";
+import { parseSurfaceComparisonQuery, projectSurfaceComparison, projectSurfaceDirectory } from "@tokenbench/frontend/model-surface-projectors";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Compare AI Models",
@@ -12,13 +14,19 @@ export const metadata: Metadata = {
 
 export default async function ComparePage({ searchParams }: { searchParams: Promise<{ models?: string | string[] }> }) {
   const query = await searchParams;
-  const rawValue = Array.isArray(query.models) ? query.models[0] : query.models;
-  const raw = rawValue ?? "";
-  const requested = raw.split(",").map((value) => value.trim()).filter(Boolean);
-  const known = new Set(catalogModels.map((model) => model.id));
-  const normalized = Array.from(new Set(requested.filter((id) => known.has(id)))).slice(0, 4);
-  const canonical = normalized.join(",");
-  if (raw && raw !== canonical) redirect(canonical ? `/compare?models=${canonical}` : "/compare");
-  const models = normalized.map((id) => catalogModels.find((model) => model.id === id)).filter((model) => model !== undefined);
-  return <CompareWorkbenchPage models={models} />;
+  const comparisonQuery = parseSurfaceComparisonQuery(query.models);
+  const { requestedIds, valid: validRequest } = comparisonQuery;
+  const [directorySnapshot, comparisonSnapshot] = await Promise.all([
+    loadModelSurfaceDirectory(),
+    validRequest && requestedIds.length >= 2 ? loadModelSurfaceComparison(requestedIds) : Promise.resolve(null),
+  ]);
+  const directory = directorySnapshot.envelope === null ? null : projectSurfaceDirectory(directorySnapshot.envelope);
+  const comparison = comparisonSnapshot?.envelope === null || comparisonSnapshot === null
+    ? null
+    : projectSurfaceComparison(comparisonSnapshot.envelope, requestedIds);
+  const sources = new Map((directory?.provenance ?? []).map((source) => [source.id, source]));
+  for (const source of comparison?.provenance ?? []) sources.set(source.id, source);
+  const mode = comparison?.mode ?? directory?.mode ?? "published";
+  const status = comparison?.status ?? directory?.status ?? "unavailable";
+  return <CompareWorkbenchPage candidates={directory?.data ?? []} comparison={comparison?.data ?? null} mode={mode} requestedIds={requestedIds} sources={[...sources.values()]} status={status} validRequest={validRequest} />;
 }

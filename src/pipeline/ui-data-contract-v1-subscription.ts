@@ -163,8 +163,10 @@ interface SelectedPricing {
   readonly mix: SubscriptionMixItem;
   readonly pricingTierId: string | null;
   readonly inputRate: number;
-  readonly cacheReadRate: number;
-  readonly cacheWriteRate: number;
+  /** Null remains source-unknown and may only be used when its allocation is zero. */
+  readonly cacheReadRate: number | null;
+  /** Null remains source-unknown and may only be used when its allocation is zero. */
+  readonly cacheWriteRate: number | null;
   readonly outputRate: number;
 }
 
@@ -415,6 +417,12 @@ function evidenceRate(value: EvidenceValue<number>, label: string): number {
   return value.value;
 }
 
+function optionalEvidenceRate(value: EvidenceValue<number>, label: string): number | null {
+  if (value.availability === 'unavailable') return null;
+  if (!Number.isSafeInteger(value.value) || value.value < 0) failResponse('$', `${label} must be a non-negative safe integer`);
+  return value.value;
+}
+
 function evidenceContext(value: EvidenceValue<number>, label: string): number {
   if (value.availability !== 'available') failResponse('$', `${label} must be available for a calculation`);
   if (!Number.isSafeInteger(value.value) || value.value < 1) failResponse('$', `${label} must be a positive safe integer`);
@@ -502,8 +510,8 @@ function selectedPricing(request: SubscriptionCalculationRequest, facts: Subscri
       mix,
       pricingTierId: tier?.pricingTierId ?? null,
       inputRate: evidenceRate(rateSource.inputMicroDollarsPerMillion, `${mix.routeId} input price`),
-      cacheReadRate: evidenceRate(rateSource.cacheReadMicroDollarsPerMillion, `${mix.routeId} cache read price`),
-      cacheWriteRate: evidenceRate(rateSource.cacheWriteMicroDollarsPerMillion, `${mix.routeId} cache write price`),
+      cacheReadRate: optionalEvidenceRate(rateSource.cacheReadMicroDollarsPerMillion, `${mix.routeId} cache read price`),
+      cacheWriteRate: optionalEvidenceRate(rateSource.cacheWriteMicroDollarsPerMillion, `${mix.routeId} cache write price`),
       outputRate: evidenceRate(rateSource.outputMicroDollarsPerMillion, `${mix.routeId} output price`),
     };
   });
@@ -538,13 +546,19 @@ function priceDirectionalTokens(
   const lineItems: SubscriptionCostLineItem[] = [];
   for (const [index, price] of prices.entries()) {
     const [standardInput, cacheRead, cacheWrite] = allocateTokens(inputTokens[index], inputLineShares, 'cache input');
-    const definitions: ReadonlyArray<readonly [(typeof COST_LINE_ORDER)[number], number, number]> = [
+    const definitions: ReadonlyArray<readonly [(typeof COST_LINE_ORDER)[number], number, number | null]> = [
       ['standard_input', standardInput, price.inputRate],
       ['cache_read', cacheRead, price.cacheReadRate],
       ['cache_write', cacheWrite, price.cacheWriteRate],
       ['output', outputTokens[index], price.outputRate],
     ];
     for (const [kind, tokens, rateMicroDollarsPerMillion] of definitions) {
+      if (rateMicroDollarsPerMillion === null) {
+        if (tokens > 0) {
+          failResponse('$', `${price.mix.routeId} ${kind.replace('_', ' ')} price must be available when its allocation is positive`);
+        }
+        continue;
+      }
       lineItems.push({
         kind,
         modelSlug: price.mix.modelSlug,

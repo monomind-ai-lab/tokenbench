@@ -42,6 +42,7 @@ function sqliteD1() {
     '0010_ingestion_cycles.sql',
     '0011_catalog_publication_ownership.sql',
     '0012_benchmark_metric_rank_field_size.sql',
+    '0015_catalog_model_expiration.sql',
   ]) sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations', file), 'utf8'));
   const db = {
     prepare(sql: string) {
@@ -177,7 +178,12 @@ async function seedPreviousPublication(
 }
 
 const openRouterPayload = {
-  data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', pricing: { prompt: '0.0000025', completion: '0.00001' } }],
+  data: [{
+    id: 'openai/gpt-4o',
+    name: 'GPT-4o',
+    expiration_date: '2026-09-30',
+    pricing: { prompt: '0.0000025', completion: '0.00001' },
+  }],
 };
 const openCodeModelsPayload = { data: [{ id: 'opencode/zen', object: 'model', owned_by: 'opencode' }] };
 const openCodePricingHtml = `
@@ -279,6 +285,9 @@ describe('catalog production-cycle restart harness', () => {
     expect(finalRevision).not.toBe(priorCatalog.revision);
     expect(database.prepare('SELECT active_revision FROM catalog_publication_state WHERE singleton = 1').get())
       .toEqual({ active_revision: finalRevision });
+    expect(database.prepare(`SELECT expiration_date FROM model_offers
+      WHERE revision = ? AND model_id = 'openai/gpt-4o'`).get(finalRevision))
+      .toEqual({ expiration_date: '2026-09-30' });
     expect(database.prepare(`SELECT state, phase FROM ingestion_cycles
       WHERE scope = 'catalog' AND cycle_id = ?`).get(CYCLE_ID))
       .toEqual({ state: 'published', phase: 'receipt' });
