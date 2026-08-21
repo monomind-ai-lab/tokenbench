@@ -234,6 +234,11 @@ export function LeaderboardDetailPage({
     ?? snapshot.envelope?.reason
     ?? (sourceUnavailable ? definition.unavailableReason : null);
   const pricingOnly = definition.kind === "pricing";
+  const hasCostScorePairs = definition.kind !== "pricing"
+    && visibleRows.filter((row) => row.metric !== null && row.blendedUsdPerMillion !== null).length >= 2;
+  const hasSeparateCostScoreSection = hasCostScorePairs && definition.kind !== "value";
+  const filterSectionNumber = definition.kind === "value" || hasSeparateCostScoreSection ? "03" : "02";
+  const resultSectionNumber = definition.kind === "value" || hasSeparateCostScoreSection ? "04" : "03";
   const metricLabel = visibleRows.find((row) => row.metric !== null)?.metricLabel ?? route.seo.h1;
 
   useEffect(() => {
@@ -285,6 +290,15 @@ export function LeaderboardDetailPage({
         </div>
       </section>
 
+      {snapshot.envelope?.status === "partial" && snapshot.envelope.reason ? (
+        <div className="border-b border-border bg-muted/25 px-5 py-4 sm:px-8 lg:px-10" role="status">
+          <p className="mx-auto flex max-w-7xl items-start gap-2 text-sm leading-6 text-muted-foreground">
+            <CircleAlert aria-hidden="true" className="mt-1 size-4 shrink-0 text-primary" />
+            <span><strong className="font-medium text-foreground">Last valid published revision.</strong> {snapshot.envelope.reason}</span>
+          </p>
+        </div>
+      ) : null}
+
       {!sourceUnavailable && definition.kind !== "pricing" ? (
         <section aria-labelledby="score-chart-heading" className="px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
           <div className="mx-auto max-w-7xl">
@@ -301,6 +315,17 @@ export function LeaderboardDetailPage({
         </section>
       ) : null}
 
+      {!sourceUnavailable && hasSeparateCostScoreSection ? (
+        <section aria-labelledby="cost-score-chart-heading" className="border-y border-border bg-muted/25 px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
+          <div className="mx-auto max-w-7xl">
+            <p className="font-mono text-xs text-muted-foreground">02 / SCORE AND ROUTE COST</p>
+            <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="cost-score-chart-heading">Cost versus {metricLabel.toLocaleLowerCase()}</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Only models with both a published score for this lens and an exact selected-route price are plotted. Missing values remain omitted.</p>
+            <Card className="mt-7"><CardContent className="pt-2"><LeaderboardCostScoreChart label={metricLabel} rows={visibleRows} /></CardContent></Card>
+          </div>
+        </section>
+      ) : null}
+
       {!sourceUnavailable && pricingOnly ? (
         <section aria-labelledby="price-chart-heading" className="px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
           <div className="mx-auto max-w-7xl"><p className="font-mono text-xs text-muted-foreground">01 / ROUTE ECONOMICS</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="price-chart-heading">Selected-route price comparison</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Prices use the active workload mix and remain tied to the selected provider route.</p><Card className="mt-7"><CardContent className="pt-2"><LeaderboardPriceChart rows={visibleRows} /></CardContent></Card></div>
@@ -309,7 +334,7 @@ export function LeaderboardDetailPage({
 
       <section aria-labelledby="leaderboard-filters-heading" className="border-y border-border bg-muted/25 px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
         <div className="mx-auto max-w-7xl">
-          <div className="grid gap-6 md:grid-cols-[.7fr_1.3fr] md:items-end"><div><p className="font-mono text-xs text-muted-foreground">{definition.kind === "value" ? "03" : "02"} / FILTER AND SORT</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="leaderboard-filters-heading">Review the published revision</h2></div><p className="max-w-2xl text-sm leading-6 text-muted-foreground md:justify-self-end">Filters change the visible result only. They do not rewrite the source metric, reconstruct missing positions, or substitute another benchmark.</p></div>
+          <div className="grid gap-6 md:grid-cols-[.7fr_1.3fr] md:items-end"><div><p className="font-mono text-xs text-muted-foreground">{filterSectionNumber} / FILTER AND SORT</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="leaderboard-filters-heading">Review the published revision</h2></div><p className="max-w-2xl text-sm leading-6 text-muted-foreground md:justify-self-end">Filters change the visible result only. They do not rewrite the source metric, reconstruct missing positions, or substitute another benchmark.</p></div>
           <form aria-label="Leaderboard filters" className="mt-7 grid gap-3 rounded-2xl border border-border bg-card p-4 md:grid-cols-2 xl:grid-cols-[1.35fr_1fr_1fr_1fr_auto] xl:items-end" onSubmit={(event) => event.preventDefault()}>
             <label className="space-y-1.5 text-xs text-muted-foreground" htmlFor="leaderboard-search">Search model or provider<Input className="mt-1.5 h-11" id="leaderboard-search" onChange={(event) => update("search", event.target.value)} placeholder="Model, provider, or route" type="search" value={filters.search} /></label>
             <label className="space-y-1.5 text-xs text-muted-foreground" htmlFor="leaderboard-provider">Provider<select className="mt-1.5 block h-11 w-full rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" id="leaderboard-provider" onChange={(event) => update("provider", event.target.value)} value={filters.provider}><option value="all">All providers</option>{providers.map((provider) => <option key={provider} value={provider}>{provider}</option>)}</select></label>
@@ -323,7 +348,7 @@ export function LeaderboardDetailPage({
 
       <section aria-labelledby="leaderboard-results-heading" className="px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs text-muted-foreground">{definition.kind === "value" ? "04" : "03"} / RESULT FIELD</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="leaderboard-results-heading">{route.seo.h1} results</h2><p aria-live="polite" className="mt-2 text-sm text-muted-foreground"><span className="font-mono text-foreground">{visibleRows.length}</span>{rows.length > visibleRows.length ? <> of <span className="font-mono text-foreground">{rows.length}</span></> : null} published {visibleRows.length === 1 ? "row" : "rows"} shown</p></div><ViewModeToggle mode={filters.view} onChange={(view) => update("view", view)} /></div>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs text-muted-foreground">{resultSectionNumber} / RESULT FIELD</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="leaderboard-results-heading">{route.seo.h1} results</h2><p aria-live="polite" className="mt-2 text-sm text-muted-foreground"><span className="font-mono text-foreground">{visibleRows.length}</span>{rows.length > visibleRows.length ? <> of <span className="font-mono text-foreground">{rows.length}</span></> : null} published {visibleRows.length === 1 ? "row" : "rows"} shown</p></div><ViewModeToggle mode={filters.view} onChange={(view) => update("view", view)} /></div>
           <div className="mt-7" id="leaderboard-results">
             {sourceUnavailable ? <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-border bg-card/50 p-8 text-center" role="status"><div className="max-w-xl"><DatabaseZap className="mx-auto size-7 text-muted-foreground" /><h3 className="mt-4 text-lg font-medium">Verified source projection unavailable</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{unavailableReason}</p><p className="mt-4 text-xs leading-5 text-muted-foreground">This route remains published so its methodology, query semantics, exports, and future data boundary are stable. TokenBench does not fill it with another source&apos;s scores.</p></div></div> : null}
             {!sourceUnavailable && rows.length === 0 ? <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-border text-center"><div><CircleAlert className="mx-auto size-6 text-muted-foreground" /><h3 className="mt-3 font-medium">No published rows match these filters</h3><p className="mt-1 text-sm text-muted-foreground">Broaden the query or reset the visible result field.</p><Button className="mt-4 min-h-11" onClick={reset} variant="outline"><RotateCcw />Reset filters</Button></div></div> : null}

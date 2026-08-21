@@ -150,7 +150,7 @@ export function LeaderboardsDirectoryPage() {
             <p className="mt-7 max-w-2xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">Fourteen methodology-specific leaderboards keep capability, preference, value, price, context, and media evidence in their own measured frames.</p>
             <div className="mt-9 flex flex-wrap gap-3">
               <Button className="min-h-11 rounded-full" nativeButton={false} render={<Link href="#language-systems" />} size="lg">Browse every lens<ArrowRight /></Button>
-              <Button className="min-h-11 rounded-full" disabled size="lg" variant="outline">Custom ranking rebuild in progress</Button>
+              <Button className="min-h-11 rounded-full" nativeButton={false} render={<Link href="/make-it-yours/" />} size="lg" variant="outline">Build a custom ranking<SlidersHorizontal /></Button>
             </div>
           </div>
           <div className="self-end overflow-hidden rounded-2xl border border-border bg-card/90 shadow-soft">
@@ -173,6 +173,17 @@ export function LeaderboardsDirectoryPage() {
                 );
               })}
             </nav>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="featured-workbenches-heading" className="border-b border-border px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
+        <div className="mx-auto max-w-7xl">
+          <p className="font-mono text-xs uppercase tracking-[.16em] text-brand-secondary">Decision-ready workbenches</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight" id="featured-workbenches-heading">Start from published order—or submit your own priorities.</h2>
+          <div className="mt-8 grid gap-4 md:grid-cols-2">
+            <Link className="group rounded-2xl border border-primary/35 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_10%,var(--card)),var(--card))] p-6 transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="/popular-models/"><span className="flex items-center justify-between gap-4"><Badge variant="secondary">Published order</Badge><ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" /></span><h3 className="mt-7 text-xl font-semibold">Popular Models</h3><p className="mt-3 text-sm leading-6 text-muted-foreground">Inspect the source-published master table, category winners, evaluation economics, and a two-to-four-model decision set.</p></Link>
+            <Link className="group rounded-2xl border border-primary/35 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--brand-secondary)_10%,var(--card)),var(--card))] p-6 transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href="/make-it-yours/"><span className="flex items-center justify-between gap-4"><Badge variant="secondary">Submitted matrix</Badge><ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" /></span><h3 className="mt-7 text-xl font-semibold">Make It Yours</h3><p className="mt-3 text-sm leading-6 text-muted-foreground">Apply exact capability weights, provider/access filters, and supported service-level thresholds without rewriting source facts.</p></Link>
           </div>
         </div>
       </section>
@@ -216,7 +227,7 @@ export function LeaderboardsDirectoryPage() {
             <SlidersHorizontal className="size-5 text-muted-foreground" />
             <h2 className="mt-5 text-2xl font-semibold">Re-rank with your own priorities.</h2>
             <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">Submit the exact six-weight and filter matrix when a generic leaderboard cannot represent your workload. The shared link keeps that decision reproducible.</p>
-            <Button className="mt-6 min-h-11 rounded-full" disabled>Custom ranking rebuild in progress<ChartNoAxesCombined /></Button>
+            <Button className="mt-6 min-h-11 rounded-full" nativeButton={false} render={<Link href="/make-it-yours/" />}>Build a custom ranking<ChartNoAxesCombined /></Button>
           </div>
         </div>
       </section>

@@ -1,15 +1,15 @@
 "use client";
 
-import { ArrowRight, BookOpen, FlaskConical, Search } from "lucide-react";
+import { ArrowRight, BookOpen, FlaskConical, RotateCcw, Search } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { prototypeInsights, publishedArticles } from "@/lib/articles";
 
 type Channel = "all" | "guides" | "insights" | "news";
+type ArticleSort = "newest" | "oldest" | "title" | "shortest";
 
 const channels: ReadonlyArray<{ value: Channel; label: string; count: number }> = [
   { value: "all", label: "All", count: publishedArticles.length + prototypeInsights.length },
@@ -20,12 +20,26 @@ const channels: ReadonlyArray<{ value: Channel; label: string; count: number }> 
 
 const topics = ["All topics", "Routing", "Usage", "Cost", "Access", "Evidence"];
 
-export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel }) {
-  const router = useRouter();
+function readMinutes(value: string): number {
+  const minutes = Number.parseInt(value, 10);
+  return Number.isFinite(minutes) ? minutes : Number.POSITIVE_INFINITY;
+}
+
+export function ArticlesIndexPage({
+  initialChannel,
+  initialQuery,
+  initialSort,
+  initialTopic,
+}: {
+  initialChannel: Channel;
+  initialQuery: string;
+  initialSort: ArticleSort;
+  initialTopic: string;
+}) {
   const [channel, setChannel] = useState<Channel>(initialChannel);
-  const [query, setQuery] = useState("");
-  const [topic, setTopic] = useState("All topics");
-  const [sort, setSort] = useState<"newest" | "oldest" | "title">("newest");
+  const [query, setQuery] = useState(initialQuery);
+  const [topic, setTopic] = useState(initialTopic);
+  const [sort, setSort] = useState<ArticleSort>(initialSort);
 
   const entries = useMemo(
     () =>
@@ -36,7 +50,9 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
           `${entry.title} ${entry.dek} ${entry.topic}`.toLowerCase().includes(query.toLowerCase()),
         )
         .toSorted((a, b) =>
-          sort === "title"
+          sort === "shortest"
+            ? readMinutes(a.readTime) - readMinutes(b.readTime) || a.title.localeCompare(b.title)
+            : sort === "title"
             ? a.title.localeCompare(b.title)
             : sort === "oldest"
               ? a.date.localeCompare(b.date)
@@ -45,9 +61,38 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
     [channel, query, sort, topic],
   );
 
-  const selectChannel = (next: Channel) => {
-    setChannel(next);
-    router.replace(next === "all" ? "/articles/" : `/articles/?channel=${next}`, { scroll: false });
+  useEffect(() => {
+    const parameters = new URLSearchParams();
+    if (channel !== "all") parameters.set("channel", channel);
+    if (topic !== "All topics") parameters.set("topic", topic);
+    if (query.trim()) parameters.set("search", query.trim());
+    if (sort !== "newest") parameters.set("sort", sort);
+    const next = `/articles/${parameters.size ? `?${parameters}` : ""}${window.location.hash}`;
+    if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== next)
+      window.history.replaceState(window.history.state, "", next);
+  }, [channel, query, sort, topic]);
+
+  useEffect(() => {
+    const restore = () => {
+      const parameters = new URLSearchParams(window.location.search);
+      const nextChannel = parameters.get("channel");
+      const nextTopic = parameters.get("topic");
+      const nextSort = parameters.get("sort");
+      setChannel(nextChannel === "guides" || nextChannel === "insights" || nextChannel === "news" ? nextChannel : "all");
+      setTopic(topics.includes(nextTopic ?? "") ? nextTopic! : "All topics");
+      setQuery(parameters.get("search") ?? "");
+      setSort(nextSort === "oldest" || nextSort === "title" || nextSort === "shortest" ? nextSort : "newest");
+    };
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+
+  const filtered = channel !== "all" || topic !== "All topics" || query.trim().length > 0 || sort !== "newest";
+  const clearFilters = () => {
+    setChannel("all");
+    setTopic("All topics");
+    setQuery("");
+    setSort("newest");
   };
 
   return (
@@ -78,7 +123,7 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
                       : "border-border bg-card text-muted-foreground hover:border-primary/35 hover:bg-accent hover:text-foreground"
                   }`}
                   key={value}
-                  onClick={() => selectChannel(value)}
+                  onClick={() => setChannel(value)}
                   type="button"
                 >
                   <span>{label}</span>
@@ -138,14 +183,23 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
                   <option value="newest">Newest first</option>
                   <option value="oldest">Oldest first</option>
                   <option value="title">Title A–Z</option>
+                  <option value="shortest">Shortest read</option>
                 </select>
               </label>
             </div>
           </section>
 
-          <p aria-live="polite" className="mt-5 text-sm text-muted-foreground">
-            <span className="font-mono text-foreground tabular-nums">{entries.length}</span> articles shown
-          </p>
+          <div className="mt-5 flex min-h-11 flex-wrap items-center justify-between gap-3">
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              <span className="font-mono text-foreground tabular-nums">{entries.length}</span> articles shown
+            </p>
+            {filtered ? (
+              <button className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm font-medium text-link hover:bg-muted hover:underline" onClick={clearFilters} type="button">
+                <RotateCcw className="size-4" />
+                Clear all filters
+              </button>
+            ) : null}
+          </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {entries.map((entry) => {

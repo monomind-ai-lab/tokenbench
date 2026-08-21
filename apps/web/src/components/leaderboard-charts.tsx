@@ -166,7 +166,13 @@ export function LeaderboardScoreChart({ rows, label }: { rows: readonly Leaderbo
   return <div aria-label={`${label} by model`} className="h-[330px] w-full" role="img"><Bar data={data} options={options} /><p className="sr-only">Published {label.toLocaleLowerCase()} for {visibleRows.length} models. Unavailable measurements are omitted rather than plotted as zero.</p></div>;
 }
 
-export function LeaderboardCostScoreChart({ rows }: { rows: readonly LeaderboardDisplayRow[] }) {
+export function LeaderboardCostScoreChart({
+  label = "Published score",
+  rows,
+}: {
+  label?: string;
+  rows: readonly LeaderboardDisplayRow[];
+}) {
   const theme = useLeaderboardChartTheme();
   const visibleRows = rows.filter((row) => row.metric !== null && row.blendedUsdPerMillion !== null);
   const data = useMemo(() => ({
@@ -192,7 +198,7 @@ export function LeaderboardCostScoreChart({ rows }: { rows: readonly Leaderboard
             const score = context.parsed.y === null
               ? "Unavailable"
               : formatDisplayNumber(context.parsed.y);
-            return `${price} · score ${score}`;
+            return `${price} · ${label.toLocaleLowerCase()} ${score}`;
           },
           afterLabel: (context) => (context.raw as { frontier?: boolean }).frontier ? "Value frontier" : "",
         },
@@ -203,11 +209,11 @@ export function LeaderboardCostScoreChart({ rows }: { rows: readonly Leaderboard
     },
     scales: {
       x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) }, title: { color: theme.muted, display: true, text: "Blended route price / 1M tokens" } },
-      y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted }, title: { color: theme.muted, display: true, text: "Published overall score" } },
+      y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted }, title: { color: theme.muted, display: true, text: label } },
     },
-  }), [theme]);
+  }), [label, theme]);
   if (visibleRows.length < 2) return null;
-  return <div aria-label="Cost versus published score" className="h-[360px] w-full" role="img"><Scatter data={data} options={options} /><p className="sr-only">Published overall score plotted against selected-route blended price. Value-frontier points are larger diamonds and are also labelled in the chart legend and tooltip.</p></div>;
+  return <div aria-label={`Cost versus ${label.toLocaleLowerCase()}`} className="h-[360px] w-full" role="img"><Scatter data={data} options={options} /><p className="sr-only">{label} plotted against selected-route blended price. Value-frontier points are larger diamonds and are also labelled in the chart legend and tooltip.</p></div>;
 }
 
 export function LeaderboardPriceChart({ rows }: { rows: readonly LeaderboardDisplayRow[] }) {

@@ -1,8 +1,19 @@
 "use client";
 
+import {
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LineElement,
+  PointElement,
+  RadialLinearScale,
+  Tooltip,
+  type ChartOptions,
+} from "chart.js";
 import { ArrowRight, Check, ChevronRight, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Radar } from "react-chartjs-2";
 
 import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 
@@ -13,6 +24,8 @@ import type { HomeModel, HomePageData, HomeRankingRow } from "@/lib/home-project
 import { cn } from "@/lib/utils";
 
 type FilterName = "all" | "open" | "latency" | "throughput";
+
+ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
 const RESEARCH = [
   { href: "/articles/hybrid-router/", label: "Architecture", title: "A hybrid router for high-stakes agentic work", copy: "Reserve expensive capability for the requests that need it while keeping routine work observable and reversible.", meta: "9 min read · Aug 2026" },
@@ -157,6 +170,76 @@ function ModelWorkbenchPreview({ data }: { data: HomePageData }) {
   );
 }
 
+type HomeChartTheme = Readonly<{
+  accent: string;
+  accentFill: string;
+  grid: string;
+  muted: string;
+  reducedMotion: boolean;
+  strong: string;
+  tooltip: string;
+  tooltipBorder: string;
+}>;
+
+function fallbackHomeChartTheme(dark: boolean, reducedMotion: boolean): HomeChartTheme {
+  const accent = dark ? "#9dabff" : "#1111ff";
+  return dark ? {
+    accent,
+    accentFill: "rgba(157,171,255,.18)",
+    grid: "rgba(255,255,255,.12)",
+    muted: "#a1a1aa",
+    reducedMotion,
+    strong: "#fafafa",
+    tooltip: "#18181b",
+    tooltipBorder: accent,
+  } : {
+    accent,
+    accentFill: "rgba(17,17,255,.14)",
+    grid: "rgba(0,0,0,.12)",
+    muted: "#71717a",
+    reducedMotion,
+    strong: "#18181b",
+    tooltip: "#ffffff",
+    tooltipBorder: accent,
+  };
+}
+
+function useHomeChartTheme(): HomeChartTheme {
+  const [theme, setTheme] = useState<HomeChartTheme>(() => fallbackHomeChartTheme(false, false));
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => {
+      const fallback = fallbackHomeChartTheme(root.classList.contains("dark"), motion.matches);
+      const styles = window.getComputedStyle(root);
+      const color = (token: string, value: string) => styles.getPropertyValue(token).trim() || value;
+      setTheme({
+        ...fallback,
+        accent: color("--primary", fallback.accent),
+        grid: color("--border", fallback.grid),
+        muted: color("--muted-foreground", fallback.muted),
+        strong: color("--foreground", fallback.strong),
+        tooltip: color("--popover", fallback.tooltip),
+      });
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(root, { attributes: true, attributeFilter: ["class", "data-theme"] });
+    motion.addEventListener("change", sync);
+    return () => {
+      observer.disconnect();
+      motion.removeEventListener("change", sync);
+    };
+  }, []);
+
+  return theme;
+}
+
+function translucentHomeModelColor(color: string): string {
+  return color.startsWith("hsl(") && color.endsWith(")") ? `${color.slice(0, -1)} / 0.14)` : color;
+}
+
 function ComparisonRadar({ models }: { models: readonly HomeModel[] }) {
   const axes = useMemo(() => {
     const first = models[0]?.radar ?? [];
@@ -165,6 +248,52 @@ function ComparisonRadar({ models }: { models: readonly HomeModel[] }) {
       return values.every((value): value is number => value !== null) ? [{ label: axis.label, values }] : [];
     });
   }, [models]);
+  const theme = useHomeChartTheme();
+  const data = useMemo(() => ({
+    labels: axes.map((axis) => axis.label),
+    datasets: models.map((model, modelIndex) => ({
+      label: unavailable(model.name),
+      data: axes.map((axis) => axis.values[modelIndex] ?? null),
+      borderColor: modelIndex === 0 ? theme.accent : model.color,
+      backgroundColor: modelIndex === 0 ? theme.accentFill : translucentHomeModelColor(model.color),
+      borderWidth: modelIndex === 0 ? 3 : 2,
+      pointBackgroundColor: modelIndex === 0 ? theme.accent : model.color,
+      pointRadius: modelIndex === 0 ? 4 : 3,
+      pointStyle: modelIndex === 0 ? "rectRot" as const : "circle" as const,
+      spanGaps: false,
+    })),
+  }), [axes, models, theme.accent, theme.accentFill]);
+  const options = useMemo<ChartOptions<"radar">>(() => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: theme.reducedMotion ? false : { duration: 400 },
+    plugins: {
+      legend: {
+        position: "bottom",
+        labels: { color: theme.muted, padding: 16, pointStyle: "circle", usePointStyle: true },
+      },
+      tooltip: {
+        backgroundColor: theme.tooltip,
+        borderColor: theme.tooltipBorder,
+        borderWidth: 1,
+        bodyColor: theme.muted,
+        titleColor: theme.strong,
+        callbacks: { label: (context) => `${context.dataset.label}: ${formatScore(context.parsed.r)}` },
+      },
+    },
+    scales: {
+      r: {
+        beginAtZero: true,
+        max: 100,
+        min: 0,
+        angleLines: { color: theme.grid },
+        grid: { color: theme.grid },
+        pointLabels: { color: theme.muted, font: { size: 11 } },
+        ticks: { display: false },
+      },
+    },
+  }), [theme]);
+  const description = models.map((model, modelIndex) => `${unavailable(model.name)}: ${axes.map((axis) => `${axis.label} ${formatScore(axis.values[modelIndex])}`).join(", ")}`).join(". ");
 
   if (models.length < 2 || axes.length === 0) {
     return <EmptyState>Capability overlay is unavailable until two compared models provide matching accepted axes.</EmptyState>;
@@ -192,34 +321,15 @@ function ComparisonRadar({ models }: { models: readonly HomeModel[] }) {
             })}
           </section>
         ))}
-        <p className="sr-only">{models.map((model, modelIndex) => `${unavailable(model.name)}: ${axes.map((axis) => `${axis.label} ${formatScore(axis.values[modelIndex])}`).join(", ")}`).join(". ")}</p>
+        <p className="sr-only">{description}</p>
       </div>
     );
   }
 
-  const center = 160;
-  const radius = 112;
-  const point = (axis: number, value: number) => {
-    const angle = (Math.PI * 2 * axis) / axes.length - Math.PI / 2;
-    const scaled = radius * Math.max(0, Math.min(100, value)) / 100;
-    return `${center + Math.cos(angle) * scaled},${center + Math.sin(angle) * scaled}`;
-  };
-  const grid = (value: number) => axes.map((_, index) => point(index, value)).join(" ");
-  const description = models.map((model, modelIndex) => `${unavailable(model.name)}: ${axes.map((axis) => `${axis.label} ${formatScore(axis.values[modelIndex])}`).join(", ")}`).join(". ");
-
   return (
-    <div className="h-[340px] w-full" role="img" aria-label="Capability comparison overlay">
-      <svg className="h-full w-full" viewBox="0 0 320 320">
-        {[20, 40, 60, 80, 100].map((value) => <polygon fill="none" key={value} points={grid(value)} stroke="currentColor" strokeOpacity="0.14" strokeWidth="1" />)}
-        {axes.map((axis, index) => {
-          const angle = (Math.PI * 2 * index) / axes.length - Math.PI / 2;
-          const labelX = center + Math.cos(angle) * (radius + 28);
-          const labelY = center + Math.sin(angle) * (radius + 28);
-          return <g key={axis.label}><line stroke="currentColor" strokeOpacity="0.14" x1={center} x2={center + Math.cos(angle) * radius} y1={center} y2={center + Math.sin(angle) * radius} /><text fill="currentColor" fontSize="9" opacity="0.68" textAnchor="middle" x={labelX} y={labelY}>{axis.label}</text></g>;
-        })}
-        {models.map((model, modelIndex) => <polygon fill={model.color} fillOpacity="0.12" key={model.id} points={axes.map((axis, index) => point(index, axis.values[modelIndex])).join(" ")} stroke={model.color} strokeWidth="2" />)}
-      </svg>
-      <p className="sr-only">{description}</p>
+    <div aria-describedby="home-comparison-radar-description" aria-label="Capability comparison overlay" className="h-[380px] w-full" role="img">
+      <Radar aria-hidden="true" data={data} id="home-comparison-radar" options={options} />
+      <p className="sr-only" id="home-comparison-radar-description">{description}. Missing source axes remain unavailable rather than being estimated as zero.</p>
     </div>
   );
 }

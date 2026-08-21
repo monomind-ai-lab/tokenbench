@@ -5,6 +5,8 @@ import {
   ChevronRight,
   CircleAlert,
   GitCompareArrows,
+  LayoutGrid,
+  List,
   Plus,
   Search,
 } from "lucide-react";
@@ -23,6 +25,7 @@ import { formatDisplayNumber } from "@tokenbench/frontend/display-format";
 import {
   PopularModelsAggregateCostRankingChart,
   PopularModelsAggregateQualityCostChart,
+  PopularModelsComparisonRadar,
   PopularModelsComparisonEconomicsChart,
   popularProviderColor,
 } from "@/components/popular-models-charts";
@@ -73,6 +76,7 @@ interface InitialControls {
   readonly showProviders: boolean;
   readonly sortDirection: PopularModelsSortDirectionV1;
   readonly sortKey: PopularModelsSortKeyV1;
+  readonly viewMode: "cards" | "list";
 }
 
 function firstParameter(
@@ -156,6 +160,7 @@ function controlsFromParameters(
           ? "desc"
           : popularModelsDefaultSortDirection(sortKey),
     sortKey,
+    viewMode: firstParameter(parameters.view) === "cards" ? "cards" : "list",
   };
 }
 
@@ -242,7 +247,7 @@ function ModelLink({ model }: { model: PopularModelV1 }) {
   return (
     <Link
       className="block truncate font-medium transition-colors hover:text-primary hover:underline"
-      href={`/model-profile?model=${encodeURIComponent(model.id)}`}
+      href={`/model-profile?model=${encodeURIComponent(model.slug)}`}
     >
       {modelName(model)}
     </Link>
@@ -883,8 +888,10 @@ function ModelTable({
 }
 
 function ModelCards({
+  className = "grid gap-3 md:hidden",
   props,
 }: {
+  className?: string;
   props: Omit<TableProps, "onSort" | "sortDirection" | "sortKey">;
 }) {
   const {
@@ -898,7 +905,7 @@ function ModelCards({
     winnerIdsByColumn,
   } = props;
   return (
-    <div className="grid gap-3 md:hidden">
+    <div className={className}>
       {models.map((model, index) => {
         const expanded = expandedIds.has(model.id);
         const evidenceId = `popular-model-mobile-evidence-${model.id}`;
@@ -1289,24 +1296,6 @@ function ComparisonPicker({
   );
 }
 
-function comparisonRadarPoints(
-  model: PopularModelV1,
-  categories: readonly PopularModelsCategoryV1[],
-): string | null {
-  if (categories.length < 3) return null;
-  const values = categories.map((category) =>
-    popularModelsMetricValue(model, category.key),
-  );
-  if (values.some((value) => value === null)) return null;
-  return values
-    .map((value, index) => {
-      const angle = (Math.PI * 2 * index) / categories.length - Math.PI / 2;
-      const radius = 16 + (value! / 100) * 76;
-      return `${100 + Math.cos(angle) * radius},${100 + Math.sin(angle) * radius}`;
-    })
-    .join(" ");
-}
-
 function MatrixValue({ children }: { children: ReactNode }) {
   return <td className="py-2 pr-4 font-mono text-xs last:pr-0">{children}</td>;
 }
@@ -1318,10 +1307,6 @@ function ComparisonMatrices({
   categories: readonly PopularModelsCategoryV1[];
   models: readonly PopularModelV1[];
 }) {
-  const plottedModels = models.flatMap((model) => {
-    const points = comparisonRadarPoints(model, categories);
-    return points === null ? [] : [{ model, points }];
-  });
   const modelHeadings = (
     <>
       {models.map((model) => (
@@ -1360,68 +1345,7 @@ function ComparisonMatrices({
             ))}
           </div>
         </div>
-        {categories.length < 3 ? (
-          <p className="mt-4 text-sm text-muted-foreground">
-            Unavailable: fewer than three benchmark categories are published.
-          </p>
-        ) : (
-          <div className="mt-3 grid min-w-0 gap-4 sm:grid-cols-[220px_minmax(0,1fr)]">
-            <svg
-              aria-label="Comparison radar of benchmark capability categories"
-              className="mx-auto size-[220px]"
-              role="img"
-              viewBox="0 0 200 200"
-            >
-              <title>Comparison radar of benchmark capability categories</title>
-              {categories.map((category, index) => {
-                const angle =
-                  (Math.PI * 2 * index) / categories.length - Math.PI / 2;
-                return (
-                  <line
-                    key={category.key}
-                    stroke="currentColor"
-                    strokeOpacity=".2"
-                    x1="100"
-                    x2={100 + Math.cos(angle) * 92}
-                    y1="100"
-                    y2={100 + Math.sin(angle) * 92}
-                  />
-                );
-              })}
-              <circle
-                cx="100"
-                cy="100"
-                fill="none"
-                r="92"
-                stroke="currentColor"
-                strokeOpacity=".2"
-              />
-              {plottedModels.map(({ model, points }) => (
-                <polygon
-                  fill={popularProviderColor(model.provider)}
-                  fillOpacity=".14"
-                  key={model.id}
-                  points={points}
-                  stroke={popularProviderColor(model.provider)}
-                  strokeWidth="2"
-                />
-              ))}
-            </svg>
-            <div className="min-w-0 text-xs leading-5 text-muted-foreground">
-              <p>
-                {plottedModels.length} of {models.length} selected models have
-                complete values across all {categories.length} benchmark
-                categories.
-              </p>
-              {plottedModels.length !== models.length ? (
-                <p className="mt-2">
-                  The capability matrix retains every exact axis value and its
-                  unavailable state.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        )}
+        <PopularModelsComparisonRadar categories={categories} models={models} />
       </section>
       <section
         className="min-w-0 max-w-full rounded-xl border border-border bg-muted/20 p-4"
@@ -1807,6 +1731,7 @@ export function PopularModelsPage({
   );
   const [sortDirection, setSortDirection] =
     useState<PopularModelsSortDirectionV1>(initial.sortDirection);
+  const [viewMode, setViewMode] = useState<"cards" | "list">(initial.viewMode);
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(() =>
     comparisonIdsFromParameters(viewModel.models, initialParameters),
   );
@@ -1876,7 +1801,9 @@ export function PopularModelsPage({
       ),
     [viewModel.models],
   );
-  const comparisonIds = selectedModels.map((model) => model.id);
+  const comparisonIds = selectedModels.flatMap((model) =>
+    model.slug === null ? [] : [model.slug],
+  );
   const actionRows = csvRows(visibleModels, viewModel, metricColumns);
   const insightCategoryLabel = categoryLabel(viewModel, insightCategoryKey);
   const canRemoveComparison = selectedIds.length > 2;
@@ -1894,6 +1821,7 @@ export function PopularModelsPage({
     if (sortKey !== "overall") parameters.set("sort", sortKey);
     if (sortDirection !== popularModelsDefaultSortDirection(sortKey))
       parameters.set("direction", sortDirection);
+    if (viewMode === "cards") parameters.set("view", "cards");
     if (comparisonIds.length) parameters.set("models", comparisonIds.join(","));
     const nextUrl = `${window.location.pathname}${parameters.size ? `?${parameters}` : ""}${window.location.hash}`;
     if (
@@ -1911,6 +1839,7 @@ export function PopularModelsPage({
     showProviders,
     sortDirection,
     sortKey,
+    viewMode,
   ]);
   useEffect(() => {
     const onPopState = () => {
@@ -1926,6 +1855,7 @@ export function PopularModelsPage({
       setInsightCategoryKey(parsed.insightCategoryKey);
       setSortKey(parsed.sortKey);
       setSortDirection(parsed.sortDirection);
+      setViewMode(parsed.viewMode);
       setSelectedIds(
         comparisonIdsFromParameters(
           viewModel.models,
@@ -1978,6 +1908,7 @@ export function PopularModelsPage({
     selectCategory(null);
     setInsightCategoryKey(null);
     setExpandedIds(new Set());
+    setViewMode("list");
   };
   const compareHref = `/compare?models=${comparisonIds.map((id) => encodeURIComponent(id)).join(",")}`;
   const sharedTableProps = {
@@ -2157,15 +2088,18 @@ export function PopularModelsPage({
                 ))}
               </div>
             </div>
-            <div
-              aria-live="polite"
-              className="mt-3 text-sm text-muted-foreground"
-            >
-              <span className="font-mono text-foreground">{visibleModels.length}</span>{" "}
-              of {viewModel.models.length} published rows ·{" "}
-              <span className="font-medium text-foreground">
-                {sortDirection === "asc" ? "ascending" : "descending"}
-              </span>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+              <div aria-live="polite" className="text-sm text-muted-foreground">
+                <span className="font-mono text-foreground">{visibleModels.length}</span>{" "}
+                of {viewModel.models.length} published rows ·{" "}
+                <span className="font-medium text-foreground">
+                  {sortDirection === "asc" ? "ascending" : "descending"}
+                </span>
+              </div>
+              <div aria-label="Leaderboard view" className="inline-flex rounded-lg border border-border bg-card p-1" role="group">
+                <Button aria-pressed={viewMode === "cards"} className="min-h-9" onClick={() => setViewMode("cards")} size="sm" type="button" variant={viewMode === "cards" ? "secondary" : "ghost"}><LayoutGrid />Cards</Button>
+                <Button aria-pressed={viewMode === "list"} className="min-h-9" onClick={() => setViewMode("list")} size="sm" type="button" variant={viewMode === "list" ? "secondary" : "ghost"}><List />List</Button>
+              </div>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted-foreground">
               A star marks one of the five highest published values; a down
@@ -2208,13 +2142,18 @@ export function PopularModelsPage({
             </div>
           ) : (
             <div className="mt-7">
-              <ModelTable
-                {...sharedTableProps}
-                onSort={selectSort}
-                sortDirection={sortDirection}
-                sortKey={sortKey}
+              {viewMode === "list" ? (
+                <ModelTable
+                  {...sharedTableProps}
+                  onSort={selectSort}
+                  sortDirection={sortDirection}
+                  sortKey={sortKey}
+                />
+              ) : null}
+              <ModelCards
+                className={viewMode === "cards" ? "grid gap-3 md:grid-cols-2 xl:grid-cols-3" : "grid gap-3 md:hidden"}
+                props={sharedTableProps}
               />
-              <ModelCards props={sharedTableProps} />
             </div>
           )}
         </div>
@@ -2406,7 +2345,7 @@ export function PopularModelsPage({
                           <Link
                             aria-label={`More details for ${modelName(model)}`}
                             className="text-xs text-primary hover:underline"
-                            href={`/model-profile?model=${encodeURIComponent(model.id)}`}
+                            href={`/model-profile?model=${encodeURIComponent(model.slug)}`}
                           >
                             More details
                           </Link>

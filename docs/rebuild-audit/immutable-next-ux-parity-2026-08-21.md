@@ -16,6 +16,33 @@ Three newer user decisions intentionally supersede the immutable presentation:
 
 These are approved overrides, not parity defects.
 
+## Final implementation checkpoint — 2026-08-21
+
+This checkpoint supersedes the older “Next gaps” wording in the historical ledger below. The ledger remains useful as the audit trail; current implementation state is:
+
+| Surface | Implemented in the final local review build |
+| --- | --- |
+| Global shell | Transparent MonoMind mark, compact shared header/footer, bounded Models/Leaderboards/Articles menus, searchable two-column language picker, dark/light persistence, focus/dismissal behavior, and marketing form on every non-transactional page. |
+| Home | Six preserved sections, factual model/filter surface, source-rank snapshot, Chart.js capability view when enough accepted axes exist with exact fallback otherwise, interactive subscription result, and research links. General methodology stays on `/data-sources/`. |
+| Models/profile/lifecycle | Factual weekly directory + strict/source joins, route-safe profile links, catalog anchor, exact cache/limit price fields, capability visualization/fallback, runtime-only-when-observed charts, workload line items, lifecycle monitor, limitations, and provenance. |
+| Popular Models | Exact three-section structure, original one-row filters and fixed category strip, complete weekly rows/ranks, exact typed category enrichment, sortable 13-column master table, cards/list URL state, row evidence drawers, insights, ordered comparison, Chart.js panels that omit genuinely missing series, and exact matrices. |
+| Make It Yours | Seven source-driven dimensions, URL-backed exact weight/filter matrix, searchable providers and model tray, three Chart.js panels, semantic result/SLA/economics tables, cards/list output, and explicit exclusion reasons for incomplete facts. |
+| Leaderboards | All 14 routes, featured workbenches, category icons, supported filters, first-ten approved result presentation, complete receipt count, per-lens charts including cost-versus-score where exact pairs exist, compact source receipt, related lenses, and `/data-sources/` link. |
+| Compare | Searchable two-to-four ordered selection, valid quick pairs, route-safe query handoff, capability/runtime/price Chart.js panels, exact desktop tables, mobile metric cards, decisions, actions, and provenance. |
+| Subscribe vs API | Seven reviewed provider slots, exact plan/model/route bindings, separately priced standard/cache-read/cache-write/output lines, full-width desktop evidence tables, mobile cards, breakeven chart/table, exact formula disclosure, URL state, and exports. |
+| Articles | Six substantive guides, two clearly labeled prototype insights, immutable-style cover and channel tabs, URL-backed topic/search/sort including shortest read, fully linked title/CTA areas, #9dabff secondary hierarchy, evidence blocks where the immutable article supplied them, sticky/collapsed contents, and shared shell/footer. |
+| Resilience | Global loading skeleton and retryable error boundary; unavailable facts remain explicit; production mode has no fixture fallback. |
+
+Current factual limitations, not UI omissions:
+
+- No independently revisioned route-runtime observation source is active, so TTFT, throughput, and uptime remain unobserved instead of synthesized.
+- The canonical sources publish no data-analysis lane for the weekly Popular Models identities; knowledge is not relabeled as data analysis.
+- A cache-write rate becomes available only where the catalog source publishes it and migration `0016` has been applied and re-ingested.
+- Lifecycle is currently an honest empty result because no qualifying active catalog expiration facts are published; no model age/name inference is used.
+- New producer behavior and migrations `0016`/`0017` are verified locally but require separate deployment authorization.
+
+Additional facts that could add user value are listed separately in `docs/rebuild-audit/future-data-value-opportunities-2026-08-21.md`; none are silently added by this checkpoint.
+
 ## Audit method and coverage
 
 - Inspected the immutable and Next DOM at desktop size, including headings, sections, forms, buttons, inputs, tables, disclosures, canvases, action links, and URL state.

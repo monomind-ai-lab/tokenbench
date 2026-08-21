@@ -154,6 +154,14 @@
     0 0 0 1px rgb(160 170 255 / 0.07);
 }
 
+/* Brand blue stays saturated for fills and charts. Text uses the lighter
+   secondary accent so links, values, and status marks remain legible. */
+.dark .text-primary,
+.dark .hover\:text-primary:hover,
+.dark .focus-visible\:text-primary:focus-visible {
+  color: var(--brand-secondary);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

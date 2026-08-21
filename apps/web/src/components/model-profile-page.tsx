@@ -17,6 +17,10 @@ import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/dis
 
 import { ResultActions } from "@/components/result-actions";
 import {
+  RouteEvidenceCapabilityRadar,
+  RouteEvidenceRuntimeCharts,
+} from "@/components/route-evidence-charts";
+import {
   RouteEvidenceCapabilityBars,
   RouteEvidenceRuntimeReadout,
   formatRouteSurfacePrice,
@@ -90,6 +94,12 @@ export function ModelProfilePage({
       ? null
       : inputTokens * model.inputUsdPerMillion +
         outputTokens * model.outputUsdPerMillion;
+  const inputLineCost = model.inputUsdPerMillion === null
+    ? null
+    : inputTokens * model.inputUsdPerMillion;
+  const outputLineCost = model.outputUsdPerMillion === null
+    ? null
+    : outputTokens * model.outputUsdPerMillion;
   const exportRows = [
     { metric: "Capability value", value: model.capabilityScore === null ? null : roundDisplayValue(model.capabilityScore), unit: "score" },
     {
@@ -105,6 +115,21 @@ export function ModelProfilePage({
     {
       metric: "Output price",
       value: model.outputUsdPerMillion === null ? null : roundDisplayValue(model.outputUsdPerMillion),
+      unit: "USD / 1M tokens",
+    },
+    {
+      metric: "Cache read price",
+      value: model.cacheReadUsdPerMillion === null ? null : roundDisplayValue(model.cacheReadUsdPerMillion),
+      unit: "USD / 1M tokens",
+    },
+    {
+      metric: "Cache write price",
+      value: model.cacheWriteUsdPerMillion === null ? null : roundDisplayValue(model.cacheWriteUsdPerMillion),
+      unit: "USD / 1M tokens",
+    },
+    {
+      metric: "Long-context input price",
+      value: model.longContextInputUsdPerMillion === null ? null : roundDisplayValue(model.longContextInputUsdPerMillion),
       unit: "USD / 1M tokens",
     },
     { metric: "TTFT p50", value: model.ttftP50Seconds === null ? null : roundDisplayValue(model.ttftP50Seconds), unit: "seconds" },
@@ -233,7 +258,21 @@ export function ModelProfilePage({
             </div>
             <Card>
               <CardContent className="pt-6">
-                <RouteEvidenceCapabilityBars models={[model]} />
+                <RouteEvidenceCapabilityRadar models={[model]} />
+                {model.capabilityAxes.filter((axis) => axis.percentile !== null).length < 3 ? (
+                  <RouteEvidenceCapabilityBars models={[model]} />
+                ) : null}
+                <details className="mt-5 rounded-xl border border-border bg-muted/25 p-4">
+                  <summary className="min-h-11 cursor-pointer py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Exact capability values</summary>
+                  <dl className="mt-3 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2">
+                    {model.capabilityAxes.map((axis) => (
+                      <div className="flex items-center justify-between gap-4 bg-card px-4 py-3 text-sm" key={axis.key}>
+                        <dt className="text-muted-foreground">{axis.label}</dt>
+                        <dd className="font-mono">{axis.percentile === null ? "Unavailable" : formatDisplayNumber(axis.percentile)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </details>
               </CardContent>
             </Card>
           </div>
@@ -254,7 +293,8 @@ export function ModelProfilePage({
               </p>
             </div>
             <Card>
-              <CardContent>
+              <CardContent className="space-y-5 pt-6">
+                <RouteEvidenceRuntimeCharts models={[model]} />
                 <RouteEvidenceRuntimeReadout model={model} />
               </CardContent>
               <CardFooter>
@@ -372,14 +412,37 @@ export function ModelProfilePage({
                 No selected route price was supplied for this model.
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl border border-border">
-                <table className="w-full min-w-[720px] border-collapse text-sm">
+              <>
+                <div className="grid gap-3 md:hidden">
+                  <Card>
+                    <CardHeader><CardTitle>{model.route}</CardTitle></CardHeader>
+                    <CardContent><dl className="grid gap-3 text-sm">
+                      {[
+                        ["Access", model.access ?? "Unavailable"],
+                        ["Input / 1M", formatRouteSurfacePrice(model.inputUsdPerMillion)],
+                        ["Output / 1M", formatRouteSurfacePrice(model.outputUsdPerMillion)],
+                        ["Cache read / 1M", formatRouteSurfacePrice(model.cacheReadUsdPerMillion)],
+                        ["Cache write / 1M", formatRouteSurfacePrice(model.cacheWriteUsdPerMillion)],
+                        ["Long-context input / 1M", formatRouteSurfacePrice(model.longContextInputUsdPerMillion)],
+                        ["Context", formatRouteSurfaceTokens(model.contextWindowTokens)],
+                        ["Max output", formatRouteSurfaceTokens(model.maxOutputTokens)],
+                      ].map(([label, value]) => <div className="flex justify-between gap-4" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-mono">{value}</dd></div>)}
+                    </dl></CardContent>
+                  </Card>
+                </div>
+                <div aria-label="Exact endpoint price table" className="hidden overflow-x-auto rounded-xl border border-border md:block" role="region" tabIndex={0}>
+                <table className="w-full min-w-[1080px] border-collapse text-sm">
                   <thead className="bg-muted/60 text-xs text-muted-foreground">
                     <tr>
                       <th className="px-4 py-3 text-left">Route</th>
                       <th className="px-4 py-3 text-left">Access</th>
                       <th className="px-4 py-3 text-right">Input / 1M</th>
                       <th className="px-4 py-3 text-right">Output / 1M</th>
+                      <th className="px-4 py-3 text-right">Cache read</th>
+                      <th className="px-4 py-3 text-right">Cache write</th>
+                      <th className="px-4 py-3 text-right">Long context</th>
+                      <th className="px-4 py-3 text-right">Context</th>
+                      <th className="px-4 py-3 text-right">Max output</th>
                       <th className="px-4 py-3 text-left">Evidence state</th>
                     </tr>
                   </thead>
@@ -395,6 +458,11 @@ export function ModelProfilePage({
                       <td className="px-4 py-3 text-right font-mono">
                         {formatRouteSurfacePrice(model.outputUsdPerMillion)}
                       </td>
+                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfacePrice(model.cacheReadUsdPerMillion)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfacePrice(model.cacheWriteUsdPerMillion)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfacePrice(model.longContextInputUsdPerMillion)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfaceTokens(model.contextWindowTokens)}</td>
+                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfaceTokens(model.maxOutputTokens)}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline">
                           {mode === "preview"
@@ -405,7 +473,8 @@ export function ModelProfilePage({
                     </tr>
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </>
             )}
           </div>
         </section>
@@ -474,6 +543,10 @@ export function ModelProfilePage({
                   <span>1M</span>
                   <span>100M</span>
                 </div>
+                <dl className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
+                  <div className="bg-card p-4"><dt className="text-xs text-muted-foreground">Input line · {inputTokens.toFixed(2)}M</dt><dd className="mt-2 font-mono">{inputLineCost === null ? "Unavailable" : `$${inputLineCost.toFixed(2)}`}</dd></div>
+                  <div className="bg-card p-4"><dt className="text-xs text-muted-foreground">Output line · {outputTokens.toFixed(2)}M</dt><dd className="mt-2 font-mono">{outputLineCost === null ? "Unavailable" : `$${outputLineCost.toFixed(2)}`}</dd></div>
+                </dl>
               </CardContent>
               <CardFooter>
                 <p className="text-xs text-muted-foreground">
@@ -523,6 +596,14 @@ export function ModelProfilePage({
                   <dd>{model.outputModalities.join(", ") || "Unavailable"}</dd>
                 </div>
               </dl>
+              <div className="mt-6 rounded-xl border border-border bg-card p-4">
+                <h3 className="text-sm font-medium">Limitations and conflicts</h3>
+                <ul className="mt-3 space-y-2 text-xs leading-5 text-muted-foreground">
+                  <li>Capability, runtime, lifecycle, and price facts may have different source timestamps; this page does not merge them into one observation.</li>
+                  <li>A selected route identifies the priced endpoint only. It does not imply every provider endpoint shares the same limits or runtime.</li>
+                  <li>Unavailable cache, long-context, or lifecycle fields remain absent from the estimate rather than inheriting a standard input price.</li>
+                </ul>
+              </div>
             </div>
             <RouteEvidenceSources
               sources={sources}

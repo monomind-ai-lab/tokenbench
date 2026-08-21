@@ -4,15 +4,18 @@ import {
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  Filler,
   Legend,
   LinearScale,
+  LineElement,
   LogarithmicScale,
   PointElement,
+  RadialLinearScale,
   Tooltip,
   type ChartOptions,
 } from "chart.js";
 import { useEffect, useMemo, useState } from "react";
-import { Bar, Scatter } from "react-chartjs-2";
+import { Bar, Radar, Scatter } from "react-chartjs-2";
 
 import { formatDisplayNumber } from "@tokenbench/frontend/display-format";
 
@@ -20,15 +23,19 @@ import {
   popularModelsFieldUnavailableLabel,
   popularModelsMetricValue,
   type PopularModelV1,
+  type PopularModelsCategoryV1,
 } from "@tokenbench/frontend/popular-models-v1";
 
 ChartJS.register(
   BarElement,
   CategoryScale,
+  Filler,
   Legend,
   LinearScale,
+  LineElement,
   LogarithmicScale,
   PointElement,
+  RadialLinearScale,
   Tooltip,
 );
 
@@ -144,6 +151,68 @@ export function popularProviderColor(provider: string | null): string {
   for (const character of text)
     hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
   return PROVIDER_COLORS[hash % PROVIDER_COLORS.length] ?? PROVIDER_COLORS[0]!;
+}
+
+export function PopularModelsComparisonRadar({
+  categories,
+  models,
+}: {
+  categories: readonly PopularModelsCategoryV1[];
+  models: readonly PopularModelV1[];
+}) {
+  const theme = useChartTheme();
+  const complete = models.filter((model) =>
+    categories.length >= 3
+    && categories.every((category) => popularModelsMetricValue(model, category.key) !== null),
+  );
+  const data = useMemo(() => ({
+    labels: categories.map((category) => category.label),
+    datasets: complete.map((model, index) => {
+      const color = index === 0 ? theme.accent : popularProviderColor(model.provider);
+      return {
+        label: model.name ?? model.slug ?? model.id,
+        data: categories.map((category) => popularModelsMetricValue(model, category.key) as number),
+        backgroundColor: `${color}20`,
+        borderColor: color,
+        borderWidth: 2,
+        pointBackgroundColor: color,
+        pointRadius: 3,
+      };
+    }),
+  }), [categories, complete, theme.accent]);
+  const options = useMemo<ChartOptions<"radar">>(() => ({
+    animation: theme.reducedMotion ? false : { duration: 400 },
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: theme.muted, pointStyle: "circle", usePointStyle: true }, position: "bottom" },
+      tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, bodyColor: theme.strong, titleColor: theme.strong },
+    },
+    responsive: true,
+    scales: {
+      r: {
+        angleLines: { color: theme.grid },
+        beginAtZero: true,
+        grid: { color: theme.grid },
+        max: 100,
+        min: 0,
+        pointLabels: { color: theme.muted, font: { size: 11 } },
+        ticks: { backdropColor: "transparent", color: theme.muted, stepSize: 20 },
+      },
+    },
+  }), [theme]);
+  if (categories.length < 3 || complete.length === 0) {
+    return (
+      <ChartUnavailable>
+        At least three complete published category values are required for a radar. Exact matrix values remain below.
+      </ChartUnavailable>
+    );
+  }
+  return (
+    <div aria-label="Comparison radar of published benchmark categories" className="mt-4 h-[340px] min-w-0" role="img">
+      <Radar data={data} options={options} />
+      <p className="sr-only">{complete.length} of {models.length} selected models have complete values across all {categories.length} published categories. Missing values remain in the exact matrix and are not plotted as zero.</p>
+    </div>
+  );
 }
 
 /**

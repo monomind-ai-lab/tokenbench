@@ -96,7 +96,9 @@ type ModelCostRow = {
   cacheReadRate: number | null;
   cacheWriteRate: number | null;
   outputRate: number | null;
-  inputCost: number;
+  standardInputCost: number;
+  cacheReadCost: number;
+  cacheWriteCost: number;
   outputCost: number;
   total: number;
 };
@@ -112,21 +114,23 @@ function modelCostRows(calculation: SubscriptionCalculationView | null): ModelCo
       cacheReadRate: null,
       cacheWriteRate: null,
       outputRate: null,
-      inputCost: 0,
+      standardInputCost: 0,
+      cacheReadCost: 0,
+      cacheWriteCost: 0,
       outputCost: 0,
       total: 0,
     };
     if (item.kind === "standard_input") {
       row.inputRate = item.rateUsdPerMillion;
-      row.inputCost += item.costUsd;
+      row.standardInputCost += item.costUsd;
     }
     if (item.kind === "cache_read") {
       row.cacheReadRate = item.rateUsdPerMillion;
-      row.inputCost += item.costUsd;
+      row.cacheReadCost += item.costUsd;
     }
     if (item.kind === "cache_write") {
       row.cacheWriteRate = item.rateUsdPerMillion;
-      row.inputCost += item.costUsd;
+      row.cacheWriteCost += item.costUsd;
     }
     if (item.kind === "output") {
       row.outputRate = item.rateUsdPerMillion;
@@ -358,8 +362,11 @@ export function SubscriptionSimulatorPage({
                 </CardContent>
               </Card>
             </div>
-            <div className="mt-4 overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[650px] border-collapse text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Volume</th><th className="px-4 py-3 text-right">API estimate</th><th className="px-4 py-3 text-right">Subscription</th><th className="px-4 py-3 text-left">Lower line</th></tr></thead><tbody>{calculation === null ? <UnavailableRow colSpan={4} message={catalog.calculationReason ?? "No verified calculation is available."} /> : calculation.domain.map((point) => <tr className="border-t border-border" key={point.tokens}><td className="px-4 py-3 font-mono">{millions(point.tokens)}{point.tokens === calculation.selectedTokenVolume ? " · selected" : ""}</td><td className="px-4 py-3 text-right font-mono">{usd(point.apiUsd)}</td><td className="px-4 py-3 text-right font-mono">{usd(point.subscriptionUsd)}</td><td className="px-4 py-3">{point.apiUsd < point.subscriptionUsd ? "API" : point.apiUsd > point.subscriptionUsd ? "Subscription" : "Equal"}</td></tr>)}</tbody></table>
+            <div className="mt-4 grid gap-3 md:hidden">
+              {calculation === null ? <p className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground">{catalog.calculationReason ?? "No verified calculation is available."}</p> : calculation.domain.map((point) => <dl className="grid grid-cols-2 gap-3 rounded-xl border border-border bg-card p-4 text-sm" key={`${point.tokens}-mobile`}><dt className="col-span-2 flex flex-wrap items-center justify-between gap-2 font-medium"><span>{millions(point.tokens)}</span>{point.tokens === calculation.selectedTokenVolume ? <Badge>Selected</Badge> : null}</dt><div><dt className="text-xs text-muted-foreground">API estimate</dt><dd className="mt-1 font-mono">{usd(point.apiUsd)}</dd></div><div><dt className="text-xs text-muted-foreground">Subscription</dt><dd className="mt-1 font-mono">{usd(point.subscriptionUsd)}</dd></div><div className="col-span-2"><dt className="text-xs text-muted-foreground">Lower line</dt><dd className="mt-1">{point.apiUsd < point.subscriptionUsd ? "API" : point.apiUsd > point.subscriptionUsd ? "Subscription" : "Equal"}</dd></div></dl>)}
+            </div>
+            <div aria-label="Breakeven comparison table" className="mt-4 hidden overflow-x-auto rounded-xl border border-border md:block" role="region" tabIndex={0}>
+              <table className="w-full table-fixed border-collapse text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Volume</th><th className="px-4 py-3 text-right">API estimate</th><th className="px-4 py-3 text-right">Subscription</th><th className="px-4 py-3 text-left">Lower line</th></tr></thead><tbody>{calculation === null ? <UnavailableRow colSpan={4} message={catalog.calculationReason ?? "No verified calculation is available."} /> : calculation.domain.map((point) => <tr className="border-t border-border" key={point.tokens}><td className="px-4 py-3 font-mono">{millions(point.tokens)}{point.tokens === calculation.selectedTokenVolume ? " · selected" : ""}</td><td className="px-4 py-3 text-right font-mono">{usd(point.apiUsd)}</td><td className="px-4 py-3 text-right font-mono">{usd(point.subscriptionUsd)}</td><td className="px-4 py-3">{point.apiUsd < point.subscriptionUsd ? "API" : point.apiUsd > point.subscriptionUsd ? "Subscription" : "Equal"}</td></tr>)}</tbody></table>
             </div>
           </div>
         </section>
@@ -367,9 +374,17 @@ export function SubscriptionSimulatorPage({
         <section className="border-y border-border bg-muted/25 px-4 py-12 sm:px-6 sm:py-16">
           <div className="mx-auto max-w-7xl">
             <SectionHeading body="Reviewed rate lines remain separate from derived monthly lines. Missing rate or entitlement evidence stays unavailable instead of being filled with an estimate." eyebrow="PRICE EVIDENCE" number="04" title="Price sources and derived monthly lines" />
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="overflow-x-auto rounded-xl border border-border bg-card"><table className="w-full min-w-[650px] border-collapse text-sm"><caption className="px-4 py-3 text-left font-medium">Raw source-price table</caption><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Model</th><th className="px-4 py-3 text-right">Input</th><th className="px-4 py-3 text-right">Cache read</th><th className="px-4 py-3 text-right">Cache write</th><th className="px-4 py-3 text-right">Output</th></tr></thead><tbody>{rows.length === 0 ? <UnavailableRow colSpan={5} message="No reviewed calculation line items are available." /> : rows.map((row) => <tr className="border-t border-border" key={row.modelSlug}><td className="px-4 py-3 font-medium">{row.modelSlug}</td><td className="px-4 py-3 text-right font-mono">{usd(row.inputRate)}</td><td className="px-4 py-3 text-right font-mono">{usd(row.cacheReadRate)}</td><td className="px-4 py-3 text-right font-mono">{usd(row.cacheWriteRate)}</td><td className="px-4 py-3 text-right font-mono">{usd(row.outputRate)}</td></tr>)}</tbody></table></div>
-              <div className="overflow-x-auto rounded-xl border border-border bg-card"><table className="w-full min-w-[650px] border-collapse text-sm"><caption className="px-4 py-3 text-left font-medium">Derived monthly line-items</caption><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Model</th><th className="px-4 py-3 text-right">Mix</th><th className="px-4 py-3 text-right">Input line</th><th className="px-4 py-3 text-right">Output line</th><th className="px-4 py-3 text-right">Total</th></tr></thead><tbody>{rows.length === 0 ? <UnavailableRow colSpan={5} message="No reviewed calculation line items are available." /> : rows.map((row) => <tr className="border-t border-border" key={row.modelSlug}><td className="px-4 py-3 font-medium">{row.modelSlug}</td><td className="px-4 py-3 text-right font-mono">{row.share === null ? "Unavailable" : `${row.share.toFixed(0)}%`}</td><td className="px-4 py-3 text-right font-mono">{usd(row.inputCost)}</td><td className="px-4 py-3 text-right font-mono">{usd(row.outputCost)}</td><td className="px-4 py-3 text-right font-mono">{usd(row.total)}</td></tr>)}</tbody></table></div>
+            <div className="grid gap-4">
+              <div>
+                <h3 className="rounded-t-xl border border-b-0 border-border bg-card px-4 py-3 font-medium">Raw source-price table</h3>
+                <div className="grid gap-3 rounded-b-xl border border-border bg-card p-3 md:hidden">{rows.length === 0 ? <p className="text-sm text-muted-foreground">No reviewed calculation line items are available.</p> : rows.map((row) => <dl className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-sm" key={`${row.modelSlug}-rates`}><dt className="col-span-2 font-medium">{row.modelSlug}</dt>{[["Input", row.inputRate], ["Cache read", row.cacheReadRate], ["Cache write", row.cacheWriteRate], ["Output", row.outputRate]].map(([label, value]) => <div key={String(label)}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-mono">{usd(value as number | null)}</dd></div>)}</dl>)}</div>
+                <div aria-label="Raw source-price table" className="hidden overflow-x-auto rounded-b-xl border border-border bg-card md:block" role="region" tabIndex={0}><table className="w-full table-fixed border-collapse text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="w-2/5 px-3 py-3 text-left">Model</th><th className="px-3 py-3 text-right">Input</th><th className="px-3 py-3 text-right">Cache read</th><th className="px-3 py-3 text-right">Cache write</th><th className="px-3 py-3 text-right">Output</th></tr></thead><tbody>{rows.length === 0 ? <UnavailableRow colSpan={5} message="No reviewed calculation line items are available." /> : rows.map((row) => <tr className="border-t border-border" key={row.modelSlug}><td className="break-words px-3 py-3 font-medium">{row.modelSlug}</td><td className="px-3 py-3 text-right font-mono">{usd(row.inputRate)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.cacheReadRate)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.cacheWriteRate)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.outputRate)}</td></tr>)}</tbody></table></div>
+              </div>
+              <div>
+                <h3 className="rounded-t-xl border border-b-0 border-border bg-card px-4 py-3 font-medium">Derived monthly line-items</h3>
+                <div className="grid gap-3 rounded-b-xl border border-border bg-card p-3 md:hidden">{rows.length === 0 ? <p className="text-sm text-muted-foreground">No reviewed calculation line items are available.</p> : rows.map((row) => <dl className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3 text-sm" key={`${row.modelSlug}-costs`}><dt className="col-span-2 flex justify-between gap-3 font-medium"><span>{row.modelSlug}</span><span className="font-mono">{row.share === null ? "Unavailable" : `${row.share.toFixed(0)}%`}</span></dt>{[["Standard input", row.standardInputCost], ["Cache read", row.cacheReadCost], ["Cache write", row.cacheWriteCost], ["Output", row.outputCost], ["Total", row.total]].map(([label, value]) => <div key={String(label)}><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 font-mono">{usd(value as number)}</dd></div>)}</dl>)}</div>
+                <div aria-label="Derived monthly line-items table" className="hidden overflow-x-auto rounded-b-xl border border-border bg-card md:block" role="region" tabIndex={0}><table className="w-full table-fixed border-collapse text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="w-1/4 px-3 py-3 text-left">Model</th><th className="px-3 py-3 text-right">Mix</th><th className="px-3 py-3 text-right">Standard input</th><th className="px-3 py-3 text-right">Cache read</th><th className="px-3 py-3 text-right">Cache write</th><th className="px-3 py-3 text-right">Output</th><th className="px-3 py-3 text-right">Total</th></tr></thead><tbody>{rows.length === 0 ? <UnavailableRow colSpan={7} message="No reviewed calculation line items are available." /> : rows.map((row) => <tr className="border-t border-border" key={row.modelSlug}><td className="break-words px-3 py-3 font-medium">{row.modelSlug}</td><td className="px-3 py-3 text-right font-mono">{row.share === null ? "Unavailable" : `${row.share.toFixed(0)}%`}</td><td className="px-3 py-3 text-right font-mono">{usd(row.standardInputCost)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.cacheReadCost)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.cacheWriteCost)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.outputCost)}</td><td className="px-3 py-3 text-right font-mono">{usd(row.total)}</td></tr>)}</tbody></table></div>
+              </div>
             </div>
             <p className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted-foreground"><CircleAlert className="mt-0.5 size-3.5 shrink-0" />Requested cache shares: {scenario.cacheReadShare}% read + {scenario.cacheWriteShare}% write. Effective allocation is available only from a reviewed calculation response.</p>
           </div>
@@ -383,6 +398,7 @@ export function SubscriptionSimulatorPage({
               <Card><CardHeader><CardTitle>2. Weighted API cost</CardTitle></CardHeader><CardContent><p className="font-mono text-xs leading-6">Σ model mix × (input allocation × price + output × price)</p><p className="mt-3 text-xs text-muted-foreground">The strict service must validate every model and route before it returns this value.</p></CardContent></Card>
               <Card><CardHeader><CardTitle>3. Crossover</CardTitle></CardHeader><CardContent><p className="font-mono text-xs leading-6">subscription monthly cost ÷ API cost per million tokens</p><p className="mt-3 text-xs text-muted-foreground">This is a cost crossover, not a claim about product capacity or feature parity.</p></CardContent></Card>
             </div>
+            <details className="mt-4 rounded-xl border border-border bg-card p-4"><summary className="min-h-11 cursor-pointer py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Exact formula and rounding</summary><div className="mt-3 space-y-3 text-xs leading-6 text-muted-foreground"><p><span className="font-mono text-foreground">monthly messages</span> = conversations/day × messages/conversation × active days.</p><p><span className="font-mono text-foreground">standard input</span>, <span className="font-mono text-foreground">cache read</span>, and <span className="font-mono text-foreground">cache write</span> are priced as separate token lines. A positive allocation requires its own accepted rate; standard input is never substituted.</p><p>Each exact micro-dollar line is calculated before presentation rounding. Reader-facing currency is then rounded to at most two decimal places; positive sub-cent values display as &lt;$0.01.</p></div></details>
           </div>
         </section>
       </div>

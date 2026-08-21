@@ -576,9 +576,13 @@ function MakeItYoursComparisonTray({
   readonly onSelect: (id: string) => void;
   readonly selectedRows: readonly WeightedRankingRow[];
 }) {
+  const [modelSearch, setModelSearch] = useState("");
   if (selectedRows.length < 2) return null;
   const candidateIds = new Set(selectedRows.map((row) => row.id));
   const available = candidates.filter((row) => !candidateIds.has(row.id));
+  const filteredAvailable = available.filter((row) =>
+    `${row.name} ${row.provider}`.toLocaleLowerCase().includes(modelSearch.trim().toLocaleLowerCase()),
+  );
   const compareHref = `/compare/?models=${selectedRows.map((row) => encodeURIComponent(row.id)).join(",")}`;
 
   return (
@@ -591,12 +595,11 @@ function MakeItYoursComparisonTray({
         {selectedRows.map((row, index) => <li className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-muted/35 px-3 py-2" key={row.id}><span className="min-w-0"><span className="mr-2 font-mono text-xs text-muted-foreground">{index + 1}</span><span className="text-sm font-medium">{row.name}</span></span><button aria-label={`Remove ${row.name} from comparison`} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onRemove(row.id)} type="button"><X className="size-4" /></button></li>)}
       </ol>
       <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
-        <label className="grid gap-1.5 text-sm font-medium">Add a filtered model
-          <select className="min-h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" defaultValue="" disabled={selectedRows.length >= 4 || available.length === 0} onChange={(event) => { if (event.currentTarget.value) { onSelect(event.currentTarget.value); event.currentTarget.value = ""; } }}>
-            <option value="">{selectedRows.length >= 4 ? "Comparison is full" : available.length ? "Choose a model" : "No additional filtered models"}</option>
-            {available.map((row) => <option key={row.id} value={row.id}>{row.name} · {row.provider}</option>)}
-          </select>
-        </label>
+        <div className="grid gap-1.5 text-sm font-medium"><label htmlFor="make-it-yours-model-search">Add a filtered model</label>
+          <input autoComplete="off" className="min-h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={selectedRows.length >= 4 || available.length === 0} id="make-it-yours-model-search" list="make-it-yours-model-options" onChange={(event) => setModelSearch(event.currentTarget.value)} placeholder={selectedRows.length >= 4 ? "Comparison is full" : "Search model or provider"} type="search" value={modelSearch} />
+          <datalist id="make-it-yours-model-options">{filteredAvailable.map((row) => <option key={row.id} label={`${row.name} · ${row.provider}`} value={row.id} />)}</datalist>
+          <Button className="min-h-11" disabled={selectedRows.length >= 4 || !available.some((row) => row.id === modelSearch)} onClick={() => { onSelect(modelSearch); setModelSearch(""); }} type="button" variant="outline">Add model</Button>
+        </div>
         <Button className="min-h-11" render={<a href={compareHref} />} type="button">Open in-depth comparison</Button>
       </div>
     </aside>
@@ -620,6 +623,7 @@ export function MakeItYoursWorkbench({
   );
   const [state, setState] = useState<WeightedRankingState>(initialState);
   const [message, setMessage] = useState<Message>(null);
+  const [providerSearch, setProviderSearch] = useState("");
   const projection = useMemo(() => projectMakeItYoursModels(envelope), [envelope]);
   const filters = useMemo(() => filtersFromState(state), [state]);
   const ranking = useMemo(
@@ -633,6 +637,10 @@ export function MakeItYoursWorkbench({
   const providers = useMemo(
     () => Array.from(new Set(projection.models.map((model) => model.provider))).sort((left, right) => left.localeCompare(right)),
     [projection.models],
+  );
+  const visibleProviders = useMemo(
+    () => providers.filter((provider) => provider.toLocaleLowerCase().includes(providerSearch.trim().toLocaleLowerCase())),
+    [providerSearch, providers],
   );
   const modelsById = useMemo(
     () => new Map(projection.models.map((model) => [model.id, model])),
@@ -733,7 +741,7 @@ export function MakeItYoursWorkbench({
             <div className="mt-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Model access filter">
                 {(["all", "open", "closed"] as const).map((access) => <button aria-pressed={state.access === access} className={cn("min-h-11 rounded-lg border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", state.access === access ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground")} key={access} onClick={() => patchState({ access })} type="button">{access === "all" ? "All" : access === "open" ? "Open weight" : "Closed"}</button>)}
-                <details className="group relative"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted"><span>Providers</span><span className="text-xs text-muted-foreground">{state.providers.length ? `${state.providers.length} selected` : "All providers"}</span><ChevronDown aria-hidden="true" className="size-4 transition-transform group-open:rotate-180" /></summary><div className="absolute z-20 mt-2 grid w-[min(22rem,calc(100vw-2.5rem))] gap-1 rounded-xl border border-border bg-popover p-2 shadow-soft"><div className="flex items-center justify-between px-2 py-1.5"><span className="text-xs text-muted-foreground">{providers.length} providers available</span>{state.providers.length ? <button className="text-xs font-medium text-primary hover:underline" onClick={() => patchState({ providers: [] })} type="button">Clear</button> : null}</div>{providers.map((provider) => <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg px-2 text-sm hover:bg-muted" key={provider}><span>{provider}</span><input checked={state.providers.includes(provider)} className="size-4 accent-primary" onChange={() => toggleProvider(provider)} type="checkbox" /></label>)}</div></details>
+                <details className="group relative"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-muted"><span>Providers</span><span className="text-xs text-muted-foreground">{state.providers.length ? `${state.providers.length} selected` : "All providers"}</span><ChevronDown aria-hidden="true" className="size-4 transition-transform group-open:rotate-180" /></summary><div className="absolute z-20 mt-2 grid w-[min(22rem,calc(100vw-2.5rem))] gap-1 rounded-xl border border-border bg-popover p-2 shadow-soft"><div className="flex items-center justify-between px-2 py-1.5"><span className="text-xs text-muted-foreground">{providers.length} providers available</span>{state.providers.length ? <button className="text-xs font-medium text-primary hover:underline" onClick={() => patchState({ providers: [] })} type="button">Clear</button> : null}</div><label><span className="sr-only">Search providers</span><input autoComplete="off" className="mb-1 min-h-11 w-full rounded-lg border border-input bg-background px-3 text-sm" onChange={(event) => setProviderSearch(event.currentTarget.value)} placeholder="Search providers" type="search" value={providerSearch} /></label><div className="max-h-64 overflow-y-auto">{visibleProviders.map((provider) => <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg px-2 text-sm hover:bg-muted" key={provider}><span>{provider}</span><input checked={state.providers.includes(provider)} className="size-4 accent-primary" onChange={() => toggleProvider(provider)} type="checkbox" /></label>)}{visibleProviders.length === 0 ? <p className="px-2 py-3 text-sm text-muted-foreground">No providers match.</p> : null}</div></div></details>
               </div>
               <p aria-live="polite" className="text-sm text-muted-foreground">{selectedRows.length} of 4 models selected for comparison.</p>
             </div>

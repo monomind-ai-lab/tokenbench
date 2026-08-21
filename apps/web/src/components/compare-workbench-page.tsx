@@ -17,8 +17,12 @@ import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/dis
 
 import { ResultActions, type CsvRow } from "@/components/result-actions";
 import {
+  RouteEvidenceCapabilityRadar,
+  RouteEvidencePriceCharts,
+  RouteEvidenceRuntimeCharts,
+} from "@/components/route-evidence-charts";
+import {
   RouteEvidenceCapabilityBars,
-  RouteEvidenceEconomicsBars,
   formatRouteSurfacePrice,
   formatRouteSurfaceTokens,
 } from "@/components/route-evidence-visuals";
@@ -139,6 +143,12 @@ export function CompareWorkbenchPage({
   const available = candidates.filter(
     (model) => !requestedIds.includes(model.id),
   );
+  const candidateIsAvailable = available.some((model) => model.id === candidate);
+  const quickPairs = candidates.slice(0, 4).reduce<string[][]>((pairs, model, index) => {
+    if (index % 2 === 0) pairs.push([model.id]);
+    else pairs[pairs.length - 1]?.push(model.id);
+    return pairs;
+  }, []).filter((pair) => pair.length === 2);
   const labels = requestedIds.map((id, index) => slots[index]?.name ?? id);
   const navigate = (ids: string[]) =>
     router.push(
@@ -147,7 +157,7 @@ export function CompareWorkbenchPage({
         : "/compare",
     );
   const addCandidate = () => {
-    if (!candidate || requestedIds.length >= 4) return;
+    if (!candidateIsAvailable || requestedIds.length >= 4) return;
     navigate([...requestedIds, candidate]);
     setCandidate("");
   };
@@ -292,22 +302,23 @@ export function CompareWorkbenchPage({
                   <div className="flex gap-2 pt-2">
                     <label className="min-w-0 flex-1">
                       <span className="sr-only">Add a model</span>
-                      <select
+                      <input
+                        autoComplete="off"
                         className="h-10 w-full rounded-lg border border-input bg-background px-2.5 text-sm"
+                        list="compare-model-options"
                         onChange={(event) => setCandidate(event.target.value)}
+                        placeholder="Search supplied models"
+                        type="search"
                         value={candidate}
-                      >
-                        <option value="">Choose supplied record</option>
+                      />
+                      <datalist id="compare-model-options">
                         {available.map((model) => (
-                          <option key={model.id} value={model.id}>
-                            {model.name} —{" "}
-                            {model.provider ?? "Provider unavailable"}
-                          </option>
+                          <option key={model.id} label={`${model.name} — ${model.provider ?? "Provider unavailable"}`} value={model.id} />
                         ))}
-                      </select>
+                      </datalist>
                     </label>
                     <Button
-                      disabled={!candidate || !validRequest}
+                      disabled={!candidateIsAvailable || !validRequest}
                       onClick={addCandidate}
                     >
                       <Plus />
@@ -333,6 +344,16 @@ export function CompareWorkbenchPage({
               </CardFooter>
             </Card>
           </div>
+          {quickPairs.length ? (
+            <nav aria-label="Quick model pairs" className="mt-6 flex flex-wrap items-center gap-2">
+              <span className="mr-1 text-xs text-muted-foreground">Quick pairs</span>
+              {quickPairs.map((pair) => (
+                <Button key={pair.join(",")} onClick={() => navigate(pair)} size="sm" variant="outline">
+                  {pair.map((id) => candidates.find((model) => model.id === id)?.name ?? id).join(" vs ")}
+                </Button>
+              ))}
+            </nav>
+          ) : null}
         </div>
       </section>
 
@@ -443,10 +464,27 @@ export function CompareWorkbenchPage({
                 <div className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
                   <Card>
                     <CardContent className="pt-6">
-                      <RouteEvidenceCapabilityBars models={models} compact />
+                      <RouteEvidenceCapabilityRadar models={models} />
+                      {models.every((model) => model.capabilityAxes.filter((axis) => axis.percentile !== null).length < 3) ? (
+                        <RouteEvidenceCapabilityBars models={models} compact />
+                      ) : null}
                     </CardContent>
                   </Card>
-                  <div className="overflow-x-auto rounded-xl border border-border bg-card">
+                  <div className="grid gap-3 md:hidden">
+                    {capability.map((row) => (
+                      <Card key={row.key}>
+                        <CardHeader><CardTitle>{row.label}</CardTitle></CardHeader>
+                        <CardContent><dl className="grid gap-3 text-sm">
+                          {requestedIds.map((id, index) => {
+                            const selected = slots[index];
+                            const value = selected?.capabilityAxes.find((axis) => axis.key === row.key)?.percentile ?? null;
+                            return <div className="flex justify-between gap-4" key={`${id}-${row.key}`}><dt className="text-muted-foreground">{selected?.name ?? id}</dt><dd className="font-mono">{formattedMeasurement(value)}</dd></div>;
+                          })}
+                        </dl></CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                  <div aria-label="Exact capability comparison table" className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block" role="region" tabIndex={0}>
                     <table className="w-full min-w-[560px] border-collapse text-sm">
                       <thead className="bg-muted/60 text-xs text-muted-foreground">
                         <tr>
@@ -512,7 +550,10 @@ export function CompareWorkbenchPage({
                 </p>
               </div>
               {models.length ? (
-                <RouteEvidenceEconomicsBars models={models} />
+                <div className="space-y-4">
+                  <RouteEvidenceRuntimeCharts models={models} />
+                  <RouteEvidencePriceCharts models={models} />
+                </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-border p-6 text-sm text-muted-foreground">
                   No accepted comparison economics record was returned for this
@@ -580,7 +621,25 @@ export function CompareWorkbenchPage({
                   </Card>
                 ))}
               </div>
-              <div className="mt-4 overflow-x-auto rounded-xl border border-border bg-card">
+              <div className="mt-4 grid gap-3 md:hidden">
+                {requestedIds.map((id, index) => {
+                  const model = slots[index];
+                  return (
+                    <Card key={`${id}-decision-mobile`}>
+                      <CardHeader><CardTitle>{model?.name ?? id}</CardTitle></CardHeader>
+                      <CardContent><dl className="grid gap-3 text-sm">
+                        {[
+                          ["Capability", formattedMeasurement(model?.capabilityScore ?? null)],
+                          ["Blended / 1M", model ? formatRouteSurfacePrice(blendedPrice(model)) : "Unavailable"],
+                          ["Throughput", model?.outputTokensPerSecond == null ? "Unavailable" : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`],
+                          ["Context", model ? formatRouteSurfaceTokens(model.contextWindowTokens) : "Unavailable"],
+                        ].map(([label, value]) => <div className="flex justify-between gap-4" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-mono">{value}</dd></div>)}
+                      </dl></CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+              <div aria-label="Exact decision comparison table" className="mt-4 hidden overflow-x-auto rounded-xl border border-border bg-card md:block" role="region" tabIndex={0}>
                 <table className="w-full min-w-[760px] border-collapse text-sm">
                   <thead className="bg-muted/60 text-xs text-muted-foreground">
                     <tr>
