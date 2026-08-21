@@ -244,6 +244,16 @@ function mapPriceCheck(value: unknown): BenchmarkPriceCheck {
     inputModalities: parseNullableStringArray(row.input_modalities_json, 'benchmark price check.input_modalities_json'),
     outputModalities: parseNullableStringArray(row.output_modalities_json, 'benchmark price check.output_modalities_json'),
     supportedParameters: parseNullableStringArray(row.supported_parameters_json, 'benchmark price check.supported_parameters_json'),
+    cacheWriteUsdPerMillion: (row.cache_write_usd_per_million ?? null) as number | null,
+    createdAt: (row.created_at ?? null) as string | null,
+    expirationDate: (row.expiration_date ?? null) as string | null,
+    knowledgeCutoff: (row.knowledge_cutoff ?? null) as string | null,
+    tokenizer: (row.tokenizer ?? null) as string | null,
+    instructionFormat: (row.instruction_format ?? null) as string | null,
+    isModerated: row.is_moderated === null || row.is_moderated === undefined
+      ? null
+      : asBoolean(row.is_moderated, 'benchmark price check.is_moderated'),
+    perRequestLimitsJson: (row.per_request_limits_json ?? null) as string | null,
     sourceArtifactId: row.source_artifact_id as string,
   };
 }

@@ -39,9 +39,11 @@ export function modelProfileViewModelFixture(overrides: Partial<ModelProfileView
       ],
       priceRoutes: [{
         sourceId: 'openrouter', providerId: 'openai', routeId: 'openrouter:openai/gpt-5-6-sol', sourceModelId: 'openai/gpt-5-6-sol',
-        canonicalSlug: 'gpt-5-6-sol', inputUsdPerMillion: 5, cachedInputUsdPerMillion: null, outputUsdPerMillion: 30,
+        canonicalSlug: 'gpt-5-6-sol', inputUsdPerMillion: 5, cachedInputUsdPerMillion: null, cacheWriteUsdPerMillion: null, outputUsdPerMillion: 30,
         contextWindowTokens: 400_000, maxInputTokens: null, maxOutputTokens: 32_000,
         inputModalities: ['text', 'image'], outputModalities: ['text'], supportedParameters: ['tools'],
+        createdAt: null, expirationDate: null, knowledgeCutoff: null, tokenizer: null,
+        instructionFormat: null, isModerated: null, perRequestLimitsJson: null,
         verificationStatus: 'primary', sourceArtifactId: 'openrouter-models', sourceUrl: 'https://openrouter.ai/models/openai/gpt-5-6-sol', observedAt: AT,
       }],
       specifications: {

@@ -68,6 +68,7 @@ const price = {
   canonical_slug: null,
   input_usd_per_million: 1,
   cached_input_usd_per_million: null,
+  cache_write_usd_per_million: 0.2,
   output_usd_per_million: 4,
   context_window_tokens: 128_000,
   max_input_tokens: 128_000,
@@ -75,6 +76,13 @@ const price = {
   input_modalities_json: '["text"]',
   output_modalities_json: '["text"]',
   supported_parameters_json: '["tools"]',
+  created_at: '2026-08-01T00:00:00.000Z',
+  expiration_date: '2027-08-01',
+  knowledge_cutoff: '2025-06',
+  tokenizer: 'o200k_base',
+  instruction_format: 'chatml',
+  is_moderated: 1,
+  per_request_limits_json: '{"max_requests":10}',
   source_artifact_id: 'catalog:catalog-r1',
   verification_status: 'primary',
 };
@@ -175,12 +183,29 @@ describe('targeted benchmark model API', () => {
     });
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json() as { attribution: readonly unknown[] };
+    expect(body.attribution).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceId: 'openrouter',
+      url: 'https://openrouter.ai/api/v1/models',
+      updatedAt: CHECKED_AT,
+    })]));
+    expect(body).toMatchObject({
       revision: REVISION,
       data: {
         model: { slug: 'alpha' },
         metrics: [{ metricKey: 'benchlm:overall:raw' }],
-        priceChecks: [{ routeId: 'openrouter:provider/alpha' }],
+        priceChecks: [{
+          routeId: 'openrouter:provider/alpha',
+          cacheWriteUsdPerMillion: 0.2,
+          createdAt: '2026-08-01T00:00:00.000Z',
+          expirationDate: '2027-08-01',
+          knowledgeCutoff: '2025-06',
+          tokenizer: 'o200k_base',
+          instructionFormat: 'chatml',
+          isModerated: true,
+          perRequestLimitsJson: '{"max_requests":10}',
+          sourceArtifactId: 'catalog:catalog-r1',
+        }],
       },
     });
     expect(db.queries).not.toContain(expect.stringContaining('SELECT * FROM benchmark_models WHERE revision = ?\n'));

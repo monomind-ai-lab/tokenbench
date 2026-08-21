@@ -3,16 +3,19 @@ import type { ModelDirectoryEntry, ModelDirectoryEnvelope } from './model-direct
 import type { ModelProfileViewModel } from './model-profile-contracts';
 import type {
   CompareData,
+  CachePricing,
   EvidenceValue,
   LifecycleData,
   LifecycleReplacement,
   ModelAccess,
   ModelDirectoryData,
   ModelLifecycle,
+  ModelProfileFacts,
   PreviewModel,
   PreviewModelProfileData,
   Provenance,
   RankingData,
+  RouteFact,
   RoutePricing,
   UiDataContractV1,
 } from './preview-data/contracts';
@@ -31,6 +34,7 @@ function pipelineProvenance(input: {
   readonly id: string;
   readonly label: string;
   readonly effectiveAt: string | null;
+  readonly url?: string;
   readonly note: string;
 }): Provenance {
   return { ...input, kind: 'accepted_pipeline' };
@@ -42,48 +46,240 @@ function modelAccess(sourceType: ModelDirectoryEntry['sourceType'], provenance: 
   return unavailable('The published model record does not classify access.', provenance);
 }
 
+function nullableEvidence<T>(
+  value: T | null | undefined,
+  reason: string,
+  provenance: Provenance,
+): EvidenceValue<T> {
+  return value === null || value === undefined
+    ? unavailable(reason, provenance)
+    : available(value, provenance);
+}
+
+function recordValue(value: unknown): Readonly<Record<string, unknown>> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Readonly<Record<string, unknown>>
+    : null;
+}
+
+function nonEmptyStringArrayEvidence(
+  value: readonly string[] | null | undefined,
+  reason: string,
+  provenance: Provenance,
+): EvidenceValue<readonly string[]> {
+  return value === null || value === undefined || value.length === 0
+    ? unavailable(reason, provenance)
+    : available(value, provenance);
+}
+
+function routeProvenance(
+  route: NonNullable<ModelDirectoryEntry['representativePrice']>,
+): Provenance {
+  return pipelineProvenance({
+    id: `model-route:${route.sourceId}:${route.providerId}:${route.routeId}:${route.sourceArtifactId}`,
+    label: `Published ${route.providerId} route`,
+    effectiveAt: route.observedAt,
+    url: route.sourceUrl,
+    note: `Exact ${route.verificationStatus} route receipt for ${route.sourceModelId}.`,
+  });
+}
+
+/** Keeps every route field separate so partial price receipts retain their limits and capability facts. */
+function routeFact(
+  route: NonNullable<ModelDirectoryEntry['representativePrice']>,
+): RouteFact {
+  const provenance = routeProvenance(route);
+  return {
+    receipt: {
+      sourceId: route.sourceId,
+      providerId: route.providerId,
+      routeId: route.routeId,
+      sourceModelId: route.sourceModelId,
+      sourceArtifactId: route.sourceArtifactId,
+      sourceUrl: route.sourceUrl,
+      observedAt: route.observedAt,
+      verificationStatus: route.verificationStatus,
+    },
+    inputUsdPerMillion: nullableEvidence(route.inputUsdPerMillion, 'No published input price is available for this route.', provenance),
+    outputUsdPerMillion: nullableEvidence(route.outputUsdPerMillion, 'No published output price is available for this route.', provenance),
+    cacheReadUsdPerMillion: nullableEvidence(route.cachedInputUsdPerMillion, 'No published cache-read price is available for this route.', provenance),
+    cacheWriteUsdPerMillion: nullableEvidence(
+      route.cacheWriteUsdPerMillion,
+      'No published cache-write price is available for this route.',
+      provenance,
+    ),
+    contextWindowTokens: nullableEvidence(route.contextWindowTokens, 'No published context-window value is available for this route.', provenance),
+    maxInputTokens: nullableEvidence(route.maxInputTokens, 'No published maximum-input value is available for this route.', provenance),
+    maxOutputTokens: nullableEvidence(route.maxOutputTokens, 'No published maximum-output value is available for this route.', provenance),
+    inputModalities: nonEmptyStringArrayEvidence(route.inputModalities, 'No published input modalities are available for this route.', provenance),
+    outputModalities: nonEmptyStringArrayEvidence(route.outputModalities, 'No published output modalities are available for this route.', provenance),
+    supportedParameters: nonEmptyStringArrayEvidence(route.supportedParameters, 'No published supported parameters are available for this route.', provenance),
+  };
+}
+
 function routePricing(
   route: ModelDirectoryEntry['representativePrice'],
-  provenance: Provenance,
+  fallbackProvenance: Provenance,
 ): EvidenceValue<RoutePricing> {
-  if (route === null || route.inputUsdPerMillion === null || route.outputUsdPerMillion === null) {
-    return unavailable('No complete published input/output route price is available.', provenance);
+  if (route === null) return unavailable('No complete published input/output route price is available.', fallbackProvenance);
+  const fact = routeFact(route);
+  if (fact.inputUsdPerMillion.availability === 'unavailable' || fact.outputUsdPerMillion.availability === 'unavailable') {
+    return unavailable('No complete published input/output route price is available.', routeProvenance(route));
   }
+  const provenance = fact.inputUsdPerMillion.provenance;
+  const cache: EvidenceValue<CachePricing> = fact.cacheReadUsdPerMillion.availability === 'unavailable'
+    && fact.cacheWriteUsdPerMillion.availability === 'unavailable'
+    ? unavailable('No published cache price is available for this route.', provenance)
+    : available({
+      readUsdPerMillion: fact.cacheReadUsdPerMillion,
+      writeUsdPerMillion: fact.cacheWriteUsdPerMillion,
+    }, provenance);
   return available({
     route: route.routeId,
-    inputUsdPerMillion: route.inputUsdPerMillion,
-    outputUsdPerMillion: route.outputUsdPerMillion,
-    contextWindowTokens: route.contextWindowTokens === null
-      ? unavailable('No published context-window value is available.', provenance)
-      : available(route.contextWindowTokens, provenance),
-    maxOutputTokens: route.maxOutputTokens === null
-      ? unavailable('No published maximum-output value is available.', provenance)
-      : available(route.maxOutputTokens, provenance),
+    inputUsdPerMillion: fact.inputUsdPerMillion.value,
+    outputUsdPerMillion: fact.outputUsdPerMillion.value,
+    contextWindowTokens: fact.contextWindowTokens,
+    maxInputTokens: fact.maxInputTokens,
+    maxOutputTokens: fact.maxOutputTokens,
     inputModalities: route.inputModalities ?? [],
     outputModalities: route.outputModalities ?? [],
-    cache: route.cachedInputUsdPerMillion === null
-      ? unavailable('No published cache-read price is available for this route.', provenance)
-      : available({
-        readUsdPerMillion: available(route.cachedInputUsdPerMillion, provenance),
-        writeUsdPerMillion: unavailable('No published cache-write price is available for this route.', provenance),
-      }, provenance),
+    supportedParameters: fact.supportedParameters,
+    receipt: fact.receipt,
+    cache,
   }, provenance);
 }
 
+function profileSourceProvenance(profileView: ModelProfileViewModel): readonly Provenance[] {
+  const profileSources = profileView.profile.sources.map((source) => pipelineProvenance({
+    id: `model-profile-source:${profileView.revision}:${source.sourceId}:${source.artifactId}`,
+    label: source.attributionText,
+    effectiveAt: source.observedAt,
+    url: source.sourceUrl,
+    note: `Exact ${source.sourceId} profile receipt ${source.artifactId}.`,
+  }));
+  if (profileSources.length > 0) return profileSources;
+  return profileView.attribution.map((source) => pipelineProvenance({
+    id: `model-profile-attribution:${profileView.revision}:${source.sourceId}:${source.updatedAt}`,
+    label: source.label,
+    effectiveAt: source.updatedAt,
+    url: source.url,
+    note: `Published model profile revision ${profileView.selectedRevision}.`,
+  }));
+}
+
+function sharedRouteMetadata<T>(
+  routes: readonly NonNullable<ModelDirectoryEntry['representativePrice']>[],
+  key: string,
+  parse: (value: unknown) => T | null,
+  unavailableReason: string,
+  conflictReason: string,
+  fallbackProvenance: Provenance,
+): EvidenceValue<T> {
+  const candidates = routes.flatMap((route) => {
+    const value = parse((route as unknown as Record<string, unknown>)[key]);
+    return value === null ? [] : [{ value, provenance: routeProvenance(route) }];
+  });
+  if (candidates.length === 0) return unavailable(unavailableReason, fallbackProvenance);
+  const values = new Map<string, typeof candidates[number]>();
+  for (const candidate of candidates) values.set(JSON.stringify(candidate.value), candidate);
+  if (values.size !== 1) return unavailable(conflictReason, fallbackProvenance);
+  const candidate = values.values().next().value as typeof candidates[number];
+  return available(candidate.value, candidate.provenance);
+}
+
+function profileFacts(
+  profileView: ModelProfileViewModel,
+  provenance: Provenance,
+): ModelProfileFacts {
+  const { profile } = profileView;
+  const sources = profileSourceProvenance(profileView);
+  const profileProvenance = sources[0] ?? provenance;
+  const routes = profile.priceRoutes.map(routeFact);
+  const rawRoutes = profile.priceRoutes as readonly NonNullable<ModelDirectoryEntry['representativePrice']>[];
+  const stringMetadata = (key: string, label: string) => sharedRouteMetadata(
+    rawRoutes,
+    key,
+    (value) => typeof value === 'string' && value.trim().length > 0 ? value : null,
+    `No published ${label} is available for this model's exact routes.`,
+    `Published routes disagree about ${label}; inspect individual route receipts.`,
+    profileProvenance,
+  );
+  const booleanMetadata = (key: string, label: string) => sharedRouteMetadata(
+    rawRoutes,
+    key,
+    (value) => typeof value === 'boolean' ? value : null,
+    `No published ${label} is available for this model's exact routes.`,
+    `Published routes disagree about ${label}; inspect individual route receipts.`,
+    profileProvenance,
+  );
+  const limitsMetadata = sharedRouteMetadata(
+    rawRoutes,
+    'perRequestLimitsJson',
+    (value) => {
+      if (typeof value !== 'string') return null;
+      try { return recordValue(JSON.parse(value)); } catch { return null; }
+    },
+    "No published per-request limits are available for this model's exact routes.",
+    'Published routes disagree about per-request limits; inspect individual route receipts.',
+    profileProvenance,
+  );
+  return {
+    freshness: {
+      status: profileView.freshness.status,
+      checkedAt: profileView.freshness.checkedAt,
+      message: profileView.freshness.message ?? null,
+    },
+    sourceCoverage: profile.summary.coverage,
+    benchmark: {
+      overallRank: profile.summary.overallRank,
+      evidenceStatus: profile.summary.evidenceStatus,
+      publishedAt: profile.summary.publishedAt,
+      checkedAt: profile.summary.checkedAt,
+      categories: profile.categories,
+      ledger: profile.ledger,
+    },
+    specifications: {
+      reasoningType: nullableEvidence(profile.identity.reasoningType, 'No published reasoning type is available.', profileProvenance),
+      familyId: nullableEvidence(profile.identity.familyId, 'No published family ID is available.', profileProvenance),
+      variantId: nullableEvidence(profile.identity.variantId, 'No published variant ID is available.', profileProvenance),
+      releaseDate: nullableEvidence(profile.identity.releaseDate, 'No published release date is available.', profileProvenance),
+      createdAt: stringMetadata('createdAt', 'creation date'),
+      expirationDate: stringMetadata('expirationDate', 'expiration date'),
+      knowledgeCutoff: stringMetadata('knowledgeCutoff', 'knowledge cutoff'),
+      tokenizer: stringMetadata('tokenizer', 'tokenizer'),
+      instructionFormat: stringMetadata('instructionFormat', 'instruction format'),
+      isModerated: booleanMetadata('isModerated', 'moderation status'),
+      perRequestLimits: limitsMetadata,
+      contextWindowTokens: nullableEvidence(profile.specifications.contextWindowTokens, 'No published context-window value is available.', profileProvenance),
+      maxInputTokens: nullableEvidence(profile.specifications.maxInputTokens, 'No published maximum-input value is available.', profileProvenance),
+      maxOutputTokens: nullableEvidence(profile.specifications.maxOutputTokens, 'No published maximum-output value is available.', profileProvenance),
+      inputModalities: nonEmptyStringArrayEvidence(profile.specifications.inputModalities, 'No published input modalities are available.', profileProvenance),
+      outputModalities: nonEmptyStringArrayEvidence(profile.specifications.outputModalities, 'No published output modalities are available.', profileProvenance),
+      supportedParameters: nonEmptyStringArrayEvidence(profile.specifications.supportedParameters, 'No published supported parameters are available.', profileProvenance),
+      selfHostingAvailable: nullableEvidence(profile.specifications.selfHostingAvailable, 'No published self-hosting availability is available.', profileProvenance),
+    },
+    routes,
+    sources,
+  };
+}
+
 function directoryModel(entry: ModelDirectoryEntry, envelope: ModelDirectoryEnvelope): PreviewModel {
+  const attribution = envelope.attribution.find((source) => source.sourceId === entry.sourceId);
   const provenance = pipelineProvenance({
     id: `model-directory:${envelope.revision}:${entry.canonicalSlug}`,
     label: 'Published model directory',
     effectiveAt: entry.profileCheckedAt,
+    url: attribution?.url,
     note: `Validated weekly directory and profile projection for ${entry.canonicalSlug}.`,
   });
-  const radar = entry.strongestCategory === null ? [] : [{
-    key: entry.strongestCategory.key,
-    label: entry.strongestCategory.label,
-    percentile: entry.strongestCategory.percentile,
-    rank: entry.strongestCategory.rank,
-    fieldSize: entry.strongestCategory.fieldSize,
-  }];
+  const radar = entry.categories.map((category) => ({
+    key: category.key,
+    label: category.label,
+    percentile: category.percentile,
+    rank: category.rank,
+    fieldSize: category.fieldSize,
+  }));
+  const selectedRoute = routePricing(entry.representativePrice, provenance);
   return {
     id: entry.canonicalSlug,
     identity: available({
@@ -96,19 +292,24 @@ function directoryModel(entry: ModelDirectoryEntry, envelope: ModelDirectoryEnve
     capability: entry.overallScore === null
       ? unavailable('No published overall capability score is available.', provenance)
       : available({ compositeScore: entry.overallScore, radar }, provenance),
-    routePricing: routePricing(entry.representativePrice, provenance),
+    routePricing: selectedRoute,
     taskEconomics: unavailable('The directory does not publish task-economics evidence.', provenance),
     runtime: unavailable('No published runtime observation is available for this model.', provenance),
     lifecycle: unavailable('Lifecycle status is sourced independently from the endpoint catalog.', provenance),
+    routeOptions: selectedRoute.availability === 'available'
+      ? available([selectedRoute.value], selectedRoute.provenance)
+      : unavailable('No complete published route price is available in the directory.', provenance),
   };
 }
 
 function profileModel(profileView: ModelProfileViewModel): PreviewModel {
   const { profile, directory } = profileView;
+  const source = profileSourceProvenance(profileView)[0];
   const provenance = pipelineProvenance({
     id: `model-profile:${profileView.revision}:${profile.identity.slug}`,
     label: 'Published model profile',
     effectiveAt: profile.summary.checkedAt,
+    url: source?.url,
     note: `Validated model profile revision ${profileView.selectedRevision}.`,
   });
   const selectedRoute = profile.priceRoutes.find((route) => (
@@ -119,6 +320,11 @@ function profileModel(profileView: ModelProfileViewModel): PreviewModel {
   const compatibleRoute = selectedRoute === null ? null : {
     ...selectedRoute,
   };
+  const selectedRoutePricing = routePricing(compatibleRoute, provenance);
+  const routeOptions = profile.priceRoutes
+    .map((route) => routePricing(route, provenance))
+    .flatMap((candidate) => candidate.availability === 'available' ? [candidate.value] : []);
+  const facts = profileFacts(profileView, provenance);
   return {
     id: profile.identity.slug,
     identity: available({
@@ -148,10 +354,14 @@ function profileModel(profileView: ModelProfileViewModel): PreviewModel {
           fieldSize: axis.fieldSize,
         })),
       }, provenance),
-    routePricing: routePricing(compatibleRoute, provenance),
+    routePricing: selectedRoutePricing,
     taskEconomics: unavailable('The profile does not publish comparable task-economics evidence.', provenance),
     runtime: unavailable('No published runtime observation is available for this model.', provenance),
     lifecycle: unavailable('Lifecycle status is sourced independently from the endpoint catalog.', provenance),
+    profileFacts: available(facts, provenance),
+    routeOptions: routeOptions.length === 0
+      ? unavailable('No complete published route price is available for this profile.', provenance)
+      : available(routeOptions, provenance),
   };
 }
 
@@ -245,6 +455,8 @@ function mergeModelFacts(directory: PreviewModel, benchmark: PreviewModel): Prev
     access: benchmark.access.availability === 'available' ? benchmark.access : directory.access,
     routePricing: directory.routePricing,
     lifecycle: directory.lifecycle,
+    profileFacts: directory.profileFacts ?? benchmark.profileFacts,
+    routeOptions: directory.routeOptions ?? benchmark.routeOptions,
   };
 }
 

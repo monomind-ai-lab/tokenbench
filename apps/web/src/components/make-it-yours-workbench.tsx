@@ -15,7 +15,7 @@ import { ChevronDown, CircleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Bar, Scatter } from "react-chartjs-2";
 
-import { formatDisplayUsd } from "@tokenbench/frontend/display-format";
+import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 
 import type {
   RankingData,
@@ -87,8 +87,10 @@ const PROVIDER_COLORS = [
   "#9a7cc1",
 ] as const;
 
+const MISSING_VALUE = "-";
+
 function fallbackChartTheme(dark: boolean, reducedMotion: boolean): MakeItYoursChartTheme {
-  const accent = dark ? "#9696ff" : "#1111ff";
+  const accent = dark ? "#9dabff" : "#1111ff";
   return dark
     ? {
         accent,
@@ -157,15 +159,19 @@ function titleCase(value: string) {
 }
 
 function formatMoney(value: number | null) {
-  return value === null ? "Unavailable" : formatDisplayUsd(value);
+  return value === null ? MISSING_VALUE : formatDisplayUsd(value);
 }
 
 function formatTtft(value: number | null) {
-  return value === null ? "Unavailable" : `${value.toFixed(2)}s`;
+  return value === null
+    ? MISSING_VALUE
+    : `${formatDisplayNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}s`;
 }
 
 function formatThroughput(value: number | null) {
-  return value === null ? "Unavailable" : `${value.toFixed(0)} tok/s`;
+  return value === null
+    ? MISSING_VALUE
+    : `${formatDisplayNumber(value, { maximumFractionDigits: 0 })} tok/s`;
 }
 
 function searchParametersFromRecord(record: SearchParameterRecord) {
@@ -235,7 +241,7 @@ function MakeItYoursRankChart({ rows }: { readonly rows: readonly WeightedRankin
           backgroundColor: theme.tooltip,
           borderColor: theme.tooltipBorder,
           borderWidth: 1,
-          callbacks: { label: (item) => `Weighted score ${Number(item.parsed.x).toFixed(1)}` },
+          callbacks: { label: (item) => `Weighted score ${formatDisplayNumber(Number(item.parsed.x), { maximumFractionDigits: 1 })}` },
           displayColors: false,
           titleColor: theme.strong,
           bodyColor: theme.muted,
@@ -246,7 +252,7 @@ function MakeItYoursRankChart({ rows }: { readonly rows: readonly WeightedRankin
         x: {
           border: { color: theme.grid },
           grid: { color: theme.grid },
-          ticks: { color: theme.muted },
+          ticks: { color: theme.muted, callback: (value) => formatDisplayNumber(Number(value), { maximumFractionDigits: 1 }) },
           title: { color: theme.muted, display: true, text: "Weighted score" },
         },
         y: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted } },
@@ -298,8 +304,8 @@ function MakeItYoursSlaChart({
           borderWidth: 1,
           callbacks: {
             label: (item) => metric === "ttft"
-              ? `${Number(item.parsed.x).toFixed(2)} seconds`
-              : `${Number(item.parsed.x).toFixed(0)} tok/s`,
+              ? `${formatDisplayNumber(Number(item.parsed.x), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} seconds`
+              : `${formatDisplayNumber(Number(item.parsed.x), { maximumFractionDigits: 0 })} tok/s`,
           },
           displayColors: false,
           titleColor: theme.strong,
@@ -308,7 +314,7 @@ function MakeItYoursSlaChart({
       },
       responsive: true,
       scales: {
-        x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted } },
+        x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => metric === "ttft" ? formatDisplayNumber(Number(value), { maximumFractionDigits: 2 }) : formatDisplayNumber(Number(value), { maximumFractionDigits: 0 }) } },
         y: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted } },
       },
     }),
@@ -369,7 +375,7 @@ function MakeItYoursCostChart({ rows }: { readonly rows: readonly WeightedRankin
           borderWidth: 1,
           callbacks: {
             title: (items) => String((items[0]?.raw as { model?: string } | undefined)?.model ?? "Model"),
-            label: (item) => `${formatMoney(Number(item.parsed.x))} / successful evaluation · score ${Number(item.parsed.y).toFixed(1)}`,
+            label: (item) => `${formatMoney(Number(item.parsed.x))} / successful evaluation · score ${formatDisplayNumber(Number(item.parsed.y), { maximumFractionDigits: 1 })}`,
             afterLabel: (item) => (item.raw as { frontier?: boolean }).frontier ? "Weighted frontier" : "",
           },
           displayColors: false,
@@ -389,7 +395,7 @@ function MakeItYoursCostChart({ rows }: { readonly rows: readonly WeightedRankin
         y: {
           border: { color: theme.grid },
           grid: { color: theme.grid },
-          ticks: { color: theme.muted },
+          ticks: { color: theme.muted, callback: (value) => formatDisplayNumber(Number(value), { maximumFractionDigits: 1 }) },
           title: { color: theme.muted, display: true, text: "Weighted score" },
         },
       },
@@ -424,7 +430,7 @@ function MakeItYoursCostRankingChart({ rows }: { readonly rows: readonly Weighte
         backgroundColor: theme.tooltip,
         borderColor: theme.tooltipBorder,
         borderWidth: 1,
-        callbacks: { label: (item) => `Weighted score ${Number(item.parsed.x).toFixed(1)}` },
+        callbacks: { label: (item) => `Weighted score ${formatDisplayNumber(Number(item.parsed.x), { maximumFractionDigits: 1 })}` },
         displayColors: false,
         titleColor: theme.strong,
         bodyColor: theme.muted,
@@ -432,7 +438,7 @@ function MakeItYoursCostRankingChart({ rows }: { readonly rows: readonly Weighte
     },
     responsive: true,
     scales: {
-      x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted } },
+      x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayNumber(Number(value), { maximumFractionDigits: 1 }) } },
       y: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted } },
     },
   }), [theme]);
@@ -483,11 +489,11 @@ function MakeItYoursRankingTable({
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{index + 1}</td>
                 <th className="border-b border-border/70 px-3 py-3 font-medium" scope="row">{row.name}</th>
                 <td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{row.provider}</td>
-                <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{row.score.toFixed(1)}</td>
-                <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{projected ? `${formatMoney(projected.inputUsdPerMillion)} / ${formatMoney(projected.outputUsdPerMillion)}` : "Unavailable"}</td>
+                <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</td>
+                <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{projected ? `${formatMoney(projected.inputUsdPerMillion)} / ${formatMoney(projected.outputUsdPerMillion)}` : MISSING_VALUE}</td>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatTtft(row.ttft)}</td>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatThroughput(row.throughput)}</td>
-                <td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{projected?.lifecycle ?? "Unavailable"}</td>
+                <td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{projected?.lifecycle ?? MISSING_VALUE}</td>
                 <td className="border-b border-border/70 px-3 py-3"><Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? "SLA unobserved" : row.meetsSla ? "Pass" : "Outside SLA"}</Badge></td>
                 <td className="border-b border-border/70 px-3 py-3"><Button aria-pressed={selected} className={cn("min-h-11", selected && "bg-active-control text-active-control-foreground")} onClick={() => onToggle(row.id)} size="sm" type="button" variant={selected ? "secondary" : "outline"}>{selected ? "Selected" : "Compare"}</Button></td>
               </tr>
@@ -525,11 +531,11 @@ function MakeItYoursRankingCards({
               <Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? "SLA unobserved" : row.meetsSla ? "Pass" : "Outside SLA"}</Badge>
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4 text-xs">
-              <div><dt className="text-muted-foreground">Weighted</dt><dd className="mt-1 font-mono tabular-nums">{row.score.toFixed(1)}</dd></div>
+              <div><dt className="text-muted-foreground">Weighted</dt><dd className="mt-1 font-mono tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</dd></div>
               <div><dt className="text-muted-foreground">Evaluation cost / success</dt><dd className="mt-1 font-mono tabular-nums">{formatMoney(row.cost)}</dd></div>
               <div><dt className="text-muted-foreground">TTFT</dt><dd className="mt-1 font-mono tabular-nums">{formatTtft(row.ttft)}</dd></div>
               <div><dt className="text-muted-foreground">Throughput</dt><dd className="mt-1 font-mono tabular-nums">{formatThroughput(row.throughput)}</dd></div>
-              <div className="col-span-2"><dt className="text-muted-foreground">Lifecycle</dt><dd className="mt-1">{projected?.lifecycle ?? "Unavailable"}</dd></div>
+              <div className="col-span-2"><dt className="text-muted-foreground">Lifecycle</dt><dd className="mt-1">{projected?.lifecycle ?? MISSING_VALUE}</dd></div>
             </dl>
             <Button aria-pressed={selected} className={cn("mt-4 min-h-11 w-full", selected && "bg-active-control text-active-control-foreground")} onClick={() => onToggle(row.id)} type="button" variant={selected ? "secondary" : "outline"}>{selected ? "Remove from comparison" : "Select for comparison"}</Button>
           </article>
@@ -557,7 +563,7 @@ function MakeItYoursCostTable({ rows }: { readonly rows: readonly WeightedRankin
       <table className="w-full min-w-[680px] text-left text-sm">
         <caption className="sr-only">Exact weighted score and cost values</caption>
         <thead className="text-xs text-muted-foreground"><tr>{["Cost rank", "Model", "Provider", "Weighted", "Evaluation cost / success", "Frontier", "SLA"].map((heading) => <th className="border-b border-border px-3 py-3 font-medium" key={heading} scope="col">{heading}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr className="hover:bg-muted/45" key={row.id}><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{index + 1}</td><th className="border-b border-border/70 px-3 py-3 font-medium" scope="row">{row.name}</th><td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{row.provider}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{row.score.toFixed(1)}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatMoney(row.cost)}</td><td className="border-b border-border/70 px-3 py-3">{row.frontier ? "Weighted frontier" : "Dominated"}</td><td className="border-b border-border/70 px-3 py-3">{row.meetsSla ? "Pass" : "Outside SLA"}</td></tr>)}</tbody>
+        <tbody>{rows.map((row, index) => <tr className="hover:bg-muted/45" key={row.id}><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{index + 1}</td><th className="border-b border-border/70 px-3 py-3 font-medium" scope="row">{row.name}</th><td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{row.provider}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatMoney(row.cost)}</td><td className="border-b border-border/70 px-3 py-3">{row.frontier ? "Weighted frontier" : "Dominated"}</td><td className="border-b border-border/70 px-3 py-3">{row.meetsSla ? "Pass" : "Outside SLA"}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -725,7 +731,7 @@ export function MakeItYoursWorkbench({
               </CardHeader>
               <CardContent>
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
-                  {WEIGHTED_RANKING_CAPABILITIES.map((capability) => <label className="grid gap-2" htmlFor={`make-it-yours-${capability}`} key={capability}><span className="flex items-baseline justify-between gap-3 text-sm font-medium"><span>{titleCase(capability)}</span><output className="font-mono text-xs tabular-nums text-muted-foreground" htmlFor={`make-it-yours-${capability}`}>{state.weights[capability].toFixed(0)}%</output></span><input aria-label={`${titleCase(capability)} weight`} className="h-11 w-full accent-primary" id={`make-it-yours-${capability}`} max="100" min="0" onChange={(event) => updateWeight(capability, Number(event.currentTarget.value))} step="1" type="range" value={state.weights[capability]} /></label>)}
+                  {WEIGHTED_RANKING_CAPABILITIES.map((capability) => <label className="grid gap-2" htmlFor={`make-it-yours-${capability}`} key={capability}><span className="flex items-baseline justify-between gap-3 text-sm font-medium"><span>{titleCase(capability)}</span><output className="font-mono text-xs tabular-nums text-muted-foreground" htmlFor={`make-it-yours-${capability}`}>{formatDisplayNumber(state.weights[capability], { maximumFractionDigits: 0 })}%</output></span><input aria-label={`${titleCase(capability)} weight`} className="h-11 w-full accent-primary" id={`make-it-yours-${capability}`} max="100" min="0" onChange={(event) => updateWeight(capability, Number(event.currentTarget.value))} step="1" type="range" value={state.weights[capability]} /></label>)}
                 </div>
                 {!ranking.valid ? <p className="mt-5 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive" role="alert">{ranking.reason}</p> : null}
               </CardContent>
@@ -750,10 +756,10 @@ export function MakeItYoursWorkbench({
               {projection.unavailableCount > 0 ? <p className="rounded-lg border border-border bg-muted/35 p-3 text-sm leading-6 text-muted-foreground" role="status">{projection.unavailableCount} returned model{projection.unavailableCount === 1 ? "" : "s"} lack a complete published category or evaluation-cost fact and remain outside this custom ranking.</p> : null}
               {message ? <p className={cn("rounded-lg border p-3 text-sm", message.tone === "error" ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border bg-muted/35 text-muted-foreground")} role="status">{message.text}</p> : null}
               {!ranking.valid ? <p className="rounded-lg border border-border bg-muted/35 p-4 text-sm text-muted-foreground" role="status">Ranking is paused until at least one capability weight is above zero.</p> : ranking.rows.length === 0 ? <p className="rounded-lg border border-border bg-muted/35 p-4 text-sm leading-6 text-muted-foreground" role="status">{missingRequiredFacts ? "No complete returned model can be ranked until the verified source publishes every required capability category and aggregate evaluation-cost fact." : "No visible weighted results match the current filters. Reset an access or provider filter, or keep candidates with unobserved or outside-SLA runtime to restore evidence."}</p> : <>
-                <p className="font-mono text-xs leading-5 text-muted-foreground" role="status">Live result: <span className="font-semibold text-foreground">{ranking.rows[0]?.name}</span> leads at {ranking.rows[0]?.score.toFixed(1)}. Showing {ranking.rows.length} of {ranking.candidates.length} filtered candidates; {runtimeObservedCount === 0 ? "runtime SLA measurements are not published for this release" : `${passingCount} of ${runtimeObservedCount} observed candidates meet both SLA thresholds`}.</p>
+                <p className="font-mono text-xs leading-5 text-muted-foreground" role="status">Live result: <span className="font-semibold text-foreground">{ranking.rows[0]?.name ?? MISSING_VALUE}</span> leads at {ranking.rows[0] === undefined ? MISSING_VALUE : formatDisplayNumber(ranking.rows[0].score, { maximumFractionDigits: 1 })}. Showing {ranking.rows.length} of {ranking.candidates.length} filtered candidates; {runtimeObservedCount === 0 ? "runtime SLA measurements are not published for this release" : `${passingCount} of ${runtimeObservedCount} observed candidates meet both SLA thresholds`}.</p>
                 <div className="grid gap-5 xl:grid-cols-[1.08fr_.92fr]">
                   <section aria-labelledby="weighted-chart-title" className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold" id="weighted-chart-title">Weighted score ranking</h3><p className="mt-1 text-sm text-muted-foreground">Provider color identifies the source organization; ranking uses the exact current matrix.</p><div className="mt-5"><MakeItYoursRankChart rows={ranking.chartRows} /></div></section>
-                  <section aria-labelledby="sla-title" className="rounded-xl border border-border bg-background p-4"><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-semibold" id="sla-title">Service-level filter</h3><p className="mt-1 text-sm text-muted-foreground">Constraints operate beside the score and activate only for observed runtime rows.</p></div><Badge variant={runtimeObservedCount > 0 && passingCount === runtimeObservedCount ? "secondary" : "outline"}>{runtimeObservedCount === 0 ? "Runtime unobserved" : `${passingCount} / ${runtimeObservedCount} pass`}</Badge></div><div className="mt-5 grid gap-5"><label className="grid gap-2 text-sm font-medium"><span className="flex justify-between gap-3"><span>Maximum TTFT</span><output className="font-mono text-xs text-muted-foreground">≤ {state.maxTtft.toFixed(2)}s</output></span><input aria-label="Maximum TTFT" className="h-11 w-full accent-primary disabled:opacity-45" disabled={runtimeObservedCount === 0} max="1.2" min="0.2" onChange={(event) => patchState({ maxTtft: Number(event.currentTarget.value) })} step="0.05" type="range" value={state.maxTtft} /></label><label className="grid gap-2 text-sm font-medium"><span className="flex justify-between gap-3"><span>Minimum throughput</span><output className="font-mono text-xs text-muted-foreground">≥ {state.minThroughput} tok/s</output></span><input aria-label="Minimum throughput" className="h-11 w-full accent-primary disabled:opacity-45" disabled={runtimeObservedCount === 0} max="140" min="20" onChange={(event) => patchState({ minThroughput: Number(event.currentTarget.value) })} step="5" type="range" value={state.minThroughput} /></label><label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 text-sm font-medium"><input checked={state.showOutsideSla} className="size-4 accent-primary" onChange={(event) => patchState({ showOutsideSla: event.currentTarget.checked })} type="checkbox" />Keep candidates with unobserved or outside-SLA runtime</label></div></section>
+                  <section aria-labelledby="sla-title" className="rounded-xl border border-border bg-background p-4"><div className="flex items-start justify-between gap-4"><div><h3 className="text-lg font-semibold" id="sla-title">Service-level filter</h3><p className="mt-1 text-sm text-muted-foreground">Constraints operate beside the score and activate only for observed runtime rows.</p></div><Badge variant={runtimeObservedCount > 0 && passingCount === runtimeObservedCount ? "secondary" : "outline"}>{runtimeObservedCount === 0 ? "Runtime unobserved" : `${passingCount} / ${runtimeObservedCount} pass`}</Badge></div><div className="mt-5 grid gap-5"><label className="grid gap-2 text-sm font-medium"><span className="flex justify-between gap-3"><span>Maximum TTFT</span><output className="font-mono text-xs text-muted-foreground">≤ {formatDisplayNumber(state.maxTtft, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}s</output></span><input aria-label="Maximum TTFT" className="h-11 w-full accent-primary disabled:opacity-45" disabled={runtimeObservedCount === 0} max="1.2" min="0.2" onChange={(event) => patchState({ maxTtft: Number(event.currentTarget.value) })} step="0.05" type="range" value={state.maxTtft} /></label><label className="grid gap-2 text-sm font-medium"><span className="flex justify-between gap-3"><span>Minimum throughput</span><output className="font-mono text-xs text-muted-foreground">≥ {formatDisplayNumber(state.minThroughput, { maximumFractionDigits: 0 })} tok/s</output></span><input aria-label="Minimum throughput" className="h-11 w-full accent-primary disabled:opacity-45" disabled={runtimeObservedCount === 0} max="140" min="20" onChange={(event) => patchState({ minThroughput: Number(event.currentTarget.value) })} step="5" type="range" value={state.minThroughput} /></label><label className="flex min-h-11 items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 text-sm font-medium"><input checked={state.showOutsideSla} className="size-4 accent-primary" onChange={(event) => patchState({ showOutsideSla: event.currentTarget.checked })} type="checkbox" />Keep candidates with unobserved or outside-SLA runtime</label></div></section>
                 </div>
 
                 <div className="grid gap-5 xl:grid-cols-2">

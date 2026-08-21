@@ -202,7 +202,7 @@ test("capability routes retain the exact source category, rank, and model access
 
 test("value and pricing routes retain selected route economics and frontier facts", () => {
   const overall = metric("benchlm:overall:raw", "overall");
-  const valuePrice = primaryPrice();
+  const valuePrice = primaryPrice({ cacheWriteUsdPerMillion: 0.2 });
   const valueResponse = envelope("llm-value", "inputHeavy", [{
     model: model(),
     metric: overall,
@@ -231,6 +231,29 @@ test("value and pricing routes retain selected route economics and frontier fact
       ? valueRow.model.routePricing.value.blendedUsdPerMillion.value
       : null,
     blendedCostPerMillion(1, 4, "inputHeavy"),
+  );
+  assert.equal(
+    valueRow?.model.routePricing.availability === "available"
+      && valueRow.model.routePricing.value.cache.availability === "available"
+      && valueRow.model.routePricing.value.cache.value.writeUsdPerMillion.availability === "available"
+      ? valueRow.model.routePricing.value.cache.value.writeUsdPerMillion.value
+      : null,
+    0.2,
+  );
+  assert.deepEqual(
+    valueRow?.model.routePricing.availability === "available"
+      ? valueRow.model.routePricing.value.receipt
+      : null,
+    {
+      sourceId: "openrouter",
+      providerId: "openrouter",
+      routeId: "openrouter:model-a",
+      sourceModelId: "model-a",
+      sourceArtifactId: "openrouter-artifact",
+      sourceUrl: "https://example.com/openrouter",
+      observedAt: ISO_TIME,
+      verificationStatus: "primary",
+    },
   );
 
   const pricingPrice = primaryPrice();

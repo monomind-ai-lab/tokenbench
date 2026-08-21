@@ -151,9 +151,9 @@ test("published evaluation cost remains rankable while missing runtime stays exp
     Model: "Verified model",
     Provider: "Example provider",
     "Weighted score": 83.3,
-    "Evaluation cost / success USD": 0.014,
-    "TTFT seconds": "Unavailable",
-    "Throughput tok/s": "Unavailable",
+      "Evaluation cost / success USD": 0.01,
+    "TTFT seconds": "-",
+    "Throughput tok/s": "-",
     "SLA result": "Outside threshold",
     "Weighted frontier": "Yes",
   }]);

@@ -102,7 +102,10 @@ function validateEntitlementEvidence(value: unknown, name: string): asserts valu
 
   if (!evidence.source || typeof evidence.source !== 'object') fail(`${name}.source must be an object`);
   requireUrl(evidence.source.url, `${name}.source.url`);
-  requireString(evidence.source.accessedAt, `${name}.source.accessedAt`);
+  requireFiniteIsoTimestamp(evidence.source.accessedAt, `${name}.source.accessedAt`);
+  if (evidence.source.publishedOrModifiedAt !== undefined) {
+    requireFiniteIsoTimestamp(evidence.source.publishedOrModifiedAt, `${name}.source.publishedOrModifiedAt`);
+  }
   if (!['high', 'medium', 'low'].includes(evidence.source.confidence)) fail(`${name}.source.confidence is invalid`);
 }
 
@@ -171,6 +174,8 @@ export function validateCatalogResponse(value: unknown): CatalogResponse {
     planIds.add(plan.id);
     requireNonNegativeInteger(plan.monthlyCostMicroDollars, `${name}.monthlyCostMicroDollars`);
     if (plan.billingCycle !== undefined && !['monthly', 'annual', 'other'].includes(plan.billingCycle)) fail(`${name}.billingCycle is invalid`);
+    if (plan.annualCostMicroDollars !== undefined) requireNonNegativeInteger(plan.annualCostMicroDollars, `${name}.annualCostMicroDollars`);
+    if (plan.annualEffectiveMonthlyCostMicroDollars !== undefined) requireNonNegativeInteger(plan.annualEffectiveMonthlyCostMicroDollars, `${name}.annualEffectiveMonthlyCostMicroDollars`);
     validateOptionalStringArray(plan.supportedModelIds, `${name}.supportedModelIds`);
     if (plan.currency !== 'USD' || plan.pricingBasis !== 'subscription' || plan.route !== 'subscription') fail(`${name} has invalid pricing metadata`);
     validateEntitlement(plan.entitlement, `${name}.entitlement`);

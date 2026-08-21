@@ -28,7 +28,7 @@ import {
 } from "react";
 import { Scatter } from "react-chartjs-2";
 
-import { formatDisplayUsd } from "@tokenbench/frontend/display-format";
+import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 
 import { ResultActions, type CsvRow } from "@/components/result-actions";
 import { Button } from "@/components/ui/button";
@@ -80,8 +80,10 @@ const SOURCE_SLOTS = [
   { id: "openrouter", label: "Route catalog source" },
 ] as const;
 
+const MISSING_VALUE = "-";
+
 function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return "Unavailable";
+  if (!value) return MISSING_VALUE;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return new Intl.DateTimeFormat("en-US", {
@@ -94,7 +96,7 @@ function formatTimestamp(value: string | null | undefined): string {
 function fallbackChartTheme(dark: boolean, reducedMotion: boolean): ChartTheme {
   return dark
     ? {
-        accent: "#9696ff",
+        accent: "#9dabff",
         grid: "rgba(255,255,255,.11)",
         muted: "#b8b8c6",
         reducedMotion,
@@ -163,9 +165,24 @@ function formatCost(value: number): string {
 }
 
 function formatAxis(value: number): string {
-  return new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 2,
-  }).format(value);
+  return formatDisplayNumber(value);
+}
+
+function formatPointView(
+  point: PricePerformancePointView,
+  attribution: readonly PricePerformanceAttribution[],
+) {
+  const facts = formatPricePerformancePointView(point, attribution);
+  return facts.scorePerDollar === "Unavailable"
+    ? {
+        ...facts,
+        accessibleName: facts.accessibleName.replace(
+          "score per dollar unavailable",
+          "score per dollar -",
+        ),
+        scorePerDollar: MISSING_VALUE,
+      }
+    : facts;
 }
 
 function priceRangeIndexes(
@@ -294,7 +311,7 @@ function LlmPricePerformanceControls({
             ))
           ) : (
             <span className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-dashed border-border px-3 text-xs text-muted-foreground">
-              Unavailable
+              {MISSING_VALUE}
             </span>
           )}
         </div>
@@ -481,7 +498,7 @@ function LlmPricePerformanceParetoChart({
         y: {
           border: { color: chartTheme.grid },
           grid: { color: chartTheme.grid },
-          ticks: { color: chartTheme.muted },
+          ticks: { color: chartTheme.muted, callback: (value) => formatAxis(Number(value)) },
           title: {
             color: chartTheme.muted,
             display: true,
@@ -550,7 +567,7 @@ function LlmPricePerformanceParetoChart({
       </figcaption>
       <ol className="sr-only" aria-label="Accessible chart points">
         {points.map((point) => {
-          const facts = formatPricePerformancePointView(point, attribution);
+          const facts = formatPointView(point, attribution);
           return (
             <li key={point.modelKey}>
               <button onClick={(event) => onSelect(point, event.currentTarget)} type="button">
@@ -577,7 +594,7 @@ function LlmPricePerformanceDetailDialog({
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-  const facts = formatPricePerformancePointView(point, attribution);
+  const facts = formatPointView(point, attribution);
 
   useEffect(() => {
     closeRef.current?.focus();
@@ -689,7 +706,7 @@ function LlmPricePerformanceTable({
   readonly points: readonly PricePerformancePointView[];
 }) {
   const rows = points.map((point) => ({
-    facts: formatPricePerformancePointView(point, attribution),
+    facts: formatPointView(point, attribution),
     point,
   }));
   return (
@@ -785,7 +802,7 @@ function LlmPricePerformanceEvidence({
       </div>
       <dl className="mt-7 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
         {[
-          ["Revision", envelope?.revision ?? "Unavailable"],
+          ["Revision", envelope?.revision ?? MISSING_VALUE],
           ["Published", formatTimestamp(envelope?.publishedAt)],
           ["Checked", formatTimestamp(envelope?.freshness.checkedAt)],
         ].map(([term, value]) => (
@@ -809,7 +826,7 @@ function LlmPricePerformanceEvidence({
                 <span className="text-sm font-medium text-muted-foreground">{slot.label}</span>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
-                {source ? `Updated ${formatTimestamp(source.updatedAt)}` : "Unavailable"}
+                {source?.updatedAt ? `Updated ${formatTimestamp(source.updatedAt)}` : MISSING_VALUE}
               </p>
             </li>
           );
@@ -824,7 +841,7 @@ function csvRows(
   attribution: readonly PricePerformanceAttribution[],
 ): CsvRow[] {
   return points.map((point) => {
-    const facts = formatPricePerformancePointView(point, attribution);
+    const facts = formatPointView(point, attribution);
     return {
       Model: facts.modelName,
       Score: facts.score,

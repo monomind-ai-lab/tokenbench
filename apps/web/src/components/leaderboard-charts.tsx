@@ -23,6 +23,7 @@ ChartJS.register(BarElement, CategoryScale, Legend, LinearScale, PointElement, T
 
 const COLORS = ["#5489d6", "#d97757", "#7c8fd1", "#66a98d", "#c49a53", "#9a7cc1"];
 const MONOMIND_CHART_ACCENT = "#1111ff";
+const MISSING_VALUE = "-";
 
 interface ChartTheme {
   readonly accent: string;
@@ -35,7 +36,7 @@ interface ChartTheme {
 }
 
 function fallbackChartTheme(dark: boolean, reducedMotion: boolean): ChartTheme {
-  const accent = dark ? "#9696ff" : MONOMIND_CHART_ACCENT;
+  const accent = dark ? "#9dabff" : MONOMIND_CHART_ACCENT;
   return dark ? {
     accent,
     grid: "rgba(255,255,255,.07)",
@@ -155,11 +156,12 @@ export function LeaderboardScoreChart({ rows, label }: { rows: readonly Leaderbo
         displayColors: false,
         titleColor: theme.strong,
         bodyColor: theme.muted,
+        callbacks: { label: (context) => formatDisplayNumber(Number(context.raw)) },
       },
     },
     scales: {
       x: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted, maxRotation: 45, minRotation: 0 } },
-      y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted }, title: { color: theme.muted, display: true, text: label } },
+      y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayNumber(Number(value)) }, title: { color: theme.muted, display: true, text: label } },
     },
   }), [label, theme]);
   if (!visibleRows.length) return null;
@@ -193,10 +195,10 @@ export function LeaderboardCostScoreChart({
           title: (items) => String((items[0]?.raw as { model?: string } | undefined)?.model ?? "Model"),
           label: (context) => {
             const price = context.parsed.x === null
-              ? "Price unavailable"
+              ? MISSING_VALUE
               : `${formatDisplayUsd(context.parsed.x)}/1M blended`;
             const score = context.parsed.y === null
-              ? "Unavailable"
+              ? MISSING_VALUE
               : formatDisplayNumber(context.parsed.y);
             return `${price} · ${label.toLocaleLowerCase()} ${score}`;
           },
@@ -209,7 +211,7 @@ export function LeaderboardCostScoreChart({
     },
     scales: {
       x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) }, title: { color: theme.muted, display: true, text: "Blended route price / 1M tokens" } },
-      y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted }, title: { color: theme.muted, display: true, text: label } },
+      y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayNumber(Number(value)) }, title: { color: theme.muted, display: true, text: label } },
     },
   }), [label, theme]);
   if (visibleRows.length < 2) return null;
@@ -235,7 +237,7 @@ export function LeaderboardPriceChart({ rows }: { rows: readonly LeaderboardDisp
     maintainAspectRatio: false,
     indexAxis: "y",
     animation: theme.reducedMotion ? false : { duration: 400 },
-    plugins: { legend: { display: false }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, displayColors: false, titleColor: theme.strong, bodyColor: theme.muted } },
+    plugins: { legend: { display: false }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, displayColors: false, titleColor: theme.strong, bodyColor: theme.muted, callbacks: { label: (context) => `${formatDisplayUsd(Number(context.raw))}/1M` } } },
     scales: {
       x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) }, title: { color: theme.muted, display: true, text: "USD / 1M blended tokens" } },
       y: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted } },

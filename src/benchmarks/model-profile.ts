@@ -88,6 +88,7 @@ export interface ModelProfilePriceRoute {
   readonly canonicalSlug: string | null;
   readonly inputUsdPerMillion: number | null;
   readonly cachedInputUsdPerMillion: number | null;
+  readonly cacheWriteUsdPerMillion: number | null;
   readonly outputUsdPerMillion: number | null;
   readonly contextWindowTokens: number | null;
   readonly maxInputTokens: number | null;
@@ -95,6 +96,15 @@ export interface ModelProfilePriceRoute {
   readonly inputModalities: readonly string[] | null;
   readonly outputModalities: readonly string[] | null;
   readonly supportedParameters: readonly string[] | null;
+  /** OpenRouter model metadata preserved on this exact source route. */
+  readonly createdAt: string | null;
+  readonly expirationDate: string | null;
+  readonly knowledgeCutoff: string | null;
+  readonly tokenizer: string | null;
+  readonly instructionFormat: string | null;
+  readonly isModerated: boolean | null;
+  /** Exact source JSON; its provider-owned sub-schema is intentionally opaque. */
+  readonly perRequestLimitsJson: string | null;
   readonly verificationStatus: BenchmarkPriceCheck['verificationStatus'];
   readonly sourceArtifactId: string;
   readonly sourceUrl: string;
@@ -237,6 +247,34 @@ function timestamp(value: unknown, label: string): string {
 function nullableTimestamp(value: unknown, label: string): string | null {
   if (value === null) return null;
   return timestamp(value, label);
+}
+
+function nullableCalendarDate(value: unknown, label: string): string | null {
+  if (value === null) return null;
+  const result = nonBlank(value, label);
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(result)
+    || new Date(`${result}T00:00:00.000Z`).toISOString().slice(0, 10) !== result) {
+    fail(`${label} must be a calendar date or null`);
+  }
+  return result;
+}
+
+function nullableBoolean(value: unknown, label: string): boolean | null {
+  if (value === null) return null;
+  if (value === true || value === false) return value;
+  fail(`${label} must be boolean or null`);
+}
+
+function nullableJsonObject(value: unknown, label: string): string | null {
+  if (value === null) return null;
+  const json = nonBlank(value, label);
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) fail(`${label} must be a JSON object or null`);
+  } catch {
+    fail(`${label} must be a JSON object or null`);
+  }
+  return json;
 }
 function httpsUrl(value: unknown, label: string): string {
   const result = nonBlank(value, label);
@@ -397,6 +435,7 @@ function routeFromPrice(
     canonicalSlug: price.canonicalSlug,
     inputUsdPerMillion: price.inputUsdPerMillion,
     cachedInputUsdPerMillion: price.cachedInputUsdPerMillion,
+    cacheWriteUsdPerMillion: price.cacheWriteUsdPerMillion ?? null,
     outputUsdPerMillion: price.outputUsdPerMillion,
     contextWindowTokens: price.contextWindowTokens,
     maxInputTokens: price.maxInputTokens,
@@ -404,6 +443,13 @@ function routeFromPrice(
     inputModalities: price.inputModalities,
     outputModalities: price.outputModalities,
     supportedParameters: price.supportedParameters,
+    createdAt: price.createdAt ?? null,
+    expirationDate: price.expirationDate ?? null,
+    knowledgeCutoff: price.knowledgeCutoff ?? null,
+    tokenizer: price.tokenizer ?? null,
+    instructionFormat: price.instructionFormat ?? null,
+    isModerated: price.isModerated ?? null,
+    perRequestLimitsJson: price.perRequestLimitsJson ?? null,
     verificationStatus: price.verificationStatus,
     sourceArtifactId: price.sourceArtifactId,
     sourceUrl: source.sourceUrl,
@@ -638,6 +684,7 @@ function validateProfileSnapshot(value: unknown): ModelProfileSnapshotData {
       canonicalSlug: nullableString(candidate.canonicalSlug, `priceRoutes[${index}].canonicalSlug`),
       inputUsdPerMillion: finiteOrNull(candidate.inputUsdPerMillion, `priceRoutes[${index}].inputUsdPerMillion`),
       cachedInputUsdPerMillion: finiteOrNull(candidate.cachedInputUsdPerMillion, `priceRoutes[${index}].cachedInputUsdPerMillion`),
+      cacheWriteUsdPerMillion: finiteOrNull(candidate.cacheWriteUsdPerMillion ?? null, `priceRoutes[${index}].cacheWriteUsdPerMillion`),
       outputUsdPerMillion: finiteOrNull(candidate.outputUsdPerMillion, `priceRoutes[${index}].outputUsdPerMillion`),
       contextWindowTokens: positiveIntegerOrNull(candidate.contextWindowTokens, `priceRoutes[${index}].contextWindowTokens`),
       maxInputTokens: positiveIntegerOrNull(candidate.maxInputTokens, `priceRoutes[${index}].maxInputTokens`),
@@ -645,6 +692,13 @@ function validateProfileSnapshot(value: unknown): ModelProfileSnapshotData {
       inputModalities: nullableStringArray(candidate.inputModalities, `priceRoutes[${index}].inputModalities`),
       outputModalities: nullableStringArray(candidate.outputModalities, `priceRoutes[${index}].outputModalities`),
       supportedParameters: nullableStringArray(candidate.supportedParameters, `priceRoutes[${index}].supportedParameters`),
+      createdAt: nullableTimestamp(candidate.createdAt ?? null, `priceRoutes[${index}].createdAt`),
+      expirationDate: nullableCalendarDate(candidate.expirationDate ?? null, `priceRoutes[${index}].expirationDate`),
+      knowledgeCutoff: nullableString(candidate.knowledgeCutoff ?? null, `priceRoutes[${index}].knowledgeCutoff`),
+      tokenizer: nullableString(candidate.tokenizer ?? null, `priceRoutes[${index}].tokenizer`),
+      instructionFormat: nullableString(candidate.instructionFormat ?? null, `priceRoutes[${index}].instructionFormat`),
+      isModerated: nullableBoolean(candidate.isModerated ?? null, `priceRoutes[${index}].isModerated`),
+      perRequestLimitsJson: nullableJsonObject(candidate.perRequestLimitsJson ?? null, `priceRoutes[${index}].perRequestLimitsJson`),
       verificationStatus: verificationStatus(candidate.verificationStatus, `priceRoutes[${index}].verificationStatus`),
       sourceArtifactId: nonBlank(candidate.sourceArtifactId, `priceRoutes[${index}].sourceArtifactId`),
       sourceUrl,

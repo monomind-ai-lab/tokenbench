@@ -64,7 +64,7 @@ function evidenceState<T>(value: EvidenceValue<T>) {
 }
 
 function formatMeasurement(value: number | null): string {
-  return value === null ? "Unavailable" : formatDisplayNumber(value);
+  return value === null ? "-" : formatDisplayNumber(value);
 }
 
 function exportMeasurement(value: number | null): number | null {
@@ -73,7 +73,7 @@ function exportMeasurement(value: number | null): number | null {
 
 function comparisonRows(models: readonly (PreviewModel | null)[]): CsvRow[] {
   return models.flatMap<CsvRow>((model, index): CsvRow[] => {
-    if (model === null) return [{ model: `Requested model ${index + 1}`, metric: "Evidence", value: "Unavailable", state: "Unavailable" }];
+    if (model === null) return [{ model: `Requested model ${index + 1}`, metric: "Evidence", value: "-", state: "Unavailable" }];
     const name = modelName(model, model.id);
     const route = routeEvidenceValue(model.routePricing);
     const capability = routeEvidenceValue(model.capability);
@@ -104,14 +104,14 @@ function ModelSummary({ model, requestedSlug }: { model: PreviewModel | null; re
   const runtime = routeEvidenceValue(model.runtime);
   return (
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-      <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{details?.provider ?? "Unavailable"}</Badge>{evidenceState(model.identity)}{evidenceState(model.access)}</div>
+      <div className="flex flex-wrap items-center gap-2"><Badge variant="secondary">{details?.provider ?? "-"}</Badge>{evidenceState(model.identity)}{evidenceState(model.access)}</div>
       <h2 className="mt-4 text-xl font-semibold tracking-tight">{details?.name ?? requestedSlug}</h2>
       <p className="mt-2 text-sm text-muted-foreground">{details?.slug ?? requestedSlug}</p>
       <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
         <div><dt className="text-xs text-muted-foreground">Composite</dt><dd className="mt-1 font-mono">{formatMeasurement(capability?.compositeScore ?? null)}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">Route</dt><dd className="mt-1 truncate">{route?.route ?? "Unavailable"}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">Input / 1M</dt><dd className="mt-1 font-mono">{route ? formatRouteEvidencePrice(route.inputUsdPerMillion) : "Unavailable"}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">TTFT p50</dt><dd className="mt-1 font-mono">{runtime ? `${formatMeasurement(runtime.ttftP50Seconds)}s` : "Unavailable"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">Route</dt><dd className="mt-1 truncate">{route?.route ?? "-"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">Input / 1M</dt><dd className="mt-1 font-mono">{route ? formatRouteEvidencePrice(route.inputUsdPerMillion) : "-"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">TTFT p50</dt><dd className="mt-1 font-mono">{runtime ? `${formatMeasurement(runtime.ttftP50Seconds)}s` : "-"}</dd></div>
       </dl>
       <Link className={cn(buttonVariants({ variant: "outline" }), "mt-6")} href={routeEvidenceModelPath(details?.slug ?? requestedSlug)}>Open evidence profile<ArrowRight /></Link>
     </section>

@@ -53,6 +53,8 @@ function sqliteD1() {
     '0010_ingestion_cycles.sql',
     '0011_catalog_publication_ownership.sql',
     '0012_benchmark_metric_rank_field_size.sql',
+    '0018_benchmark_openrouter_route_receipts.sql',
+    '0019_plan_annual_price_evidence.sql',
   ]) sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations', file), 'utf8'));
 
   interface Statement {

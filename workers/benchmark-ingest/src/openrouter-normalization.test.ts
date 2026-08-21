@@ -34,9 +34,15 @@ describe('normalizeOpenRouterCatalogStep', () => {
     const projection = projectOpenRouterModelsPayload({ data: [{
       id: 'openai/gpt-5.6-sol',
       name: 'GPT-5.6 Sol',
+      created: 1_775_366_400,
       context_length: 256_000,
-      pricing: { prompt: '0.000002', completion: '0.000008' },
-      architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+      expiration_date: '2026-12-31',
+      knowledge_cutoff: '2025-06',
+      supported_parameters: ['tools', 'response_format'],
+      per_request_limits: { max_requests: 10 },
+      pricing: { prompt: '0.000002', completion: '0.000008', input_cache_write: '0.000003' },
+      architecture: { input_modalities: ['text'], output_modalities: ['text'], tokenizer: 'o200k_base', instruct_type: 'chatml' },
+      top_provider: { max_completion_tokens: 32_768, is_moderated: true },
     }] });
     const bytes = new TextEncoder().encode(JSON.stringify(projection));
     const contentHash = hash(bytes);
@@ -62,7 +68,17 @@ describe('normalizeOpenRouterCatalogStep', () => {
     expect(payload.source).toBe('openrouter');
     expect(payload.batch.sources).toHaveLength(1);
     expect(payload.batch.models).toContainEqual(expect.objectContaining({ name: 'GPT-5.6 Sol' }));
-    expect(payload.batch.priceChecks).toHaveLength(1);
+    expect(payload.batch.priceChecks).toEqual([expect.objectContaining({
+      cacheWriteUsdPerMillion: 3,
+      createdAt: '2026-04-05T05:20:00.000Z',
+      expirationDate: '2026-12-31',
+      knowledgeCutoff: '2025-06',
+      tokenizer: 'o200k_base',
+      instructionFormat: 'chatml',
+      isModerated: true,
+      perRequestLimitsJson: '{"max_requests":10}',
+      supportedParameters: ['tools', 'response_format'],
+    })]);
   });
 
   it('rejects mismatched frozen catalog bytes before writing a candidate', async () => {

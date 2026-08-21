@@ -11,11 +11,22 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
+import { presentEvidence } from "@tokenbench/frontend/presentation-value";
 
 import { ResultActions } from "@/components/result-actions";
+import {
+  DataValueText,
+  DataText,
+  availableValue,
+  unavailableValue,
+  type PresentationValue,
+} from "@/components/untitled-data/data-value";
+import { ProvenanceActivityFeed } from "@/components/untitled-data/application/activity-feed/activity-feed";
+import { DataTableCard } from "@/components/untitled-data/application/table/table";
+import { DataMetrics } from "@/components/untitled-data/metrics";
 import {
   RouteEvidenceCapabilityRadar,
   RouteEvidenceRuntimeCharts,
@@ -57,21 +68,47 @@ function Dot({ model }: { model: SurfaceModel }) {
   );
 }
 
-function Metric({
-  label,
+function priceValue(value: number | null | undefined, reason: string): PresentationValue<number> {
+  return value === null || value === undefined
+    ? unavailableValue(reason)
+    : availableValue(value, formatRouteSurfacePrice(value));
+}
+
+function formatPerRequestLimit(value: unknown): string {
+  if (typeof value === "number") return formatDisplayNumber(value);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, (_key, nested) =>
+    typeof nested === "number" ? Number(nested.toFixed(2)) : nested,
+  ) ?? "-";
+}
+
+function PerRequestLimits({
   value,
-  note,
 }: {
-  label: string;
-  value: string;
-  note: string;
+  value: PresentationValue<Readonly<Record<string, unknown>>>;
 }) {
+  if (value.availability === "unavailable" || value.value === null) {
+    return <DataValueText value={value} />;
+  }
+  const entries = Object.entries(value.value);
+  if (entries.length === 0) return <span className="text-muted-foreground">No listed limits</span>;
   return (
-    <div className="bg-card p-4 sm:p-5">
-      <p className="font-mono text-xl tabular-nums sm:text-2xl">{value}</p>
-      <p className="mt-1 text-xs font-medium">{label}</p>
-      <p className="mt-2 text-[11px] leading-4 text-muted-foreground">{note}</p>
-    </div>
+    <details className="group text-left">
+      <summary className="cursor-pointer list-none text-link hover:underline">
+        {entries.length} limit{entries.length === 1 ? "" : "s"}
+      </summary>
+      <dl className="mt-2 space-y-1 border-l border-border pl-3 text-xs text-muted-foreground">
+        {entries.map(([key, limit]) => (
+          <div className="flex justify-between gap-4" key={key}>
+            <dt>{key}</dt>
+            <dd className="font-mono text-foreground">
+              {formatPerRequestLimit(limit)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }
 
@@ -100,6 +137,90 @@ export function ModelProfilePage({
   const outputLineCost = model.outputUsdPerMillion === null
     ? null
     : outputTokens * model.outputUsdPerMillion;
+  const specifications = model.specifications;
+  const dataReceiptRows: readonly { content: ReactNode; label: string }[] = [
+    {
+      label: "Created",
+      content: <DataValueText value={presentEvidence(specifications?.createdAt)} />,
+    },
+    {
+      label: "Expiration",
+      content: <DataValueText value={presentEvidence(specifications?.expirationDate)} />,
+    },
+    {
+      label: "Knowledge cutoff",
+      content: <DataValueText value={presentEvidence(specifications?.knowledgeCutoff)} />,
+    },
+    {
+      label: "Tokenizer",
+      content: <DataValueText value={presentEvidence(specifications?.tokenizer)} />,
+    },
+    {
+      label: "Instruction format",
+      content: <DataValueText value={presentEvidence(specifications?.instructionFormat)} />,
+    },
+    {
+      label: "Moderated",
+      content: <DataValueText value={presentEvidence(specifications?.isModerated, (value) => value ? "Yes" : "No")} />,
+    },
+    {
+      label: "Supported parameters",
+      content: <DataValueText value={presentEvidence(specifications?.supportedParameters, (value) => value.join(", "))} />,
+    },
+    {
+      label: "Per-request limits",
+      content: <PerRequestLimits value={presentEvidence(specifications?.perRequestLimits)} />,
+    },
+    {
+      label: "Benchmark coverage",
+      content: model.sourceCoverage === undefined
+        ? <DataValueText value={unavailableValue("No benchmark or category coverage was supplied.")} />
+        : <DataValueText value={availableValue(
+          model.sourceCoverage,
+          `${model.sourceCoverage.benchmarkCount} benchmarks · ${model.sourceCoverage.categoryCount} categories · ${model.sourceCoverage.rankedCategoryCount} ranked`,
+        )} />,
+    },
+    {
+      label: "Overall benchmark rank",
+      content: model.benchmark?.overallRank === null || model.benchmark?.overallRank === undefined
+        ? <DataValueText value={unavailableValue("No overall benchmark rank was supplied.")} />
+        : <DataValueText value={availableValue(model.benchmark.overallRank, `#${model.benchmark.overallRank}`)} />,
+    },
+    {
+      label: "Category field sizes",
+      content: model.benchmark === undefined || model.benchmark.categories.length === 0
+        ? <DataValueText value={unavailableValue("No benchmark category field sizes were supplied.")} />
+        : <DataText
+          reason="No benchmark category field sizes were supplied."
+          value={model.benchmark.categories
+            .map((category) => category.fieldSize === null ? null : `${category.label}: ${category.fieldSize}`)
+            .filter((value): value is string => value !== null)
+            .join(" · ") || null}
+        />,
+    },
+    {
+      label: "Source coverage",
+      content: model.sourceCoverage === undefined
+        ? <DataValueText value={unavailableValue("No source coverage count was supplied.")} />
+        : <DataValueText value={availableValue(model.sourceCoverage.sourceCount, String(model.sourceCoverage.sourceCount))} />,
+    },
+    {
+      label: "Freshness",
+      content: model.freshness === undefined
+        ? <DataValueText value={unavailableValue("No freshness status was supplied.")} />
+        : <DataValueText value={availableValue(model.freshness.status, model.freshness.status === "fresh" ? "Fresh" : "Stale")} />,
+    },
+    {
+      label: "Checked",
+      content: model.freshness === undefined
+        ? <DataValueText value={unavailableValue("No freshness check time was supplied.")} />
+        : <DataValueText value={availableValue(model.freshness.checkedAt, model.freshness.checkedAt)} />,
+    },
+    {
+      label: "Cache write / 1M",
+      content: <DataValueText value={priceValue(model.cacheWriteUsdPerMillion, "No cache-write price was supplied.")} />,
+    },
+  ];
   const exportRows = [
     { metric: "Capability value", value: model.capabilityScore === null ? null : roundDisplayValue(model.capabilityScore), unit: "score" },
     {
@@ -139,7 +260,7 @@ export function ModelProfilePage({
       unit: "tokens / second",
     },
   ];
-  const lifecycleValue = model.lifecycleStatus ?? "Unavailable";
+  const lifecycleValue = <DataText reason="No lifecycle status was supplied for this model." value={model.lifecycleStatus} />;
 
   return (
     <main>
@@ -160,10 +281,10 @@ export function ModelProfilePage({
               <div className="mb-5 flex flex-wrap items-center gap-3">
                 <Dot model={model} />
                 <Badge variant="secondary">
-                  {model.provider ?? "Provider unavailable"}
+                  <DataText reason="No provider was supplied for this model." value={model.provider} />
                 </Badge>
                 <Badge variant="outline">
-                  {model.access ?? "Access unavailable"}
+                  <DataText reason="No access type was supplied for this model." value={model.access} />
                 </Badge>
               </div>
               <h1 className="text-balance text-4xl font-semibold tracking-[-0.04em] sm:text-6xl">
@@ -196,47 +317,59 @@ export function ModelProfilePage({
 
       <div id="profile-result">
         <section className="px-4 py-8 sm:px-6">
-          <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-5">
-            <Metric
-              label="Capability"
-              note={
-                model.capabilityScore === null
-                  ? "No compatible capability value was supplied."
-                  : "Published capability observation."
-              }
-              value={
-                model.capabilityScore === null
-                  ? "Unavailable"
-                  : formatDisplayNumber(model.capabilityScore)
-              }
-            />
-            <Metric
-              label="Context"
-              note="Selected-route context window."
-              value={formatRouteSurfaceTokens(model.contextWindowTokens)}
-            />
-            <Metric
-              label="Input price"
-              note="Selected-route price per million tokens."
-              value={formatRouteSurfacePrice(model.inputUsdPerMillion)}
-            />
-            <Metric
-              label="Output price"
-              note="Selected-route generated-token price."
-              value={formatRouteSurfacePrice(model.outputUsdPerMillion)}
-            />
-            <Metric
-              label="Throughput"
-              note={
-                model.outputTokensPerSecond === null
-                  ? "No runtime observation was supplied."
-                  : "Observed p50 throughput, not an SLA."
-              }
-              value={
-                model.outputTokensPerSecond === null
-                  ? "Unavailable"
-                  : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`
-              }
+          <div className="mx-auto max-w-7xl">
+            <DataMetrics
+              items={[
+                {
+                  label: "Capability",
+                  note: "Published capability observation.",
+                  value:
+                    model.capabilityScore === null
+                      ? unavailableValue("No compatible capability value was supplied.")
+                      : availableValue(
+                          model.capabilityScore,
+                          formatDisplayNumber(model.capabilityScore),
+                        ),
+                },
+                {
+                  label: "Context",
+                  note: "Selected-route context window.",
+                  value:
+                    model.contextWindowTokens === null
+                      ? unavailableValue("The selected route did not supply a context window.")
+                      : availableValue(
+                          model.contextWindowTokens,
+                          formatRouteSurfaceTokens(model.contextWindowTokens),
+                        ),
+                },
+                {
+                  label: "Input price",
+                  note: "Selected-route price per million tokens.",
+                  value: priceValue(
+                    model.inputUsdPerMillion,
+                    "The selected route did not supply an input price.",
+                  ),
+                },
+                {
+                  label: "Output price",
+                  note: "Selected-route generated-token price.",
+                  value: priceValue(
+                    model.outputUsdPerMillion,
+                    "The selected route did not supply an output price.",
+                  ),
+                },
+                {
+                  label: "Throughput",
+                  note: "Observed p50 throughput, not an SLA.",
+                  value:
+                    model.outputTokensPerSecond === null
+                      ? unavailableValue("No runtime observation was supplied.")
+                      : availableValue(
+                          model.outputTokensPerSecond,
+                          `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`,
+                        ),
+                },
+              ]}
             />
           </div>
         </section>
@@ -268,7 +401,7 @@ export function ModelProfilePage({
                     {model.capabilityAxes.map((axis) => (
                       <div className="flex items-center justify-between gap-4 bg-card px-4 py-3 text-sm" key={axis.key}>
                         <dt className="text-muted-foreground">{axis.label}</dt>
-                        <dd className="font-mono">{axis.percentile === null ? "Unavailable" : formatDisplayNumber(axis.percentile)}</dd>
+                        <dd className="font-mono"><DataText format={formatDisplayNumber} reason={`No percentile was supplied for ${axis.label}.`} value={axis.percentile} /></dd>
                       </div>
                     ))}
                   </dl>
@@ -324,7 +457,7 @@ export function ModelProfilePage({
                 <CardContent className="space-y-3 text-sm">
                   <p className="flex justify-between gap-4">
                     <span className="text-muted-foreground">Provider</span>
-                    <span>{model.provider ?? "Unavailable"}</span>
+                    <span><DataText reason="No provider was supplied for this model." value={model.provider} /></span>
                   </p>
                   <p className="flex justify-between gap-4">
                     <span className="text-muted-foreground">Model ID</span>
@@ -334,7 +467,7 @@ export function ModelProfilePage({
                     <span className="text-muted-foreground">
                       Benchmark release
                     </span>
-                    <span>{model.benchmarkReleaseOn ?? "Unavailable"}</span>
+                    <span><DataText reason="No benchmark release was supplied for this model." value={model.benchmarkReleaseOn} /></span>
                   </p>
                 </CardContent>
               </Card>
@@ -347,7 +480,7 @@ export function ModelProfilePage({
                   <p className="flex justify-between gap-4">
                     <span className="text-muted-foreground">Route</span>
                     <span className="max-w-[12rem] truncate">
-                      {model.route ?? "Unavailable"}
+                      <DataText reason="No selected route was supplied for this model." value={model.route} />
                     </span>
                   </p>
                   <p className="flex justify-between gap-4">
@@ -375,7 +508,7 @@ export function ModelProfilePage({
                     {lifecycleValue}
                   </div>
                   <p className="mt-3 text-xs leading-5 text-muted-foreground">
-                    Sunset: {model.sunsetOn ?? "Unavailable"}. An absent date is
+                    Sunset: <DataText reason="No sunset date was supplied for this model." value={model.sunsetOn} />. An absent date is
                     not a promise of indefinite availability.
                   </p>
                 </CardContent>
@@ -418,15 +551,39 @@ export function ModelProfilePage({
                     <CardHeader><CardTitle>{model.route}</CardTitle></CardHeader>
                     <CardContent><dl className="grid gap-3 text-sm">
                       {[
-                        ["Access", model.access ?? "Unavailable"],
-                        ["Input / 1M", formatRouteSurfacePrice(model.inputUsdPerMillion)],
-                        ["Output / 1M", formatRouteSurfacePrice(model.outputUsdPerMillion)],
-                        ["Cache read / 1M", formatRouteSurfacePrice(model.cacheReadUsdPerMillion)],
-                        ["Cache write / 1M", formatRouteSurfacePrice(model.cacheWriteUsdPerMillion)],
-                        ["Long-context input / 1M", formatRouteSurfacePrice(model.longContextInputUsdPerMillion)],
-                        ["Context", formatRouteSurfaceTokens(model.contextWindowTokens)],
-                        ["Max output", formatRouteSurfaceTokens(model.maxOutputTokens)],
-                      ].map(([label, value]) => <div className="flex justify-between gap-4" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-mono">{value}</dd></div>)}
+                        {
+                          label: "Access",
+                          value: <DataText reason="No access type was supplied for this model." value={model.access} />,
+                        },
+                        {
+                          label: "Input / 1M",
+                          value: <DataText format={formatRouteSurfacePrice} reason="No input price was supplied for this route." value={model.inputUsdPerMillion} />,
+                        },
+                        {
+                          label: "Output / 1M",
+                          value: <DataText format={formatRouteSurfacePrice} reason="No output price was supplied for this route." value={model.outputUsdPerMillion} />,
+                        },
+                        {
+                          label: "Cache read / 1M",
+                          value: <DataText format={formatRouteSurfacePrice} reason="No cache-read price was supplied for this route." value={model.cacheReadUsdPerMillion} />,
+                        },
+                        {
+                          label: "Cache write / 1M",
+                          value: <DataText format={formatRouteSurfacePrice} reason="No cache-write price was supplied for this route." value={model.cacheWriteUsdPerMillion} />,
+                        },
+                        {
+                          label: "Long-context input / 1M",
+                          value: <DataText format={formatRouteSurfacePrice} reason="No long-context input price was supplied for this route." value={model.longContextInputUsdPerMillion} />,
+                        },
+                        {
+                          label: "Context",
+                          value: <DataText format={formatRouteSurfaceTokens} reason="No context window was supplied for this route." value={model.contextWindowTokens} />,
+                        },
+                        {
+                          label: "Max output",
+                          value: <DataText format={formatRouteSurfaceTokens} reason="No maximum output was supplied for this route." value={model.maxOutputTokens} />,
+                        },
+                      ].map(({ label, value }) => <div className="flex justify-between gap-4" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-mono">{value}</dd></div>)}
                     </dl></CardContent>
                   </Card>
                 </div>
@@ -450,19 +607,19 @@ export function ModelProfilePage({
                     <tr className="border-t border-border">
                       <td className="px-4 py-3 font-medium">{model.route}</td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {model.access ?? "Unavailable"}
+                        <DataText reason="No access type was supplied for this model." value={model.access} />
                       </td>
                       <td className="px-4 py-3 text-right font-mono">
-                        {formatRouteSurfacePrice(model.inputUsdPerMillion)}
+                        <DataText format={formatRouteSurfacePrice} reason="No input price was supplied for this route." value={model.inputUsdPerMillion} />
                       </td>
                       <td className="px-4 py-3 text-right font-mono">
-                        {formatRouteSurfacePrice(model.outputUsdPerMillion)}
+                        <DataText format={formatRouteSurfacePrice} reason="No output price was supplied for this route." value={model.outputUsdPerMillion} />
                       </td>
-                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfacePrice(model.cacheReadUsdPerMillion)}</td>
-                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfacePrice(model.cacheWriteUsdPerMillion)}</td>
-                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfacePrice(model.longContextInputUsdPerMillion)}</td>
-                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfaceTokens(model.contextWindowTokens)}</td>
-                      <td className="px-4 py-3 text-right font-mono">{formatRouteSurfaceTokens(model.maxOutputTokens)}</td>
+                      <td className="px-4 py-3 text-right font-mono"><DataText format={formatRouteSurfacePrice} reason="No cache-read price was supplied for this route." value={model.cacheReadUsdPerMillion} /></td>
+                      <td className="px-4 py-3 text-right font-mono"><DataText format={formatRouteSurfacePrice} reason="No cache-write price was supplied for this route." value={model.cacheWriteUsdPerMillion} /></td>
+                      <td className="px-4 py-3 text-right font-mono"><DataText format={formatRouteSurfacePrice} reason="No long-context input price was supplied for this route." value={model.longContextInputUsdPerMillion} /></td>
+                      <td className="px-4 py-3 text-right font-mono"><DataText format={formatRouteSurfaceTokens} reason="No context window was supplied for this route." value={model.contextWindowTokens} /></td>
+                      <td className="px-4 py-3 text-right font-mono"><DataText format={formatRouteSurfaceTokens} reason="No maximum output was supplied for this route." value={model.maxOutputTokens} /></td>
                       <td className="px-4 py-3">
                         <Badge variant="outline">
                           {mode === "preview"
@@ -474,6 +631,45 @@ export function ModelProfilePage({
                   </tbody>
                 </table>
                 </div>
+                {model.routes?.length ? (
+                  <details className="mt-4 rounded-xl border border-border bg-card p-4">
+                    <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      Inspect {model.routes.length} supplied route receipt{model.routes.length === 1 ? "" : "s"}
+                    </summary>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full min-w-[760px] text-xs">
+                        <caption className="sr-only">Exact route receipt meters and provenance</caption>
+                        <thead className="bg-muted/60 text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2 text-left">Route receipt</th>
+                            <th className="px-3 py-2 text-right">Input / 1M</th>
+                            <th className="px-3 py-2 text-right">Output / 1M</th>
+                            <th className="px-3 py-2 text-right">Cache write / 1M</th>
+                            <th className="px-3 py-2 text-right">Context</th>
+                            <th className="px-3 py-2 text-left">Verification</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {model.routes.map((route) => (
+                            <tr className="border-t border-border" key={`${route.receipt.providerId}-${route.receipt.routeId}-${route.receipt.observedAt}`}>
+                              <td className="px-3 py-2">
+                                <a className="text-primary underline underline-offset-2 hover:no-underline dark:text-[#9dabff]" href={route.receipt.sourceUrl} rel="noreferrer" target="_blank">
+                                  {route.receipt.routeId}
+                                </a>
+                                <span className="ml-2 text-muted-foreground">{route.receipt.observedAt}</span>
+                              </td>
+                              <td className="px-3 py-2 text-right font-mono"><DataValueText value={presentEvidence(route.inputUsdPerMillion, formatRouteSurfacePrice)} /></td>
+                              <td className="px-3 py-2 text-right font-mono"><DataValueText value={presentEvidence(route.outputUsdPerMillion, formatRouteSurfacePrice)} /></td>
+                              <td className="px-3 py-2 text-right font-mono"><DataValueText value={presentEvidence(route.cacheWriteUsdPerMillion, formatRouteSurfacePrice)} /></td>
+                              <td className="px-3 py-2 text-right font-mono"><DataValueText value={presentEvidence(route.contextWindowTokens, formatRouteSurfaceTokens)} /></td>
+                              <td className="px-3 py-2 text-muted-foreground">{route.receipt.verificationStatus}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                ) : null}
               </>
             )}
           </div>
@@ -517,9 +713,7 @@ export function ModelProfilePage({
                   </div>
                   <div className="text-right">
                     <p className="font-mono text-3xl tabular-nums">
-                      {monthlyCost === null
-                        ? "Unavailable"
-                        : `$${monthlyCost.toFixed(2)}`}
+                      <DataText format={(value) => `$${value.toFixed(2)}`} reason="The selected route did not supply both input and output prices for this estimate." value={monthlyCost} />
                     </p>
                     <p className="text-xs text-muted-foreground">
                       selected-route estimate
@@ -544,8 +738,8 @@ export function ModelProfilePage({
                   <span>100M</span>
                 </div>
                 <dl className="mt-6 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-2">
-                  <div className="bg-card p-4"><dt className="text-xs text-muted-foreground">Input line · {inputTokens.toFixed(2)}M</dt><dd className="mt-2 font-mono">{inputLineCost === null ? "Unavailable" : `$${inputLineCost.toFixed(2)}`}</dd></div>
-                  <div className="bg-card p-4"><dt className="text-xs text-muted-foreground">Output line · {outputTokens.toFixed(2)}M</dt><dd className="mt-2 font-mono">{outputLineCost === null ? "Unavailable" : `$${outputLineCost.toFixed(2)}`}</dd></div>
+                  <div className="bg-card p-4"><dt className="text-xs text-muted-foreground">Input line · {inputTokens.toFixed(2)}M</dt><dd className="mt-2 font-mono"><DataText format={(value) => `$${value.toFixed(2)}`} reason="The selected route did not supply an input price for this estimate." value={inputLineCost} /></dd></div>
+                  <div className="bg-card p-4"><dt className="text-xs text-muted-foreground">Output line · {outputTokens.toFixed(2)}M</dt><dd className="mt-2 font-mono"><DataText format={(value) => `$${value.toFixed(2)}`} reason="The selected route did not supply an output price for this estimate." value={outputLineCost} /></dd></div>
                 </dl>
               </CardContent>
               <CardFooter>
@@ -572,28 +766,67 @@ export function ModelProfilePage({
                 missing field is not resolved by substituting another route or
                 model.
               </p>
+              <div className="mt-6 grid gap-4">
+                <DataTableCard
+                  description="Only fields emitted by the accepted model record are shown; a dash means no accepted value was supplied."
+                  title="Model data receipt"
+                  trailing={
+                    <span className="text-xs text-muted-foreground">
+                      {sources.length} attached source{sources.length === 1 ? "" : "s"}
+                    </span>
+                  }
+                >
+                  <table className="w-full min-w-[520px] text-sm">
+                    <caption className="sr-only">Model data receipt</caption>
+                    <tbody>
+                      {dataReceiptRows.map((row) => (
+                        <tr className="border-t border-border first:border-t-0" key={row.label}>
+                          <th className="w-2/5 px-4 py-3 text-left text-xs font-medium text-muted-foreground" scope="row">
+                            {row.label}
+                          </th>
+                          <td className="px-4 py-3 text-right font-mono text-xs">
+                            {row.content}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </DataTableCard>
+                <ProvenanceActivityFeed
+                  items={sources.map((source) => ({
+                      detail: source.note,
+                      id: source.id,
+                      observedAt:
+                        source.effectiveAt === null
+                          ? unavailableValue("This source did not supply an effective time.")
+                          : availableValue(source.effectiveAt, source.effectiveAt),
+                      sourceLabel: source.kind.replaceAll("_", " "),
+                      sourceUrl: source.url ?? null,
+                      title: source.label,
+                    }))}
+                  title="Profile provenance receipts"
+                />
+              </div>
               <dl className="mt-6 grid gap-3 text-sm">
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Task economics</dt>
                   <dd>
-                    {model.costUsdPerSuccessfulTask === null
-                      ? "Unavailable"
-                      : `$${model.costUsdPerSuccessfulTask.toFixed(2)} / successful task`}
+                    <DataText format={(value) => `$${value.toFixed(2)} / successful task`} reason="No task economics value was supplied for this model." value={model.costUsdPerSuccessfulTask} />
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Workload</dt>
                   <dd className="text-right">
-                    {model.workload ?? "Unavailable"}
+                    <DataText reason="No workload was supplied for this model." value={model.workload} />
                   </dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Input modalities</dt>
-                  <dd>{model.inputModalities.join(", ") || "Unavailable"}</dd>
+                  <dd><DataText format={(value) => value.join(", ")} reason="No input modalities were supplied for this model." value={model.inputModalities.length ? model.inputModalities : null} /></dd>
                 </div>
                 <div className="flex justify-between gap-4">
                   <dt className="text-muted-foreground">Output modalities</dt>
-                  <dd>{model.outputModalities.join(", ") || "Unavailable"}</dd>
+                  <dd><DataText format={(value) => value.join(", ")} reason="No output modalities were supplied for this model." value={model.outputModalities.length ? model.outputModalities : null} /></dd>
                 </div>
               </dl>
               <div className="mt-6 rounded-xl border border-border bg-card p-4">

@@ -4,7 +4,8 @@ TokenBench publishes only server-fetched, immutable snapshots. A published
 benchmark revision records the exact sanitized catalog revision and OpenRouter
 content hash used for route-level pricing, so an API response never combines a
 newer catalog price with an older benchmark score. Missing source values remain
-`null` and are displayed as unavailable; they are never converted to zero.
+`null` and are displayed as an accessible `-`; their unavailable reason and
+provenance remain inspectable and they are never converted to zero.
 
 ## Permitted sources and visible attribution
 

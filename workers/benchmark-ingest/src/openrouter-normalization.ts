@@ -63,6 +63,48 @@ function readNullableStringArray(value: unknown): string[] | null {
   return [...value];
 }
 
+function readNullableString(value: unknown, label: string): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || value.trim().length === 0) fail(`OpenRouter ${label} is invalid`);
+  return value;
+}
+
+function readCreatedAt(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) fail('OpenRouter created timestamp is invalid');
+  const milliseconds = value * 1_000;
+  if (!Number.isSafeInteger(milliseconds)) fail('OpenRouter created timestamp is out of range');
+  const result = new Date(milliseconds);
+  if (!Number.isFinite(result.getTime())) fail('OpenRouter created timestamp is invalid');
+  return result.toISOString();
+}
+
+function readExpirationDate(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string'
+    || !/^\d{4}-\d{2}-\d{2}$/u.test(value)
+    || new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) !== value) {
+    fail('OpenRouter expiration date is invalid');
+  }
+  return value;
+}
+
+function readNullableBoolean(value: unknown, label: string): boolean | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'boolean') fail(`OpenRouter ${label} is invalid`);
+  return value;
+}
+
+function readPerRequestLimitsJson(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    fail('OpenRouter per_request_limits is invalid');
+  }
+  const json = JSON.stringify(value);
+  if (json === undefined) fail('OpenRouter per_request_limits is not JSON serializable');
+  return json;
+}
+
 function catalogBatch(
   projected: { data: Record<string, unknown>[] },
   catalog: FrozenOpenRouterCatalog,
@@ -95,6 +137,9 @@ function catalogBatch(
     const metadata = metadataById.get(sourceModelId) ?? {};
     const architecture = metadata.architecture && typeof metadata.architecture === 'object' && !Array.isArray(metadata.architecture)
       ? metadata.architecture as Record<string, unknown>
+      : {};
+    const topProvider = metadata.top_provider && typeof metadata.top_provider === 'object' && !Array.isArray(metadata.top_provider)
+      ? metadata.top_provider as Record<string, unknown>
       : {};
     const canonicalSlug = typeof metadata.canonical_slug === 'string' && metadata.canonical_slug.length > 0
       ? metadata.canonical_slug
@@ -136,6 +181,16 @@ function catalogBatch(
       inputModalities: readNullableStringArray(architecture.input_modalities),
       outputModalities: readNullableStringArray(architecture.output_modalities),
       supportedParameters: readNullableStringArray(metadata.supported_parameters),
+      cacheWriteUsdPerMillion: offer.cacheWriteMicroDollarsPerMillion === undefined
+        ? null
+        : offer.cacheWriteMicroDollarsPerMillion / 1_000_000,
+      createdAt: readCreatedAt(metadata.created),
+      expirationDate: readExpirationDate(metadata.expiration_date),
+      knowledgeCutoff: readNullableString(metadata.knowledge_cutoff, 'knowledge_cutoff'),
+      tokenizer: readNullableString(architecture.tokenizer, 'architecture.tokenizer'),
+      instructionFormat: readNullableString(architecture.instruct_type, 'architecture.instruct_type'),
+      isModerated: readNullableBoolean(topProvider.is_moderated, 'top_provider.is_moderated'),
+      perRequestLimitsJson: readPerRequestLimitsJson(metadata.per_request_limits),
       sourceArtifactId: artifactId,
     });
   }

@@ -323,6 +323,14 @@ describe('benchmark contracts', () => {
       ...validBatch,
       priceChecks: [{ ...validBatch.priceChecks[0], maxOutputTokens: 0 }],
     })).toThrow('priceChecks[0].maxOutputTokens must be a positive integer or null');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      priceChecks: [{ ...validBatch.priceChecks[0], createdAt: '2026-08-21T00:00:00+00:00' }],
+    })).toThrow('priceChecks[0].createdAt must be a canonical ISO timestamp or null');
+    expect(() => validateNormalizedSourceBatch({
+      ...validBatch,
+      priceChecks: [{ ...validBatch.priceChecks[0], expirationDate: '2026-02-30' }],
+    })).toThrow('priceChecks[0].expirationDate must be a valid calendar date or null');
     expect(validateNormalizedSourceBatch({
       ...validBatch,
       priceChecks: [{

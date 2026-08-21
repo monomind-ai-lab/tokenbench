@@ -111,8 +111,8 @@ export function makeItYoursCsvRows(
     Provider: row.provider,
     "Weighted score": Number(row.score.toFixed(1)),
     "Evaluation cost / success USD": roundDisplayValue(row.cost),
-    "TTFT seconds": row.ttft === null ? "Unavailable" : Number(row.ttft.toFixed(2)),
-    "Throughput tok/s": row.throughput === null ? "Unavailable" : Number(row.throughput.toFixed(0)),
+    "TTFT seconds": row.ttft === null ? "-" : Number(row.ttft.toFixed(2)),
+    "Throughput tok/s": row.throughput === null ? "-" : Number(row.throughput.toFixed(0)),
     "SLA result": row.meetsSla ? "Pass" : "Outside threshold",
     "Weighted frontier": row.frontier ? "Yes" : "No",
   }));

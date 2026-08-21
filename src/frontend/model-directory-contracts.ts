@@ -33,6 +33,8 @@ export interface ModelDirectoryEntry extends ModelDirectoryRecord {
   readonly weeklyRank: number | null;
   readonly overallScore: number | null;
   readonly overallRank: number | null;
+  /** Exact ordered category facts retained from the selected published profile. */
+  readonly categories: readonly ModelProfileCategory[];
   readonly strongestCategory: ModelProfileCategory | null;
   readonly representativePrice: ModelProfilePriceRoute | null;
   readonly evidenceStatus: EvidenceStatus;
@@ -96,6 +98,21 @@ function nullableNonNegativeInteger(value: unknown): value is number | null {
   return value === null || (Number.isSafeInteger(value) && (value as number) >= 0);
 }
 
+function nullableBoolean(value: unknown): value is boolean | null {
+  return value === null || typeof value === "boolean";
+}
+
+function nullableJsonObject(value: unknown): value is string | null {
+  if (value === null) return true;
+  if (!text(value)) return false;
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed);
+  } catch {
+    return false;
+  }
+}
+
 function nonNegativeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
@@ -140,6 +157,23 @@ function parseCategory(value: unknown): ModelProfileCategory | null {
   return value as unknown as ModelProfileCategory;
 }
 
+/**
+ * Preserve the published profile order while rejecting ambiguous duplicate
+ * category identities at the SSR-to-browser boundary.
+ */
+function parseCategories(value: unknown): readonly ModelProfileCategory[] | null {
+  if (!Array.isArray(value)) return null;
+  const categories: ModelProfileCategory[] = [];
+  const keys = new Set<string>();
+  for (const candidate of value) {
+    const category = parseCategory(candidate);
+    if (category === null || keys.has(category.key)) return null;
+    keys.add(category.key);
+    categories.push(category);
+  }
+  return categories;
+}
+
 function parsePriceRoute(value: unknown): ModelProfilePriceRoute | null {
   if (!isRecord(value)
     || !sourceId(value.sourceId)
@@ -150,6 +184,7 @@ function parsePriceRoute(value: unknown): ModelProfilePriceRoute | null {
     || (value.canonicalSlug !== null && !isModelSlugRouteSafe(value.canonicalSlug))
     || !nullableFinite(value.inputUsdPerMillion)
     || !nullableFinite(value.cachedInputUsdPerMillion)
+    || (value.cacheWriteUsdPerMillion !== undefined && !nullableFinite(value.cacheWriteUsdPerMillion))
     || !nullableFinite(value.outputUsdPerMillion)
     || !nullablePositiveInteger(value.contextWindowTokens)
     || !nullablePositiveInteger(value.maxInputTokens)
@@ -157,12 +192,33 @@ function parsePriceRoute(value: unknown): ModelProfilePriceRoute | null {
     || !(value.inputModalities === null || stringArray(value.inputModalities))
     || !(value.outputModalities === null || stringArray(value.outputModalities))
     || !(value.supportedParameters === null || stringArray(value.supportedParameters))
+    || (value.createdAt !== undefined && !nullableText(value.createdAt))
+    || (value.expirationDate !== undefined && !nullableText(value.expirationDate))
+    || (value.knowledgeCutoff !== undefined && !nullableText(value.knowledgeCutoff))
+    || (value.tokenizer !== undefined && !nullableText(value.tokenizer))
+    || (value.instructionFormat !== undefined && !nullableText(value.instructionFormat))
+    || (value.isModerated !== undefined && !nullableBoolean(value.isModerated))
+    || (value.perRequestLimitsJson !== undefined && !nullableJsonObject(value.perRequestLimitsJson))
     || typeof value.verificationStatus !== 'string'
     || !VERIFICATION_STATUSES.has(value.verificationStatus as ModelProfilePriceRoute['verificationStatus'])
     || !text(value.sourceArtifactId)
     || !httpsUrl(value.sourceUrl)
     || !timestamp(value.observedAt)) return null;
-  return value as unknown as ModelProfilePriceRoute;
+  return {
+    ...(value as unknown as ModelProfilePriceRoute),
+    cacheWriteUsdPerMillion: value.cacheWriteUsdPerMillion === undefined
+      ? null
+      : value.cacheWriteUsdPerMillion as number | null,
+    createdAt: value.createdAt === undefined ? null : value.createdAt as string | null,
+    expirationDate: value.expirationDate === undefined ? null : value.expirationDate as string | null,
+    knowledgeCutoff: value.knowledgeCutoff === undefined ? null : value.knowledgeCutoff as string | null,
+    tokenizer: value.tokenizer === undefined ? null : value.tokenizer as string | null,
+    instructionFormat: value.instructionFormat === undefined ? null : value.instructionFormat as string | null,
+    isModerated: value.isModerated === undefined ? null : value.isModerated as boolean | null,
+    perRequestLimitsJson: value.perRequestLimitsJson === undefined
+      ? null
+      : value.perRequestLimitsJson as string | null,
+  };
 }
 
 function parseWeek(value: unknown): PopularModelWeek | null {
@@ -185,10 +241,15 @@ function parseWeek(value: unknown): PopularModelWeek | null {
 function parseEntry(value: unknown): ModelDirectoryEntry | null {
   if (!isRecord(value)) return null;
   const directory = parseModelDirectoryRecord(value);
+  // `categories` is an additive producer field. Accept the currently published
+  // directory shape while still validating every category once the producer
+  // starts emitting the full vector.
+  const categories = value.categories === undefined ? [] : parseCategories(value.categories);
   if (!directory
     || !(value.weeklyRank === null || (Number.isSafeInteger(value.weeklyRank) && (value.weeklyRank as number) >= 1 && (value.weeklyRank as number) <= 100))
     || !nullableFinite(value.overallScore)
     || !nullablePositiveInteger(value.overallRank)
+    || categories === null
     || !(value.strongestCategory === null || parseCategory(value.strongestCategory) !== null)
     || !(value.representativePrice === null || parsePriceRoute(value.representativePrice) !== null)
     || !evidenceStatus(value.evidenceStatus)
@@ -201,6 +262,7 @@ function parseEntry(value: unknown): ModelDirectoryEntry | null {
     weeklyRank: value.weeklyRank as number | null,
     overallScore: value.overallScore as number | null,
     overallRank: value.overallRank as number | null,
+    categories,
     strongestCategory: value.strongestCategory === null ? null : parseCategory(value.strongestCategory)!,
     representativePrice: value.representativePrice === null ? null : parsePriceRoute(value.representativePrice)!,
     evidenceStatus: value.evidenceStatus,

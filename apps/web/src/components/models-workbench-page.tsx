@@ -18,6 +18,13 @@ import { useMemo, useState } from "react";
 import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 
 import { ResultActions, ViewModeToggle } from "@/components/result-actions";
+import {
+  DataFilterBar,
+  DataFilterTag,
+} from "@/components/untitled-data/application/filter-bar/filter-bar";
+import { DataTableCard } from "@/components/untitled-data/application/table/table";
+import { DataText, availableValue } from "@/components/untitled-data/data-value";
+import { DataMetrics } from "@/components/untitled-data/metrics";
 import { RouteEvidenceFrontierPlot } from "@/components/route-evidence-visuals";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -38,18 +45,15 @@ import { cn } from "@/lib/utils";
 
 type SortMode = "score" | "price" | "context" | "release";
 
-function formatPrice(value: number | null): string {
-  return value === null
-    ? "Unavailable"
-    : formatDisplayUsd(value);
+function formatPrice(value: number): string {
+  return formatDisplayUsd(value);
 }
 
-function formatScore(value: number | null): string {
-  return value === null ? "Unavailable" : formatDisplayNumber(value);
+function formatScore(value: number): string {
+  return formatDisplayNumber(value);
 }
 
-function formatTokens(value: number | null): string {
-  if (value === null) return "Unavailable";
+function formatTokens(value: number): string {
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(1))}M`;
   if (value >= 1_000) return `${Number((value / 1_000).toFixed(1))}K`;
   return String(value);
@@ -203,8 +207,8 @@ function ModelPicker({
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium">{model.name}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {model.provider ?? "Provider unavailable"} ·{" "}
-                    {model.access ?? "Access unavailable"}
+                    <DataText reason="No provider was supplied for this model." value={model.provider} /> ·{" "}
+                    <DataText reason="No access type was supplied for this model." value={model.access} />
                   </span>
                 </span>
                 <span
@@ -357,6 +361,20 @@ export function ModelsWorkbenchPage({
     setSort("score");
   };
   const compareHref = `/compare?models=${selected.join(",")}`;
+  const activeFilterTags = [
+    query
+      ? { label: `Search: ${query}`, onClear: () => setQuery("") }
+      : null,
+    provider !== "All"
+      ? { label: `Provider: ${provider}`, onClear: () => setProvider("All") }
+      : null,
+    access !== "All"
+      ? { label: `Access: ${access}`, onClear: () => setAccess("All") }
+      : null,
+    sort !== "score"
+      ? { label: `Sort: ${sort}`, onClear: () => setSort("score") }
+      : null,
+  ].filter((filter): filter is { label: string; onClear: () => void } => filter !== null);
 
   return (
     <main>
@@ -380,18 +398,13 @@ export function ModelsWorkbenchPage({
               </p>
               <DataModeNotice mode={mode} status={status} />
             </div>
-            <div className="grid grid-cols-3 gap-px overflow-hidden rounded-xl border border-border bg-border">
-              {[
-                ["Visible", String(models.length)],
-                ["Frontier", String(frontierIds.size)],
-                ["Selection", `${selected.length}/4`],
-              ].map(([label, metric]) => (
-                <div className="bg-card p-4" key={label}>
-                  <p className="font-mono text-2xl tabular-nums">{metric}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-                </div>
-              ))}
-            </div>
+            <DataMetrics
+              items={[
+                { label: "Visible", value: availableValue(models.length, String(models.length)) },
+                { label: "Frontier", value: availableValue(frontierIds.size, String(frontierIds.size)) },
+                { label: "Selection", value: availableValue(selected.length, `${selected.length}/4`) },
+              ]}
+            />
           </div>
         </div>
       </section>
@@ -483,8 +496,8 @@ export function ModelsWorkbenchPage({
                       <div className="min-w-0 flex-1">
                         <p className="font-medium">{model.name}</p>
                         <p className="text-xs text-muted-foreground">
-                          {model.provider ?? "Provider unavailable"} ·{" "}
-                          {formatTokens(model.contextWindowTokens)} context
+                          <DataText reason="No provider was supplied for this model." value={model.provider} /> ·{" "}
+                          <DataText format={formatTokens} reason="No context window was supplied for this model." value={model.contextWindowTokens} /> context
                         </p>
                       </div>
                       <SelectionButton
@@ -537,9 +550,17 @@ export function ModelsWorkbenchPage({
               to the response already accepted by the data adapter.
             </p>
           </div>
-          <div className="mb-5 grid gap-3 rounded-2xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_auto] lg:items-end">
+          <DataFilterBar
+            actions={
+              <Button onClick={resetFilters} size="sm" variant="outline">
+                <RotateCcw />
+                Reset
+              </Button>
+            }
+            className="mb-3"
+          >
             <label
-              className="space-y-1.5 text-xs text-muted-foreground"
+              className="min-w-48 flex-1 space-y-1.5 text-xs text-muted-foreground"
               htmlFor="catalog-search"
             >
               Search supplied records
@@ -551,11 +572,7 @@ export function ModelsWorkbenchPage({
                 value={query}
               />
             </label>
-            <SelectField
-              label="Provider"
-              onChange={setProvider}
-              value={provider}
-            >
+            <SelectField label="Provider" onChange={setProvider} value={provider}>
               {providers.map((value) => (
                 <option key={value}>{value}</option>
               ))}
@@ -579,11 +596,14 @@ export function ModelsWorkbenchPage({
               <option value="context">Context window</option>
               <option value="release">Benchmark release</option>
             </SelectField>
-            <Button onClick={resetFilters} size="sm" variant="outline">
-              <RotateCcw />
-              Reset
-            </Button>
-          </div>
+          </DataFilterBar>
+          {activeFilterTags.length ? (
+            <div aria-label="Active model filters" className="mb-5 flex flex-wrap gap-2">
+              {activeFilterTags.map((filter) => (
+                <DataFilterTag key={filter.label} label={filter.label} onClear={filter.onClear} />
+              ))}
+            </div>
+          ) : null}
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <p aria-live="polite" className="text-sm text-muted-foreground">
               <span className="font-mono text-foreground">
@@ -643,10 +663,9 @@ export function ModelsWorkbenchPage({
                     <CardHeader>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <ModelDot model={model} />
-                        {model.provider ?? "Provider unavailable"}
+                        <DataText reason="No provider was supplied for this model." value={model.provider} />
                         <span className="ml-auto">
-                          {model.benchmarkReleaseOn ??
-                            "Benchmark release unavailable"}
+                          <DataText reason="No benchmark release was supplied for this model." value={model.benchmarkReleaseOn} />
                         </span>
                       </div>
                       <div className="flex items-start justify-between gap-3 pt-2">
@@ -655,7 +674,7 @@ export function ModelsWorkbenchPage({
                             {model.name}
                           </CardTitle>
                           <Badge className="mt-2" variant="outline">
-                            {model.access ?? "Access unavailable"}
+                            <DataText reason="No access type was supplied for this model." value={model.access} />
                           </Badge>
                         </div>
                         <SelectionButton
@@ -673,7 +692,7 @@ export function ModelsWorkbenchPage({
                       <div className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border">
                         <div className="bg-muted/50 p-2.5">
                           <p className="font-mono text-sm">
-                            {formatScore(model.capabilityScore)}
+                            <DataText format={formatScore} reason="No capability score was supplied for this model." value={model.capabilityScore} />
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             Capability
@@ -681,7 +700,7 @@ export function ModelsWorkbenchPage({
                         </div>
                         <div className="bg-muted/50 p-2.5">
                           <p className="font-mono text-sm">
-                            {formatTokens(model.contextWindowTokens)}
+                            <DataText format={formatTokens} reason="No context window was supplied for this model." value={model.contextWindowTokens} />
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             Context
@@ -689,17 +708,20 @@ export function ModelsWorkbenchPage({
                         </div>
                         <div className="bg-muted/50 p-2.5">
                           <p className="font-mono text-sm">
-                            {formatPrice(model.inputUsdPerMillion)}
+                            <DataText format={formatPrice} reason="No input price was supplied for this model." value={model.inputUsdPerMillion} />
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             Input / 1M
                           </p>
                         </div>
                       </div>
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Sources: <DataText reason="No source coverage count was supplied for this model." value={model.sourceCoverage?.sourceCount} /> · Freshness: <DataText format={(value) => value === "fresh" ? "Fresh" : "Stale"} reason="No freshness status was supplied for this model." value={model.freshness?.status} />
+                      </p>
                     </CardContent>
                     <CardFooter className="justify-between">
                       <span className="text-xs text-muted-foreground">
-                        {model.route ?? "Route unavailable"}
+                        <DataText reason="No selected route was supplied for this model." value={model.route} />
                       </span>
                       <Link
                         className={buttonVariants({
@@ -717,7 +739,10 @@ export function ModelsWorkbenchPage({
               </div>
             ) : null}
             {filtered.length > 0 && view === "list" ? (
-              <div className="overflow-x-auto rounded-2xl border border-border">
+              <DataTableCard
+                description="Only records in the accepted response are filterable and selectable."
+                title="Model results"
+              >
                 <table className="w-full min-w-[900px] border-collapse text-sm">
                   <thead className="bg-muted/60 text-xs text-muted-foreground">
                     <tr>
@@ -744,22 +769,22 @@ export function ModelsWorkbenchPage({
                             <span>
                               {model.name}
                               <span className="block text-xs font-normal text-muted-foreground">
-                                {model.provider ?? "Provider unavailable"}
+                                <DataText reason="No provider was supplied for this model." value={model.provider} />
                               </span>
                             </span>
                           </Link>
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {model.access ?? "Unavailable"}
+                          <DataText reason="No access type was supplied for this model." value={model.access} />
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {formatTokens(model.contextWindowTokens)}
+                          <DataText format={formatTokens} reason="No context window was supplied for this model." value={model.contextWindowTokens} />
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {formatPrice(model.inputUsdPerMillion)}
+                          <DataText format={formatPrice} reason="No input price was supplied for this model." value={model.inputUsdPerMillion} />
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {formatScore(model.capabilityScore)}
+                          <DataText format={formatScore} reason="No capability score was supplied for this model." value={model.capabilityScore} />
                         </td>
                         <td className="px-4 py-3 text-right">
                           <SelectionButton
@@ -772,7 +797,7 @@ export function ModelsWorkbenchPage({
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </DataTableCard>
             ) : null}
           </div>
         </div>
@@ -811,7 +836,7 @@ export function ModelsWorkbenchPage({
                     <p className="font-medium">{model.name}</p>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {model.lifecycleStatus} ·{" "}
-                      {model.sunsetOn ?? "Sunset unavailable"}
+                      <DataText reason="No sunset date was supplied for this model." value={model.sunsetOn} />
                     </p>
                   </div>
                   <ChevronRight className="size-4 text-muted-foreground" />
@@ -854,8 +879,8 @@ export function ModelsWorkbenchPage({
                     {model.name}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {model.provider ?? "Provider unavailable"} ·{" "}
-                    {model.access ?? "Access unavailable"}
+                    <DataText reason="No provider was supplied for this model." value={model.provider} /> ·{" "}
+                    <DataText reason="No access type was supplied for this model." value={model.access} />
                   </p>
                 </Link>
               ))}

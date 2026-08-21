@@ -1,6 +1,7 @@
 import { readPublishedCatalog } from '../catalog';
 import type {
   CatalogResponse,
+  EntitlementEvidence,
   EntitlementDimension,
   PlanOffer,
   SourceProvenance,
@@ -87,6 +88,10 @@ function sourceRef(revision: string, sourceId: string): string {
   return `catalog:${revision}:${sourceId}`;
 }
 
+function entitlementSourceRef(revision: string, planId: string): string {
+  return `catalog:${revision}:plan:${planId}:entitlement`;
+}
+
 function sourceAttribution(catalog: CatalogResponse, source: SourceProvenance): SourceAttribution {
   return {
     sourceRef: sourceRef(catalog.revision, source.id),
@@ -101,12 +106,75 @@ function sourceAttribution(catalog: CatalogResponse, source: SourceProvenance): 
   };
 }
 
+function entitlementSourceAttribution(
+  catalog: CatalogResponse,
+  plan: PlanOffer,
+  index: number,
+): SourceAttribution {
+  const evidence = plan.entitlementEvidence.source;
+  return {
+    sourceRef: entitlementSourceRef(catalog.revision, plan.id),
+    fieldGroup: `/data/plans/${index}/entitlement`,
+    sourceId: plan.sourceId,
+    sourceRevision: catalog.revision,
+    label: 'Reviewed provider entitlement receipt',
+    url: evidence.url,
+    licenseId: 'provider-terms',
+    observedAt: evidence.accessedAt,
+    effectiveAt: evidence.publishedOrModifiedAt ?? null,
+  };
+}
+
 function available<T>(value: T, source: string): EvidenceValue<T> {
   return { availability: 'available', value, sourceRefs: [source] };
 }
 
 function unknown<T>(reason: string, source: string): EvidenceValue<T> {
   return { availability: 'unavailable', value: null, reason, sourceRefs: [source] };
+}
+
+function documentedPlanPrice(
+  value: number | undefined,
+  reason: string,
+  catalogSourceRef: string,
+): EvidenceValue<number> {
+  return value === undefined ? unknown(reason, catalogSourceRef) : available(value, catalogSourceRef);
+}
+
+function usageNote(plan: PlanOffer): string | null {
+  switch (plan.entitlement.kind) {
+    case 'fixed_tokens': return null;
+    case 'rolling_limit':
+    case 'credits':
+    case 'guardrail_limited':
+    case 'unknown': return plan.entitlement.description;
+  }
+}
+
+function entitlementReceipt(
+  evidence: EntitlementEvidence,
+  plan: PlanOffer,
+  receiptSourceRef: string,
+) {
+  return {
+    evidenceStatus: evidence.status,
+    boundType: evidence.boundType,
+    usageNote: usageNote(plan),
+    dimensions: evidence.dimensions.map((dimension) => ({
+      metric: dimension.metric,
+      minimum: dimension.min ?? null,
+      maximum: dimension.max ?? null,
+      unit: dimension.unit,
+      window: dimension.window,
+      resetRule: dimension.resetRule ?? null,
+      modelId: dimension.modelId ?? null,
+      feature: dimension.feature ?? null,
+      sharedPoolId: dimension.sharedPoolId ?? null,
+    })),
+    staleReason: evidence.staleReason ?? null,
+    lastVerifiedAt: evidence.source.accessedAt,
+    sourceRefs: [receiptSourceRef],
+  };
 }
 
 function subscriptionUnavailableWarnings(value: unknown): DataWarning[] {
@@ -339,26 +407,42 @@ function buildCatalogProjection(input: {
   const routes = directOffers;
   const usedSourceIds = new Set([...plans, ...routes].map((offer) => offer.sourceId));
   if (usedSourceIds.size === 0) return null;
-  const sources = [...usedSourceIds]
+  const catalogSources = [...usedSourceIds]
     .map((sourceId) => sourceById.get(sourceId))
     .filter((source): source is SourceProvenance => source !== undefined)
     .sort((left, right) => left.id.localeCompare(right.id))
     .map((source) => sourceAttribution(catalog, source));
-  const sourceRefs = new Map(sources.map((source) => [source.sourceId, source.sourceRef]));
-  const sourceObservedAt = new Map(sources.map((source) => [source.sourceId, source.observedAt]));
+  const sources = [
+    ...catalogSources,
+    ...plans.map((plan, index) => entitlementSourceAttribution(catalog, plan, index)),
+  ].sort((left, right) => left.sourceRef.localeCompare(right.sourceRef));
+  const sourceRefs = new Map(catalogSources.map((source) => [source.sourceId, source.sourceRef]));
+  const sourceObservedAt = new Map(catalogSources.map((source) => [source.sourceId, source.observedAt]));
 
   const projectedPlans = plans.map((plan) => {
     const catalogSourceRef = sourceRefs.get(plan.sourceId);
     const observedAt = sourceObservedAt.get(plan.sourceId);
     if (catalogSourceRef === undefined || observedAt === undefined) throw new Error('Missing plan source attribution.');
+    const receiptSourceRef = entitlementSourceRef(catalog.revision, plan.id);
     return {
       planId: plan.id,
       providerId: plan.providerId,
       displayName: plan.displayName,
       monthlyCostMicroDollars: plan.monthlyCostMicroDollars,
+      annualCostMicroDollars: documentedPlanPrice(
+        plan.annualCostMicroDollars,
+        'No reviewed provider annual checkout price is available for this plan.',
+        catalogSourceRef,
+      ),
+      annualEffectiveMonthlyCostMicroDollars: documentedPlanPrice(
+        plan.annualEffectiveMonthlyCostMicroDollars,
+        'No reviewed provider annual effective monthly price is available for this plan.',
+        catalogSourceRef,
+      ),
+      entitlementReceipt: entitlementReceipt(plan.entitlementEvidence, plan, receiptSourceRef),
       supportedModelSlugs: safeModelSlugs(plan),
       sourceRefs: [catalogSourceRef],
-      entitlement: projectEntitlement(plan, catalogSourceRef, observedAt, workloadShape),
+      entitlementProjection: projectEntitlement(plan, catalogSourceRef, observedAt, workloadShape),
     };
   });
   const projectedRoutes = routes.map((offer) => {
@@ -374,10 +458,13 @@ function buildCatalogProjection(input: {
 
   const data: SubscriptionData = {
     operation: 'catalog',
-    plans: projectedPlans.map(({ entitlement: _entitlement, ...plan }) => plan),
+    plans: projectedPlans.map(({ entitlementProjection: _entitlementProjection, entitlementReceipt, ...plan }) => ({
+      ...plan,
+      entitlement: entitlementReceipt,
+    })),
     routes: projectedRoutes,
     routeBindings,
-    entitlementProjections: projectedPlans.map((plan) => plan.entitlement),
+    entitlementProjections: projectedPlans.map((plan) => plan.entitlementProjection),
     calculation: null,
   };
   const hasCalculationBindingGap = calculationBindingUnavailable({
@@ -388,7 +475,7 @@ function buildCatalogProjection(input: {
   const warnings: DataWarning[] = [
     ...subscriptionUnavailableWarnings(data),
     ...projectedPlans.flatMap((plan, index): DataWarning[] => (
-      plan.entitlement.evidenceState === 'dynamic_unknown' ? [{
+      plan.entitlementProjection.evidenceState === 'dynamic_unknown' ? [{
         code: 'subscription_entitlement_dynamic_unknown',
         fieldGroup: `/data/entitlementProjections/${index}`,
         state: 'unknown',

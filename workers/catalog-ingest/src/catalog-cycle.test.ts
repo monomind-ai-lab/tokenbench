@@ -72,6 +72,7 @@ function sqliteD1() {
     '0012_benchmark_metric_rank_field_size.sql',
     '0015_catalog_model_expiration.sql',
     '0016_catalog_cache_write_rate.sql',
+    '0019_plan_annual_price_evidence.sql',
   ]) {
     sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations', file), 'utf8'));
   }

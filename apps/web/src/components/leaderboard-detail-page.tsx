@@ -82,23 +82,29 @@ const PROFILE_LABELS = {
   outputHeavy: "Output-heavy",
 } as const;
 
+const MISSING_VALUE = "-";
+
 function formatScore(value: number | null) {
-  return value === null ? "Unavailable" : formatDisplayNumber(value);
+  return value === null ? MISSING_VALUE : formatDisplayNumber(value);
 }
 
 function formatPrice(value: number | null) {
-  return value === null ? "Unavailable" : formatDisplayUsd(value);
+  return value === null ? MISSING_VALUE : formatDisplayUsd(value);
+}
+
+function formatAccess(value: string) {
+  return value === "Unavailable" ? MISSING_VALUE : value;
 }
 
 function formatTokens(value: number | null) {
-  if (value === null) return "Unavailable";
-  if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(1))}M`;
-  if (value >= 1_000) return `${Number((value / 1_000).toFixed(1))}K`;
-  return value.toLocaleString("en-US");
+  if (value === null) return MISSING_VALUE;
+  if (value >= 1_000_000) return `${formatDisplayNumber(value / 1_000_000, { maximumFractionDigits: 1 })}M`;
+  if (value >= 1_000) return `${formatDisplayNumber(value / 1_000, { maximumFractionDigits: 1 })}K`;
+  return formatDisplayNumber(value);
 }
 
 function formatTimestamp(value: string | null) {
-  if (value === null) return "Mixed or unavailable";
+  if (value === null) return MISSING_VALUE;
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return value;
   return new Intl.DateTimeFormat("en-US", {
@@ -120,27 +126,27 @@ function ProviderDot({ provider }: { provider: string }) {
   return <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full ring-4 ring-current/10" style={{ backgroundColor: color, color }} />;
 }
 
-function LeaderboardRowCard({ row, position, pricingOnly }: { row: LeaderboardDisplayRow; position: number; pricingOnly: boolean }) {
+function LeaderboardRowCard({ row, pricingOnly }: { row: LeaderboardDisplayRow; pricingOnly: boolean }) {
   return (
     <Card className={cn("transition-colors hover:ring-foreground/20", row.frontier && "ring-1 ring-primary/35")}>
       <CardContent>
         <div className="flex items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-border bg-muted/60 font-mono text-xs text-muted-foreground">
-            {row.rank === null ? String(position + 1).padStart(2, "0") : `#${row.rank}`}
+            {row.rank === null ? MISSING_VALUE : `#${row.rank}`}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-medium">{row.name}</h3>
               {row.frontier ? <Badge variant="secondary"><Sparkles />Frontier</Badge> : null}
             </div>
-            <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground"><ProviderDot provider={row.provider} />{row.provider} · {row.access}</div>
+            <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground"><ProviderDot provider={row.provider} />{row.provider} · {formatAccess(row.access)}</div>
           </div>
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-border sm:grid-cols-4">
           {!pricingOnly ? <div className="bg-muted/55 p-3"><dt className="text-[10px] text-muted-foreground">{row.metricLabel}</dt><dd className="mt-1 font-mono text-sm">{formatScore(row.metric)}</dd></div> : null}
           <div className="bg-muted/55 p-3"><dt className="text-[10px] text-muted-foreground">Blended / 1M</dt><dd className="mt-1 font-mono text-sm">{formatPrice(row.blendedUsdPerMillion)}</dd></div>
           <div className="bg-muted/55 p-3"><dt className="text-[10px] text-muted-foreground">Context</dt><dd className="mt-1 font-mono text-sm">{formatTokens(row.contextWindowTokens)}</dd></div>
-          <div className="bg-muted/55 p-3"><dt className="text-[10px] text-muted-foreground">Route</dt><dd className="mt-1 truncate font-mono text-sm" title={row.route ?? undefined}>{row.route ?? "Unavailable"}</dd></div>
+          <div className="bg-muted/55 p-3"><dt className="text-[10px] text-muted-foreground">Route</dt><dd className="mt-1 truncate font-mono text-sm" title={row.route ?? undefined}>{row.route ?? MISSING_VALUE}</dd></div>
         </dl>
       </CardContent>
     </Card>
@@ -167,15 +173,15 @@ function LeaderboardTable({ rows, pricingOnly }: { rows: readonly LeaderboardDis
         <tbody>
           {rows.map((row) => (
             <tr className="border-t border-border transition-colors hover:bg-muted/30" key={row.id}>
-              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.rank === null ? "Unranked" : `#${row.rank}`}{row.frontier ? <Badge className="ml-2" variant="secondary">Frontier</Badge> : null}</td>
+              <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{row.rank === null ? MISSING_VALUE : `#${row.rank}`}{row.frontier ? <Badge className="ml-2" variant="secondary">Frontier</Badge> : null}</td>
               <td className="px-4 py-3"><span className="flex items-center gap-3"><ProviderDot provider={row.provider} /><span><span className="block font-medium">{row.name}</span><span className="block text-xs text-muted-foreground">{row.provider}</span></span></span></td>
-              <td className="px-4 py-3 text-muted-foreground">{row.access}</td>
-              {!pricingOnly ? <td className="px-4 py-3 text-right"><span className="font-mono">{formatScore(row.metric)}</span><span className="block text-[10px] text-muted-foreground">{row.metricLabel}{row.fieldSize === null ? "" : ` · field ${row.fieldSize}`}</span></td> : null}
+              <td className="px-4 py-3 text-muted-foreground">{formatAccess(row.access)}</td>
+              {!pricingOnly ? <td className="px-4 py-3 text-right"><span className="font-mono">{formatScore(row.metric)}</span><span className="block text-[10px] text-muted-foreground">{row.metricLabel}{row.fieldSize === null ? "" : ` · field ${formatDisplayNumber(row.fieldSize)}`}</span></td> : null}
               <td className="px-4 py-3 text-right font-mono">{formatPrice(row.inputUsdPerMillion)}</td>
               <td className="px-4 py-3 text-right font-mono">{formatPrice(row.outputUsdPerMillion)}</td>
               <td className="px-4 py-3 text-right font-mono">{formatPrice(row.blendedUsdPerMillion)}</td>
               <td className="px-4 py-3 text-right font-mono">{formatTokens(row.contextWindowTokens)}</td>
-              <td className="max-w-52 px-4 py-3 font-mono text-xs text-muted-foreground"><span className="block truncate" title={row.route ?? undefined}>{row.route ?? "Unavailable"}</span></td>
+              <td className="max-w-52 px-4 py-3 font-mono text-xs text-muted-foreground"><span className="block truncate" title={row.route ?? undefined}>{row.route ?? MISSING_VALUE}</span></td>
             </tr>
           ))}
         </tbody>
@@ -190,7 +196,7 @@ function csvRows(rows: readonly LeaderboardDisplayRow[], unavailableReason: stri
     rank: row.rank,
     model: row.name,
     provider: row.provider,
-    access: row.access,
+    access: formatAccess(row.access),
     metric: row.metric,
     metricLabel: row.metricLabel,
     fieldSize: row.fieldSize,
@@ -282,7 +288,7 @@ export function LeaderboardDetailPage({
           <div className="overflow-hidden rounded-2xl border border-border bg-card/90 shadow-soft">
             <div className="border-b border-border px-5 py-4"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium">Evidence receipt</p><p className="mt-1 text-xs text-muted-foreground">The timestamp and coverage travel with the result.</p></div><Link className="shrink-0 text-xs font-medium text-link hover:underline" href="/data-sources/">Data sources</Link></div></div>
             <dl className="grid grid-cols-2 gap-px bg-border">
-              <div className="bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Status</dt><dd className="mt-2 text-sm font-medium capitalize">{sourceUnavailable ? "Unavailable" : snapshot.envelope?.status ?? "Unavailable"}</dd></div>
+              <div className="bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Status</dt><dd className="mt-2 text-sm font-medium capitalize">{sourceUnavailable ? MISSING_VALUE : snapshot.envelope?.status ?? MISSING_VALUE}</dd></div>
               <div className="bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Published rows</dt><dd className="mt-2 font-mono text-sm">{sourceRows.length}</dd></div>
               <div className="col-span-2 bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Last updated</dt><dd className="mt-2 text-sm">{formatTimestamp(sourceUnavailable ? null : snapshot.envelope?.effectiveAt ?? null)}</dd></div>
             </dl>
@@ -352,8 +358,8 @@ export function LeaderboardDetailPage({
           <div className="mt-7" id="leaderboard-results">
             {sourceUnavailable ? <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-border bg-card/50 p-8 text-center" role="status"><div className="max-w-xl"><DatabaseZap className="mx-auto size-7 text-muted-foreground" /><h3 className="mt-4 text-lg font-medium">Verified source projection unavailable</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{unavailableReason}</p><p className="mt-4 text-xs leading-5 text-muted-foreground">This route remains published so its methodology, query semantics, exports, and future data boundary are stable. TokenBench does not fill it with another source&apos;s scores.</p></div></div> : null}
             {!sourceUnavailable && rows.length === 0 ? <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-border text-center"><div><CircleAlert className="mx-auto size-6 text-muted-foreground" /><h3 className="mt-3 font-medium">No published rows match these filters</h3><p className="mt-1 text-sm text-muted-foreground">Broaden the query or reset the visible result field.</p><Button className="mt-4 min-h-11" onClick={reset} variant="outline"><RotateCcw />Reset filters</Button></div></div> : null}
-            {visibleRows.length > 0 && filters.view === "cards" ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRows.map((row, index) => <LeaderboardRowCard key={row.id} position={index} pricingOnly={pricingOnly} row={row} />)}</div> : null}
-            {visibleRows.length > 0 && filters.view === "list" ? <><div className="grid gap-3 md:hidden">{visibleRows.map((row, index) => <LeaderboardRowCard key={row.id} position={index} pricingOnly={pricingOnly} row={row} />)}</div><div className="hidden md:block"><LeaderboardTable pricingOnly={pricingOnly} rows={visibleRows} /></div></> : null}
+            {visibleRows.length > 0 && filters.view === "cards" ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRows.map((row) => <LeaderboardRowCard key={row.id} pricingOnly={pricingOnly} row={row} />)}</div> : null}
+            {visibleRows.length > 0 && filters.view === "list" ? <><div className="grid gap-3 md:hidden">{visibleRows.map((row) => <LeaderboardRowCard key={row.id} pricingOnly={pricingOnly} row={row} />)}</div><div className="hidden md:block"><LeaderboardTable pricingOnly={pricingOnly} rows={visibleRows} /></div></> : null}
           </div>
         </div>
       </section>

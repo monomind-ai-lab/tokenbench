@@ -31,10 +31,35 @@ function rawEntry(
     readonly weeklyRank: number | null;
     readonly overallScore: number | null;
     readonly category?: { readonly key: string; readonly label: string; readonly score: number } | null;
+    readonly categories?: readonly { readonly key: string; readonly label: string; readonly score: number }[];
     readonly sourceType?: "Proprietary" | "Open Weight" | "Unknown";
     readonly price?: boolean;
   },
 ) {
+  const categoryInputs = options.categories ?? (
+    options.category === undefined || options.category === null ? [] : [options.category]
+  );
+  const categoryFact = (category: { readonly key: string; readonly label: string; readonly score: number }) => ({
+    key: category.key,
+    metricKey: `benchlm:category:${category.key}`,
+    label: category.label,
+    score: category.score,
+    rawScore: null,
+    rank: null,
+    fieldSize: null,
+    percentile: null,
+    evidenceStatus: "supported" as const,
+    benchmarkCount: 1,
+    rankingEligible: true,
+    unit: "score" as const,
+    sourceId: "benchlm" as const,
+  });
+  const categories = categoryInputs.map(categoryFact);
+  const strongestCategory = options.category === undefined
+    ? categories[0] ?? null
+    : options.category === null
+      ? null
+      : categoryFact(options.category);
   return {
     modelKey: `benchlm:test:${id}`,
     canonicalSlug: id,
@@ -56,26 +81,8 @@ function rawEntry(
     weeklyRank: options.weeklyRank,
     overallScore: options.overallScore,
     overallRank: null,
-    strongestCategory:
-      options.category === undefined
-        ? null
-        : options.category === null
-          ? null
-          : {
-              key: options.category.key,
-              metricKey: `benchlm:category:${options.category.key}`,
-              label: options.category.label,
-              score: options.category.score,
-              rawScore: null,
-              rank: null,
-              fieldSize: null,
-              percentile: null,
-              evidenceStatus: "supported",
-              benchmarkCount: 1,
-              rankingEligible: true,
-              unit: "score",
-              sourceId: "benchlm",
-            },
+    categories,
+    strongestCategory,
     representativePrice:
       options.price === false
         ? null
@@ -454,6 +461,30 @@ test("keeps a published zero distinct from an unavailable live value", () => {
   // Vision has a source score, but is not one of the immutable UI slot aliases.
   assert.deepEqual(missing?.axes, []);
   assert.equal(missing?.routePricing.availability, "unavailable");
+});
+
+test("projects every supported directory category without profile or category requests", () => {
+  const raw = rawEnvelope();
+  raw.data.models = [rawEntry("category-vector", {
+    weeklyRank: 1,
+    overallScore: 88,
+    // The compatibility summary stays absent; axes must use categories.
+    category: null,
+    categories: [
+      { key: "coding", label: "Coding", score: 91.5 },
+      { key: "reasoning", label: "Reasoning", score: 89.25 },
+      { key: "vision", label: "Vision", score: 77 },
+    ],
+  })];
+  const published = parseModelDirectoryEnvelope(raw);
+  assert.ok(published);
+
+  const model = projectPopularModelsLive(published).models[0];
+  assert.equal(model?.overallScore, 88);
+  assert.deepEqual(model?.axes.map((axis) => [axis.key, axis.percentile]), [
+    ["coding", 91.5],
+    ["reasoning", 89.25],
+  ]);
 });
 
 test("overrides strict benchmark rank while retaining strict capability and economics", () => {

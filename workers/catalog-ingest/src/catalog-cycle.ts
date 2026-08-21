@@ -336,6 +336,8 @@ export function buildCatalogCandidateStatements(input: {
     JSON.stringify(plan.entitlement),
     JSON.stringify(plan.entitlementEvidence),
     plan.billingCycle ?? null,
+    plan.annualCostMicroDollars ?? null,
+    plan.annualEffectiveMonthlyCostMicroDollars ?? null,
     plan.supportedModelIds ? JSON.stringify(plan.supportedModelIds) : null,
     plan.sourceId,
   ]));
@@ -375,7 +377,8 @@ export function buildCatalogCandidateStatements(input: {
     ...multiRowInsert(db, `INSERT OR IGNORE INTO plan_offers
       (revision, id, provider_id, display_name, monthly_cost_micro_dollars,
        currency, entitlement_json, entitlement_evidence_json, billing_cycle,
-       supported_model_ids_json, source_id) VALUES`, planRows, 11),
+       annual_cost_micro_dollars, annual_effective_monthly_cost_micro_dollars,
+       supported_model_ids_json, source_id) VALUES`, planRows, 13),
     ...multiRowInsert(db, `INSERT OR IGNORE INTO model_offers
       (revision, id, provider_id, display_name, model_id, pricing_basis,
        route, currency, unit, input_micro_dollars_per_million,

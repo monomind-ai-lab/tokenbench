@@ -24,7 +24,7 @@ describe('subscription entitlement evidence', () => {
       expect(['verified', 'projected', 'dynamic_unknown', 'stale']).toContain(plan.entitlementEvidence.status);
       expect(['hard_max', 'practical_upper', 'outer_ceiling', 'unknown']).toContain(plan.entitlementEvidence.boundType);
       expect(plan.entitlementEvidence.source.url).toMatch(/^https:\/\//);
-      expect(plan.entitlementEvidence.source.accessedAt).toBe('2026-08-10T00:00:00.000Z');
+      expect(plan.entitlementEvidence.source.accessedAt).toMatch(/^2026-08-(10|21)T/);
     }
   });
 
@@ -55,11 +55,18 @@ describe('subscription entitlement evidence', () => {
     expect(staleIds).toEqual([
       'alibaba:token-plan-pro',
       'alibaba:token-plan-standard',
-      'google:ai-plus',
+      'google:ai-ultra-20x',
+      'google:ai-ultra-5x',
+      'openai:go',
+      'openai:plus',
+      'openai:pro-20x',
+      'openai:pro-5x',
+      'xai:supergrok',
+      'zai:lite',
       'zai:max',
       'zai:pro',
     ]);
-    for (const id of staleIds) expect(evidenceFor(id).staleReason).toMatch(/price/i);
+    for (const id of staleIds) expect(evidenceFor(id).staleReason).toBeTruthy();
   });
 
   it('expresses Claude and Gemini capacity as relative projections, never absolute guarantees', () => {
@@ -67,9 +74,8 @@ describe('subscription entitlement evidence', () => {
       'anthropic:pro': '5 x F x 144',
       'anthropic:max-5x': '25 x F x 144',
       'anthropic:max-20x': '100 x F x 144',
-      'google:ai-pro': '576 x S',
-      'google:ai-ultra-5x': '2880 x S',
-      'google:ai-ultra-20x': '11520 x S',
+      'google:ai-plus': '2 x S',
+      'google:ai-pro': '4 x S',
     };
 
     for (const [id, formula] of Object.entries(relative)) {
@@ -83,7 +89,7 @@ describe('subscription entitlement evidence', () => {
     }
   });
 
-  it('projects OpenAI 30-day outer ceilings from the published five-hour bands', () => {
+  it('keeps last-verified OpenAI bands stale when current sources do not publish numeric caps', () => {
     const expected: Record<string, readonly number[]> = {
       'openai:plus': [14_400, 28_800, 288_000],
       'openai:pro-5x': [72_000, 144_000, 1_440_000],
@@ -92,7 +98,7 @@ describe('subscription entitlement evidence', () => {
 
     for (const [id, ceilings] of Object.entries(expected)) {
       const evidence = evidenceFor(id);
-      expect(evidence.status).toBe('projected');
+      expect(evidence.status).toBe('stale');
       const derived = evidence.dimensions.map((dimension) => (dimension.max ?? 0) * 144);
       expect(derived).toEqual(ceilings);
       expect(evidence.projection?.caveats.join(' ')).toMatch(/weekly cap/i);
@@ -106,10 +112,10 @@ describe('subscription entitlement evidence', () => {
     }
   });
 
-  it('keeps providers without a published number as dynamic unknown', () => {
+  it('marks retained prices stale when current first-party evidence is unavailable or disallowed', () => {
     for (const id of ['xai:supergrok', 'openai:go']) {
       const evidence = evidenceFor(id);
-      expect(evidence.status).toBe('dynamic_unknown');
+      expect(evidence.status).toBe('stale');
       expect(evidence.boundType).toBe('unknown');
       expect(evidence.dimensions).toEqual([]);
       expect(evidence.projection).toBeUndefined();
@@ -133,18 +139,21 @@ describe('subscription entitlement evidence', () => {
     }
   });
 
-  it('projects Z.AI 30-day credits from published weekly credits and discloses the 5h cap', () => {
+  it('records current Z.AI five-hour and weekly credit caps without a token conversion', () => {
     const zai: Record<string, readonly [number, number]> = {
-      'zai:lite': [10_000, 42_900],
-      'zai:pro': [60_000, 257_100],
-      'zai:max': [140_000, 600_000],
+      'zai:lite': [2_000, 10_000],
+      'zai:pro': [12_000, 60_000],
+      'zai:max': [28_000, 140_000],
     };
 
-    for (const [id, [weekly, projected]] of Object.entries(zai)) {
+    for (const [id, [fiveHour, weekly]] of Object.entries(zai)) {
       const evidence = evidenceFor(id);
-      expect(evidence.dimensions[0]).toMatchObject({ metric: 'credits', max: weekly, window: 'weekly' });
-      expect(evidence.projection?.formula).toBe(`${weekly} x 30 / 7 = ${projected}`);
-      expect(evidence.projection?.caveats.join(' ')).toMatch(/five-hour cap/i);
+      expect(evidence.status).toBe('stale');
+      expect(evidence.dimensions).toEqual([
+        expect.objectContaining({ metric: 'credits', max: fiveHour, window: 'rolling_5h' }),
+        expect.objectContaining({ metric: 'credits', max: weekly, window: 'weekly' }),
+      ]);
+      expect(evidence.projection).toBeUndefined();
     }
   });
 

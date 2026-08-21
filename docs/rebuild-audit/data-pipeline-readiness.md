@@ -51,6 +51,8 @@ The accepted evidence set also covers:
 - Subscription calculations are catalog-owned and have no benchmark dependency.
 - Cache-read, cache-write, standard-input, output, tier, route, and crossover
   facts stay explicit.
+- Reader-facing absent scalar facts use `-`; their structured unavailable reason
+  and provenance remain in the accepted value and accessible presentation.
 - Production composition is HTTP-only. Evidence fixtures may not become a silent
   production fallback.
 
@@ -68,9 +70,10 @@ The accepted evidence set also covers:
 | LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned artifacts/methodology, bounded parsing, R2 evidence, eight-statement actual-size D1 staging, persisted publication epoch lease, and atomic stale-completion rejection |
 | `rankings` GET | Production-capable after migration and first ingestion | pinned LiveBench global-average projection, release/taxonomy/total/cursor receipt, task economics, filters, bounded pagination, ETag |
 | Custom `rankings` POST | LiveBench capability ranking ready | active release publishes its exact category dimension-set revision; submitted weights are echoed and applied exactly; unavailable route/runtime SLA filters make candidates ineligible rather than inventing facts |
-| `models`, `profile`, `comparison` v1 | Strict mixed-source join implemented locally | LiveBench capability/economics plus exact reviewed canonical catalog route, pricing, cache read/write, modality, and expiration facts; runtime remains explicitly unavailable without an observation source |
+| `models`, `profile`, `comparison` v1 | Strict mixed-source join implemented locally | LiveBench capability/economics plus exact reviewed canonical catalog route, pricing, cache read/write, modalities, supported parameters, creation/expiration, knowledge cutoff, tokenizer/instruction format, moderation, per-request limits, category coverage, and freshness; runtime remains explicitly unavailable without an observation source |
 | `lifecycle` | Production-capable after migration and catalog refresh | the endpoint catalog expiration date is revisioned and projected into scheduled/retired events; replacements remain unavailable unless published |
-| `subscription` | Reviewed catalog and bounded calculation implemented | exactly seven provider slots; reviewed plan/usage limits; exact direct-route bindings; positive cache allocations require independently published rates |
+| `subscription` | Reviewed catalog, source receipts, and bounded calculation implemented | exactly seven provider slots; reviewed monthly/annual plan prices, entitlement dimensions and usage notes, direct source links/timestamps, exact route bindings; positive cache allocations require independently published rates |
+| Daily subscription refresh | Implemented in the catalog-ingest cycle | the existing daily Worker schedule runs bounded first-party plan crawling, requires exact unambiguous plan matches, preserves stale/unknown evidence, and never derives annual savings or numeric capacity |
 | Deployment/cutover | Not authorized | no live infrastructure changes |
 
 The retained acceptance artifacts are contract fixtures: their revisions are
@@ -147,13 +150,15 @@ mode and has no evidence fallback; production builds reject evidence mode.
 ## Remaining data work before production
 
 1. With separate authorization, apply migrations `0016` (catalog cache-write
-   rate) and `0017` (LiveBench publication epoch), deploy the reviewed producer,
+   rate), `0017` (LiveBench publication epoch), `0018` (approved OpenRouter
+   route receipts), and `0019` (provider-published annual plan prices); deploy the reviewed producer,
    and run the first catalog/LiveBench refresh. No live cutover has been
    authorized.
 2. Add independently revisioned runtime observations for TTFT, throughput, and
    uptime, then publish coherent mixed-source projection tuples.
 3. Add reviewed Perplexity/Microsoft plan facts and any still-missing provider
-   cache-write rates; keep positive unknown allocations unavailable.
+   cache-write rates; keep positive unknown allocations unavailable. Numeric
+   subscription caps still require direct provider proof with a reset window.
 4. Deploy/activate the locally implemented strict custom-ranking POST surface
    if server-side custom ranking remains desired. The current Next workbench can
    re-rank only candidates with all active weighted dimensions and evaluation

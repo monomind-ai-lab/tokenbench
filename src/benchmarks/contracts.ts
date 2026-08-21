@@ -162,6 +162,17 @@ export interface BenchmarkPriceCheck {
   inputModalities: readonly string[] | null;
   outputModalities: readonly string[] | null;
   supportedParameters: readonly string[] | null;
+  /** Additional published meters remain independent of token input/output rates. */
+  cacheWriteUsdPerMillion?: number | null;
+  /** Source-declared model metadata, attached to this exact route receipt. */
+  createdAt?: string | null;
+  expirationDate?: string | null;
+  knowledgeCutoff?: string | null;
+  tokenizer?: string | null;
+  instructionFormat?: string | null;
+  isModerated?: boolean | null;
+  /** Opaque source JSON because OpenRouter does not promise a stable sub-schema. */
+  perRequestLimitsJson?: string | null;
   sourceArtifactId: string;
 }
 
@@ -616,6 +627,33 @@ function validatePriceCheck(
   requireNullablePositiveInteger(price.maxOutputTokens, `${name}.maxOutputTokens`);
   for (const key of ['inputModalities', 'outputModalities', 'supportedParameters'] as const) {
     requireNullableStringArray(price[key], `${name}.${key}`);
+  }
+  for (const key of [
+    'cacheWriteUsdPerMillion',
+  ] as const) {
+    if (price[key] !== undefined) requireNullableNonNegativeFiniteNumber(price[key], `${name}.${key}`);
+  }
+  for (const key of ['createdAt', 'expirationDate', 'knowledgeCutoff', 'tokenizer', 'instructionFormat', 'perRequestLimitsJson'] as const) {
+    if (price[key] !== undefined) requireNullableString(price[key], `${name}.${key}`);
+  }
+  if (price.createdAt !== undefined && price.createdAt !== null && !isCanonicalIsoTimestamp(price.createdAt)) {
+    fail(`${name}.createdAt must be a canonical ISO timestamp or null`);
+  }
+  if (price.expirationDate !== undefined && price.expirationDate !== null
+    && (!/^\d{4}-\d{2}-\d{2}$/.test(price.expirationDate)
+      || new Date(`${price.expirationDate}T00:00:00.000Z`).toISOString().slice(0, 10) !== price.expirationDate)) {
+    fail(`${name}.expirationDate must be a valid calendar date or null`);
+  }
+  if (price.perRequestLimitsJson !== undefined && price.perRequestLimitsJson !== null) {
+    try {
+      const parsed = JSON.parse(price.perRequestLimitsJson);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) fail(`${name}.perRequestLimitsJson must be a JSON object or null`);
+    } catch {
+      fail(`${name}.perRequestLimitsJson must be a JSON object or null`);
+    }
+  }
+  if (price.isModerated !== undefined && price.isModerated !== null && typeof price.isModerated !== 'boolean') {
+    fail(`${name}.isModerated must be boolean or null`);
   }
   requireKnownArtifact(sourceArtifacts, price.sourceId, price.sourceArtifactId, name);
   return price;

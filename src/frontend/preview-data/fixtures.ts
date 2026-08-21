@@ -144,7 +144,8 @@ const deepseekV3: PreviewModel = {
 
 export const PREVIEW_FIXTURE_MODELS: readonly PreviewModel[] = [gpt4o, deepseekV3];
 
-type WeightedRankingCapability = 'agentic' | 'coding' | 'reasoning' | 'math' | 'multimodal' | 'throughput';
+type LegacyWeightedRankingCapability = 'agentic' | 'coding' | 'reasoning' | 'math' | 'multimodal';
+type WeightedRankingCapability = 'reasoning' | 'coding' | 'agentic-coding' | 'mathematics' | 'data-analysis' | 'language' | 'instruction-following';
 
 interface WeightedRankingFixtureRecord {
   readonly id: string;
@@ -160,10 +161,10 @@ interface WeightedRankingFixtureRecord {
   readonly sunset: string | null;
   readonly ttft: number;
   readonly throughput: number;
-  readonly scores: Readonly<Record<Exclude<WeightedRankingCapability, 'throughput'>, number>>;
+  readonly scores: Readonly<Record<LegacyWeightedRankingCapability, number>>;
 }
 
-const WEIGHTED_RANKING_CAPABILITIES: readonly WeightedRankingCapability[] = ['agentic', 'coding', 'reasoning', 'math', 'multimodal', 'throughput'];
+const WEIGHTED_RANKING_CAPABILITIES: readonly WeightedRankingCapability[] = ['reasoning', 'coding', 'agentic-coding', 'mathematics', 'data-analysis', 'language', 'instruction-following'];
 
 /**
  * Typed migration of the approved illustrative Make it yours records. This is
@@ -203,15 +204,27 @@ const WEIGHTED_RANKING_FIXTURE_RECORDS: readonly WeightedRankingFixtureRecord[] 
   {"id":"grok-3-mini","name":"Grok 3 Mini","provider":"xAI","access":"Proprietary","cost":0.6,"inputPrice":0.3,"outputPrice":1.2,"cacheRead":null,"released":"2025-04-09","lifecycle":"Current","sunset":null,"ttft":0.4,"throughput":98,"scores":{"agentic":85,"coding":88,"reasoning":91,"math":92,"multimodal":55}},
 ];
 
-function normalizedThroughputScore(throughput: number): number {
-  return Math.min(100, throughput / 120 * 100);
+function weightedRankingFixtureScore(
+  record: WeightedRankingFixtureRecord,
+  capability: WeightedRankingCapability,
+): number {
+  switch (capability) {
+    case 'reasoning': return record.scores.reasoning;
+    case 'coding': return record.scores.coding;
+    case 'agentic-coding': return record.scores.agentic;
+    case 'mathematics': return record.scores.math;
+    case 'data-analysis': return (record.scores.reasoning + record.scores.math) / 2;
+    case 'language': return (record.scores.reasoning + record.scores.multimodal) / 2;
+    case 'instruction-following': return (record.scores.agentic + record.scores.reasoning) / 2;
+  }
 }
 
 function weightedRankingComposite(record: WeightedRankingFixtureRecord): number {
-  const weights = { agentic: 20, coding: 20, reasoning: 20, math: 15, multimodal: 15, throughput: 10 } as const;
-  return WEIGHTED_RANKING_CAPABILITIES.reduce((total, capability) => total + (capability === 'throughput'
-    ? normalizedThroughputScore(record.throughput)
-    : record.scores[capability]) * weights[capability], 0) / 100;
+  const weights = { reasoning: 20, coding: 20, 'agentic-coding': 20, mathematics: 15, 'data-analysis': 10, language: 5, 'instruction-following': 10 } as const;
+  return WEIGHTED_RANKING_CAPABILITIES.reduce(
+    (total, capability) => total + weightedRankingFixtureScore(record, capability) * weights[capability],
+    0,
+  ) / 100;
 }
 
 function weightedRankingModel(record: WeightedRankingFixtureRecord): PreviewModel {
@@ -228,7 +241,7 @@ function weightedRankingModel(record: WeightedRankingFixtureRecord): PreviewMode
       radar: WEIGHTED_RANKING_CAPABILITIES.map((key) => ({
         key,
         label: key[0]!.toUpperCase() + key.slice(1),
-        percentile: key === 'throughput' ? normalizedThroughputScore(record.throughput) : record.scores[key],
+        percentile: weightedRankingFixtureScore(record, key),
         rank: null,
         fieldSize: null,
       })),

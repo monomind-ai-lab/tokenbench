@@ -45,7 +45,7 @@ describe('MakeItYoursPage', () => {
     const match = { routeId: 'make-it-yours' as const, pathname: '/make-it-yours/', search: new URLSearchParams(), hash: '', params: {} };
 
     render(<MakeItYoursPage match={match} data={data} />);
-    for (const label of ['Agentic', 'Coding', 'Reasoning', 'Math', 'Multimodal', 'Throughput']) {
+    for (const label of ['Reasoning', 'Coding', 'Agentic-coding', 'Mathematics', 'Data-analysis', 'Language', 'Instruction-following']) {
       fireEvent.change(screen.getByRole('slider', { name: `${label} weight` }), { target: { value: '0' } });
     }
 
@@ -75,7 +75,7 @@ describe('MakeItYoursPage', () => {
     const match = { routeId: 'make-it-yours' as const, pathname: '/make-it-yours/', search: new URLSearchParams(), hash: '', params: {} };
 
     render(<MakeItYoursPage match={match} data={data} adapter={adapter} />);
-    fireEvent.change(screen.getByRole('slider', { name: 'Agentic weight' }), { target: { value: '100' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Agentic-coding weight' }), { target: { value: '100' } });
 
     await waitFor(() => expect(requests).toEqual([ACCEPTED_CUSTOM_RANKING_QUERY]));
   });

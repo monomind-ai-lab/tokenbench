@@ -5,13 +5,13 @@ type ManualProviderId = typeof MANUAL_SUBSCRIPTION_PROVIDER_IDS[number];
 
 export const MANUAL_SUBSCRIPTION_SOURCES: Record<ManualProviderId, Omit<SourceProvenance, 'observedAt'>> = {
   alibaba: { id: 'alibaba-subscription', providerId: 'alibaba', sourceUrl: 'https://www.alibabacloud.com/help/en/model-studio/coding-plan', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'Plan details', reviewStatus: 'verified' },
-  anthropic: { id: 'anthropic-subscription', providerId: 'anthropic', sourceUrl: 'https://support.claude.com/en/articles/11049762-choose-a-claude-plan', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'Plan table', reviewStatus: 'verified' },
+  anthropic: { id: 'anthropic-subscription', providerId: 'anthropic', sourceUrl: 'https://claude.com/pricing/', sourceKind: 'manual_manifest', confidence: 'manual_verified', contentHash: 'sha256:8ab23dfbf9b6ad69eb04f15098d529cc321b492dfa71455b8d2ece9c332b7117', parserVersion: 'subscription-monitor-2026-08-21.v1', evidenceLocator: 'Individual plan pricing and annual-billing display', reviewStatus: 'verified' },
   deepseek: { id: 'deepseek-api', providerId: 'deepseek', sourceUrl: 'https://api-docs.deepseek.com/quick_start/pricing', sourceKind: 'manual_manifest', confidence: 'manual_verified' },
-  google: { id: 'google-subscription', providerId: 'google', sourceUrl: 'https://one.google.com/about/plans', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'Google AI plan pricing', reviewStatus: 'verified' },
-  xai: { id: 'xai-subscription', providerId: 'xai', sourceUrl: 'https://x.ai/pricing', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'SuperGrok monthly pricing', reviewStatus: 'verified' },
+  google: { id: 'google-subscription', providerId: 'google', sourceUrl: 'https://one.google.com/about/plans', sourceKind: 'manual_manifest', confidence: 'manual_verified', contentHash: 'sha256:cc1d2a06910a08057dbf20846b0115769a103e32bba3166833ac7ec0517f0dd4', parserVersion: 'subscription-monitor-2026-08-21.v1', evidenceLocator: 'Google AI Plus and Pro plan pricing', reviewStatus: 'verified' },
+  xai: { id: 'xai-subscription', providerId: 'xai', sourceUrl: 'https://x.ai/pricing', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'subscription-monitor-2026-08-21.v1', evidenceLocator: 'Current x.ai page is excluded by its ai-input=no policy; retained price requires review', reviewStatus: 'needs_review' },
   kimi: { id: 'kimi-subscription', providerId: 'kimi', sourceUrl: 'https://www.kimi.com/help/membership/membership-pricing', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'Global membership pricing', reviewStatus: 'verified' },
-  openai: { id: 'openai-subscription', providerId: 'openai', sourceUrl: 'https://chatgpt.com/pricing/', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'Individual monthly plans', reviewStatus: 'verified' },
-  zai: { id: 'zai-subscription', providerId: 'zai', sourceUrl: 'https://z.ai/subscribe', sourceKind: 'manual_manifest', confidence: 'manual_verified', parserVersion: 'manual-2026-08-10', evidenceLocator: 'Lite, Pro, and Max monthly plans', reviewStatus: 'verified' },
+  openai: { id: 'openai-subscription', providerId: 'openai', sourceUrl: 'https://chatgpt.com/pricing/', sourceKind: 'manual_manifest', confidence: 'manual_verified', contentHash: 'sha256:f30f3b3968a1cad80988eac9de9ff07ac710870408f4aa166c0f83560505d4ad', parserVersion: 'subscription-monitor-2026-08-21.v1', evidenceLocator: 'Individual monthly plan prices and feature matrix', reviewStatus: 'verified' },
+  zai: { id: 'zai-subscription', providerId: 'zai', sourceUrl: 'https://docs.z.ai/devpack/overview', sourceKind: 'manual_manifest', confidence: 'manual_verified', contentHash: 'sha256:4fa4b804a904ba6073a9397a5a7f7b6ceddd644a869f9f3ab2fb90bd315dc3f8', parserVersion: 'subscription-monitor-2026-08-21.v1', evidenceLocator: 'Coding-plan credit allowances and reset policy; per-tier price unavailable', reviewStatus: 'needs_review' },
 };
 
 /** Alibaba publishes the Token Plan Personal Edition separately from Coding Plan. */
@@ -36,6 +36,7 @@ const credits = (description: string) => ({ kind: 'credits' as const, descriptio
 
 /** Every entitlement fact in this manifest was read from its primary source on this date. */
 export const ENTITLEMENT_ACCESSED_AT = '2026-08-10T00:00:00.000Z';
+const MONITOR_ACCESSED_AT = '2026-08-21T01:29:58.000Z';
 
 const ENTITLEMENT_SOURCE_URLS = {
   alibabaCoding: 'https://www.alibabacloud.com/help/en/model-studio/coding-plan',
@@ -49,8 +50,12 @@ const ENTITLEMENT_SOURCE_URLS = {
   zai: 'https://docs.z.ai/devpack/usage-policy',
 } as const;
 
-function evidenceSource(url: string, confidence: 'high' | 'medium' | 'low' = 'high') {
-  return { url, accessedAt: ENTITLEMENT_ACCESSED_AT, confidence };
+function evidenceSource(
+  url: string,
+  confidence: 'high' | 'medium' | 'low' = 'high',
+  accessedAt = ENTITLEMENT_ACCESSED_AT,
+) {
+  return { url, accessedAt, confidence };
 }
 
 /**
@@ -61,7 +66,6 @@ function evidenceSource(url: string, confidence: 'high' | 'medium' | 'low' = 'hi
 const THIRTY_DAY_ROLLING_5H_MULTIPLIER = 144;
 
 const WEEKLY_TO_THIRTY_DAY_CAVEAT = 'A published weekly cap may bind before this 30-day ceiling is reached.';
-const NO_TOKEN_CONVERSION_CAVEAT = 'The provider does not publish a stable token conversion for this unit.';
 
 export const MANUAL_ALIBABA_TOKEN_PLANS: PlanOffer[] = [
   {
@@ -121,36 +125,44 @@ function claudeRelativeCeiling(multiplier: number, label: string): EntitlementEv
         'Because F is unknown, this projection yields no absolute message count.',
       ],
     },
-    source: evidenceSource(multiplier === 5 ? ENTITLEMENT_SOURCE_URLS.claudePro : ENTITLEMENT_SOURCE_URLS.claudeMax),
+    source: evidenceSource(multiplier === 5 ? ENTITLEMENT_SOURCE_URLS.claudePro : ENTITLEMENT_SOURCE_URLS.claudeMax, 'high', MONITOR_ACCESSED_AT),
   };
 }
 
-function geminiRelativeCeiling(multiplier: number, label: string): EntitlementEvidence {
+function geminiRelativeCeiling(
+  multiplier: number,
+  label: string,
+  basis: 'standard' | 'ai_pro' = 'standard',
+): EntitlementEvidence {
+  const symbol = basis === 'standard' ? 'S' : 'P';
+  const basisDescription = basis === 'standard'
+    ? 'S is the dynamic standard-session capacity Google does not publish as a fixed number.'
+    : 'P is the dynamic Google AI Pro capacity Google does not publish as a fixed number.';
   return {
     status: 'projected',
     boundType: 'outer_ceiling',
     dimensions: [{ metric: 'messages', unit: 'messages', window: 'rolling_5h', resetRule: 'Five-hour refresh' }],
     projection: {
-      formula: `${multiplier} x S`,
+      formula: `${multiplier} x ${symbol}`,
       assumptions: [
-        'S is the dynamic standard-session capacity Google does not publish as a fixed number.',
-        `${label} is published only as a relative multiple of the standard tier.`,
+        basisDescription,
+        `${label} is published only as a relative multiple of the ${basis === 'standard' ? 'standard tier' : 'AI Pro tier'}.`,
       ],
       caveats: [
         WEEKLY_TO_THIRTY_DAY_CAVEAT,
         'Because S varies by region and demand, this projection yields no absolute message count.',
       ],
     },
-    source: evidenceSource(ENTITLEMENT_SOURCE_URLS.gemini),
+    source: evidenceSource(ENTITLEMENT_SOURCE_URLS.gemini, 'high', MONITOR_ACCESSED_AT),
   };
 }
 
-/** OpenAI publishes per-model five-hour message bands; 30-day values are outer ceilings. */
-function openAiMessageCeilings(
+/** Last-verified OpenAI message bands remain visible only as stale review data. */
+function openAiLastVerifiedMessageBands(
   bands: readonly { readonly modelId: string; readonly min: number; readonly max: number }[],
 ): EntitlementEvidence {
   return {
-    status: 'projected',
+    status: 'stale',
     boundType: 'outer_ceiling',
     dimensions: bands.map((band) => ({
       metric: 'messages' as const,
@@ -166,15 +178,16 @@ function openAiMessageCeilings(
         .map((band) => `${band.modelId}: ${band.max} x ${THIRTY_DAY_ROLLING_5H_MULTIPLIER} = ${band.max * THIRTY_DAY_ROLLING_5H_MULTIPLIER}`)
         .join('; '),
       assumptions: [
-        'Each published five-hour maximum is sustained across every window in 30 days.',
+        'These are retained from the last verified evidence set and are not current-plan claims.',
         'A rolling five-hour window repeats 144 times in 30 days.',
       ],
       caveats: [
         WEEKLY_TO_THIRTY_DAY_CAVEAT,
-        'Published bands are ranges; the minimum of each band may apply under load.',
+        'Current official pages publish relative and dynamic limits instead of these numeric bands.',
       ],
     },
     source: evidenceSource(ENTITLEMENT_SOURCE_URLS.openai),
+    staleReason: 'Current official OpenAI plan evidence does not publish these numeric model bands; they cannot support a capacity recommendation.',
   };
 }
 
@@ -193,21 +206,16 @@ function kimiFeatureLimits(agent: number, swarm: number, databaseUses: number): 
 }
 
 /** Z.AI publishes weekly credits; 30-day figures are projections before the unpublished 5h cap. */
-function zaiWeeklyCredits(weeklyCredits: number, projectedThirtyDay: number, staleReason?: string): EntitlementEvidence {
+function zaiCreditLimits(fiveHourCredits: number, weeklyCredits: number, staleReason: string): EntitlementEvidence {
   return {
-    status: staleReason ? 'stale' : 'projected',
-    boundType: 'outer_ceiling',
-    dimensions: [{ metric: 'credits', max: weeklyCredits, unit: 'credits', window: 'weekly' }],
-    projection: {
-      formula: `${weeklyCredits} x 30 / 7 = ${projectedThirtyDay}`,
-      assumptions: ['The published weekly credit allowance repeats across a 30-day period.'],
-      caveats: [
-        'Z.AI also applies an unpublished five-hour cap that may bind first.',
-        NO_TOKEN_CONVERSION_CAVEAT,
-      ],
-    },
-    ...(staleReason ? { staleReason } : {}),
-    source: evidenceSource(ENTITLEMENT_SOURCE_URLS.zai),
+    status: 'stale',
+    boundType: 'hard_max',
+    dimensions: [
+      { metric: 'credits', max: fiveHourCredits, unit: 'credits', window: 'rolling_5h', resetRule: 'Quota refreshes dynamically five hours after use.' },
+      { metric: 'credits', max: weeklyCredits, unit: 'credits', window: 'weekly', resetRule: 'Quota resets every seven days.' },
+    ],
+    staleReason,
+    source: evidenceSource(ENTITLEMENT_SOURCE_URLS.zai, 'high', MONITOR_ACCESSED_AT),
   };
 }
 
@@ -233,7 +241,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
   },
   {
     id: 'anthropic:pro', providerId: 'anthropic', displayName: 'Claude Pro', monthlyCostMicroDollars: 20_000_000,
-    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
+    currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', annualCostMicroDollars: 200_000_000, annualEffectiveMonthlyCostMicroDollars: 17_000_000, supportedModelIds: [],
     entitlement: rolling('Usage capacity is published as at least 5x free usage per five hours plus a weekly cap, not a token allowance.'),
     entitlementEvidence: claudeRelativeCeiling(5, 'Claude Pro'),
     sourceId: 'anthropic-subscription',
@@ -257,9 +265,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: guardrail('Published as 2x standard capacity with a five-hour refresh plus a weekly cap; no fixed token allowance is published.'),
     entitlementEvidence: {
-      ...geminiRelativeCeiling(288, 'Google AI Plus'),
-      status: 'stale',
-      staleReason: 'The published Google AI Plus price has drifted from the stored value; the row cannot back a cost recommendation until the price is re-read.',
+      ...geminiRelativeCeiling(2, 'Google AI Plus'),
     },
     sourceId: 'google-subscription',
   },
@@ -267,21 +273,29 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     id: 'google:ai-pro', providerId: 'google', displayName: 'Google AI Pro', monthlyCostMicroDollars: 19_990_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: guardrail('Published as 4x standard capacity; no fixed token allowance is published.'),
-    entitlementEvidence: geminiRelativeCeiling(576, 'Google AI Pro'),
+    entitlementEvidence: geminiRelativeCeiling(4, 'Google AI Pro'),
     sourceId: 'google-subscription',
   },
   {
     id: 'google:ai-ultra-5x', providerId: 'google', displayName: 'Google AI Ultra 5x', monthlyCostMicroDollars: 100_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: guardrail('Published as 20x standard capacity rather than a fixed monthly token allowance.'),
-    entitlementEvidence: geminiRelativeCeiling(2_880, 'Google AI Ultra 5x'),
+    entitlementEvidence: {
+      ...geminiRelativeCeiling(5, 'Google AI Ultra 5x', 'ai_pro'),
+      status: 'stale',
+      staleReason: 'Current official Google evidence confirms the relative Ultra limit but does not publish this plan price or variant mapping.',
+    },
     sourceId: 'google-subscription',
   },
   {
     id: 'google:ai-ultra-20x', providerId: 'google', displayName: 'Google AI Ultra 20x', monthlyCostMicroDollars: 200_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: guardrail('Published as 80x standard capacity rather than a fixed monthly token allowance.'),
-    entitlementEvidence: geminiRelativeCeiling(11_520, 'Google AI Ultra 20x'),
+    entitlementEvidence: {
+      ...geminiRelativeCeiling(20, 'Google AI Ultra 20x', 'ai_pro'),
+      status: 'stale',
+      staleReason: 'Current official Google evidence confirms the relative Ultra limit but does not publish this plan price or variant mapping.',
+    },
     sourceId: 'google-subscription',
   },
   {
@@ -289,10 +303,11 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: guardrail('Advertised as higher limits with no published numeric cap or reset schedule.'),
     entitlementEvidence: {
-      status: 'dynamic_unknown',
+      status: 'stale',
       boundType: 'unknown',
       dimensions: [],
-      source: evidenceSource(ENTITLEMENT_SOURCE_URLS.xai),
+      staleReason: 'The current x.ai source is excluded by its ai-input=no policy, so the retained SuperGrok price cannot support a recommendation.',
+      source: evidenceSource(ENTITLEMENT_SOURCE_URLS.xai, 'high', MONITOR_ACCESSED_AT),
     },
     sourceId: 'xai-subscription',
   },
@@ -329,10 +344,11 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-terra'],
     entitlement: guardrail('No numeric allowance is published; US reference price is shown.'),
     entitlementEvidence: {
-      status: 'dynamic_unknown',
+      status: 'stale',
       boundType: 'unknown',
       dimensions: [],
-      source: evidenceSource(ENTITLEMENT_SOURCE_URLS.openai),
+      staleReason: 'The current official OpenAI pricing page does not publish the retained ChatGPT Go amount; it cannot support a recommendation.',
+      source: evidenceSource(ENTITLEMENT_SOURCE_URLS.openai, 'high', MONITOR_ACCESSED_AT),
     },
     sourceId: 'openai-subscription',
   },
@@ -340,7 +356,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     id: 'openai:plus', providerId: 'openai', displayName: 'ChatGPT Plus', monthlyCostMicroDollars: 20_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     entitlement: guardrail('Publishes per-model five-hour message bands rather than a token allowance.'),
-    entitlementEvidence: openAiMessageCeilings([
+    entitlementEvidence: openAiLastVerifiedMessageBands([
       { modelId: 'sol', min: 10, max: 100 },
       { modelId: 'terra', min: 25, max: 200 },
       { modelId: 'luna', min: 250, max: 2_000 },
@@ -351,7 +367,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     id: 'openai:pro-5x', providerId: 'openai', displayName: 'ChatGPT Pro 5x', monthlyCostMicroDollars: 100_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     entitlement: guardrail('Publishes per-model five-hour message bands rather than a token allowance.'),
-    entitlementEvidence: openAiMessageCeilings([
+    entitlementEvidence: openAiLastVerifiedMessageBands([
       { modelId: 'sol', min: 50, max: 500 },
       { modelId: 'terra', min: 125, max: 1_000 },
       { modelId: 'luna', min: 1_250, max: 10_000 },
@@ -362,7 +378,7 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     id: 'openai:pro-20x', providerId: 'openai', displayName: 'ChatGPT Pro 20x', monthlyCostMicroDollars: 200_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'],
     entitlement: guardrail('Publishes per-model five-hour message bands rather than a token allowance.'),
-    entitlementEvidence: openAiMessageCeilings([
+    entitlementEvidence: openAiLastVerifiedMessageBands([
       { modelId: 'sol', min: 200, max: 2_000 },
       { modelId: 'terra', min: 500, max: 4_000 },
       { modelId: 'luna', min: 5_000, max: 40_000 },
@@ -373,17 +389,17 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     id: 'zai:lite', providerId: 'zai', displayName: 'Z.AI Lite', monthlyCostMicroDollars: 18_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: credits('Includes 10,000 credits per week; no token allowance is published.'),
-    entitlementEvidence: zaiWeeklyCredits(10_000, 42_900),
+    entitlementEvidence: zaiCreditLimits(2_000, 10_000, 'Current Z.AI source publishes the credit limits but not a per-tier Lite price; the stored price cannot support a recommendation.'),
     sourceId: 'zai-subscription',
   },
   {
     id: 'zai:pro', providerId: 'zai', displayName: 'Z.AI Pro', monthlyCostMicroDollars: 72_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: credits('Includes 60,000 credits per week; no token allowance is published.'),
-    entitlementEvidence: zaiWeeklyCredits(
+    entitlementEvidence: zaiCreditLimits(
+      12_000,
       60_000,
-      257_100,
-      'The published Z.AI Pro price has drifted from the stored value; the row cannot back a cost recommendation until the price is re-read.',
+      'Current Z.AI source publishes the credit limits but not a per-tier Pro price; the stored price cannot support a recommendation.',
     ),
     sourceId: 'zai-subscription',
   },
@@ -391,10 +407,10 @@ export const MANUAL_SUBSCRIPTION_PLANS: PlanOffer[] = [
     id: 'zai:max', providerId: 'zai', displayName: 'Z.AI Max', monthlyCostMicroDollars: 160_000_000,
     currency: 'USD', pricingBasis: 'subscription', route: 'subscription', billingCycle: 'monthly', supportedModelIds: [],
     entitlement: credits('Includes 140,000 credits per week; no token allowance is published.'),
-    entitlementEvidence: zaiWeeklyCredits(
+    entitlementEvidence: zaiCreditLimits(
+      28_000,
       140_000,
-      600_000,
-      'The published Z.AI Max price has drifted from the stored value; the row cannot back a cost recommendation until the price is re-read.',
+      'Current Z.AI source publishes the credit limits but not a per-tier Max price; the stored price cannot support a recommendation.',
     ),
     sourceId: 'zai-subscription',
   },

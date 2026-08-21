@@ -1,11 +1,42 @@
 # Future data opportunities for human review
 
 Review date: 2026-08-21
-Status: candidates only — not approved for implementation by this checkpoint
+Status: mixed — approved existing-source facts implemented; blocked/new-source candidates retained for later review
 
 ## Decision rule
 
 These additions could make TokenBench more useful without changing the approved page structure. A candidate should ship only after its source, identity join, update cadence, licensing/redistribution terms, and unavailable-state contract are reviewed. An upstream sort option or marketing statement is not itself a displayable measurement.
+
+## Implemented from approved current sources
+
+- OpenRouter route receipts now preserve model creation time, expiration date,
+  knowledge cutoff, tokenizer, instruction format, moderation, per-request
+  limits, input/output modalities, supported parameters, context, maximum
+  output, and an independent cache-write price when published. Each fact stays
+  attached to the exact route and source artifact; the public API does not
+  become a bulk OpenRouter mirror.
+- The model directory loads every cursor page from one immutable revision and
+  exposes the published profile category vector, field sizes, ranks, coverage,
+  and freshness without replacing weekly popularity order or making browser-side
+  profile fan-out requests.
+- Model Profile, Models, Compare, Popular Models, Make It Yours, leaderboard,
+  and data-source surfaces consume these typed receipts. Missing scalar facts
+  render as an accessible `-`; the reason and provenance remain available to
+  assistive technology and inspectable detail views.
+- Subscription plan responses now include provider-published annual checkout
+  and effective-monthly amounts, qualitative usage notes, evidence status,
+  entitlement dimensions, reset/model/feature/shared-pool facts, last-verified
+  timestamps, and direct source references. Annual savings and numeric capacity
+  are not inferred.
+- LiveBench task economics already supply task score, question count,
+  evaluation cost, token volumes, cost per question, cost per quality point,
+  and source Pareto membership on the exact release/taxonomy identity.
+
+Not implemented by this checkpoint: copied OpenRouter descriptions; fixed,
+image, web-search, or internal-reasoning meters outside the approved source
+allowlist; ZDR/EU discovery filters without durable endpoint receipts; and
+AI Pricing Guru history as a public source without written redistribution
+permission.
 
 ## High-value facts already exposed by current sources
 

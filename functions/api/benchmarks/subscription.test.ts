@@ -52,6 +52,8 @@ const openAiPlan = {
   provider_id: 'openai',
   display_name: 'Reviewed plan',
   monthly_cost_micro_dollars: 20_000_000,
+  annual_cost_micro_dollars: 200_000_000,
+  annual_effective_monthly_cost_micro_dollars: 17_000_000,
   currency: 'USD',
   entitlement_json: JSON.stringify({ kind: 'rolling_limit', description: 'Provider-managed limit.' }),
   entitlement_evidence_json: dynamicEntitlement,
@@ -175,6 +177,18 @@ describe('subscription v1 endpoint boundary', () => {
     expect(envelope.status).toBe('partial');
     expect(envelope.data?.plans).toEqual(expect.arrayContaining([expect.objectContaining({
       planId: 'openai:reviewed', providerId: 'openai', supportedModelSlugs: ['gpt-4o'],
+      annualCostMicroDollars: {
+        availability: 'available', value: 200_000_000, sourceRefs: ['catalog:subscription-rev-1:openai-reviewed'],
+      },
+      annualEffectiveMonthlyCostMicroDollars: {
+        availability: 'available', value: 17_000_000, sourceRefs: ['catalog:subscription-rev-1:openai-reviewed'],
+      },
+      entitlement: expect.objectContaining({
+        evidenceStatus: 'dynamic_unknown',
+        usageNote: 'Provider-managed limit.',
+        lastVerifiedAt: '2026-08-21T00:00:00.000Z',
+        sourceRefs: ['catalog:subscription-rev-1:plan:openai:reviewed:entitlement'],
+      }),
     }), expect.objectContaining({
       planId: 'anthropic:reviewed', providerId: 'anthropic',
     })]));
@@ -197,6 +211,13 @@ describe('subscription v1 endpoint boundary', () => {
       projectedCapacity: { minimum: 10, maximum: 100, unit: 'messages', window: 'rolling_5h' },
     })]));
     expect(envelope.data?.calculation).toBeNull();
+    expect(envelope.sources).toEqual(expect.arrayContaining([expect.objectContaining({
+      sourceRef: 'catalog:subscription-rev-1:plan:openai:reviewed:entitlement',
+      fieldGroup: '/data/plans/0/entitlement',
+      sourceId: 'openai-reviewed',
+      url: 'https://example.test/plan-terms',
+      observedAt: '2026-08-21T00:00:00.000Z',
+    })]));
     expect(envelope.warnings).toEqual(expect.arrayContaining([expect.objectContaining({
       code: 'subscription_calculation_binding_unavailable',
     })]));

@@ -4,12 +4,12 @@ import type { SurfaceModel } from "@tokenbench/frontend/model-surface-projectors
 import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 
 function formatPrice(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return "-";
   return formatDisplayUsd(value);
 }
 
 function formatTokens(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return "-";
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(1))}M`;
   if (value >= 1_000) return `${Number((value / 1_000).toFixed(1))}K`;
   return String(Math.round(value));
@@ -159,8 +159,8 @@ export function RouteEvidenceCapabilityBars({
           <div className="flex items-center justify-between gap-4 text-sm">
             <h3 className="font-medium">{axis.label}</h3>
             <span className="font-mono text-xs text-muted-foreground">
-              Rank {axis.rank ?? "Unavailable"} /{" "}
-              {axis.fieldSize ?? "Unavailable"}
+              Rank {axis.rank ?? "-"} /{" "}
+              {axis.fieldSize ?? "-"}
             </span>
           </div>
           <div
@@ -175,7 +175,7 @@ export function RouteEvidenceCapabilityBars({
                 <div className="min-w-0" key={model.id}>
                   <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                     <span className="truncate">{model.name}</span>
-                    <span className="font-mono">{value === null ? "Unavailable" : formatDisplayNumber(value)}</span>
+                    <span className="font-mono">{value === null ? "-" : formatDisplayNumber(value)}</span>
                   </div>
                   <div
                     className="h-2 overflow-hidden rounded-full bg-muted"
@@ -220,7 +220,7 @@ export function RouteEvidenceRuntimeReadout({
         <dt className="text-xs text-muted-foreground">TTFT p50</dt>
         <dd className="mt-2 font-mono text-2xl tabular-nums">
           {model.ttftP50Seconds === null
-            ? "Unavailable"
+            ? "-"
             : `${formatDisplayNumber(model.ttftP50Seconds)}s`}
         </dd>
       </div>
@@ -228,7 +228,7 @@ export function RouteEvidenceRuntimeReadout({
         <dt className="text-xs text-muted-foreground">Output throughput</dt>
         <dd className="mt-2 font-mono text-2xl tabular-nums">
           {model.outputTokensPerSecond === null
-            ? "Unavailable"
+            ? "-"
             : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`}
         </dd>
       </div>
@@ -237,7 +237,7 @@ export function RouteEvidenceRuntimeReadout({
           Observation conditions
         </dt>
         <dd className="mt-2 text-sm leading-6">
-          {model.runtimeConditions ?? "Unavailable"}
+          {model.runtimeConditions ?? "-"}
         </dd>
       </div>
     </dl>
@@ -278,7 +278,7 @@ export function RouteEvidenceEconomicsBars({
       values: models.map((model) => model.outputTokensPerSecond),
       max: maxThroughput,
       format: (value: number | null) =>
-        value === null ? "Unavailable" : `${formatDisplayNumber(value)} tok/s`,
+        value === null ? "-" : `${formatDisplayNumber(value)} tok/s`,
     },
     {
       title: "Context capacity",

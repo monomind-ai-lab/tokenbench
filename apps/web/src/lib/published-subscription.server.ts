@@ -19,6 +19,7 @@ import {
 import type {
   StrictSubscriptionCalculationQuery,
   SubscriptionCalculationView,
+  SubscriptionEntitlementView,
   SubscriptionLimitView,
   SubscriptionModelView,
   SubscriptionPlanView,
@@ -84,6 +85,32 @@ function limitView(plan: PlanOffer): SubscriptionLimitView {
     : { state: "variable", label: `Projected — ${label}`, detail: evidence.projection?.caveats[0] ?? null };
 }
 
+function entitlementView(plan: PlanOffer): SubscriptionEntitlementView {
+  const evidence = plan.entitlementEvidence;
+  const usageNote = "description" in plan.entitlement
+    ? plan.entitlement.description
+    : null;
+  return {
+    evidenceStatus: evidence.status,
+    boundType: evidence.boundType,
+    usageNote,
+    dimensions: evidence.dimensions.map((dimension) => ({
+      metric: dimension.metric,
+      minimum: dimension.min ?? null,
+      maximum: dimension.max ?? null,
+      unit: dimension.unit,
+      window: dimension.window,
+      resetRule: dimension.resetRule ?? null,
+      modelId: dimension.modelId ?? null,
+      feature: dimension.feature ?? null,
+      sharedPoolId: dimension.sharedPoolId ?? null,
+    })),
+    staleReason: evidence.staleReason ?? null,
+    lastVerifiedAt: evidence.source.accessedAt,
+    sourceRefs: [plan.sourceId],
+  };
+}
+
 function planViews(catalog: CatalogResponse): readonly SubscriptionProviderView[] {
   const plans = scopedPlans(catalog);
   return SUBSCRIPTION_PROVIDERS.map((provider) => {
@@ -93,6 +120,14 @@ function planViews(catalog: CatalogResponse): readonly SubscriptionProviderView[
         id: plan.id,
         displayName: plan.displayName,
         monthlyUsd: plan.monthlyCostMicroDollars / 1_000_000,
+        annualUsd: plan.annualCostMicroDollars === undefined
+          ? null
+          : plan.annualCostMicroDollars / 1_000_000,
+        annualEffectiveMonthlyUsd: plan.annualEffectiveMonthlyCostMicroDollars === undefined
+          ? null
+          : plan.annualEffectiveMonthlyCostMicroDollars / 1_000_000,
+        entitlement: entitlementView(plan),
+        sourceRefs: [plan.sourceId],
         limit: limitView(plan),
       }));
     return {
@@ -139,6 +174,13 @@ export function projectPublishedSubscriptionCatalog(catalog: CatalogResponse): S
       : "No exact provider-plan-model-route binding is currently published.",
     calculation: null,
     calculationReason: "Choose a reviewed plan and model to calculate the workload.",
+    sources: catalog.provenance.map((source) => ({
+      sourceRef: source.id,
+      label: `Published ${source.providerId} provider source`,
+      url: source.sourceUrl,
+      observedAt: source.observedAt,
+      effectiveAt: source.observedAt,
+    })),
   };
 }
 

@@ -20,7 +20,6 @@ import { Bar, Radar, Scatter } from "react-chartjs-2";
 import { formatDisplayNumber } from "@tokenbench/frontend/display-format";
 
 import {
-  popularModelsFieldUnavailableLabel,
   popularModelsMetricValue,
   type PopularModelV1,
   type PopularModelsCategoryV1,
@@ -48,6 +47,7 @@ const PROVIDER_COLORS = [
   "#9a7cc1",
 ];
 const MONOMIND_CHART_ACCENT = "#1111ff";
+const MISSING_VALUE = "-";
 
 interface ChartTheme {
   readonly accent: string;
@@ -60,7 +60,7 @@ interface ChartTheme {
 }
 
 function fallbackChartTheme(dark: boolean, reducedMotion: boolean): ChartTheme {
-  const accent = dark ? "#9696ff" : MONOMIND_CHART_ACCENT;
+  const accent = dark ? "#9dabff" : MONOMIND_CHART_ACCENT;
   return dark
     ? {
         accent,
@@ -298,11 +298,11 @@ export function popularAggregateChartDatasets(
 }
 
 function providerName(model: PopularModelV1): string {
-  return model.provider ?? "Unavailable provider";
+  return model.provider ?? MISSING_VALUE;
 }
 
 function modelName(model: PopularModelV1): string {
-  return model.name ?? "Unavailable model identity";
+  return model.name ?? MISSING_VALUE;
 }
 
 function modelProfileHref(
@@ -324,18 +324,16 @@ function formatScore(value: number): string {
 }
 
 function formatTokens(value: number): string {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
-    value,
-  );
+  return formatDisplayNumber(value, { maximumFractionDigits: 0 });
 }
 
 function formatPublishedValue(
   value: number | null,
-  unavailableReason: string | null,
+  _unavailableReason: string | null,
   formatter: (value: number) => string,
 ): string {
   return value === null
-    ? popularModelsFieldUnavailableLabel(unavailableReason)
+    ? MISSING_VALUE
     : formatter(value);
 }
 
@@ -348,7 +346,7 @@ function ChartUnavailable({ children }: { children: React.ReactNode }) {
 }
 
 function aggregateCostLabel(model: PopularModelV1): string {
-  if (model.aggregate === null) return "Unavailable";
+  if (model.aggregate === null) return MISSING_VALUE;
   return formatPublishedValue(
     model.aggregate.costPerSuccessfulEvaluationUsd.value,
     model.aggregate.costPerSuccessfulEvaluationUsd.unavailableReason,
@@ -357,7 +355,7 @@ function aggregateCostLabel(model: PopularModelV1): string {
 }
 
 function aggregateMeanOutputLabel(model: PopularModelV1): string {
-  if (model.aggregate === null) return "Unavailable";
+  if (model.aggregate === null) return MISSING_VALUE;
   return formatPublishedValue(
     model.aggregate.meanOutputTokens.value,
     model.aggregate.meanOutputTokens.unavailableReason,
@@ -371,7 +369,7 @@ function capabilityLabel(
 ): string {
   const value = popularModelsMetricValue(model, categoryKey);
   return value === null
-    ? popularModelsFieldUnavailableLabel(model.capabilityUnavailableReason)
+    ? MISSING_VALUE
     : formatScore(value);
 }
 
@@ -432,7 +430,7 @@ function AggregateExactValues({
                 </td>
                 <td className="py-2 font-mono">
                   {model.aggregate === null
-                    ? "Unavailable"
+                    ? MISSING_VALUE
                     : model.aggregate.pareto
                       ? "Yes"
                       : "No"}
@@ -613,7 +611,7 @@ export function PopularModelsQualityCostChart({
         y: {
           border: { color: theme.grid },
           grid: { color: theme.grid },
-          ticks: { color: theme.muted },
+          ticks: { color: theme.muted, callback: (value) => formatScore(Number(value)) },
           title: { color: theme.muted, display: true, text: categoryLabel },
         },
       },
@@ -834,7 +832,7 @@ export function PopularModelsCostRankingChart({
                 </span>
                 <span className="font-mono">
                   {pricing.blendedUsdPerMillion === null
-                    ? "Unavailable"
+                    ? MISSING_VALUE
                     : formatUsd(pricing.blendedUsdPerMillion)}{" "}
                   / 1M
                 </span>
@@ -972,7 +970,7 @@ export function PopularModelsAggregateQualityCostChart({
         y: {
           border: { color: theme.grid },
           grid: { color: theme.grid },
-          ticks: { color: theme.muted },
+          ticks: { color: theme.muted, callback: (value) => formatScore(Number(value)) },
           title: { color: theme.muted, display: true, text: categoryLabel },
         },
       },
@@ -1388,9 +1386,7 @@ export function PopularModelsComparisonEconomicsChart({
                     <td className="py-2 pr-3">{providerName(row.model)}</td>
                     <td className="py-2 pr-3 font-mono">
                       {row.value === null
-                        ? popularModelsFieldUnavailableLabel(
-                            row.unavailableReason,
-                          )
+                        ? MISSING_VALUE
                         : definition.format(row.value)}
                     </td>
                     <td className="py-2 text-muted-foreground">

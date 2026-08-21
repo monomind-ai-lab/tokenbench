@@ -99,11 +99,14 @@ SELECT ?, json_extract(row.value, '$.modelKey'), json_extract(row.value, '$.metr
 FROM json_each(?) AS row
 WHERE ${OWNERSHIP_GUARD}`,
   prices: `INSERT OR IGNORE INTO benchmark_price_checks
-  (revision, model_key, source_id, provider_id, route_id, source_model_id, canonical_slug, input_usd_per_million, cached_input_usd_per_million, output_usd_per_million, context_window_tokens, max_input_tokens, max_output_tokens, input_modalities_json, output_modalities_json, supported_parameters_json, source_artifact_id, verification_status)
+  (revision, model_key, source_id, provider_id, route_id, source_model_id, canonical_slug, input_usd_per_million, cached_input_usd_per_million, output_usd_per_million, context_window_tokens, max_input_tokens, max_output_tokens, input_modalities_json, output_modalities_json, supported_parameters_json, cache_write_usd_per_million, created_at, expiration_date, knowledge_cutoff, tokenizer, instruction_format, is_moderated, per_request_limits_json, source_artifact_id, verification_status)
 SELECT ?, json_extract(row.value, '$.modelKey'), json_extract(row.value, '$.sourceId'), json_extract(row.value, '$.providerId'), json_extract(row.value, '$.routeId'),
   json_extract(row.value, '$.sourceModelId'), json_extract(row.value, '$.canonicalSlug'), json_extract(row.value, '$.inputUsdPerMillion'), json_extract(row.value, '$.cachedInputUsdPerMillion'), json_extract(row.value, '$.outputUsdPerMillion'),
   json_extract(row.value, '$.contextWindowTokens'), json_extract(row.value, '$.maxInputTokens'), json_extract(row.value, '$.maxOutputTokens'),
   json_extract(row.value, '$.inputModalities'), json_extract(row.value, '$.outputModalities'), json_extract(row.value, '$.supportedParameters'),
+  json_extract(row.value, '$.cacheWriteUsdPerMillion'), json_extract(row.value, '$.createdAt'), json_extract(row.value, '$.expirationDate'), json_extract(row.value, '$.knowledgeCutoff'), json_extract(row.value, '$.tokenizer'), json_extract(row.value, '$.instructionFormat'),
+  CASE json_type(row.value, '$.isModerated') WHEN 'true' THEN 1 WHEN 'false' THEN 0 ELSE NULL END,
+  json_extract(row.value, '$.perRequestLimitsJson'),
   json_extract(row.value, '$.sourceArtifactId'), json_extract(row.value, '$.verificationStatus')
 FROM json_each(?) AS row
 WHERE ${OWNERSHIP_GUARD}`,

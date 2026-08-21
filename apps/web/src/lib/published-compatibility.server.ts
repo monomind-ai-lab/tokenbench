@@ -2,7 +2,9 @@ import "server-only";
 
 import type { CatalogResponse } from "@tokenbench/catalog/contracts";
 import { validateCatalogResponse } from "@tokenbench/catalog/validation";
-import { parseModelDirectoryEnvelope } from "@tokenbench/frontend/model-directory-contracts";
+import {
+  parseModelDirectoryEnvelope,
+} from "@tokenbench/frontend/model-directory-contracts";
 import { parseModelProfileViewModel, type ModelProfileViewModel } from "@tokenbench/frontend/model-profile-contracts";
 import {
   projectPublishedComparison,
@@ -28,6 +30,7 @@ import {
   hasSourcePrefixedModelId,
   normalizePublishedModelIds,
 } from "@/lib/published-model-identity";
+import { mergePublishedDirectoryPages } from "@/lib/published-directory-pages";
 
 const MODEL_DIRECTORY_PAGE_LIMIT = 100;
 const MAX_MODEL_DIRECTORY_PAGES = 16;
@@ -72,7 +75,9 @@ export async function loadPublishedModelDirectory(
   fetchImpl: typeof fetch = fetch,
 ): Promise<UiDataContractV1<ModelDirectoryData>> {
   const [directory, ranking] = await Promise.all([
-    publishedDirectorySource(limit, fetchImpl).then(projectPublishedModelDirectory),
+    publishedDirectoryPages(fetchImpl, limit)
+      .then(mergePublishedDirectoryPages)
+      .then(projectPublishedModelDirectory),
     loadCurrentLiveBenchRanking().catch(() => null),
   ]);
   return mergePublishedModelDirectorySources(directory, ranking);
@@ -94,12 +99,18 @@ async function publishedDirectorySource(
   return candidate;
 }
 
-async function publishedDirectoryPages(fetchImpl: typeof fetch) {
+async function publishedDirectoryPages(
+  fetchImpl: typeof fetch,
+  limit = MODEL_DIRECTORY_PAGE_LIMIT,
+) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > MODEL_DIRECTORY_PAGE_LIMIT) {
+    throw new RangeError("Published model directory limit must be between 1 and 100.");
+  }
   const pages = [];
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
   for (let pageIndex = 0; pageIndex < MAX_MODEL_DIRECTORY_PAGES; pageIndex += 1) {
-    const page = await publishedDirectorySource(MODEL_DIRECTORY_PAGE_LIMIT, fetchImpl, cursor);
+    const page = await publishedDirectorySource(limit, fetchImpl, cursor);
     pages.push(page);
     const nextCursor = page.data.nextCursor;
     if (nextCursor === null) return pages;
@@ -128,7 +139,9 @@ export async function loadPublishedModelDirectoryAndRanking(
   rankings: UiDataContractV1<RankingData>;
   rankedModelIds: readonly string[];
 }>> {
-  const candidate = await publishedDirectorySource(limit, fetchImpl);
+  const candidate = mergePublishedDirectoryPages(
+    await publishedDirectoryPages(fetchImpl, limit),
+  );
   const ranking = await loadCurrentLiveBenchRanking().catch(() => null);
   return {
     models: mergePublishedModelDirectorySources(projectPublishedModelDirectory(candidate), ranking),

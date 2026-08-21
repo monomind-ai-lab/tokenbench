@@ -59,9 +59,11 @@ function profile(slug: string, revision = 'rev-2'): ModelProfileSnapshotData {
     priceRoutes: [{
       sourceId: 'openrouter', providerId: 'openai', routeId: `openrouter:${slug}`,
       sourceModelId: `provider/${slug}`, canonicalSlug: slug, inputUsdPerMillion: 1,
-      cachedInputUsdPerMillion: null, outputUsdPerMillion: 4, contextWindowTokens: 128_000,
+      cachedInputUsdPerMillion: null, cacheWriteUsdPerMillion: null, outputUsdPerMillion: 4, contextWindowTokens: 128_000,
       maxInputTokens: null, maxOutputTokens: 16_000, inputModalities: ['text'],
-      outputModalities: ['text'], supportedParameters: ['tools'], verificationStatus: 'primary',
+      outputModalities: ['text'], supportedParameters: ['tools'], createdAt: null, expirationDate: null,
+      knowledgeCutoff: null, tokenizer: null, instructionFormat: null, isModerated: null,
+      perRequestLimitsJson: null, verificationStatus: 'primary',
       sourceArtifactId: 'openrouter-models', sourceUrl: 'https://openrouter.ai/models', observedAt: NOW,
     }],
     specifications: {
@@ -187,7 +189,13 @@ describe('durable model directory reads', () => {
     const db = database();
     const weekly = await readModelDirectory(db, DEFAULT_QUERY);
     expect(weekly.data.models).toHaveLength(100);
-    expect(weekly.data.models[0]).toMatchObject({ canonicalSlug: 'alpha', weeklyRank: 1, overallScore: 81.48 });
+    expect(weekly.data.models[0]).toMatchObject({
+      canonicalSlug: 'alpha',
+      weeklyRank: 1,
+      overallScore: 81.48,
+      categories: profile('alpha').categories,
+      strongestCategory: profile('alpha').categories[1],
+    });
 
     const archived = await readModelDirectory(db, {
       ...DEFAULT_QUERY,

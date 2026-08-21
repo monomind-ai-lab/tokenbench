@@ -15,7 +15,7 @@ export function routeEvidenceText<T>(
   value: EvidenceValue<T>,
   format: (available: T) => ReactNode,
 ): ReactNode {
-  return value.availability === "available" ? format(value.value) : "Unavailable";
+  return value.availability === "available" ? format(value.value) : "-";
 }
 
 export function routeEvidenceValue<T>(value: EvidenceValue<T>): T | null {
@@ -23,12 +23,12 @@ export function routeEvidenceValue<T>(value: EvidenceValue<T>): T | null {
 }
 
 export function formatRouteEvidencePrice(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return "-";
   return formatDisplayUsd(value);
 }
 
 export function formatRouteEvidenceTokens(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return "-";
   if (value >= 1_000_000) return `${Number((value / 1_000_000).toFixed(1))}M`;
   if (value >= 1_000) return `${Number((value / 1_000).toFixed(1))}K`;
   return Math.round(value).toLocaleString("en-US");

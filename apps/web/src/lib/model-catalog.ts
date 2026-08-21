@@ -58,5 +58,5 @@ export function formatContext(value: number) {
 }
 
 export function formatPrice(value: number | null) {
-  return value === null ? "Not listed" : `$${value < 1 ? value.toFixed(2) : Number(value.toFixed(2))}`;
+  return value === null ? "-" : `$${value < 1 ? value.toFixed(2) : Number(value.toFixed(2))}`;
 }

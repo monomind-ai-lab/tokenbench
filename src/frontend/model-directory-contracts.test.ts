@@ -38,6 +38,11 @@ function envelope(overrides: Record<string, unknown> = {}) {
         weeklyRank: 1,
         overallScore: 81.48,
         overallRank: 1,
+        categories: [{
+          key: 'coding', metricKey: 'benchlm:category:coding', label: 'Coding', score: 77.95,
+          rawScore: null, rank: 3, fieldSize: 31, percentile: 93.33, evidenceStatus: 'supported',
+          benchmarkCount: 12, rankingEligible: true, unit: 'score', sourceId: 'benchlm',
+        }],
         strongestCategory: {
           key: 'coding', metricKey: 'benchlm:category:coding', label: 'Coding', score: 77.95,
           rawScore: null, rank: 3, fieldSize: 31, percentile: 93.33, evidenceStatus: 'supported',
@@ -70,6 +75,40 @@ describe('model directory hydration contract', () => {
       overallScore: 81.48,
       weeklyRank: 1,
     });
+  });
+
+  it('preserves ordered category vectors, accepts the prior producer shape, and rejects invalid vectors', () => {
+    const source = envelope();
+    const model = source.data.models[0]!;
+    const reasoning = {
+      ...model.categories[0]!,
+      key: 'reasoning',
+      metricKey: 'benchlm:category:reasoning',
+      label: 'Reasoning',
+    };
+    const withVector = {
+      ...source,
+      data: {
+        ...source.data,
+        models: [{ ...model, categories: [model.categories[0], reasoning] }],
+      },
+    };
+
+    expect(parseModelDirectoryEnvelope(withVector)?.data.models[0]?.categories.map((category) => category.key))
+      .toEqual(['coding', 'reasoning']);
+    const { categories: _categories, ...priorProducerModel } = model;
+    expect(parseModelDirectoryEnvelope({
+      ...source,
+      data: { ...source.data, models: [priorProducerModel] },
+    })?.data.models[0]?.categories).toEqual([]);
+    expect(parseModelDirectoryEnvelope({
+      ...source,
+      data: { ...source.data, models: [{ ...model, categories: null }] },
+    })).toBeNull();
+    expect(parseModelDirectoryEnvelope({
+      ...source,
+      data: { ...source.data, models: [{ ...model, categories: [model.categories[0], model.categories[0]] }] },
+    })).toBeNull();
   });
 
   it('rejects malformed freshness and unsafe model routes before hydration', () => {

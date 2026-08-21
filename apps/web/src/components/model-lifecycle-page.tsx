@@ -11,6 +11,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { ResultActions, ViewModeToggle } from "@/components/result-actions";
+import { DataText } from "@/components/untitled-data/data-value";
 import {
   RouteEvidenceModeNotice,
   RouteEvidenceSources,
@@ -30,19 +31,15 @@ import type {
 } from "@tokenbench/frontend/model-surface-projectors";
 import type { Provenance } from "@tokenbench/frontend/preview-data/contracts";
 
-function formatAsOf(value: string): string {
+function formatAsOf(value: string): string | null {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? "Unavailable"
+    ? null
     : date.toLocaleDateString("en-US", {
         day: "numeric",
         month: "short",
         timeZone: "UTC",
       });
-}
-
-function statusLabel(value: string | null): string {
-  return value ?? "Unavailable";
 }
 
 export function ModelLifecyclePage({
@@ -110,15 +107,18 @@ export function ModelLifecyclePage({
                 ["Open alerts", String(alerts.length)],
                 [
                   "Next sunset",
-                  nextSunset === null ? "Unavailable" : `${nextSunset}d`,
+                  nextSunset === null ? null : `${nextSunset}d`,
                 ],
                 ["As of", formatAsOf(asOf)],
-              ].map(([label, value]) => (
-                <div className="bg-card p-4" key={label}>
-                  <p className="font-mono text-2xl">{value}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{label}</p>
-                </div>
-              ))}
+              ].map(([label, value]) => {
+                const metricLabel = label ?? "Lifecycle metric";
+                return (
+                  <div className="bg-card p-4" key={metricLabel}>
+                    <p className="font-mono text-2xl"><DataText reason={`No ${metricLabel.toLowerCase()} was supplied for this lifecycle response.`} value={value} /></p>
+                    <p className="mt-1 text-xs text-muted-foreground">{metricLabel}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -187,12 +187,10 @@ export function ModelLifecyclePage({
                     <CardHeader>
                       <div className="flex items-center justify-between gap-4">
                         <Badge variant="outline">
-                          {item.provider ?? "Provider unavailable"}
+                          <DataText reason="No provider was supplied for this lifecycle record." value={item.provider} />
                         </Badge>
                         <span className="font-mono text-xs text-amber-500">
-                          {item.daysToSunset === null
-                            ? "Deadline unavailable"
-                            : `${item.daysToSunset} days`}
+                          <DataText format={(value) => `${value} days`} reason="No retirement deadline was supplied for this lifecycle record." value={item.daysToSunset} />
                         </span>
                       </div>
                       <CardTitle className="mt-4 text-xl">
@@ -205,7 +203,7 @@ export function ModelLifecyclePage({
                           Recommended successor
                         </p>
                         <p className="mt-2 text-lg font-medium">
-                          {item.replacementId ?? "Unavailable"}
+                          <DataText reason="No accepted successor was supplied for this lifecycle record." value={item.replacementId} />
                         </p>
                         <p className="mt-2 text-xs leading-5 text-muted-foreground">
                           {item.migrationNote ??
@@ -214,12 +212,12 @@ export function ModelLifecyclePage({
                       </div>
                       <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                         <CalendarClock className="size-4" />
-                        Published sunset {item.sunsetOn ?? "Unavailable"}
+                        Published sunset <DataText reason="No published sunset date was supplied for this lifecycle record." value={item.sunsetOn} />
                       </div>
                     </CardContent>
                     <CardFooter className="justify-between">
                       <span className="text-xs text-muted-foreground">
-                        {statusLabel(item.lifecycleStatus)}
+                        <DataText reason="No lifecycle status was supplied for this record." value={item.lifecycleStatus} />
                       </span>
                       {item.replacementId === null ? (
                         <span className="text-xs text-muted-foreground">
@@ -255,19 +253,19 @@ export function ModelLifecyclePage({
                       <tr className="border-t border-border" key={item.id}>
                         <td className="px-4 py-3 font-medium">{item.name}</td>
                         <td className="px-4 py-3">
-                          {item.provider ?? "Unavailable"}
+                          <DataText reason="No provider was supplied for this lifecycle record." value={item.provider} />
                         </td>
                         <td className="px-4 py-3 font-mono">
-                          {item.sunsetOn ?? "Unavailable"}
+                          <DataText reason="No published sunset date was supplied for this lifecycle record." value={item.sunsetOn} />
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {item.daysToSunset ?? "Unavailable"}
+                          <DataText reason="No retirement deadline was supplied for this lifecycle record." value={item.daysToSunset} />
                         </td>
                         <td className="px-4 py-3">
-                          {item.replacementId ?? "Unavailable"}
+                          <DataText reason="No accepted successor was supplied for this lifecycle record." value={item.replacementId} />
                         </td>
                         <td className="px-4 py-3">
-                          {statusLabel(item.lifecycleStatus)}
+                          <DataText reason="No lifecycle status was supplied for this record." value={item.lifecycleStatus} />
                         </td>
                       </tr>
                     ))}

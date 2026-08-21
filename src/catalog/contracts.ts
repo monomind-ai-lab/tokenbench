@@ -74,6 +74,10 @@ export interface PlanOffer {
   entitlementEvidence: EntitlementEvidence;
   /** Omitted only when the provider has not published these facts. */
   billingCycle?: 'monthly' | 'annual' | 'other';
+  /** Separate annual checkout price when explicitly published by the provider. */
+  annualCostMicroDollars?: number;
+  /** Provider-displayed annual effective monthly price; never derived or rounded by TokenBench. */
+  annualEffectiveMonthlyCostMicroDollars?: number;
   supportedModelIds?: string[];
   sourceId: string;
 }

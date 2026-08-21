@@ -5,6 +5,8 @@ export interface Provenance {
   readonly kind: 'illustrative_prototype' | 'approved_manual' | 'accepted_pipeline';
   /** The source fact time, which remains null when the accepted producer made it unknown. */
   readonly effectiveAt: string | null;
+  /** Canonical source location when the published receipt exposes one. */
+  readonly url?: string;
   readonly note: string;
 }
 
@@ -65,19 +67,145 @@ export interface CachePricing {
   readonly writeUsdPerMillion: EvidenceValue<number>;
 }
 
+/** Exact receipt for one published provider route. */
+export interface RouteReceipt {
+  readonly sourceId: string;
+  readonly providerId: string;
+  readonly routeId: string;
+  readonly sourceModelId: string;
+  readonly sourceArtifactId: string;
+  readonly sourceUrl: string;
+  readonly observedAt: string;
+  readonly verificationStatus: 'primary' | 'corroborating' | 'conflict';
+}
+
 export interface RoutePricing {
   readonly route: string;
   readonly inputUsdPerMillion: number;
   readonly outputUsdPerMillion: number;
   readonly contextWindowTokens: EvidenceValue<number>;
+  /** Independent maximum input receipt; it must not be assumed to equal context. */
+  readonly maxInputTokens?: EvidenceValue<number>;
   readonly maxOutputTokens: EvidenceValue<number>;
   readonly inputModalities: readonly string[];
   readonly outputModalities: readonly string[];
+  /** Model-level route parameters supplied by the exact route receipt. */
+  readonly supportedParameters?: EvidenceValue<readonly string[]>;
+  readonly receipt?: RouteReceipt;
   /** Optional only because the directory fixture does not claim a blended route price. */
   readonly blendedUsdPerMillion?: EvidenceValue<number>;
   /** Optional because many providers do not publish a distinct long-context input tier. */
   readonly longContextInputUsdPerMillion?: EvidenceValue<number>;
   readonly cache: EvidenceValue<CachePricing>;
+}
+
+/**
+ * Complete exact-route receipt. Unlike the selected convenience route, this
+ * shape keeps routes with partial pricing so one missing meter cannot erase
+ * independently published limits or compatibility facts.
+ */
+export interface RouteFact {
+  readonly receipt: RouteReceipt;
+  readonly inputUsdPerMillion: EvidenceValue<number>;
+  readonly outputUsdPerMillion: EvidenceValue<number>;
+  readonly cacheReadUsdPerMillion: EvidenceValue<number>;
+  readonly cacheWriteUsdPerMillion: EvidenceValue<number>;
+  readonly contextWindowTokens: EvidenceValue<number>;
+  readonly maxInputTokens: EvidenceValue<number>;
+  readonly maxOutputTokens: EvidenceValue<number>;
+  readonly inputModalities: EvidenceValue<readonly string[]>;
+  readonly outputModalities: EvidenceValue<readonly string[]>;
+  readonly supportedParameters: EvidenceValue<readonly string[]>;
+}
+
+export interface ModelSourceCoverage {
+  readonly benchmarkCount: number;
+  readonly categoryCount: number;
+  readonly rankedCategoryCount: number;
+  readonly sourceCount: number;
+}
+
+export interface ModelBenchmarkCategoryFact {
+  readonly key: string;
+  readonly metricKey: string;
+  readonly label: string;
+  readonly score: number;
+  readonly rawScore: number | null;
+  readonly rank: number | null;
+  readonly fieldSize: number | null;
+  readonly percentile: number | null;
+  readonly evidenceStatus: string;
+  readonly benchmarkCount: number;
+  readonly rankingEligible: boolean;
+  readonly unit: string;
+  readonly sourceId: string;
+}
+
+export interface ModelBenchmarkLedgerFact {
+  readonly metricKey: string;
+  readonly category: string;
+  readonly benchmarkName: string;
+  readonly displayValue: number;
+  readonly rawValue: number | null;
+  readonly unit: string;
+  readonly rank: number | null;
+  readonly bestVerifiedComparison: number | null;
+  readonly gap: number | null;
+  readonly weight: number | null;
+  readonly evidenceStatus: string;
+  readonly observedAt: string;
+  readonly sourceId: string;
+  readonly sourceArtifactId: string;
+  readonly sourceUrl: string;
+}
+
+export interface ModelBenchmarkFacts {
+  readonly overallRank: number | null;
+  readonly evidenceStatus: string;
+  readonly publishedAt: string | null;
+  readonly checkedAt: string;
+  readonly categories: readonly ModelBenchmarkCategoryFact[];
+  readonly ledger: readonly ModelBenchmarkLedgerFact[];
+}
+
+/**
+ * Profile metadata from a source-published snapshot. Every independently
+ * nullable field remains evidence rather than becoming a synthetic default.
+ */
+export interface ModelSpecifications {
+  readonly reasoningType: EvidenceValue<string>;
+  readonly familyId: EvidenceValue<string>;
+  readonly variantId: EvidenceValue<string>;
+  readonly releaseDate: EvidenceValue<string>;
+  readonly createdAt: EvidenceValue<string>;
+  readonly expirationDate: EvidenceValue<string>;
+  readonly knowledgeCutoff: EvidenceValue<string>;
+  readonly tokenizer: EvidenceValue<string>;
+  readonly instructionFormat: EvidenceValue<string>;
+  readonly isModerated: EvidenceValue<boolean>;
+  readonly perRequestLimits: EvidenceValue<Readonly<Record<string, unknown>>>;
+  readonly contextWindowTokens: EvidenceValue<number>;
+  readonly maxInputTokens: EvidenceValue<number>;
+  readonly maxOutputTokens: EvidenceValue<number>;
+  readonly inputModalities: EvidenceValue<readonly string[]>;
+  readonly outputModalities: EvidenceValue<readonly string[]>;
+  readonly supportedParameters: EvidenceValue<readonly string[]>;
+  readonly selfHostingAvailable: EvidenceValue<boolean>;
+}
+
+export interface ModelDataFreshness {
+  readonly status: 'fresh' | 'stale';
+  readonly checkedAt: string;
+  readonly message: string | null;
+}
+
+export interface ModelProfileFacts {
+  readonly freshness: ModelDataFreshness;
+  readonly sourceCoverage: ModelSourceCoverage;
+  readonly benchmark: ModelBenchmarkFacts;
+  readonly specifications: ModelSpecifications;
+  readonly routes: readonly RouteFact[];
+  readonly sources: readonly Provenance[];
 }
 
 export interface TaskEconomics {
@@ -107,6 +235,10 @@ export interface PreviewModel {
   readonly taskEconomics: EvidenceValue<TaskEconomics>;
   readonly runtime: EvidenceValue<RuntimeSla>;
   readonly lifecycle: EvidenceValue<ModelLifecycle>;
+  /** Full source-published profile facts when this surface loaded a profile. */
+  readonly profileFacts?: EvidenceValue<ModelProfileFacts>;
+  /** All exact provider routes when the source publishes more than the selected route. */
+  readonly routeOptions?: EvidenceValue<readonly RoutePricing[]>;
 }
 
 export interface ModelDirectoryQuery {

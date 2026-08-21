@@ -36,7 +36,7 @@ function modelName(model: PreviewModel, fallback: string): string {
 }
 
 function provider(model: PreviewModel): string {
-  return model.identity.availability === "available" ? model.identity.value.provider : "Unavailable";
+  return model.identity.availability === "available" ? model.identity.value.provider : "-";
 }
 
 function sources(...groups: readonly (readonly Provenance[])[]): readonly Provenance[] {
@@ -90,9 +90,9 @@ function ProfileIdentity({ model }: { model: PreviewModel }) {
   const access = routeEvidenceValue(model.access);
   return (
     <dl className="grid gap-4 text-sm sm:grid-cols-2">
-      <div><dt className="text-xs text-muted-foreground">Provider</dt><dd className="mt-1 font-medium">{identity?.provider ?? "Unavailable"}</dd></div>
-      <div><dt className="text-xs text-muted-foreground">Model slug</dt><dd className="mt-1 font-mono text-xs">{identity?.slug ?? "Unavailable"}</dd></div>
-      <div><dt className="text-xs text-muted-foreground">Access</dt><dd className="mt-1">{access ?? "Unavailable"}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Provider</dt><dd className="mt-1 font-medium">{identity?.provider ?? "-"}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Model slug</dt><dd className="mt-1 font-mono text-xs">{identity?.slug ?? "-"}</dd></div>
+      <div><dt className="text-xs text-muted-foreground">Access</dt><dd className="mt-1">{access ?? "-"}</dd></div>
       <div><dt className="text-xs text-muted-foreground">Benchmark release</dt><dd className="mt-1">{routeEvidenceText(model.benchmark, (release) => release.releaseOn)}</dd></div>
     </dl>
   );
@@ -113,9 +113,9 @@ function CapabilityTable({ model }: { model: PreviewModel }) {
           {capability.radar.map((axis) => (
             <tr className="border-t border-border" key={axis.key}>
               <td className="px-4 py-3 font-medium">{axis.label}</td>
-              <td className="px-4 py-3 text-right font-mono">{axis.percentile === null ? "Unavailable" : formatDisplayNumber(axis.percentile)}</td>
-              <td className="px-4 py-3 text-right font-mono">{axis.rank ?? "Unavailable"}</td>
-              <td className="px-4 py-3 text-right font-mono">{axis.fieldSize ?? "Unavailable"}</td>
+              <td className="px-4 py-3 text-right font-mono">{axis.percentile === null ? "-" : formatDisplayNumber(axis.percentile)}</td>
+              <td className="px-4 py-3 text-right font-mono">{axis.rank ?? "-"}</td>
+              <td className="px-4 py-3 text-right font-mono">{axis.fieldSize ?? "-"}</td>
             </tr>
           ))}
         </tbody>
@@ -151,10 +151,10 @@ function PriceLedger({ model }: { model: PreviewModel }) {
           </tr>
           <tr className="border-t border-border bg-muted/20 text-xs text-muted-foreground">
             <td className="px-4 py-3">Cache pricing</td>
-            <td className="px-4 py-3 text-right font-mono">{cache ? routeEvidenceText(cache.readUsdPerMillion, formatRouteEvidencePrice) : "Unavailable"}</td>
-            <td className="px-4 py-3 text-right font-mono">{cache ? routeEvidenceText(cache.writeUsdPerMillion, formatRouteEvidencePrice) : "Unavailable"}</td>
-            <td className="px-4 py-3 text-right">{route.inputModalities.join(", ") || "Unavailable"}</td>
-            <td className="px-4 py-3 text-right">{route.outputModalities.join(", ") || "Unavailable"}</td>
+            <td className="px-4 py-3 text-right font-mono">{cache ? routeEvidenceText(cache.readUsdPerMillion, formatRouteEvidencePrice) : "-"}</td>
+            <td className="px-4 py-3 text-right font-mono">{cache ? routeEvidenceText(cache.writeUsdPerMillion, formatRouteEvidencePrice) : "-"}</td>
+            <td className="px-4 py-3 text-right">{route.inputModalities.join(", ") || "-"}</td>
+            <td className="px-4 py-3 text-right">{route.outputModalities.join(", ") || "-"}</td>
             <td className="px-4 py-3">{routeEvidenceValueState(route.cache)}</td>
           </tr>
         </tbody>
@@ -253,10 +253,10 @@ export function RouteEvidenceModelProfilePage({
 
       <section className="px-4 py-8 sm:px-6">
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
-          <ProfileFact label="Composite capability" note="Only shown from the requested model evidence." value={capability ? formatDisplayNumber(capability.compositeScore) : "Unavailable"} />
-          <ProfileFact label="Selected route" note="No route is inferred when pricing is unavailable." value={route?.route ?? "Unavailable"} />
-          <ProfileFact label="Input / 1M" note="Endpoint-specific price." value={route ? formatRouteEvidencePrice(route.inputUsdPerMillion) : "Unavailable"} />
-          <ProfileFact label="TTFT p50" note="Runtime measurement, not a provider SLA." value={runtime ? `${formatDisplayNumber(runtime.ttftP50Seconds)}s` : "Unavailable"} />
+          <ProfileFact label="Composite capability" note="Only shown from the requested model evidence." value={capability ? formatDisplayNumber(capability.compositeScore) : "-"} />
+          <ProfileFact label="Selected route" note="No route is inferred when pricing is unavailable." value={route?.route ?? "-"} />
+          <ProfileFact label="Input / 1M" note="Endpoint-specific price." value={route ? formatRouteEvidencePrice(route.inputUsdPerMillion) : "-"} />
+          <ProfileFact label="TTFT p50" note="Runtime measurement, not a provider SLA." value={runtime ? `${formatDisplayNumber(runtime.ttftP50Seconds)}s` : "-"} />
         </div>
       </section>
 

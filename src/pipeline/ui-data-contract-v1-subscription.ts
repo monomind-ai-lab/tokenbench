@@ -11,6 +11,12 @@ import {
   type RoutePricingTier,
   type SafeModelSlug,
 } from './ui-data-contract-v1-models';
+import type {
+  EntitlementBoundType,
+  EntitlementEvidenceStatus,
+  EntitlementMetric,
+  EntitlementWindow,
+} from '../catalog/contracts';
 
 const BASIS_POINTS = 10_000;
 const MILLION = 1_000_000n;
@@ -64,7 +70,39 @@ export interface SubscriptionPlanFact {
   readonly providerId: string;
   readonly displayName: string;
   readonly monthlyCostMicroDollars: number;
+  /** Provider-disclosed annual checkout amount; unavailable stays distinct from zero. */
+  readonly annualCostMicroDollars: EvidenceValue<number>;
+  /** Provider-disclosed effective monthly annual price; TokenBench never derives this value. */
+  readonly annualEffectiveMonthlyCostMicroDollars: EvidenceValue<number>;
+  /**
+   * First-party entitlement receipt. Feature limits remain source facts rather
+   * than token-equivalent estimates, and `lastVerifiedAt` is the evidence
+   * receipt timestamp, not a derived catalog freshness value.
+   */
+  readonly entitlement: SubscriptionEntitlementReceipt;
   readonly supportedModelSlugs: readonly SafeModelSlug[];
+  readonly sourceRefs: readonly string[];
+}
+
+export interface SubscriptionEntitlementDimensionReceipt {
+  readonly metric: EntitlementMetric;
+  readonly minimum: number | null;
+  readonly maximum: number | null;
+  readonly unit: string;
+  readonly window: EntitlementWindow;
+  readonly resetRule: string | null;
+  readonly modelId: string | null;
+  readonly feature: string | null;
+  readonly sharedPoolId: string | null;
+}
+
+export interface SubscriptionEntitlementReceipt {
+  readonly evidenceStatus: EntitlementEvidenceStatus;
+  readonly boundType: EntitlementBoundType;
+  readonly usageNote: string | null;
+  readonly dimensions: readonly SubscriptionEntitlementDimensionReceipt[];
+  readonly staleReason: string | null;
+  readonly lastVerifiedAt: string;
   readonly sourceRefs: readonly string[];
 }
 
@@ -897,7 +935,10 @@ function validateRouteBinding(value: unknown, path: string): SubscriptionRouteBi
 
 function validatePlan(value: unknown, path: string, sourceRefs: ReadonlySet<string>): SubscriptionPlanFact {
   const plan = expectResponseRecord(value, path);
-  expectResponseKeys(plan, ['planId', 'providerId', 'displayName', 'monthlyCostMicroDollars', 'supportedModelSlugs', 'sourceRefs'], path);
+  expectResponseKeys(plan, [
+    'planId', 'providerId', 'displayName', 'monthlyCostMicroDollars', 'annualCostMicroDollars',
+    'annualEffectiveMonthlyCostMicroDollars', 'entitlement', 'supportedModelSlugs', 'sourceRefs',
+  ], path);
   const supportedModelSlugs = expectResponseArray(plan.supportedModelSlugs, `${path}/supportedModelSlugs`).map((candidate, index) => (
     expectResponseModelSlug(candidate, `${path}/supportedModelSlugs/${index}`)
   ));
@@ -907,8 +948,88 @@ function validatePlan(value: unknown, path: string, sourceRefs: ReadonlySet<stri
     providerId: expectResponseIdentifier(plan.providerId, `${path}/providerId`, 256),
     displayName: expectNonEmptyResponseString(plan.displayName, `${path}/displayName`),
     monthlyCostMicroDollars: expectResponseSafeInteger(plan.monthlyCostMicroDollars, `${path}/monthlyCostMicroDollars`, 0),
+    annualCostMicroDollars: validateEvidence(plan.annualCostMicroDollars, `${path}/annualCostMicroDollars`, sourceRefs, (candidate, candidatePath) => (
+      expectResponseSafeInteger(candidate, candidatePath, 0)
+    )),
+    annualEffectiveMonthlyCostMicroDollars: validateEvidence(
+      plan.annualEffectiveMonthlyCostMicroDollars,
+      `${path}/annualEffectiveMonthlyCostMicroDollars`,
+      sourceRefs,
+      (candidate, candidatePath) => expectResponseSafeInteger(candidate, candidatePath, 0),
+    ),
+    entitlement: validateEntitlementReceipt(plan.entitlement, `${path}/entitlement`, sourceRefs),
     supportedModelSlugs,
     sourceRefs: validateSourceRefs(plan.sourceRefs, `${path}/sourceRefs`, sourceRefs, true),
+  };
+}
+
+function nullableReceiptText(value: unknown, path: string): string | null {
+  return value === null ? null : expectNonEmptyResponseString(value, path);
+}
+
+function nullableReceiptBound(value: unknown, path: string): number | null {
+  return value === null ? null : expectResponseFiniteNumber(value, path, 0);
+}
+
+function validateEntitlementDimensionReceipt(
+  value: unknown,
+  path: string,
+): SubscriptionEntitlementDimensionReceipt {
+  const dimension = expectResponseRecord(value, path);
+  expectResponseKeys(dimension, [
+    'metric', 'minimum', 'maximum', 'unit', 'window', 'resetRule', 'modelId', 'feature', 'sharedPoolId',
+  ], path);
+  const metrics = new Set<EntitlementMetric>(['messages', 'model_calls', 'credits', 'tasks', 'feature_uses']);
+  const windows = new Set<EntitlementWindow>(['rolling_5h', 'weekly', 'monthly', 'billing_cycle']);
+  if (!metrics.has(dimension.metric as EntitlementMetric)) failResponse(`${path}/metric`, 'must be a declared entitlement metric');
+  if (!windows.has(dimension.window as EntitlementWindow)) failResponse(`${path}/window`, 'must be a declared entitlement window');
+  const minimum = nullableReceiptBound(dimension.minimum, `${path}/minimum`);
+  const maximum = nullableReceiptBound(dimension.maximum, `${path}/maximum`);
+  if (minimum !== null && maximum !== null && minimum > maximum) failResponse(path, 'minimum must not exceed maximum');
+  return {
+    metric: dimension.metric as EntitlementMetric,
+    minimum,
+    maximum,
+    unit: expectNonEmptyResponseString(dimension.unit, `${path}/unit`),
+    window: dimension.window as EntitlementWindow,
+    resetRule: nullableReceiptText(dimension.resetRule, `${path}/resetRule`),
+    modelId: nullableReceiptText(dimension.modelId, `${path}/modelId`),
+    feature: nullableReceiptText(dimension.feature, `${path}/feature`),
+    sharedPoolId: nullableReceiptText(dimension.sharedPoolId, `${path}/sharedPoolId`),
+  };
+}
+
+function validateEntitlementReceipt(
+  value: unknown,
+  path: string,
+  sourceRefs: ReadonlySet<string>,
+): SubscriptionEntitlementReceipt {
+  const receipt = expectResponseRecord(value, path);
+  expectResponseKeys(receipt, [
+    'evidenceStatus', 'boundType', 'usageNote', 'dimensions', 'staleReason', 'lastVerifiedAt', 'sourceRefs',
+  ], path);
+  const statuses = new Set<EntitlementEvidenceStatus>(['verified', 'projected', 'dynamic_unknown', 'stale']);
+  const boundTypes = new Set<EntitlementBoundType>(['hard_max', 'practical_upper', 'outer_ceiling', 'unknown']);
+  if (!statuses.has(receipt.evidenceStatus as EntitlementEvidenceStatus)) {
+    failResponse(`${path}/evidenceStatus`, 'must be a declared entitlement evidence status');
+  }
+  if (!boundTypes.has(receipt.boundType as EntitlementBoundType)) {
+    failResponse(`${path}/boundType`, 'must be a declared entitlement bound type');
+  }
+  const staleReason = nullableReceiptText(receipt.staleReason, `${path}/staleReason`);
+  if (receipt.evidenceStatus === 'stale' && staleReason === null) {
+    failResponse(`${path}/staleReason`, 'is required for stale entitlement evidence');
+  }
+  return {
+    evidenceStatus: receipt.evidenceStatus as EntitlementEvidenceStatus,
+    boundType: receipt.boundType as EntitlementBoundType,
+    usageNote: nullableReceiptText(receipt.usageNote, `${path}/usageNote`),
+    dimensions: expectResponseArray(receipt.dimensions, `${path}/dimensions`).map((dimension, index) => (
+      validateEntitlementDimensionReceipt(dimension, `${path}/dimensions/${index}`)
+    )),
+    staleReason,
+    lastVerifiedAt: expectCanonicalTimestamp(receipt.lastVerifiedAt, `${path}/lastVerifiedAt`),
+    sourceRefs: validateSourceRefs(receipt.sourceRefs, `${path}/sourceRefs`, sourceRefs, true),
   };
 }
 

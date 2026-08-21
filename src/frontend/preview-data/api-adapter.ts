@@ -78,6 +78,7 @@ function provenance(source: AcceptedSourceAttribution): Provenance {
     label: source.label,
     kind: 'accepted_pipeline',
     effectiveAt: source.effectiveAt,
+    url: source.url,
     note: `${source.sourceRevision} · ${source.fieldGroup}`,
   };
 }

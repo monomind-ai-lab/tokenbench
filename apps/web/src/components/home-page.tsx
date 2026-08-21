@@ -27,6 +27,8 @@ type FilterName = "all" | "open" | "latency" | "throughput";
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
 
+const MISSING_VALUE = "-";
+
 const RESEARCH = [
   { href: "/articles/hybrid-router/", label: "Architecture", title: "A hybrid router for high-stakes agentic work", copy: "Reserve expensive capability for the requests that need it while keeping routine work observable and reversible.", meta: "9 min read · Aug 2026" },
   { href: "/guides/reduce-llm-api-costs-caching-batch-output-limits/", label: "Cost optimization", title: "Lower LLM API Costs with Caching, Batch Jobs, and Output Caps", copy: "Reduce cost per successful task without shifting expense into retries, latency, or human review.", meta: "11 min read · Aug 2026" },
@@ -34,11 +36,11 @@ const RESEARCH = [
 ] as const;
 
 function unavailable(value: string | null | undefined): string {
-  return value === null || value === undefined || value.length === 0 ? "Unavailable" : value;
+  return value === null || value === undefined || value.length === 0 ? MISSING_VALUE : value;
 }
 
 function formatNumber(value: number | null, decimals = 0): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return MISSING_VALUE;
   return formatDisplayNumber(value, {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
@@ -46,35 +48,35 @@ function formatNumber(value: number | null, decimals = 0): string {
 }
 
 function formatScore(value: number | null): string {
-  return value === null ? "Unavailable" : formatNumber(value, 1);
+  return value === null ? MISSING_VALUE : formatNumber(value, 1);
 }
 
 function formatUsd(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return MISSING_VALUE;
   return formatDisplayUsd(value);
 }
 
 function formatRoutePrice(value: number | null): string {
-  return value === null ? "Unavailable" : `${formatUsd(value)} / 1M`;
+  return value === null || !Number.isFinite(value) ? MISSING_VALUE : `${formatUsd(value)} / 1M`;
 }
 
 function formatRuntime(value: number | null): string {
-  return value === null ? "Unavailable" : `${formatNumber(value, 2)}s`;
+  return value === null || !Number.isFinite(value) ? MISSING_VALUE : `${formatNumber(value, 2)}s`;
 }
 
 function formatThroughput(value: number | null): string {
-  return value === null ? "Unavailable" : `${formatNumber(value)} tok/s`;
+  return value === null || !Number.isFinite(value) ? MISSING_VALUE : `${formatNumber(value)} tok/s`;
 }
 
 function formatTokens(value: number | null): string {
-  if (value === null || !Number.isFinite(value)) return "Unavailable";
+  if (value === null || !Number.isFinite(value)) return MISSING_VALUE;
   if (value >= 1_000_000) return `${formatNumber(value / 1_000_000, 1)}M`;
   if (value >= 1_000) return `${formatNumber(value / 1_000, 1)}k`;
   return formatNumber(value);
 }
 
 function identityRecordStatus(value: string | null): string {
-  return value === null ? "Unavailable" : "Recorded";
+  return value === null ? MISSING_VALUE : "Recorded";
 }
 
 function modeLabel(mode: HomePageData["mode"]): string {
@@ -111,7 +113,7 @@ function DecisionSnapshot({ data }: { data: HomePageData }) {
       <CardHeader className="border-b border-border px-5 py-5 sm:px-6">
         <div className="flex items-start justify-between gap-3">
           <div><p className="font-mono text-[10px] tracking-[.18em] text-muted-foreground">DECISION SNAPSHOT</p><CardTitle className="mt-2 text-base">Observed model evidence</CardTitle></div>
-          <Badge variant="outline">{data.updatedAt?.slice(0, 10) ?? "Timestamp unavailable"}</Badge>
+          <Badge variant="outline">{unavailable(data.updatedAt?.slice(0, 10))}</Badge>
         </div>
       </CardHeader>
       <CardContent className="p-5 sm:p-6">
@@ -129,7 +131,7 @@ function SnapshotRow({ row }: { row: HomeRankingRow }) {
   const { model } = row;
   return (
     <li className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-3 py-4">
-      <div className="flex min-w-0 items-center gap-3"><span aria-label={row.rank === null ? "Rank unavailable" : undefined} className="font-mono text-[10px] text-muted-foreground">{row.rank === null ? "—" : `#${row.rank}`}</span><BrandDot color={model.color} /><span className="min-w-0"><span className="block truncate text-sm font-medium">{unavailable(model.name)}</span><span className="block truncate text-[10px] text-muted-foreground">{unavailable(model.access)}</span></span></div>
+      <div className="flex min-w-0 items-center gap-3"><span aria-label={row.rank === null ? "Rank -" : undefined} className="font-mono text-[10px] text-muted-foreground">{row.rank === null ? MISSING_VALUE : `#${row.rank}`}</span><BrandDot color={model.color} /><span className="min-w-0"><span className="block truncate text-sm font-medium">{unavailable(model.name)}</span><span className="block truncate text-[10px] text-muted-foreground">{unavailable(model.access)}</span></span></div>
       <span className="font-mono text-xs">{formatScore(model.capabilityScore)}</span><span className="font-mono text-xs">{formatRuntime(model.ttftP50Seconds)}</span><span className="font-mono text-xs">{formatUsd(model.inputUsdPerMillion)}</span>
     </li>
   );
@@ -162,7 +164,7 @@ function ModelWorkbenchPreview({ data }: { data: HomePageData }) {
         <table className="min-w-[760px] w-full border-collapse text-sm">
           <caption className="sr-only">Available model identity, access, route pricing, and runtime facts</caption>
           <thead><tr className="border-b border-border text-left text-xs text-muted-foreground"><th className="px-5 py-4 font-medium">Model</th><th className="px-4 py-4 font-medium">Identity record</th><th className="px-4 py-4 font-medium">Access</th><th className="px-4 py-4 text-right font-medium">Input / 1M</th><th className="px-4 py-4 text-right font-medium">Output / 1M</th><th className="px-4 py-4 text-right font-medium">TTFT · p50</th><th className="px-5 py-4 text-right font-medium">Throughput</th></tr></thead>
-          <tbody>{models.length > 0 ? models.map((model) => <tr className="border-b border-border last:border-b-0 hover:bg-muted/40" key={model.id}><td className="px-5 py-4 font-medium">{model.name === null ? <span className="text-muted-foreground">Unavailable</span> : <Link className="hover:underline" href={`/model-profile?model=${encodeURIComponent(model.id)}`}>{model.name}</Link>}</td><td className="px-4 py-4 text-muted-foreground">{identityRecordStatus(model.provider)}</td><td className="px-4 py-4 text-muted-foreground">{unavailable(model.access)}</td><td className="px-4 py-4 text-right font-mono">{formatRoutePrice(model.inputUsdPerMillion)}</td><td className="px-4 py-4 text-right font-mono">{formatRoutePrice(model.outputUsdPerMillion)}</td><td className="px-4 py-4 text-right font-mono">{formatRuntime(model.ttftP50Seconds)}</td><td className="px-5 py-4 text-right font-mono">{formatThroughput(model.outputTokensPerSecond)}</td></tr>) : <tr><td className="px-5 py-8 text-sm text-muted-foreground" colSpan={7}>{data.modelMessage ?? "No accepted model records match this filter."}</td></tr>}</tbody>
+          <tbody>{models.length > 0 ? models.map((model) => <tr className="border-b border-border last:border-b-0 hover:bg-muted/40" key={model.id}><td className="px-5 py-4 font-medium">{model.name === null ? <span className="text-muted-foreground">{MISSING_VALUE}</span> : <Link className="hover:underline" href={`/model-profile?model=${encodeURIComponent(model.id)}`}>{model.name}</Link>}</td><td className="px-4 py-4 text-muted-foreground">{identityRecordStatus(model.provider)}</td><td className="px-4 py-4 text-muted-foreground">{unavailable(model.access)}</td><td className="px-4 py-4 text-right font-mono">{formatRoutePrice(model.inputUsdPerMillion)}</td><td className="px-4 py-4 text-right font-mono">{formatRoutePrice(model.outputUsdPerMillion)}</td><td className="px-4 py-4 text-right font-mono">{formatRuntime(model.ttftP50Seconds)}</td><td className="px-5 py-4 text-right font-mono">{formatThroughput(model.outputTokensPerSecond)}</td></tr>) : <tr><td className="px-5 py-8 text-sm text-muted-foreground" colSpan={7}>{data.modelMessage ?? "No accepted model records match this filter."}</td></tr>}</tbody>
         </table>
       </div>
       <p className="mt-3 text-xs text-muted-foreground">{models.length} accepted {models.length === 1 ? "model" : "models"} shown. Runtime filters include only records with that observed measurement.</p>
@@ -350,7 +352,7 @@ function ComparisonPreview({ data }: { data: HomePageData }) {
 }
 
 function ComparisonIdentity({ model }: { model: HomeModel | null }) {
-  return <div className="min-w-0"><Badge variant="outline">{unavailable(model?.access)}</Badge><h3 className="mt-3 truncate text-lg font-semibold">{unavailable(model?.name)}</h3><p className="truncate text-xs text-muted-foreground">{model?.provider === null || model === null ? "Identity record unavailable" : "Identity record available"}</p></div>;
+  return <div className="min-w-0"><Badge variant="outline">{unavailable(model?.access)}</Badge><h3 className="mt-3 truncate text-lg font-semibold">{unavailable(model?.name)}</h3><p className="truncate text-xs text-muted-foreground">{model?.provider === null || model === null ? MISSING_VALUE : "Identity record available"}</p></div>;
 }
 
 function SubscriptionPreview({ data }: { data: HomePageData }) {
@@ -368,12 +370,12 @@ function SubscriptionPreview({ data }: { data: HomePageData }) {
   return (
     <div className="mt-9 grid items-stretch gap-6 lg:grid-cols-[.8fr_1.2fr]">
       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-        <Card className="h-full"><CardContent className="flex h-full flex-col justify-center p-5 text-center"><p className="text-xs text-muted-foreground">Validated subscription</p><p className="mt-3 font-mono text-3xl">{formatUsd(fixed)}</p><p className="mt-1 text-xs text-muted-foreground">{subscription.planName ?? "Plan unavailable"}</p></CardContent></Card>
+        <Card className="h-full"><CardContent className="flex h-full flex-col justify-center p-5 text-center"><p className="text-xs text-muted-foreground">Validated subscription</p><p className="mt-3 font-mono text-3xl">{formatUsd(fixed)}</p><p className="mt-1 text-xs text-muted-foreground">{subscription.planName ?? MISSING_VALUE}</p></CardContent></Card>
         <span className="font-mono text-[10px] text-muted-foreground">VERSUS</span>
         <Card className="h-full"><CardContent className="flex h-full flex-col justify-center p-5 text-center"><p className="text-xs text-muted-foreground">API consumption</p><p className="mt-3 font-mono text-3xl">{formatUsd(api)}</p><p className="mt-1 text-xs text-muted-foreground">selected validated volume</p></CardContent></Card>
       </div>
       <Card><CardContent className="p-6">
-        <div className="flex items-end justify-between gap-4"><div><label className="text-xs text-muted-foreground" htmlFor="home-token-volume">Validated token-volume sample</label><output className="mt-2 block font-mono text-3xl" htmlFor="home-token-volume">{formatTokens(selected?.tokens ?? null)}</output></div><Badge variant={hasSamples ? apiLower ? "secondary" : "default" : "outline"}>{hasSamples ? apiLower ? "API lower" : "Subscription lower" : "Unavailable"}</Badge></div>
+        <div className="flex items-end justify-between gap-4"><div><label className="text-xs text-muted-foreground" htmlFor="home-token-volume">Validated token-volume sample</label><output className="mt-2 block font-mono text-3xl" htmlFor="home-token-volume">{formatTokens(selected?.tokens ?? null)}</output></div><Badge variant={hasSamples ? apiLower ? "secondary" : "default" : "outline"}>{hasSamples ? apiLower ? "API lower" : "Subscription lower" : MISSING_VALUE}</Badge></div>
         <input aria-describedby="home-token-volume-note" aria-label="Validated token-volume sample" className="mt-7 w-full accent-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={!hasSamples} id="home-token-volume" max={Math.max(0, points.length - 1)} min={0} onChange={(event) => setPointIndex(Number(event.target.value))} step={1} type="range" value={Math.min(Math.max(pointIndex, 0), Math.max(0, points.length - 1))} />
         <div className="mt-1 flex justify-between font-mono text-[10px] text-muted-foreground"><span>{formatTokens(rangeStart)}</span><span>{formatTokens(rangeEnd)}</span></div>
         <p className="mt-5 text-sm leading-6 text-muted-foreground" id="home-token-volume-note">{hasSamples ? <>This comparison uses the selected validated domain sample. {subscription.crossoverTokens === null ? "The crossover volume is unavailable." : `The reported crossover is ${formatTokens(subscription.crossoverTokens)} tokens.`}</> : subscription.message ?? "No accepted subscription calculation is available."}</p>
@@ -393,7 +395,7 @@ export function HomePage({ data }: { data: HomePageData }) {
             <h1 className="max-w-3xl text-balance text-5xl font-semibold leading-[.98] tracking-[-.045em] sm:text-6xl lg:text-7xl">Empirical evidence for practical AI runtime and cost decisions.</h1>
             <p className="mt-7 max-w-xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">Independent quantitative LLM analysis of capability, streaming latency, and route economics—without collapsed or hidden data.</p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row"><Button className="rounded-full" nativeButton={false} render={<Link href="/models/" />} size="lg">Explore models workbench<ArrowRight /></Button><Button className="rounded-full" nativeButton={false} render={<Link href="/compare/" />} size="lg" variant="outline">Compare models</Button></div>
-            <p className="mt-7 max-w-xl text-xs leading-5 text-muted-foreground">{modeLabel(data.mode)} · {data.updatedAt === null ? "revision timestamp unavailable" : `effective ${data.updatedAt.slice(0, 10)}`}</p>
+            <p className="mt-7 max-w-xl text-xs leading-5 text-muted-foreground">{modeLabel(data.mode)} · {data.updatedAt === null ? MISSING_VALUE : `effective ${data.updatedAt.slice(0, 10)}`}</p>
           </div>
           <DecisionSnapshot data={data} />
         </div>
@@ -414,5 +416,5 @@ export function HomePage({ data }: { data: HomePageData }) {
 
 function PopularModelCard({ row }: { row: HomeRankingRow }) {
   const { model } = row;
-  return <Card className="group"><CardHeader><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><BrandDot color={model.color} /><div className="min-w-0"><p className="truncate text-xs text-muted-foreground">{unavailable(model.access)}</p><CardTitle className="mt-1 truncate text-sm">{unavailable(model.name)}</CardTitle></div></div><Badge className="shrink-0 font-mono" variant="outline">{row.rank === null ? "Rank unavailable" : `Rank #${row.rank}`}</Badge></div></CardHeader><CardContent><dl className="grid gap-3 border-t border-border pt-4 text-xs"><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Capability score</dt><dd className="font-mono">{formatScore(model.capabilityScore)}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Throughput</dt><dd className="font-mono">{formatThroughput(model.outputTokensPerSecond)}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Input / output</dt><dd className="text-right font-mono">{formatRoutePrice(model.inputUsdPerMillion)} · {formatRoutePrice(model.outputUsdPerMillion)}</dd></div></dl></CardContent></Card>;
+  return <Card className="group"><CardHeader><div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-3"><BrandDot color={model.color} /><div className="min-w-0"><p className="truncate text-xs text-muted-foreground">{unavailable(model.access)}</p><CardTitle className="mt-1 truncate text-sm">{unavailable(model.name)}</CardTitle></div></div><Badge className="shrink-0 font-mono" variant="outline">{row.rank === null ? MISSING_VALUE : `Rank #${row.rank}`}</Badge></div></CardHeader><CardContent><dl className="grid gap-3 border-t border-border pt-4 text-xs"><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Capability score</dt><dd className="font-mono">{formatScore(model.capabilityScore)}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Throughput</dt><dd className="font-mono">{formatThroughput(model.outputTokensPerSecond)}</dd></div><div className="flex justify-between gap-3"><dt className="text-muted-foreground">Input / output</dt><dd className="text-right font-mono">{formatRoutePrice(model.inputUsdPerMillion)} · {formatRoutePrice(model.outputUsdPerMillion)}</dd></div></dl></CardContent></Card>;
 }

@@ -241,7 +241,44 @@
     "operation": "calculate",
     "plans": [
       {
+        "annualCostMicroDollars": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 200000000
+        },
+        "annualEffectiveMonthlyCostMicroDollars": {
+          "availability": "available",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "value": 17000000
+        },
         "displayName": "Fixture Pro",
+        "entitlement": {
+          "boundType": "practical_upper",
+          "dimensions": [
+            {
+              "feature": null,
+              "maximum": 2000,
+              "metric": "messages",
+              "minimum": 1000,
+              "modelId": null,
+              "resetRule": null,
+              "sharedPoolId": null,
+              "unit": "messages",
+              "window": "monthly"
+            }
+          ],
+          "evidenceStatus": "projected",
+          "lastVerifiedAt": "2026-08-18T00:00:00.000Z",
+          "sourceRefs": [
+            "fixture:primary-2026-08-18"
+          ],
+          "staleReason": null,
+          "usageNote": "Provider-managed plan capacity."
+        },
         "monthlyCostMicroDollars": 20000000,
         "planId": "fixture-pro",
         "providerId": "fixture-provider",

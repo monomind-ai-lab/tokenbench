@@ -122,17 +122,15 @@ function accessFor(
 }
 
 function sourceCategoryAxes(entry: ModelDirectoryEntry): PopularModelV1["axes"] {
-  const category = entry.strongestCategory;
-  if (
-    category === null ||
-    popularModelsCategorySlotKey(category.key, category.label) === null
-  )
-    return [];
-
-  return [
-    {
-      // Keep the source key. The immutable UI slots resolve it through the
-      // existing aliases rather than creating a category from a label.
+  const occupiedSlots = new Set<string>();
+  return entry.categories.flatMap((category) => {
+    const slot = popularModelsCategorySlotKey(category.key, category.label);
+    // Keep the source key. The immutable UI slots resolve it through the
+    // existing aliases rather than creating a category from a label. Retain
+    // source order if distinct source keys resolve to the same fixed slot.
+    if (slot === null || occupiedSlots.has(slot)) return [];
+    occupiedSlots.add(slot);
+    return [{
       key: category.key,
       label: category.label,
       // This field is the generic displayed category measurement in the
@@ -141,8 +139,8 @@ function sourceCategoryAxes(entry: ModelDirectoryEntry): PopularModelV1["axes"] 
       percentile: category.score,
       rank: category.rank,
       fieldSize: category.fieldSize,
-    },
-  ];
+    }];
+  });
 }
 
 type PublishedIdentity = {
@@ -216,7 +214,8 @@ function categorySourceProvenance(
     label: attribution.label,
     kind: "accepted_pipeline",
     effectiveAt: attribution.updatedAt,
-    note: `Published ${source.key} leaderboard revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}; ${attribution.url}`,
+    url: attribution.url,
+    note: `Published ${source.key} leaderboard revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}`,
   }));
 }
 
@@ -233,7 +232,8 @@ function pricePerformanceProvenance(
     label: attribution.label,
     kind: "accepted_pipeline",
     effectiveAt: attribution.updatedAt,
-    note: `Published price-performance revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}; ${attribution.url}`,
+    url: attribution.url,
+    note: `Published price-performance revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}`,
   }));
 }
 

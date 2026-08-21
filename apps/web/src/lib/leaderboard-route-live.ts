@@ -234,17 +234,29 @@ function isBenchmarkMetric(value: unknown): value is BenchmarkMetric {
 function isBenchmarkPriceCheck(value: unknown): value is BenchmarkPriceCheck {
   if (!recordOrFalse(value)) return false;
   const price = value as JsonRecord;
+  const optionalText = [
+    "createdAt",
+    "expirationDate",
+    "knowledgeCutoff",
+    "tokenizer",
+    "instructionFormat",
+    "perRequestLimitsJson",
+  ];
   return ["modelKey", "providerId", "routeId", "sourceModelId", "sourceArtifactId"]
     .every((key) => nonEmptyString(price[key]))
     && sourceId(price.sourceId)
     && (price.verificationStatus === "primary" || price.verificationStatus === "corroborating" || price.verificationStatus === "conflict")
     && nullableNonNegativeFiniteNumber(price.inputUsdPerMillion)
     && nullableNonNegativeFiniteNumber(price.cachedInputUsdPerMillion)
+    && (price.cacheWriteUsdPerMillion === undefined || nullableNonNegativeFiniteNumber(price.cacheWriteUsdPerMillion))
     && nullableNonNegativeFiniteNumber(price.outputUsdPerMillion)
     && nullablePositiveInteger(price.contextWindowTokens)
     && (price.maxOutputTokens === undefined || nullablePositiveInteger(price.maxOutputTokens))
     && (price.inputModalities === undefined || nullableStringArray(price.inputModalities))
-    && (price.outputModalities === undefined || nullableStringArray(price.outputModalities));
+    && (price.outputModalities === undefined || nullableStringArray(price.outputModalities))
+    && (price.supportedParameters === undefined || nullableStringArray(price.supportedParameters))
+    && optionalText.every((key) => price[key] === undefined || price[key] === null || nonEmptyString(price[key]))
+    && (price.isModerated === undefined || price.isModerated === null || typeof price.isModerated === "boolean");
 }
 
 function isExpectedDefinition(value: unknown, key: LeaderboardKey): value is LeaderboardDefinition {
@@ -508,7 +520,8 @@ function toProvenance(
     label: source.label,
     kind: "accepted_pipeline",
     effectiveAt: source.updatedAt,
-    note: `${envelope.freshness.status} published revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}; ${source.url}`,
+    url: source.url,
+    note: `${envelope.freshness.status} published revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}`,
   };
 }
 
@@ -564,6 +577,16 @@ function nullableNumberEvidence(
   return value === null ? unavailable(reason, provenance) : available(value, provenance);
 }
 
+function nullableStringArrayEvidence(
+  value: readonly string[] | null | undefined,
+  reason: string,
+  provenance: Provenance,
+): EvidenceValue<readonly string[]> {
+  return value === null || value === undefined || value.length === 0
+    ? unavailable(reason, provenance)
+    : available(value, provenance);
+}
+
 function routePricingFor(
   entry: LeaderboardEntry,
   envelope: LeaderboardRouteLiveEnvelope,
@@ -573,12 +596,20 @@ function routePricingFor(
     return unavailable("No complete selected-route price is published for this model.");
   }
   const provenance = sourceProvenance(envelope, price.sourceId);
-  const cache: EvidenceValue<CachePricing> = price.cachedInputUsdPerMillion === null
+  const cacheRead = nullableNumberEvidence(
+    price.cachedInputUsdPerMillion,
+    "The published route does not declare a cache-read price.",
+    provenance,
+  );
+  const cacheWrite = nullableNumberEvidence(
+    price.cacheWriteUsdPerMillion ?? null,
+    "The published route does not declare a cache-write price.",
+    provenance,
+  );
+  const cache: EvidenceValue<CachePricing> = cacheRead.availability === "unavailable"
+    && cacheWrite.availability === "unavailable"
     ? unavailable("No published cache price is available for this route.", provenance)
-    : available({
-      readUsdPerMillion: available(price.cachedInputUsdPerMillion, provenance),
-      writeUsdPerMillion: unavailable("The published route does not declare a cache-write price.", provenance),
-    }, provenance);
+    : available({ readUsdPerMillion: cacheRead, writeUsdPerMillion: cacheWrite }, provenance);
   return available({
     route: price.routeId,
     inputUsdPerMillion: price.inputUsdPerMillion,
@@ -588,6 +619,11 @@ function routePricingFor(
       "The selected route does not publish a context window.",
       provenance,
     ),
+    maxInputTokens: nullableNumberEvidence(
+      price.maxInputTokens,
+      "The selected route does not publish a maximum input limit.",
+      provenance,
+    ),
     maxOutputTokens: nullableNumberEvidence(
       price.maxOutputTokens ?? null,
       "The selected route does not publish a maximum output limit.",
@@ -595,6 +631,21 @@ function routePricingFor(
     ),
     inputModalities: price.inputModalities ?? [],
     outputModalities: price.outputModalities ?? [],
+    supportedParameters: nullableStringArrayEvidence(
+      price.supportedParameters,
+      "The selected route does not publish supported request parameters.",
+      provenance,
+    ),
+    receipt: {
+      sourceId: price.sourceId,
+      providerId: price.providerId,
+      routeId: price.routeId,
+      sourceModelId: price.sourceModelId,
+      sourceArtifactId: price.sourceArtifactId,
+      sourceUrl: provenance.url ?? envelope.attribution.find((source) => source.sourceId === price.sourceId)?.url ?? "",
+      observedAt: provenance.effectiveAt ?? envelope.publishedAt,
+      verificationStatus: price.verificationStatus,
+    },
     blendedUsdPerMillion: nullableNumberEvidence(
       entry.blendedCostPerMillion,
       "No published workload-blended route price is available.",
@@ -613,6 +664,7 @@ function modelFor(entry: LeaderboardEntry, envelope: LeaderboardRouteLiveEnvelop
   const metricProvenance = entry.metric === null
     ? modelProvenance
     : sourceProvenance(envelope, entry.metric.sourceId);
+  const routePricing = routePricingFor(entry, envelope);
   return {
     // Public links must use the published canonical route slug, but only when
     // this row proves the exact source-key identity that maps to it. A similar
@@ -629,10 +681,13 @@ function modelFor(entry: LeaderboardEntry, envelope: LeaderboardRouteLiveEnvelop
     access: accessFor(entry.model, modelProvenance),
     benchmark: unavailable("This endpoint does not publish a reusable benchmark-release receipt.", metricProvenance),
     capability: capabilityFor(entry, envelope),
-    routePricing: routePricingFor(entry, envelope),
+    routePricing,
     taskEconomics: unavailable("This endpoint does not publish task-economics evidence.", metricProvenance),
     runtime: unavailable("This endpoint does not publish runtime evidence.", metricProvenance),
     lifecycle: unavailable("This endpoint does not publish lifecycle evidence.", modelProvenance),
+    routeOptions: routePricing.availability === "available"
+      ? available([routePricing.value], routePricing.provenance)
+      : unavailable("No complete selected-route price is published for this model.", modelProvenance),
   };
 }
 

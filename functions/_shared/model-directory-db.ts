@@ -30,6 +30,8 @@ export interface ModelDirectoryEntry extends ModelDirectoryRecord {
   readonly weeklyRank: number | null;
   readonly overallScore: number | null;
   readonly overallRank: number | null;
+  /** Exact ordered category facts retained from the selected published profile. */
+  readonly categories: readonly ModelProfileCategory[];
   readonly strongestCategory: ModelProfileCategory | null;
   readonly representativePrice: ModelProfilePriceRoute | null;
   readonly evidenceStatus: EvidenceStatus;
@@ -414,6 +416,7 @@ export async function readModelDirectory(
       weeklyRank: weeklyRank(row),
       overallScore: profile.summary.overallScore,
       overallRank: profile.summary.overallRank,
+      categories: profile.categories,
       strongestCategory: strongestCategory(profile),
       representativePrice: representativePrice(profile),
       evidenceStatus: profile.summary.evidenceStatus,

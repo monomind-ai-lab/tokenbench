@@ -22,6 +22,11 @@ export type SubscriptionCrawlState = 'baseline' | 'unchanged' | 'changed' | 'blo
 
 export interface SubscriptionPriceObservation {
   readonly displayName: string;
+  /**
+   * Published amount billed at `billingCycle`. The legacy field name means a
+   * monthly amount only for monthly observations; an annual observation holds
+   * the exact annual checkout total and is never converted by this crawler.
+   */
   readonly monthlyCostMicroDollars: number;
   readonly currency: 'USD';
   readonly billingCycle: 'monthly' | 'annual' | 'other';
@@ -389,11 +394,26 @@ function sourceForRecord(
   };
 }
 
-function matchObservation(plan: PlanOffer, observations: readonly SubscriptionPriceObservation[]): SubscriptionPriceObservation | undefined {
-  const normalized = plan.displayName.trim().toLowerCase();
-  const monthly = observations.filter((observation) => observation.billingCycle === 'monthly');
-  return monthly.find((observation) => observation.displayName.trim().toLowerCase() === normalized)
-    ?? monthly.find((observation) => normalized.includes(observation.displayName.trim().toLowerCase()) || observation.displayName.trim().toLowerCase().includes(normalized));
+function normalizedPlanName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * A changed crawl may update a reviewed plan only through one unambiguous,
+ * normalized-exact plan name at the requested billing cycle.  Substring
+ * matching could join Pro, Team, or regional offers to the wrong plan.
+ */
+function matchObservation(
+  plan: PlanOffer,
+  observations: readonly SubscriptionPriceObservation[],
+  billingCycle: SubscriptionPriceObservation['billingCycle'],
+): SubscriptionPriceObservation | undefined {
+  const normalized = normalizedPlanName(plan.displayName);
+  const matches = observations.filter((observation) => (
+    observation.billingCycle === billingCycle
+    && normalizedPlanName(observation.displayName) === normalized
+  ));
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function mergeChangedSource(
@@ -406,10 +426,17 @@ function mergeChangedSource(
   return {
     source: sourceForRecord(current.source, record, 'needs_review'),
     plans: current.plans.map((plan) => {
-      const observation = matchObservation(plan, record.priceObservations);
+      const observation = matchObservation(plan, record.priceObservations, 'monthly');
+      const annual = matchObservation(plan, record.priceObservations, 'annual');
       return {
         ...plan,
         ...(observation ? { monthlyCostMicroDollars: observation.monthlyCostMicroDollars } : {}),
+        ...(annual ? {
+          annualCostMicroDollars: annual.monthlyCostMicroDollars,
+          ...(annual.effectiveMonthlyCostMicroDollars === undefined
+            ? {}
+            : { annualEffectiveMonthlyCostMicroDollars: annual.effectiveMonthlyCostMicroDollars }),
+        } : {}),
         entitlementEvidence: staleEvidence(plan.entitlementEvidence, reason, record.observedAt),
       };
     }),

@@ -48,7 +48,6 @@ import {
   popularModelsColumnWinnerIds,
   popularModelsCategorySlotKey,
   popularModelsDefaultSortDirection,
-  popularModelsFieldUnavailableLabel,
   popularModelsLeaderboardColumns,
   popularModelsMetricValue,
   sortPopularModels,
@@ -78,6 +77,8 @@ interface InitialControls {
   readonly sortKey: PopularModelsSortKeyV1;
   readonly viewMode: "cards" | "list";
 }
+
+const MISSING_VALUE = "-";
 
 function firstParameter(
   value: string | readonly string[] | undefined,
@@ -177,20 +178,20 @@ function comparisonIdsFromParameters(
 }
 
 function modelName(model: PopularModelV1): string {
-  return model.name ?? "Unavailable model identity";
+  return model.name ?? MISSING_VALUE;
 }
 
 function providerName(model: PopularModelV1): string {
-  return model.provider ?? "Unavailable provider";
+  return model.provider ?? MISSING_VALUE;
 }
 
 function rankLabel(model: PopularModelV1): string {
-  return model.rank === null ? "Unavailable" : `#${model.rank}`;
+  return model.rank === null ? MISSING_VALUE : `#${model.rank}`;
 }
 
 function formatNumber(value: number | null, maximumFractionDigits = 2): string {
   return value === null
-    ? "Unavailable"
+    ? MISSING_VALUE
     : formatDisplayNumber(value, { maximumFractionDigits });
 }
 
@@ -199,16 +200,14 @@ function formatExactNumber(value: number): string {
 }
 
 function formatPrice(value: number | null): string {
-  if (value === null) return "Unavailable";
+  if (value === null) return MISSING_VALUE;
   return value > 0 && value < 0.01 ? "USD <0.01" : `USD ${formatExactNumber(value)}`;
 }
 
 function formatTokens(value: number | null): string {
   return value === null
-    ? "Unavailable"
-    : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(
-        value,
-      );
+    ? MISSING_VALUE
+    : formatDisplayNumber(value, { maximumFractionDigits: 0 });
 }
 
 function formatEvidenceNumber(
@@ -216,7 +215,7 @@ function formatEvidenceNumber(
   formatter: (value: number) => string = formatExactNumber,
 ): string {
   return measurement.value === null
-    ? popularModelsFieldUnavailableLabel(measurement.unavailableReason)
+    ? MISSING_VALUE
     : formatter(measurement.value);
 }
 
@@ -256,7 +255,7 @@ function ModelLink({ model }: { model: PopularModelV1 }) {
 
 function RoutePrice({ model }: { model: PopularModelV1 }) {
   if (model.routePricing.availability === "unavailable")
-    return <span className="text-muted-foreground">Unavailable</span>;
+    return <span className="text-muted-foreground">{MISSING_VALUE}</span>;
   return (
     <span className="font-mono">
       {formatPrice(model.routePricing.blendedUsdPerMillion)}
@@ -272,7 +271,7 @@ function AggregateCost({
   winner?: boolean;
 }) {
   if (model.aggregate === null)
-    return <span className="text-muted-foreground">Unavailable</span>;
+    return <span className="text-muted-foreground">{MISSING_VALUE}</span>;
   return (
     <span
       className={cn(
@@ -317,7 +316,7 @@ function ScoreCell({
         winner && "font-semibold text-primary",
       )}
     >
-      <span>{value === null ? "Unavailable" : formatExactNumber(value)}</span>
+      <span>{value === null ? MISSING_VALUE : formatExactNumber(value)}</span>
       {winner ? (
         <span
           aria-label="Among the five highest published values"
@@ -386,8 +385,7 @@ function EvidenceDetails({
             Access
           </dt>
           <dd className="mt-1 font-mono">
-            {model.access ??
-              popularModelsFieldUnavailableLabel(model.accessUnavailableReason)}
+            {model.access ?? MISSING_VALUE}
           </dd>
         </div>
       </dl>
@@ -409,8 +407,8 @@ function EvidenceDetails({
                     </span>
                     <span className="text-muted-foreground">
                       Published rank{" "}
-                      {axis.rank === null ? "unavailable" : axis.rank}
-                      {axis.fieldSize === null ? "" : ` / ${axis.fieldSize}`}
+                      {axis.rank === null ? MISSING_VALUE : formatDisplayNumber(axis.rank)}
+                      {axis.fieldSize === null ? "" : ` / ${formatDisplayNumber(axis.fieldSize)}`}
                     </span>
                   </dt>
                   <dd className="font-mono">{formatNumber(axis.percentile)}</dd>
@@ -535,7 +533,7 @@ function EvidenceDetails({
               <dd className="text-muted-foreground">
                 {model.runtimeUnavailableReason === null
                   ? "Published data is available; no runtime metric is shown."
-                  : "Unavailable"}
+                  : MISSING_VALUE}
               </dd>
             </div>
             <div>
@@ -543,7 +541,7 @@ function EvidenceDetails({
               <dd className="text-muted-foreground">
                 {tasks.length
                   ? `${tasks.length} published task row${tasks.length === 1 ? "" : "s"} shown below.`
-                  : "Unavailable"}
+                  : MISSING_VALUE}
               </dd>
             </div>
             {pricing.availability === "available" &&
@@ -551,7 +549,7 @@ function EvidenceDetails({
               <div>
                 <dt className="font-medium">Context capacity</dt>
                 <dd className="text-muted-foreground">
-                  Unavailable
+                  {MISSING_VALUE}
                 </dd>
               </div>
             ) : null}
@@ -560,7 +558,7 @@ function EvidenceDetails({
               <div>
                 <dt className="font-medium">Maximum output</dt>
                 <dd className="text-muted-foreground">
-                  Unavailable
+                  {MISSING_VALUE}
                 </dd>
               </div>
             ) : null}
@@ -830,11 +828,11 @@ function ModelTable({
                     <span
                       aria-label={
                         model.rank === null
-                          ? "Published rank unavailable"
+                          ? "Published rank -"
                           : `Published rank ${model.rank}`
                       }
                     >
-                      {model.rank ?? "—"}
+                      {model.rank ?? MISSING_VALUE}
                     </span>
                   </td>
                   <td className="align-middle px-2 py-2.5">
@@ -915,13 +913,13 @@ function ModelCards({
               <div className="flex items-start gap-3">
                 <span className="grid min-h-9 min-w-9 place-items-center rounded-xl border border-border bg-muted/60 px-2 font-mono text-xs text-muted-foreground">
                   <span
-                    aria-label={
-                      model.rank === null
-                        ? "Published rank unavailable"
-                        : `Published rank ${model.rank}`
-                    }
-                  >
-                    {model.rank ?? "—"}
+                      aria-label={
+                        model.rank === null
+                          ? "Published rank -"
+                          : `Published rank ${model.rank}`
+                      }
+                    >
+                    {model.rank ?? MISSING_VALUE}
                   </span>
                 </span>
                 <div className="min-w-0 flex-1">
@@ -1389,10 +1387,7 @@ function ComparisonMatrices({
                 <th className="py-2 pr-4 text-left font-medium">Access</th>
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
-                    {model.access ??
-                      popularModelsFieldUnavailableLabel(
-                        model.accessUnavailableReason,
-                      )}
+                    {model.access ?? MISSING_VALUE}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1404,9 +1399,7 @@ function ComparisonMatrices({
                   <MatrixValue key={model.id}>
                     {model.routePricing.availability === "available"
                       ? model.routePricing.route
-                      : popularModelsFieldUnavailableLabel(
-                          model.routePricing.reason,
-                        )}
+                      : MISSING_VALUE}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1482,7 +1475,7 @@ function ComparisonMatrices({
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
                     {model.aggregate === null
-                      ? "Unavailable"
+                      ? MISSING_VALUE
                       : formatEvidenceNumber(
                           model.aggregate.costPerSuccessfulEvaluationUsd,
                           (value) => formatPrice(value),
@@ -1497,7 +1490,7 @@ function ComparisonMatrices({
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
                     {model.aggregate === null
-                      ? "Unavailable"
+                      ? MISSING_VALUE
                       : formatEvidenceNumber(model.aggregate.meanOutputTokens)}
                   </MatrixValue>
                 ))}
@@ -1509,7 +1502,7 @@ function ComparisonMatrices({
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
                     {model.aggregate === null
-                      ? "Unavailable"
+                      ? MISSING_VALUE
                       : model.aggregate.pareto
                         ? "Yes"
                         : "No"}
@@ -1522,10 +1515,7 @@ function ComparisonMatrices({
                 </th>
                 {models.map((model) => (
                   <MatrixValue key={model.id}>
-                    {model.taskEconomics.length ||
-                      popularModelsFieldUnavailableLabel(
-                        model.taskEconomicsUnavailableReason,
-                      )}
+                    {model.taskEconomics.length || MISSING_VALUE}
                   </MatrixValue>
                 ))}
               </tr>
@@ -1535,7 +1525,7 @@ function ComparisonMatrices({
                   <MatrixValue key={model.id}>
                     {model.runtimeUnavailableReason === null
                       ? "Available; not projected"
-                      : "Unavailable"}
+                      : MISSING_VALUE}
                   </MatrixValue>
                 ))}
               </tr>

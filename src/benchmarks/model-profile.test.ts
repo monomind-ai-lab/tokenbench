@@ -96,6 +96,7 @@ function price(overrides: Partial<BenchmarkPriceCheck> = {}): BenchmarkPriceChec
     providerId: 'openai',
     inputUsdPerMillion: 1.25,
     cachedInputUsdPerMillion: 0.125,
+    cacheWriteUsdPerMillion: 0.25,
     outputUsdPerMillion: 10,
     contextWindowTokens: 400_000,
     verificationStatus: 'primary',
@@ -107,6 +108,13 @@ function price(overrides: Partial<BenchmarkPriceCheck> = {}): BenchmarkPriceChec
     inputModalities: ['text', 'image'],
     outputModalities: ['text'],
     supportedParameters: ['tools'],
+    createdAt: '2026-08-01T00:00:00.000Z',
+    expirationDate: '2027-08-01',
+    knowledgeCutoff: '2025-06',
+    tokenizer: 'o200k_base',
+    instructionFormat: 'chatml',
+    isModerated: true,
+    perRequestLimitsJson: '{"max_requests":10}',
     sourceArtifactId: 'openrouter-models',
     ...overrides,
   };
@@ -178,6 +186,19 @@ describe('model profile contracts', () => {
     expect(profile.radar.find((axis) => axis.key === 'missing')?.percentile).toBeNull();
     expect(profile.priceRoutes).toHaveLength(2);
     expect(profile.priceRoutes.some((route) => route.verificationStatus === 'conflict')).toBe(true);
+    expect(profile.priceRoutes[0]).toMatchObject({
+      cacheWriteUsdPerMillion: 0.25,
+      createdAt: '2026-08-01T00:00:00.000Z',
+      expirationDate: '2027-08-01',
+      knowledgeCutoff: '2025-06',
+      tokenizer: 'o200k_base',
+      instructionFormat: 'chatml',
+      isModerated: true,
+      perRequestLimitsJson: '{"max_requests":10}',
+      sourceArtifactId: 'openrouter-models',
+      sourceUrl: 'https://openrouter.ai/models',
+      observedAt: OBSERVED_AT,
+    });
     expect(profile.ledger.every((row) => row.sourceUrl.startsWith('https://'))).toBe(true);
   });
 

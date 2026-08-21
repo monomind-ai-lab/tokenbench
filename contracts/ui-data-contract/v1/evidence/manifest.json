@@ -194,7 +194,7 @@
       }
     },
     {
-      "byteLength": 17190,
+      "byteLength": 18302,
       "classification": "method_response",
       "expected": {
         "errorCode": null,
@@ -248,7 +248,7 @@
       ],
       "path": "contracts/ui-data-contract/v1/evidence/responses/subscription.json",
       "schemaRef": "#/$defs/subscriptionEnvelope",
-      "sha256": "sha256:22a8d604774e4585ea01ea84853d99fc5a0c9245d09b8edb4e42a6f420ed4277",
+      "sha256": "sha256:59f739a8a07787ec699a4aa11675506e3d45c4de28d5e91595826f1a3567f2f9",
       "transport": {
         "expectedHttpStatus": 200,
         "httpMethod": "POST",

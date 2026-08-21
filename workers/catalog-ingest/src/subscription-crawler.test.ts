@@ -115,12 +115,35 @@ describe('subscription crawler', () => {
       sourceId: config.sourceId, providerId: config.providerId, url: config.url, observedAt,
       state: 'changed', statusCode: 200, contentHash: 'sha256:new', etag: null, lastModified: null,
       snapshotKey: 'raw/new.html',
-      priceObservations: [{ displayName: 'ChatGPT Pro', monthlyCostMicroDollars: 250_000_000, currency: 'USD', billingCycle: 'monthly', evidenceLocator: 'JSON-LD' }],
+    priceObservations: [
+      { displayName: 'ChatGPT Pro', monthlyCostMicroDollars: 250_000_000, currency: 'USD', billingCycle: 'monthly', evidenceLocator: 'JSON-LD' },
+      { displayName: 'ChatGPT Pro', monthlyCostMicroDollars: 2_000_000_000, effectiveMonthlyCostMicroDollars: 167_000_000, currency: 'USD', billingCycle: 'annual', evidenceLocator: 'JSON-LD' },
+    ],
     }]);
     expect(merged.source.reviewStatus).toBe('needs_review');
     expect(merged.plans[0].monthlyCostMicroDollars).toBe(250_000_000);
+    expect(merged.plans[0]).toMatchObject({ annualCostMicroDollars: 2_000_000_000, annualEffectiveMonthlyCostMicroDollars: 167_000_000 });
     expect(merged.plans[0].entitlementEvidence.status).toBe('stale');
     expect(merged.plans[0].entitlementEvidence.staleReason).toContain('changed');
+  });
+
+  it('does not join partial plan names when applying changed monthly or annual crawl observations', () => {
+    const catalog = {
+      revision: 'catalog', publishedAt: observedAt, freshness: { status: 'fresh' as const, checkedAt: observedAt },
+      provenance: [source()], plans: [plan()], modelOffers: [],
+    };
+    const [merged] = mergeSubscriptionCrawlIntoSources(catalog, [{
+      sourceId: config.sourceId, providerId: config.providerId, url: config.url, observedAt,
+      state: 'changed', statusCode: 200, contentHash: 'sha256:new', etag: null, lastModified: null,
+      priceObservations: [
+        { displayName: 'ChatGPT Pro Team', monthlyCostMicroDollars: 250_000_000, currency: 'USD', billingCycle: 'monthly', evidenceLocator: 'JSON-LD' },
+        { displayName: 'ChatGPT Pro Team', monthlyCostMicroDollars: 2_000_000_000, effectiveMonthlyCostMicroDollars: 167_000_000, currency: 'USD', billingCycle: 'annual', evidenceLocator: 'JSON-LD' },
+      ],
+    }]);
+
+    expect(merged.plans[0]?.monthlyCostMicroDollars).toBe(200_000_000);
+    expect(merged.plans[0]).not.toHaveProperty('annualCostMicroDollars');
+    expect(merged.plans[0]).not.toHaveProperty('annualEffectiveMonthlyCostMicroDollars');
   });
 
 });

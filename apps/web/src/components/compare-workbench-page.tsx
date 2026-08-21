@@ -16,6 +16,7 @@ import { useState } from "react";
 import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
 
 import { ResultActions, type CsvRow } from "@/components/result-actions";
+import { DataText } from "@/components/untitled-data/data-value";
 import {
   RouteEvidenceCapabilityRadar,
   RouteEvidencePriceCharts,
@@ -61,10 +62,6 @@ function blendedPrice(model: SurfaceModel): number | null {
   return model.inputUsdPerMillion === null || model.outputUsdPerMillion === null
     ? null
     : model.inputUsdPerMillion * 0.75 + model.outputUsdPerMillion * 0.25;
-}
-
-function formattedMeasurement(value: number | null): string {
-  return value === null ? "Unavailable" : formatDisplayNumber(value);
 }
 
 function exportMeasurement(value: number | null): number | null {
@@ -227,6 +224,42 @@ export function CompareWorkbenchPage({
     "max",
   );
   const capability = capabilityRows(models);
+  const decisionDeltas: readonly {
+    label: string;
+    model: SurfaceModel | null;
+    value: number | null;
+    format: (value: number) => string;
+    reason: string;
+  }[] = [
+    {
+      label: "Highest capability",
+      model: bestEvidence,
+      value: bestEvidence?.capabilityScore ?? null,
+      format: formatDisplayNumber,
+      reason: "No published capability value was supplied for the requested models.",
+    },
+    {
+      label: "Lowest blended price",
+      model: cheapest,
+      value: cheapest === null ? null : blendedPrice(cheapest),
+      format: (value) => `${formatRouteSurfacePrice(value)} / 1M`,
+      reason: "No requested model supplied both an input and output price.",
+    },
+    {
+      label: "Largest context",
+      model: largestContext,
+      value: largestContext?.contextWindowTokens ?? null,
+      format: formatRouteSurfaceTokens,
+      reason: "No context window was supplied for the requested models.",
+    },
+    {
+      label: "Fastest observation",
+      model: fastest,
+      value: fastest?.outputTokensPerSecond ?? null,
+      format: (value) => `${formatDisplayNumber(value)} tok/s`,
+      reason: "No throughput observation was supplied for the requested models.",
+    },
+  ];
   const insufficient = !validRequest || requestedIds.length < 2;
 
   return (
@@ -284,7 +317,7 @@ export function CompareWorkbenchPage({
                           {model?.name ?? id}
                         </span>
                         <span className="block text-xs text-muted-foreground">
-                          {model?.provider ?? "Evidence unavailable"}
+                          <DataText reason="No provider evidence was supplied for this requested model." value={model?.provider ?? null} />
                         </span>
                       </span>
                       <Button
@@ -313,7 +346,7 @@ export function CompareWorkbenchPage({
                       />
                       <datalist id="compare-model-options">
                         {available.map((model) => (
-                          <option key={model.id} label={`${model.name} — ${model.provider ?? "Provider unavailable"}`} value={model.id} />
+                          <option key={model.id} label={`${model.name} — ${model.provider ?? "-"}`} title={model.provider === null ? "No provider evidence was supplied for this model." : undefined} value={model.id} />
                         ))}
                       </datalist>
                     </label>
@@ -413,14 +446,17 @@ export function CompareWorkbenchPage({
                         <>
                           <div className="flex items-center gap-2 text-xs text-muted-foreground">
                             <Dot model={model} />
-                            {model.provider ?? "Provider unavailable"}
+                            <DataText reason="No provider was supplied for this model." value={model.provider} />
                           </div>
                           <p className="mt-4 text-lg font-medium">
                             {model.name}
                           </p>
                           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                            {model.access ?? "Access unavailable"} ·{" "}
-                            {model.route ?? "Route unavailable"}
+                            <DataText reason="No access type was supplied for this model." value={model.access} /> ·{" "}
+                            <DataText reason="No selected route was supplied for this model." value={model.route} />
+                          </p>
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Sources: <DataText reason="No source coverage count was supplied for this model." value={model.sourceCoverage?.sourceCount} /> · Freshness: <DataText format={(value) => value === "fresh" ? "Fresh" : "Stale"} reason="No freshness status was supplied for this model." value={model.freshness?.status} />
                           </p>
                           <Link
                             className="mt-4 inline-flex items-center gap-1 text-xs font-medium hover:underline"
@@ -475,11 +511,11 @@ export function CompareWorkbenchPage({
                       <Card key={row.key}>
                         <CardHeader><CardTitle>{row.label}</CardTitle></CardHeader>
                         <CardContent><dl className="grid gap-3 text-sm">
-                          {requestedIds.map((id, index) => {
-                            const selected = slots[index];
-                            const value = selected?.capabilityAxes.find((axis) => axis.key === row.key)?.percentile ?? null;
-                            return <div className="flex justify-between gap-4" key={`${id}-${row.key}`}><dt className="text-muted-foreground">{selected?.name ?? id}</dt><dd className="font-mono">{formattedMeasurement(value)}</dd></div>;
-                          })}
+                        {requestedIds.map((id, index) => {
+                          const selected = slots[index];
+                          const value = selected?.capabilityAxes.find((axis) => axis.key === row.key)?.percentile ?? null;
+                          return <div className="flex justify-between gap-4" key={`${id}-${row.key}`}><dt className="text-muted-foreground">{selected?.name ?? id}</dt><dd className="font-mono"><DataText format={formatDisplayNumber} reason="No published value was supplied for this capability category." value={value} /></dd></div>;
+                        })}
                         </dl></CardContent>
                       </Card>
                     ))}
@@ -510,13 +546,13 @@ export function CompareWorkbenchPage({
                                 className="px-4 py-3 text-right font-mono"
                                 key={`${id}-${index}`}
                               >
-                                {slots[index] === null
-                                  ? "Unavailable"
-                                  : formattedMeasurement(row.values[
-                                      models.indexOf(
-                                        slots[index] as SurfaceModel,
-                                      )
-                                    ] ?? null)}
+                                <DataText
+                                  format={formatDisplayNumber}
+                                  reason="No published value was supplied for this capability category."
+                                  value={slots[index] === null
+                                    ? null
+                                    : row.values[models.indexOf(slots[index] as SurfaceModel)] ?? null}
+                                />
                               </td>
                             ))}
                           </tr>
@@ -574,49 +610,18 @@ export function CompareWorkbenchPage({
                 </h2>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {[
-                  [
-                    "Highest capability",
-                    bestEvidence,
-                    bestEvidence?.capabilityScore === null
-                      ? "Unavailable"
-                      : formattedMeasurement(bestEvidence?.capabilityScore ?? null),
-                  ],
-                  [
-                    "Lowest blended price",
-                    cheapest,
-                    cheapest
-                      ? `${formatRouteSurfacePrice(blendedPrice(cheapest))} / 1M`
-                      : "Unavailable",
-                  ],
-                  [
-                    "Largest context",
-                    largestContext,
-                    largestContext
-                      ? formatRouteSurfaceTokens(
-                          largestContext.contextWindowTokens,
-                        )
-                      : "Unavailable",
-                  ],
-                  [
-                    "Fastest observation",
-                    fastest,
-                    fastest?.outputTokensPerSecond == null
-                      ? "Unavailable"
-                      : `${formattedMeasurement(fastest?.outputTokensPerSecond ?? null)} tok/s`,
-                  ],
-                ].map(([label, model, value]) => (
-                  <Card key={String(label)}>
+                {decisionDeltas.map(({ label, model, value, format, reason }) => (
+                  <Card key={label}>
                     <CardHeader>
                       <p className="text-xs text-muted-foreground">
-                        {label as string}
+                        {label}
                       </p>
                       <CardTitle className="mt-2">
-                        {(model as SurfaceModel | null)?.name ?? "Unavailable"}
+                        <DataText reason={`${label} is not available because no qualifying requested model was supplied.`} value={model?.name ?? null} />
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="font-mono text-xl">{value as string}</p>
+                      <p className="font-mono text-xl"><DataText format={format} reason={reason} value={value} /></p>
                     </CardContent>
                   </Card>
                 ))}
@@ -629,11 +634,11 @@ export function CompareWorkbenchPage({
                       <CardHeader><CardTitle>{model?.name ?? id}</CardTitle></CardHeader>
                       <CardContent><dl className="grid gap-3 text-sm">
                         {[
-                          ["Capability", formattedMeasurement(model?.capabilityScore ?? null)],
-                          ["Blended / 1M", model ? formatRouteSurfacePrice(blendedPrice(model)) : "Unavailable"],
-                          ["Throughput", model?.outputTokensPerSecond == null ? "Unavailable" : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`],
-                          ["Context", model ? formatRouteSurfaceTokens(model.contextWindowTokens) : "Unavailable"],
-                        ].map(([label, value]) => <div className="flex justify-between gap-4" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-mono">{value}</dd></div>)}
+                          { label: "Capability", value: model?.capabilityScore ?? null, format: formatDisplayNumber, reason: "No published capability value was supplied." },
+                          { label: "Blended / 1M", value: model === null ? null : blendedPrice(model), format: formatRouteSurfacePrice, reason: "No requested model supplied both input and output prices." },
+                          { label: "Throughput", value: model?.outputTokensPerSecond ?? null, format: (value: number) => `${formatDisplayNumber(value)} tok/s`, reason: "No throughput observation was supplied." },
+                          { label: "Context", value: model?.contextWindowTokens ?? null, format: formatRouteSurfaceTokens, reason: "No context window was supplied." },
+                        ].map(({ label, value, format, reason }) => <div className="flex justify-between gap-4" key={label}><dt className="text-muted-foreground">{label}</dt><dd className="text-right font-mono"><DataText format={format} reason={reason} value={value} /></dd></div>)}
                       </dl></CardContent>
                     </Card>
                   );
@@ -662,25 +667,16 @@ export function CompareWorkbenchPage({
                             {model?.name ?? id}
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
-                            {formattedMeasurement(model?.capabilityScore ?? null)}
+                            <DataText format={formatDisplayNumber} reason="No published capability value was supplied." value={model?.capabilityScore ?? null} />
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
-                            {model
-                              ? formatRouteSurfacePrice(blendedPrice(model))
-                              : "Unavailable"}
+                            <DataText format={formatRouteSurfacePrice} reason="No requested model supplied both input and output prices." value={model === null ? null : blendedPrice(model)} />
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
-                            {model?.outputTokensPerSecond === null ||
-                            model === null
-                              ? "Unavailable"
-                              : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`}
+                            <DataText format={(value) => `${formatDisplayNumber(value)} tok/s`} reason="No throughput observation was supplied." value={model?.outputTokensPerSecond ?? null} />
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
-                            {model
-                              ? formatRouteSurfaceTokens(
-                                  model.contextWindowTokens,
-                                )
-                              : "Unavailable"}
+                            <DataText format={formatRouteSurfaceTokens} reason="No context window was supplied." value={model?.contextWindowTokens ?? null} />
                           </td>
                         </tr>
                       );

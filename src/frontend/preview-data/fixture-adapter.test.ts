@@ -116,12 +116,13 @@ describe('fixtureAdapter', () => {
       provenance: { label: 'Illustrative prototype data' },
       value: {
         radar: expect.arrayContaining([
-          expect.objectContaining({ key: 'agentic', percentile: 92 }),
-          expect.objectContaining({ key: 'coding', percentile: 94 }),
           expect.objectContaining({ key: 'reasoning', percentile: 90 }),
-          expect.objectContaining({ key: 'math', percentile: 88 }),
-          expect.objectContaining({ key: 'multimodal', percentile: 89 }),
-          expect.objectContaining({ key: 'throughput', percentile: 68.33333333333333 }),
+          expect.objectContaining({ key: 'coding', percentile: 94 }),
+          expect.objectContaining({ key: 'agentic-coding', percentile: 92 }),
+          expect.objectContaining({ key: 'mathematics', percentile: 88 }),
+          expect.objectContaining({ key: 'data-analysis', percentile: 89 }),
+          expect.objectContaining({ key: 'language', percentile: 89.5 }),
+          expect.objectContaining({ key: 'instruction-following', percentile: 91 }),
         ]),
       },
     });

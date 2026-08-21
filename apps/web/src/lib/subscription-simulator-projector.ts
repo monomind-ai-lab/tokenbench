@@ -1,4 +1,7 @@
-import type { AcceptedUiDataContractV1 } from "@tokenbench/frontend/preview-data/contract-v1";
+import type {
+  AcceptedSourceAttribution,
+  AcceptedUiDataContractV1,
+} from "@tokenbench/frontend/preview-data/contract-v1";
 
 import {
   SUBSCRIPTION_PROVIDERS,
@@ -56,7 +59,21 @@ type StrictPlan = Readonly<{
   providerId: string;
   displayName: string;
   monthlyCostMicroDollars: number;
+  annualCostMicroDollars: number | null;
+  annualEffectiveMonthlyCostMicroDollars: number | null;
+  entitlement: StrictEntitlementReceipt | null;
   supportedModelSlugs: readonly string[];
+  sourceRefs: readonly string[];
+}>;
+
+type StrictEntitlementReceipt = Readonly<{
+  evidenceStatus: "verified" | "projected" | "dynamic_unknown" | "stale";
+  boundType: "hard_max" | "practical_upper" | "outer_ceiling" | "unknown";
+  usageNote: string | null;
+  dimensions: readonly SubscriptionEntitlementDimensionView[];
+  staleReason: string | null;
+  lastVerifiedAt: string;
+  sourceRefs: readonly string[];
 }>;
 
 type StrictRoute = Readonly<{
@@ -122,7 +139,43 @@ export type SubscriptionPlanView = Readonly<{
   id: string;
   displayName: string | null;
   monthlyUsd: number | null;
+  /** Exact provider-published annual checkout amount; never derived. */
+  annualUsd: number | null;
+  /** Exact provider-displayed annual effective monthly amount; never derived. */
+  annualEffectiveMonthlyUsd: number | null;
+  entitlement: SubscriptionEntitlementView | null;
+  sourceRefs: readonly string[];
   limit: SubscriptionLimitView;
+}>;
+
+export type SubscriptionEntitlementDimensionView = Readonly<{
+  metric: string;
+  minimum: number | null;
+  maximum: number | null;
+  unit: string;
+  window: string;
+  resetRule: string | null;
+  modelId: string | null;
+  feature: string | null;
+  sharedPoolId: string | null;
+}>;
+
+export type SubscriptionEntitlementView = Readonly<{
+  evidenceStatus: "verified" | "projected" | "dynamic_unknown" | "stale";
+  boundType: "hard_max" | "practical_upper" | "outer_ceiling" | "unknown";
+  usageNote: string | null;
+  dimensions: readonly SubscriptionEntitlementDimensionView[];
+  staleReason: string | null;
+  lastVerifiedAt: string | null;
+  sourceRefs: readonly string[];
+}>;
+
+export type SubscriptionSourceReceipt = Readonly<{
+  sourceRef: string;
+  label: string;
+  url: string;
+  observedAt: string;
+  effectiveAt: string | null;
 }>;
 
 export type SubscriptionProviderView = Readonly<{
@@ -177,7 +230,19 @@ export type SubscriptionSimulatorCatalog = Readonly<{
   modelSelectionReason: string;
   calculation: SubscriptionCalculationView | null;
   calculationReason: string | null;
+  /** Full source receipts keyed by plan/entitlement sourceRefs. */
+  sources: readonly SubscriptionSourceReceipt[];
 }>;
+
+function sourceReceipt(source: AcceptedSourceAttribution): SubscriptionSourceReceipt {
+  return {
+    sourceRef: source.sourceRef,
+    label: source.label,
+    url: source.url,
+    observedAt: source.observedAt,
+    effectiveAt: source.effectiveAt,
+  };
+}
 
 function record(value: unknown): JsonRecord | null {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as JsonRecord : null;
@@ -207,6 +272,54 @@ function strings(value: unknown): readonly string[] | null {
   return values.every((item): item is string => item !== null) ? values : null;
 }
 
+function evidenceNumber(value: unknown): number | null {
+  const candidate = record(value);
+  if (candidate === null) return null;
+  if (candidate.availability === "unavailable") return null;
+  return candidate.availability === "available" ? finite(candidate.value) : null;
+}
+
+function nullableText(value: unknown): string | null | undefined {
+  return value === null ? null : string(value) ?? undefined;
+}
+
+function entitlementDimension(value: unknown): SubscriptionEntitlementDimensionView | null {
+  const candidate = record(value);
+  const metric = string(candidate?.metric);
+  const minimum = nullableFinite(candidate?.minimum);
+  const maximum = nullableFinite(candidate?.maximum);
+  const unit = string(candidate?.unit);
+  const window = string(candidate?.window);
+  const resetRule = nullableText(candidate?.resetRule);
+  const modelId = nullableText(candidate?.modelId);
+  const feature = nullableText(candidate?.feature);
+  const sharedPoolId = nullableText(candidate?.sharedPoolId);
+  return metric === null || minimum === undefined || maximum === undefined || unit === null || window === null
+    || resetRule === undefined || modelId === undefined || feature === undefined || sharedPoolId === undefined
+    ? null
+    : { metric, minimum, maximum, unit, window, resetRule, modelId, feature, sharedPoolId };
+}
+
+/** Newer strict plan receipts retain verified entitlement facts next to their plan price. */
+function planEntitlement(value: unknown): StrictEntitlementReceipt | null {
+  const candidate = record(value);
+  if (candidate === null) return null;
+  const evidenceStatus = candidate.evidenceStatus;
+  const boundType = candidate.boundType;
+  const usageNote = nullableText(candidate.usageNote);
+  const staleReason = nullableText(candidate.staleReason);
+  const lastVerifiedAt = string(candidate.lastVerifiedAt);
+  const sourceRefs = strings(candidate.sourceRefs);
+  const dimensions = records(candidate.dimensions)?.map(entitlementDimension);
+  if (
+    (evidenceStatus !== "verified" && evidenceStatus !== "projected" && evidenceStatus !== "dynamic_unknown" && evidenceStatus !== "stale")
+    || (boundType !== "hard_max" && boundType !== "practical_upper" && boundType !== "outer_ceiling" && boundType !== "unknown")
+    || usageNote === undefined || staleReason === undefined || lastVerifiedAt === null || sourceRefs === null || dimensions === undefined
+    || !dimensions.every((dimension): dimension is SubscriptionEntitlementDimensionView => dimension !== null)
+  ) return null;
+  return { evidenceStatus, boundType, usageNote, dimensions, staleReason, lastVerifiedAt, sourceRefs };
+}
+
 function plans(value: unknown): readonly StrictPlan[] | null {
   const candidates = records(value);
   if (candidates === null) return null;
@@ -215,10 +328,29 @@ function plans(value: unknown): readonly StrictPlan[] | null {
     const providerId = string(candidate.providerId);
     const displayName = string(candidate.displayName);
     const monthlyCostMicroDollars = finite(candidate.monthlyCostMicroDollars);
-    const supportedModelSlugs = strings(candidate.supportedModelSlugs);
-    return planId === null || providerId === null || displayName === null || monthlyCostMicroDollars === null || supportedModelSlugs === null
+    const annualCostMicroDollars = candidate.annualCostMicroDollars === undefined
       ? null
-      : { planId, providerId, displayName, monthlyCostMicroDollars, supportedModelSlugs };
+      : evidenceNumber(candidate.annualCostMicroDollars);
+    const annualEffectiveMonthlyCostMicroDollars = candidate.annualEffectiveMonthlyCostMicroDollars === undefined
+      ? null
+      : evidenceNumber(candidate.annualEffectiveMonthlyCostMicroDollars);
+    const entitlement = candidate.entitlement === undefined ? null : planEntitlement(candidate.entitlement);
+    const supportedModelSlugs = strings(candidate.supportedModelSlugs);
+    const sourceRefs = candidate.sourceRefs === undefined ? [] : strings(candidate.sourceRefs);
+    return planId === null || providerId === null || displayName === null || monthlyCostMicroDollars === null || supportedModelSlugs === null || sourceRefs === null
+      || (candidate.entitlement !== undefined && entitlement === null)
+      ? null
+      : {
+        planId,
+        providerId,
+        displayName,
+        monthlyCostMicroDollars,
+        annualCostMicroDollars,
+        annualEffectiveMonthlyCostMicroDollars,
+        entitlement,
+        supportedModelSlugs,
+        sourceRefs,
+      };
   });
   return projected.every((item): item is StrictPlan => item !== null) ? projected : null;
 }
@@ -443,6 +575,34 @@ function projectLimit(entitlementFact: StrictEntitlement | undefined): Subscript
   };
 }
 
+function projectPlanReceiptLimit(receipt: StrictEntitlementReceipt): SubscriptionLimitView {
+  if (receipt.evidenceStatus === "dynamic_unknown" || receipt.evidenceStatus === "stale" || receipt.boundType === "unknown") {
+    return {
+      state: "variable",
+      label: "Variable — provider-managed",
+      detail: receipt.staleReason ?? receipt.usageNote,
+    };
+  }
+  const dimension = receipt.dimensions.length === 1 ? receipt.dimensions[0] : null;
+  if (dimension === null || dimension.metric === "credits") {
+    return unavailableLimit("No comparable published capacity is available for this plan.");
+  }
+  const amount = dimension.minimum !== null && dimension.maximum !== null
+    ? dimension.minimum === dimension.maximum
+      ? dimension.minimum.toLocaleString()
+      : `${dimension.minimum.toLocaleString()}–${dimension.maximum.toLocaleString()}`
+    : dimension.maximum !== null
+      ? `Up to ${dimension.maximum.toLocaleString()}`
+      : dimension.minimum !== null
+        ? `At least ${dimension.minimum.toLocaleString()}`
+        : null;
+  if (amount === null) return unavailableLimit("No comparable published capacity is available for this plan.");
+  const label = `${amount} ${dimension.unit} / ${dimension.window.replaceAll("_", " ")}`;
+  return receipt.evidenceStatus === "verified" && receipt.boundType === "hard_max"
+    ? { state: "available", label, detail: receipt.usageNote }
+    : { state: "variable", label: `Published — ${label}`, detail: receipt.usageNote };
+}
+
 function projectCalculation(
   strictCalculation: StrictCalculation,
   modelShares: Readonly<Record<string, number>>,
@@ -483,7 +643,15 @@ function providerViews(data: StrictSubscriptionData | null, fallbackReason: stri
         id: plan.planId,
         displayName: plan.displayName,
         monthlyUsd: plan.monthlyCostMicroDollars / 1_000_000,
-        limit: projectLimit(data.entitlementProjections.find((entitlementFact) => entitlementFact.planId === plan.planId)),
+        annualUsd: plan.annualCostMicroDollars === null ? null : plan.annualCostMicroDollars / 1_000_000,
+        annualEffectiveMonthlyUsd: plan.annualEffectiveMonthlyCostMicroDollars === null
+          ? null
+          : plan.annualEffectiveMonthlyCostMicroDollars / 1_000_000,
+        entitlement: plan.entitlement,
+        sourceRefs: plan.sourceRefs,
+        limit: plan.entitlement === null
+          ? projectLimit(data.entitlementProjections.find((entitlementFact) => entitlementFact.planId === plan.planId))
+          : projectPlanReceiptLimit(plan.entitlement),
       })) ?? [];
     return { ...provider, plans: providerPlans, unavailableReason: providerPlans.length === 0 ? fallbackReason : null };
   });
@@ -573,6 +741,7 @@ export function projectSubscriptionCatalog(
         : "Only models with an exact reviewed plan-to-route binding are selectable.",
     calculation: projectedCalculation,
     calculationReason,
+    sources: envelope?.sources.map(sourceReceipt) ?? [],
   };
 }
 

@@ -3,10 +3,17 @@ import type {
   EvidenceValue,
   LifecycleData,
   LifecycleModel,
+  ModelBenchmarkFacts,
+  ModelDataFreshness,
   ModelDirectoryData,
+  ModelLifecycle,
+  ModelSourceCoverage,
+  ModelSpecifications,
   PreviewModel,
   PreviewModelProfileData,
   Provenance,
+  RouteFact,
+  RoutePricing,
   UiDataContractV1,
 } from "./preview-data/contracts";
 
@@ -46,6 +53,14 @@ export type SurfaceModel = Readonly<{
   costUsdPerSuccessfulTask: number | null;
   workload: string | null;
   color: string;
+  /** Additive evidence-rich fields for profile, comparison, and model-card UI. */
+  freshness?: ModelDataFreshness;
+  sourceCoverage?: ModelSourceCoverage;
+  benchmark?: ModelBenchmarkFacts;
+  specifications?: ModelSpecifications;
+  selectedRoute?: EvidenceValue<RoutePricing>;
+  routes?: readonly RouteFact[];
+  lifecycle?: EvidenceValue<ModelLifecycle>;
 }>;
 
 export type SurfaceLifecycleRow = Readonly<{
@@ -96,8 +111,8 @@ export function parseSurfaceComparisonQuery(
   };
 }
 
-function value<T>(evidence: EvidenceValue<T>): T | null {
-  return evidence.availability === "available" ? evidence.value : null;
+function value<T>(evidence: EvidenceValue<T> | undefined): T | null {
+  return evidence?.availability === "available" ? evidence.value : null;
 }
 
 function mode(provenance: readonly Provenance[]): ModelSurfaceMode {
@@ -159,6 +174,7 @@ export function projectSurfaceModel(model: PreviewModel): SurfaceModel {
   const lifecycle = value(model.lifecycle);
   const taskEconomics = value(model.taskEconomics);
   const benchmark = value(model.benchmark);
+  const profileFacts = value(model.profileFacts);
 
   return {
     id: identity?.slug ?? model.id,
@@ -199,6 +215,15 @@ export function projectSurfaceModel(model: PreviewModel): SurfaceModel {
     costUsdPerSuccessfulTask: taskEconomics?.costUsdPerSuccessfulTask ?? null,
     workload: taskEconomics?.workload ?? null,
     color: modelSurfaceColor(identity?.slug ?? model.id),
+    ...(profileFacts === null ? {} : {
+      freshness: profileFacts.freshness,
+      sourceCoverage: profileFacts.sourceCoverage,
+      benchmark: profileFacts.benchmark,
+      specifications: profileFacts.specifications,
+      routes: profileFacts.routes,
+    }),
+    selectedRoute: model.routePricing,
+    lifecycle: model.lifecycle,
   };
 }
 

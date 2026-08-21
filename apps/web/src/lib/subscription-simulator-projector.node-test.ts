@@ -109,6 +109,54 @@ test("projects only the fixed seven-provider scope and leaves missing slots unav
   assert.equal(catalog.providers.some((provider) => provider.plans.some((plan) => plan.id === "out-of-scope")), false);
 });
 
+test("retains source-published annual price and entitlement verification without deriving savings", () => {
+  const envelope = catalogEnvelope();
+  const data = envelope.data as Record<string, unknown>;
+  const plans = (data.plans as Array<Record<string, unknown>>).map((plan) => plan.planId !== "openai-reviewed"
+    ? plan
+    : {
+      ...plan,
+      annualCostMicroDollars: { availability: "available", value: 200_000_000 },
+      annualEffectiveMonthlyCostMicroDollars: { availability: "available", value: 16_666_667 },
+      entitlement: {
+        evidenceStatus: "verified",
+        boundType: "hard_max",
+        usageNote: "Provider-published annual plan receipt.",
+        dimensions: [{
+          metric: "messages", minimum: null, maximum: 80, unit: "messages",
+          window: "rolling_5h", resetRule: "Rolling", modelId: null, feature: null, sharedPoolId: null,
+        }],
+        staleReason: null,
+        lastVerifiedAt: "2026-08-21T00:00:00.000Z",
+        sourceRefs: ["openai-source"],
+      },
+    });
+  const catalog = projectSubscriptionCatalog({ ...envelope, data: { ...data, plans } } as StrictSubscriptionEnvelope, "production");
+  const plan = catalog.providers.find((provider) => provider.id === "openai")?.plans[0];
+
+  assert.deepEqual(plan, {
+    id: "openai-reviewed",
+    displayName: "Reviewed OpenAI plan",
+    monthlyUsd: 20,
+    annualUsd: 200,
+    annualEffectiveMonthlyUsd: 16.666667,
+    entitlement: {
+      evidenceStatus: "verified",
+      boundType: "hard_max",
+      usageNote: "Provider-published annual plan receipt.",
+      dimensions: [{
+        metric: "messages", minimum: null, maximum: 80, unit: "messages",
+        window: "rolling_5h", resetRule: "Rolling", modelId: null, feature: null, sharedPoolId: null,
+      }],
+      staleReason: null,
+      lastVerifiedAt: "2026-08-21T00:00:00.000Z",
+      sourceRefs: ["openai-source"],
+    },
+    sourceRefs: ["openai-source"],
+    limit: { state: "available", label: "Up to 80 messages / rolling 5h", detail: "Provider-published annual plan receipt." },
+  });
+});
+
 test("accepts only an exact echoed subscription request", () => {
   const envelope = catalogEnvelope();
   assert.equal(subscriptionRequestMatches(envelope, { operation: "catalog" }), true);
