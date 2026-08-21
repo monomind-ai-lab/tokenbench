@@ -184,7 +184,7 @@ export function ArticlesIndexPage({ initialChannel }: { initialChannel: Channel 
                   <CardFooter className="mt-auto justify-between bg-muted/40">
                     <span className="font-mono text-[10px] text-muted-foreground">{prototype ? "Concept only" : entry.topic}</span>
                     {prototype ? (
-                      <a className="group/cta inline-flex min-h-11 items-center gap-1 text-xs font-medium text-primary hover:underline" href={href}>
+                      <a className="group/cta inline-flex min-h-11 items-center gap-1 text-xs font-medium text-brand-secondary hover:underline" href={href}>
                         Review disclosure <ArrowRight className="size-3.5 transition-transform group-hover/cta:translate-x-0.5" />
                       </a>
                     ) : (
