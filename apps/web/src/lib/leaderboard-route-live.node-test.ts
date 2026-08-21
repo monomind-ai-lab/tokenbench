@@ -18,6 +18,7 @@ import type { LeaderboardKey } from "@tokenbench/routing/leaderboard-routes";
 import {
   LEADERBOARD_ROUTE_LIVE_LIMIT,
   leaderboardRouteLiveEndpoint,
+  mergeLeaderboardRouteLiveEnvelopes,
   parseLeaderboardRouteLiveEnvelope,
   projectLeaderboardRouteLiveEnvelope,
   type LeaderboardRouteApiEnvelope,
@@ -301,7 +302,7 @@ test("published null rank and route facts remain unavailable rather than becomin
   );
 });
 
-test("a malformed or incomplete per-key response is rejected", () => {
+test("validated cursor pages merge into one complete route result", () => {
   const sourceMetric = metric("benchlm:category:coding", "coding");
   const response = envelope("llm-coding", "balanced", [{
     model: model(),
@@ -313,7 +314,7 @@ test("a malformed or incomplete per-key response is rejected", () => {
     sourceRank: 2,
     onValueFrontier: false,
   }]);
-  const malformed = {
+  const firstPage = {
     ...response,
     data: {
       ...response.data,
@@ -324,9 +325,27 @@ test("a malformed or incomplete per-key response is rejected", () => {
       },
     },
   };
-
-  assert.throws(
-    () => parseLeaderboardRouteLiveEnvelope(malformed, "llm-coding", "balanced"),
-    /not a complete leaderboard page/,
-  );
+  const secondMetric = metric("benchlm:category:coding", "coding", { modelKey: "model-b", sourceModelId: "model-b", rank: 3 });
+  const secondPage = envelope("llm-coding", "balanced", [{
+    model: model({ modelKey: "model-b", slug: "model-b", name: "Model B", sourceModelId: "model-b" }),
+    metric: secondMetric,
+    metrics: [secondMetric],
+    primaryPrice: null,
+    blendedCostPerMillion: null,
+    contextWindowTokens: null,
+    sourceRank: 3,
+    onValueFrontier: false,
+  }]);
+  const merged = mergeLeaderboardRouteLiveEnvelopes([
+    parseLeaderboardRouteLiveEnvelope(firstPage, "llm-coding", "balanced"),
+    parseLeaderboardRouteLiveEnvelope({
+      ...secondPage,
+      attribution: [{ ...source("benchlm"), url: "https://example.com/benchlm?page=2" }],
+      data: { ...secondPage.data, pagination: { ...secondPage.data.pagination, total: 2 } },
+    }, "llm-coding", "balanced"),
+  ]);
+  assert.equal(leaderboardRouteLiveEndpoint("llm-coding", "balanced", "opaque-cursor"), "/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=200&cursor=opaque-cursor");
+  assert.equal(merged.data.entries.length, 2);
+  assert.equal(merged.data.pagination.nextCursor, null);
+  assert.equal(merged.attribution.length, 2);
 });

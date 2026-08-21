@@ -283,7 +283,7 @@ function artifactIdentity(sourceId: BenchmarkSourceId, artifactId: string): stri
 async function sha256Digest(bytes: Uint8Array): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) fail('Web Crypto SHA-256 is unavailable');
-  const digest = await subtle.digest('SHA-256', bytes);
+  const digest = await subtle.digest('SHA-256', Uint8Array.from(bytes).buffer);
   const hex = [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');

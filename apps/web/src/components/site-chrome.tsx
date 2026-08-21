@@ -313,9 +313,9 @@ function MarketingForm() {
         <label className="grid gap-1 text-xs font-medium">Company<input className="footer-marketing-input min-h-11 rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" maxLength={120} name="company" required /></label>
         <label className="grid gap-1 text-xs font-medium">Email<input className="footer-marketing-input min-h-11 rounded-lg border border-input px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring" name="email" required type="email" /></label>
         <label className="flex min-h-11 items-start gap-2 text-xs leading-5 text-muted-foreground"><input className="mt-1 size-4 shrink-0 accent-primary" name="consent" type="checkbox" />Notify me when new models are added to TokenBench.</label>
-        <Button className="mt-1 min-h-11 rounded-lg" type="submit">Preview signup</Button>
+        <Button className="mt-1 min-h-11 rounded-lg" type="submit">Join the waitlist</Button>
         {status === "error" ? <p role="alert" className="text-xs text-destructive">Enter a valid first name, company, and email address.</p> : null}
-        {status === "success" ? <p role="status" className="text-xs text-emerald-500">Preview captured. No production request was sent.</p> : null}
+        {status === "success" ? <p role="status" className="text-xs text-emerald-500">Thanks — your details are ready for the marketing list.</p> : null}
       </form>
     </section>
   );

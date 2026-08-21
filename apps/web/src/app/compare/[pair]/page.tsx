@@ -34,10 +34,10 @@ export default async function RouteEvidencePairRoute({
   }
 
   const snapshot = await loadRouteEvidenceComparison([pair.left, pair.right]);
-  if (snapshot.envelope === null || snapshot.mode === "unconfigured") {
+  if (snapshot.envelope === null || snapshot.mode === "unconfigured" || snapshot.envelope.status === "unavailable" || snapshot.envelope.data === null) {
     return (
       <RouteEvidenceUnavailableState
-        detail={snapshot.error ?? "No evidence response could be loaded for this requested ordered pair."}
+        detail={snapshot.error ?? snapshot.envelope?.reason ?? "No evidence response could be loaded for this requested ordered pair."}
         heading="Pair evidence is not configured"
       />
     );

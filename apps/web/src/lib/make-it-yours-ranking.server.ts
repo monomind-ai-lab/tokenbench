@@ -8,9 +8,11 @@ import {
   type UiDataContractV1,
 } from "@tokenbench/frontend/preview-data/contracts";
 import { createEvidencePreviewDataComposition } from "@tokenbench/frontend/preview-data/composition-evidence";
+import { mergePublishedRankingDirectorySource } from "@tokenbench/frontend/published-model-compatibility";
 
 import { projectMakeItYoursModels } from "@/lib/make-it-yours-projector";
-import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
+import { loadCurrentLiveBenchRanking } from "@/lib/livebench-upstream.server";
+import { loadPublishedModelDirectory } from "@/lib/published-compatibility.server";
 
 export type MakeItYoursDataMode = "evidence" | "production" | "unconfigured";
 
@@ -22,7 +24,7 @@ export interface MakeItYoursRankingSnapshot {
 
 /**
  * The production producer currently owns the published leaderboard contract,
- * not a stable six-axis custom-ranking dimension contract. This request
+ * not a stable custom-ranking POST contract. This request
  * deliberately omits fixture-only dimension revisions and weights so the HTTP
  * transport selects the valid leaderboard GET operation.
  */
@@ -57,13 +59,13 @@ function producerCapabilityUnavailable(
 ): string | null {
   const projection = projectMakeItYoursModels(envelope);
   if (projection.models.length > 0 || projection.unavailableCount === 0) return null;
-  return "Producer capability unavailable: the published leaderboard response does not include the complete six-axis, route-price, and runtime facts required for client-side re-ranking.";
+  return "Producer capability unavailable: the published rows do not include every category score and aggregate evaluation-cost fact required for client-side re-ranking.";
 }
 
 /**
  * Evidence keeps its retained exact custom request. Production requests only
  * source-published leaderboard candidates, then the workbench applies its
- * six-axis weights and filters locally to complete candidate facts.
+ * published category weights and filters locally to complete candidate facts.
  */
 export async function loadMakeItYoursRankingFromAdapter(
   mode: "evidence" | "production",
@@ -124,10 +126,16 @@ export async function loadMakeItYoursRanking(): Promise<MakeItYoursRankingSnapsh
   }
 
   try {
-    return loadMakeItYoursRankingFromAdapter(
-      "production",
-      createProductionUiDataAdapter(),
-    );
+    const [benchmark, directory] = await Promise.all([
+      loadCurrentLiveBenchRanking(),
+      loadPublishedModelDirectory(100).catch(() => null),
+    ]);
+    const envelope = mergePublishedRankingDirectorySource(benchmark, directory);
+    return {
+      mode: "production",
+      envelope,
+      error: producerCapabilityUnavailable(envelope),
+    };
   } catch {
     return {
       mode: "production",

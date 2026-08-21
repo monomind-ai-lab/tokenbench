@@ -5,6 +5,7 @@ import type { LeaderboardKey } from "@tokenbench/routing/leaderboard-routes";
 
 import {
   leaderboardRouteLiveEndpoint,
+  mergeLeaderboardRouteLiveEnvelopes,
   parseLeaderboardRouteLiveEnvelope,
   projectLeaderboardRouteLiveEnvelope,
 } from "@/lib/leaderboard-route-live";
@@ -50,27 +51,29 @@ export async function loadLeaderboardRouteLiveSnapshot(
   }
 
   try {
-    const endpoint = new URL(
-      leaderboardRouteLiveEndpoint(key, profile),
-      productionBaseUrl(process.env.TOKENBENCH_UI_DATA_BASE_URL),
-    );
-    const response = await fetch(endpoint, {
-      cache: "no-store",
-      headers: { accept: "application/json" },
-    });
-    if (response.status === 404 || response.status === 503) {
-      return unavailable("production", "No published leaderboard projection is available for this route.");
+    const baseUrl = productionBaseUrl(process.env.TOKENBENCH_UI_DATA_BASE_URL);
+    const pages = [];
+    let cursor: string | null = null;
+    for (let pageIndex = 0; pageIndex < 32; pageIndex += 1) {
+      const endpoint = new URL(leaderboardRouteLiveEndpoint(key, profile, cursor), baseUrl);
+      const response = await fetch(endpoint, { cache: "no-store", headers: { accept: "application/json" } });
+      if (response.status === 404 || response.status === 503) {
+        return unavailable("production", "No published leaderboard projection is available for this route.");
+      }
+      if (!response.ok) return unavailable("production", `The published leaderboard request failed (${response.status}).`);
+      let candidate: unknown;
+      try {
+        candidate = await response.json();
+      } catch {
+        return unavailable("production", "The published leaderboard response was not valid JSON.");
+      }
+      const page = parseLeaderboardRouteLiveEnvelope(candidate, key, profile);
+      pages.push(page);
+      cursor = page.data.pagination.nextCursor;
+      if (cursor === null) break;
     }
-    if (!response.ok) {
-      return unavailable("production", `The published leaderboard request failed (${response.status}).`);
-    }
-    let candidate: unknown;
-    try {
-      candidate = await response.json();
-    } catch {
-      return unavailable("production", "The published leaderboard response was not valid JSON.");
-    }
-    const envelope = parseLeaderboardRouteLiveEnvelope(candidate, key, profile);
+    if (cursor !== null) return unavailable("production", "The published leaderboard exceeded the bounded pagination limit.");
+    const envelope = mergeLeaderboardRouteLiveEnvelopes(pages);
     return {
       mode: "production",
       envelope: projectLeaderboardRouteLiveEnvelope(envelope),

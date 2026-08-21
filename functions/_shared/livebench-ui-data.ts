@@ -298,27 +298,31 @@ export function buildLiveBenchLeaderboardData(input: {
         questionCount: available(taskEconomics.questionCount, sourceRef),
         evaluationCostUsd: available(taskEconomics.evaluationCostUsd, sourceRef),
         inputPriceUsdPerMillion: taskEconomics.inputPriceUsdPerMillion === null
-          ? unavailable('LiveBench does not provide this input price.', sourceRef)
+          ? unavailable('The benchmark release does not provide this input price.', sourceRef)
           : available(taskEconomics.inputPriceUsdPerMillion, sourceRef),
         outputPriceUsdPerMillion: taskEconomics.outputPriceUsdPerMillion === null
-          ? unavailable('LiveBench does not provide this output price.', sourceRef)
+          ? unavailable('The benchmark release does not provide this output price.', sourceRef)
           : available(taskEconomics.outputPriceUsdPerMillion, sourceRef),
         equivalentSuccesses: available(equivalentSuccesses, sourceRef),
         costPerSuccessfulEvaluationUsd: equivalentSuccesses === 0
           ? unavailable('This task has no equivalent successful evaluations.', sourceRef)
           : available(taskEconomics.evaluationCostUsd / equivalentSuccesses, sourceRef),
         meanInputTokens: taskEconomics.meanInputTokens === null
-          ? unavailable('LiveBench does not provide mean input tokens.', sourceRef)
+          ? unavailable('The benchmark release does not provide mean input tokens.', sourceRef)
           : available(Math.round(taskEconomics.meanInputTokens), sourceRef),
         meanOutputTokens: taskEconomics.meanOutputTokens === null
-          ? unavailable('LiveBench does not provide mean output tokens.', sourceRef)
+          ? unavailable('The benchmark release does not provide mean output tokens.', sourceRef)
           : available(Math.round(taskEconomics.meanOutputTokens), sourceRef),
       };
     });
     const totalCost = tasks.reduce((sum, task) => sum + (task.evaluationCostUsd.availability === 'available' ? task.evaluationCostUsd.value : 0), 0);
     const totalEquivalentSuccesses = tasks.reduce((sum, task) => sum + (task.equivalentSuccesses.availability === 'available' ? task.equivalentSuccesses.value : 0), 0);
-    const outputFacts = tasks.filter((task) => task.meanOutputTokens.availability === 'available');
-    const outputQuestionCount = outputFacts.reduce((sum, task) => sum + (task.questionCount.availability === 'available' ? task.questionCount.value : 0), 0);
+    const outputFacts = tasks.flatMap((task) => (
+      task.meanOutputTokens.availability === 'available' && task.questionCount.availability === 'available'
+        ? [{ meanOutputTokens: task.meanOutputTokens.value, questionCount: task.questionCount.value }]
+        : []
+    ));
+    const outputQuestionCount = outputFacts.reduce((sum, task) => sum + task.questionCount, 0);
     const model: ModelSummary = {
       identity: {
         configurationId: configuration.configurationId,
@@ -327,7 +331,7 @@ export function buildLiveBenchLeaderboardData(input: {
         organization: configuration.organization,
       },
       openWeights: configuration.openWeights === null
-        ? unavailable('LiveBench does not declare this model\'s open-weight status.', sourceRef)
+        ? unavailable('The benchmark release does not declare this model\'s open-weight status.', sourceRef)
         : available(configuration.openWeights, sourceRef),
       isDerivativeFinetune: configuration.isDerivativeFinetune,
       baseModelSlug: configuration.isDerivativeFinetune
@@ -345,7 +349,7 @@ export function buildLiveBenchLeaderboardData(input: {
       selectedRouteId: null,
       selectedRoutePolicy: 'Benchmark-only projection; no catalog route has been joined.',
       selectedRoute: null,
-      lifecycleStatus: unavailable('LiveBench is not a lifecycle source.', sourceRef),
+      lifecycleStatus: unavailable('The benchmark release is not a lifecycle source.', sourceRef),
     };
     return {
       model,
@@ -355,9 +359,9 @@ export function buildLiveBenchLeaderboardData(input: {
         ? unavailable('This model has no equivalent successful evaluations.', sourceRef)
         : available(totalCost / totalEquivalentSuccesses, sourceRef),
       aggregateMeanOutputTokens: outputFacts.length !== tasks.length || outputQuestionCount === 0
-        ? unavailable('LiveBench does not provide complete mean output tokens.', sourceRef)
+        ? unavailable('The benchmark release does not provide complete mean output tokens.', sourceRef)
         : available(Math.round(outputFacts.reduce((sum, task) => (
-          sum + task.meanOutputTokens.value * task.questionCount.value
+          sum + task.meanOutputTokens * task.questionCount
         ), 0) / outputQuestionCount), sourceRef),
     };
   });
@@ -419,7 +423,7 @@ function unavailableWarnings(value: unknown): DataWarning[] {
         state: 'unknown',
         message: typeof record.reason === 'string' && record.reason.trim().length > 0
           ? record.reason
-          : 'This LiveBench-backed field is unavailable.',
+          : 'This benchmark-backed field is unavailable.',
       });
       return;
     }
@@ -637,7 +641,7 @@ function profileForSlug(
     routes: joined?.routes ?? [],
     lifecycleEvents: joined?.lifecycleEvents ?? [],
     replacement: joined?.replacement
-      ?? unavailable('LiveBench is not a lifecycle or replacement source.', source.sourceRef),
+      ?? unavailable('The benchmark release is not a lifecycle or replacement source.', source.sourceRef),
   };
 }
 

@@ -4,6 +4,7 @@ import test from "node:test";
 import type {
   EvidenceValue,
   PreviewModel,
+  RankingEntry,
   RankingData,
   UiDataContractV1,
 } from "@tokenbench/frontend/preview-data/contracts";
@@ -20,6 +21,10 @@ function available<T>(value: T): EvidenceValue<T> {
   };
 }
 
+function unavailable<T>(reason: string): EvidenceValue<T> {
+  return { availability: "unavailable", reason };
+}
+
 function model(overrides: Partial<PreviewModel> = {}): PreviewModel {
   return {
     id: "verified-model",
@@ -27,12 +32,13 @@ function model(overrides: Partial<PreviewModel> = {}): PreviewModel {
     access: available("Proprietary"),
     benchmark: available({ releaseOn: "2026-08-20", subtasks: [] }),
     capability: available({ compositeScore: 99, radar: [
-      { key: "agentic", label: "Agentic", percentile: 81, rank: 1, fieldSize: 2 },
+      { key: "agentic-coding", label: "Agentic coding", percentile: 81, rank: 1, fieldSize: 2 },
       { key: "coding", label: "Coding", percentile: 82, rank: 1, fieldSize: 2 },
       { key: "reasoning", label: "Reasoning", percentile: 83, rank: 1, fieldSize: 2 },
-      { key: "math", label: "Math", percentile: 84, rank: 1, fieldSize: 2 },
-      { key: "multimodal", label: "Multimodal", percentile: 85, rank: 1, fieldSize: 2 },
-      { key: "throughput", label: "Throughput", percentile: 86, rank: 1, fieldSize: 2 },
+      { key: "mathematics", label: "Mathematics", percentile: 84, rank: 1, fieldSize: 2 },
+      { key: "data-analysis", label: "Data analysis", percentile: 85, rank: 1, fieldSize: 2 },
+      { key: "language", label: "Language", percentile: 86, rank: 1, fieldSize: 2 },
+      { key: "if", label: "IF", percentile: 87, rank: 1, fieldSize: 2 },
     ] }),
     routePricing: available({
       route: "direct",
@@ -52,34 +58,47 @@ function model(overrides: Partial<PreviewModel> = {}): PreviewModel {
   };
 }
 
-function envelope(models: readonly PreviewModel[]): UiDataContractV1<RankingData> {
+function rankingEntry(model: PreviewModel, evaluationCost = 1.5): RankingEntry {
+  return {
+    model,
+    rank: available(1),
+    aggregate: {
+      costPerSuccessfulEvaluationUsd: available(evaluationCost),
+      meanOutputTokens: available(800),
+      pareto: true,
+    },
+  };
+}
+
+function envelope(entries: readonly RankingEntry[]): UiDataContractV1<RankingData> {
   return {
     contractVersion: "ui-data-contract/v1",
     status: "available",
     fetchedAt: "2026-08-20T00:00:00.000Z",
     effectiveAt: null,
     provenance: [],
-    data: { models: models.map((model) => ({ model, rank: available(1) })) },
+    data: { models: entries },
   };
 }
 
-test("the make-it-yours projector requires all exact six axes and does not use a composite fallback", () => {
-  const complete = projectMakeItYoursModels(envelope([model()]));
+test("the make-it-yours projector requires all seven published categories and does not use a composite fallback", () => {
+  const complete = projectMakeItYoursModels(envelope([rankingEntry(model())]));
   assert.equal(complete.models.length, 1);
   assert.deepEqual(complete.models[0]?.scores, {
-    agentic: 81,
-    coding: 82,
     reasoning: 83,
-    math: 84,
-    multimodal: 85,
-    throughput: 86,
+    coding: 82,
+    "agentic-coding": 81,
+    mathematics: 84,
+    "data-analysis": 85,
+    language: 86,
+    "instruction-following": 87,
   });
 
   const incompleteCapability = available({
     compositeScore: 99,
-    radar: [{ key: "agentic", label: "Agentic", percentile: 81, rank: 1, fieldSize: 2 }],
+    radar: [{ key: "reasoning", label: "Reasoning", percentile: 81, rank: 1, fieldSize: 2 }],
   });
-  const incomplete = projectMakeItYoursModels(envelope([model({ capability: incompleteCapability })]));
+  const incomplete = projectMakeItYoursModels(envelope([rankingEntry(model({ capability: incompleteCapability }))]));
   assert.deepEqual(incomplete, { models: [], unavailableCount: 1 });
 });
 
@@ -100,11 +119,14 @@ test("the projector retains published zero prices while incomplete candidates re
   const incomplete = model({
     capability: available({
       compositeScore: 99,
-      radar: [{ key: "agentic", label: "Agentic", percentile: 81, rank: 1, fieldSize: 2 }],
+      radar: [{ key: "reasoning", label: "Reasoning", percentile: 81, rank: 1, fieldSize: 2 }],
     }),
   });
 
-  const projection = projectMakeItYoursModels(envelope([zeroPriced, incomplete]));
+  const projection = projectMakeItYoursModels(envelope([
+    rankingEntry(zeroPriced, 0),
+    rankingEntry(incomplete),
+  ]));
 
   assert.equal(projection.models.length, 1);
   assert.equal(projection.models[0]?.cost, 0);
@@ -113,8 +135,10 @@ test("the projector retains published zero prices while incomplete candidates re
   assert.equal(projection.unavailableCount, 1);
 });
 
-test("the projected raw SLA and published blended cost flow into ranked CSV rows", () => {
-  const projection = projectMakeItYoursModels(envelope([model()]));
+test("published evaluation cost remains rankable while missing runtime stays explicitly unavailable", () => {
+  const projection = projectMakeItYoursModels(envelope([
+    rankingEntry(model({ runtime: unavailable("No reviewed runtime observation was supplied.") }), 0.014),
+  ]));
   const ranking = buildWeightedRanking({
     models: projection.models,
     weights: DEFAULT_WEIGHTED_RANKING_STATE.weights,
@@ -126,11 +150,11 @@ test("the projected raw SLA and published blended cost flow into ranked CSV rows
     "Weighted rank": 1,
     Model: "Verified model",
     Provider: "Example provider",
-    "Weighted score": 83.2,
-    "Blended USD / 1M": 1.5,
-    "TTFT seconds": 0.4,
-    "Throughput tok/s": 80,
-    "SLA result": "Pass",
+    "Weighted score": 83.3,
+    "Evaluation cost / success USD": 0.014,
+    "TTFT seconds": "Unavailable",
+    "Throughput tok/s": "Unavailable",
+    "SLA result": "Outside threshold",
     "Weighted frontier": "Yes",
   }]);
 });

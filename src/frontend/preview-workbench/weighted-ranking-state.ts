@@ -16,7 +16,7 @@ export const DEFAULT_WEIGHTED_RANKING_STATE: WeightedRankingState = {
   minThroughput: 60,
   showOutsideSla: true,
   view: 'rows',
-  weights: { agentic: 20, coding: 20, reasoning: 20, math: 15, multimodal: 15, throughput: 10 },
+  weights: { reasoning: 20, coding: 20, 'agentic-coding': 20, mathematics: 15, 'data-analysis': 10, language: 5, 'instruction-following': 10 },
 };
 
 function boundedNumber(value: string | null, minimum: number, maximum: number): number | null {

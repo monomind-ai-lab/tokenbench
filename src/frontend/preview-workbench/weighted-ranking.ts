@@ -1,4 +1,4 @@
-export const WEIGHTED_RANKING_CAPABILITIES = ['agentic', 'coding', 'reasoning', 'math', 'multimodal', 'throughput'] as const;
+export const WEIGHTED_RANKING_CAPABILITIES = ['reasoning', 'coding', 'agentic-coding', 'mathematics', 'data-analysis', 'language', 'instruction-following'] as const;
 export const MAX_WEIGHTED_RANKING_MODELS = 20;
 
 export type WeightedRankingCapability = typeof WEIGHTED_RANKING_CAPABILITIES[number];
@@ -20,14 +20,16 @@ export interface WeightedRankingModel {
   readonly provider: string;
   readonly access: 'Proprietary' | 'Open weights';
   readonly cost: number;
-  readonly ttft: number;
-  readonly throughput: number;
+  readonly ttft: number | null;
+  readonly throughput: number | null;
   readonly scores?: Partial<Record<WeightedRankingCapability, number | null>>;
-  readonly agentic?: number | null;
+  readonly 'agentic-coding'?: number | null;
   readonly coding?: number | null;
   readonly reasoning?: number | null;
-  readonly math?: number | null;
-  readonly multimodal?: number | null;
+  readonly mathematics?: number | null;
+  readonly 'data-analysis'?: number | null;
+  readonly language?: number | null;
+  readonly 'instruction-following'?: number | null;
 }
 
 export interface WeightedRankingRow extends WeightedRankingModel {
@@ -90,11 +92,11 @@ export function meetsWeightedRankingSla(model: Pick<WeightedRankingModel, 'ttft'
 }
 
 export function meetsWeightedRankingTtft(model: Pick<WeightedRankingModel, 'ttft'>, filters: Pick<WeightedRankingFilters, 'maxTtft'>): boolean {
-  return finite(model.ttft) && model.ttft <= filters.maxTtft;
+  return model.ttft !== null && finite(model.ttft) && model.ttft <= filters.maxTtft;
 }
 
 export function meetsWeightedRankingThroughput(model: Pick<WeightedRankingModel, 'throughput'>, filters: Pick<WeightedRankingFilters, 'minThroughput'>): boolean {
-  return finite(model.throughput) && model.throughput >= filters.minThroughput;
+  return model.throughput !== null && finite(model.throughput) && model.throughput >= filters.minThroughput;
 }
 
 function matchesFilters(model: WeightedRankingModel, filters: WeightedRankingFilters): boolean {

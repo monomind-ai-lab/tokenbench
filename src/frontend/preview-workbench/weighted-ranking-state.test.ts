@@ -12,7 +12,7 @@ describe('weightedRankingStateFromQuery', () => {
       minThroughput: 65,
       showOutsideSla: false,
       view: 'cards' as const,
-      weights: { agentic: 15, coding: 25, reasoning: 30, math: 10, multimodal: 10, throughput: 10 },
+      weights: { reasoning: 25, coding: 25, 'agentic-coding': 15, mathematics: 10, 'data-analysis': 10, language: 5, 'instruction-following': 10 },
     };
 
     expect(weightedRankingStateFromQuery(encodeWeightedRankingState(state))).toEqual(state);

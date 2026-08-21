@@ -3,9 +3,8 @@ import "server-only";
 import { projectPopularModelsV1, type PopularModelsV1ViewModel } from "@tokenbench/frontend/popular-models-v1";
 
 import { loadLeaderboardRankings } from "@/lib/ui-data.server";
-import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
+import { loadCurrentLiveBenchRanking } from "@/lib/livebench-upstream.server";
 import {
-  POPULAR_MODELS_LIVE_LIMIT,
   loadPopularModelsLiveDirectory,
   projectPopularModelsLive,
   projectPopularModelsLiveWithStrict,
@@ -26,24 +25,8 @@ function liveErrorMessage(error: unknown): string {
   return "The live Popular Models directory could not complete this request.";
 }
 
-const STRICT_PRODUCTION_LEADERBOARD_QUERY = {
-  operation: "leaderboard",
-  releaseId: null,
-  filters: {
-    organizationIds: [],
-    openWeights: "all",
-    excludeDerivativeFinetunes: false,
-  },
-  limit: POPULAR_MODELS_LIVE_LIMIT,
-  cursor: null,
-} as const;
-
-async function loadStrictProductionLeaderboard(
-  fetchImpl: typeof fetch,
-): Promise<PopularModelsV1ViewModel | null> {
-  const envelope = await createProductionUiDataAdapter(fetchImpl).rankings(
-    STRICT_PRODUCTION_LEADERBOARD_QUERY,
-  );
+async function loadStrictProductionLeaderboard(): Promise<PopularModelsV1ViewModel | null> {
+  const envelope = await loadCurrentLiveBenchRanking();
   if (envelope.data === null) return null;
   return projectPopularModelsV1(envelope);
 }
@@ -83,7 +66,7 @@ export async function loadPopularModelsData(
       process.env.TOKENBENCH_UI_DATA_BASE_URL,
       fetchImpl,
     ),
-    loadStrictProductionLeaderboard(fetchImpl),
+    loadStrictProductionLeaderboard(),
   ]);
 
   if (weeklyResult.status === "rejected") {

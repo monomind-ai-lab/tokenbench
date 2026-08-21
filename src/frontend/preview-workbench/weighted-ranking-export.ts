@@ -30,8 +30,8 @@ function download(href: string, filename: string): void {
 export function weightedRankingCsv(rows: readonly WeightedRankingExportRow[]): string {
   const ordered = rows.slice().sort((left, right) => left.cost - right.cost || right.score - left.score || left.name.localeCompare(right.name));
   return [
-    ['Cost rank', 'Model', 'Provider', 'Weighted score', 'Blended $ per 1M', 'Weighted frontier', 'SLA result'],
-    ...ordered.map((row, index) => [String(index + 1), row.name, row.provider, row.score.toFixed(1), row.cost.toFixed(2), row.frontier ? 'Yes' : 'No', row.meetsSla ? 'Pass' : 'Outside threshold']),
+    ['Cost rank', 'Model', 'Provider', 'Weighted score', 'Evaluation cost / success $', 'Weighted frontier', 'SLA result'],
+    ...ordered.map((row, index) => [String(index + 1), row.name, row.provider, row.score.toFixed(1), row.cost.toFixed(6), row.frontier ? 'Yes' : 'No', row.meetsSla ? 'Pass' : 'Outside threshold']),
   ].map((row) => row.map(csvCell).join(',')).join('\n');
 }
 

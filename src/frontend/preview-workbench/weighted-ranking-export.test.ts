@@ -10,15 +10,15 @@ describe('weighted ranking exports', () => {
     ]);
 
     expect(csv).toBe([
-      'Cost rank,Model,Provider,Weighted score,Blended $ per 1M,Weighted frontier,SLA result',
-      '1,Fast,Provider B,80.0,1.00,Yes,Pass',
-      '2,Slow,Provider A,90.0,3.00,Yes,Outside threshold',
+      'Cost rank,Model,Provider,Weighted score,Evaluation cost / success $,Weighted frontier,SLA result',
+      '1,Fast,Provider B,80.0,1.000000,Yes,Pass',
+      '2,Slow,Provider A,90.0,3.000000,Yes,Outside threshold',
     ].join('\n'));
   });
 
   it('preserves the current workbench query and requested section in share links', () => {
     const state = { ...DEFAULT_WEIGHTED_RANKING_STATE, minThroughput: 65 };
     expect(weightedRankingShareUrl('https://tokenbench.test/make-it-yours/', state, 'weighted-score-cost').href)
-      .toBe('https://tokenbench.test/make-it-yours/?access=all&outside=1&ttft=0.80&tps=65&view=rows&weights=agentic%3A20.00%2Ccoding%3A20.00%2Creasoning%3A20.00%2Cmath%3A15.00%2Cmultimodal%3A15.00%2Cthroughput%3A10.00#weighted-score-cost');
+      .toBe('https://tokenbench.test/make-it-yours/?access=all&outside=1&ttft=0.80&tps=65&view=rows&weights=reasoning%3A20.00%2Ccoding%3A20.00%2Cagentic-coding%3A20.00%2Cmathematics%3A15.00%2Cdata-analysis%3A10.00%2Clanguage%3A5.00%2Cinstruction-following%3A10.00#weighted-score-cost');
   });
 });

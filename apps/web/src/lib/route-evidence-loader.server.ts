@@ -7,7 +7,10 @@ import type {
 } from "@tokenbench/frontend/preview-data/contracts";
 
 import { createDesignEvidenceDataAdapter } from "@/lib/ui-data-preview.server";
-import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
+import {
+  loadPublishedModelComparison,
+  loadPublishedModelProfile,
+} from "@/lib/published-compatibility.server";
 
 export type RouteEvidenceDataMode = "evidence" | "production" | "unconfigured";
 
@@ -63,8 +66,7 @@ export async function loadRouteEvidenceProfile(slug: string): Promise<RouteEvide
     return unavailable("unconfigured", "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading route evidence.");
   }
 
-  const adapter = createProductionUiDataAdapter();
-  return loadProductionSnapshot(() => adapter.profile(slug));
+  return loadProductionSnapshot(() => loadPublishedModelProfile(slug));
 }
 
 export async function loadRouteEvidenceComparison(
@@ -83,6 +85,5 @@ export async function loadRouteEvidenceComparison(
     return unavailable("unconfigured", "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading route evidence.");
   }
 
-  const adapter = createProductionUiDataAdapter();
-  return loadProductionSnapshot(() => adapter.comparison({ modelIds }));
+  return loadProductionSnapshot(() => loadPublishedModelComparison(modelIds));
 }

@@ -4,6 +4,7 @@ import {
   Chart as ChartJS,
   Legend,
   LinearScale,
+  LineElement,
   LogarithmicScale,
   PointElement,
   Tooltip,
@@ -49,7 +50,7 @@ import type {
 import { pricePerformanceUrl, type PricePerformanceState } from "@tokenbench/frontend/price-performance-state";
 import { formatPricePerformancePointView } from "@tokenbench/frontend/price-performance-view";
 
-ChartJS.register(LinearScale, LogarithmicScale, PointElement, Tooltip, Legend);
+ChartJS.register(LinearScale, LogarithmicScale, LineElement, PointElement, Tooltip, Legend);
 
 type LlmChartPoint = {
   readonly displayName: string;

@@ -335,11 +335,11 @@ export function LeaderboardDetailPage({
       <section aria-labelledby="evidence-heading" className="border-y border-border bg-muted/25 px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
         <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[.72fr_1.28fr]">
           <div><Info className="size-5 text-muted-foreground" /><p className="mt-5 font-mono text-xs text-muted-foreground">04 / EVIDENCE AND METHODOLOGY</p><h2 className="mt-2 text-2xl font-semibold" id="evidence-heading">Read the result with its limits.</h2></div>
-          <div className="space-y-5 text-sm leading-6 text-muted-foreground">
+          <div className="min-w-0 space-y-5 text-sm leading-6 text-muted-foreground">
             <p className="text-foreground">{definition.methodology}</p>
             <p>{definition.positionNote}</p>
             {snapshot.mode === "evidence" ? <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-amber-700 dark:text-amber-300">This local preview uses the retained deterministic contract evidence for design review. It is never a production fallback.</p> : null}
-            {routeProvenance.length ? <div className="grid gap-3 sm:grid-cols-2">{routeProvenance.map((source) => <div className="rounded-xl border border-border bg-card p-4" key={source.id}><p className="font-medium text-foreground">{source.label}</p><p className="mt-1 text-xs">Effective {formatTimestamp(source.effectiveAt)}</p>{source.note ? <p className="mt-2 text-xs">{source.note}</p> : null}</div>)}</div> : <p>No verified source receipt is available yet. Publication time and source identity will appear here with a valid envelope.</p>}
+            {routeProvenance.length ? <div className="grid min-w-0 gap-3 sm:grid-cols-2">{routeProvenance.map((source) => <div className="min-w-0 rounded-xl border border-border bg-card p-4" key={source.id}><p className="font-medium text-foreground">{source.label}</p><p className="mt-1 text-xs">Effective {formatTimestamp(source.effectiveAt)}</p>{source.note ? <p className="mt-2 break-words text-xs [overflow-wrap:anywhere]">{source.note}</p> : null}</div>)}</div> : <p>No verified source receipt is available yet. Publication time and source identity will appear here with a valid envelope.</p>}
           </div>
         </div>
       </section>

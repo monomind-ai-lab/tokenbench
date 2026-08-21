@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Make it yours · custom model ranking",
   description:
-    "Re-rank complete published leaderboard candidate facts with an explicit six-axis matrix and service-level constraints, without filling missing measurements.",
+    "Re-rank published benchmark candidates with seven explicit capability weights and independent service-level constraints, without filling missing measurements.",
   alternates: { canonical: "/make-it-yours/" },
 };
 
@@ -33,7 +33,7 @@ export default async function MakeItYoursRoute({
         >
           <div className="mx-auto max-w-7xl px-5 py-3 text-sm leading-6 text-muted-foreground sm:px-8 lg:px-10">
             <span className="font-medium text-foreground">Published-candidate re-ranking.</span>{" "}
-            The published leaderboard response is re-ranked client-side with the current six-axis weights and filters; incomplete candidates remain unavailable.
+            The published benchmark response is re-ranked client-side with seven capability weights and independent filters; incomplete facts remain explicit.
           </div>
         </aside>
       ) : null}

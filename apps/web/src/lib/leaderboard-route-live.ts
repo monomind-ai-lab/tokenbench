@@ -15,6 +15,10 @@ import {
 import {
   createLeaderboardQueryCapabilities,
   hasValidLeaderboardQueryGrammar,
+  LEADERBOARD_EVIDENCE_STATUSES,
+  LEADERBOARD_SORT_ORDER,
+  LEADERBOARD_SOURCE_TYPES,
+  type LeaderboardQueryCapabilities,
 } from "@tokenbench/benchmarks/leaderboard-query";
 import {
   blendedCostPerMillion,
@@ -129,6 +133,57 @@ function sameJsonValue(left: unknown, right: unknown): boolean {
   const rightKeys = Object.keys(rightRecord).sort();
   return leftKeys.length === rightKeys.length
     && leftKeys.every((key, index) => key === rightKeys[index] && sameJsonValue(leftRecord[key], rightRecord[key]));
+}
+
+function containsAll(actual: readonly unknown[], expected: readonly unknown[]): boolean {
+  return expected.every((value) => actual.some((candidate) => sameJsonValue(candidate, value)));
+}
+
+/**
+ * A paginated API publishes capabilities for the complete route, so an
+ * individual page may expose providers or price values that do not occur in
+ * that page's rows. Validate the complete-route receipt as a typed superset;
+ * the merged result is recomputed from every validated page below.
+ */
+function pageCapabilitiesCoverEntries(
+  value: unknown,
+  expected: LeaderboardQueryCapabilities,
+): boolean {
+  if (!recordOrFalse(value)) return false;
+  const capabilities = value as JsonRecord;
+  const priceValues = capabilities.priceValues;
+  const sorts = capabilities.sorts;
+  const providers = capabilities.providers;
+  const sourceTypes = capabilities.sourceTypes;
+  const evidenceStatuses = capabilities.evidenceStatuses;
+  if (!Array.isArray(priceValues)
+    || priceValues.some((price) => typeof price !== "number" || !Number.isFinite(price) || price < 0)
+    || new Set(priceValues).size !== priceValues.length
+    || !Array.isArray(sorts)
+    || !sorts.every((sort) => LEADERBOARD_SORT_ORDER.includes(sort))
+    || !Array.isArray(providers)
+    || !providers.every(nonEmptyString)
+    || !Array.isArray(sourceTypes)
+    || !sourceTypes.every((sourceType) => LEADERBOARD_SOURCE_TYPES.includes(sourceType))
+    || !Array.isArray(evidenceStatuses)
+    || !evidenceStatuses.every((status) => LEADERBOARD_EVIDENCE_STATUSES.includes(status))) {
+    return false;
+  }
+  return capabilities.dataReady === true
+    && capabilities.defaultProfile === expected.defaultProfile
+    && capabilities.defaultSort === expected.defaultSort
+    && capabilities.supportsProfile === expected.supportsProfile
+    && capabilities.supportsEstimated === expected.supportsEstimated
+    && capabilities.supportsLifecycle === false
+    && capabilities.priceMode === expected.priceMode
+    && typeof capabilities.supportsPrice === "boolean"
+    && (expected.supportsPrice !== true || capabilities.supportsPrice === true)
+    && sameJsonValue(capabilities.metricKeys, expected.metricKeys)
+    && containsAll(priceValues, expected.priceValues ?? [])
+    && containsAll(sorts, expected.sorts)
+    && containsAll(providers, expected.providers ?? [])
+    && containsAll(sourceTypes, expected.sourceTypes ?? [])
+    && containsAll(evidenceStatuses, expected.evidenceStatuses ?? []);
 }
 
 function isBenchmarkModel(value: unknown): value is BenchmarkModel {
@@ -330,7 +385,7 @@ function responseSourcesCoverEntries(
  * client uses. The detail UI filters locally, so only its workload profile is
  * sent; this preserves a complete source field for the client-side controls.
  */
-export function leaderboardRouteLiveEndpoint(key: LeaderboardKey, profile: WorkloadProfile): string {
+export function leaderboardRouteLiveEndpoint(key: LeaderboardKey, profile: WorkloadProfile, cursor: string | null = null): string {
   if (!isWorkloadProfile(profile)) throw new TypeError("Leaderboard profile is unsupported.");
   const definition = LEADERBOARD_DEFINITIONS[key];
   const parameters = new URLSearchParams({ profile });
@@ -338,13 +393,16 @@ export function leaderboardRouteLiveEndpoint(key: LeaderboardKey, profile: Workl
     throw new TypeError("Leaderboard profile does not match the route query grammar.");
   }
   parameters.set("limit", String(LEADERBOARD_ROUTE_LIVE_LIMIT));
+  if (cursor !== null) {
+    if (!isValidLeaderboardCursor(cursor)) throw new TypeError("Leaderboard cursor is invalid.");
+    parameters.set("cursor", cursor);
+  }
   return `/api/benchmarks/leaderboards/${encodeURIComponent(key)}?${parameters.toString()}`;
 }
 
 /**
- * Accepts only a complete, route-matched published page. A partial page would
- * make filters and charts silently omit source rows, so it is unavailable
- * rather than fabricated with a second request or local reconstruction.
+ * Accepts one route-matched published page. The server loader follows the
+ * opaque cursor and merges every validated page before projection.
  */
 export function parseLeaderboardRouteLiveEnvelope(
   candidate: unknown,
@@ -381,12 +439,11 @@ export function parseLeaderboardRouteLiveEnvelope(
     || (pagination.total as number) < 0
     || (pagination.total as number) > 4_096
     || !(pagination.nextCursor === null || isValidLeaderboardCursor(pagination.nextCursor))
-    || pagination.nextCursor !== null
-    || pagination.total !== typedEntries.length) {
-    fail("is not a complete leaderboard page");
+    || (pagination.total as number) < typedEntries.length) {
+    fail("has invalid leaderboard pagination");
   }
   const expectedCapabilities = createLeaderboardQueryCapabilities(definition, typedEntries);
-  if (!sameJsonValue(data.capabilities, expectedCapabilities)) {
+  if (!pageCapabilitiesCoverEntries(data.capabilities, expectedCapabilities)) {
     fail("has capabilities that do not match the published route entries");
   }
   const attribution = envelope.attribution as readonly LeaderboardRouteAttribution[];
@@ -394,6 +451,39 @@ export function parseLeaderboardRouteLiveEnvelope(
     fail("is missing source attribution for a displayed fact");
   }
   return envelope as unknown as LeaderboardRouteLiveEnvelope;
+}
+
+export function mergeLeaderboardRouteLiveEnvelopes(
+  pages: readonly LeaderboardRouteLiveEnvelope[],
+): LeaderboardRouteLiveEnvelope {
+  const first = pages[0];
+  if (first === undefined) fail("has no pages to merge");
+  const entries = pages.flatMap((page) => page.data.entries);
+  const attribution = [...new Map(pages
+    .flatMap((page) => page.attribution)
+    .map((source) => [`${source.sourceId}\u0000${source.url}\u0000${source.updatedAt}`, source] as const))
+    .values()];
+  const expectedTotal = first.data.pagination.total;
+  if (pages.some((page) => (
+    page.revision !== first.revision
+    || page.publishedAt !== first.publishedAt
+    || page.data.key !== first.data.key
+    || page.data.profile !== first.data.profile
+    || page.data.pagination.total !== expectedTotal
+  ))) fail("changed while paginated results were loading");
+  if (entries.length !== expectedTotal || new Set(entries.map((entry) => entry.model.modelKey)).size !== entries.length) {
+    fail("did not yield one complete unique paginated result");
+  }
+  return {
+    ...first,
+    attribution,
+    data: {
+      ...first.data,
+      entries,
+      pagination: { limit: LEADERBOARD_ROUTE_LIVE_LIMIT, total: expectedTotal, nextCursor: null },
+      capabilities: createLeaderboardQueryCapabilities(first.data.definition, entries),
+    },
+  };
 }
 
 function toProvenance(

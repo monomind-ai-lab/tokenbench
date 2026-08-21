@@ -164,8 +164,35 @@ function ComparisonRadar({ models }: { models: readonly HomeModel[] }) {
     });
   }, [models]);
 
-  if (models.length < 2 || axes.length < 3) {
+  if (models.length < 2 || axes.length === 0) {
     return <EmptyState>Capability overlay is unavailable until two compared models provide matching accepted axes.</EmptyState>;
+  }
+
+  if (axes.length < 3) {
+    return (
+      <div aria-label="Capability comparison by published axis" className="grid gap-5" role="img">
+        {axes.map((axis) => (
+          <section className="grid gap-3" key={axis.label}>
+            <h4 className="text-sm font-medium">{axis.label}</h4>
+            {models.map((model, modelIndex) => {
+              const value = axis.values[modelIndex] ?? 0;
+              return (
+                <div className="grid grid-cols-[minmax(0,1fr)_3rem] items-center gap-3" key={model.id}>
+                  <div className="grid min-w-0 gap-1.5">
+                    <span className="truncate text-xs text-muted-foreground">{unavailable(model.name)}</span>
+                    <span className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+                      <span className="block h-full rounded-full" style={{ backgroundColor: model.color, width: `${Math.max(0, Math.min(100, value))}%` }} />
+                    </span>
+                  </div>
+                  <span className="text-right font-mono text-xs tabular-nums">{formatScore(value)}</span>
+                </div>
+              );
+            })}
+          </section>
+        ))}
+        <p className="sr-only">{models.map((model, modelIndex) => `${unavailable(model.name)}: ${axes.map((axis) => `${axis.label} ${formatScore(axis.values[modelIndex])}`).join(", ")}`).join(". ")}</p>
+      </div>
+    );
   }
 
   const center = 160;
@@ -266,7 +293,7 @@ export function HomePage({ data }: { data: HomePageData }) {
 
       <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10"><SectionHeader action="Compare all models" copy="Compare capability shape and route constraints before choosing a default runtime." href="/compare/" number="03" title="Head-to-Head Capability & Economics" /><ComparisonPreview data={data} /></section>
 
-      <section className="border-y border-border bg-muted/20"><div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10"><SectionHeader action="Calculate subscription vs API savings" copy="Test when a fixed individual seat crosses an API-equivalent workload instead of treating either route as universally cheaper." href="/subscribe-vs-api/" number="04" title="Subscription vs. Pay-As-You-Go API Analysis" /><p className="mt-5 text-xs text-muted-foreground">The Home preview uses only a validated subscription calculation; otherwise its values remain unavailable.</p><SubscriptionPreview data={data} /></div></section>
+      <section className="border-y border-border bg-muted/20"><div className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10"><SectionHeader action="Calculate subscription vs API savings" copy="Test when a fixed individual seat crosses an API-equivalent workload instead of treating either route as universally cheaper." href="/subscribe-vs-api/" number="04" title="Subscription vs. Pay-As-You-Go API Analysis" /><p className="mt-5 text-xs text-muted-foreground">This view uses only the reviewed plan, route-price, and workload facts behind the calculation.</p><SubscriptionPreview data={data} /></div></section>
 
       <section className="mx-auto max-w-7xl px-5 py-20 sm:px-8 lg:px-10"><SectionHeader action="Browse all articles" copy="Follow the assumptions, monitoring practices, and architecture behind defensible model decisions." href="/articles/" number="05" title="Methodological Research & Analysis" /><div className="mt-9 overflow-hidden rounded-2xl border border-border bg-card">{RESEARCH.map((article, index) => <Link className="group grid gap-3 border-b border-border px-5 py-5 transition-colors last:border-b-0 hover:bg-muted/50 sm:grid-cols-[120px_1fr_auto] sm:items-center" href={article.href} key={article.href}><span className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">{article.label}</span><span><span className="block text-sm font-medium">{article.title}</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">{article.copy}</span></span><span className="flex items-center gap-3 text-xs text-muted-foreground"><span>{article.meta}</span><ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" /></span><span className="sr-only">Article {index + 1}</span></Link>)}</div></section>
     </>

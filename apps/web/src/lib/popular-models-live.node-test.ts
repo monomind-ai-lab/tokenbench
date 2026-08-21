@@ -260,9 +260,9 @@ test("projects source weekly ranks rather than using array indexes", () => {
   assert.deepEqual(
     view.models.map((model) => [model.id, model.rank]),
     [
-      ["benchlm:test:first", 4],
-      ["benchlm:test:zero-score", 37],
-      ["benchlm:test:unranked", null],
+      ["first", 4],
+      ["zero-score", 37],
+      ["unranked", null],
     ],
   );
   assert.equal(view.models[0]?.rank, 4);
@@ -276,8 +276,8 @@ test("projects source weekly ranks rather than using array indexes", () => {
 
 test("keeps a published zero distinct from an unavailable live value", () => {
   const view = projectPopularModelsLive(envelope());
-  const zero = view.models.find((model) => model.id === "benchlm:test:zero-score");
-  const missing = view.models.find((model) => model.id === "benchlm:test:unranked");
+  const zero = view.models.find((model) => model.id === "zero-score");
+  const missing = view.models.find((model) => model.id === "unranked");
 
   assert.equal(zero?.overallScore, 0);
   assert.equal(zero?.axes[0]?.percentile, 0);
@@ -299,7 +299,7 @@ test("overrides strict benchmark rank while retaining strict capability and econ
   const view = projectPopularModelsLiveWithStrict(envelope(), strict);
   const first = view.models.find((model) => model.slug === "first");
 
-  assert.equal(first?.id, "benchlm:test:first");
+  assert.equal(first?.id, "first");
   assert.equal(first?.name, "Model first");
   assert.equal(first?.provider, "Test provider");
   assert.equal(first?.access, "Open weights");

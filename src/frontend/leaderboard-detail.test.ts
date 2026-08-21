@@ -47,7 +47,7 @@ describe('Next leaderboard detail projection', () => {
     expect(coding.map((row) => [row.metric, row.rank])).toEqual([[91, 1], [86, 2], [81, 3]]);
     expect(value).toHaveLength(3);
     expect(value.filter((row) => row.frontier).map((row) => row.id)).toEqual(['alpha']);
+    expect(preferenceDefinition.kind).toBe('category');
     expect(preference).toEqual([]);
   });
 });
-

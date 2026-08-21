@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { CompareWorkbenchPage } from "@/components/compare-workbench-page";
+import { RouteEvidenceUnavailableState } from "@/components/route-evidence-ui";
 import { loadModelSurfaceComparison, loadModelSurfaceDirectory } from "@/lib/model-surface-data.server";
 import { parseSurfaceComparisonQuery, projectSurfaceComparison, projectSurfaceDirectory } from "@tokenbench/frontend/model-surface-projectors";
 
@@ -20,6 +21,12 @@ export default async function ComparePage({ searchParams }: { searchParams: Prom
     loadModelSurfaceDirectory(),
     validRequest && requestedIds.length >= 2 ? loadModelSurfaceComparison(requestedIds) : Promise.resolve(null),
   ]);
+  if (directorySnapshot.envelope === null || directorySnapshot.envelope.data === null || directorySnapshot.envelope.status === "unavailable") {
+    return <RouteEvidenceUnavailableState heading="Comparison catalog unavailable" detail={directorySnapshot.error ?? directorySnapshot.envelope?.reason ?? "The published model catalog could not be loaded."} />;
+  }
+  if (comparisonSnapshot !== null && (comparisonSnapshot.envelope === null || comparisonSnapshot.envelope.data === null || comparisonSnapshot.envelope.status === "unavailable")) {
+    return <RouteEvidenceUnavailableState heading="Comparison unavailable" detail={comparisonSnapshot.error ?? comparisonSnapshot.envelope?.reason ?? "One or more requested published model profiles could not be loaded."} />;
+  }
   const directory = directorySnapshot.envelope === null ? null : projectSurfaceDirectory(directorySnapshot.envelope);
   const comparison = comparisonSnapshot?.envelope === null || comparisonSnapshot === null
     ? null

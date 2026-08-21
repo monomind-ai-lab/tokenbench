@@ -11,6 +11,11 @@ import {
   type StrictSubscriptionEnvelope,
   type SubscriptionSimulatorCatalog,
 } from "@/lib/subscription-simulator-projector";
+import { loadPublishedCatalog } from "@/lib/published-compatibility.server";
+import {
+  calculatePublishedSubscription,
+  projectPublishedSubscriptionCatalog,
+} from "@/lib/published-subscription.server";
 
 function productionBaseUrl(value: string | undefined): string {
   if (value === undefined || value.trim().length === 0) {
@@ -87,7 +92,7 @@ export async function loadSubscriptionSimulatorCatalog(): Promise<SubscriptionSi
   }
 
   try {
-    return projectSubscriptionCatalog(await loadEnvelope("production", { operation: "catalog" }), "production");
+    return projectPublishedSubscriptionCatalog(await loadPublishedCatalog());
   } catch (error) {
     return projectSubscriptionCatalog(null, "production", safeError(error, "catalog"));
   }
@@ -111,7 +116,7 @@ export async function loadSubscriptionSimulatorCalculation(
     return projectSubscriptionCatalog(null, "unconfigured", "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before calculating subscription data.");
   }
   try {
-    return projectSubscriptionCatalog(await loadEnvelope("production", query), "production");
+    return calculatePublishedSubscription(await loadPublishedCatalog(), query);
   } catch (error) {
     return projectSubscriptionCatalog(null, "production", safeError(error, "calculation"));
   }

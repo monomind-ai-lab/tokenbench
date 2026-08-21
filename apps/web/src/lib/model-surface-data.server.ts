@@ -15,7 +15,12 @@ import {
 } from "@tokenbench/frontend/model-surface-lifecycle-query";
 
 import { createDesignEvidenceDataAdapter } from "@/lib/ui-data-preview.server";
-import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
+import {
+  loadPublishedLifecycle,
+  loadPublishedModelComparison,
+  loadPublishedModelDirectory,
+  loadPublishedModelProfile,
+} from "@/lib/published-compatibility.server";
 
 export type ModelSurfaceDataMode = "evidence" | "production" | "unconfigured";
 
@@ -101,9 +106,7 @@ export async function loadModelSurfaceDirectory(): Promise<
       "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading model data.",
     );
   }
-  return loadProductionSnapshot(() =>
-    createProductionUiDataAdapter().models(PRODUCTION_MODEL_DIRECTORY_QUERY),
-  );
+  return loadProductionSnapshot(() => loadPublishedModelDirectory(PRODUCTION_MODEL_DIRECTORY_QUERY.limit));
 }
 
 export async function loadModelSurfaceProfile(
@@ -125,9 +128,7 @@ export async function loadModelSurfaceProfile(
       "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading model data.",
     );
   }
-  return loadProductionSnapshot(() =>
-    createProductionUiDataAdapter().profile(slug),
-  );
+  return loadProductionSnapshot(() => loadPublishedModelProfile(slug));
 }
 
 export async function loadModelSurfaceLifecycle(
@@ -157,9 +158,7 @@ export async function loadModelSurfaceLifecycle(
     };
   }
   return {
-    ...(await loadProductionSnapshot(() =>
-      createProductionUiDataAdapter().lifecycle(query),
-    )),
+    ...(await loadProductionSnapshot(() => loadPublishedLifecycle(query))),
     query,
   };
 }
@@ -183,7 +182,5 @@ export async function loadModelSurfaceComparison(
       "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading comparison data.",
     );
   }
-  return loadProductionSnapshot(() =>
-    createProductionUiDataAdapter().comparison({ modelIds }),
-  );
+  return loadProductionSnapshot(() => loadPublishedModelComparison(modelIds));
 }

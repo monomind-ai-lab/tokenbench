@@ -153,7 +153,10 @@ function routePricingFor(entry: ModelDirectoryEntry): PopularModelsRoutePricingV
 
 function mapDirectoryEntry(entry: ModelDirectoryEntry): PopularModelV1 {
   return {
-    id: entry.modelKey,
+    // Client navigation and comparison use the canonical route slug. The
+    // source-specific model key remains a join key only and must never leak
+    // into a public URL.
+    id: entry.canonicalSlug,
     slug: entry.canonicalSlug,
     name: entry.displayName,
     provider: entry.creator,
@@ -233,7 +236,13 @@ function matchingStrictModel(
   index: ReadonlyMap<string, PopularModelV1>,
 ): PopularModelV1 | null {
   const matches = new Set(
-    [index.get(entry.canonicalSlug), index.get(entry.modelKey)].filter(
+    [
+      index.get(entry.canonicalSlug),
+      index.get(entry.modelKey),
+      // Both producers retain the upstream source model ID. This exact join
+      // recovers benchmark categories/economics without name matching.
+      index.get(entry.sourceModelId),
+    ].filter(
       (model): model is PopularModelV1 => model !== undefined,
     ),
   );

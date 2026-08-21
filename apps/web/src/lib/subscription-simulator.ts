@@ -50,7 +50,10 @@ export const defaultSubscriptionScenario: SubscriptionScenario = {
   inputTokensPerMessage: 1200,
   outputTokensPerMessage: 350,
   cacheReadShare: 20,
-  cacheWriteShare: 5,
+  // Published provider catalogs rarely expose a separate cache-write rate.
+  // Keep the default exactly calculable; a positive user-entered share remains
+  // blocked unless its reviewed rate is present.
+  cacheWriteShare: 0,
   seats: 1,
   tokenVolume: 0,
   inputCharactersPerMessage: 4800,
