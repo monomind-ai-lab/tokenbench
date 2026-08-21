@@ -24,6 +24,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { LEADERBOARD_ROUTES } from "@tokenbench/routing/leaderboard-routes";
 
 type ThemeMode = "dark" | "light";
 type NavigationMenuName = "models" | "leaderboards" | "articles";
@@ -130,6 +131,26 @@ const MORE_LANGUAGES: LanguageOption[] = [
   { code: "zu", label: "Zulu" },
 ];
 
+const LLM_LEADERBOARD_KEYS = [
+  "llm-overall",
+  "llm-coding",
+  "llm-agentic",
+  "llm-reasoning",
+  "llm-knowledge",
+  "llm-human-preference",
+  "llm-value",
+  "llm-pricing-context",
+] as const;
+
+const MULTIMODAL_LEADERBOARD_KEYS = [
+  "multimodal-vision-documents",
+  "media-text-to-image",
+  "media-image-editing",
+  "media-text-to-video",
+  "media-image-to-video",
+  "media-video-editing",
+] as const;
+
 const SIMPLE_NAV = [
   ["/", "Home"],
   ["/compare/", "Compare"],
@@ -204,17 +225,48 @@ function NavigationMenu({
     return (
       <div role="region" aria-label="Leaderboards">
         <p className="font-mono text-[10px] uppercase tracking-[.18em] text-muted-foreground">Leaderboards · rank and re-rank models</p>
-        <div className="mt-4 grid gap-2">
-          {[
-            ["/popular-models/", "Popular models", "Browse top models by quality, performance, and cost."],
-            ["/make-it-yours/", "Make it yours", "Adjust six capability weights and SLA thresholds."],
-            ["/leaderboards/", "All leaderboards", "Open every evidence-backed ranking surface."],
-          ].map(([href, title, copy]) => (
-            <Link className="grid min-h-14 grid-cols-[minmax(8rem,.42fr)_minmax(0,.58fr)] items-start gap-4 rounded-lg border border-border bg-card px-4 py-3 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
-              <span className="text-sm font-medium">{title}</span>
-              <span className="text-xs leading-5 text-muted-foreground">{copy}</span>
-            </Link>
-          ))}
+        <div className="mt-4 grid gap-6 lg:grid-cols-[.9fr_1fr_1fr]">
+          <div>
+            <p className="text-sm font-semibold">Ranking workbenches</p>
+            <div className="mt-3 grid divide-y divide-border">
+              {[
+                ["/popular-models/", "Popular models", "Browse top models by quality, performance, and cost."],
+                ["/make-it-yours/", "Make it yours", "Adjust capability weights and evidence thresholds."],
+                ["/leaderboards/", "All leaderboards", "Open every evidence-backed ranking surface."],
+              ].map(([href, title, copy]) => (
+                <Link className="rounded-lg px-1 py-3 transition-colors hover:bg-accent" href={href} key={href} onClick={close}>
+                  <span className="block text-sm font-medium">{title}</span>
+                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">{copy}</span>
+                </Link>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Language-model leaderboards</p>
+            <div className="mt-3 grid divide-y divide-border">
+              {LLM_LEADERBOARD_KEYS.map((key) => {
+                const route = LEADERBOARD_ROUTES[key];
+                return (
+                  <Link className="flex min-h-11 items-center rounded-lg px-1 py-2 text-xs font-medium transition-colors hover:bg-accent" href={route.pathname} key={key} onClick={close}>
+                    {route.navigationLabel}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">Multimodal and media</p>
+            <div className="mt-3 grid divide-y divide-border">
+              {MULTIMODAL_LEADERBOARD_KEYS.map((key) => {
+                const route = LEADERBOARD_ROUTES[key];
+                return (
+                  <Link className="flex min-h-11 items-center rounded-lg px-1 py-2 text-xs font-medium transition-colors hover:bg-accent" href={route.pathname} key={key} onClick={close}>
+                    {route.navigationLabel}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -366,11 +418,13 @@ function SiteHeader({ language, theme, onLanguage, onLanguageOpen, onTheme, topM
   const panelWidth = (name: NavigationMenuName) => name === "models"
     ? topModels?.length ? "w-[min(56rem,calc(100vw-2rem))]" : "w-[min(42rem,calc(100vw-2rem))]"
     : name === "leaderboards"
-      ? "w-[min(38rem,calc(100vw-2rem))]"
+      ? "w-[min(56rem,calc(100vw-2rem))]"
       : "w-[min(38rem,calc(100vw-2rem))]";
-  const panelPosition = (name: NavigationMenuName) => name === "models" && topModels?.length
-    ? "left-1/2 -translate-x-1/2 xl:left-[-15.5rem] xl:translate-x-0"
-    : "left-1/2 -translate-x-1/2";
+  const panelPosition = (name: NavigationMenuName) => {
+    if (name === "models" && topModels?.length) return "left-1/2 -translate-x-1/2 xl:left-[-15.5rem] xl:translate-x-0";
+    if (name === "leaderboards") return "left-1/2 -translate-x-1/2 xl:left-[-20rem] xl:translate-x-0";
+    return "left-1/2 -translate-x-1/2";
+  };
   const navButton = (name: NavigationMenuName, label: string) => (
     <div className="relative">
       <button aria-controls={`site-menu-${name}`} aria-expanded={menu === name} className={cn("flex min-h-11 items-center gap-1 rounded-lg px-2.5 py-2 text-[13px] text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground", menu === name && "bg-active-control text-active-control-foreground")} onClick={toggleMenu(name)} type="button">
