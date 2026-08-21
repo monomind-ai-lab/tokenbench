@@ -12,6 +12,7 @@ import {
 } from './catalog-cycle';
 import { createCatalogCycle } from './coordinator';
 import { buildManualSubscriptionSources } from '../../../src/catalog/manual-manifests';
+import { SUBSCRIPTION_SOURCE_CONFIGS, type SubscriptionCrawlResult } from './subscription-crawler';
 
 interface Statement { sql: string; values: unknown[] }
 type SqlValue = string | number | bigint | Uint8Array | null;
@@ -180,6 +181,7 @@ describe('catalog cycle contract', () => {
       'retrieve-opencode-models',
       'retrieve-opencode-pricing',
       'prepare-manual',
+      'retrieve-subscriptions',
       'stage',
       'validate',
       'publish',
@@ -304,6 +306,68 @@ describe('catalog cycle contract', () => {
       .toEqual([{ active_revision: cycle.finalRevision }]);
     expect((await db.prepare("SELECT active_revision FROM api_response_publication_state WHERE scope = 'catalog'").bind().all()).results)
       .toEqual([expect.objectContaining({ active_revision: expect.stringContaining('+cache-') })]);
+  });
+
+  it('stores bounded subscription HTML and a crawl receipt before staging', async () => {
+    const harness = sqliteD1();
+    using database = harness.sqlite;
+    const { db } = harness;
+    const r2 = memoryR2();
+    const startedAt = Date.parse('2026-08-21T00:20:00.000Z');
+    const initial = createCatalogCycle(startedAt, '550e8400-e29b-41d4-a716-446655440000');
+    const cycle = { ...initial, phase: 'retrieve-subscriptions' as const, cursor: 5 };
+    await db.batch([db.prepare(`INSERT INTO ingestion_cycles
+      (scope, cycle_id, cadence_key, state, phase, cursor, attempt, manifest_key,
+       started_at, updated_at, expires_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+      cycle.scope, cycle.cycleId, cycle.cadenceKey, cycle.state, cycle.phase,
+      cycle.cursor, cycle.attempt, cycle.manifestKey, cycle.startedAt,
+      cycle.updatedAt, cycle.expiresAt,
+    )]);
+    const baselineKey = `catalog-candidates/${cycle.cycleId}/baseline.json`;
+    await r2.put(baselineKey, JSON.stringify(null));
+    await r2.put(cycle.manifestKey!, JSON.stringify({
+      schemaVersion: 1,
+      cycleId: cycle.cycleId,
+      cadenceKey: cycle.cadenceKey,
+      observedAt: cycle.startedAt,
+      baselineKey,
+      frozenCatalogRevision: null,
+      validators: {},
+      artifacts: {},
+    }));
+    const rawHtml = new TextEncoder().encode('<html><body>ChatGPT Pro</body></html>');
+    const crawlSubscriptionsImpl = async (): Promise<SubscriptionCrawlResult> => ({
+      rawBytes: rawHtml,
+      record: {
+        sourceId: SUBSCRIPTION_SOURCE_CONFIGS[0].sourceId,
+        providerId: SUBSCRIPTION_SOURCE_CONFIGS[0].providerId,
+        url: SUBSCRIPTION_SOURCE_CONFIGS[0].url,
+        observedAt: cycle.startedAt,
+        state: 'baseline',
+        statusCode: 200,
+        contentHash: 'sha256:test-subscription',
+        etag: null,
+        lastModified: null,
+        priceObservations: [],
+      },
+    });
+    const result = await runCatalogCycleStep({
+      cycle,
+      env: {
+        CATALOG_DB: db,
+        SOURCE_SNAPSHOTS: r2,
+        AUTOMATED_SUBSCRIPTION_SOURCE_IDS: SUBSCRIPTION_SOURCE_CONFIGS[0].sourceId,
+      },
+      crawlSubscriptionsImpl,
+      nowMs: startedAt,
+    });
+    expect(result.kind).toBe('advanced');
+    expect(result.cycle.phase).toBe('stage');
+    expect([...r2.objects.keys()].some((key) => key.includes('/subscriptions/openai-subscription/'))).toBe(true);
+    const manifestBytes = r2.objects.get(cycle.manifestKey!)?.bytes;
+    const manifest = JSON.parse(new TextDecoder().decode(manifestBytes ?? new Uint8Array())) as { artifacts: Record<string, { key: string }> };
+    expect(manifest.artifacts.subscriptions).toBeDefined();
   });
 
   it('honors the complete 429 reset and does not fetch twice in one alarm', async () => {

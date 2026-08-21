@@ -9,6 +9,7 @@ compatibility_date = "2026-08-12"
 
 [vars]
 AUTOMATED_SOURCE_IDS = "openrouter-models,opencode-zen"
+AUTOMATED_SUBSCRIPTION_SOURCE_IDS = "openai-subscription,anthropic-subscription,google-subscription,xai-subscription,zai-subscription,perplexity-subscription,microsoft-subscription"
 
 [[d1_databases]]
 binding = "CATALOG_DB"

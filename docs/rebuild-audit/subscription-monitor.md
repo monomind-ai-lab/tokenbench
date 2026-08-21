@@ -1,9 +1,9 @@
 # Subscription plan monitor
 
-Date: 2026-08-20  
-Automation: `tokenbench-subscription-plan-monitor`  
-Status: active; daily local run  
-Deployment: not performed or authorized
+Date: 2026-08-21
+Automation: `tokenbench-subscription-plan-monitor` (retired)
+Status: replaced by the checkpointed catalog Worker subscription retrieval phase
+Deployment: code/config ready; deployment not performed or authorized
 
 ## Approved provider scope
 
@@ -50,13 +50,29 @@ legacy entries is data-wiring work and must preserve historical provenance.
 
 ## Output and publication boundary
 
-The daily run compares normalized `PlanOffer`, `EntitlementEvidence`, and
-`SourceProvenance` candidates with `src/catalog/manual-manifests.ts`. When a
-verified change exists it writes a latest review report plus dated history under
-`docs/data-refresh/`. It does not edit the production manifest, publish a D1
-revision, deploy, or push. A reviewed candidate must still pass the catalog
-validation and ingestion gates before publication.
+The production path now runs in `workers/catalog-ingest/src/subscription-crawler.ts`
+inside the daily checkpointed catalog cycle. It fetches only the seven
+allowlisted source pages after checking each origin's `robots.txt`, stores a
+bounded raw HTML snapshot in R2, and writes a combined crawl receipt before
+staging. The existing manual manifests are the baseline: the first successful
+crawl records an official HTML snapshot while preserving reviewed plan and
+entitlement facts. A 304 or unchanged hash keeps the existing facts. A changed
+page with incomplete recognized facts preserves explicit parsed prices only and
+marks entitlements `stale` with `reviewStatus: needs_review`; robots blocks,
+transient failures, and unsupported pages leave the last-good catalog active.
 
-The current manifest lacks Perplexity and Microsoft/Copilot subscription
-records. Adding those and limiting the UI projection to the approved provider
-set belongs to checkpoint 4 data wiring.
+The staged candidate passes the existing catalog validator and is published by
+the same guarded D1 catalog/cache pointer transaction used for model/API data.
+Pages already read the published catalog through `/api/catalog`, so no frontend
+fallback or separate subscription database is involved. Perplexity and
+Microsoft records are captured as provenance/review receipts until a page
+publishes a complete, reviewed plan fact; the crawler never fabricates them.
+
+The former local report-only automation was intentionally retired after this
+Worker path was implemented. The checked-in `docs/data-refresh/` files remain
+historical evidence and are not the production publication mechanism.
+
+The checked-in manual manifest still lacks reviewed Perplexity and Microsoft /
+Copilot plan offers. The crawler can now retain their raw evidence and
+`needs_review` provenance, but a reviewed catalog decision is required before
+those plans appear as consumer recommendations.

@@ -25,6 +25,7 @@ export interface IngestEnv {
   CATALOG_DB: D1Database;
   SOURCE_SNAPSHOTS: R2Bucket;
   AUTOMATED_SOURCE_IDS?: string;
+  AUTOMATED_SUBSCRIPTION_SOURCE_IDS?: string;
   INGEST_COORDINATOR?: {
     getByName(name: string): {
       start(input: { scheduledTime: number; force?: boolean }): Promise<unknown>;

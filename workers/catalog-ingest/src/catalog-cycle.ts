@@ -27,6 +27,14 @@ import {
   type D1Database,
   type ParsedSource,
 } from './index';
+import {
+  SUBSCRIPTION_SOURCE_CONFIGS,
+  crawlSubscriptionSource,
+  mergeSubscriptionCrawlIntoSources,
+  subscriptionCrawlArtifact,
+  type SubscriptionCrawlArtifact,
+  type SubscriptionCrawlRecord,
+} from './subscription-crawler';
 
 export const CATALOG_CYCLE_STEPS = [
   'acquire',
@@ -34,6 +42,7 @@ export const CATALOG_CYCLE_STEPS = [
   'retrieve-opencode-models',
   'retrieve-opencode-pricing',
   'prepare-manual',
+  'retrieve-subscriptions',
   'stage',
   'validate',
   'publish',
@@ -81,6 +90,7 @@ export interface CatalogCycleEnvironment {
   readonly CATALOG_DB: D1Database;
   readonly SOURCE_SNAPSHOTS: CatalogR2Bucket;
   readonly AUTOMATED_SOURCE_IDS?: string;
+  readonly AUTOMATED_SUBSCRIPTION_SOURCE_IDS?: string;
 }
 
 export interface CatalogArtifact {
@@ -125,6 +135,7 @@ export interface CatalogCycleStepInput {
   readonly nowMs?: number;
   readonly fetchImpl?: typeof fetch;
   readonly jitterMs?: number;
+  readonly crawlSubscriptionsImpl?: typeof crawlSubscriptionSource;
 }
 
 export type CatalogCycleStepResult =
@@ -164,6 +175,10 @@ function isTerminalState(state: IngestionCycleState): boolean {
 
 function sourceAllowed(env: CatalogCycleEnvironment, sourceId: string): boolean {
   return env.AUTOMATED_SOURCE_IDS?.split(',').map((value) => value.trim()).includes(sourceId) ?? false;
+}
+
+function subscriptionSourceAllowed(env: CatalogCycleEnvironment, sourceId: string): boolean {
+  return env.AUTOMATED_SUBSCRIPTION_SOURCE_IDS?.split(',').map((value) => value.trim()).includes(sourceId) ?? false;
 }
 
 function conditionalHeaders(validator: CatalogSourceValidator | undefined): Headers | undefined {
@@ -797,6 +812,20 @@ async function acquireStep(input: CatalogCycleStepInput, nowMs: number): Promise
       priorSnapshotKey: openCodePrior.priorSnapshotKey,
     };
   }
+  for (const config of SUBSCRIPTION_SOURCE_CONFIGS) {
+    if (!subscriptionSourceAllowed(input.env, config.sourceId)) continue;
+    const prior = validators[config.sourceId];
+    if (!prior) {
+      const source = baseline?.provenance.find((candidate) => candidate.id === config.sourceId);
+      if (!source?.snapshotKey) continue;
+      const metadata = metadataBySource[config.sourceId] ?? {};
+      validators[config.sourceId] = {
+        etag: metadata.etag ?? null,
+        lastModified: metadata.last_modified ?? null,
+        priorSnapshotKey: source.snapshotKey,
+      };
+    }
+  }
   const manifest: CatalogCycleManifest = {
     schemaVersion: 1,
     cycleId: input.cycle.cycleId,
@@ -925,6 +954,75 @@ async function retrievalStep(input: CatalogCycleStepInput, nowMs: number): Promi
   }
 }
 
+async function subscriptionRetrievalStep(input: CatalogCycleStepInput, nowMs: number): Promise<CatalogCycleStepResult> {
+  const manifest = await readManifest(input);
+  const completedArtifact = manifest.artifacts.subscriptions;
+  if (completedArtifact) {
+    const result = advance(input.cycle, nowMs, completedArtifact.byteLength);
+    await persistStep({
+      env: input.env,
+      previous: input.cycle,
+      next: result.cycle,
+      status: completedArtifact.unchanged ? 'skipped' : 'completed',
+      stepAttempt: Math.max(1, input.cycle.attempt + 1),
+      outputCount: completedArtifact.byteLength,
+    });
+    return result;
+  }
+
+  const configured = SUBSCRIPTION_SOURCE_CONFIGS.filter((config) => subscriptionSourceAllowed(input.env, config.sourceId));
+  const baseline = await readR2Json<CatalogResponse | null>(input.env.SOURCE_SNAPSHOTS, manifest.baselineKey);
+  const fetchImpl = input.fetchImpl ?? ((request, init) => globalThis.fetch(request, init));
+  const crawl = input.crawlSubscriptionsImpl ?? crawlSubscriptionSource;
+  const records: SubscriptionCrawlRecord[] = [];
+  for (const config of configured) {
+    const previousSource = baseline?.provenance.find((source) => source.id === config.sourceId);
+    const result = await crawl({
+      config,
+      observedAt: manifest.observedAt,
+      validator: manifest.validators[config.sourceId],
+      previousSource,
+      fetchImpl,
+    });
+    let record = result.record;
+    if (result.rawBytes && record.contentHash) {
+      const key = `catalog-candidates/${input.cycle.cycleId}/subscriptions/${config.sourceId}/${record.contentHash.slice(7, 23)}.html`;
+      await input.env.SOURCE_SNAPSHOTS.put(key, result.rawBytes, {
+        httpMetadata: { contentType: 'text/html; charset=utf-8' },
+        customMetadata: {
+          content_hash: record.contentHash,
+          source_id: config.sourceId,
+          observed_at: record.observedAt,
+          ...(record.etag ? { etag: record.etag } : {}),
+          ...(record.lastModified ? { last_modified: record.lastModified } : {}),
+        },
+      });
+      record = { ...record, snapshotKey: key };
+    }
+    records.push(record);
+  }
+  const artifact = subscriptionCrawlArtifact(records, manifest.observedAt);
+  const bytes = new TextEncoder().encode(JSON.stringify(artifact));
+  await storeArtifact({
+    stepInput: input,
+    manifest,
+    artifactId: 'subscriptions',
+    bytes,
+    etag: null,
+    lastModified: null,
+  });
+  const result = advance(input.cycle, nowMs, records.length);
+  await persistStep({
+    env: input.env,
+    previous: input.cycle,
+    next: result.cycle,
+    status: 'completed',
+    stepAttempt: 1,
+    outputCount: records.length,
+  });
+  return result;
+}
+
 function rotatingManualProvider(cadenceKey: string): string {
   const day = Math.floor(Date.parse(`${cadenceKey}T00:00:00.000Z`) / 86_400_000);
   return MANUAL_SUBSCRIPTION_PROVIDER_IDS[day % MANUAL_SUBSCRIPTION_PROVIDER_IDS.length];
@@ -973,21 +1071,23 @@ function replaceSources(
   replacements: readonly ParsedSource[],
   observedAt: string,
 ): CatalogResponse {
-  const sourceIds = new Set(replacements.map((source) => source.source.id));
+  const replacementBySource = new Map<string, ParsedSource>();
+  for (const replacement of replacements) replacementBySource.set(replacement.source.id, replacement);
+  const sourceIds = new Set(replacementBySource.keys());
   return {
     ...baseline,
     freshness: { status: 'fresh', checkedAt: observedAt },
     provenance: [
       ...baseline.provenance.filter((source) => !sourceIds.has(source.id)),
-      ...replacements.map((source) => source.source),
+      ...Array.from(replacementBySource.values(), (source) => source.source),
     ],
     plans: [
       ...baseline.plans.filter((plan) => !sourceIds.has(plan.sourceId)),
-      ...replacements.flatMap((source) => source.plans),
+      ...Array.from(replacementBySource.values()).flatMap((source) => source.plans),
     ],
     modelOffers: [
       ...baseline.modelOffers.filter((offer) => !sourceIds.has(offer.sourceId)),
-      ...replacements.flatMap((source) => source.modelOffers),
+      ...Array.from(replacementBySource.values()).flatMap((source) => source.modelOffers),
     ],
   };
 }
@@ -1069,6 +1169,18 @@ async function stageStep(input: CatalogCycleStepInput, nowMs: number): Promise<C
   const manualSources = await readR2Json<ParsedSource[]>(input.env.SOURCE_SNAPSHOTS, manualArtifact.key);
   replacements.push(...manualSources);
   for (const source of manualSources) snapshotKeys[source.source.id] = manualArtifact.key;
+  const subscriptionsArtifact = manifest.artifacts.subscriptions;
+  if (!subscriptionsArtifact) throw new Error('subscription candidate missing');
+  const subscriptionPayload = await readR2Json<SubscriptionCrawlArtifact>(
+    input.env.SOURCE_SNAPSHOTS,
+    subscriptionsArtifact.key,
+  );
+  const manualCandidate = replaceSources(candidate, manualSources, manifest.observedAt);
+  const subscriptionSources = mergeSubscriptionCrawlIntoSources(manualCandidate, subscriptionPayload.records);
+  replacements.push(...subscriptionSources);
+  for (const source of subscriptionSources) {
+    if (source.source.snapshotKey) snapshotKeys[source.source.id] = source.source.snapshotKey;
+  }
   candidate = replaceSources(candidate, replacements, manifest.observedAt);
   const contentHash = await sha256(new TextEncoder().encode(canonicalCatalogContent(candidate)));
   const baselineHash = baseline
@@ -1110,11 +1222,7 @@ async function stageStep(input: CatalogCycleStepInput, nowMs: number): Promise<C
       cacheRevision,
       changed,
       sourceCount: candidate.provenance.length,
-      sourceIds: [...new Set([
-        'openrouter-models',
-        'opencode-zen',
-        ...manualSources.map((source) => source.source.id),
-      ])],
+      sourceIds: candidate.provenance.map((source) => source.id),
       planCount: candidate.plans.length,
       modelCount: candidate.modelOffers.length,
       cacheVariantCount,
@@ -1285,6 +1393,7 @@ export async function runCatalogCycleStep(input: CatalogCycleStepInput): Promise
   const step = input.cycle.phase as CatalogCycleStep;
   try {
     if (step === 'acquire') return acquireStep(input, nowMs);
+    if (step === 'retrieve-subscriptions') return subscriptionRetrievalStep(input, nowMs);
     if (step.startsWith('retrieve-')) return retrievalStep(input, nowMs);
     if (step === 'prepare-manual') return manualStep(input, nowMs);
     if (step === 'stage') return stageStep(input, nowMs);
@@ -1296,7 +1405,9 @@ export async function runCatalogCycleStep(input: CatalogCycleStepInput): Promise
     if (step.startsWith('retrieve-')) {
       return retrievalFailure({
         stepInput: input,
-        sourceId: step === 'retrieve-openrouter' ? 'openrouter-models' : 'opencode-zen',
+        sourceId: step === 'retrieve-openrouter'
+          ? 'openrouter-models'
+          : step === 'retrieve-subscriptions' ? 'subscriptions' : 'opencode-zen',
         error,
       });
     }

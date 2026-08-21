@@ -149,7 +149,7 @@ valid and one that is fresh:
 
 | Worker | Cron | Work performed | Operational constraint |
 | --- | --- | --- | --- |
-| tokenbench-catalog-ingest | `20 0 * * *` | Starts one resumable daily catalog cycle. OpenRouter and OpenCode requests run serially in separate Durable Object alarms; reviewed manual manifests are prepared without external requests. | Only sources named in `AUTOMATED_SOURCE_IDS` may refresh automatically. |
+| tokenbench-catalog-ingest | `20 0 * * *` | Starts one resumable daily catalog cycle. OpenRouter, OpenCode, and the allowlisted subscription pages run serially in separate Durable Object alarms; reviewed manual manifests remain part of the same staged revision. | Model/API sources are controlled by `AUTOMATED_SOURCE_IDS`; subscription pages are controlled independently by `AUTOMATED_SUBSCRIPTION_SOURCE_IDS`. Robots blocks and provider-specific parser failures become crawl receipts and preserve the last-good catalog. |
 | tokenbench-benchmark-ingest | `15 2 * * SUN` | Starts one resumable weekly benchmark cycle. Retrieval, normalization, derivation, D1 facts, 100-model profile windows, cache keys, validation, and publication are checkpointed into separate alarms. | Scheduled-only; fetch returns 405. Last-good remains public until the final guarded transaction. |
 
 This cadence is intentionally spread across the week and day for provider and
