@@ -8,6 +8,7 @@ import {
   reconcileSubscriptionScenario,
   type StrictSubscriptionEnvelope,
 } from "./subscription-simulator-projector";
+import type { SubscriptionScenario } from "./subscription-simulator";
 
 function catalogEnvelope(): StrictSubscriptionEnvelope {
   return {
@@ -47,6 +48,7 @@ function catalogEnvelope(): StrictSubscriptionEnvelope {
         },
       ],
       routes: [],
+      routeBindings: [],
       entitlementProjections: [
         {
           projectionId: "openai-dynamic-limit",
@@ -145,34 +147,53 @@ test("does not preserve a plan or model that the strict catalog cannot validate"
   assert.match(catalog.modelSelectionReason, /model-to-route binding/);
 });
 
-test("builds a calculation request only from an exact emitted direct-route binding", () => {
+test("does not synthesize a model route from a returned persisted route ID", () => {
   const envelope = catalogEnvelope();
   const data = envelope.data as Record<string, unknown>;
-  const catalog = projectSubscriptionCatalog({
-    ...envelope,
-    data: {
-      ...data,
-      plans: (data.plans as Array<Record<string, unknown>>).map((plan) => plan.planId === "openai-reviewed"
-        ? { ...plan, supportedModelSlugs: ["gpt-4o"] }
-        : plan),
-      routes: [{
-        routeId: "gpt-4o-direct",
-        providerId: "openai",
-        status: "available",
-        contextWindowTokens: { availability: "available", value: 128_000 },
-      }],
-    },
-  } as StrictSubscriptionEnvelope, "production");
-  const scenario = reconcileSubscriptionScenario({
+  const catalogData = {
+    ...data,
+    plans: (data.plans as Array<Record<string, unknown>>).map((plan) => plan.planId === "openai-reviewed"
+      ? { ...plan, supportedModelSlugs: ["gpt-4o"] }
+      : plan),
+    routes: [{
+      routeId: "openai:gpt-4o:direct",
+      providerId: "openai",
+      status: "available",
+      contextWindowTokens: { availability: "available", value: 128_000 },
+    }],
+  };
+  const catalog = projectSubscriptionCatalog({ ...envelope, data: catalogData } as StrictSubscriptionEnvelope, "production");
+  const scenarioSeed: SubscriptionScenario = {
     provider: "openai", plan: "openai-reviewed", models: ["gpt-4o"], mix: { "gpt-4o": 100 },
     conversationsPerDay: 1, messagesPerConversation: 1, activeDays: 20, inputTokensPerMessage: 1_000,
     outputTokensPerMessage: 500, cacheReadShare: 0, cacheWriteShare: 0, seats: 1, tokenVolume: 1,
     inputCharactersPerMessage: 4_000, outputCharactersPerMessage: 2_000, contentType: "text", longContext: false,
-  }, catalog);
+  };
+  const scenario = reconcileSubscriptionScenario(scenarioSeed, catalog);
 
+  assert.deepEqual(catalog.models, []);
+  assert.match(catalog.modelSelectionReason, /exact reviewed plan-to-model-to-route binding/);
   assert.deepEqual(buildSubscriptionCalculationRequest(scenario, catalog), {
+    request: null,
+    reason: "Choose a reviewed plan and at least one exactly bound API model.",
+  });
+
+  const boundCatalog = projectSubscriptionCatalog({
+    ...envelope,
+    data: {
+      ...catalogData,
+      routeBindings: [{
+        routeId: "openai:gpt-4o:direct",
+        modelSlug: "gpt-4o",
+        providerId: "openai",
+      }],
+    },
+  } as StrictSubscriptionEnvelope, "production");
+  const boundScenario = reconcileSubscriptionScenario(scenarioSeed, boundCatalog);
+
+  assert.deepEqual(buildSubscriptionCalculationRequest(boundScenario, boundCatalog), {
     request: expectRequest({
-      modelSlug: "gpt-4o", routeId: "gpt-4o-direct", tierContextTokens: 128_000,
+      modelSlug: "gpt-4o", routeId: "openai:gpt-4o:direct", tierContextTokens: 128_000,
     }),
     reason: null,
   });

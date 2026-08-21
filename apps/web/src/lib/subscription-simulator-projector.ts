@@ -66,6 +66,12 @@ type StrictRoute = Readonly<{
   contextWindowTokens: number | null;
 }>;
 
+type StrictRouteBinding = Readonly<{
+  routeId: string;
+  modelSlug: string;
+  providerId: string;
+}>;
+
 type StrictCalculation = Readonly<{
   selectedPlanId: string;
   monthlyApiCostMicroDollars: number;
@@ -99,6 +105,7 @@ type StrictCostKind = StrictCalculation["lineItems"][number]["kind"];
 type StrictSubscriptionData = Readonly<{
   plans: readonly StrictPlan[];
   routes: readonly StrictRoute[];
+  routeBindings: readonly StrictRouteBinding[];
   entitlementProjections: readonly StrictEntitlement[];
   calculation: StrictCalculation | null;
 }>;
@@ -238,6 +245,28 @@ function routes(value: unknown): readonly StrictRoute[] | null {
   return projected.every((item): item is StrictRoute => item !== null) ? projected : null;
 }
 
+function routeBinding(value: unknown): StrictRouteBinding | null {
+  const candidate = record(value);
+  const routeId = string(candidate?.routeId);
+  const modelSlug = string(candidate?.modelSlug);
+  const providerId = string(candidate?.providerId);
+  return routeId === null || modelSlug === null || providerId === null
+    ? null
+    : { routeId, modelSlug, providerId };
+}
+
+function routeBindings(value: unknown): readonly StrictRouteBinding[] | null {
+  // Strict v1 responses published before the binding field remain readable,
+  // but have no factual plan-to-model-to-route selection data. Do not restore
+  // the removed slug-derived route-ID convention for those older receipts.
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return null;
+  const projected = value.map(routeBinding);
+  return projected.every((item): item is StrictRouteBinding => item !== null)
+    ? projected
+    : null;
+}
+
 function entitlement(value: unknown): StrictEntitlement | null {
   const candidate = record(value);
   if (candidate === null) return null;
@@ -348,10 +377,17 @@ function parseSubscriptionData(value: unknown): StrictSubscriptionData | null {
   if (data === null || (data.operation !== "catalog" && data.operation !== "calculate")) return null;
   const projectedPlans = plans(data.plans);
   const projectedRoutes = routes(data.routes);
+  const projectedRouteBindings = routeBindings(data.routeBindings);
   const projectedEntitlements = entitlements(data.entitlementProjections);
   const projectedCalculation = calculation(data.calculation);
-  if (projectedPlans === null || projectedRoutes === null || projectedEntitlements === null || (data.calculation !== null && projectedCalculation === null)) return null;
-  return { plans: projectedPlans, routes: projectedRoutes, entitlementProjections: projectedEntitlements, calculation: projectedCalculation };
+  if (projectedPlans === null || projectedRoutes === null || projectedRouteBindings === null || projectedEntitlements === null || (data.calculation !== null && projectedCalculation === null)) return null;
+  return {
+    plans: projectedPlans,
+    routes: projectedRoutes,
+    routeBindings: projectedRouteBindings,
+    entitlementProjections: projectedEntitlements,
+    calculation: projectedCalculation,
+  };
 }
 
 function calculationModelShares(request: JsonRecord): Readonly<Record<string, number>> {
@@ -460,20 +496,30 @@ function modelViews(data: StrictSubscriptionData | null): readonly SubscriptionM
     const provider = SUBSCRIPTION_PROVIDERS.find((candidate) => candidate.id === plan.providerId);
     if (provider === undefined) continue;
     for (const modelSlug of plan.supportedModelSlugs) {
-      const routeId = `${modelSlug}-direct`;
-      const route = data.routes.find((candidate) => (
+      const bindings = data.routeBindings.filter((candidate) => (
         candidate.providerId === plan.providerId
-        && candidate.routeId === routeId
+        && candidate.modelSlug === modelSlug
+      ));
+      if (bindings.length !== 1) continue;
+      const binding = bindings[0]!;
+      // RouteFact.routeId is opaque. The producer's explicit binding is the
+      // only permissible way to associate it with a plan-supported model;
+      // never reconstruct `${modelSlug}-direct` or parse a provider route ID.
+      const routes = data.routes.filter((candidate) => (
+        candidate.providerId === plan.providerId
+        && candidate.routeId === binding.routeId
         && candidate.status !== "unavailable"
         && candidate.contextWindowTokens !== null
       ));
+      if (routes.length !== 1) continue;
+      const route = routes[0]!;
       const tierContextTokens = route?.contextWindowTokens;
       if (tierContextTokens === undefined || tierContextTokens === null || models.some((candidate) => candidate.planId === plan.planId && candidate.id === modelSlug)) continue;
       models.push({
         id: modelSlug,
         planId: plan.planId,
         providerId: provider.id,
-        routeId,
+        routeId: route.routeId,
         tierContextTokens,
       });
     }

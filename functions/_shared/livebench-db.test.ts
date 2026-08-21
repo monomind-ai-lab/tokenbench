@@ -9,6 +9,9 @@ import type {
 import {
   LIVEBENCH_STAGE_BATCH_SIZE,
   LIVEBENCH_STAGE_JSON_CHUNK_BYTES,
+  LIVEBENCH_STAGE_MAX_D1_STATEMENTS,
+  acquireLiveBenchPublicationLease,
+  isLiveBenchPublicationLeaseCurrent,
   publishLiveBenchRelease,
   readActiveLiveBenchBundle,
   readActiveLiveBenchRelease,
@@ -16,6 +19,8 @@ import {
   validateLiveBenchRelease,
   type LiveBenchD1Database,
   type LiveBenchD1Statement,
+  LiveBenchPublicationLeaseError,
+  type LiveBenchPublicationLease,
 } from './livebench-db';
 
 const CHECKED_AT = '2026-08-19T09:00:00.000Z';
@@ -200,6 +205,7 @@ function sqliteDatabase(): { readonly sqlite: DatabaseSync; readonly d1: LiveBen
   sqlite.exec('PRAGMA foreign_keys = ON');
   sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations/0013_pipeline_foundation.sql'), 'utf8'));
   sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations/0014_livebench.sql'), 'utf8'));
+  sqlite.exec(readFileSync(resolve(process.cwd(), 'migrations/0017_livebench_publication_epoch.sql'), 'utf8'));
   const d1: LiveBenchD1Database = {
     prepare(sql: string) {
       return new SqliteD1Statement(sqlite, sql);
@@ -305,12 +311,81 @@ function stageInput(db: FakeDatabase) {
   };
 }
 
+function lease(attemptId = ATTEMPT_ID, epoch = 1): LiveBenchPublicationLease {
+  return { attemptId, epoch };
+}
+
+function sourceRevisionFor(attemptId: string): string {
+  return `${bundle.releaseId}@${bundle.sourceCommit}:${attemptId}`;
+}
+
+function seedSqliteSourceEvidence(sqlite: DatabaseSync, attemptId: string): string {
+  const sourceRevision = sourceRevisionFor(attemptId);
+  const manifestKey = `evidence/benchmark/livebench/${attemptId}/manifest.json`;
+  sqlite.prepare(`INSERT INTO source_revision_manifests (
+    domain, source_id, source_revision, attempt_id, upstream_revision,
+    release_id, license_id, r2_manifest_key, content_hash, parser_version,
+    observed_at, status
+  ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'CDLA-Permissive-2.0', ?, ?, 'livebench-parser-v1', ?, 'validated')`)
+    .run(
+      sourceRevision,
+      attemptId,
+      bundle.sourceCommit,
+      bundle.releaseId,
+      manifestKey,
+      DIGEST,
+      CHECKED_AT,
+    );
+  const artifactInsert = sqlite.prepare(`INSERT INTO source_artifacts (
+    domain, source_id, source_revision, artifact_id, upstream_url,
+    r2_key, content_type, byte_length, content_hash, upstream_blob_id
+  ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, ?, 1, ?, ?)`);
+  for (const artifact of descriptor.artifacts) {
+    artifactInsert.run(
+      sourceRevision,
+      artifact.artifactId,
+      artifact.rawUrl,
+      `evidence/benchmark/livebench/${attemptId}/${artifact.artifactId}`,
+      artifact.artifactId === 'categories' ? 'application/json' : 'text/plain',
+      DIGEST,
+      artifact.blobId,
+    );
+  }
+  return sourceRevision;
+}
+
+async function stageValidatedSqliteCandidate(
+  sqlite: DatabaseSync,
+  d1: LiveBenchD1Database,
+  revision: string,
+  attemptId: string,
+): Promise<void> {
+  const sourceRevision = seedSqliteSourceEvidence(sqlite, attemptId);
+  await stageLiveBenchRelease({
+    ...stageInput(database()),
+    db: d1,
+    revision,
+    attemptId,
+    sourceRevision,
+    sourceManifestKey: `evidence/benchmark/livebench/${attemptId}/manifest.json`,
+    identities: bundle.models.map((model) => ({
+      configurationId: model.configurationId,
+      canonicalConfigurationId: null,
+      matchKind: 'proposal' as const,
+      reviewStatus: 'needs_review' as const,
+      reviewedBy: null,
+      evidenceUrl: null,
+    })),
+  });
+  await validateLiveBenchRelease({ db: d1, revision, attemptId });
+}
+
 describe('LiveBench D1 staging and publication', () => {
   it('stages immutable release rows in bounded attempt-owned batches and preserves a reviewed-null identity explicitly', async () => {
     const db = database();
     await stageLiveBenchRelease(stageInput(db));
 
-    expect(db.batches.length).toBeGreaterThan(1);
+    expect(db.batches).toHaveLength(1);
     expect(db.batches.every((batch) => batch.length <= LIVEBENCH_STAGE_BATCH_SIZE)).toBe(true);
     const modelStatement = db.statements.find(({ sql }) => sql.includes('livebench_model_configurations'));
     const stagedModels = JSON.parse(String(modelStatement?.values[2])) as Record<string, unknown>[];
@@ -387,7 +462,12 @@ describe('LiveBench D1 staging and publication', () => {
 
     expect(productionSizedBundle.taskScores).toHaveLength(1_012);
     expect(productionSizedBundle.taskEconomics).toHaveLength(1_012);
-    expect(db.statements.length).toBeLessThan(25);
+    // Four metadata collections + 44×23 scores + 44×23 economics fit in six
+    // json_each inserts; add the release insert and ownership read = eight.
+    expect(db.statements).toHaveLength(8);
+    expect(db.statements.length).toBeLessThanOrEqual(LIVEBENCH_STAGE_MAX_D1_STATEMENTS);
+    expect(db.batches.flat()).toHaveLength(db.statements.length - 2);
+    expect(db.batches.flat().length + 2).toBeLessThanOrEqual(LIVEBENCH_STAGE_MAX_D1_STATEMENTS);
     const jsonPayloads = db.statements.flatMap(({ values }) => values)
       .filter((value): value is string => typeof value === 'string' && value.startsWith('[{'));
     expect(jsonPayloads.length).toBeGreaterThanOrEqual(6);
@@ -429,7 +509,7 @@ describe('LiveBench D1 staging and publication', () => {
         );
       }
 
-      await stageLiveBenchRelease({
+      const checkpointedStage = {
         ...stageInput(database()),
         db: d1,
         identities: bundle.models.map((model) => ({
@@ -440,15 +520,98 @@ describe('LiveBench D1 staging and publication', () => {
           reviewedBy: null,
           evidenceUrl: null,
         })),
-      });
+      };
+      await stageLiveBenchRelease(checkpointedStage);
+      // The release+attempt is a durable checkpoint: a retry repeats the
+      // deterministic bulk plan without duplicating immutable facts.
+      await stageLiveBenchRelease(checkpointedStage);
       await validateLiveBenchRelease({ db: d1, revision: REVISION, attemptId: ATTEMPT_ID });
-      await publishLiveBenchRelease({ db: d1, revision: REVISION, attemptId: ATTEMPT_ID, publishedAt: PUBLISHED_AT });
+      const publicationLease = await acquireLiveBenchPublicationLease({
+        db: d1,
+        attemptId: ATTEMPT_ID,
+        acquiredAt: PUBLISHED_AT,
+      });
+      await publishLiveBenchRelease({
+        db: d1,
+        revision: REVISION,
+        attemptId: ATTEMPT_ID,
+        lease: publicationLease,
+        publishedAt: PUBLISHED_AT,
+      });
       const active = await readActiveLiveBenchBundle(d1);
 
       expect(active?.release.revision).toBe(REVISION);
       expect(active?.bundle).toEqual(bundle);
       expect(sqlite.prepare('SELECT COUNT(*) AS count FROM livebench_task_scores').get())
         .toEqual({ count: 4 });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('atomically rejects a stale completion after a later persisted lease is acquired', async () => {
+    const { sqlite, d1 } = sqliteDatabase();
+    const oldRevision = 'livebench-last-good';
+    const oldAttempt = 'attempt-last-good';
+    const staleRevision = 'livebench-stale';
+    const staleAttempt = 'attempt-stale';
+    const newerRevision = 'livebench-newer';
+    const newerAttempt = 'attempt-newer';
+    try {
+      await stageValidatedSqliteCandidate(sqlite, d1, oldRevision, oldAttempt);
+      const oldLease = await acquireLiveBenchPublicationLease({
+        db: d1,
+        attemptId: oldAttempt,
+        acquiredAt: '2026-08-19T09:01:00.000Z',
+      });
+      await publishLiveBenchRelease({
+        db: d1,
+        revision: oldRevision,
+        attemptId: oldAttempt,
+        lease: oldLease,
+        publishedAt: '2026-08-19T09:01:00.000Z',
+      });
+
+      await stageValidatedSqliteCandidate(sqlite, d1, staleRevision, staleAttempt);
+      await stageValidatedSqliteCandidate(sqlite, d1, newerRevision, newerAttempt);
+      const staleLease = await acquireLiveBenchPublicationLease({
+        db: d1,
+        attemptId: staleAttempt,
+        acquiredAt: '2026-08-19T09:02:00.000Z',
+      });
+      const newerLease = await acquireLiveBenchPublicationLease({
+        db: d1,
+        attemptId: newerAttempt,
+        acquiredAt: '2026-08-19T09:03:00.000Z',
+      });
+
+      expect(staleLease.epoch).toBeLessThan(newerLease.epoch);
+      await expect(isLiveBenchPublicationLeaseCurrent({ db: d1, lease: staleLease })).resolves.toBe(false);
+      await expect(isLiveBenchPublicationLeaseCurrent({ db: d1, lease: newerLease })).resolves.toBe(true);
+      await expect(publishLiveBenchRelease({
+        db: d1,
+        revision: staleRevision,
+        attemptId: staleAttempt,
+        lease: staleLease,
+        publishedAt: '2026-08-19T09:04:00.000Z',
+      })).rejects.toBeInstanceOf(LiveBenchPublicationLeaseError);
+
+      expect(sqlite.prepare('SELECT publication_state FROM livebench_releases WHERE revision = ?').get(staleRevision))
+        .toEqual({ publication_state: 'validated' });
+      expect(sqlite.prepare('SELECT active_revision FROM livebench_publication_state WHERE singleton = 1').get())
+        .toEqual({ active_revision: oldRevision });
+
+      await publishLiveBenchRelease({
+        db: d1,
+        revision: newerRevision,
+        attemptId: newerAttempt,
+        lease: newerLease,
+        publishedAt: '2026-08-19T09:05:00.000Z',
+      });
+      expect(sqlite.prepare('SELECT active_revision FROM livebench_publication_state WHERE singleton = 1').get())
+        .toEqual({ active_revision: newerRevision });
+      expect(sqlite.prepare('SELECT current_epoch, active_epoch FROM livebench_publication_epochs WHERE singleton = 1').get())
+        .toEqual({ current_epoch: newerLease.epoch, active_epoch: newerLease.epoch });
     } finally {
       sqlite.close();
     }
@@ -472,19 +635,32 @@ describe('LiveBench D1 staging and publication', () => {
 
   it('promotes only a validated current release in one final pointer batch', async () => {
     const db = database({ release: stagedRelease({ publication_state: 'validated' }) });
-    const result = await publishLiveBenchRelease({ db, revision: REVISION, attemptId: ATTEMPT_ID, publishedAt: PUBLISHED_AT });
+    const result = await publishLiveBenchRelease({
+      db,
+      revision: REVISION,
+      attemptId: ATTEMPT_ID,
+      lease: lease(),
+      publishedAt: PUBLISHED_AT,
+    });
 
     expect(result).toEqual({ revision: REVISION, publishedAt: PUBLISHED_AT });
     expect(db.batches).toHaveLength(1);
-    expect(db.batches[0]).toHaveLength(2);
+    expect(db.batches[0]).toHaveLength(3);
     expect(db.batches[0]?.[1]?.sql).toContain('livebench_publication_state');
-    expect(db.batches[0]?.[1]?.sql).toContain('excluded.updated_at >= livebench_publication_state.updated_at');
+    expect(db.batches[0]?.[0]?.sql).toContain('livebench_publication_epochs');
+    expect(db.batches[0]?.[2]?.sql).toContain('active_epoch');
   });
 
   it('never allows a historical release to move the active pointer', async () => {
     const db = database({ release: stagedRelease({ release_kind: 'historical', publication_state: 'validated' }) });
 
-    await expect(publishLiveBenchRelease({ db, revision: REVISION, attemptId: ATTEMPT_ID, publishedAt: PUBLISHED_AT }))
+    await expect(publishLiveBenchRelease({
+      db,
+      revision: REVISION,
+      attemptId: ATTEMPT_ID,
+      lease: lease(),
+      publishedAt: PUBLISHED_AT,
+    }))
       .rejects.toThrow(/historical/i);
     expect(db.batches).toHaveLength(0);
   });

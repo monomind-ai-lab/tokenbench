@@ -79,7 +79,7 @@ export async function onRequestGet({
       normalized,
     ])}"`;
     if (request.headers.get('if-none-match') === etag) {
-      return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'public, max-age=0, must-revalidate' } });
+      return new Response(null, { status: 304, headers: { ETag: etag, 'Cache-Control': 'public, max-age=0, must-revalidate', Vary: 'Accept' } });
     }
     return jsonUiDataResponse(envelope, 200, etag);
   } catch {

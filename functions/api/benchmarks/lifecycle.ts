@@ -42,6 +42,7 @@ interface CatalogLifecycleModelRow {
 
 const PROJECTION_METHODOLOGY = 'endpoint-catalog-expiration-v1';
 const DAY_MS = 24 * 60 * 60 * 1_000;
+const CATALOG_STALE_AFTER_MS = 24 * 60 * 60 * 1_000;
 
 async function all<T>(db: D1Database, query: string, ...values: unknown[]): Promise<T[]> {
   return (await db.prepare(query).bind(...values).all<T>()).results;
@@ -190,7 +191,27 @@ export async function onRequestGet({
       observedAt: context.observed_at,
       effectiveAt: context.observed_at,
     };
-    const { data, warnings } = buildLifecycleData({ request: normalized, rows, source });
+    const { data, warnings: projectionWarnings } = buildLifecycleData({ request: normalized, rows, source });
+    const warnings = [
+      ...projectionWarnings,
+      ...(Date.parse(fetchedAt) - Date.parse(context.checked_at) > CATALOG_STALE_AFTER_MS ? [{
+        code: 'lifecycle_catalog_stale',
+        fieldGroup: '/data',
+        state: 'stale' as const,
+        message: 'The endpoint lifecycle catalog is stale; events remain last verified observations.',
+      }] : []),
+    ];
+    const etag = `"${PROJECTION_METHODOLOGY}:${context.revision}:${normalized.asOf}:${normalized.horizonDays}"`;
+    if (request.headers.get('if-none-match') === etag) {
+      return new Response(null, {
+        status: 304,
+        headers: {
+          'Cache-Control': 'public, max-age=0, must-revalidate',
+          ETag: etag,
+          Vary: 'Accept',
+        },
+      });
+    }
     return jsonUiDataResponse(buildUiDataContractV1Envelope({
       method: 'lifecycle',
       request: normalized,
@@ -213,7 +234,7 @@ export async function onRequestGet({
       },
       sources: [source],
       warnings,
-    }), 200, `"${PROJECTION_METHODOLOGY}:${context.revision}:${normalized.asOf}:${normalized.horizonDays}"`);
+    }), 200, etag);
   } catch {
     return jsonUiDataResponse({
       error: {

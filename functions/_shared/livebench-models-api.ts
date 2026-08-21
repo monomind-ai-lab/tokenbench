@@ -125,7 +125,7 @@ export async function onLiveBenchModelsGet(input: {
       request: normalized,
     });
     if (input.request.headers.get('if-none-match') === responseEtag) {
-      return new Response(null, { status: 304, headers: { ETag: responseEtag, 'Cache-Control': 'public, max-age=0, must-revalidate' } });
+      return new Response(null, { status: 304, headers: { ETag: responseEtag, 'Cache-Control': 'public, max-age=0, must-revalidate', Vary: 'Accept' } });
     }
     return jsonUiDataResponse(envelope, 200, responseEtag);
   } catch (error) {
@@ -192,7 +192,7 @@ export async function onLiveBenchProfileGet(input: {
       request: normalized,
     });
     if (input.request.headers.get('if-none-match') === responseEtag) {
-      return new Response(null, { status: 304, headers: { ETag: responseEtag, 'Cache-Control': 'public, max-age=0, must-revalidate' } });
+      return new Response(null, { status: 304, headers: { ETag: responseEtag, 'Cache-Control': 'public, max-age=0, must-revalidate', Vary: 'Accept' } });
     }
     return jsonUiDataResponse(envelope, 200, responseEtag);
   } catch {

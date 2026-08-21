@@ -74,8 +74,24 @@ function model(id: string, name = id.toUpperCase()): PreviewModel {
         inputModalities: ["text"],
         outputModalities: ["text"],
         cache: {
-          availability: "unavailable",
-          reason: "No accepted cache source.",
+          availability: "available",
+          value: {
+            readUsdPerMillion: {
+              availability: "available",
+              value: 0.5,
+              provenance: source,
+            },
+            writeUsdPerMillion: {
+              availability: "unavailable",
+              reason: "No accepted cache-write source.",
+            },
+          },
+          provenance: source,
+        },
+        longContextInputUsdPerMillion: {
+          availability: "available",
+          value: 4,
+          provenance: source,
         },
       },
       provenance: source,
@@ -116,6 +132,9 @@ describe("model surface projectors", () => {
       id: "alpha",
       capabilityScore: 91,
       inputUsdPerMillion: 2,
+      cacheReadUsdPerMillion: 0.5,
+      cacheWriteUsdPerMillion: null,
+      longContextInputUsdPerMillion: 4,
       contextWindowTokens: null,
       maxOutputTokens: null,
       ttftP50Seconds: null,

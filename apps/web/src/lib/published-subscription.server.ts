@@ -117,7 +117,9 @@ function modelViews(catalog: CatalogResponse): readonly SubscriptionModelView[] 
       id: modelId,
       planId: plan.id,
       providerId: plan.providerId as SubscriptionProvider,
-      routeId: `${modelId}-direct`,
+      // `model_offers.id` is the persisted route identity. It may differ from
+      // a model slug and must never be reconstructed from one.
+      routeId: offer.id,
       tierContextTokens: offer.contextWindowTokens as number,
     }];
   }));
@@ -201,7 +203,7 @@ function priceTokens(
       }
       const costMicroDollars = roundedCost(tokens, rate);
       lines.push({
-        id: `${item.modelSlug}-${kind}`,
+        id: `${item.routeId}-${kind}`,
         modelSlug: item.modelSlug,
         kind,
         tokens,
@@ -283,12 +285,19 @@ export function calculatePublishedSubscription(
     const offers = scopedDirectOffers(catalog);
     for (const item of request.modelMix) {
       if (!(plan.supportedModelIds ?? []).includes(item.modelSlug)) throw new TypeError("The selected model is not published for this plan.");
-      if (item.routeId !== `${item.modelSlug}-direct`) throw new TypeError("The selected route does not match the published direct binding.");
-      if (!offers.some((offer) => offer.providerId === plan.providerId && offer.modelId === item.modelSlug)) {
+      if (!offers.some((offer) => (
+        offer.providerId === plan.providerId
+        && offer.modelId === item.modelSlug
+        && offer.id === item.routeId
+      ))) {
         throw new TypeError("The selected model has no exact reviewed direct route.");
       }
     }
-    const selectedOffers = request.modelMix.map((item) => offers.find((offer) => offer.providerId === plan.providerId && offer.modelId === item.modelSlug) as ModelOffer);
+    const selectedOffers = request.modelMix.map((item) => offers.find((offer) => (
+      offer.providerId === plan.providerId
+      && offer.modelId === item.modelSlug
+      && offer.id === item.routeId
+    )) as ModelOffer);
     return { ...projected, calculation: calculateView(plan, selectedOffers, request), calculationReason: null };
   } catch (error) {
     return {
@@ -326,7 +335,7 @@ function homeModels(catalog: CatalogResponse, provenance: Provenance): readonly 
       benchmark: homeUnavailable("The provider catalog is not a benchmark source.", provenance),
       capability: homeUnavailable("The provider catalog is not a capability source.", provenance),
       routePricing: homeAvailable({
-        route: `${offer.modelId}-direct`,
+        route: offer.id,
         inputUsdPerMillion: offer.inputMicroDollarsPerMillion / 1_000_000,
         outputUsdPerMillion: offer.outputMicroDollarsPerMillion / 1_000_000,
         contextWindowTokens: homeAvailable(offer.contextWindowTokens, provenance),

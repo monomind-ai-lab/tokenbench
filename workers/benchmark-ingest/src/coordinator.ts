@@ -72,7 +72,11 @@ import {
   refreshLiveBenchRelease as runLiveBenchRefresh,
   type LiveBenchRefreshResult,
 } from './livebench-refresh';
-import type { LiveBenchD1Database } from '../../../functions/_shared/livebench-db';
+import {
+  acquireLiveBenchPublicationLease,
+  isLiveBenchPublicationLeaseCurrent,
+  type LiveBenchD1Database,
+} from '../../../functions/_shared/livebench-db';
 import type { CandidateEvidenceBucket } from '../../_shared/candidate-evidence';
 
 // ---------------------------------------------------------------------------
@@ -1356,8 +1360,8 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
   /**
    * Run the lightweight six-hour LiveBench discovery and, only for a changed
    * complete bundle, validate and atomically publish a new current revision.
-   * A single-flight guard prevents overlapping external I/O from interleaving
-   * two refreshes in the same Durable Object instance.
+   * The in-memory single-flight guard avoids duplicate I/O in one instance;
+   * the D1-persisted lease fences completions across restarts and instances.
    */
   async refreshLiveBench(input: { scheduledTime: number }): Promise<LiveBenchRefreshResult> {
     if (this.liveBenchRefreshInFlight) return this.liveBenchRefreshInFlight;
@@ -1372,6 +1376,13 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
 
   private async performLiveBenchRefresh(input: { scheduledTime: number }): Promise<LiveBenchRefreshResult> {
     const checkedAt = iso(Number.isFinite(input.scheduledTime) ? input.scheduledTime : this.deps.now());
+    const database = this.coordinatorEnv.CATALOG_DB as unknown as LiveBenchD1Database;
+    const publicationAttemptId = this.deps.randomUUID();
+    const publicationLease = await acquireLiveBenchPublicationLease({
+      db: database,
+      attemptId: publicationAttemptId,
+      acquiredAt: checkedAt,
+    });
     const previous = await this.durable.get<LiveBenchDiscoveryState>(LIVEBENCH_DISCOVERY_STORAGE_KEY) ?? {
       etag: null,
       headCommit: null,
@@ -1380,7 +1391,7 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
     };
     const result = await runLiveBenchRefresh({
       env: {
-        CATALOG_DB: this.coordinatorEnv.CATALOG_DB as unknown as LiveBenchD1Database,
+        CATALOG_DB: database,
         SOURCE_SNAPSHOTS: this.coordinatorEnv.SOURCE_SNAPSHOTS as unknown as CandidateEvidenceBucket,
       },
       previous,
@@ -1388,9 +1399,12 @@ export class BenchmarkIngestCoordinator extends DurableObject<BenchmarkIngestEnv
       forceWeeklyVerification: previous.verifiedIsoWeek !== benchmarkCadenceKey(checkedAt),
       license: ACCEPTED_LIVEBENCH_LICENSE,
       fetchImpl: this.deps.fetchImpl,
-      attemptId: this.deps.randomUUID,
+      attemptId: () => publicationAttemptId,
+      publicationLease,
     });
-    await this.durable.put(LIVEBENCH_DISCOVERY_STORAGE_KEY, result.state);
+    if (await isLiveBenchPublicationLeaseCurrent({ db: database, lease: publicationLease })) {
+      await this.durable.put(LIVEBENCH_DISCOVERY_STORAGE_KEY, result.state);
+    }
     this.deps.log({
       event: 'livebench_refresh_completed',
       status: result.status,

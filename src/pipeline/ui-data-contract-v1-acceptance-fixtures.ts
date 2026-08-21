@@ -77,7 +77,7 @@ function route(slug: string, index: number) {
   const routeId = `${slug}-direct`;
   return {
     routeId,
-    providerId: `provider-${index}`,
+    providerId: 'fixture-provider',
     status: 'available' as const,
     inputMicroDollarsPerMillion: available(2_000_000 + index * 100_000),
     outputMicroDollarsPerMillion: available(8_000_000 + index * 100_000),
@@ -302,13 +302,19 @@ function subscriptionData() {
     effectiveAt: UI_DATA_CONTRACT_V1_ACCEPTANCE_TIME,
     sourceRefs: [PRIMARY_SOURCE.sourceRef],
   }];
-  const facts = { plans, routes, entitlementProjections, methodologyVersion: 'subscription-v1' };
+  const routeBindings = routes.map((route) => ({
+    routeId: route.routeId,
+    modelSlug: request.modelMix.find((mix) => mix.routeId === route.routeId)?.modelSlug ?? 'unbound',
+    providerId: route.providerId,
+  }));
+  const facts = { plans, routes, routeBindings, entitlementProjections, methodologyVersion: 'subscription-v1' };
   return {
     request,
     data: {
       operation: 'calculate' as const,
       plans,
       routes,
+      routeBindings,
       entitlementProjections,
       calculation: buildSubscriptionCalculation(request, facts),
     },

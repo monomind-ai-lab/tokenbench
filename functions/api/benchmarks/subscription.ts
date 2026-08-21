@@ -24,6 +24,7 @@ import {
   type SubscriptionCalculationRequest,
   type SubscriptionData,
   type SubscriptionRequest,
+  type SubscriptionRouteBinding,
   type SubscriptionWorkloadShape,
 } from '../../../src/pipeline/ui-data-contract-v1-subscription';
 import {
@@ -154,9 +155,10 @@ function documentedPositiveInteger(
 
 function projectRoute(offer: CatalogResponse['modelOffers'][number], catalogSourceRef: string): RouteFact {
   return {
-    // Explicit strict-v1 catalog convention: a safe direct model slug is bound
-    // to this exact route ID. This mirrors the accepted v1 evidence contract.
-    routeId: `${offer.modelId}-direct`,
+    // The revisioned offer ID is the sole route identity. Do not derive a
+    // substitute from a model slug: multiple provider routes can expose the
+    // same model ID while having different pricing and availability facts.
+    routeId: offer.id,
     providerId: offer.providerId,
     status: routeStatus(offer.availability),
     inputMicroDollarsPerMillion: available(offer.inputMicroDollarsPerMillion, catalogSourceRef),
@@ -164,7 +166,9 @@ function projectRoute(offer: CatalogResponse['modelOffers'][number], catalogSour
     cacheReadMicroDollarsPerMillion: offer.cachedInputMicroDollarsPerMillion === undefined
       ? unknown('No reviewed cache-read rate is available for this route.', catalogSourceRef)
       : available(offer.cachedInputMicroDollarsPerMillion, catalogSourceRef),
-    cacheWriteMicroDollarsPerMillion: unknown('No reviewed cache-write rate is available for this route.', catalogSourceRef),
+    cacheWriteMicroDollarsPerMillion: offer.cacheWriteMicroDollarsPerMillion === undefined
+      ? unknown('No reviewed cache-write rate is available for this route.', catalogSourceRef)
+      : available(offer.cacheWriteMicroDollarsPerMillion, catalogSourceRef),
     contextWindowTokens: documentedPositiveInteger(
       offer.contextWindowTokens,
       'No reviewed context-window value is available for this route.',
@@ -292,6 +296,24 @@ function projectEntitlement(
   };
 }
 
+function calculationBindingUnavailable(input: {
+  readonly plans: readonly {
+    readonly providerId: string;
+    readonly supportedModelSlugs: readonly string[];
+  }[];
+  readonly routes: readonly Pick<RouteFact, 'routeId' | 'status'>[];
+  readonly routeBindings: readonly SubscriptionRouteBinding[];
+}): boolean {
+  return input.plans.some((plan) => (
+    plan.supportedModelSlugs.length === 0
+    || plan.supportedModelSlugs.some((modelSlug) => !input.routeBindings.some((binding) => (
+      binding.modelSlug === modelSlug
+      && binding.providerId === plan.providerId
+      && input.routes.some((route) => route.routeId === binding.routeId && route.status !== 'unavailable')
+    )))
+  ));
+}
+
 function buildCatalogProjection(input: {
   readonly catalog: CatalogResponse;
   readonly workloadShape: SubscriptionWorkloadShape;
@@ -311,13 +333,10 @@ function buildCatalogProjection(input: {
     && SAFE_MODEL_SLUG.test(offer.modelId)
     && sourceById.has(offer.sourceId)
   ));
-  const routeSlugCounts = new Map<string, number>();
-  for (const offer of directOffers) {
-    routeSlugCounts.set(offer.modelId, (routeSlugCounts.get(offer.modelId) ?? 0) + 1);
-  }
-  // `${modelSlug}-direct` is the established public binding convention. If
-  // two catalog rows would claim it, omit both rather than choose one.
-  const routes = directOffers.filter((offer) => routeSlugCounts.get(offer.modelId) === 1);
+  // `model_offers.id` is revision-scoped and already the exact route identity.
+  // Keep an explicit binding so calculations cannot pair a plan's supported
+  // model slug with a different provider/model offer merely by route shape.
+  const routes = directOffers;
   const usedSourceIds = new Set([...plans, ...routes].map((offer) => offer.sourceId));
   if (usedSourceIds.size === 0) return null;
   const sources = [...usedSourceIds]
@@ -347,17 +366,42 @@ function buildCatalogProjection(input: {
     if (catalogSourceRef === undefined) throw new Error('Missing route source attribution.');
     return projectRoute(offer, catalogSourceRef);
   });
+  const routeBindings: SubscriptionRouteBinding[] = routes.map((offer, index) => ({
+    routeId: projectedRoutes[index]!.routeId,
+    modelSlug: offer.modelId,
+    providerId: offer.providerId,
+  }));
 
   const data: SubscriptionData = {
     operation: 'catalog',
     plans: projectedPlans.map(({ entitlement: _entitlement, ...plan }) => plan),
     routes: projectedRoutes,
+    routeBindings,
     entitlementProjections: projectedPlans.map((plan) => plan.entitlement),
     calculation: null,
   };
+  const hasCalculationBindingGap = calculationBindingUnavailable({
+    plans: data.plans,
+    routes: data.routes,
+    routeBindings: data.routeBindings,
+  });
   const warnings: DataWarning[] = [
     ...subscriptionUnavailableWarnings(data),
-    ...(includeCalculationBindingWarning ? [{
+    ...projectedPlans.flatMap((plan, index): DataWarning[] => (
+      plan.entitlement.evidenceState === 'dynamic_unknown' ? [{
+        code: 'subscription_entitlement_dynamic_unknown',
+        fieldGroup: `/data/entitlementProjections/${index}`,
+        state: 'unknown',
+        message: 'This plan publishes no single fixed, comparable entitlement capacity.',
+      }] : []
+    )),
+    ...(catalog.freshness.status === 'stale' ? [{
+      code: 'subscription_catalog_stale',
+      fieldGroup: '/data',
+      state: 'stale' as const,
+      message: 'The reviewed subscription catalog is stale; values remain last verified observations.',
+    }] : []),
+    ...(includeCalculationBindingWarning && hasCalculationBindingGap ? [{
       code: 'subscription_calculation_binding_unavailable',
       fieldGroup: '/data/calculation',
       state: 'unknown' as const,
@@ -383,7 +427,7 @@ async function catalogResponse(request: SubscriptionRequest, env: Env | undefine
     const envelope = buildUiDataContractV1Envelope({
       method: 'subscription',
       request,
-      status: 'partial',
+      status: projection.warnings.length === 0 ? 'available' : 'partial',
       reason: null,
       fetchedAt,
       data: projection.data,
@@ -430,7 +474,12 @@ function calculationBindingFailure(
   if (plan === undefined) return 'The selected plan is not a reviewed catalog plan.';
   for (const mix of request.modelMix) {
     if (!plan.supportedModelSlugs.includes(mix.modelSlug)) return 'The selected model is not reviewed as supported by this plan.';
-    if (mix.routeId !== `${mix.modelSlug}-direct`) return 'The selected route does not match the published direct-route binding convention.';
+    const binding = data.routeBindings.find((candidate) => candidate.routeId === mix.routeId);
+    if (binding === undefined
+      || binding.modelSlug !== mix.modelSlug
+      || binding.providerId !== plan.providerId) {
+      return 'No exact reviewed direct route is available for the selected model and plan.';
+    }
     const route = data.routes.find((candidate) => (
       candidate.routeId === mix.routeId
       && candidate.providerId === plan.providerId
@@ -476,16 +525,17 @@ async function calculationResponse(
     const calculation = buildSubscriptionCalculation(request, {
       plans: projection.data.plans,
       routes: projection.data.routes,
+      routeBindings: projection.data.routeBindings,
       entitlementProjections: projection.data.entitlementProjections,
       methodologyVersion: selectedEntitlement.methodologyVersion,
     });
     const data: SubscriptionData = { ...projection.data, operation: 'calculate', calculation };
-    const warnings = subscriptionUnavailableWarnings(data);
+    const warnings = projection.warnings;
     validateSubscriptionData(request, data, projection.sources);
     const envelope = buildUiDataContractV1Envelope({
       method: 'subscription',
       request,
-      status: 'partial',
+      status: warnings.length === 0 ? 'available' : 'partial',
       reason: null,
       fetchedAt,
       data,

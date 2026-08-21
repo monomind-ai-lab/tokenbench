@@ -36,6 +36,7 @@ export interface StrictModelJoinRouteInput {
   readonly availability: 'available' | 'limited' | 'deprecated' | null;
   readonly inputMicroDollarsPerMillion: number;
   readonly cacheReadMicroDollarsPerMillion: number | null;
+  readonly cacheWriteMicroDollarsPerMillion: number | null;
   readonly outputMicroDollarsPerMillion: number;
   readonly contextWindowTokens: number | null;
   readonly maxOutputTokens: number | null;
@@ -74,7 +75,7 @@ export interface StrictModelJoinD1Database {
 
 interface ActiveCatalogContext {
   readonly revision: string;
-  readonly checkedAt: string;
+  readonly checked_at: string;
 }
 
 interface CatalogJoinRow {
@@ -92,6 +93,7 @@ interface CatalogJoinRow {
   readonly availability: unknown;
   readonly input_micro_dollars_per_million: unknown;
   readonly cached_input_micro_dollars_per_million: unknown;
+  readonly cache_write_micro_dollars_per_million: unknown;
   readonly output_micro_dollars_per_million: unknown;
   readonly context_window_tokens: unknown;
   readonly max_output_tokens: unknown;
@@ -133,6 +135,7 @@ const ACTIVE_EXACT_ROUTE_ROWS_SQL = `
     offers.availability,
     offers.input_micro_dollars_per_million,
     offers.cached_input_micro_dollars_per_million,
+    offers.cache_write_micro_dollars_per_million,
     offers.output_micro_dollars_per_million,
     offers.context_window_tokens,
     offers.max_output_tokens,
@@ -233,6 +236,9 @@ function routeFromInput(input: StrictModelJoinRouteInput): RouteFact | null {
   const cacheRead = input.cacheReadMicroDollarsPerMillion === null
     ? null
     : nonNegativeInteger(input.cacheReadMicroDollarsPerMillion);
+  const cacheWrite = input.cacheWriteMicroDollarsPerMillion === null
+    ? null
+    : nonNegativeInteger(input.cacheWriteMicroDollarsPerMillion);
   const sourceRef = input.source.sourceRef;
   return {
     routeId,
@@ -243,12 +249,9 @@ function routeFromInput(input: StrictModelJoinRouteInput): RouteFact | null {
     cacheReadMicroDollarsPerMillion: cacheRead === null
       ? unavailable('No exact reviewed cache-read rate is available for this catalog route.', sourceRef)
       : available(cacheRead, sourceRef),
-    // Current revisioned model_offers storage has no cache-write field. Never
-    // copy a cache-read or input rate into this independent fact.
-    cacheWriteMicroDollarsPerMillion: unavailable(
-      'No authoritative cache-write rate is stored for this catalog route.',
-      sourceRef,
-    ),
+    cacheWriteMicroDollarsPerMillion: cacheWrite === null
+      ? unavailable('No authoritative cache-write rate is available for this catalog route.', sourceRef)
+      : available(cacheWrite, sourceRef),
     contextWindowTokens: input.contextWindowTokens === null
       ? unavailable('No exact reviewed context-window value is available for this catalog route.', sourceRef)
       : (() => {
@@ -516,7 +519,7 @@ export async function readStrictModelJoin(input: {
     });
   }
   const revision = nonBlank(catalog.revision);
-  const checkedAt = canonicalTimestamp(catalog.checkedAt);
+  const checkedAt = canonicalTimestamp(catalog.checked_at);
   if (!revision || !checkedAt) throw new Error('active catalog context is invalid');
 
   const [rows, snapshot] = await Promise.all([
@@ -568,6 +571,10 @@ export async function readStrictModelJoin(input: {
       cacheReadMicroDollarsPerMillion: row.cached_input_micro_dollars_per_million === null
         ? null
         : nonNegativeInteger(row.cached_input_micro_dollars_per_million),
+      cacheWriteMicroDollarsPerMillion: row.cache_write_micro_dollars_per_million === null
+        || row.cache_write_micro_dollars_per_million === undefined
+        ? null
+        : nonNegativeInteger(row.cache_write_micro_dollars_per_million),
       outputMicroDollarsPerMillion: outputPrice,
       contextWindowTokens: row.context_window_tokens === null ? null : positiveIntegerOrNull(row.context_window_tokens),
       maxOutputTokens: row.max_output_tokens === null ? null : positiveIntegerOrNull(row.max_output_tokens),
@@ -627,7 +634,7 @@ export interface StrictModelJoinEnvelopeContext {
 
 /** Builds a mixed-source envelope without ever flattening source timestamps. */
 export function buildStrictModelJoinEnvelope<
-  M extends 'models' | 'profile' | 'comparison',
+  M extends 'models' | 'profile' | 'comparison' | 'rankings',
   R,
   D extends object,
 >(input: {

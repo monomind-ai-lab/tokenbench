@@ -254,6 +254,18 @@
         ]
       }
     ],
+    "routeBindings": [
+      {
+        "modelSlug": "alpha",
+        "providerId": "fixture-provider",
+        "routeId": "alpha-direct"
+      },
+      {
+        "modelSlug": "beta",
+        "providerId": "fixture-provider",
+        "routeId": "beta-direct"
+      }
+    ],
     "routes": [
       {
         "cacheReadMicroDollarsPerMillion": {
@@ -339,7 +351,7 @@
             "pricingTierId": "alpha-direct-standard"
           }
         ],
-        "providerId": "provider-0",
+        "providerId": "fixture-provider",
         "routeId": "alpha-direct",
         "runtimeObservation": {
           "availability": "available",
@@ -461,7 +473,7 @@
             "pricingTierId": "beta-direct-standard"
           }
         ],
-        "providerId": "provider-1",
+        "providerId": "fixture-provider",
         "routeId": "beta-direct",
         "runtimeObservation": {
           "availability": "available",

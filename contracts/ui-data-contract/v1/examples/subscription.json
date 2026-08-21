@@ -6,7 +6,7 @@
   "reason": null,
   "fetchedAt": "2026-08-18T08:00:00.000Z",
   "effectiveAt": "2026-08-18T07:00:00.000Z",
-  "data": { "operation": "catalog", "plans": [], "routes": [], "entitlementProjections": [], "calculation": null },
+  "data": { "operation": "catalog", "plans": [], "routes": [], "routeBindings": [], "entitlementProjections": [], "calculation": null },
   "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": null, "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
   "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": null, "benchmarkCheckedAt": null },
   "sources": [{ "sourceRef": "illustrative-source", "fieldGroup": "/data", "sourceId": "illustrative-source", "sourceRevision": "illustrative-revision-v1", "label": "Illustrative prototype data", "url": "https://example.com/tokenbench-ui-data-contract-v1", "licenseId": null, "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" }],

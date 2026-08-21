@@ -26,7 +26,7 @@ const releaseRow = {
   attribution_text: 'LiveBench source attribution',
 };
 
-function database(): LiveBenchD1Database {
+function database(options: { strictCatalog?: boolean } = {}): LiveBenchD1Database {
   const categories = [{ category_id: 'reasoning', label: 'Reasoning' }];
   const tasks = [{ task_id: 'logic', label: 'Logic', category_id: 'reasoning' }];
   const models = [
@@ -65,7 +65,35 @@ function database(): LiveBenchD1Database {
           return sql.includes('livebench_publication_state AS pointer') ? releaseRow as T : null;
         },
         async all<T>() {
-          const results = sql.includes('livebench_categories') ? categories
+          const results = options.strictCatalog && sql.includes('FROM catalog_publication_state AS publication')
+            ? [{ revision: 'catalog-r1', checked_at: checkedAt }]
+            : options.strictCatalog && sql.includes('FROM livebench_model_configurations AS livebench')
+              && sql.includes('model_offers AS offers')
+              ? [{
+                  configuration_id: 'beta',
+                  canonical_configuration_id: 'canonical-beta',
+                  identity_match_kind: 'exact',
+                  identity_review_status: 'verified',
+                  canonical_model_key: 'benchlm:beta',
+                  directory_model_key: 'benchlm:beta',
+                  canonical_slug: 'beta',
+                  directory_source_model_id: 'openrouter/beta',
+                  route_id: 'openrouter:beta:route',
+                  provider_id: 'openrouter',
+                  catalog_model_id: 'openrouter/beta',
+                  availability: 'available',
+                  input_micro_dollars_per_million: 0,
+                  cached_input_micro_dollars_per_million: 0,
+                  cache_write_micro_dollars_per_million: 0,
+                  output_micro_dollars_per_million: 1_000_000,
+                  context_window_tokens: 128_000,
+                  max_output_tokens: 16_000,
+                  expiration_date: null,
+                  source_id: 'openrouter-models',
+                  source_url: 'https://openrouter.ai/api/v1/models',
+                  source_observed_at: checkedAt,
+                }]
+              : sql.includes('livebench_categories') ? categories
             : sql.includes('livebench_tasks') ? tasks
               : sql.includes('livebench_model_configurations') ? models
                 : sql.includes('livebench_task_scores') ? scores
@@ -131,6 +159,43 @@ describe('LiveBench rankings endpoint', () => {
     const envelope = parseUiDataContractV1Runtime(payload, 'rankings');
     expect(envelope.status).toBe('partial');
     expect(envelope.data?.rows.map((row) => row.model.identity.slug)).toEqual(['beta']);
+  });
+
+  it('applies the exact reviewed catalog join to emitted rows and custom filters', async () => {
+    const db = database({ strictCatalog: true });
+    const leaderboard = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/rankings?operation=leaderboard&limit=50'),
+      env: { CATALOG_DB: db },
+    });
+    expect(leaderboard.status).toBe(200);
+    const leaderboardEnvelope = parseUiDataContractV1Runtime(await leaderboard.json(), 'rankings');
+    expect(leaderboardEnvelope.revisions.catalog).toBe('catalog-r1');
+    if (leaderboardEnvelope.data?.operation !== 'leaderboard') throw new Error('expected leaderboard data');
+    expect(leaderboardEnvelope.data.rows.find((row) => row.model.identity.slug === 'beta')?.model.selectedRoute)
+      .toMatchObject({ routeId: 'openrouter:beta:route', inputMicroDollarsPerMillion: { value: 0 } });
+
+    const custom = await onRequestPost({
+      request: new Request('https://tokenbench.example/api/benchmarks/rankings', {
+        method: 'POST',
+        body: JSON.stringify({
+          operation: 'custom',
+          dimensionSetRevision: 'livebench-2026-06-25-benchmark-dimensions-v1',
+          weights: { reasoning: 100 },
+          filters: {
+            access: 'all', providerIds: ['openrouter'], excludeDerivativeFinetunes: false,
+            requiredInputModalities: [], maxInputMicroDollarsPerMillion: 0,
+            maxOutputMicroDollarsPerMillion: null, minTpsP50: null, maxTtftP50Ms: null,
+            minContextWindowTokens: 128_000, minMaxOutputTokens: 16_000,
+          },
+          includeIneligible: false,
+          limit: 50,
+        }),
+      }),
+      env: { CATALOG_DB: db },
+    });
+    const customEnvelope = parseUiDataContractV1Runtime(await custom.json(), 'rankings');
+    if (customEnvelope.data?.operation !== 'custom') throw new Error('expected custom data');
+    expect(customEnvelope.data.rows.map((row) => row.model.identity.slug)).toEqual(['beta']);
   });
 
   it('rejects unknown query parameters before reading D1', async () => {

@@ -6,7 +6,7 @@ import {
   type BenchmarkPriceCheck,
   type BenchmarkSourceId,
 } from "@tokenbench/benchmarks/contracts";
-import { isValidLeaderboardCursor } from "@tokenbench/benchmarks/leaderboard-cursor";
+import { isModelSlugRouteSafe } from "@tokenbench/benchmarks/model-directory";
 import {
   LEADERBOARD_DEFINITIONS,
   type LeaderboardDefinition,
@@ -42,6 +42,7 @@ import type { LeaderboardKey } from "@tokenbench/routing/leaderboard-routes";
 
 /** The API maximum supplies a complete route result for the current detail UI. */
 export const LEADERBOARD_ROUTE_LIVE_LIMIT = 200;
+const LEADERBOARD_OPAQUE_CURSOR_MAX_LENGTH = 2_048;
 
 export interface LeaderboardRouteFreshness {
   readonly status: "fresh" | "stale";
@@ -114,6 +115,18 @@ function nullablePositiveInteger(value: unknown): value is number | null {
 
 function nullableStringArray(value: unknown): value is readonly string[] | null {
   return value === null || (Array.isArray(value) && value.every(nonEmptyString));
+}
+
+/**
+ * Cursors belong to the published endpoint. The server can retain a bounded,
+ * non-control-string receipt and pass it back verbatim, but must not decode or
+ * reconstruct its format locally.
+ */
+function isOpaqueLeaderboardCursor(value: unknown): value is string {
+  return typeof value === "string"
+    && value.length > 0
+    && value.length <= LEADERBOARD_OPAQUE_CURSOR_MAX_LENGTH
+    && !/[\u0000-\u001f\u007f]/u.test(value);
 }
 
 function sameJsonValue(left: unknown, right: unknown): boolean {
@@ -394,7 +407,7 @@ export function leaderboardRouteLiveEndpoint(key: LeaderboardKey, profile: Workl
   }
   parameters.set("limit", String(LEADERBOARD_ROUTE_LIVE_LIMIT));
   if (cursor !== null) {
-    if (!isValidLeaderboardCursor(cursor)) throw new TypeError("Leaderboard cursor is invalid.");
+    if (!isOpaqueLeaderboardCursor(cursor)) throw new TypeError("Leaderboard cursor is invalid.");
     parameters.set("cursor", cursor);
   }
   return `/api/benchmarks/leaderboards/${encodeURIComponent(key)}?${parameters.toString()}`;
@@ -438,7 +451,7 @@ export function parseLeaderboardRouteLiveEnvelope(
     || !Number.isSafeInteger(pagination.total)
     || (pagination.total as number) < 0
     || (pagination.total as number) > 4_096
-    || !(pagination.nextCursor === null || isValidLeaderboardCursor(pagination.nextCursor))
+    || !(pagination.nextCursor === null || isOpaqueLeaderboardCursor(pagination.nextCursor))
     || (pagination.total as number) < typedEntries.length) {
     fail("has invalid leaderboard pagination");
   }
@@ -601,7 +614,13 @@ function modelFor(entry: LeaderboardEntry, envelope: LeaderboardRouteLiveEnvelop
     ? modelProvenance
     : sourceProvenance(envelope, entry.metric.sourceId);
   return {
-    id: entry.model.modelKey,
+    // Public links must use the published canonical route slug, but only when
+    // this row proves the exact source-key identity that maps to it. A similar
+    // display name or source-model ID is not enough to normalize safely.
+    id: entry.model.modelKey === `source:${entry.model.sourceId}:${entry.model.sourceModelId}`
+      && isModelSlugRouteSafe(entry.model.slug)
+      ? entry.model.slug
+      : entry.model.modelKey,
     identity: available({
       slug: entry.model.slug,
       name: entry.model.name,

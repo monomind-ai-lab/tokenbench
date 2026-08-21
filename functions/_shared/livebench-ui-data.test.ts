@@ -11,6 +11,7 @@ import {
   buildLiveBenchRankingDimensionSet,
   buildLiveBenchRankingsEnvelope,
 } from './livebench-ui-data';
+import { buildStrictModelJoin } from './strict-model-join';
 
 const source: SourceAttribution = {
   sourceRef: 'livebench:2026-06-25',
@@ -70,6 +71,18 @@ const bundle: LiveBenchReleaseBundle = {
       meanInputTokens: 100, meanOutputTokens: 50,
     })),
   ],
+};
+
+const catalogSource: SourceAttribution = {
+  sourceRef: 'catalog:catalog-r1:openrouter-models',
+  fieldGroup: '/data',
+  sourceId: 'openrouter-models',
+  sourceRevision: 'catalog-r1',
+  label: 'Active catalog source openrouter-models',
+  url: 'https://openrouter.ai/api/v1/models',
+  licenseId: 'OpenRouter-ToS',
+  observedAt: '2026-08-20T00:00:00.000Z',
+  effectiveAt: '2026-08-20T00:00:00.000Z',
 };
 
 function request(overrides: Partial<LeaderboardRankingsRequest> = {}): LeaderboardRankingsRequest {
@@ -139,6 +152,64 @@ describe('LiveBench ui-data-contract/v1 projection', () => {
       ['beta', 1],
       ['alpha', 2],
     ]);
+  });
+
+  it('applies exact reviewed catalog route facts to leaderboard and custom-ranking filters', () => {
+    const join = buildStrictModelJoin({
+      catalogRevision: 'catalog-r1',
+      catalogObservedAt: catalogSource.observedAt,
+      asOf: '2026-08-21T00:00:00.000Z',
+      routes: [{
+        liveBenchConfigurationId: 'beta',
+        canonicalConfigurationId: 'canonical-beta',
+        liveBenchIdentityMatchKind: 'exact',
+        liveBenchIdentityReviewStatus: 'verified',
+        canonicalModelKey: 'benchlm:beta',
+        directoryModelKey: 'benchlm:beta',
+        directoryCanonicalSlug: 'beta',
+        directorySourceModelId: 'openrouter/beta',
+        routeId: 'openrouter:beta:route',
+        providerId: 'openrouter',
+        catalogModelId: 'openrouter/beta',
+        availability: 'available',
+        inputMicroDollarsPerMillion: 0,
+        cacheReadMicroDollarsPerMillion: 0,
+        cacheWriteMicroDollarsPerMillion: 0,
+        outputMicroDollarsPerMillion: 1_000_000,
+        contextWindowTokens: 128_000,
+        maxOutputTokens: 16_000,
+        expirationDate: null,
+        source: catalogSource,
+      }],
+    });
+    const leaderboard = buildLiveBenchLeaderboardData({
+      bundle,
+      source,
+      join,
+      request: request({ limit: 50 }),
+    });
+    expect(leaderboard.rows.find((row) => row.model.identity.slug === 'beta')?.model.selectedRoute)
+      .toMatchObject({ routeId: 'openrouter:beta:route', inputMicroDollarsPerMillion: { value: 0 } });
+
+    const ranked = buildLiveBenchCustomRankingsData({
+      bundle,
+      source,
+      join,
+      request: {
+        operation: 'custom',
+        dimensionSetRevision: buildLiveBenchRankingDimensionSet(bundle).revision,
+        weights: { reasoning: 100, coding: 0 },
+        filters: {
+          access: 'all', providerIds: ['openrouter'], excludeDerivativeFinetunes: false,
+          requiredInputModalities: [], maxInputMicroDollarsPerMillion: 0,
+          maxOutputMicroDollarsPerMillion: null, minTpsP50: null, maxTtftP50Ms: null,
+          minContextWindowTokens: 128_000, minMaxOutputTokens: 16_000,
+        },
+        includeIneligible: false,
+        limit: 50,
+      },
+    });
+    expect(ranked.rows.map((row) => row.model.identity.slug)).toEqual(['beta']);
   });
 
   it('binds pagination cursors to the exact release, filter matrix, and limit', () => {

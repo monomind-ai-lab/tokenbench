@@ -351,6 +351,7 @@ export function buildCatalogCandidateStatements(input: {
     model.unit,
     model.inputMicroDollarsPerMillion,
     model.cachedInputMicroDollarsPerMillion ?? null,
+    model.cacheWriteMicroDollarsPerMillion ?? null,
     model.outputMicroDollarsPerMillion,
     model.contextWindowTokens ?? null,
     model.maxOutputTokens ?? null,
@@ -378,9 +379,9 @@ export function buildCatalogCandidateStatements(input: {
     ...multiRowInsert(db, `INSERT OR IGNORE INTO model_offers
       (revision, id, provider_id, display_name, model_id, pricing_basis,
        route, currency, unit, input_micro_dollars_per_million,
-       cached_input_micro_dollars_per_million, output_micro_dollars_per_million,
+       cached_input_micro_dollars_per_million, cache_write_micro_dollars_per_million, output_micro_dollars_per_million,
        context_window_tokens, max_output_tokens, availability, expiration_date,
-       source_id) VALUES`, modelRows, 17),
+       source_id) VALUES`, modelRows, 18),
     ...cacheCandidateStatements({ db, catalog, cacheRevision, createdAt }),
   ] as BoundStatement[];
 }

@@ -20,12 +20,15 @@ import {
   type SourceManifest,
 } from '../../../src/pipeline/source-contracts';
 import {
+  acquireLiveBenchPublicationLease,
+  LiveBenchPublicationLeaseError,
   publishLiveBenchRelease,
   readActiveLiveBenchRelease,
   stageLiveBenchRelease,
   validateLiveBenchRelease,
   type LiveBenchD1Database,
   type LiveBenchLicenseVerification,
+  type LiveBenchPublicationLease,
 } from '../../../functions/_shared/livebench-db';
 import { discoverLiveBenchRelease } from './livebench-discovery';
 
@@ -51,6 +54,7 @@ export interface LiveBenchRefreshEnvironment {
 export type LiveBenchRefreshResult =
   | { readonly status: 'unchanged'; readonly state: LiveBenchDiscoveryState; readonly revision: string | null }
   | { readonly status: 'incomplete_upstream_release'; readonly state: LiveBenchDiscoveryState; readonly releaseId: string }
+  | { readonly status: 'superseded'; readonly state: LiveBenchDiscoveryState; readonly revision: string | null }
   | { readonly status: 'published'; readonly state: LiveBenchDiscoveryState; readonly revision: string };
 
 export interface RetrievedLiveBenchCandidate {
@@ -297,6 +301,8 @@ export async function refreshLiveBenchRelease(input: {
   readonly license?: VerifiedLiveBenchLicenseConfiguration;
   readonly fetchImpl: typeof fetch;
   readonly attemptId: () => string;
+  /** Optional coordinator-acquired persisted fence token. */
+  readonly publicationLease?: LiveBenchPublicationLease;
 }): Promise<LiveBenchRefreshResult> {
   const acceptedLicense = input.license ?? ACCEPTED_LIVEBENCH_LICENSE;
   validateLiveBenchLicenseEvidence({
@@ -321,10 +327,15 @@ export async function refreshLiveBenchRelease(input: {
   if (active?.sourceFingerprint === discovery.release.fingerprint) {
     return { status: 'unchanged', state: discovery.state, revision: active.revision };
   }
+  const publicationLease = input.publicationLease ?? await acquireLiveBenchPublicationLease({
+    db: input.env.CATALOG_DB,
+    attemptId: input.attemptId(),
+    acquiredAt: input.checkedAt,
+  });
   const candidate = await retrieveLiveBenchCandidate({
     descriptor: discovery.release,
     checkedAt: input.checkedAt,
-    attemptId: input.attemptId(),
+    attemptId: publicationLease.attemptId,
     license: acceptedLicense,
     fetchImpl: input.fetchImpl,
   });
@@ -353,7 +364,24 @@ export async function refreshLiveBenchRelease(input: {
     })),
   });
   await validateLiveBenchRelease({ db: input.env.CATALOG_DB, revision, attemptId: candidate.attemptId });
-  await publishLiveBenchRelease({ db: input.env.CATALOG_DB, revision, attemptId: candidate.attemptId, publishedAt: input.checkedAt });
+  try {
+    await publishLiveBenchRelease({
+      db: input.env.CATALOG_DB,
+      revision,
+      attemptId: candidate.attemptId,
+      lease: publicationLease,
+      publishedAt: input.checkedAt,
+    });
+  } catch (error) {
+    if (error instanceof LiveBenchPublicationLeaseError) {
+      return {
+        status: 'superseded',
+        state: discovery.state,
+        revision: (await readActiveLiveBenchRelease(input.env.CATALOG_DB))?.revision ?? null,
+      };
+    }
+    throw error;
+  }
   return { status: 'published', state: discovery.state, revision };
 }
 

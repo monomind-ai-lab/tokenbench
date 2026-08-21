@@ -302,6 +302,57 @@ test("published null rank and route facts remain unavailable rather than becomin
   );
 });
 
+test("source-prefixed row IDs become route-safe only with an exact published mapping", () => {
+  const sourceMetric = metric("benchlm:category:coding", "coding", {
+    modelKey: "source:benchlm:model-a",
+    sourceModelId: "model-a",
+  });
+  const exact = envelope("llm-coding", "balanced", [{
+    model: model({
+      modelKey: "source:benchlm:model-a",
+      slug: "model-a",
+      sourceModelId: "model-a",
+    }),
+    metric: sourceMetric,
+    metrics: [sourceMetric],
+    primaryPrice: null,
+    blendedCostPerMillion: null,
+    contextWindowTokens: null,
+    sourceRank: 2,
+    onValueFrontier: false,
+  }]);
+  const mismatched = envelope("llm-coding", "balanced", [{
+    model: model({
+      modelKey: "source:benchlm:not-model-a",
+      slug: "model-a",
+      sourceModelId: "model-a",
+    }),
+    metric: metric("benchlm:category:coding", "coding", {
+      modelKey: "source:benchlm:not-model-a",
+      sourceModelId: "model-a",
+    }),
+    metrics: [metric("benchlm:category:coding", "coding", {
+      modelKey: "source:benchlm:not-model-a",
+      sourceModelId: "model-a",
+    })],
+    primaryPrice: null,
+    blendedCostPerMillion: null,
+    contextWindowTokens: null,
+    sourceRank: 2,
+    onValueFrontier: false,
+  }]);
+
+  const exactRow = projectLeaderboardRouteLiveEnvelope(
+    parseLeaderboardRouteLiveEnvelope(exact, "llm-coding", "balanced"),
+  ).data?.models[0];
+  const mismatchedRow = projectLeaderboardRouteLiveEnvelope(
+    parseLeaderboardRouteLiveEnvelope(mismatched, "llm-coding", "balanced"),
+  ).data?.models[0];
+
+  assert.equal(exactRow?.model.id, "model-a");
+  assert.equal(mismatchedRow?.model.id, "source:benchlm:not-model-a");
+});
+
 test("validated cursor pages merge into one complete route result", () => {
   const sourceMetric = metric("benchlm:category:coding", "coding");
   const response = envelope("llm-coding", "balanced", [{
@@ -321,7 +372,7 @@ test("validated cursor pages merge into one complete route result", () => {
       pagination: {
         ...response.data.pagination,
         total: 2,
-        nextCursor: "opaque-cursor",
+        nextCursor: "legacy/page?offset=200&sort=rank-asc",
       },
     },
   };
@@ -344,8 +395,64 @@ test("validated cursor pages merge into one complete route result", () => {
       data: { ...secondPage.data, pagination: { ...secondPage.data.pagination, total: 2 } },
     }, "llm-coding", "balanced"),
   ]);
-  assert.equal(leaderboardRouteLiveEndpoint("llm-coding", "balanced", "opaque-cursor"), "/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=200&cursor=opaque-cursor");
+  assert.equal(
+    leaderboardRouteLiveEndpoint("llm-coding", "balanced", "legacy/page?offset=200&sort=rank-asc"),
+    "/api/benchmarks/leaderboards/llm-coding?profile=balanced&limit=200&cursor=legacy%2Fpage%3Foffset%3D200%26sort%3Drank-asc",
+  );
   assert.equal(merged.data.entries.length, 2);
   assert.equal(merged.data.pagination.nextCursor, null);
   assert.equal(merged.attribution.length, 2);
+});
+
+test("merges the complete 389- and 405-row source routes through opaque 200-row pages", () => {
+  const entryAt = (index: number): LeaderboardEntry => {
+    const id = `model-${index}`;
+    const sourceMetric = metric("benchlm:category:coding", "coding", {
+      modelKey: id,
+      sourceModelId: id,
+      rank: index + 1,
+    });
+    return {
+      model: model({ modelKey: id, slug: id, name: `Model ${index}`, sourceModelId: id }),
+      metric: sourceMetric,
+      metrics: [sourceMetric],
+      primaryPrice: null,
+      blendedCostPerMillion: null,
+      contextWindowTokens: null,
+      sourceRank: index + 1,
+      onValueFrontier: false,
+    };
+  };
+
+  for (const total of [389, 405]) {
+    const pages = [0, 200, 400]
+      .map((offset) => Math.min(200, total - offset))
+      .filter((count) => count > 0)
+      .map((count, pageIndex) => {
+        const offset = pageIndex * 200;
+        const response = envelope(
+          "llm-coding",
+          "balanced",
+          Array.from({ length: count }, (_, index) => entryAt(offset + index)),
+        );
+        return parseLeaderboardRouteLiveEnvelope({
+          ...response,
+          data: {
+            ...response.data,
+            pagination: {
+              ...response.data.pagination,
+              total,
+              nextCursor: offset + count < total
+                ? `legacy/page?offset=${offset + count}&total=${total}`
+                : null,
+            },
+          },
+        }, "llm-coding", "balanced");
+      });
+
+    const merged = mergeLeaderboardRouteLiveEnvelopes(pages);
+    assert.equal(merged.data.entries.length, total);
+    assert.equal(merged.data.pagination.total, total);
+    assert.equal(merged.data.pagination.nextCursor, null);
+  }
 });

@@ -65,10 +65,10 @@ The accepted evidence set also covers:
 | Next pages using the validated gateway | Wired across the decision routes | Home, models/profile/lifecycle, compare, Popular Models, leaderboard children, subscription, Make It Yours, and price-performance use explicit server boundaries; production has no fixture fallback |
 | Current BenchLM/catalog APIs | Healthy but legacy | focused API/contract suite passes; response shapes predate UI contract v1 |
 | LiveBench ingestion cadence/source/checkpoint contracts | Ready on this branch | accepted producer foundations plus six-hour discovery cadence |
-| LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned four-artifact retrieval, bounded parsing, R2 evidence, bulk D1 staging/validation, monotonic current pointer |
+| LiveBench artifact discovery/parser/publication worker | Ready locally, not deployed | canonical release-list selection, commit-pinned artifacts/methodology, bounded parsing, R2 evidence, eight-statement actual-size D1 staging, persisted publication epoch lease, and atomic stale-completion rejection |
 | `rankings` GET | Production-capable after migration and first ingestion | pinned LiveBench global-average projection, release/taxonomy/total/cursor receipt, task economics, filters, bounded pagination, ETag |
 | Custom `rankings` POST | LiveBench capability ranking ready | active release publishes its exact category dimension-set revision; submitted weights are echoed and applied exactly; unavailable route/runtime SLA filters make candidates ineligible rather than inventing facts |
-| `models`, `profile`, `comparison` v1 | Strict mixed-source join implemented locally | LiveBench capability/economics plus exact reviewed canonical catalog route, pricing, modality, and expiration facts; runtime and cache-write remain explicitly unavailable |
+| `models`, `profile`, `comparison` v1 | Strict mixed-source join implemented locally | LiveBench capability/economics plus exact reviewed canonical catalog route, pricing, cache read/write, modality, and expiration facts; runtime remains explicitly unavailable without an observation source |
 | `lifecycle` | Production-capable after migration and catalog refresh | the endpoint catalog expiration date is revisioned and projected into scheduled/retired events; replacements remain unavailable unless published |
 | `subscription` | Reviewed catalog and bounded calculation implemented | exactly seven provider slots; reviewed plan/usage limits; exact direct-route bindings; positive cache allocations require independently published rates |
 | Deployment/cutover | Not authorized | no live infrastructure changes |
@@ -97,12 +97,14 @@ revision built from commit-pinned source evidence.
   reproduced by the projection.
 - Retrieval verifies every immutable Git blob SHA before parsing, then stores a
   content-hashed source manifest and artifacts before D1 publication.
-- Fact staging uses D1 `json_each()` bulk inserts. The 44 × 23 regression case
-  stages 1,012 scores and 1,012 economics rows below the 50-query free-plan
-  per-invocation ceiling; the SQL is also exercised against real SQLite.
-- Concurrent refresh calls are single-flighted in the coordinator, and pointer
-  promotion is conditional on a published candidate and a non-regressing
-  timestamp. A slow older candidate cannot replace a newer active revision.
+- Fact staging uses D1 `json_each()` bulk inserts and an explicit statement
+  receipt. The 44 × 23 regression case stages 1,012 scores and 1,012 economics
+  rows in eight statements, below the 40-statement integration budget; the SQL
+  is also exercised against real SQLite.
+- A persisted publication epoch lease fences each refresh attempt. Pointer
+  promotion atomically rejects a stale completion; the candidate remains
+  validated, the last-good pointer stays active, and only the current lease can
+  publish.
 - Cold/no-source responses remain contract-valid 404 unavailable envelopes;
   D1 or projection faults return 503 and propagate through the HTTP transport.
 - Custom category rankings use revision
@@ -126,13 +128,17 @@ explicitly unavailable until those independent joins exist. The Next decision
 routes no longer use the hard-coded model catalog or browser-side price math as
 factual fallbacks.
 
-`/popular-models/` now loads the validated weekly directory and strict
-leaderboard concurrently in HTTP mode. Weekly rows exclusively own popularity
-identity, order, and displayed rank. Exact slug/model-ID matches enrich them
-with the strict release, taxonomy, total, cursor, capability, aggregate
-cost-per-success/mean-output/Pareto, task-economics, route, and runtime fields.
-If strict data is absent the weekly result remains honestly partial; if weekly
-data is absent the route is unavailable and never relabels a benchmark rank.
+`/popular-models/` now loads the validated weekly directory, strict LiveBench
+leaderboard, typed overall/agentic/coding/reasoning/knowledge receipts, and the
+typed price-performance projection concurrently in HTTP mode. Weekly rows
+exclusively own popularity identity, order, and displayed rank. Enrichment
+requires exact `modelKey + sourceModelId + canonicalSlug` identity. Direct
+category receipts supply score/rank/field size; price-performance supplies
+published mathematics, multilingual/language, and instruction-following values
+without inventing ranks. Knowledge is not relabeled as data analysis. Strict
+LiveBench remains authoritative on an exact source match. If supplementary
+sources fail, the weekly result remains honestly partial; if weekly data is
+absent the route is unavailable and never relabels a benchmark rank.
 
 `TOKENBENCH_UI_DATA_MODE=evidence` is local-development-only and visibly labeled
 with a source-neutral preview-data notice. `TOKENBENCH_UI_DATA_MODE=http` is the production HTTP-only
@@ -140,24 +146,20 @@ mode and has no evidence fallback; production builds reject evidence mode.
 
 ## Remaining data work before production
 
-1. Deploy and exercise the exact reviewed canonical catalog join with the active
-   LiveBench/catalog revisions. The code is ready locally; no live cutover has
-   been authorized.
+1. With separate authorization, apply migrations `0016` (catalog cache-write
+   rate) and `0017` (LiveBench publication epoch), deploy the reviewed producer,
+   and run the first catalog/LiveBench refresh. No live cutover has been
+   authorized.
 2. Add independently revisioned runtime observations for TTFT, throughput, and
    uptime, then publish coherent mixed-source projection tuples.
-3. Add reviewed Perplexity/Microsoft subscription plan facts and independently
-   sourced cache-write rates; keep positive unknown allocations unavailable.
-4. Implement/activate the production custom-ranking POST surface if server-side
-   custom ranking remains desired. The Next route no longer sends the retained
-   fixture query in production: it GETs published candidates and re-ranks only
-   candidates with all required six-axis, route-price, and runtime facts.
-5. Exercise the shared HTTP transport through a local Next preview, then obtain
-   separate authorization for any deployment or cutover.
-6. After the first real production ranking response is wired, run a mandatory
-   full cross-page review of `/popular-models/`, `/leaderboards/`, `/models/`,
-   model profiles, `/compare/`, and `/model-lifecycle/`. Recheck the common
-   source meanings, unavailable boundaries, shell, query behavior, actions, and
-   desktop/mobile rendering before changing any route-level approval state.
+3. Add reviewed Perplexity/Microsoft plan facts and any still-missing provider
+   cache-write rates; keep positive unknown allocations unavailable.
+4. Deploy/activate the locally implemented strict custom-ranking POST surface
+   if server-side custom ranking remains desired. The current Next workbench can
+   re-rank only candidates with all active weighted dimensions and evaluation
+   cost; runtime stays an independent optional constraint.
+5. Repeat the completed local cross-page review after deployment and first real
+   producer refresh before changing any production approval state.
 
 ## Verification receipt
 
@@ -170,7 +172,7 @@ mode and has no evidence fallback; production builds reject evidence mode.
 - The current upstream LiveBench release was retrieved and projected locally:
   44 leaderboard rows with schema-valid partial evidence envelopes.
 - Root TypeScript, both worker TypeScript projects, migration sequence through
-  `0015`, Next ESLint, and the Next
+  `0017`, Next ESLint, and the Next
   production build passed after integration.
 - Checkpoint-4 focused adapter/projector/endpoint/ingester slice: 93 tests
   passed (17 Node tests and 76 Vitest tests).
@@ -198,4 +200,9 @@ mode and has no evidence fallback; production builds reject evidence mode.
   does not collect the Next-only alias boundary; its dedicated `tsx --test` run
   covers CSV formula hardening, UTF-8 BOM output, PNG control exclusion, and the
   accessible action group.
+- Final HTTP-mode local review exercised Home, Models, profile, lifecycle,
+  Compare, Popular Models, Make It Yours, all leaderboard families,
+  Subscribe vs API, price-performance, articles/details, tools, and data
+  sources. The rebuilt routes returned no document-level horizontal overflow;
+  intentional matrices remain contained.
 - No deployment, endpoint activation, or live infrastructure change occurred.

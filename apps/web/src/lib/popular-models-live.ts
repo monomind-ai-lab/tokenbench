@@ -3,16 +3,44 @@ import {
   type ModelDirectoryEntry,
   type ModelDirectoryEnvelope,
 } from "@tokenbench/frontend/model-directory-contracts";
+import type { Provenance } from "@tokenbench/frontend/preview-data/contracts";
+import type {
+  PricePerformanceEnvelope,
+  PricePerformancePoint,
+  PricePerformanceScoreLane,
+} from "@tokenbench/benchmarks/price-performance-contracts";
+import type { LeaderboardKey } from "@tokenbench/routing/leaderboard-routes";
 import {
   POPULAR_MODELS_CATEGORY_SLOTS,
   popularModelsCategorySlotKey,
   type PopularModelV1,
+  type PopularModelsAxisV1,
   type PopularModelsRoutePricingV1,
   type PopularModelsV1ViewModel,
 } from "@tokenbench/frontend/popular-models-v1";
+import type { LeaderboardRouteLiveEnvelope } from "@/lib/leaderboard-route-live";
 
 /** The deployed directory endpoint's documented maximum page size. */
 export const POPULAR_MODELS_LIVE_LIMIT = 100;
+
+/**
+ * These are the complete published BenchLM route receipts currently exposed
+ * by the canonical endpoint. The UI has no semantic substitute for an absent
+ * route: e.g. knowledge is fetched and validated but is never projected as
+ * data analysis.
+ */
+export const POPULAR_MODELS_CATEGORY_LEADERBOARD_KEYS = [
+  "llm-overall",
+  "llm-agentic",
+  "llm-coding",
+  "llm-reasoning",
+  "llm-knowledge",
+] as const satisfies readonly LeaderboardKey[];
+
+export interface PopularModelsCategoryLeaderboardSource {
+  readonly key: (typeof POPULAR_MODELS_CATEGORY_LEADERBOARD_KEYS)[number];
+  readonly envelope: LeaderboardRouteLiveEnvelope;
+}
 
 export type PopularModelsDataPath = "evidence" | "live" | "unconfigured";
 
@@ -115,6 +143,380 @@ function sourceCategoryAxes(entry: ModelDirectoryEntry): PopularModelV1["axes"] 
       fieldSize: category.fieldSize,
     },
   ];
+}
+
+type PublishedIdentity = {
+  readonly modelKey: string;
+  readonly sourceModelId: string;
+  readonly canonicalSlug: string;
+};
+
+type TaggedAxis = {
+  readonly axis: PopularModelsAxisV1;
+  readonly sourceKey: string;
+  readonly priority: number;
+};
+
+type TaggedNumber = {
+  readonly value: number;
+  readonly sourceKey: string;
+  readonly priority: number;
+};
+
+interface PublishedModelFacts {
+  readonly axes: ReadonlyMap<string, TaggedAxis>;
+  readonly overallScore: TaggedNumber | null;
+}
+
+interface PublishedFactsIndex {
+  readonly facts: ReadonlyMap<string, PublishedModelFacts>;
+  readonly provenance: ReadonlyMap<string, readonly Provenance[]>;
+}
+
+function publishedIdentityKey(identity: PublishedIdentity): string {
+  // JSON keeps arbitrary upstream separators from making a collision between
+  // the three independently published identity fields.
+  return JSON.stringify([
+    identity.modelKey,
+    identity.sourceModelId,
+    identity.canonicalSlug,
+  ]);
+}
+
+function uniqueWeeklyIdentityKeys(
+  entries: readonly ModelDirectoryEntry[],
+): ReadonlySet<string> {
+  const unique = new Set<string>();
+  const ambiguous = new Set<string>();
+  for (const entry of entries) {
+    const key = publishedIdentityKey(entry);
+    if (ambiguous.has(key)) continue;
+    if (unique.has(key)) {
+      unique.delete(key);
+      ambiguous.add(key);
+    } else {
+      unique.add(key);
+    }
+  }
+  return unique;
+}
+
+function categorySourceKey(
+  source: PopularModelsCategoryLeaderboardSource,
+): string {
+  return `popular-models-category:${source.key}:${source.envelope.revision}`;
+}
+
+function categorySourceProvenance(
+  source: PopularModelsCategoryLeaderboardSource,
+): readonly Provenance[] {
+  const { envelope } = source;
+  return envelope.attribution.map((attribution) => ({
+    id: `${categorySourceKey(source)}:${attribution.sourceId}:${attribution.url}:${attribution.updatedAt}`,
+    label: attribution.label,
+    kind: "accepted_pipeline",
+    effectiveAt: attribution.updatedAt,
+    note: `Published ${source.key} leaderboard revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}; ${attribution.url}`,
+  }));
+}
+
+function pricePerformanceSourceKey(envelope: PricePerformanceEnvelope): string {
+  return `popular-models-price-performance:${envelope.revision}`;
+}
+
+function pricePerformanceProvenance(
+  envelope: PricePerformanceEnvelope,
+): readonly Provenance[] {
+  const sourceKey = pricePerformanceSourceKey(envelope);
+  return envelope.attribution.map((attribution) => ({
+    id: `${sourceKey}:${attribution.sourceId}:${attribution.url}:${attribution.updatedAt}`,
+    label: attribution.label,
+    kind: "accepted_pipeline",
+    effectiveAt: attribution.updatedAt,
+    note: `Published price-performance revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}; ${attribution.url}`,
+  }));
+}
+
+function categoryEntryIdentity(
+  entry: LeaderboardRouteLiveEnvelope["data"]["entries"][number],
+): string | null {
+  const metric = entry.metric;
+  // The typed parser validates each field separately. Require the category
+  // metric to agree with its model before it can join the weekly directory.
+  if (
+    metric === null ||
+    metric.modelKey !== entry.model.modelKey ||
+    metric.sourceId !== entry.model.sourceId ||
+    metric.sourceModelId !== entry.model.sourceModelId
+  )
+    return null;
+  return publishedIdentityKey({
+    modelKey: entry.model.modelKey,
+    sourceModelId: entry.model.sourceModelId,
+    canonicalSlug: entry.model.slug,
+  });
+}
+
+function categoryAxis(
+  metric: NonNullable<LeaderboardRouteLiveEnvelope["data"]["entries"][number]["metric"]>,
+): { readonly slot: string; readonly axis: PopularModelsAxisV1 } | null {
+  const slot = popularModelsCategorySlotKey(metric.metricKey, metric.category);
+  if (slot === null) return null;
+  return {
+    slot,
+    axis: {
+      // Keep the source metric key and category label; fixed UI slots resolve
+      // these through their explicit published aliases.
+      key: metric.metricKey,
+      label: metric.category,
+      percentile: metric.value,
+      rank: metric.rank,
+      fieldSize: metric.rankFieldSize ?? null,
+    },
+  };
+}
+
+const PRICE_PERFORMANCE_AXIS_SLOTS: readonly {
+  readonly lane: PricePerformanceScoreLane;
+  readonly slot: string;
+  readonly metricKey: string;
+  readonly label: string;
+}[] = [
+  { lane: "agentic", slot: "agentic-coding", metricKey: "benchlm:category:agentic", label: "Agentic" },
+  { lane: "coding", slot: "coding", metricKey: "benchlm:category:coding", label: "Coding" },
+  { lane: "reasoning", slot: "reasoning", metricKey: "benchlm:category:reasoning", label: "Reasoning" },
+  { lane: "mathematics", slot: "mathematics", metricKey: "benchlm:category:math", label: "Mathematics" },
+  // The source calls this lane `multilingual`; the fixed workbench has one
+  // explicit language slot. This is a declared lane-to-slot registry, never a
+  // match derived from model names or score labels.
+  { lane: "multilingual", slot: "language", metricKey: "benchlm:category:multilingual", label: "Multilingual" },
+  { lane: "instruction-following", slot: "instruction-following", metricKey: "benchlm:category:instructionFollowing", label: "Instruction following" },
+];
+
+function pricePerformancePointIdentity(point: PricePerformancePoint): string | null {
+  // Price-performance retains the same model key, upstream source model ID,
+  // and canonical slug. All three must agree with the directory; a route with
+  // no canonical identity is not a safe Popular Models join candidate.
+  if (
+    point.route.canonicalSlug === null ||
+    point.route.canonicalSlug !== point.slug
+  )
+    return null;
+  return publishedIdentityKey({
+    modelKey: point.modelKey,
+    sourceModelId: point.route.sourceModelId,
+    canonicalSlug: point.slug,
+  });
+}
+
+function mutableFacts(
+  facts: Map<string, {
+    axes: Map<string, TaggedAxis>;
+    overallScore: TaggedNumber | null;
+    ambiguousAxes: Set<string>;
+    overallAmbiguous: boolean;
+  }>,
+  identity: string,
+) {
+  const existing = facts.get(identity);
+  if (existing !== undefined) return existing;
+  const created = {
+    axes: new Map<string, TaggedAxis>(),
+    overallScore: null,
+    ambiguousAxes: new Set<string>(),
+    overallAmbiguous: false,
+  };
+  facts.set(identity, created);
+  return created;
+}
+
+function addAxisFact(
+  target: ReturnType<typeof mutableFacts>,
+  slot: string,
+  axis: TaggedAxis,
+): void {
+  if (target.ambiguousAxes.has(slot)) return;
+  const existing = target.axes.get(slot);
+  if (existing === undefined) {
+    target.axes.set(slot, axis);
+    return;
+  }
+  if (existing.priority > axis.priority) return;
+  if (existing.priority < axis.priority) {
+    target.axes.set(slot, axis);
+    return;
+  }
+  if (existing.priority === axis.priority) {
+    target.axes.delete(slot);
+    target.ambiguousAxes.add(slot);
+  }
+}
+
+function addOverallFact(
+  target: ReturnType<typeof mutableFacts>,
+  score: TaggedNumber,
+): void {
+  if (target.overallAmbiguous) return;
+  if (target.overallScore === null) {
+    target.overallScore = score;
+    return;
+  }
+  if (target.overallScore.priority > score.priority) return;
+  if (target.overallScore.priority < score.priority) {
+    target.overallScore = score;
+    return;
+  }
+  if (target.overallScore.priority === score.priority) {
+    target.overallScore = null;
+    target.overallAmbiguous = true;
+  }
+}
+
+function indexPublishedFacts(
+  entries: readonly ModelDirectoryEntry[],
+  categorySources: readonly PopularModelsCategoryLeaderboardSource[],
+  pricePerformance: PricePerformanceEnvelope | null,
+): PublishedFactsIndex {
+  const uniqueIdentities = uniqueWeeklyIdentityKeys(entries);
+  const facts = new Map<string, ReturnType<typeof mutableFacts>>();
+  const provenance = new Map<string, readonly Provenance[]>();
+
+  for (const source of categorySources) {
+    const sourceKey = categorySourceKey(source);
+    provenance.set(sourceKey, categorySourceProvenance(source));
+    for (const entry of source.envelope.data.entries) {
+      const identity = categoryEntryIdentity(entry);
+      if (identity === null || !uniqueIdentities.has(identity) || entry.metric === null)
+        continue;
+
+      const target = mutableFacts(facts, identity);
+      if (source.key === "llm-overall") {
+        addOverallFact(target, {
+          value: entry.metric.value,
+          sourceKey,
+          // Direct category receipts retain rank and field-size evidence, so
+          // they take precedence over the value-only price-performance lens.
+          priority: 2,
+        });
+        continue;
+      }
+      const axis = categoryAxis(entry.metric);
+      if (axis !== null)
+        addAxisFact(target, axis.slot, {
+          axis: axis.axis,
+          sourceKey,
+          priority: 2,
+        });
+    }
+  }
+
+  if (pricePerformance !== null) {
+    const sourceKey = pricePerformanceSourceKey(pricePerformance);
+    provenance.set(sourceKey, pricePerformanceProvenance(pricePerformance));
+    for (const point of pricePerformance.data.points) {
+      const identity = pricePerformancePointIdentity(point);
+      if (identity === null || !uniqueIdentities.has(identity)) continue;
+
+      const target = mutableFacts(facts, identity);
+      if (point.scores.overall !== null)
+        addOverallFact(target, {
+          value: point.scores.overall,
+          sourceKey,
+          priority: 1,
+        });
+      for (const mapping of PRICE_PERFORMANCE_AXIS_SLOTS) {
+        const value = point.scores[mapping.lane];
+        if (value === null) continue;
+        addAxisFact(target, mapping.slot, {
+          sourceKey,
+          priority: 1,
+          axis: {
+            // Use the fixed slot key for the declared multilingual -> language
+            // registry above. Other source metric keys retain their direct key.
+            key: mapping.slot === "language" ? mapping.slot : mapping.metricKey,
+            label: mapping.label,
+            percentile: value,
+            // This endpoint intentionally publishes score lanes, not category
+            // ranking receipts. Never use its point order as a rank.
+            rank: null,
+            fieldSize: null,
+          },
+        });
+      }
+    }
+  }
+
+  return {
+    facts: new Map(
+      [...facts].map(([identity, value]) => [
+        identity,
+        { axes: value.axes, overallScore: value.overallScore },
+      ]),
+    ),
+    provenance,
+  };
+}
+
+function mergePublishedAxes(
+  weeklyAxes: readonly PopularModelsAxisV1[],
+  publishedAxes: ReadonlyMap<string, TaggedAxis>,
+): readonly PopularModelsAxisV1[] {
+  if (publishedAxes.size === 0) return weeklyAxes;
+  const weeklySlots = new Set(
+    weeklyAxes
+      .map((axis) => popularModelsCategorySlotKey(axis.key, axis.label))
+      .filter((slot): slot is string => slot !== null),
+  );
+  return [
+    ...weeklyAxes.filter((axis) => {
+      const slot = popularModelsCategorySlotKey(axis.key, axis.label);
+      const published = slot === null ? undefined : publishedAxes.get(slot);
+      // A direct per-key leaderboard receipt supplies the richer category
+      // rank/field-size fact. The price-performance projection has only a
+      // value, so it fills an absent weekly slot and never overwrites one.
+      return published === undefined || published.priority < 2;
+    }),
+    ...[...publishedAxes.entries()]
+      .filter(([slot, fact]) => !weeklySlots.has(slot) || fact.priority >= 2)
+      .map(([, fact]) => fact.axis),
+  ];
+}
+
+function mergeWeeklyModelWithPublishedFacts(
+  entry: ModelDirectoryEntry,
+  facts: PublishedModelFacts | undefined,
+  appliedSourceKeys: Set<string>,
+): PopularModelV1 {
+  const weekly = mapDirectoryEntry(entry);
+  if (facts === undefined) return weekly;
+
+  for (const fact of facts.axes.values()) appliedSourceKeys.add(fact.sourceKey);
+  const overallScore = weekly.overallScore ?? facts.overallScore?.value ?? null;
+  if (weekly.overallScore === null && facts.overallScore !== null)
+    appliedSourceKeys.add(facts.overallScore.sourceKey);
+
+  return {
+    ...weekly,
+    overallScore,
+    capabilityUnavailableReason:
+      overallScore === null
+        ? weekly.capabilityUnavailableReason
+        : null,
+    axes: mergePublishedAxes(weekly.axes, facts.axes),
+  };
+}
+
+function mergedProvenance(
+  base: readonly Provenance[],
+  facts: PublishedFactsIndex,
+  appliedSourceKeys: ReadonlySet<string>,
+): readonly Provenance[] {
+  const byId = new Map<string, Provenance>();
+  for (const source of base) byId.set(source.id, source);
+  for (const key of appliedSourceKeys) {
+    for (const source of facts.provenance.get(key) ?? []) byId.set(source.id, source);
+  }
+  return [...byId.values()];
 }
 
 function routePricingFor(entry: ModelDirectoryEntry): PopularModelsRoutePricingV1 {
@@ -297,6 +699,18 @@ function unavailableView(
   };
 }
 
+function legacyDirectoryProvenance(
+  envelope: ModelDirectoryEnvelope,
+): readonly Provenance[] {
+  return envelope.attribution.map((source) => ({
+    id: `model-directory:${envelope.revision}:${source.sourceId}:${source.url}:${source.updatedAt}`,
+    label: source.label,
+    kind: "accepted_pipeline",
+    effectiveAt: source.updatedAt,
+    note: `Published model-directory revision ${envelope.revision}; checked ${envelope.freshness.checkedAt}; ${source.url}`,
+  }));
+}
+
 /**
  * Projects the typed weekly directory into the existing Popular Models view.
  * It retains the exact weekly rank and every representable source value, while
@@ -315,12 +729,14 @@ export function projectPopularModelsLive(
 
   return {
     // A valid legacy envelope is intentionally partial: it has no strict-v1
-    // release, taxonomy, task economics, runtime, or provenance receipt.
+    // release, taxonomy, task economics, or runtime receipt. Its published
+    // attribution and freshness remain factual provenance rather than being
+    // dropped just because the strict media type is not negotiated yet.
     sourceStatus: "partial",
     unavailableReason: loaderError,
-    fetchedAt: null,
+    fetchedAt: envelope.freshness.checkedAt,
     effectiveAt: envelope.data.week?.generatedAt ?? envelope.publishedAt,
-    provenance: [],
+    provenance: legacyDirectoryProvenance(envelope),
     release: null,
     taxonomy: [],
     total: null,
@@ -336,40 +752,81 @@ export function projectPopularModelsLive(
 }
 
 /**
- * Combines the weekly popularity source with a strict production leaderboard.
- * The weekly source is authoritative for rows, identity, access, and rank;
- * strict data is used only for an exact canonical-slug/model-id match.
+ * Combines the weekly popularity source with exact published category facts.
+ * The weekly directory remains the only authority for rows and weekly rank.
+ * Strict LiveBench retains priority when its identity joins exactly; category
+ * and price-performance facts fill only rows that have no strict match.
+ */
+export function projectPopularModelsLiveWithPublishedCategories(
+  weeklyEnvelope: ModelDirectoryEnvelope | null,
+  strictView: PopularModelsV1ViewModel | null,
+  categorySources: readonly PopularModelsCategoryLeaderboardSource[],
+  pricePerformance: PricePerformanceEnvelope | null,
+  weeklyError: string | null = null,
+): PopularModelsV1ViewModel {
+  if (weeklyEnvelope === null)
+    return projectPopularModelsLive(null, weeklyError);
+  const strictUsable =
+    strictView !== null &&
+    strictView.sourceStatus !== "unavailable" &&
+    strictView.models.length > 0;
+  const index = strictUsable ? strictModelIndex(strictView!.models) : null;
+  const facts = indexPublishedFacts(
+    weeklyEnvelope.data.models,
+    categorySources,
+    pricePerformance,
+  );
+  const appliedSourceKeys = new Set<string>();
+  let includesUnmatchedWeeklyModel = false;
+  const models = weeklyModels(weeklyEnvelope.data.models, (entry) => {
+    const strictModel = index === null ? null : matchingStrictModel(entry, index);
+    if (strictModel !== null) return mergedWeeklyModel(entry, strictModel);
+    if (strictUsable) includesUnmatchedWeeklyModel = true;
+    return mergeWeeklyModelWithPublishedFacts(
+      entry,
+      facts.facts.get(publishedIdentityKey(entry)),
+      appliedSourceKeys,
+    );
+  });
+
+  const base = strictUsable
+    ? strictView!
+    : projectPopularModelsLive(weeklyEnvelope);
+
+  return {
+    ...base,
+    sourceStatus:
+      strictUsable && base.sourceStatus === "available" && !includesUnmatchedWeeklyModel
+        ? "available"
+        : "partial",
+    provenance: mergedProvenance(
+      [
+        ...legacyDirectoryProvenance(weeklyEnvelope),
+        ...(strictUsable ? strictView!.provenance : []),
+      ],
+      facts,
+      appliedSourceKeys,
+    ),
+    categories: POPULAR_MODELS_CATEGORY_SLOTS,
+    models,
+  };
+}
+
+/**
+ * Backward-compatible strict-only entry point. Production uses the broader
+ * published-category adapter above; this remains useful to focused callers
+ * that have no category receipts to supply.
  */
 export function projectPopularModelsLiveWithStrict(
   weeklyEnvelope: ModelDirectoryEnvelope | null,
   strictView: PopularModelsV1ViewModel | null,
   weeklyError: string | null = null,
 ): PopularModelsV1ViewModel {
-  if (weeklyEnvelope === null)
-    return projectPopularModelsLive(null, weeklyError);
-  if (
-    strictView === null ||
-    strictView.sourceStatus === "unavailable" ||
-    strictView.models.length === 0
-  )
-    return projectPopularModelsLive(weeklyEnvelope);
-
-  const index = strictModelIndex(strictView.models);
-  let includesUnmatchedWeeklyModel = false;
-  const models = weeklyModels(weeklyEnvelope.data.models, (entry) => {
-    const strictModel = matchingStrictModel(entry, index);
-    if (strictModel === null) includesUnmatchedWeeklyModel = true;
-    return mergedWeeklyModel(entry, strictModel);
-  });
-
-  return {
-    // These fields are retained only from the strict leaderboard receipt.
-    ...strictView,
-    sourceStatus:
-      strictView.sourceStatus === "available" && !includesUnmatchedWeeklyModel
-        ? "available"
-        : "partial",
-    categories: POPULAR_MODELS_CATEGORY_SLOTS,
-    models,
-  };
+  return projectPopularModelsLiveWithPublishedCategories(
+    weeklyEnvelope,
+    strictView,
+    [],
+    null,
+    weeklyError,
+  );
 }

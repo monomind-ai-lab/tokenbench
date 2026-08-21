@@ -1,7 +1,6 @@
 import {
   decodeBoundedJson,
   buildUiDataContractV1Envelope,
-  type SourceAttribution,
 } from '../../../src/pipeline/ui-data-contract-v1-core';
 import {
   normalizeRankingsRequest,
@@ -12,21 +11,24 @@ import {
 } from '../../../src/pipeline/ui-data-contract-v1-rankings';
 import { encodeOpaqueValue } from '../../_shared/benchmark-db';
 import {
-  readActiveLiveBenchBundle,
   type LiveBenchD1Database,
 } from '../../_shared/livebench-db';
 import {
   buildLiveBenchCustomRankingsData,
   buildLiveBenchRankingDimensionSet,
-  buildLiveBenchRankingsEnvelope,
+  buildLiveBenchLeaderboardData,
   LiveBenchRequestBindingError,
   LiveBenchRequestedReleaseUnavailableError,
 } from '../../_shared/livebench-ui-data';
 import {
-  buildLiveBenchMethodEnvelope,
   jsonUiDataServiceUnavailable,
   readLiveBenchApiContext,
+  UI_DATA_CONTRACT_V1_MEDIA_TYPE,
 } from '../../_shared/livebench-v1-api';
+import {
+  buildStrictModelJoinEnvelope,
+  readStrictModelJoin,
+} from '../../_shared/strict-model-join';
 
 const ALLOWED_PARAMETERS = new Set([
   'operation', 'releaseId', 'organizationIds', 'openWeights',
@@ -72,7 +74,8 @@ export function parseLiveBenchRankingsRequest(request: Request): LeaderboardRank
 function json(value: unknown, status: number, etag?: string): Response {
   const headers = new Headers({
     'Cache-Control': status === 200 ? 'public, max-age=0, must-revalidate' : 'no-store',
-    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Type': `${UI_DATA_CONTRACT_V1_MEDIA_TYPE}; charset=utf-8`,
+    Vary: 'Accept',
   });
   if (etag) headers.set('ETag', etag);
   return new Response(JSON.stringify(value), { status, headers });
@@ -144,32 +147,37 @@ export async function onRequestGet({
   }
   if (!env.CATALOG_DB) return unavailable(normalized, fetchedAt);
   try {
-    const active = await readActiveLiveBenchBundle(env.CATALOG_DB);
-    if (!active) return unavailable(normalized, fetchedAt);
-    const source: SourceAttribution = {
-      sourceRef: `livebench:${active.release.revision}`,
-      fieldGroup: '/data',
-      sourceId: 'livebench',
-      sourceRevision: active.release.revision,
-      label: `LiveBench ${active.release.sourceReleaseId}`,
-      url: `https://github.com/LiveBench/new-livebench/tree/${active.release.sourceCommit}`,
-      licenseId: active.release.licenseId,
-      observedAt: active.release.observedAt,
-      effectiveAt: active.release.releasedAt,
-    };
-    const envelope = buildLiveBenchRankingsEnvelope({
-      bundle: active.bundle,
+    const context = await readLiveBenchApiContext(env.CATALOG_DB);
+    if (!context) return unavailable(normalized, fetchedAt);
+    const join = await readStrictModelJoin({
+      db: env.CATALOG_DB,
+      liveBenchRevision: context.release.revision,
+      asOf: fetchedAt,
+    });
+    const data = buildLiveBenchLeaderboardData({
+      bundle: context.bundle,
       request: normalized,
-      source,
+      source: context.source,
+      join,
+    });
+    const envelope = buildStrictModelJoinEnvelope({
+      method: 'rankings',
+      request: normalized,
+      data,
+      context: {
+        revision: context.release.revision,
+        releasedAt: context.release.releasedAt,
+        checkedAt: context.release.checkedAt,
+        source: context.source,
+      },
+      join,
       fetchedAt,
-      projectionRevision: `livebench-ui-data-v1:${active.release.revision}:rankings`,
-      benchmarkRevision: active.release.revision,
-      projectionMethodology: 'livebench-upstream-global-average-2026-06-25-v1',
-      checkedAt: active.release.checkedAt,
     });
     const etag = `"ui-data-${encodeOpaqueValue([
-      active.release.revision,
-      active.release.checkedAt,
+      context.release.revision,
+      context.release.checkedAt,
+      join.catalogRevision,
+      join.modalityBenchmarkRevision,
       normalized,
     ])}"`;
     if (request.headers.get('if-none-match') === etag) {
@@ -178,6 +186,7 @@ export async function onRequestGet({
         headers: {
           'Cache-Control': 'public, max-age=0, must-revalidate',
           ETag: etag,
+          Vary: 'Accept',
         },
       });
     }
@@ -239,16 +248,28 @@ export async function onRequestPost({
     return invalidRequest();
   }
   try {
+    const join = await readStrictModelJoin({
+      db: env.CATALOG_DB,
+      liveBenchRevision: context.release.revision,
+      asOf: fetchedAt,
+    });
     const data = buildLiveBenchCustomRankingsData({
       bundle: context.bundle,
       request: normalized,
       source: context.source,
+      join,
     });
-    return json(buildLiveBenchMethodEnvelope({
+    return json(buildStrictModelJoinEnvelope({
       method: 'rankings',
       request: normalized,
       data,
-      context,
+      context: {
+        revision: context.release.revision,
+        releasedAt: context.release.releasedAt,
+        checkedAt: context.release.checkedAt,
+        source: context.source,
+      },
+      join,
       fetchedAt,
     }), 200);
   } catch {

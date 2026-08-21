@@ -89,6 +89,7 @@ function exactRoute(overrides: Partial<StrictModelJoinRouteInput> = {}): StrictM
     availability: 'available',
     inputMicroDollarsPerMillion: 1_000_000,
     cacheReadMicroDollarsPerMillion: 500_000,
+    cacheWriteMicroDollarsPerMillion: null,
     outputMicroDollarsPerMillion: 2_000_000,
     contextWindowTokens: 128_000,
     maxOutputTokens: 16_384,
@@ -181,6 +182,7 @@ describe('strict LiveBench model join', () => {
     const join = exactJoin([exactRoute({
       inputMicroDollarsPerMillion: 0,
       cacheReadMicroDollarsPerMillion: 0,
+      cacheWriteMicroDollarsPerMillion: 0,
       outputMicroDollarsPerMillion: 0,
       contextWindowTokens: null,
       maxOutputTokens: null,
@@ -192,7 +194,7 @@ describe('strict LiveBench model join', () => {
     expect(route?.outputMicroDollarsPerMillion).toMatchObject({ availability: 'available', value: 0 });
     expect(route?.contextWindowTokens).toMatchObject({ availability: 'unavailable', value: null });
     expect(route?.maxOutputTokens).toMatchObject({ availability: 'unavailable', value: null });
-    expect(route?.cacheWriteMicroDollarsPerMillion).toMatchObject({ availability: 'unavailable', value: null });
+    expect(route?.cacheWriteMicroDollarsPerMillion).toMatchObject({ availability: 'available', value: 0 });
     expect(route?.runtimeObservation).toMatchObject({ availability: 'unavailable', value: null });
   });
 

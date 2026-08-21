@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { discoverLiveBenchRelease, type LiveBenchDiscoveryState } from './livebench-discovery';
 
@@ -13,6 +14,15 @@ const RELEASE_CONTROL_0625_BLOB = '81889f6652e0e6dac043e5c57d338ec479e93cbe';
 const RELEASE_CONTROL_0701_BLOB = '39a6ca0b502205d65196a20dd12a359060fd3b79';
 const SUPPORTED_COMPUTE_BLOB = '7bb8f5e8021ed0a7220d5891fd4cec7dccb9a39f';
 const SUPPORTED_AVERAGING_BLOB = '8048d175739ea66e8069711ff6e572c684cfc75b';
+
+function gitBlobId(source: string): string {
+  return createHash('sha1')
+    .update(`blob ${new TextEncoder().encode(source).byteLength}\0${source}`, 'utf8')
+    .digest('hex');
+}
+
+const RELEASE_CONTROL_0625_WITH_HISTORY = 'export const RELEASES = ["2026-05-30", "2026-06-25"];';
+const RELEASE_CONTROL_0625_WITH_HISTORY_BLOB = gitBlobId(RELEASE_CONTROL_0625_WITH_HISTORY);
 
 function jsonResponse(value: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(value), {
@@ -123,6 +133,41 @@ describe('discoverLiveBenchRelease', () => {
       forceWeeklyVerification: false,
       fetchImpl,
     })).resolves.toMatchObject({ status: 'changed' });
+  });
+
+  it('includes the canonical RELEASES selector blob in the release fingerprint', async () => {
+    const firstFetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: 'b'.repeat(40) } }))
+      .mockResolvedValueOnce(jsonResponse(githubTree(completeTree())))
+      .mockResolvedValueOnce(new Response(RELEASE_CONTROL_0625));
+    const first = await discoverLiveBenchRelease({
+      previous: { ...initialState, fingerprint: null },
+      checkedAt: '2026-08-17T06:17:00.000Z',
+      forceWeeklyVerification: false,
+      fetchImpl: firstFetch,
+    });
+    if (first.status !== 'changed') throw new Error('expected changed');
+
+    const secondFetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ object: { sha: 'c'.repeat(40) } }))
+      .mockResolvedValueOnce(jsonResponse(githubTree(completeTree(
+        '2026-06-25',
+        '4'.repeat(40),
+        SUPPORTED_COMPUTE_BLOB,
+        SUPPORTED_AVERAGING_BLOB,
+        RELEASE_CONTROL_0625_WITH_HISTORY_BLOB,
+      ))))
+      .mockResolvedValueOnce(new Response(RELEASE_CONTROL_0625_WITH_HISTORY));
+    const second = await discoverLiveBenchRelease({
+      previous: first.state,
+      checkedAt: '2026-08-18T06:17:00.000Z',
+      forceWeeklyVerification: false,
+      fetchImpl: secondFetch,
+    });
+
+    expect(second).toMatchObject({ status: 'changed', release: { releaseId: '2026-06-25' } });
+    if (second.status !== 'changed') throw new Error('expected changed');
+    expect(second.release.fingerprint).not.toBe(first.release.fingerprint);
   });
 
   it('blocks an unreviewed methodology change instead of silently applying the old projection', async () => {

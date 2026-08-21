@@ -14,6 +14,15 @@ export const LIVEBENCH_STAGE_BATCH_SIZE = 25;
  * stays well below the query budget without approaching the value-size limit.
  */
 export const LIVEBENCH_STAGE_JSON_CHUNK_BYTES = 1_000_000;
+/**
+ * Keep a deliberate margin below D1's 50-query invocation ceiling. A stage
+ * owns two control queries (release insert + ownership read), leaving at most
+ * 38 deterministic JSON bulk inserts. If a future schema/data shape exceeds
+ * this budget, leave the candidate staged for a later checkpointed retry
+ * instead of starting a D1 invocation that must exceed the hard limit.
+ */
+export const LIVEBENCH_STAGE_MAX_D1_STATEMENTS = 40;
+const LIVEBENCH_STAGE_CONTROL_STATEMENT_COUNT = 2;
 
 export type LiveBenchReleaseKind = 'current' | 'historical';
 export type LiveBenchIdentityMatchKind = 'exact' | 'reviewed' | 'proposal';
@@ -27,9 +36,13 @@ export interface LiveBenchD1Statement {
   run(): Promise<{ meta?: { changes?: number } }>;
 }
 
+export interface LiveBenchD1Result {
+  readonly meta?: { readonly changes?: number };
+}
+
 export interface LiveBenchD1Database {
   prepare(sql: string): LiveBenchD1Statement;
-  batch(statements: readonly LiveBenchD1Statement[]): Promise<unknown>;
+  batch(statements: readonly LiveBenchD1Statement[]): Promise<readonly LiveBenchD1Result[]>;
 }
 
 /**
@@ -96,6 +109,15 @@ export interface LiveBenchValidationReceipt {
   readonly economics: number;
 }
 
+/**
+ * A database-persisted fence token. A later refresh acquisition supersedes all
+ * earlier tokens before any candidate can move the public pointer.
+ */
+export interface LiveBenchPublicationLease {
+  readonly attemptId: string;
+  readonly epoch: number;
+}
+
 export interface ActiveLiveBenchRelease {
   readonly revision: string;
   readonly sourceReleaseId: string;
@@ -141,6 +163,14 @@ export class LiveBenchStorageError extends Error {
   }
 }
 
+/** A validated candidate lost its persisted publication lease before commit. */
+export class LiveBenchPublicationLeaseError extends LiveBenchStorageError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LiveBenchPublicationLeaseError';
+  }
+}
+
 function fail(message: string): never {
   throw new LiveBenchStorageError(message);
 }
@@ -163,6 +193,11 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
 function requireCount(row: ValidationRow, key: string): number {
   const value = row[key];
   if (!Number.isSafeInteger(value) || Number(value) < 0) fail(`candidate validation ${key} is invalid`);
+  return Number(value);
+}
+
+function requirePositiveInteger(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || Number(value) <= 0) fail(`${label} must be a positive integer`);
   return Number(value);
 }
 
@@ -328,6 +363,66 @@ async function assertStagedOwnership(
   return candidate;
 }
 
+function validatePublicationLease(
+  value: LiveBenchPublicationLease,
+  attemptId: string,
+): LiveBenchPublicationLease {
+  const leaseAttemptId = requireNonBlank(value.attemptId, 'publication lease attemptId');
+  if (leaseAttemptId !== attemptId) {
+    fail('LiveBench publication lease does not belong to the staged attempt');
+  }
+  return { attemptId: leaseAttemptId, epoch: requirePositiveInteger(value.epoch, 'publication lease epoch') };
+}
+
+/**
+ * Acquire the next persisted fence token before a refresh performs expensive
+ * work. This survives Durable Object restarts and orders refreshes even when
+ * their scheduled timestamps are equal.
+ */
+export async function acquireLiveBenchPublicationLease(input: {
+  readonly db: LiveBenchD1Database;
+  readonly attemptId: string;
+  readonly acquiredAt: string;
+}): Promise<LiveBenchPublicationLease> {
+  const attemptId = requireNonBlank(input.attemptId, 'publication lease attemptId');
+  const acquiredAt = assertLiveBenchTimestamp(input.acquiredAt, 'publication lease acquiredAt');
+  const row = await input.db.prepare(`
+    INSERT INTO livebench_publication_epochs (
+      singleton, current_epoch, current_attempt_id, active_epoch, updated_at
+    ) VALUES (1, 1, ?, 0, ?)
+    ON CONFLICT(singleton) DO UPDATE SET
+      current_epoch = livebench_publication_epochs.current_epoch + 1,
+      current_attempt_id = excluded.current_attempt_id,
+      updated_at = excluded.updated_at
+    RETURNING current_epoch, current_attempt_id
+  `).bind(attemptId, acquiredAt).first<Record<string, unknown>>();
+  if (!row) fail('LiveBench publication lease acquisition did not return a row');
+  const returnedAttemptId = requireNonBlank(row.current_attempt_id, 'publication lease returned attemptId');
+  if (returnedAttemptId !== attemptId) fail('LiveBench publication lease acquisition returned another attempt');
+  return {
+    attemptId,
+    epoch: requirePositiveInteger(row.current_epoch, 'publication lease returned epoch'),
+  };
+}
+
+/** True only while no later refresh has acquired a newer persisted fence token. */
+export async function isLiveBenchPublicationLeaseCurrent(input: {
+  readonly db: LiveBenchD1Database;
+  readonly lease: LiveBenchPublicationLease;
+}): Promise<boolean> {
+  const attemptId = requireNonBlank(input.lease.attemptId, 'publication lease attemptId');
+  const epoch = requirePositiveInteger(input.lease.epoch, 'publication lease epoch');
+  const row = await input.db.prepare(`
+    SELECT 1 AS current_lease
+    FROM livebench_publication_epochs
+    WHERE singleton = 1
+      AND current_epoch = ?
+      AND current_attempt_id = ?
+    LIMIT 1
+  `).bind(epoch, attemptId).first<Record<string, unknown>>();
+  return row?.current_lease === 1;
+}
+
 function stageStatement(
   db: LiveBenchD1Database,
   sql: string,
@@ -381,6 +476,27 @@ async function executeBoundedBatches(
   for (let offset = 0; offset < statements.length; offset += LIVEBENCH_STAGE_BATCH_SIZE) {
     await db.batch(statements.slice(offset, offset + LIVEBENCH_STAGE_BATCH_SIZE));
   }
+}
+
+function assertStageStatementBudget(statements: readonly LiveBenchD1Statement[]): void {
+  const total = LIVEBENCH_STAGE_CONTROL_STATEMENT_COUNT + statements.length;
+  if (total > LIVEBENCH_STAGE_MAX_D1_STATEMENTS) {
+    fail(
+      `LiveBench staging requires ${total} D1 statements, exceeding the ${LIVEBENCH_STAGE_MAX_D1_STATEMENTS} safe invocation budget`,
+    );
+  }
+}
+
+function batchChanges(
+  results: readonly LiveBenchD1Result[],
+  index: number,
+  label: string,
+): number {
+  const changes = results[index]?.meta?.changes;
+  if (!Number.isSafeInteger(changes) || Number(changes) < 0) {
+    fail(`${label} did not return a valid D1 change count`);
+  }
+  return Number(changes);
 }
 
 /**
@@ -444,7 +560,6 @@ export async function stageLiveBenchRelease(input: StageLiveBenchReleaseInput): 
     blobId: artifact.blobId,
     rawUrl: artifact.rawUrl,
   })), stage.revision, stage.attemptId);
-  await executeBoundedBatches(input.db, artifactStatements);
 
   const categoryStatements = jsonStageStatements(input.db, `
     INSERT OR IGNORE INTO livebench_categories (
@@ -460,7 +575,6 @@ export async function stageLiveBenchRelease(input: StageLiveBenchReleaseInput): 
     categoryId: category.categoryId,
     label: category.label,
   })), stage.revision, stage.attemptId);
-  await executeBoundedBatches(input.db, categoryStatements);
 
   const taskStatements = jsonStageStatements(input.db, `
     INSERT OR IGNORE INTO livebench_tasks (
@@ -477,7 +591,6 @@ export async function stageLiveBenchRelease(input: StageLiveBenchReleaseInput): 
     categoryId: task.categoryId,
     label: task.label,
   })), stage.revision, stage.attemptId);
-  await executeBoundedBatches(input.db, taskStatements);
 
   const modelRows = stage.bundle.models.map((model) => {
     const identity = stage.identities.get(model.configurationId);
@@ -520,7 +633,6 @@ export async function stageLiveBenchRelease(input: StageLiveBenchReleaseInput): 
       WHERE revision = ? AND staging_attempt_id = ? AND publication_state = 'staged'
     )
   `, modelRows, stage.revision, stage.attemptId);
-  await executeBoundedBatches(input.db, modelStatements);
 
   const sourceModelByConfiguration = new Map(stage.bundle.models.map((model) => [
     model.configurationId,
@@ -549,7 +661,6 @@ export async function stageLiveBenchRelease(input: StageLiveBenchReleaseInput): 
       WHERE revision = ? AND staging_attempt_id = ? AND publication_state = 'staged'
     )
   `, scoreRows, stage.revision, stage.attemptId);
-  await executeBoundedBatches(input.db, scoreStatements);
 
   const economicsRows = stage.bundle.taskEconomics.map((economics) => {
     const sourceModelId = sourceModelByConfiguration.get(economics.configurationId);
@@ -583,7 +694,20 @@ export async function stageLiveBenchRelease(input: StageLiveBenchReleaseInput): 
       WHERE revision = ? AND staging_attempt_id = ? AND publication_state = 'staged'
     )
   `, economicsRows, stage.revision, stage.attemptId);
-  await executeBoundedBatches(input.db, economicsStatements);
+  // Build the full deterministic bulk plan before writing any facts. The
+  // release row is the durable checkpoint: if an invocation fails after a
+  // batch, retrying this same revision/attempt safely skips committed rows via
+  // INSERT OR IGNORE. Never begin a plan that could cross D1's query ceiling.
+  const factStatements = [
+    ...artifactStatements,
+    ...categoryStatements,
+    ...taskStatements,
+    ...modelStatements,
+    ...scoreStatements,
+    ...economicsStatements,
+  ];
+  assertStageStatementBudget(factStatements);
+  await executeBoundedBatches(input.db, factStatements);
 
   return {
     revision: stage.revision,
@@ -748,15 +872,17 @@ export async function validateLiveBenchRelease(input: {
   return { revision, attemptId, artifacts, categories, tasks, models, scores, economics };
 }
 
-/** Move the sole public pointer only after a current candidate is validated. */
+/** Move the sole public pointer only after a validated current candidate still owns its lease. */
 export async function publishLiveBenchRelease(input: {
   readonly db: LiveBenchD1Database;
   readonly revision: string;
   readonly attemptId: string;
+  readonly lease: LiveBenchPublicationLease;
   readonly publishedAt: string;
 }): Promise<{ revision: string; publishedAt: string }> {
   const revision = requireNonBlank(input.revision, 'revision');
   const attemptId = requireNonBlank(input.attemptId, 'attemptId');
+  const lease = validatePublicationLease(input.lease, attemptId);
   const publishedAt = assertLiveBenchTimestamp(input.publishedAt, 'publishedAt');
   const candidate = await assertStagedOwnership(input.db, revision, attemptId);
   if (candidate.releaseKind !== 'current') fail('historical LiveBench releases cannot move the active pointer');
@@ -764,7 +890,7 @@ export async function publishLiveBenchRelease(input: {
   if (candidate.licenseId !== 'CDLA-Permissive-2.0' || candidate.licenseVerificationState !== 'verified') {
     fail('LiveBench publication requires independently verified CDLA license evidence');
   }
-  await input.db.batch([
+  const results = await input.db.batch([
     input.db.prepare(`
       UPDATE livebench_releases
       SET publication_state = 'published', published_at = ?
@@ -774,7 +900,13 @@ export async function publishLiveBenchRelease(input: {
         AND publication_state = 'validated'
         AND license_id = 'CDLA-Permissive-2.0'
         AND license_verification_state = 'verified'
-    `).bind(publishedAt, revision, attemptId),
+        AND EXISTS (
+          SELECT 1 FROM livebench_publication_epochs
+          WHERE singleton = 1
+            AND current_epoch = ?
+            AND current_attempt_id = ?
+        )
+    `).bind(publishedAt, revision, attemptId, lease.epoch, lease.attemptId),
     input.db.prepare(`
       INSERT INTO livebench_publication_state (singleton, active_revision, updated_at)
       SELECT 1, ?, ?
@@ -787,12 +919,39 @@ export async function publishLiveBenchRelease(input: {
           AND license_id = 'CDLA-Permissive-2.0'
           AND license_verification_state = 'verified'
       )
+      AND EXISTS (
+        SELECT 1 FROM livebench_publication_epochs
+        WHERE singleton = 1
+          AND current_epoch = ?
+          AND current_attempt_id = ?
+      )
       ON CONFLICT(singleton) DO UPDATE SET
         active_revision = excluded.active_revision,
         updated_at = excluded.updated_at
-      WHERE excluded.updated_at >= livebench_publication_state.updated_at
-    `).bind(revision, publishedAt, revision, attemptId),
+    `).bind(revision, publishedAt, revision, attemptId, lease.epoch, lease.attemptId),
+    input.db.prepare(`
+      UPDATE livebench_publication_epochs
+      SET active_epoch = ?, updated_at = ?
+      WHERE singleton = 1
+        AND current_epoch = ?
+        AND current_attempt_id = ?
+        AND EXISTS (
+          SELECT 1 FROM livebench_releases
+          WHERE revision = ?
+            AND staging_attempt_id = ?
+            AND publication_state = 'published'
+        )
+    `).bind(lease.epoch, publishedAt, lease.epoch, lease.attemptId, revision, attemptId),
   ]);
+  if (batchChanges(results, 0, 'LiveBench candidate publication') !== 1) {
+    throw new LiveBenchPublicationLeaseError(
+      `LiveBench publication lease ${lease.epoch} was superseded before ${revision} could become public`,
+    );
+  }
+  if (batchChanges(results, 1, 'LiveBench publication pointer') !== 1
+    || batchChanges(results, 2, 'LiveBench publication epoch') !== 1) {
+    fail('LiveBench publication did not atomically activate its lease-owned candidate');
+  }
   return { revision, publishedAt };
 }
 

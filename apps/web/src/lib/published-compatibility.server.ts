@@ -24,6 +24,13 @@ import type {
 } from "@tokenbench/frontend/preview-data/contracts";
 
 import { loadCurrentLiveBenchRanking } from "@/lib/livebench-upstream.server";
+import {
+  hasSourcePrefixedModelId,
+  normalizePublishedModelIds,
+} from "@/lib/published-model-identity";
+
+const MODEL_DIRECTORY_PAGE_LIMIT = 100;
+const MAX_MODEL_DIRECTORY_PAGES = 16;
 
 function publishedBaseUrl(): URL {
   const configured = process.env.TOKENBENCH_UI_DATA_BASE_URL;
@@ -71,10 +78,46 @@ export async function loadPublishedModelDirectory(
   return mergePublishedModelDirectorySources(directory, ranking);
 }
 
-async function publishedDirectorySource(limit: number, fetchImpl: typeof fetch) {
-  const candidate = parseModelDirectoryEnvelope(await publishedJson(`/api/benchmarks/models?limit=${limit}`, fetchImpl));
+function directoryPath(limit: number, cursor: string | null = null): string {
+  const parameters = new URLSearchParams({ limit: String(limit) });
+  if (cursor !== null) parameters.set("cursor", cursor);
+  return `/api/benchmarks/models?${parameters.toString()}`;
+}
+
+async function publishedDirectorySource(
+  limit: number,
+  fetchImpl: typeof fetch,
+  cursor: string | null = null,
+) {
+  const candidate = parseModelDirectoryEnvelope(await publishedJson(directoryPath(limit, cursor), fetchImpl));
   if (candidate === null) throw new TypeError("Published model directory failed validation.");
   return candidate;
+}
+
+async function publishedDirectoryPages(fetchImpl: typeof fetch) {
+  const pages = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  for (let pageIndex = 0; pageIndex < MAX_MODEL_DIRECTORY_PAGES; pageIndex += 1) {
+    const page = await publishedDirectorySource(MODEL_DIRECTORY_PAGE_LIMIT, fetchImpl, cursor);
+    pages.push(page);
+    const nextCursor = page.data.nextCursor;
+    if (nextCursor === null) return pages;
+    if (seenCursors.has(nextCursor)) {
+      throw new TypeError("Published model directory repeated an opaque pagination cursor.");
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  }
+  throw new TypeError("Published model directory exceeded the bounded pagination limit.");
+}
+
+async function resolvePublishedModelIds(
+  modelIds: readonly string[],
+  fetchImpl: typeof fetch,
+): Promise<readonly string[]> {
+  if (!hasSourcePrefixedModelId(modelIds)) return modelIds;
+  return normalizePublishedModelIds(modelIds, await publishedDirectoryPages(fetchImpl));
 }
 
 export async function loadPublishedModelDirectoryAndRanking(
@@ -129,7 +172,8 @@ export async function loadPublishedModelProfile(
   slug: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<UiDataContractV1<PreviewModelProfileData>> {
-  const candidate = await publishedProfile(slug, fetchImpl, false);
+  const [resolvedSlug] = await resolvePublishedModelIds([slug], fetchImpl);
+  const candidate = await publishedProfile(resolvedSlug ?? slug, fetchImpl, false);
   if (candidate === null) throw new TypeError("Published model profile is unavailable.");
   return mergePublishedProfileSource(projectPublishedModelProfile(candidate), await loadCurrentLiveBenchRanking().catch(() => null));
 }
@@ -138,10 +182,11 @@ export async function loadPublishedModelComparison(
   modelIds: readonly string[],
   fetchImpl: typeof fetch = fetch,
 ): Promise<UiDataContractV1<CompareData>> {
-  const profiles = await Promise.all(modelIds.map((id) => publishedProfile(id, fetchImpl, true)));
+  const resolvedModelIds = await resolvePublishedModelIds(modelIds, fetchImpl);
+  const profiles = await Promise.all(resolvedModelIds.map((id) => publishedProfile(id, fetchImpl, true)));
   const comparison = projectPublishedComparison(
     profiles.filter((profile): profile is ModelProfileViewModel => profile !== null),
-    modelIds,
+    resolvedModelIds,
   );
   return mergePublishedComparisonSource(comparison, await loadCurrentLiveBenchRanking().catch(() => null));
 }

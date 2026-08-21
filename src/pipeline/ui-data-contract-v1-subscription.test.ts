@@ -126,6 +126,10 @@ const calculationFacts: SubscriptionCalculationFacts = {
     sourceRefs: [source.sourceRef],
   }],
   routes: [alphaRoute, betaRoute],
+  routeBindings: [
+    { routeId: 'route-a', modelSlug: 'alpha', providerId: 'provider' },
+    { routeId: 'route-b', modelSlug: 'beta', providerId: 'provider' },
+  ],
   entitlementProjections: [entitlement],
   methodologyVersion: 'subscription-v1',
 };
@@ -195,12 +199,21 @@ function projectionForRequest(
   };
 }
 
+function routeBindingsFor(request: SubscriptionCalculationRequest, routes: readonly RouteFact[]) {
+  return routes.map((route) => ({
+    routeId: route.routeId,
+    modelSlug: request.modelMix.find((mix) => mix.routeId === route.routeId)?.modelSlug ?? 'unbound',
+    providerId: route.providerId,
+  }));
+}
+
 function factsForRequest(
   request: SubscriptionCalculationRequest,
   overrides: Partial<SubscriptionCalculationFacts> & {
     readonly monthlyCostMicroDollars?: number;
   } = {},
 ): SubscriptionCalculationFacts {
+  const routes = overrides.routes ?? calculationFacts.routes;
   return {
     plans: overrides.plans ?? [{
       ...calculationFacts.plans[0],
@@ -208,7 +221,8 @@ function factsForRequest(
       monthlyCostMicroDollars: overrides.monthlyCostMicroDollars ?? calculationFacts.plans[0].monthlyCostMicroDollars,
       supportedModelSlugs: [...new Set(request.modelMix.map((item) => item.modelSlug))],
     }],
-    routes: overrides.routes ?? calculationFacts.routes,
+    routes,
+    routeBindings: overrides.routeBindings ?? routeBindingsFor(request, routes),
     entitlementProjections: overrides.entitlementProjections ?? [projectionForRequest(request)],
     methodologyVersion: overrides.methodologyVersion ?? calculationFacts.methodologyVersion,
   };
@@ -219,6 +233,7 @@ function dataForCalculation(request: SubscriptionCalculationRequest, facts: Subs
     operation: 'calculate' as const,
     plans: facts.plans,
     routes: facts.routes,
+    routeBindings: facts.routeBindings,
     entitlementProjections: facts.entitlementProjections,
     calculation: buildSubscriptionCalculation(request, facts),
   };
@@ -231,6 +246,7 @@ describe('UI data contract v1 subscription', () => {
       operation: 'catalog' as const,
       plans: calculationFacts.plans,
       routes: calculationFacts.routes,
+      routeBindings: calculationFacts.routeBindings,
       entitlementProjections: calculationFacts.entitlementProjections,
       calculation: null,
     };
@@ -241,6 +257,27 @@ describe('UI data contract v1 subscription', () => {
       .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
     expect(() => validateSubscriptionData(request, { ...data, calculation: {} }, sources))
       .toThrowError(expect.objectContaining({ code: 'invalid_response' }));
+  });
+
+  it('requires an exact one-to-one subscription route binding for each offer ID', () => {
+    const request = normalizedCalculate();
+    const data = dataForCalculation(request, factsForRequest(request));
+
+    expect(validateSubscriptionData(request, data, sources)).toEqual(data);
+    expect(() => validateSubscriptionData(request, {
+      ...data,
+      routeBindings: data.routeBindings.map((binding) => (
+        binding.routeId === 'route-a' ? { ...binding, modelSlug: 'beta' } : binding
+      )),
+    }, sources)).toThrowError(expect.objectContaining({ code: 'invalid_response' }));
+    expect(() => validateSubscriptionData(request, {
+      ...data,
+      routeBindings: data.routeBindings.slice(1),
+    }, sources)).toThrowError(expect.objectContaining({ code: 'invalid_response' }));
+    expect(() => validateSubscriptionData(request, {
+      ...data,
+      routeBindings: data.routeBindings.map((binding) => ({ ...binding, providerId: 'other-provider' })),
+    }, sources)).toThrowError(expect.objectContaining({ code: 'invalid_response' }));
   });
 
   it('accepts exact seat and workload bounds and rejects values outside them', () => {
@@ -792,6 +829,7 @@ describe('UI data contract v1 subscription', () => {
       operation: 'calculate' as const,
       plans: calculationFacts.plans,
       routes: calculationFacts.routes,
+      routeBindings: calculationFacts.routeBindings,
       entitlementProjections: calculationFacts.entitlementProjections,
       calculation,
     };

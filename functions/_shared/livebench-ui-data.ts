@@ -230,6 +230,7 @@ export function buildLiveBenchLeaderboardData(input: {
   readonly bundle: LiveBenchReleaseBundle;
   readonly request: LeaderboardRankingsRequest;
   readonly source: SourceAttribution;
+  readonly join?: StrictModelJoin;
 }): LeaderboardRankingsData {
   const { bundle, request, source } = input;
   if (request.releaseId !== null && request.releaseId !== bundle.releaseId) {
@@ -372,11 +373,13 @@ export function buildLiveBenchLeaderboardData(input: {
       || compareText(left.model.identity.slug, right.model.identity.slug));
   const frontier = paretoSlugs(filtered);
   const offset = cursorOffset(request, bundle.releaseId);
-  if (offset > filtered.length) throw new LiveBenchRequestBindingError('invalid LiveBench leaderboard cursor');
+  if (request.cursor !== null && offset >= filtered.length) {
+    throw new LiveBenchRequestBindingError('invalid LiveBench leaderboard cursor');
+  }
   const page = filtered.slice(offset, offset + request.limit);
   const rows: LeaderboardRow[] = page.map((projection) => ({
     sourceRank: projection.sourceRank,
-    model: projection.model,
+    model: joinedModel(projection.model, input.join),
     taskEconomics: projection.tasks,
     costPerSuccessfulEvaluationUsd: projection.aggregateCostPerSuccess,
     meanOutputTokens: projection.aggregateMeanOutputTokens,
@@ -403,7 +406,7 @@ export function buildLiveBenchLeaderboardData(input: {
     total: filtered.length,
     nextCursor: nextCursor(request, bundle.releaseId, offset + rows.length, filtered.length),
   };
-  validateRankingsDataIntrinsic(request, data, [source]);
+  validateRankingsDataIntrinsic(request, data, modelMethodSources(source, input.join));
   return data;
 }
 
@@ -436,6 +439,7 @@ function unavailableWarnings(value: unknown): DataWarning[] {
 function allLiveBenchRows(
   bundle: LiveBenchReleaseBundle,
   source: SourceAttribution,
+  join?: StrictModelJoin,
 ): readonly LeaderboardRow[] {
   const rows: LeaderboardRow[] = [];
   let cursor: string | null = null;
@@ -455,7 +459,10 @@ function allLiveBenchRows(
         cursor,
       },
     });
-    rows.push(...page.rows);
+    rows.push(...page.rows.map((row) => {
+      const model = joinedModel(row.model, join);
+      return model === row.model ? row : { ...row, model };
+    }));
     cursor = page.nextCursor;
   } while (cursor !== null);
   return rows;
@@ -489,10 +496,7 @@ function joinedRows(
   source: SourceAttribution,
   join: StrictModelJoin | undefined,
 ): readonly LeaderboardRow[] {
-  return allLiveBenchRows(bundle, source).map((row) => {
-    const model = joinedModel(row.model, join);
-    return model === row.model ? row : { ...row, model };
-  });
+  return allLiveBenchRows(bundle, source, join);
 }
 
 export function buildLiveBenchRankingDimensionSet(
@@ -516,8 +520,9 @@ export function buildLiveBenchCustomRankingsData(input: {
   readonly bundle: LiveBenchReleaseBundle;
   readonly request: CustomRankingsRequest;
   readonly source: SourceAttribution;
+  readonly join?: StrictModelJoin;
 }): CustomRankingsData {
-  const candidates: CustomRankingCandidate[] = allLiveBenchRows(input.bundle, input.source).map((row) => ({
+  const candidates: CustomRankingCandidate[] = allLiveBenchRows(input.bundle, input.source, input.join).map((row) => ({
     model: row.model,
     values: Object.fromEntries(row.model.categories.map((category) => [
       category.dimensionId,
@@ -609,7 +614,9 @@ export function buildLiveBenchModelsData(input: {
     .map((row) => row.model)
     .sort((left, right) => compareText(left.identity.slug, right.identity.slug));
   const offset = modelsCursorOffset(input.request, input.bundle.releaseId);
-  if (offset > filtered.length) throw new LiveBenchRequestBindingError('invalid LiveBench models cursor');
+  if (input.request.cursor !== null && offset >= filtered.length) {
+    throw new LiveBenchRequestBindingError('invalid LiveBench models cursor');
+  }
   const models = filtered.slice(offset, offset + input.request.limit);
   const data: ModelsData = {
     models,

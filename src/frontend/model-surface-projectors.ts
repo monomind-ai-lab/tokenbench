@@ -31,6 +31,9 @@ export type SurfaceModel = Readonly<{
   route: string | null;
   inputUsdPerMillion: number | null;
   outputUsdPerMillion: number | null;
+  cacheReadUsdPerMillion: number | null;
+  cacheWriteUsdPerMillion: number | null;
+  longContextInputUsdPerMillion: number | null;
   contextWindowTokens: number | null;
   maxOutputTokens: number | null;
   inputModalities: readonly string[];
@@ -150,6 +153,7 @@ export function surfaceParetoModelIds(
 export function projectSurfaceModel(model: PreviewModel): SurfaceModel {
   const identity = value(model.identity);
   const route = value(model.routePricing);
+  const cache = route === null ? null : value(route.cache);
   const capability = value(model.capability);
   const runtime = value(model.runtime);
   const lifecycle = value(model.lifecycle);
@@ -174,6 +178,14 @@ export function projectSurfaceModel(model: PreviewModel): SurfaceModel {
     route: route?.route ?? null,
     inputUsdPerMillion: route?.inputUsdPerMillion ?? null,
     outputUsdPerMillion: route?.outputUsdPerMillion ?? null,
+    cacheReadUsdPerMillion:
+      cache === null ? null : value(cache.readUsdPerMillion),
+    cacheWriteUsdPerMillion:
+      cache === null ? null : value(cache.writeUsdPerMillion),
+    longContextInputUsdPerMillion:
+      route?.longContextInputUsdPerMillion === undefined
+        ? null
+        : value(route.longContextInputUsdPerMillion),
     contextWindowTokens:
       route === null ? null : value(route.contextWindowTokens),
     maxOutputTokens: route === null ? null : value(route.maxOutputTokens),

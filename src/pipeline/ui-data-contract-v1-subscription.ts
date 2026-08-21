@@ -148,13 +148,27 @@ export interface SubscriptionData {
   readonly operation: 'catalog' | 'calculate';
   readonly plans: readonly SubscriptionPlanFact[];
   readonly routes: readonly RouteFact[];
+  /**
+   * Exact catalog identity for each subscription route. RouteFact intentionally
+   * remains reusable across model surfaces, where its owning model is already
+   * explicit; the subscription catalog needs this separate, one-to-one map to
+   * associate revisioned offer IDs with a provider and model without inference.
+   */
+  readonly routeBindings: readonly SubscriptionRouteBinding[];
   readonly entitlementProjections: readonly EntitlementProjectionFact[];
   readonly calculation: SubscriptionCalculation | null;
+}
+
+export interface SubscriptionRouteBinding {
+  readonly routeId: string;
+  readonly modelSlug: SafeModelSlug;
+  readonly providerId: string;
 }
 
 export interface SubscriptionCalculationFacts {
   readonly plans: readonly SubscriptionPlanFact[];
   readonly routes: readonly RouteFact[];
+  readonly routeBindings: readonly SubscriptionRouteBinding[];
   readonly entitlementProjections: readonly EntitlementProjectionFact[];
   readonly methodologyVersion: string;
 }
@@ -468,8 +482,13 @@ function selectedPricing(request: SubscriptionCalculationRequest, facts: Subscri
   readonly entitlement: EntitlementProjectionFact;
   readonly prices: readonly SelectedPricing[];
 } {
-  if (!Array.isArray(facts.plans) || !Array.isArray(facts.routes) || !Array.isArray(facts.entitlementProjections)) {
-    failResponse('$', 'subscription calculation facts must contain plans, routes, and entitlement projections');
+  if (
+    !Array.isArray(facts.plans)
+    || !Array.isArray(facts.routes)
+    || !Array.isArray(facts.routeBindings)
+    || !Array.isArray(facts.entitlementProjections)
+  ) {
+    failResponse('$', 'subscription calculation facts must contain plans, routes, route bindings, and entitlement projections');
   }
   if (typeof facts.methodologyVersion !== 'string' || facts.methodologyVersion.trim().length === 0) {
     failResponse('$', 'subscription calculation facts require a methodology version');
@@ -504,6 +523,15 @@ function selectedPricing(request: SubscriptionCalculationRequest, facts: Subscri
       failRequest('$/request/modelMix', `selected plan does not support ${mix.modelSlug}`);
     }
     const route = findExactlyOne(facts.routes, (candidate) => candidate.routeId === mix.routeId, '$/data/routes', 'must contain exactly one selected route');
+    const binding = findExactlyOne(
+      facts.routeBindings,
+      (candidate) => candidate.routeId === mix.routeId,
+      '$/data/routeBindings',
+      'must contain exactly one selected route binding',
+    );
+    if (binding.modelSlug !== mix.modelSlug || binding.providerId !== plan.providerId || binding.providerId !== route.providerId) {
+      failRequest('$/request/modelMix', 'selected route must have an exact reviewed model and provider binding for the selected plan');
+    }
     const tier = resolveTier(route, mix);
     const rateSource = tier ?? route;
     return {
@@ -857,6 +885,16 @@ function validateRoute(value: unknown, path: string, sourceRefs: ReadonlySet<str
   };
 }
 
+function validateRouteBinding(value: unknown, path: string): SubscriptionRouteBinding {
+  const binding = expectResponseRecord(value, path);
+  expectResponseKeys(binding, ['routeId', 'modelSlug', 'providerId'], path);
+  return {
+    routeId: expectResponseIdentifier(binding.routeId, `${path}/routeId`, 512),
+    modelSlug: expectResponseModelSlug(binding.modelSlug, `${path}/modelSlug`),
+    providerId: expectResponseIdentifier(binding.providerId, `${path}/providerId`, 256),
+  };
+}
+
 function validatePlan(value: unknown, path: string, sourceRefs: ReadonlySet<string>): SubscriptionPlanFact {
   const plan = expectResponseRecord(value, path);
   expectResponseKeys(plan, ['planId', 'providerId', 'displayName', 'monthlyCostMicroDollars', 'supportedModelSlugs', 'sourceRefs'], path);
@@ -1025,17 +1063,37 @@ export function validateSubscriptionData(
   const request = normalizeSubscriptionRequest(value);
   const sourceRefs = sourceReferenceSet(sources);
   const data = expectResponseRecord(candidate, '$/data');
-  expectResponseKeys(data, ['operation', 'plans', 'routes', 'entitlementProjections', 'calculation'], '$/data');
+  expectResponseKeys(data, ['operation', 'plans', 'routes', 'routeBindings', 'entitlementProjections', 'calculation'], '$/data');
   if (data.operation !== 'catalog' && data.operation !== 'calculate') failResponse('$/data/operation', 'must be catalog or calculate');
   if (data.operation !== request.operation) failResponse('$/data/operation', 'must match the normalized request operation');
   const plans = expectResponseArray(data.plans, '$/data/plans').map((plan, index) => validatePlan(plan, `$/data/plans/${index}`, sourceRefs));
   const routes = expectResponseArray(data.routes, '$/data/routes').map((route, index) => validateRoute(route, `$/data/routes/${index}`, sourceRefs));
+  const routeBindings = expectResponseArray(data.routeBindings, '$/data/routeBindings').map((binding, index) => (
+    validateRouteBinding(binding, `$/data/routeBindings/${index}`)
+  ));
   const entitlementProjections = expectResponseArray(data.entitlementProjections, '$/data/entitlementProjections').map((projection, index) => (
     validateEntitlement(projection, `$/data/entitlementProjections/${index}`, sourceRefs)
   ));
   expectUniqueStrings(plans.map((plan) => plan.planId), '$/data/plans');
   expectUniqueStrings(routes.map((route) => route.routeId), '$/data/routes');
+  expectUniqueStrings(routeBindings.map((binding) => binding.routeId), '$/data/routeBindings');
   expectUniqueStrings(entitlementProjections.map((projection) => projection.projectionId), '$/data/entitlementProjections');
+  for (const [index, binding] of routeBindings.entries()) {
+    const route = findExactlyOne(
+      routes,
+      (candidate) => candidate.routeId === binding.routeId,
+      '$/data/routes',
+      'must contain exactly one route for each route binding',
+    );
+    if (route.providerId !== binding.providerId) {
+      failResponse(`$/data/routeBindings/${index}/providerId`, 'must exactly match its route provider');
+    }
+  }
+  for (const [index, route] of routes.entries()) {
+    if (!routeBindings.some((binding) => binding.routeId === route.routeId)) {
+      failResponse(`$/data/routes/${index}/routeId`, 'must have exactly one route binding');
+    }
+  }
   for (const [index, projection] of entitlementProjections.entries()) {
     if (!plans.some((plan) => plan.planId === projection.planId)) {
       failResponse(`$/data/entitlementProjections/${index}/planId`, 'must reference a listed plan');
@@ -1043,7 +1101,7 @@ export function validateSubscriptionData(
   }
   if (request.operation === 'catalog') {
     if (data.calculation !== null) failResponse('$/data/calculation', 'must be null for catalog responses');
-    return { operation: 'catalog', plans, routes, entitlementProjections, calculation: null };
+    return { operation: 'catalog', plans, routes, routeBindings, entitlementProjections, calculation: null };
   }
   if (data.calculation === null) failResponse('$/data/calculation', 'must be non-null for calculate responses');
   expectResponseRecord(data.calculation, '$/data/calculation');
@@ -1053,9 +1111,27 @@ export function validateSubscriptionData(
     '$/data/entitlementProjections',
     'must contain exactly one entitlement projection for the selected plan',
   );
+  const selectedPlan = findExactlyOne(
+    plans,
+    (plan) => plan.planId === request.planId,
+    '$/data/plans',
+    'must contain exactly one selected plan',
+  );
+  for (const [index, mix] of request.modelMix.entries()) {
+    const binding = findExactlyOne(
+      routeBindings,
+      (candidate) => candidate.routeId === mix.routeId,
+      '$/data/routeBindings',
+      'must contain exactly one binding for each selected route',
+    );
+    if (binding.modelSlug !== mix.modelSlug || binding.providerId !== selectedPlan.providerId) {
+      failResponse(`$/data/routeBindings/${index}`, 'must exactly bind each selected route to the requested model and plan provider');
+    }
+  }
   const expectedCalculation = buildSubscriptionCalculation(request, {
     plans,
     routes,
+    routeBindings,
     entitlementProjections,
     methodologyVersion: selectedEntitlement.methodologyVersion,
   });
@@ -1066,6 +1142,7 @@ export function validateSubscriptionData(
     operation: 'calculate',
     plans,
     routes,
+    routeBindings,
     entitlementProjections,
     calculation: expectedCalculation,
   };

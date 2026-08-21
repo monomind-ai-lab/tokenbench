@@ -97,6 +97,7 @@ const openAiRoute = {
   unit: 'micro_dollars_per_million_tokens',
   input_micro_dollars_per_million: 2_500_000,
   cached_input_micro_dollars_per_million: 1_250_000,
+  cache_write_micro_dollars_per_million: null,
   output_micro_dollars_per_million: 10_000_000,
   context_window_tokens: 128_000,
   max_output_tokens: 16_000,
@@ -179,10 +180,13 @@ describe('subscription v1 endpoint boundary', () => {
     })]));
     expect(envelope.data?.plans.some((plan) => plan.providerId === 'alibaba')).toBe(false);
     expect(envelope.data?.routes).toEqual([expect.objectContaining({
-      routeId: 'gpt-4o-direct',
+      routeId: 'openai:gpt-4o:direct',
       inputMicroDollarsPerMillion: expect.objectContaining({ value: 2_500_000 }),
       cacheReadMicroDollarsPerMillion: expect.objectContaining({ value: 1_250_000 }),
     })]);
+    expect(envelope.data?.routeBindings).toEqual([{
+      routeId: 'openai:gpt-4o:direct', modelSlug: 'gpt-4o', providerId: 'openai',
+    }]);
     expect(envelope.data?.entitlementProjections).toEqual(expect.arrayContaining([expect.objectContaining({
       planId: 'openai:reviewed',
       evidenceState: 'dynamic_unknown',
@@ -205,7 +209,7 @@ describe('subscription v1 endpoint boundary', () => {
       seats: 1,
       modelMix: [{
         modelSlug: 'gpt-4o',
-        routeId: 'gpt-4o-direct',
+        routeId: 'openai:gpt-4o:direct',
         pricingTierId: null,
         tierContextTokens: 128_000,
         shareBasisPoints: 10_000,
@@ -242,5 +246,80 @@ describe('subscription v1 endpoint boundary', () => {
     expect(envelope.request).toEqual(request);
     expect(envelope.data?.calculation?.selectedPlanId).toBe('openai:reviewed');
     expect(envelope.data?.calculation?.lineItems.some((line) => line.kind === 'cache_write')).toBe(false);
+  });
+
+  it('retains a published zero cache-write rate instead of fabricating an input-rate fallback', async () => {
+    const response = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/subscription?operation=catalog'),
+      env: {
+        CATALOG_DB: catalogD1({
+          revision: [revision],
+          sources: [openAiSource],
+          plans: [openAiPlan],
+          models: [{ ...openAiRoute, cache_write_micro_dollars_per_million: 0 }],
+        }),
+      },
+    });
+
+    expect(response.status).toBe(200);
+    const envelope = parseUiDataContractV1Runtime(await response.json(), 'subscription');
+    expect(envelope.data?.routes[0]?.cacheWriteMicroDollarsPerMillion).toEqual({
+      availability: 'available',
+      value: 0,
+      sourceRefs: ['catalog:subscription-rev-1:openai-reviewed'],
+    });
+  });
+
+  it('keeps same-slug provider offers distinct and rejects a cross-provider route binding', async () => {
+    const anthropicRoute = {
+      ...openAiRoute,
+      id: 'anthropic:gpt-4o:direct',
+      provider_id: 'anthropic',
+      source_id: 'anthropic-reviewed',
+    };
+    const catalog = {
+      revision: [revision],
+      sources: [openAiSource, anthropicSource],
+      plans: [openAiPlan],
+      models: [openAiRoute, anthropicRoute],
+    };
+    const catalogResponse = await onRequestGet({
+      request: new Request('https://tokenbench.example/api/benchmarks/subscription?operation=catalog'),
+      env: { CATALOG_DB: catalogD1(catalog) },
+    });
+    const envelope = parseUiDataContractV1Runtime(await catalogResponse.json(), 'subscription');
+    expect(envelope.data?.routes.map((route) => route.routeId).sort()).toEqual([
+      'anthropic:gpt-4o:direct',
+      'openai:gpt-4o:direct',
+    ]);
+    expect([...(envelope.data?.routeBindings ?? [])].sort((left, right) => left.routeId.localeCompare(right.routeId))).toEqual([
+      { routeId: 'anthropic:gpt-4o:direct', modelSlug: 'gpt-4o', providerId: 'anthropic' },
+      { routeId: 'openai:gpt-4o:direct', modelSlug: 'gpt-4o', providerId: 'openai' },
+    ]);
+
+    const response = await onRequestPost({
+      request: new Request('https://tokenbench.example/api/benchmarks/subscription', {
+        method: 'POST',
+        body: JSON.stringify({
+          operation: 'calculate',
+          planId: 'openai:reviewed',
+          seats: 1,
+          modelMix: [{
+            modelSlug: 'gpt-4o', routeId: 'anthropic:gpt-4o:direct', pricingTierId: null,
+            tierContextTokens: 128_000, shareBasisPoints: 10_000,
+          }],
+          workload: {
+            conversationsPerDay: 1, messagesPerConversation: 1,
+            inputTokensPerMessage: 1_000, outputTokensPerMessage: 500, activeDaysPerMonth: 20,
+          },
+          cacheReadShareBasisPoints: 0,
+          cacheWriteShareBasisPoints: 0,
+          crossoverTokenVolume: 1_000_000,
+        }),
+      }),
+      env: { CATALOG_DB: catalogD1(catalog) },
+    });
+    expect(response.status).toBe(404);
+    expect(parseUiDataContractV1Runtime(await response.json(), 'subscription').status).toBe('unavailable');
   });
 });

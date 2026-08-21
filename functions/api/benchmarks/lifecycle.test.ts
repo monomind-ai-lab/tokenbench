@@ -60,7 +60,7 @@ describe('lifecycle v1 endpoint boundary', () => {
         status: expect.objectContaining({ value: 'sunset_scheduled' }),
       }),
     ]);
-    expect(envelope.warnings).toHaveLength(2);
+    expect(envelope.warnings.filter((warning) => warning.code === 'lifecycle_replacement_unavailable')).toHaveLength(2);
   });
 
   it('returns a service error when a published catalog cannot be projected', async () => {
@@ -89,5 +89,36 @@ describe('lifecycle v1 endpoint boundary', () => {
     ]) {
       expect((await onRequestGet({ request: new Request(`https://tokenbench.example/api/benchmarks/lifecycle?${query}`) })).status).toBe(400);
     }
+  });
+
+  it('honors exact ETag revalidation for a normalized lifecycle query', async () => {
+    const db = {
+      prepare(query: string) {
+        return {
+          bind: (..._values: unknown[]) => ({
+            async all<T>() {
+              const results = query.includes('FROM catalog_publication_state')
+                ? [{
+                    revision: 'catalog-r1',
+                    checked_at: '2099-01-01T00:00:00.000Z',
+                    source_url: 'https://openrouter.ai/api/v1/models',
+                    observed_at: '2099-01-01T00:00:00.000Z',
+                  }]
+                : [];
+              return { results: results as T[] };
+            },
+          }),
+        };
+      },
+    };
+    const url = 'https://tokenbench.example/api/benchmarks/lifecycle?asOf=2026-08-21T00%3A00%3A00.000Z&horizonDays=30';
+    const initial = await onRequestGet({ request: new Request(url), env: { CATALOG_DB: db } });
+    const etag = initial.headers.get('etag');
+    expect(etag).toBeTruthy();
+    const revalidated = await onRequestGet({
+      request: new Request(url, { headers: { 'if-none-match': etag ?? '' } }),
+      env: { CATALOG_DB: db },
+    });
+    expect(revalidated.status).toBe(304);
   });
 });

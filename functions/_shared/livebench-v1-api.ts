@@ -24,7 +24,16 @@ export interface LiveBenchApiContext {
 export function acceptsUiDataContractV1(request: Request): boolean {
   return (request.headers.get('accept') ?? '')
     .split(',')
-    .some((value) => value.trim().split(';', 1)[0] === UI_DATA_CONTRACT_V1_MEDIA_TYPE);
+    .some((entry) => {
+      const [mediaType = '', ...parameters] = entry.split(';');
+      if (mediaType.trim().toLowerCase() !== UI_DATA_CONTRACT_V1_MEDIA_TYPE) return false;
+      const quality = parameters
+        .map((parameter) => parameter.trim())
+        .find((parameter) => parameter.toLowerCase().startsWith('q='));
+      if (quality === undefined) return true;
+      const value = Number(quality.slice(2));
+      return Number.isFinite(value) && value > 0 && value <= 1;
+    });
 }
 
 export async function readLiveBenchApiContext(
@@ -119,7 +128,8 @@ export function buildUnavailableUiDataEnvelope<M extends UiDataContractV1Method,
 export function jsonUiDataResponse(value: unknown, status: number, etag?: string): Response {
   const headers = new Headers({
     'Cache-Control': status === 200 ? 'public, max-age=0, must-revalidate' : 'no-store',
-    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Type': `${UI_DATA_CONTRACT_V1_MEDIA_TYPE}; charset=utf-8`,
+    Vary: 'Accept',
   });
   if (etag) headers.set('ETag', etag);
   return new Response(JSON.stringify(value), { status, headers });

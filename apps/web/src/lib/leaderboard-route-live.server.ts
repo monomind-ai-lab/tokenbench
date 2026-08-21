@@ -8,6 +8,7 @@ import {
   mergeLeaderboardRouteLiveEnvelopes,
   parseLeaderboardRouteLiveEnvelope,
   projectLeaderboardRouteLiveEnvelope,
+  type LeaderboardRouteLiveEnvelope,
 } from "@/lib/leaderboard-route-live";
 import type { LeaderboardDataSnapshot } from "@/lib/ui-data.server";
 
@@ -52,7 +53,8 @@ export async function loadLeaderboardRouteLiveSnapshot(
 
   try {
     const baseUrl = productionBaseUrl(process.env.TOKENBENCH_UI_DATA_BASE_URL);
-    const pages = [];
+    const pages: LeaderboardRouteLiveEnvelope[] = [];
+    const seenCursors = new Set<string>();
     let cursor: string | null = null;
     for (let pageIndex = 0; pageIndex < 32; pageIndex += 1) {
       const endpoint = new URL(leaderboardRouteLiveEndpoint(key, profile, cursor), baseUrl);
@@ -69,7 +71,12 @@ export async function loadLeaderboardRouteLiveSnapshot(
       }
       const page = parseLeaderboardRouteLiveEnvelope(candidate, key, profile);
       pages.push(page);
-      cursor = page.data.pagination.nextCursor;
+      const nextCursor = page.data.pagination.nextCursor;
+      if (nextCursor !== null && seenCursors.has(nextCursor)) {
+        return unavailable("production", "The published leaderboard repeated an opaque pagination cursor.");
+      }
+      if (nextCursor !== null) seenCursors.add(nextCursor);
+      cursor = nextCursor;
       if (cursor === null) break;
     }
     if (cursor !== null) return unavailable("production", "The published leaderboard exceeded the bounded pagination limit.");

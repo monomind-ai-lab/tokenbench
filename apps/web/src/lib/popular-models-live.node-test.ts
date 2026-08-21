@@ -1,19 +1,26 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { parseModelDirectoryEnvelope } from "@tokenbench/frontend/model-directory-contracts";
+import {
+  parseModelDirectoryEnvelope,
+  type ModelDirectoryEnvelope,
+} from "@tokenbench/frontend/model-directory-contracts";
 import {
   popularModelsMetricValue,
   POPULAR_MODELS_CATEGORY_SLOTS,
   type PopularModelV1,
   type PopularModelsV1ViewModel,
 } from "@tokenbench/frontend/popular-models-v1";
+import type { PricePerformanceEnvelope } from "@tokenbench/benchmarks/price-performance-contracts";
+import type { LeaderboardRouteLiveEnvelope } from "@/lib/leaderboard-route-live";
 
 import {
   loadPopularModelsLiveDirectory,
   projectPopularModelsLive,
+  projectPopularModelsLiveWithPublishedCategories,
   projectPopularModelsLiveWithStrict,
   resolvePopularModelsDataPath,
+  type PopularModelsCategoryLeaderboardSource,
 } from "./popular-models-live";
 
 const AT = "2026-08-21T12:00:00.000Z";
@@ -254,6 +261,148 @@ function strictView(
   };
 }
 
+const CATEGORY_METRICS = {
+  "llm-overall": {
+    metricKey: "benchlm:overall:raw",
+    category: "overall",
+  },
+  "llm-agentic": {
+    metricKey: "benchlm:category:agentic",
+    category: "agentic",
+  },
+  "llm-coding": {
+    metricKey: "benchlm:category:coding",
+    category: "coding",
+  },
+  "llm-reasoning": {
+    metricKey: "benchlm:category:reasoning",
+    category: "reasoning",
+  },
+  "llm-knowledge": {
+    metricKey: "benchlm:category:knowledge",
+    category: "knowledge",
+  },
+} as const;
+
+function categorySource(
+  key: keyof typeof CATEGORY_METRICS,
+  id: string,
+  options: {
+    readonly value: number;
+    readonly rank: number | null;
+    readonly fieldSize: number | null;
+    readonly modelKey?: string;
+    readonly sourceModelId?: string;
+    readonly slug?: string;
+    readonly sourceId?: string;
+  },
+): PopularModelsCategoryLeaderboardSource {
+  const metric = CATEGORY_METRICS[key];
+  const modelKey = options.modelKey ?? `benchlm:test:${id}`;
+  const sourceModelId = options.sourceModelId ?? id;
+  const slug = options.slug ?? id;
+  const sourceId = options.sourceId ?? "benchlm";
+  return {
+    key,
+    envelope: {
+      revision: `${key}-revision`,
+      publishedAt: AT,
+      freshness: { status: "fresh", checkedAt: AT },
+      attribution: [
+        {
+          sourceId: "benchlm",
+          label: `${key} source`,
+          url: `https://example.test/${key}`,
+          updatedAt: AT,
+        },
+      ],
+      data: {
+        key,
+        entries: [
+          {
+            model: {
+              modelKey,
+              slug,
+              sourceId,
+              sourceModelId,
+            },
+            metric: {
+              modelKey,
+              metricKey: metric.metricKey,
+              category: metric.category,
+              value: options.value,
+              rank: options.rank,
+              rankFieldSize: options.fieldSize,
+              sourceId,
+              sourceModelId,
+            },
+          },
+        ],
+      },
+    } as unknown as LeaderboardRouteLiveEnvelope,
+  };
+}
+
+function pricePerformance(
+  points: readonly {
+    readonly id: string;
+    readonly scores: Partial<{
+      readonly overall: number | null;
+      readonly agentic: number | null;
+      readonly coding: number | null;
+      readonly reasoning: number | null;
+      readonly knowledge: number | null;
+      readonly multimodal: number | null;
+      readonly mathematics: number | null;
+      readonly multilingual: number | null;
+      readonly "instruction-following": number | null;
+    }>;
+    readonly modelKey?: string;
+    readonly sourceModelId?: string;
+    readonly slug?: string;
+    readonly canonicalSlug?: string | null;
+  }[],
+): PricePerformanceEnvelope {
+  return {
+    revision: "price-performance-revision",
+    publishedAt: AT,
+    freshness: { status: "fresh", checkedAt: AT },
+    attribution: [
+      {
+        sourceId: "benchlm",
+        label: "Price-performance source",
+        url: "https://example.test/price-performance",
+        updatedAt: AT,
+      },
+    ],
+    data: {
+      points: points.map((point) => {
+        const slug = point.slug ?? point.id;
+        return {
+          modelKey: point.modelKey ?? `benchlm:test:${point.id}`,
+          slug,
+          route: {
+            sourceModelId: point.sourceModelId ?? point.id,
+            canonicalSlug: point.canonicalSlug ?? slug,
+          },
+          scores: {
+            overall: null,
+            agentic: null,
+            coding: null,
+            reasoning: null,
+            knowledge: null,
+            multimodal: null,
+            mathematics: null,
+            multilingual: null,
+            "instruction-following": null,
+            ...point.scores,
+          },
+        };
+      }),
+    },
+  } as unknown as PricePerformanceEnvelope;
+}
+
 test("projects source weekly ranks rather than using array indexes", () => {
   const view = projectPopularModelsLive(envelope());
 
@@ -272,6 +421,20 @@ test("projects source weekly ranks rather than using array indexes", () => {
     popularModelsMetricValue(view.models[0]!, "mathematics"),
     88.25,
   );
+});
+
+test("retains legacy source attribution and freshness as published provenance", () => {
+  const view = projectPopularModelsLive(envelope());
+
+  assert.equal(view.fetchedAt, AT);
+  assert.equal(view.provenance.length, 1);
+  assert.deepEqual(view.provenance[0], {
+    id: "model-directory:directory-r1:benchlm:https://example.test/weekly:2026-08-21T12:00:00.000Z",
+    label: "BenchLM weekly directory",
+    kind: "accepted_pipeline",
+    effectiveAt: AT,
+    note: "Published model-directory revision directory-r1; checked 2026-08-21T12:00:00.000Z; https://example.test/weekly",
+  });
 });
 
 test("keeps a published zero distinct from an unavailable live value", () => {
@@ -330,6 +493,195 @@ test("does not attach a strict row when neither its canonical slug nor model id 
   assert.equal(first?.aggregate, null);
   assert.equal(first?.taskEconomics.length, 0);
   assert.equal(view.sourceStatus, "partial");
+});
+
+test("enriches non-strict weekly rows from exact category receipts without replacing weekly rank", () => {
+  const strict = strictView([strictModel("strict-mismatch", "other-model")]);
+  const view = projectPopularModelsLiveWithPublishedCategories(
+    envelope(),
+    strict,
+    [
+      categorySource("llm-overall", "unranked", {
+        value: 63.4,
+        rank: 19,
+        fieldSize: 90,
+      }),
+      categorySource("llm-overall", "zero-score", {
+        value: 99,
+        rank: 1,
+        fieldSize: 90,
+      }),
+      categorySource("llm-reasoning", "first", {
+        value: 92.1,
+        rank: 4,
+        fieldSize: 62,
+      }),
+      categorySource("llm-coding", "first", {
+        value: 87.3,
+        rank: 3,
+        fieldSize: 81,
+      }),
+      categorySource("llm-agentic", "first", {
+        value: 79.8,
+        rank: 8,
+        fieldSize: 49,
+      }),
+    ],
+    pricePerformance([
+      {
+        id: "first",
+        scores: {
+          // The weekly directory already publishes mathematics for this row;
+          // a value-only source must supplement, not replace, that evidence.
+          mathematics: 77,
+          multilingual: 76.5,
+          "instruction-following": 83.2,
+        },
+      },
+      { id: "unranked", scores: { overall: 60 } },
+    ]),
+  );
+  const first = view.models.find((model) => model.id === "first");
+  const unranked = view.models.find((model) => model.id === "unranked");
+  const zero = view.models.find((model) => model.id === "zero-score");
+
+  assert.equal(first?.rank, 4);
+  assert.notEqual(first?.rank, 3);
+  assert.equal(popularModelsMetricValue(first!, "reasoning"), 92.1);
+  assert.equal(popularModelsMetricValue(first!, "coding"), 87.3);
+  assert.equal(popularModelsMetricValue(first!, "agentic-coding"), 79.8);
+  assert.equal(popularModelsMetricValue(first!, "mathematics"), 88.25);
+  assert.equal(popularModelsMetricValue(first!, "language"), 76.5);
+  assert.equal(popularModelsMetricValue(first!, "instruction-following"), 83.2);
+  assert.equal(popularModelsMetricValue(first!, "data-analysis"), null);
+  assert.deepEqual(
+    first?.axes
+      .filter((axis) => ["reasoning", "coding", "agentic"].includes(axis.label))
+      .map((axis) => [axis.label, axis.percentile, axis.rank, axis.fieldSize]),
+    [
+      ["reasoning", 92.1, 4, 62],
+      ["coding", 87.3, 3, 81],
+      ["agentic", 79.8, 8, 49],
+    ],
+  );
+  assert.equal(
+    first?.axes.find((axis) => axis.label === "Multilingual")?.rank,
+    null,
+  );
+  assert.equal(unranked?.rank, null);
+  assert.equal(unranked?.overallScore, 63.4);
+  assert.equal(unranked?.capabilityUnavailableReason, null);
+  // A source-published zero is more specific than an enrichment value.
+  assert.equal(zero?.overallScore, 0);
+  assert.equal(
+    view.provenance.some((item) => item.id.startsWith("popular-models-category:llm-coding:")),
+    true,
+  );
+  assert.equal(
+    view.provenance.some((item) => item.id.startsWith("popular-models-price-performance:")),
+    true,
+  );
+});
+
+test("requires a unique exact modelKey, sourceModelId, and canonicalSlug category join", () => {
+  const noMatch = projectPopularModelsLiveWithPublishedCategories(
+    envelope(),
+    null,
+    [
+      categorySource("llm-reasoning", "first", {
+        value: 99,
+        rank: 1,
+        fieldSize: 90,
+        sourceModelId: "renamed-first",
+      }),
+      categorySource("llm-reasoning", "first", {
+        value: 98,
+        rank: 2,
+        fieldSize: 90,
+        modelKey: "benchlm:test:other-first",
+      }),
+      categorySource("llm-reasoning", "first", {
+        value: 97,
+        rank: 3,
+        fieldSize: 90,
+        slug: "other-first",
+      }),
+    ],
+    null,
+  );
+  assert.equal(
+    popularModelsMetricValue(
+      noMatch.models.find((model) => model.id === "first")!,
+      "reasoning",
+    ),
+    null,
+  );
+
+  const base = envelope();
+  const firstEntry = base.data.models.find((entry) => entry.canonicalSlug === "first");
+  assert.ok(firstEntry);
+  const ambiguousWeekly: ModelDirectoryEnvelope = {
+    ...base,
+    data: { ...base.data, models: [firstEntry, firstEntry] },
+  };
+  const ambiguous = projectPopularModelsLiveWithPublishedCategories(
+    ambiguousWeekly,
+    null,
+    [
+      categorySource("llm-reasoning", "first", {
+        value: 99,
+        rank: 1,
+        fieldSize: 90,
+      }),
+    ],
+    null,
+  );
+  assert.deepEqual(
+    ambiguous.models.map((model) => popularModelsMetricValue(model, "reasoning")),
+    [null, null],
+  );
+});
+
+test("retains strict exact enrichment and surviving category facts when a category endpoint fails", () => {
+  const strict = strictView([strictModel("strict-first", "first")]);
+  const withStrict = projectPopularModelsLiveWithPublishedCategories(
+    envelope(),
+    strict,
+    [
+      categorySource("llm-reasoning", "first", {
+        value: 1,
+        rank: 99,
+        fieldSize: 99,
+      }),
+    ],
+    pricePerformance([{ id: "first", scores: { coding: 1 } }]),
+  );
+  const strictFirst = withStrict.models.find((model) => model.id === "first");
+  assert.deepEqual(strictFirst?.axes, strict.models[0]?.axes);
+  assert.equal(
+    withStrict.provenance.some((item) => item.id.startsWith("popular-models-category:")),
+    false,
+  );
+
+  // This models Promise.allSettled retaining the coding receipt while the
+  // independent reasoning request rejects and contributes no source object.
+  const partial = projectPopularModelsLiveWithPublishedCategories(
+    envelope(),
+    null,
+    [
+      categorySource("llm-coding", "first", {
+        value: 86.2,
+        rank: 5,
+        fieldSize: 81,
+      }),
+    ],
+    null,
+  );
+  const partialFirst = partial.models.find((model) => model.id === "first");
+  assert.equal(partial.sourceStatus, "partial");
+  assert.equal(partialFirst?.rank, 4);
+  assert.equal(popularModelsMetricValue(partialFirst!, "coding"), 86.2);
+  assert.equal(popularModelsMetricValue(partialFirst!, "reasoning"), null);
 });
 
 test("falls back to the partial weekly view only when strict data is unavailable", () => {

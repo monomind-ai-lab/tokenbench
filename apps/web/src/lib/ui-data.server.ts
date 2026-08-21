@@ -3,7 +3,7 @@ import "server-only";
 import type { RankingData, UiDataContractV1 } from "@tokenbench/frontend/preview-data/contracts";
 
 import { createDesignEvidenceDataAdapter } from "@/lib/ui-data-preview.server";
-import { createProductionUiDataAdapter } from "@/lib/ui-data-production.server";
+import { loadLeaderboardRouteLiveSnapshot } from "@/lib/leaderboard-route-live.server";
 
 export type LeaderboardDataMode = "evidence" | "production" | "unconfigured";
 
@@ -65,23 +65,12 @@ export async function loadLeaderboardRankings(): Promise<LeaderboardDataSnapshot
   }
 
   try {
-    return {
-      mode: "production",
-      envelope: await createProductionUiDataAdapter().rankings({
-        operation: "leaderboard",
-        releaseId: null,
-        filters: {
-          organizationIds: [],
-          openWeights: "all",
-          excludeDerivativeFinetunes: false,
-        },
-        limit: 50,
-        cursor: null,
-      }),
-      error: null,
-    };
+    // The canonical origin currently serves the legacy per-key envelope, not
+    // the strict generic rankings media type. Its published overall route is
+    // the only honest generic fallback: it keeps server facts and provenance
+    // intact without falling through to evidence or a synthetic ranking.
+    return await loadLeaderboardRouteLiveSnapshot("llm-overall", "balanced");
   } catch (error) {
     return { mode: "production", envelope: null, error: safeErrorMessage(error) };
   }
 }
-

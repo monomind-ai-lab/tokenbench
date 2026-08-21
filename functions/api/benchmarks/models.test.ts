@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseUiDataContractV1Runtime } from '../../../src/pipeline/ui-data-contract-v1';
-import { UI_DATA_CONTRACT_V1_MEDIA_TYPE } from '../../_shared/livebench-v1-api';
+import { acceptsUiDataContractV1, UI_DATA_CONTRACT_V1_MEDIA_TYPE } from '../../_shared/livebench-v1-api';
 import { onRequestGet } from './models';
 
 describe('durable model directory API', () => {
@@ -31,7 +31,18 @@ describe('durable model directory API', () => {
     });
     const payload = await response.json();
     expect(response.status).toBe(404);
+    expect(response.headers.get('content-type')).toContain(UI_DATA_CONTRACT_V1_MEDIA_TYPE);
+    expect(response.headers.get('vary')).toContain('Accept');
     expect(parseUiDataContractV1Runtime(payload, 'models')).toMatchObject({ status: 'unavailable' });
+  });
+
+  it('honors media-type parameters but not a v1 range explicitly weighted to zero', () => {
+    expect(acceptsUiDataContractV1(new Request('https://tokenbench.example', {
+      headers: { accept: `application/json, ${UI_DATA_CONTRACT_V1_MEDIA_TYPE}; q=0.5` },
+    }))).toBe(true);
+    expect(acceptsUiDataContractV1(new Request('https://tokenbench.example', {
+      headers: { accept: `Application/Vnd.Tokenbench.Ui-Data.V1+Json; Q=0` },
+    }))).toBe(false);
   });
 
   it('keeps a v1 D1 fault distinct from cold-source unavailability', async () => {

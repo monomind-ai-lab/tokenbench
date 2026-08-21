@@ -357,6 +357,7 @@ function calculationData() {
       sourceRefs: [fixtureSource.sourceRef],
     }],
     routes: [providerRoute],
+    routeBindings: [{ routeId: providerRoute.routeId, modelSlug: 'alpha', providerId: providerRoute.providerId }],
     entitlementProjections: [entitlement],
     methodologyVersion: 'subscription-v1',
   };
@@ -364,6 +365,7 @@ function calculationData() {
     operation: 'calculate' as const,
     plans: facts.plans,
     routes: facts.routes,
+    routeBindings: facts.routeBindings,
     entitlementProjections: facts.entitlementProjections,
     calculation: buildSubscriptionCalculation(request, facts),
   };
@@ -400,7 +402,7 @@ function availableEnvelope(
       request = operation === 'calculate' ? calculateRequest() : { operation: 'catalog' };
       data = operation === 'calculate'
         ? calculationData()
-        : { operation: 'catalog', plans: [], routes: [], entitlementProjections: [], calculation: null };
+        : { operation: 'catalog', plans: [], routes: [], routeBindings: [], entitlementProjections: [], calculation: null };
       break;
   }
   return {
@@ -564,7 +566,7 @@ describe('ui-data-contract/v1 schema and parser parity', () => {
 
   it.each([
     ['rankings', { request: customRequest(), data: leaderboardData() }],
-    ['subscription', { request: calculateRequest(), data: { operation: 'catalog', plans: [], routes: [], entitlementProjections: [], calculation: null } }],
+    ['subscription', { request: calculateRequest(), data: { operation: 'catalog', plans: [], routes: [], routeBindings: [], entitlementProjections: [], calculation: null } }],
   ] as const)('pairs %s request and data operations in schema and runtime', (method, override) => {
     const value = { ...availableEnvelope(method), ...override };
 
