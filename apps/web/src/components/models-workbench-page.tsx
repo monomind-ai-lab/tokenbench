@@ -15,6 +15,8 @@ import {
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
+
 import { ResultActions, ViewModeToggle } from "@/components/result-actions";
 import { RouteEvidenceFrontierPlot } from "@/components/route-evidence-visuals";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +41,11 @@ type SortMode = "score" | "price" | "context" | "release";
 function formatPrice(value: number | null): string {
   return value === null
     ? "Unavailable"
-    : `$${value < 1 ? value.toFixed(3) : value.toFixed(2)}`;
+    : formatDisplayUsd(value);
+}
+
+function formatScore(value: number | null): string {
+  return value === null ? "Unavailable" : formatDisplayNumber(value);
 }
 
 function formatTokens(value: number | null): string {
@@ -667,7 +673,7 @@ export function ModelsWorkbenchPage({
                       <div className="mt-5 grid grid-cols-3 gap-px overflow-hidden rounded-lg bg-border">
                         <div className="bg-muted/50 p-2.5">
                           <p className="font-mono text-sm">
-                            {model.capabilityScore ?? "Unavailable"}
+                            {formatScore(model.capabilityScore)}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             Capability
@@ -753,7 +759,7 @@ export function ModelsWorkbenchPage({
                           {formatPrice(model.inputUsdPerMillion)}
                         </td>
                         <td className="px-4 py-3 text-right font-mono">
-                          {model.capabilityScore ?? "Unavailable"}
+                          {formatScore(model.capabilityScore)}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <SelectionButton

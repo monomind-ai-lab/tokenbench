@@ -7,6 +7,7 @@ import {
   parseLeaderboardFilters,
   projectLeaderboardRows,
   serializeLeaderboardFilters,
+  visibleLeaderboardRows,
 } from './leaderboard-detail';
 
 describe('Next leaderboard detail projection', () => {
@@ -49,5 +50,30 @@ describe('Next leaderboard detail projection', () => {
     expect(value.filter((row) => row.frontier).map((row) => row.id)).toEqual(['alpha']);
     expect(preferenceDefinition.kind).toBe('category');
     expect(preference).toEqual([]);
+  });
+
+  it('limits the reader-facing result window without rebuilding source rank', () => {
+    const rows = Array.from({ length: 12 }, (_, index) => ({
+      id: `model-${index}`,
+      name: `Model ${index}`,
+      provider: 'Provider',
+      access: 'Proprietary' as const,
+      rank: index * 2 + 1,
+      metric: 100 - index,
+      metricLabel: 'Coding',
+      fieldSize: 12,
+      inputUsdPerMillion: null,
+      outputUsdPerMillion: null,
+      blendedUsdPerMillion: null,
+      contextWindowTokens: null,
+      maxOutputTokens: null,
+      route: null,
+      frontier: false,
+    }));
+
+    const visible = visibleLeaderboardRows(rows);
+    expect(visible).toHaveLength(10);
+    expect(visible.map((row) => row.rank)).toEqual([1, 3, 5, 7, 9, 11, 13, 15, 17, 19]);
+    expect(rows).toHaveLength(12);
   });
 });

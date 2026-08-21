@@ -15,7 +15,6 @@ import {
   Eye,
   Image,
   Images,
-  Info,
   RotateCcw,
   Scale,
   Scissors,
@@ -34,10 +33,12 @@ import {
   projectLeaderboardRows,
   providersForLeaderboard,
   serializeLeaderboardFilters,
+  visibleLeaderboardRows,
   type LeaderboardDisplayRow,
   type LeaderboardFilters,
   type LeaderboardSort,
 } from "@tokenbench/frontend/leaderboard-detail";
+import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 import type { LeaderboardKey } from "@tokenbench/routing/leaderboard-routes";
 import { LEADERBOARD_ROUTES } from "@tokenbench/routing/leaderboard-routes";
 
@@ -82,11 +83,11 @@ const PROFILE_LABELS = {
 } as const;
 
 function formatScore(value: number | null) {
-  return value === null ? "Unavailable" : Number.isInteger(value) ? value.toString() : value.toFixed(2);
+  return value === null ? "Unavailable" : formatDisplayNumber(value);
 }
 
 function formatPrice(value: number | null) {
-  return value === null ? "Unavailable" : `$${value.toLocaleString("en-US", { maximumFractionDigits: 3 })}`;
+  return value === null ? "Unavailable" : formatDisplayUsd(value);
 }
 
 function formatTokens(value: number | null) {
@@ -217,6 +218,7 @@ export function LeaderboardDetailPage({
   const Icon = ICON_BY_ROUTE[routeKey];
   const [filters, setFilters] = useState(initialFilters);
   const rows = useMemo(() => projectLeaderboardRows(definition, snapshot.envelope, filters), [definition, filters, snapshot.envelope]);
+  const visibleRows = useMemo(() => visibleLeaderboardRows(rows), [rows]);
   const sourceRows = useMemo(() => projectLeaderboardRows(definition, snapshot.envelope, {
     ...filters,
     search: "",
@@ -228,12 +230,11 @@ export function LeaderboardDetailPage({
     () => sourceUnavailable ? [] : providersForLeaderboard(snapshot.envelope),
     [snapshot.envelope, sourceUnavailable],
   );
-  const routeProvenance = sourceUnavailable ? [] : snapshot.envelope?.provenance ?? [];
   const unavailableReason = snapshot.error
     ?? snapshot.envelope?.reason
     ?? (sourceUnavailable ? definition.unavailableReason : null);
   const pricingOnly = definition.kind === "pricing";
-  const metricLabel = rows.find((row) => row.metric !== null)?.metricLabel ?? route.seo.h1;
+  const metricLabel = visibleRows.find((row) => row.metric !== null)?.metricLabel ?? route.seo.h1;
 
   useEffect(() => {
     const query = serializeLeaderboardFilters(definition, filters);
@@ -266,19 +267,19 @@ export function LeaderboardDetailPage({
             <Link className="inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground" href="/leaderboards/"><ArrowLeft className="size-4" />All leaderboards</Link>
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <Badge className="font-mono text-[10px] uppercase tracking-[.16em]" variant="secondary"><Icon />Evidence lens</Badge>
-              <Badge variant="outline">{definition.sourceLabel}</Badge>
+              <Badge variant="outline">Published source</Badge>
               {snapshot.mode === "evidence" ? <Badge variant="outline">Design evidence</Badge> : null}
             </div>
             <h1 className="mt-6 max-w-4xl text-balance text-5xl font-semibold leading-[.98] tracking-[-.04em] sm:text-6xl" id="leaderboard-heading">{route.seo.h1}</h1>
             <p className="mt-6 max-w-3xl text-pretty text-base leading-7 text-muted-foreground sm:text-lg">{route.seo.summary}</p>
-            <div className="mt-8"><ResultActions filename={`tokenbench-${routeKey}`} rows={csvRows(rows, unavailableReason)} targetId="leaderboard-results" /></div>
+            <div className="mt-8"><ResultActions filename={`tokenbench-${routeKey}`} rows={csvRows(visibleRows, unavailableReason)} targetId="leaderboard-results" /></div>
           </div>
           <div className="overflow-hidden rounded-2xl border border-border bg-card/90 shadow-soft">
-            <div className="border-b border-border px-5 py-4"><p className="text-sm font-medium">Evidence receipt</p><p className="mt-1 text-xs text-muted-foreground">The source, timestamp, and coverage travel with the result.</p></div>
+            <div className="border-b border-border px-5 py-4"><div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium">Evidence receipt</p><p className="mt-1 text-xs text-muted-foreground">The timestamp and coverage travel with the result.</p></div><Link className="shrink-0 text-xs font-medium text-link hover:underline" href="/data-sources/">Data sources</Link></div></div>
             <dl className="grid grid-cols-2 gap-px bg-border">
               <div className="bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Status</dt><dd className="mt-2 text-sm font-medium capitalize">{sourceUnavailable ? "Unavailable" : snapshot.envelope?.status ?? "Unavailable"}</dd></div>
               <div className="bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Published rows</dt><dd className="mt-2 font-mono text-sm">{sourceRows.length}</dd></div>
-              <div className="col-span-2 bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Effective at</dt><dd className="mt-2 text-sm">{formatTimestamp(sourceUnavailable ? null : snapshot.envelope?.effectiveAt ?? null)}</dd></div>
+              <div className="col-span-2 bg-card p-4"><dt className="font-mono text-[10px] uppercase text-muted-foreground">Last updated</dt><dd className="mt-2 text-sm">{formatTimestamp(sourceUnavailable ? null : snapshot.envelope?.effectiveAt ?? null)}</dd></div>
             </dl>
           </div>
         </div>
@@ -289,20 +290,20 @@ export function LeaderboardDetailPage({
           <div className="mx-auto max-w-7xl">
             <p className="font-mono text-xs text-muted-foreground">01 / PUBLISHED EVIDENCE</p>
             <div className="mt-2 grid gap-4 md:grid-cols-[1fr_1fr] md:items-end"><div><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl" id="score-chart-heading">Score comparison</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">The visible field for this exact evidence lens. Exact values remain in the result table below.</p></div><p className="text-sm text-muted-foreground md:justify-self-end">Unavailable measurements are omitted, never plotted at zero.</p></div>
-            <Card className="mt-7"><CardContent className="pt-2"><LeaderboardScoreChart label={metricLabel} rows={rows} /></CardContent></Card>
+            <Card className="mt-7"><CardContent className="pt-2"><LeaderboardScoreChart label={metricLabel} rows={visibleRows} /></CardContent></Card>
           </div>
         </section>
       ) : null}
 
       {!sourceUnavailable && definition.kind === "value" ? (
         <section aria-labelledby="frontier-chart-heading" className="border-y border-border bg-muted/25 px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
-          <div className="mx-auto max-w-7xl"><p className="font-mono text-xs text-muted-foreground">02 / VALUE FRONTIER</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="frontier-chart-heading">Cost versus published score</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Larger points are non-dominated under the selected workload mix: no cheaper published route scores higher.</p><Card className="mt-7"><CardContent className="pt-2"><LeaderboardCostScoreChart rows={rows} /></CardContent></Card></div>
+          <div className="mx-auto max-w-7xl"><p className="font-mono text-xs text-muted-foreground">02 / VALUE FRONTIER</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="frontier-chart-heading">Cost versus published score</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Larger points are non-dominated under the selected workload mix: no cheaper published route scores higher.</p><Card className="mt-7"><CardContent className="pt-2"><LeaderboardCostScoreChart rows={visibleRows} /></CardContent></Card></div>
         </section>
       ) : null}
 
       {!sourceUnavailable && pricingOnly ? (
         <section aria-labelledby="price-chart-heading" className="px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
-          <div className="mx-auto max-w-7xl"><p className="font-mono text-xs text-muted-foreground">01 / ROUTE ECONOMICS</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="price-chart-heading">Selected-route price comparison</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Prices use the active workload mix and remain tied to the selected provider route.</p><Card className="mt-7"><CardContent className="pt-2"><LeaderboardPriceChart rows={rows} /></CardContent></Card></div>
+          <div className="mx-auto max-w-7xl"><p className="font-mono text-xs text-muted-foreground">01 / ROUTE ECONOMICS</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="price-chart-heading">Selected-route price comparison</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Prices use the active workload mix and remain tied to the selected provider route.</p><Card className="mt-7"><CardContent className="pt-2"><LeaderboardPriceChart rows={visibleRows} /></CardContent></Card></div>
         </section>
       ) : null}
 
@@ -322,30 +323,27 @@ export function LeaderboardDetailPage({
 
       <section aria-labelledby="leaderboard-results-heading" className="px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
         <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs text-muted-foreground">{definition.kind === "value" ? "04" : "03"} / RESULT FIELD</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="leaderboard-results-heading">{route.seo.h1} results</h2><p aria-live="polite" className="mt-2 text-sm text-muted-foreground"><span className="font-mono text-foreground">{rows.length}</span> published {rows.length === 1 ? "row" : "rows"} visible</p></div><ViewModeToggle mode={filters.view} onChange={(view) => update("view", view)} /></div>
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs text-muted-foreground">{definition.kind === "value" ? "04" : "03"} / RESULT FIELD</p><h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl" id="leaderboard-results-heading">{route.seo.h1} results</h2><p aria-live="polite" className="mt-2 text-sm text-muted-foreground"><span className="font-mono text-foreground">{visibleRows.length}</span>{rows.length > visibleRows.length ? <> of <span className="font-mono text-foreground">{rows.length}</span></> : null} published {visibleRows.length === 1 ? "row" : "rows"} shown</p></div><ViewModeToggle mode={filters.view} onChange={(view) => update("view", view)} /></div>
           <div className="mt-7" id="leaderboard-results">
             {sourceUnavailable ? <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-border bg-card/50 p-8 text-center" role="status"><div className="max-w-xl"><DatabaseZap className="mx-auto size-7 text-muted-foreground" /><h3 className="mt-4 text-lg font-medium">Verified source projection unavailable</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">{unavailableReason}</p><p className="mt-4 text-xs leading-5 text-muted-foreground">This route remains published so its methodology, query semantics, exports, and future data boundary are stable. TokenBench does not fill it with another source&apos;s scores.</p></div></div> : null}
             {!sourceUnavailable && rows.length === 0 ? <div className="grid min-h-64 place-items-center rounded-2xl border border-dashed border-border text-center"><div><CircleAlert className="mx-auto size-6 text-muted-foreground" /><h3 className="mt-3 font-medium">No published rows match these filters</h3><p className="mt-1 text-sm text-muted-foreground">Broaden the query or reset the visible result field.</p><Button className="mt-4 min-h-11" onClick={reset} variant="outline"><RotateCcw />Reset filters</Button></div></div> : null}
-            {rows.length > 0 && filters.view === "cards" ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{rows.map((row, index) => <LeaderboardRowCard key={row.id} position={index} pricingOnly={pricingOnly} row={row} />)}</div> : null}
-            {rows.length > 0 && filters.view === "list" ? <><div className="grid gap-3 md:hidden">{rows.map((row, index) => <LeaderboardRowCard key={row.id} position={index} pricingOnly={pricingOnly} row={row} />)}</div><div className="hidden md:block"><LeaderboardTable pricingOnly={pricingOnly} rows={rows} /></div></> : null}
-          </div>
-        </div>
-      </section>
-
-      <section aria-labelledby="evidence-heading" className="border-y border-border bg-muted/25 px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
-        <div className="mx-auto grid max-w-7xl gap-8 lg:grid-cols-[.72fr_1.28fr]">
-          <div><Info className="size-5 text-muted-foreground" /><p className="mt-5 font-mono text-xs text-muted-foreground">04 / EVIDENCE AND METHODOLOGY</p><h2 className="mt-2 text-2xl font-semibold" id="evidence-heading">Read the result with its limits.</h2></div>
-          <div className="min-w-0 space-y-5 text-sm leading-6 text-muted-foreground">
-            <p className="text-foreground">{definition.methodology}</p>
-            <p>{definition.positionNote}</p>
-            {snapshot.mode === "evidence" ? <p className="rounded-xl border border-amber-500/25 bg-amber-500/5 p-4 text-amber-700 dark:text-amber-300">This local preview uses the retained deterministic contract evidence for design review. It is never a production fallback.</p> : null}
-            {routeProvenance.length ? <div className="grid min-w-0 gap-3 sm:grid-cols-2">{routeProvenance.map((source) => <div className="min-w-0 rounded-xl border border-border bg-card p-4" key={source.id}><p className="font-medium text-foreground">{source.label}</p><p className="mt-1 text-xs">Effective {formatTimestamp(source.effectiveAt)}</p>{source.note ? <p className="mt-2 break-words text-xs [overflow-wrap:anywhere]">{source.note}</p> : null}</div>)}</div> : <p>No verified source receipt is available yet. Publication time and source identity will appear here with a valid envelope.</p>}
+            {visibleRows.length > 0 && filters.view === "cards" ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{visibleRows.map((row, index) => <LeaderboardRowCard key={row.id} position={index} pricingOnly={pricingOnly} row={row} />)}</div> : null}
+            {visibleRows.length > 0 && filters.view === "list" ? <><div className="grid gap-3 md:hidden">{visibleRows.map((row, index) => <LeaderboardRowCard key={row.id} position={index} pricingOnly={pricingOnly} row={row} />)}</div><div className="hidden md:block"><LeaderboardTable pricingOnly={pricingOnly} rows={visibleRows} /></div></> : null}
           </div>
         </div>
       </section>
 
       <section aria-labelledby="related-leaderboards-heading" className="px-5 py-14 sm:px-8 sm:py-16 lg:px-10">
-        <div className="mx-auto max-w-7xl"><p className="font-mono text-xs text-muted-foreground">EXPLORE BY LENS</p><h2 className="mt-2 text-2xl font-semibold" id="related-leaderboards-heading">Related leaderboards</h2><nav aria-label="Related leaderboards" className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(Object.entries(LEADERBOARD_ROUTES) as [LeaderboardKey, (typeof LEADERBOARD_ROUTES)[LeaderboardKey]][]).filter(([key]) => key !== routeKey).map(([key, related]) => { const RelatedIcon = ICON_BY_ROUTE[key]; return <Link className="group flex min-h-20 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={related.pathname} key={key}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><RelatedIcon className="size-4" /></span><span className="min-w-0 flex-1 text-sm font-medium">{related.navigationLabel}</span><ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" /></Link>; })}</nav></div>
+        <div className="mx-auto max-w-7xl">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="font-mono text-xs text-muted-foreground">EXPLORE BY LENS</p><h2 className="mt-2 text-2xl font-semibold" id="related-leaderboards-heading">Related leaderboards</h2></div><Link className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-link hover:underline" href="/data-sources/">Review data sources<ArrowRight className="size-4" /></Link></div>
+          <nav aria-label="Featured leaderboards" className="mt-7 grid gap-3 sm:grid-cols-2">
+            {[
+              ["/popular-models/", "Popular models", "Browse the published model table, category lenses, insights, and ordered comparison set."],
+              ["/make-it-yours/", "Make it yours", "Re-rank published candidates with your own capability weights and SLA thresholds."],
+            ].map(([href, title, copy]) => <Link className="group rounded-2xl border border-primary/35 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--primary)_10%,var(--card)),var(--card))] p-5 transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={href} key={href}><span className="flex items-center justify-between gap-4"><Badge variant="secondary">Featured</Badge><ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" /></span><span className="mt-5 block text-lg font-semibold">{title}</span><span className="mt-2 block text-sm leading-6 text-muted-foreground">{copy}</span></Link>)}
+          </nav>
+          <nav aria-label="Related leaderboards" className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{(Object.entries(LEADERBOARD_ROUTES) as [LeaderboardKey, (typeof LEADERBOARD_ROUTES)[LeaderboardKey]][]).filter(([key]) => key !== routeKey).map(([key, related]) => { const RelatedIcon = ICON_BY_ROUTE[key]; return <Link className="group flex min-h-20 items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" href={related.pathname} key={key}><span className="grid size-9 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground"><RelatedIcon className="size-4" /></span><span className="min-w-0 flex-1 text-sm font-medium">{related.navigationLabel}</span><ArrowRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-1" /></Link>; })}</nav>
+        </div>
       </section>
 
       <aside aria-label="MonoMind optimization services" className="border-t border-border bg-muted/25 px-5 py-14 sm:px-8 sm:py-16 lg:px-10">

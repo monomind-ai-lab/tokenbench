@@ -11,8 +11,8 @@ describe('weighted ranking exports', () => {
 
     expect(csv).toBe([
       'Cost rank,Model,Provider,Weighted score,Evaluation cost / success $,Weighted frontier,SLA result',
-      '1,Fast,Provider B,80.0,1.000000,Yes,Pass',
-      '2,Slow,Provider A,90.0,3.000000,Yes,Outside threshold',
+      '1,Fast,Provider B,80.0,1,Yes,Pass',
+      '2,Slow,Provider A,90.0,3,Yes,Outside threshold',
     ].join('\n'));
   });
 

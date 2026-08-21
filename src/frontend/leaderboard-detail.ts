@@ -59,6 +59,19 @@ export interface LeaderboardDisplayRow {
   readonly frontier: boolean;
 }
 
+export const LEADERBOARD_VISIBLE_ROW_LIMIT = 10;
+
+/**
+ * Result surfaces show a concise top-ten window after the accepted filters and
+ * sort are applied. Source ranks and the full published row count remain
+ * untouched in the evidence receipt.
+ */
+export function visibleLeaderboardRows(
+  rows: readonly LeaderboardDisplayRow[],
+): readonly LeaderboardDisplayRow[] {
+  return rows.slice(0, LEADERBOARD_VISIBLE_ROW_LIMIT);
+}
+
 const EXACT_SOURCE_POSITION = 'Positions use the published source rank for this exact lens. Missing positions stay unavailable and are never rebuilt from the filtered row number.';
 const CATEGORY_POSITION = 'Positions use the published category rank when the source provides one. A missing category rank stays unranked rather than being inferred from the visible rows.';
 

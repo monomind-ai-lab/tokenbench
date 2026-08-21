@@ -1,6 +1,8 @@
 import { ArrowRight, CircleAlert, Scale } from "lucide-react";
 import Link from "next/link";
 
+import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
+
 import type { CsvRow } from "@/components/result-actions";
 import { ResultActions } from "@/components/result-actions";
 import { RouteEvidencePairControls } from "@/components/route-evidence-pair-controls";
@@ -61,6 +63,14 @@ function evidenceState<T>(value: EvidenceValue<T>) {
   return <Badge variant={label === "Unavailable" ? "outline" : "secondary"}>{label}</Badge>;
 }
 
+function formatMeasurement(value: number | null): string {
+  return value === null ? "Unavailable" : formatDisplayNumber(value);
+}
+
+function exportMeasurement(value: number | null): number | null {
+  return value === null ? null : roundDisplayValue(value);
+}
+
 function comparisonRows(models: readonly (PreviewModel | null)[]): CsvRow[] {
   return models.flatMap<CsvRow>((model, index): CsvRow[] => {
     if (model === null) return [{ model: `Requested model ${index + 1}`, metric: "Evidence", value: "Unavailable", state: "Unavailable" }];
@@ -69,11 +79,11 @@ function comparisonRows(models: readonly (PreviewModel | null)[]): CsvRow[] {
     const capability = routeEvidenceValue(model.capability);
     const runtime = routeEvidenceValue(model.runtime);
     return [
-      { model: name, metric: "Composite capability", value: capability?.compositeScore ?? null, state: routeEvidenceValueState(model.capability) },
-      { model: name, metric: "Input USD / 1M", value: route?.inputUsdPerMillion ?? null, state: routeEvidenceValueState(model.routePricing) },
-      { model: name, metric: "Output USD / 1M", value: route?.outputUsdPerMillion ?? null, state: routeEvidenceValueState(model.routePricing) },
-      { model: name, metric: "TTFT p50 seconds", value: runtime?.ttftP50Seconds ?? null, state: routeEvidenceValueState(model.runtime) },
-      { model: name, metric: "Output tokens / second", value: runtime?.outputTokensPerSecond ?? null, state: routeEvidenceValueState(model.runtime) },
+      { model: name, metric: "Composite capability", value: exportMeasurement(capability?.compositeScore ?? null), state: routeEvidenceValueState(model.capability) },
+      { model: name, metric: "Input USD / 1M", value: exportMeasurement(route?.inputUsdPerMillion ?? null), state: routeEvidenceValueState(model.routePricing) },
+      { model: name, metric: "Output USD / 1M", value: exportMeasurement(route?.outputUsdPerMillion ?? null), state: routeEvidenceValueState(model.routePricing) },
+      { model: name, metric: "TTFT p50 seconds", value: exportMeasurement(runtime?.ttftP50Seconds ?? null), state: routeEvidenceValueState(model.runtime) },
+      { model: name, metric: "Output tokens / second", value: exportMeasurement(runtime?.outputTokensPerSecond ?? null), state: routeEvidenceValueState(model.runtime) },
     ];
   });
 }
@@ -98,10 +108,10 @@ function ModelSummary({ model, requestedSlug }: { model: PreviewModel | null; re
       <h2 className="mt-4 text-xl font-semibold tracking-tight">{details?.name ?? requestedSlug}</h2>
       <p className="mt-2 text-sm text-muted-foreground">{details?.slug ?? requestedSlug}</p>
       <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
-        <div><dt className="text-xs text-muted-foreground">Composite</dt><dd className="mt-1 font-mono">{capability?.compositeScore ?? "Unavailable"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">Composite</dt><dd className="mt-1 font-mono">{formatMeasurement(capability?.compositeScore ?? null)}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Route</dt><dd className="mt-1 truncate">{route?.route ?? "Unavailable"}</dd></div>
         <div><dt className="text-xs text-muted-foreground">Input / 1M</dt><dd className="mt-1 font-mono">{route ? formatRouteEvidencePrice(route.inputUsdPerMillion) : "Unavailable"}</dd></div>
-        <div><dt className="text-xs text-muted-foreground">TTFT p50</dt><dd className="mt-1 font-mono">{runtime ? `${runtime.ttftP50Seconds}s` : "Unavailable"}</dd></div>
+        <div><dt className="text-xs text-muted-foreground">TTFT p50</dt><dd className="mt-1 font-mono">{runtime ? `${formatMeasurement(runtime.ttftP50Seconds)}s` : "Unavailable"}</dd></div>
       </dl>
       <Link className={cn(buttonVariants({ variant: "outline" }), "mt-6")} href={routeEvidenceModelPath(details?.slug ?? requestedSlug)}>Open evidence profile<ArrowRight /></Link>
     </section>
@@ -140,9 +150,9 @@ function CapabilityMatrix({
   return (
     <>
       <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
-        <table className="w-full min-w-[620px] border-collapse text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Capability</th><th className="px-4 py-3 text-right">{labels[0]}</th><th className="px-4 py-3 text-right">{labels[1]}</th></tr></thead><tbody>{rows.map((row) => <tr className="border-t border-border" key={row.key}><td className="px-4 py-3 font-medium">{row.label}</td><td className="px-4 py-3 text-right font-mono">{row.values[0] ?? "Unavailable"}</td><td className="px-4 py-3 text-right font-mono">{row.values[1] ?? "Unavailable"}</td></tr>)}</tbody></table>
+        <table className="w-full min-w-[620px] border-collapse text-sm"><thead className="bg-muted/60 text-xs text-muted-foreground"><tr><th className="px-4 py-3 text-left">Capability</th><th className="px-4 py-3 text-right">{labels[0]}</th><th className="px-4 py-3 text-right">{labels[1]}</th></tr></thead><tbody>{rows.map((row) => <tr className="border-t border-border" key={row.key}><td className="px-4 py-3 font-medium">{row.label}</td><td className="px-4 py-3 text-right font-mono">{formatMeasurement(row.values[0])}</td><td className="px-4 py-3 text-right font-mono">{formatMeasurement(row.values[1])}</td></tr>)}</tbody></table>
       </div>
-      <div className="grid gap-3 md:hidden">{rows.map((row) => <section className="rounded-xl border border-border bg-card p-4" key={row.key}><h3 className="text-sm font-medium">{row.label}</h3><dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-muted-foreground">{labels[0]}</dt><dd className="mt-1 font-mono">{row.values[0] ?? "Unavailable"}</dd></div><div><dt className="text-xs text-muted-foreground">{labels[1]}</dt><dd className="mt-1 font-mono">{row.values[1] ?? "Unavailable"}</dd></div></dl></section>)}</div>
+      <div className="grid gap-3 md:hidden">{rows.map((row) => <section className="rounded-xl border border-border bg-card p-4" key={row.key}><h3 className="text-sm font-medium">{row.label}</h3><dl className="mt-3 grid grid-cols-2 gap-3 text-sm"><div><dt className="text-xs text-muted-foreground">{labels[0]}</dt><dd className="mt-1 font-mono">{formatMeasurement(row.values[0])}</dd></div><div><dt className="text-xs text-muted-foreground">{labels[1]}</dt><dd className="mt-1 font-mono">{formatMeasurement(row.values[1])}</dd></div></dl></section>)}</div>
     </>
   );
 }
@@ -223,7 +233,7 @@ export function RouteEvidencePairPage({
 
       <section className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-7xl"><div className="mb-7"><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Pricing route variance</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Each route stays separate. A missing verification record is shown as not verified, never transformed into a cross-provider estimate.</p></div><PricingVariance labels={labels} mode={dataMode === "evidence" ? "preview" : projection.mode} models={models} /></div></section>
 
-      <section className="border-y border-border bg-muted/25 px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-7xl"><div className="mb-7"><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Conditions and unavailable facts</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Runtime and lifecycle conditions are kept per model; evidence is not reduced to a single overall winner claim.</p></div><div className="grid gap-4 lg:grid-cols-2">{models.map((model, index) => <section className="rounded-2xl border border-border bg-card p-5 sm:p-6" key={pair.slug + index}><h3 className="font-medium">{labels[index]}</h3>{model ? <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Runtime</dt><dd className="mt-1">{routeEvidenceText(model.runtime, (runtime) => `${runtime.ttftP50Seconds}s TTFT p50 · ${runtime.outputTokensPerSecond} tok/s`)}</dd></div><div><dt className="text-xs text-muted-foreground">Lifecycle</dt><dd className="mt-1">{routeEvidenceText(model.lifecycle, (lifecycle) => lifecycle.status)}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">Lifecycle sunset</dt><dd className="mt-1">{routeEvidenceText(model.lifecycle, (lifecycle) => routeEvidenceText(lifecycle.sunsetOn, (date) => date))}</dd></div></dl> : <p className="mt-5 text-sm text-muted-foreground">Unavailable. No requested-model evidence was supplied.</p>}</section>)}</div></div></section>
+      <section className="border-y border-border bg-muted/25 px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-7xl"><div className="mb-7"><h2 className="text-2xl font-semibold tracking-tight sm:text-3xl">Conditions and unavailable facts</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">Runtime and lifecycle conditions are kept per model; evidence is not reduced to a single overall winner claim.</p></div><div className="grid gap-4 lg:grid-cols-2">{models.map((model, index) => <section className="rounded-2xl border border-border bg-card p-5 sm:p-6" key={pair.slug + index}><h3 className="font-medium">{labels[index]}</h3>{model ? <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2"><div><dt className="text-xs text-muted-foreground">Runtime</dt><dd className="mt-1">{routeEvidenceText(model.runtime, (runtime) => `${formatMeasurement(runtime.ttftP50Seconds)}s TTFT p50 · ${formatMeasurement(runtime.outputTokensPerSecond)} tok/s`)}</dd></div><div><dt className="text-xs text-muted-foreground">Lifecycle</dt><dd className="mt-1">{routeEvidenceText(model.lifecycle, (lifecycle) => lifecycle.status)}</dd></div><div className="sm:col-span-2"><dt className="text-xs text-muted-foreground">Lifecycle sunset</dt><dd className="mt-1">{routeEvidenceText(model.lifecycle, (lifecycle) => routeEvidenceText(lifecycle.sunsetOn, (date) => date))}</dd></div></dl> : <p className="mt-5 text-sm text-muted-foreground">Unavailable. No requested-model evidence was supplied.</p>}</section>)}</div></div></section>
 
       <section className="px-4 py-12 sm:px-6 sm:py-16"><div className="mx-auto max-w-7xl"><RouteEvidenceSources sources={sources} title="Pair evidence receipt" /></div></section>
 

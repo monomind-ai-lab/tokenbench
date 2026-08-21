@@ -60,7 +60,7 @@ const STRUCTURAL_METRIC_TOKENS = new Set(['category', 'overall', 'raw', 'style',
 const PRICE_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
-  maximumFractionDigits: 4,
+  maximumFractionDigits: 2,
 });
 
 function toggle(values: readonly string[], value: string): readonly string[] {

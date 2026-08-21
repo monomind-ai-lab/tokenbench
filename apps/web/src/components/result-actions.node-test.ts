@@ -27,6 +27,10 @@ test("csvDownloadText prepends a UTF-8 BOM without changing the CSV payload", ()
   assert.equal(csvDownloadText([{ model: "模型" }]), "\uFEFFmodel\r\n模型");
 });
 
+test("rowsToCsv caps numeric export cells at two decimal places", () => {
+  assert.equal(rowsToCsv([{ score: 98.42519685, cost: 0.01449 }]), "score,cost\r\n98.43,0.01");
+});
+
 test("resultImageOptions excludes marked export chrome from a PNG capture", () => {
   const originalHTMLElement = Object.getOwnPropertyDescriptor(globalThis, "HTMLElement");
 

@@ -28,6 +28,8 @@ import {
 } from "react";
 import { Scatter } from "react-chartjs-2";
 
+import { formatDisplayUsd } from "@tokenbench/frontend/display-format";
+
 import { ResultActions, type CsvRow } from "@/components/result-actions";
 import { Button } from "@/components/ui/button";
 import type {
@@ -77,6 +79,17 @@ const SOURCE_SLOTS = [
   { id: "lmarena", label: "Preference benchmark source" },
   { id: "openrouter", label: "Route catalog source" },
 ] as const;
+
+function formatTimestamp(value: string | null | undefined): string {
+  if (!value) return "Unavailable";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "UTC",
+  }).format(date) + " UTC";
+}
 
 function fallbackChartTheme(dark: boolean, reducedMotion: boolean): ChartTheme {
   return dark
@@ -146,9 +159,7 @@ function providerColor(provider: string): string {
 }
 
 function formatCost(value: number): string {
-  return `$${new Intl.NumberFormat("en-US", {
-    maximumFractionDigits: 4,
-  }).format(value)} / 1M`;
+  return `${formatDisplayUsd(value)} / 1M`;
 }
 
 function formatAxis(value: number): string {
@@ -454,7 +465,7 @@ function LlmPricePerformanceParetoChart({
           border: { color: chartTheme.grid },
           grid: { color: chartTheme.grid },
           ticks: {
-            callback: (value) => `$${formatAxis(Number(value))}`,
+            callback: (value) => formatDisplayUsd(Number(value)),
             color: chartTheme.muted,
           },
           title: {
@@ -775,8 +786,8 @@ function LlmPricePerformanceEvidence({
       <dl className="mt-7 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-3">
         {[
           ["Revision", envelope?.revision ?? "Unavailable"],
-          ["Published", envelope?.publishedAt ?? "Unavailable"],
-          ["Checked", envelope?.freshness.checkedAt ?? "Unavailable"],
+          ["Published", formatTimestamp(envelope?.publishedAt)],
+          ["Checked", formatTimestamp(envelope?.freshness.checkedAt)],
         ].map(([term, value]) => (
           <div className="bg-card p-4" key={term}>
             <dt className="text-xs text-muted-foreground">{term}</dt>
@@ -798,7 +809,7 @@ function LlmPricePerformanceEvidence({
                 <span className="text-sm font-medium text-muted-foreground">{slot.label}</span>
               )}
               <p className="mt-2 text-xs text-muted-foreground">
-                {source ? `Updated ${source.updatedAt}` : "Unavailable"}
+                {source ? `Updated ${formatTimestamp(source.updatedAt)}` : "Unavailable"}
               </p>
             </li>
           );

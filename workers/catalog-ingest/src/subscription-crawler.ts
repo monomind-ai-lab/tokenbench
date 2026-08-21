@@ -4,44 +4,20 @@ import type {
   PlanOffer,
   SourceProvenance,
 } from '../../../src/catalog/contracts';
+import {
+  SUBSCRIPTION_SOURCE_CONFIGS,
+  type SubscriptionSourceConfig,
+} from '../../../src/data-sources/public-registry';
 import type { ParsedSource } from './index';
 
 /**
  * This is deliberately an allowlist. A subscription page is data input only;
  * it is never treated as an instruction to discover an authenticated API.
+ * The same registry drives the public data-sources page so crawler and UI
+ * coverage cannot silently diverge.
  */
-export const SUBSCRIPTION_SOURCE_CONFIGS = [
-  {
-    sourceId: 'openai-subscription', providerId: 'openai',
-    url: 'https://chatgpt.com/pricing/',
-  },
-  {
-    sourceId: 'anthropic-subscription', providerId: 'anthropic',
-    url: 'https://claude.com/pricing/',
-  },
-  {
-    sourceId: 'google-subscription', providerId: 'google',
-    url: 'https://one.google.com/about/plans',
-  },
-  {
-    sourceId: 'xai-subscription', providerId: 'xai',
-    url: 'https://x.ai/pricing',
-  },
-  {
-    sourceId: 'zai-subscription', providerId: 'zai',
-    url: 'https://z.ai/subscribe',
-  },
-  {
-    sourceId: 'perplexity-subscription', providerId: 'perplexity',
-    url: 'https://www.perplexity.ai/pro',
-  },
-  {
-    sourceId: 'microsoft-subscription', providerId: 'microsoft',
-    url: 'https://www.microsoft.com/en-us/microsoft-365-copilot/personal',
-  },
-] as const;
-
-export type SubscriptionSourceConfig = typeof SUBSCRIPTION_SOURCE_CONFIGS[number];
+export { SUBSCRIPTION_SOURCE_CONFIGS };
+export type { SubscriptionSourceConfig };
 export type SubscriptionCrawlState = 'baseline' | 'unchanged' | 'changed' | 'blocked' | 'failed' | 'needs_review';
 
 export interface SubscriptionPriceObservation {

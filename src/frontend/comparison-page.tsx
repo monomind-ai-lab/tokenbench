@@ -14,6 +14,7 @@ import {
 import { ModelPairPicker, type DirectoryModel, type DirectoryPair } from './model-pair-picker';
 import { ProviderMark } from './provider-mark';
 import { ShareAction } from './share-action';
+import { formatDisplayNumber } from './display-format';
 
 type SelectedRouteState =
   | { readonly status: 'selected'; readonly route: BenchmarkPriceCheck }
@@ -24,7 +25,7 @@ interface QuickPair extends DirectoryPair {
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(value);
+  return formatDisplayNumber(value);
 }
 
 function formatDateTime(value: string): string {

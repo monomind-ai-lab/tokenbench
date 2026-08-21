@@ -95,7 +95,7 @@ describe('popular-model scoring helpers', () => {
 
   it('formats illustrative currency values precisely enough for compact UI labels', () => {
     expect(formatPopularCost(1.25)).toBe('$1.25');
-    expect(formatPopularCost(0.0042)).toBe('$0.0042');
+    expect(formatPopularCost(0.0042)).toBe('<$0.01');
     expect(formatPopularCost(Number.NaN)).toBe('—');
   });
 });

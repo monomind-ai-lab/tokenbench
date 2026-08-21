@@ -13,6 +13,10 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Bar, Scatter } from "react-chartjs-2";
 
+import {
+  formatDisplayNumber,
+  formatDisplayUsd,
+} from "@tokenbench/frontend/display-format";
 import type { LeaderboardDisplayRow } from "@tokenbench/frontend/leaderboard-detail";
 
 ChartJS.register(BarElement, CategoryScale, Legend, LinearScale, PointElement, Tooltip);
@@ -181,7 +185,15 @@ export function LeaderboardCostScoreChart({ rows }: { rows: readonly Leaderboard
         borderWidth: 1,
         callbacks: {
           title: (items) => String((items[0]?.raw as { model?: string } | undefined)?.model ?? "Model"),
-          label: (context) => `$${Number(context.parsed.x).toFixed(2)}/1M blended · score ${Number(context.parsed.y).toFixed(2)}`,
+          label: (context) => {
+            const price = context.parsed.x === null
+              ? "Price unavailable"
+              : `${formatDisplayUsd(context.parsed.x)}/1M blended`;
+            const score = context.parsed.y === null
+              ? "Unavailable"
+              : formatDisplayNumber(context.parsed.y);
+            return `${price} · score ${score}`;
+          },
           afterLabel: (context) => (context.raw as { frontier?: boolean }).frontier ? "Value frontier" : "",
         },
         displayColors: false,
@@ -190,7 +202,7 @@ export function LeaderboardCostScoreChart({ rows }: { rows: readonly Leaderboard
       },
     },
     scales: {
-      x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => `$${value}` }, title: { color: theme.muted, display: true, text: "Blended route price / 1M tokens" } },
+      x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) }, title: { color: theme.muted, display: true, text: "Blended route price / 1M tokens" } },
       y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted }, title: { color: theme.muted, display: true, text: "Published overall score" } },
     },
   }), [theme]);
@@ -219,7 +231,7 @@ export function LeaderboardPriceChart({ rows }: { rows: readonly LeaderboardDisp
     animation: theme.reducedMotion ? false : { duration: 400 },
     plugins: { legend: { display: false }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, displayColors: false, titleColor: theme.strong, bodyColor: theme.muted } },
     scales: {
-      x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => `$${value}` }, title: { color: theme.muted, display: true, text: "USD / 1M blended tokens" } },
+      x: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) }, title: { color: theme.muted, display: true, text: "USD / 1M blended tokens" } },
       y: { border: { color: theme.grid }, grid: { display: false }, ticks: { color: theme.muted } },
     },
   }), [theme]);

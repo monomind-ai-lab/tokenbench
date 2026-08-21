@@ -491,6 +491,7 @@ function SiteFooter() {
           <Link className="text-muted-foreground transition-colors hover:text-link" href="/popular-models/">Popular models</Link>
           <Link className="text-muted-foreground transition-colors hover:text-link" href="/make-it-yours/">Make it yours</Link>
           <Link className="text-muted-foreground transition-colors hover:text-link" href="/compare/">Compare models</Link>
+          <Link className="text-muted-foreground transition-colors hover:text-link" href="/data-sources/">Data sources</Link>
         </nav>
         <nav aria-label="Articles" className="grid content-start gap-2 text-sm">
           <p className="mb-1 text-xs font-medium">Articles</p>

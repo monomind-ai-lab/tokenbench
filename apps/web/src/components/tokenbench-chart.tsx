@@ -17,6 +17,11 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Bar, Line, Radar, Scatter } from "react-chartjs-2";
 
+import {
+  formatDisplayNumber,
+  formatDisplayUsd,
+} from "@tokenbench/frontend/display-format";
+
 import type { CatalogModel } from "@/lib/model-catalog";
 
 ChartJS.register(BarElement, CategoryScale, Filler, LinearScale, LogarithmicScale, PointElement, RadialLinearScale, LineElement, Tooltip, Legend);
@@ -155,7 +160,15 @@ export function TokenBenchChart() {
         borderColor: theme.tooltipBorder,
         borderWidth: 1,
         callbacks: {
-          label: (context) => `${context.dataset.label}: $${context.parsed.x}/1M · score ${context.parsed.y}`,
+          label: (context) => {
+            const price = context.parsed.x === null
+              ? "Price unavailable"
+              : `${formatDisplayUsd(context.parsed.x)}/1M`;
+            const score = context.parsed.y === null
+              ? "Unavailable"
+              : formatDisplayNumber(context.parsed.y);
+            return `${context.dataset.label}: ${price} · score ${score}`;
+          },
         },
         displayColors: false,
         titleColor: theme.strong,
@@ -167,7 +180,7 @@ export function TokenBenchChart() {
         beginAtZero: true,
         border: { color: theme.grid },
         grid: { color: theme.grid },
-        ticks: { color: theme.muted, callback: (value) => `$${value}` },
+        ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) },
         title: { color: theme.muted, display: true, text: "Input price / 1M tokens" },
       },
       y: {
@@ -241,7 +254,15 @@ export function ModelFrontierChart({ models, logScale }: { models: CatalogModel[
         borderWidth: 1,
         callbacks: {
           title: (items) => String((items[0]?.raw as { model?: string } | undefined)?.model ?? items[0]?.dataset.label ?? "Model"),
-          label: (context) => `$${context.parsed.x}/1M input · evidence ${context.parsed.y}`,
+          label: (context) => {
+            const price = context.parsed.x === null
+              ? "Input price unavailable"
+              : `${formatDisplayUsd(context.parsed.x)}/1M input`;
+            const evidence = context.parsed.y === null
+              ? "Unavailable"
+              : formatDisplayNumber(context.parsed.y);
+            return `${price} · evidence ${evidence}`;
+          },
           afterLabel: (context) => (context.raw as { frontier?: boolean }).frontier ? "Value frontier" : "",
         },
         displayColors: false,
@@ -255,7 +276,7 @@ export function ModelFrontierChart({ models, logScale }: { models: CatalogModel[
         beginAtZero: !logScale,
         border: { color: theme.grid },
         grid: { color: theme.grid },
-        ticks: { color: theme.muted, callback: (value) => `$${value}` },
+        ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) },
         title: { color: theme.muted, display: true, text: "Input price / 1M tokens" },
       },
       y: {
@@ -467,7 +488,7 @@ export function SubscriptionBreakevenChart({ costPerMillion, subscriptionCost, c
     animation: theme.reducedMotion ? false : { duration: 400 },
     interaction: { intersect: false, mode: "index" },
     plugins: { legend: { position: "bottom", labels: { color: theme.muted, pointStyle: "circle", usePointStyle: true } }, tooltip: { backgroundColor: theme.tooltip, borderColor: theme.tooltipBorder, borderWidth: 1, callbacks: { title: (items) => `${items[0]?.label}M monthly tokens`, label: (context) => `${context.dataset.label}: $${Number(context.parsed.y).toFixed(2)}` }, titleColor: theme.strong, bodyColor: theme.muted } },
-    scales: { x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value, index) => `${volumes[index]}M` }, title: { color: theme.muted, display: true, text: "Monthly token volume" } }, y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => `$${value}` }, title: { color: theme.muted, display: true, text: "Monthly USD" } } },
+    scales: { x: { border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value, index) => `${formatDisplayNumber(volumes[index] ?? Number(value))}M` }, title: { color: theme.muted, display: true, text: "Monthly token volume" } }, y: { beginAtZero: true, border: { color: theme.grid }, grid: { color: theme.grid }, ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) }, title: { color: theme.muted, display: true, text: "Monthly USD" } } },
   }), [theme, volumes]);
   return <div aria-label="API versus subscription breakeven chart" className="h-[360px] w-full" role="img"><Line data={data} options={options} /><p className="sr-only">The subscription line uses dashes. API cost rises with monthly token volume while the selected subscription remains flat at ${subscriptionCost.toFixed(2)}. {crossoverMillions === null ? "No crossover is available." : `The estimated crossover is ${crossoverMillions.toFixed(2)} million tokens.`}</p></div>;
 }

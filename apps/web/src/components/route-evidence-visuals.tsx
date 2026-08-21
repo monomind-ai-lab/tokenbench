@@ -1,10 +1,11 @@
 "use client";
 
 import type { SurfaceModel } from "@tokenbench/frontend/model-surface-projectors";
+import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
 
 function formatPrice(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
-  return `$${value < 1 ? value.toFixed(3) : value.toFixed(2)}`;
+  return formatDisplayUsd(value);
 }
 
 function formatTokens(value: number | null): string {
@@ -91,7 +92,7 @@ export function RouteEvidenceFrontierPlot({
             : "";
           return (
             <span
-              aria-label={`${model.name}: ${formatPrice(price)} input per 1M and ${score} capability${frontierLabel}`}
+              aria-label={`${model.name}: ${formatPrice(price)} input per 1M and ${formatDisplayNumber(score)} capability${frontierLabel}`}
               className={`absolute grid -translate-x-1/2 translate-y-1/2 place-items-center border-2 border-background text-[9px] font-semibold text-white shadow-sm ${isFrontier ? "size-9 rounded-md ring-2 ring-foreground/25" : "size-8 rounded-full"}`}
               key={model.id}
               style={{
@@ -99,7 +100,7 @@ export function RouteEvidenceFrontierPlot({
                 bottom: `${bottom}%`,
                 left: `${left}%`,
               }}
-              title={`${model.name} · ${formatPrice(price)} input / 1M · ${score} capability${isFrontier ? " · supplied-pair frontier" : ""}`}
+              title={`${model.name} · ${formatPrice(price)} input / 1M · ${formatDisplayNumber(score)} capability${isFrontier ? " · supplied-pair frontier" : ""}`}
             >
               {model.name.slice(0, 1)}
             </span>
@@ -174,7 +175,7 @@ export function RouteEvidenceCapabilityBars({
                 <div className="min-w-0" key={model.id}>
                   <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                     <span className="truncate">{model.name}</span>
-                    <span className="font-mono">{value ?? "Unavailable"}</span>
+                    <span className="font-mono">{value === null ? "Unavailable" : formatDisplayNumber(value)}</span>
                   </div>
                   <div
                     className="h-2 overflow-hidden rounded-full bg-muted"
@@ -220,7 +221,7 @@ export function RouteEvidenceRuntimeReadout({
         <dd className="mt-2 font-mono text-2xl tabular-nums">
           {model.ttftP50Seconds === null
             ? "Unavailable"
-            : `${model.ttftP50Seconds}s`}
+            : `${formatDisplayNumber(model.ttftP50Seconds)}s`}
         </dd>
       </div>
       <div className="rounded-xl border border-border bg-muted/25 p-5">
@@ -228,7 +229,7 @@ export function RouteEvidenceRuntimeReadout({
         <dd className="mt-2 font-mono text-2xl tabular-nums">
           {model.outputTokensPerSecond === null
             ? "Unavailable"
-            : `${model.outputTokensPerSecond} tok/s`}
+            : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`}
         </dd>
       </div>
       <div className="sm:col-span-2">
@@ -277,7 +278,7 @@ export function RouteEvidenceEconomicsBars({
       values: models.map((model) => model.outputTokensPerSecond),
       max: maxThroughput,
       format: (value: number | null) =>
-        value === null ? "Unavailable" : `${value} tok/s`,
+        value === null ? "Unavailable" : `${formatDisplayNumber(value)} tok/s`,
     },
     {
       title: "Context capacity",

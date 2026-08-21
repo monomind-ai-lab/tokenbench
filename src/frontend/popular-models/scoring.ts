@@ -258,7 +258,8 @@ export function normalizePopularComparisonSelection(
 
 export function formatPopularCost(value: number): string {
   if (!Number.isFinite(value) || value < 0) return '—';
-  const fractionDigits = value < 0.01 ? 4 : value < 1 ? 3 : 2;
+  if (value > 0 && value < 0.01) return '<$0.01';
+  const fractionDigits = 2;
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',

@@ -11,6 +11,7 @@ import {
   type WeightedRankingModel,
   type WeightedRankingRow,
 } from "@tokenbench/frontend/preview-workbench/weighted-ranking";
+import { roundDisplayValue } from "@tokenbench/frontend/display-format";
 
 export interface MakeItYoursProjectedModel extends WeightedRankingModel {
   readonly inputUsdPerMillion: number | null;
@@ -109,7 +110,7 @@ export function makeItYoursCsvRows(
     Model: row.name,
     Provider: row.provider,
     "Weighted score": Number(row.score.toFixed(1)),
-    "Evaluation cost / success USD": Number(row.cost.toFixed(6)),
+    "Evaluation cost / success USD": roundDisplayValue(row.cost),
     "TTFT seconds": row.ttft === null ? "Unavailable" : Number(row.ttft.toFixed(2)),
     "Throughput tok/s": row.throughput === null ? "Unavailable" : Number(row.throughput.toFixed(0)),
     "SLA result": row.meetsSla ? "Pass" : "Outside threshold",

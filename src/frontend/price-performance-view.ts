@@ -1,5 +1,6 @@
 import { modelPath } from '../benchmarks/model-directory';
 import type { PricePerformanceAttribution, PricePerformancePointView } from '../benchmarks/price-performance-contracts';
+import { formatDisplayUsd } from './display-format';
 
 export interface PricePerformancePointViewFacts {
   readonly modelName: string;
@@ -42,7 +43,7 @@ export function formatPricePerformancePointView(
   attribution: readonly PricePerformanceAttribution[] = [],
 ): PricePerformancePointViewFacts {
   const score = formatScore(point.score);
-  const selectedCost = `$${formatNumber(point.selectedCost, 4)} / 1M ${costBasisLabel(point)}`;
+  const selectedCost = `${formatDisplayUsd(point.selectedCost)} / 1M ${costBasisLabel(point)}`;
   // The unit is stated once in the column header, not once per cell. A screen
   // reader user cannot see that header, so `accessibleName` still speaks it.
   const scorePerDollar = point.scorePerDollar === null

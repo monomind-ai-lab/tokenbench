@@ -13,6 +13,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
+
 import { ResultActions, type CsvRow } from "@/components/result-actions";
 import {
   RouteEvidenceCapabilityBars,
@@ -55,6 +57,14 @@ function blendedPrice(model: SurfaceModel): number | null {
   return model.inputUsdPerMillion === null || model.outputUsdPerMillion === null
     ? null
     : model.inputUsdPerMillion * 0.75 + model.outputUsdPerMillion * 0.25;
+}
+
+function formattedMeasurement(value: number | null): string {
+  return value === null ? "Unavailable" : formatDisplayNumber(value);
+}
+
+function exportMeasurement(value: number | null): number | null {
+  return value === null ? null : roundDisplayValue(value);
 }
 
 function extreme(
@@ -159,7 +169,7 @@ export function CompareWorkbenchPage({
       {
         model: model.name,
         metric: "Capability value",
-        value: model.capabilityScore,
+        value: exportMeasurement(model.capabilityScore),
         unit: "score",
       },
       {
@@ -171,25 +181,25 @@ export function CompareWorkbenchPage({
       {
         model: model.name,
         metric: "Input price",
-        value: model.inputUsdPerMillion,
+        value: exportMeasurement(model.inputUsdPerMillion),
         unit: "USD / 1M tokens",
       },
       {
         model: model.name,
         metric: "Output price",
-        value: model.outputUsdPerMillion,
+        value: exportMeasurement(model.outputUsdPerMillion),
         unit: "USD / 1M tokens",
       },
       {
         model: model.name,
         metric: "TTFT p50",
-        value: model.ttftP50Seconds,
+        value: exportMeasurement(model.ttftP50Seconds),
         unit: "seconds",
       },
       {
         model: model.name,
         metric: "Observed throughput",
-        value: model.outputTokensPerSecond,
+        value: exportMeasurement(model.outputTokensPerSecond),
         unit: "tokens / second",
       },
     );
@@ -464,11 +474,11 @@ export function CompareWorkbenchPage({
                               >
                                 {slots[index] === null
                                   ? "Unavailable"
-                                  : (row.values[
+                                  : formattedMeasurement(row.values[
                                       models.indexOf(
                                         slots[index] as SurfaceModel,
                                       )
-                                    ] ?? "Unavailable")}
+                                    ] ?? null)}
                               </td>
                             ))}
                           </tr>
@@ -529,7 +539,7 @@ export function CompareWorkbenchPage({
                     bestEvidence,
                     bestEvidence?.capabilityScore === null
                       ? "Unavailable"
-                      : String(bestEvidence?.capabilityScore ?? "Unavailable"),
+                      : formattedMeasurement(bestEvidence?.capabilityScore ?? null),
                   ],
                   [
                     "Lowest blended price",
@@ -550,9 +560,9 @@ export function CompareWorkbenchPage({
                   [
                     "Fastest observation",
                     fastest,
-                    fastest?.outputTokensPerSecond === null
+                    fastest?.outputTokensPerSecond == null
                       ? "Unavailable"
-                      : `${fastest?.outputTokensPerSecond ?? "Unavailable"} tok/s`,
+                      : `${formattedMeasurement(fastest?.outputTokensPerSecond ?? null)} tok/s`,
                   ],
                 ].map(([label, model, value]) => (
                   <Card key={String(label)}>
@@ -593,7 +603,7 @@ export function CompareWorkbenchPage({
                             {model?.name ?? id}
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
-                            {model?.capabilityScore ?? "Unavailable"}
+                            {formattedMeasurement(model?.capabilityScore ?? null)}
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
                             {model
@@ -604,7 +614,7 @@ export function CompareWorkbenchPage({
                             {model?.outputTokensPerSecond === null ||
                             model === null
                               ? "Unavailable"
-                              : `${model.outputTokensPerSecond} tok/s`}
+                              : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`}
                           </td>
                           <td className="px-4 py-3 text-right font-mono">
                             {model

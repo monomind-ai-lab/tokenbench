@@ -18,6 +18,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { formatDisplayNumber } from "@tokenbench/frontend/display-format";
+
 import {
   PopularModelsAggregateCostRankingChart,
   PopularModelsAggregateQualityCostChart,
@@ -181,18 +183,19 @@ function rankLabel(model: PopularModelV1): string {
   return model.rank === null ? "Unavailable" : `#${model.rank}`;
 }
 
-function formatNumber(value: number | null, maximumFractionDigits = 3): string {
+function formatNumber(value: number | null, maximumFractionDigits = 2): string {
   return value === null
     ? "Unavailable"
-    : new Intl.NumberFormat("en-US", { maximumFractionDigits }).format(value);
+    : formatDisplayNumber(value, { maximumFractionDigits });
 }
 
 function formatExactNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toString();
+  return formatDisplayNumber(value);
 }
 
 function formatPrice(value: number | null): string {
-  return value === null ? "Unavailable" : `USD ${formatExactNumber(value)}`;
+  if (value === null) return "Unavailable";
+  return value > 0 && value < 0.01 ? "USD <0.01" : `USD ${formatExactNumber(value)}`;
 }
 
 function formatTokens(value: number | null): string {

@@ -82,7 +82,7 @@ function SectionHeading({ number, eyebrow, title, body }: { number: string; eyeb
 }
 
 function usd(value: number | null, fractionDigits = 2) {
-  return value === null ? "Unavailable" : `$${value.toFixed(fractionDigits)}`;
+  return value === null ? "Unavailable" : `$${value.toFixed(Math.min(2, Math.max(0, fractionDigits)))}`;
 }
 
 function millions(tokens: number | null) {

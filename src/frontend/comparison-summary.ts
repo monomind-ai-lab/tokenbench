@@ -1,4 +1,5 @@
 import { compareUtf8Binary, type BenchmarkModel, type BenchmarkPriceCheck } from '../benchmarks/contracts';
+import { formatDisplayNumber, formatDisplayUsd } from './display-format';
 import {
   compareComparisonMetricRows,
   isSupportedBenchLmComparisonMetric,
@@ -41,11 +42,11 @@ export function friendlyMetricLabel(metricKey: string, category: string): string
 }
 
 function formatMetricValue(value: number): string {
-  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(value);
+  return formatDisplayNumber(value);
 }
 
 function formatRate(value: number): string {
-  return `$${new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(value)} / 1M tokens`;
+  return `${formatDisplayUsd(value)} / 1M tokens`;
 }
 
 function formatContextWindow(value: number): string {

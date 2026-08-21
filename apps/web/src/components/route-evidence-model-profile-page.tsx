@@ -1,6 +1,8 @@
 import { ArrowRight, CircleAlert, GitCompareArrows, Gauge, Layers3 } from "lucide-react";
 import Link from "next/link";
 
+import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
+
 import type { CsvRow } from "@/components/result-actions";
 import { ResultActions } from "@/components/result-actions";
 import { RouteEvidenceProfileControls } from "@/components/route-evidence-profile-controls";
@@ -51,12 +53,12 @@ function profileRows(model: PreviewModel): CsvRow[] {
   return [
     { field: "Model", value: identity?.name ?? null, evidenceState: routeEvidenceValueState(model.identity) },
     { field: "Provider", value: identity?.provider ?? null, evidenceState: routeEvidenceValueState(model.identity) },
-    { field: "Composite capability", value: capability?.compositeScore ?? null, evidenceState: routeEvidenceValueState(model.capability) },
+    { field: "Composite capability", value: capability === null ? null : roundDisplayValue(capability.compositeScore), evidenceState: routeEvidenceValueState(model.capability) },
     { field: "Route", value: route?.route ?? null, evidenceState: routeEvidenceValueState(model.routePricing) },
-    { field: "Input USD / 1M", value: route?.inputUsdPerMillion ?? null, evidenceState: routeEvidenceValueState(model.routePricing) },
-    { field: "Output USD / 1M", value: route?.outputUsdPerMillion ?? null, evidenceState: routeEvidenceValueState(model.routePricing) },
-    { field: "TTFT p50 seconds", value: runtime?.ttftP50Seconds ?? null, evidenceState: routeEvidenceValueState(model.runtime) },
-    { field: "Output tokens / second", value: runtime?.outputTokensPerSecond ?? null, evidenceState: routeEvidenceValueState(model.runtime) },
+    { field: "Input USD / 1M", value: route === null ? null : roundDisplayValue(route.inputUsdPerMillion), evidenceState: routeEvidenceValueState(model.routePricing) },
+    { field: "Output USD / 1M", value: route === null ? null : roundDisplayValue(route.outputUsdPerMillion), evidenceState: routeEvidenceValueState(model.routePricing) },
+    { field: "TTFT p50 seconds", value: runtime === null ? null : roundDisplayValue(runtime.ttftP50Seconds), evidenceState: routeEvidenceValueState(model.runtime) },
+    { field: "Output tokens / second", value: runtime === null ? null : roundDisplayValue(runtime.outputTokensPerSecond), evidenceState: routeEvidenceValueState(model.runtime) },
   ];
 }
 
@@ -111,7 +113,7 @@ function CapabilityTable({ model }: { model: PreviewModel }) {
           {capability.radar.map((axis) => (
             <tr className="border-t border-border" key={axis.key}>
               <td className="px-4 py-3 font-medium">{axis.label}</td>
-              <td className="px-4 py-3 text-right font-mono">{axis.percentile ?? "Unavailable"}</td>
+              <td className="px-4 py-3 text-right font-mono">{axis.percentile === null ? "Unavailable" : formatDisplayNumber(axis.percentile)}</td>
               <td className="px-4 py-3 text-right font-mono">{axis.rank ?? "Unavailable"}</td>
               <td className="px-4 py-3 text-right font-mono">{axis.fieldSize ?? "Unavailable"}</td>
             </tr>
@@ -170,8 +172,8 @@ function RuntimeAndLifecycle({ model }: { model: PreviewModel }) {
         <div className="flex items-center gap-2"><Gauge className="size-4 text-muted-foreground" /><h2 className="font-medium">Runtime observation</h2></div>
         {runtime ? (
           <dl className="mt-5 grid grid-cols-2 gap-4 text-sm">
-            <div><dt className="text-xs text-muted-foreground">TTFT p50</dt><dd className="mt-1 font-mono">{runtime.ttftP50Seconds}s</dd></div>
-            <div><dt className="text-xs text-muted-foreground">Output throughput</dt><dd className="mt-1 font-mono">{runtime.outputTokensPerSecond} tok/s</dd></div>
+            <div><dt className="text-xs text-muted-foreground">TTFT p50</dt><dd className="mt-1 font-mono">{formatDisplayNumber(runtime.ttftP50Seconds)}s</dd></div>
+            <div><dt className="text-xs text-muted-foreground">Output throughput</dt><dd className="mt-1 font-mono">{formatDisplayNumber(runtime.outputTokensPerSecond)} tok/s</dd></div>
             <div className="col-span-2"><dt className="text-xs text-muted-foreground">Conditions</dt><dd className="mt-1 text-sm">{runtime.conditions}</dd></div>
           </dl>
         ) : <p className="mt-5 text-sm text-muted-foreground">Runtime evidence is unavailable; a price record is not used as an SLA substitute.</p>}
@@ -251,10 +253,10 @@ export function RouteEvidenceModelProfilePage({
 
       <section className="px-4 py-8 sm:px-6">
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-border bg-border lg:grid-cols-4">
-          <ProfileFact label="Composite capability" note="Only shown from the requested model evidence." value={capability ? String(capability.compositeScore) : "Unavailable"} />
+          <ProfileFact label="Composite capability" note="Only shown from the requested model evidence." value={capability ? formatDisplayNumber(capability.compositeScore) : "Unavailable"} />
           <ProfileFact label="Selected route" note="No route is inferred when pricing is unavailable." value={route?.route ?? "Unavailable"} />
           <ProfileFact label="Input / 1M" note="Endpoint-specific price." value={route ? formatRouteEvidencePrice(route.inputUsdPerMillion) : "Unavailable"} />
-          <ProfileFact label="TTFT p50" note="Runtime measurement, not a provider SLA." value={runtime ? `${runtime.ttftP50Seconds}s` : "Unavailable"} />
+          <ProfileFact label="TTFT p50" note="Runtime measurement, not a provider SLA." value={runtime ? `${formatDisplayNumber(runtime.ttftP50Seconds)}s` : "Unavailable"} />
         </div>
       </section>
 

@@ -4,6 +4,8 @@ import { ArrowRight, Check, ChevronRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 
+import { formatDisplayNumber, formatDisplayUsd } from "@tokenbench/frontend/display-format";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,10 +26,10 @@ function unavailable(value: string | null | undefined): string {
 
 function formatNumber(value: number | null, decimals = 0): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
-  const formatted = value.toFixed(decimals);
-  const [whole, fraction] = formatted.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction === undefined ? grouped : `${grouped}.${fraction}`;
+  return formatDisplayNumber(value, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
 }
 
 function formatScore(value: number | null): string {
@@ -36,7 +38,7 @@ function formatScore(value: number | null): string {
 
 function formatUsd(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
-  return `$${formatNumber(value, value < 1 ? 3 : 2)}`;
+  return formatDisplayUsd(value);
 }
 
 function formatRoutePrice(value: number | null): string {

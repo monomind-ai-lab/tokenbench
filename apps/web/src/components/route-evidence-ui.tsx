@@ -1,6 +1,8 @@
 import { CircleAlert, Database, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { formatDisplayUsd } from "@tokenbench/frontend/display-format";
+
 import type {
   EvidenceValue,
   Provenance,
@@ -22,7 +24,7 @@ export function routeEvidenceValue<T>(value: EvidenceValue<T>): T | null {
 
 export function formatRouteEvidencePrice(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "Unavailable";
-  return `$${value < 1 ? value.toFixed(3) : value.toFixed(2)}`;
+  return formatDisplayUsd(value);
 }
 
 export function formatRouteEvidenceTokens(value: number | null): string {

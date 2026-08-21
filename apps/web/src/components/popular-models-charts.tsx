@@ -14,6 +14,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Bar, Scatter } from "react-chartjs-2";
 
+import { formatDisplayNumber } from "@tokenbench/frontend/display-format";
+
 import {
   popularModelsFieldUnavailableLabel,
   popularModelsMetricValue,
@@ -243,11 +245,13 @@ function modelProfileHref(
 }
 
 function formatUsd(value: number): string {
-  return `USD ${value.toString()}`;
+  return value > 0 && value < 0.01
+    ? "USD <0.01"
+    : `USD ${formatDisplayNumber(value)}`;
 }
 
 function formatScore(value: number): string {
-  return value.toString();
+  return formatDisplayNumber(value);
 }
 
 function formatTokens(value: number): string {

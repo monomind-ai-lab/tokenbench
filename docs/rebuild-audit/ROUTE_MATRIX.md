@@ -17,13 +17,14 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 | `/popular-models/` | audited | exact three-section parity and live weekly/strict merge implemented; design approval pending | `01` Leaderboard with one-row controls, fixed category tags, and complete compact table; `02` Insights with two charts; full-width `03` Compare with three economics charts; weekly popularity order; strict capability/economics enrichment; unavailable slots; deployed-data review remains |
 | `/make-it-yours/` | audited | implemented and evidence-preview checked; design approval and production data review pending | Exact six-weight/filter matrix; shareable custom ranking; no weight normalization drift |
 | `/model-lifecycle/` | audited | catalog lifecycle wired; design approval and deployed-data review pending | Metrics; response-backed expiration events; All/90/60 horizon filters; card/table toggle; copy/PNG/CSV; release timeline; evidence boundary |
-| `/leaderboards/` and 14 published child routes | audited | visual design approved; do not reopen | Category directory plus route-specific charts/tables, defaults, filters, provenance, copy/CSV/share actions, and desktop-table/mobile-card behavior; only data wiring/availability verification remains |
+| `/leaderboards/` and 14 published child routes | audited | approved foundation with 2026-08-21 annotations implemented; final human review pending | Category directory plus route-specific charts/tables, defaults, filters, copy/CSV/share actions, top-10 visible result window, centralized source registry, featured workbenches, and desktop-table/mobile-card behavior |
 | `/compare/` | audited | strict data wired and build-checked; design approval pending | URL-backed 2–4 distinct selections; invalid/duplicate rejection and four-model bound; capability chart/table; economics charts; decision table; provenance; copy/PNG/CSV |
 | `/compare/<pair>` | audited | implemented and build-checked; design approval and exact-pair production data review pending | All 29 published pairs; evidence skeleton; share dialog; switch-pair comboboxes; pricing-route variance; explicit unavailable/not-verified state |
 | `/subscribe-vs-api/` | audited | visual design approved; reviewed catalog/calculation wired | Existing simulator preserved: seven provider slots; reviewed plan/usage-limit facts; exact direct-route model mix; URL-backed workload/cache/seats/volume; summary; breakeven chart/table; source/derived tables; formula; CSV/PNG/print/copy |
 | `/cost` | audited | implemented and build-checked | Redirect-only to `/subscribe-vs-api/`; do not assert a stale default provider, plan, model, or price in the redirect |
 | `/tools/` | audited | implemented; build-checked; design approval pending | Static tool directory; one subscription-versus-API card; no embedded replacement calculator |
 | `/llm-price-performance/` | audited | validated endpoint wired; design approval pending | URL-backed lane/creator/price filters; interactive Pareto chart and model dialog; full leaderboard/details; null/zero semantics |
+| `/data-sources/` | additive route | implemented; final human review pending | One factual registry for benchmark, catalog/pricing, and the exact seven-source daily subscription allowlist; source links, cadence, publication gates, and no fixture fallback |
 | `/articles/` | audited | immutable-style cover/chrome adaptation implemented and QA-checked; design approval pending | Eight index cards; six substantive guides plus two prototype insight concepts; tabs 8/6/2/0; topics; search; compact sort; clickable titles; prototype disclosure; empty state |
 | `/articles/<six published slugs>` | audited | implemented and QA-checked; design approval pending | Breadcrumb, learning summary, numbered sections, dual CTAs, desktop TOC, related content, latest global shell, Article/Breadcrumb JSON-LD |
 | `/guides/` | audited | implemented and QA-checked; design approval pending | Five field-guide cards and subscribe-versus-API CTA |
@@ -31,7 +32,7 @@ Status legend: `audited` means the immutable behavior is recorded; it does not m
 
 ## Finalized approval policy
 
-- The user-approved visual designs for `/leaderboards/` and all 14 published leaderboard children are closed to redesign. Preserve them; only strict-v1 data wiring, unavailable-state truthfulness, and verification remain.
+- The approved visual foundation for `/leaderboards/` and all 14 published children remains closed to wholesale redesign. The user’s 2026-08-21 annotations supersede the earlier freeze: child results show the first ten filtered/sorted rows, the receipt says Last updated, repeated methodology/source cards move to `/data-sources/`, and Popular Models plus Make It Yours are featured in the related-lens close.
 - The user-approved visual design for `/subscribe-vs-api/` is likewise closed to redesign. Preserve every section, input, calculation/result slot, and action while data sources are wired.
 - Every other matrix entry remains subject to immutable-parity approval. New Next.js tokens may restyle a preserved section; they may not remove, merge, replace, or fabricate its content, controls, charts, outputs, URL semantics, or explicit unavailable state.
 - The ordered implementation/acceptance queue is maintained in `unapproved-page-parity-backlog.md`.
@@ -102,6 +103,7 @@ The Next.js foundation currently renders this complete order with the approved A
 - Multimodal and media routes preserve their route-specific chart counts, evidence notes, ranking rows, and `profile=balanced&sort=rank-asc` default where published.
 - Desktop results use full tables while mobile results use the immutable card presentation; this responsive behavior is not satisfied by merely scrolling a desktop table.
 - CSV downloads retain active query state. Share URLs preserve non-default state while omitting the default profile where the immutable site does so.
+- Reader-facing charts, tables, cards, tooltips, and exports cap decimals at two places. Source precision remains intact; a positive sub-cent value is shown as `<$0.01` rather than zero.
 - In evidence mode the Next child routes retain the exact strict
   `ui-data-contract/v1` preview path. In HTTP/production mode each child loads
   its published `/api/benchmarks/leaderboards/:key` response, validates the

@@ -15,6 +15,8 @@ import { ChevronDown, CircleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Bar, Scatter } from "react-chartjs-2";
 
+import { formatDisplayUsd } from "@tokenbench/frontend/display-format";
+
 import type {
   RankingData,
   UiDataContractV1,
@@ -155,7 +157,7 @@ function titleCase(value: string) {
 }
 
 function formatMoney(value: number | null) {
-  return value === null ? "Unavailable" : `$${value.toFixed(value < 0.1 ? 3 : 2)}`;
+  return value === null ? "Unavailable" : formatDisplayUsd(value);
 }
 
 function formatTtft(value: number | null) {
@@ -380,7 +382,7 @@ function MakeItYoursCostChart({ rows }: { readonly rows: readonly WeightedRankin
         x: {
           border: { color: theme.grid },
           grid: { color: theme.grid },
-          ticks: { color: theme.muted, callback: (value) => `$${value}` },
+          ticks: { color: theme.muted, callback: (value) => formatDisplayUsd(Number(value)) },
           title: { color: theme.muted, display: true, text: "USD / successful evaluation" },
           type: "logarithmic",
         },

@@ -104,7 +104,8 @@ function formatScore(value: number): string {
 }
 
 function formatCost(value: number): string {
-  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: value < 1 ? 3 : 2 }).format(value);
+  if (value > 0 && value < 0.01) return '<$0.01';
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value);
 }
 
 function valueFrontier(models: readonly PopularModelFixture[], category: InsightCategory): readonly PopularModelFixture[] {

@@ -13,6 +13,8 @@ import {
 import Link from "next/link";
 import { useState } from "react";
 
+import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
+
 import { ResultActions } from "@/components/result-actions";
 import {
   RouteEvidenceCapabilityBars,
@@ -89,7 +91,7 @@ export function ModelProfilePage({
       : inputTokens * model.inputUsdPerMillion +
         outputTokens * model.outputUsdPerMillion;
   const exportRows = [
-    { metric: "Capability value", value: model.capabilityScore, unit: "score" },
+    { metric: "Capability value", value: model.capabilityScore === null ? null : roundDisplayValue(model.capabilityScore), unit: "score" },
     {
       metric: "Context window",
       value: model.contextWindowTokens,
@@ -97,18 +99,18 @@ export function ModelProfilePage({
     },
     {
       metric: "Input price",
-      value: model.inputUsdPerMillion,
+      value: model.inputUsdPerMillion === null ? null : roundDisplayValue(model.inputUsdPerMillion),
       unit: "USD / 1M tokens",
     },
     {
       metric: "Output price",
-      value: model.outputUsdPerMillion,
+      value: model.outputUsdPerMillion === null ? null : roundDisplayValue(model.outputUsdPerMillion),
       unit: "USD / 1M tokens",
     },
-    { metric: "TTFT p50", value: model.ttftP50Seconds, unit: "seconds" },
+    { metric: "TTFT p50", value: model.ttftP50Seconds === null ? null : roundDisplayValue(model.ttftP50Seconds), unit: "seconds" },
     {
       metric: "Observed throughput",
-      value: model.outputTokensPerSecond,
+      value: model.outputTokensPerSecond === null ? null : roundDisplayValue(model.outputTokensPerSecond),
       unit: "tokens / second",
     },
   ];
@@ -180,7 +182,7 @@ export function ModelProfilePage({
               value={
                 model.capabilityScore === null
                   ? "Unavailable"
-                  : String(model.capabilityScore)
+                  : formatDisplayNumber(model.capabilityScore)
               }
             />
             <Metric
@@ -208,7 +210,7 @@ export function ModelProfilePage({
               value={
                 model.outputTokensPerSecond === null
                   ? "Unavailable"
-                  : `${model.outputTokensPerSecond} tok/s`
+                  : `${formatDisplayNumber(model.outputTokensPerSecond)} tok/s`
               }
             />
           </div>

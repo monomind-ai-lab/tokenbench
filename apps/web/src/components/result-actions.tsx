@@ -4,6 +4,8 @@ import { Check, Clipboard, Download, Grid2X2, ImageDown, List, Printer } from "l
 import { toPng } from "html-to-image";
 import { useState } from "react";
 
+import { roundDisplayValue } from "../../../../src/frontend/display-format";
+
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +16,7 @@ type Feedback = "copied" | "csv" | "image" | "error" | null;
 
 function csvValue(value: CsvCell) {
   if (value === null || value === undefined) return "";
-  const text = String(value);
+  const text = String(typeof value === "number" ? roundDisplayValue(value) : value);
   const formulaSafe = /^[\t\r\n=+\-@]|^ +[=+\-@]/.test(text) ? `'${text}` : text;
   return /[",\r\n]/.test(formulaSafe) ? `"${formulaSafe.replaceAll('"', '""')}"` : formulaSafe;
 }
