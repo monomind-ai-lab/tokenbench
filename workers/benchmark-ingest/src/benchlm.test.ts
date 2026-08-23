@@ -686,8 +686,12 @@ describe('prepareBenchLm', () => {
     });
   });
 
-  it('leaves a proprietary zero price exactly as the source published it', async () => {
-    // The sentinel is open-weight only; a proprietary $0 would be a real fact.
+  it('drops the zero sentinel on a proprietary row too, because the label cannot be trusted', async () => {
+    // An earlier guard scoped the sentinel to models BenchLM labels Open Weight.
+    // BenchLM labels the LiquidAI LFM2 family Proprietary, so lfm2-24b-a2b kept a
+    // $0 rate and was published as the site's lowest verified representative
+    // rate. A $0.00/M hosted price is not a real commercial rate for any model,
+    // and this feed cannot distinguish a free endpoint from an unpublished one.
     const source = payloads();
     const pricing = (source.pricing as { items: Array<Record<string, unknown>> }).items;
     const proprietary = pricing.find((item) => item.canonicalModelKey === 'model-a');
@@ -699,11 +703,7 @@ describe('prepareBenchLm', () => {
 
     const batch = await parsePayloads(source);
 
-    expect(batch.priceChecks.find((check) => check.sourceModelId === 'model-a')).toMatchObject({
-      inputUsdPerMillion: 0,
-      cachedInputUsdPerMillion: 0,
-      outputUsdPerMillion: 0,
-    });
+    expect(batch.priceChecks.find((check) => check.sourceModelId === 'model-a')).toBeUndefined();
   });
 
   it('preserves nullable pricing slugs found in the official export', async () => {
