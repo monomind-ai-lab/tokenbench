@@ -65,21 +65,51 @@ Every catalog record links back to its evidence source. Manual price manifests a
 
 ## Design
 
-The responsive light and dark interfaces implement the exported [Stitch project](https://stitch.withgoogle.com/projects/15996347374407149271?pli=1):
+[`DESIGN.md`](DESIGN.md) is the design authority for the Next rebuild in `apps/web`. It defines the token
+system, typography, data-value semantics, and interaction rules, and it defers to
+[`docs/rebuild-audit/PRESERVATION_CONTRACT.md`](docs/rebuild-audit/PRESERVATION_CONTRACT.md) for what content
+and behavior every route must keep. Literal token values live in `apps/web/src/app/globals.css`.
 
-- Modern Professional for light mode
-- Obsidian Flux for dark mode
-
-Synced Stitch HTML, screenshots, metadata, and design-system references live under `.stitch/`; normalized tokens live in `resources/style-guide.json`.
+The legacy root Vite app implements an earlier exported Stitch project; its synced HTML, screenshots, and
+metadata remain under `.stitch/`, with normalized tokens in `resources/style-guide.json`. That material is
+**history for the root app only** and is not the authority for the Next rebuild.
 
 ## Development
 
+This repository contains **two applications**:
+
+| App | Location | Status | Commands run from |
+| --- | --- | --- | --- |
+| Legacy Vite app (currently deployed to Cloudflare Pages) | repository root | in production | repository root |
+| Next.js rebuild | `apps/web` | not yet deployed | `apps/web` |
+
+### Next.js rebuild (`apps/web`)
+
 ```bash
-npm install
-npm run dev
+cd apps/web
+npm run dev     # http://localhost:3000
+npm run build
+npm run lint
 ```
 
-The development server runs at `http://localhost:3000`.
+Server data loaders require explicit configuration; without it they return a
+`TOKENBENCH_UI_DATA_BASE_URL is not configured.` error rather than falling back to fixtures. To review a
+production build against the canonical origin:
+
+```bash
+cd apps/web
+npm run build
+TOKENBENCH_UI_DATA_MODE=http \
+TOKENBENCH_UI_DATA_BASE_URL=https://tokenbench.monomind.one \
+npm run start -- --hostname 127.0.0.1 --port 3101
+```
+
+### Legacy root app
+
+```bash
+npm install
+npm run dev     # http://localhost:3000
+```
 
 Validation commands:
 
@@ -90,7 +120,12 @@ npm run build
 npm run test:browser
 ```
 
-The app uses React, TypeScript, Vite, Cloudflare Workers/D1/R2 for catalog ingestion, and Playwright for responsive browser coverage.
+> **`npm run build` at the repository root writes into the source tree.** Its `prebuild` step runs
+> `generate:pages`, which overwrites the tracked `index.html` and emits route HTML beside the source. Use
+> `cd apps/web && npm run build` when you only need to check the Next rebuild.
+
+The root app uses React, TypeScript, Vite, Cloudflare Workers/D1/R2 for catalog ingestion, and Playwright for
+responsive browser coverage. The rebuild uses Next.js 16, React 19, Base UI primitives, and Chart.js.
 
 ## Deployment and operations
 

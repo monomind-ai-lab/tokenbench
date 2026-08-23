@@ -1,506 +1,270 @@
 ---
-version: alpha
-name: Composio-design-analysis
-description: A developer-tools brand for AI-agent tool integration whose marketing surfaces lean into a dark, technical aesthetic with a single deep-electric-blue voltage (`#0007cd`). The page floor is near-black (`#0f0f0f`); cards float above on subtle gray-tinted surfaces. abcDiatype carries display and body in a single sans family with weights 400-600. The brand's strongest visual signature is a four-pane terminal-style mockup (a 2×2 grid of dark code/output panels) with a central blue spotlight glow — used as the homepage hero anchor.
+version: 1
+name: TokenBench-design-authority
+description: An evidence-first decision tool for comparing AI model cost, capability, and runtime facts. The interface is a dense, light-first data product built on neutral surfaces with a single saturated electric blue (`#1111ff`) reserved for primary actions, chart fills, and focus. Inter Tight carries display and body; JetBrains Mono carries every measured value. The defining visual signature is the evidence receipt — a provenance/freshness line attached to every result surface — and the deliberate `-` / `n/a` rendering of facts no approved source publishes.
+
+authority:
+  structure: "https://8bf19b96.tokenbench-27t.pages.dev/"
+  structure-contract: docs/rebuild-audit/PRESERVATION_CONTRACT.md
+  tokens-source-of-truth: apps/web/src/app/globals.css
+  interaction-language: AI Components (card/list result surfaces, filter and tray behavior)
+  primitives: Base UI + local shadcn-style cva wrappers; Cult UI motion/disclosure patterns; licensed Untitled UI icons and namespaced data-value layer
+  charts: Chart.js via react-chartjs-2
+  precedence: "structure -> this document -> globals.css -> component-local classes"
 
 colors:
-  primary: "#0007cd"
-  primary-active: "#0005a3"
-  primary-glow: "#1a26ff"
-  ink: "#ffffff"
-  body: "#a8a8a8"
-  body-strong: "#ffffff"
-  muted: "#888888"
-  muted-soft: "#666666"
-  hairline: "#222222"
-  hairline-soft: "#1a1a1a"
-  hairline-strong: "#333333"
-  canvas: "#0f0f0f"
-  canvas-deep: "#000000"
-  surface-card: "#181818"
-  surface-card-elevated: "#222222"
-  surface-strong: "#2a2a2a"
-  on-primary: "#ffffff"
-  on-dark: "#ffffff"
-  accent-cyan: "#00d4ff"
-  accent-violet: "#7b3aed"
-  semantic-error: "#ff4d4d"
-  semantic-success: "#33d17a"
+  brand: "#1111ff"
+  brand-hover: "#0d0ddd"
+  brand-active: "#0909bc"
+  brand-secondary: "#2727a8"
+  brand-secondary-dark: "#9dabff"
+  brand-foreground: "#ffffff"
+  brand-subtle: "#e9e9ff"
+  brand-subtle-dark: "#282855"
+  selection: "#ced0ff"
+  selection-dark: "#38387f"
+  background: "oklch(1 0 0)"
+  background-dark: "oklch(0.145 0.012 265)"
+  card: "oklch(1 0 0)"
+  card-dark: "oklch(0.205 0.016 265)"
+  muted: "oklch(0.97 0 0)"
+  muted-dark: "oklch(0.175 0.014 265)"
+  muted-foreground: "oklch(0.556 0 0)"
+  muted-foreground-dark: "oklch(0.72 0.014 265)"
+  foreground: "oklch(0.145 0 0)"
+  foreground-dark: "oklch(0.985 0.006 265)"
+  border: "oklch(0.922 0 0)"
+  border-dark: "oklch(0.34 0.016 265 / 72%)"
+  destructive: "oklch(0.577 0.245 27.325)"
+  destructive-dark: "oklch(0.704 0.191 22.216)"
 
 typography:
-  display-mega:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 72px
-    fontWeight: 500
-    lineHeight: 1.05
-    letterSpacing: -2.16px
-  display-xl:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 56px
-    fontWeight: 500
-    lineHeight: 1.05
-    letterSpacing: -1.68px
+  display-hero:
+    fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
+    class: text-5xl
+    fontWeight: 600
+    usage: One per page at most; route-family landing headline.
   display-lg:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 44px
-    fontWeight: 500
-    lineHeight: 1.1
-    letterSpacing: -1.32px
-  display-md:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 32px
-    fontWeight: 500
-    lineHeight: 1.15
-    letterSpacing: -0.96px
-  display-sm:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 24px
-    fontWeight: 500
-    lineHeight: 1.25
-    letterSpacing: -0.5px
-  title-md:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 18px
+    fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
+    class: text-4xl
     fontWeight: 600
-    lineHeight: 1.4
-    letterSpacing: 0
-  title-sm:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 16px
+    usage: Page title on interior decision surfaces.
+  heading-section:
+    fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
+    class: text-2xl
     fontWeight: 600
-    lineHeight: 1.4
-    letterSpacing: 0
-  body-md:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 16px
-    fontWeight: 400
-    lineHeight: 1.5
-    letterSpacing: 0
-  body-sm:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 14px
-    fontWeight: 400
-    lineHeight: 1.5
-    letterSpacing: 0
-  caption:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 13px
-    fontWeight: 400
-    lineHeight: 1.4
-    letterSpacing: 0
-  caption-uppercase:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 11px
-    fontWeight: 600
-    lineHeight: 1.4
-    letterSpacing: 0.88px
-    textTransform: uppercase
-  code:
-    fontFamily: "'JetBrains Mono', 'Fira Code', monospace"
-    fontSize: 13px
-    fontWeight: 400
-    lineHeight: 1.5
-    letterSpacing: 0
-  button:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 14px
+    usage: Named section owning a result or an input group.
+  heading-sub:
+    fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
+    class: text-lg
     fontWeight: 500
-    lineHeight: 1.0
-    letterSpacing: 0
-  nav-link:
-    fontFamily: "'abcDiatype', ui-sans-serif, system-ui, sans-serif"
-    fontSize: 14px
-    fontWeight: 500
-    lineHeight: 1.4
-    letterSpacing: 0
+    usage: Card title, table caption, tray label.
+  body:
+    fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
+    class: text-sm
+    fontWeight: 400
+    usage: Default reading size across the product.
+  dense:
+    fontFamily: "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
+    class: text-xs
+    fontWeight: 400
+    usage: Table cells, badges, chips, provenance receipts, helper text.
+  measured-value:
+    fontFamily: "'JetBrains Mono', ui-monospace, monospace"
+    class: font-mono text-xs tabular-nums
+    usage: Mandatory for every number that came from a source. Never for prose.
 
 rounded:
-  none: 0px
-  xs: 4px
   sm: 6px
   md: 8px
-  lg: 12px
-  xl: 16px
+  lg: 10px
+  xl: 14px
   pill: 9999px
-  full: 9999px
+  base-variable: 0.625rem
 
 spacing:
-  xxs: 4px
-  xs: 8px
-  sm: 12px
-  base: 16px
-  md: 20px
-  lg: 24px
-  xl: 32px
-  xxl: 48px
-  section: 96px
+  control-gap: 8px
+  field-gap: 12px
+  card-gap: 16px
+  cell-y: 12px
+  section-y-compact: 48px
+  section-y: 56px
+  section-y-loose: 64px
+  container-max: 1280px
+  prose-max: 42rem
 
 components:
-  top-nav-dark:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.nav-link}"
-    height: 64px
-  button-primary:
-    backgroundColor: "{colors.primary}"
-    textColor: "{colors.on-primary}"
-    typography: "{typography.button}"
-    rounded: "{rounded.md}"
-    padding: 10px 18px
-    height: 40px
-  button-primary-active:
-    backgroundColor: "{colors.primary-active}"
-    textColor: "{colors.on-primary}"
-    rounded: "{rounded.md}"
-  button-secondary-dark:
-    backgroundColor: "{colors.surface-card-elevated}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.button}"
-    rounded: "{rounded.md}"
-    padding: 10px 18px
-    height: 40px
+  container:
+    maxWidth: "{spacing.container-max}"
+    class: max-w-7xl
+    note: Every full-width result surface uses this. Prose columns use max-w-2xl / max-w-3xl.
+  button-default:
+    backgroundColor: "{colors.brand}"
+    textColor: "{colors.brand-foreground}"
+    hover: "{colors.brand-hover}"
+    active: "{colors.brand-active}"
+    rounded: "{rounded.lg}"
+    note: The one primary action in a control group. Adding an item to a comparison is a primary action.
   button-outline:
     backgroundColor: transparent
-    textColor: "{colors.body-strong}"
-    typography: "{typography.button}"
-    rounded: "{rounded.md}"
-    padding: 9px 17px
-    height: 40px
-  button-tertiary-text:
+    border: "{colors.border}"
+    rounded: "{rounded.lg}"
+    note: Secondary/reversible actions only.
+  button-ghost:
     backgroundColor: transparent
-    textColor: "{colors.body}"
-    typography: "{typography.button}"
-  hero-band:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.display-mega}"
-    padding: 96px
-  terminal-mockup-grid:
-    backgroundColor: "{colors.canvas-deep}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.code}"
-    rounded: "{rounded.xl}"
-    padding: 32px
-  terminal-pane:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body}"
-    typography: "{typography.code}"
-    rounded: "{rounded.lg}"
-    padding: 20px
-  feature-card:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body}"
-    typography: "{typography.title-md}"
-    rounded: "{rounded.xl}"
-    padding: 28px
-  toolkit-card:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.title-sm}"
-    rounded: "{rounded.lg}"
-    padding: 20px
-  toolkit-icon:
-    backgroundColor: "{colors.surface-card-elevated}"
-    rounded: "{rounded.md}"
-    size: 40px
-  spotlight-glow-card:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.display-md}"
-    rounded: "{rounded.xl}"
-    padding: 48px
-  code-block:
-    backgroundColor: "{colors.canvas-deep}"
-    textColor: "{colors.body}"
-    typography: "{typography.code}"
-    rounded: "{rounded.lg}"
-    padding: 20px
-  badge-pill:
-    backgroundColor: "{colors.surface-card-elevated}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.caption-uppercase}"
-    rounded: "{rounded.pill}"
-    padding: 4px 10px
-  text-input:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.md}"
-    padding: 12px 16px
-    height: 44px
-  search-input:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.md}"
-    padding: 10px 16px
-    height: 40px
-  cta-band-spotlight:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.body-strong}"
-    typography: "{typography.display-lg}"
-    padding: 96px
-  testimonial-card:
-    backgroundColor: "{colors.surface-card}"
-    textColor: "{colors.body}"
-    typography: "{typography.body-md}"
-    rounded: "{rounded.lg}"
-    padding: 24px
-  footer-dark:
-    backgroundColor: "{colors.canvas}"
-    textColor: "{colors.body}"
-    typography: "{typography.body-sm}"
-    padding: 64px 48px
-  footer-link:
-    backgroundColor: transparent
-    textColor: "{colors.body}"
-    typography: "{typography.body-sm}"
+    note: Tertiary and icon-only affordances.
+  touch-target:
+    minHeight: 44px
+    note: min-h-11 on every interactive control in a dense table or tray.
+  data-value:
+    typography: "{typography.measured-value}"
+    unavailable-scalar: "-"
+    unavailable-status: "n/a"
+    note: Both carry an accessible title and screen-reader reason. Never coerce absence to 0, free, pass, or fail.
+  evidence-receipt:
+    typography: "{typography.dense}"
+    textColor: "{colors.muted-foreground}"
+    note: One latest source receipt on-page; the full ledger lives in exports and /data-sources/.
+  focus-ring:
+    outline: 2px solid var(--ring)
+    outlineOffset: 2px
+    note: --ring is brand in light, brand-secondary in dark. Never remove without an equal replacement.
 ---
 
 ## Overview
 
-Composio's marketing site reads like a serious developer-infrastructure brand — closer to Vercel or Stripe Docs in atmosphere than to a typical AI-tools startup. The base canvas is a near-black `{colors.canvas}` (#0f0f0f) holding white type and a single voltage of **deep electric blue** (`{colors.primary}` — #0007cd) carrying every primary CTA, brand wordmark, and atmospheric spotlight glow that backs the homepage hero.
+TokenBench helps someone choose an AI model or plan using facts that are traceable to an approved source. Every visual decision serves that: the reader must be able to tell, at a glance, what a number is, where it came from, how fresh it is, and whether it is missing.
 
-Type runs **abcDiatype** as the single sans family across display, body, navigation, and captions. Display sits at weight 500 — confident but not bombastic. Code blocks and terminal mockups switch to JetBrains Mono.
+The interface is therefore **dense and quiet**. Roughly three quarters of all text in the product is `text-xs` or `text-sm`. Color is not decoration — a saturated blue appearing anywhere means *this is actionable* or *this is the measured series*. Neutral surfaces carry everything else so that data, not chrome, is the figure.
 
-The page rhythm is monolithic: dark canvas top to bottom with subtle elevation steps via card surfaces. The brand's strongest visual signature is a **four-pane terminal-style mockup** — a 2×2 grid of dark code/output panels with a central blue spotlight glow behind them.
+This document is the **human design authority**. `apps/web/src/app/globals.css` is the machine source of truth for token values; when the two disagree, the CSS is correct and this document must be corrected to match. Neither one may override `docs/rebuild-audit/PRESERVATION_CONTRACT.md`, which governs what content and behavior must exist at all.
 
-**Key Characteristics:**
-- Single accent: `{colors.primary}` (#0007cd) for primary CTAs, wordmark, spotlight glows.
-- Single sans family: abcDiatype carries everything except code (JetBrains Mono).
-- Dark monolithic canvas: `{colors.canvas}` runs top to bottom; depth from `{colors.surface-card}` and `{colors.surface-card-elevated}` brightness steps.
-- Terminal-mockup hero: 2×2 grid of code/output panes is the brand signature.
-- Compact pill geometry: CTAs sit at `{rounded.md}` (8px), not full pills — developer-tool dialect.
-- Spotlight-glow atmospheric backdrop: a radial blue glow centered behind hero content.
-- 96px section rhythm.
+### Authority chain
+
+1. **Structure and behavior** — the immutable deployment `8bf19b96` and the preservation contract. Route coverage, section order, information hierarchy, interactive behavior, and result actions come from here. A redesign may not delete a section.
+2. **This document** — the visual and interaction system applied to that structure.
+3. **`globals.css`** — literal token values.
+4. **Component-local classes** — only for genuinely local composition.
+
+AI Components supplies the card/list result-surface language and the filter/tray interaction model. Cult UI contributes motion and disclosure patterns (`animated-number`, `direction-aware-tabs`, `hover-card`). Untitled UI contributes icons and a namespaced data-value layer, using TokenBench's blue — **no Untitled global theme is imported**. Chart.js owns every quantitative chart.
 
 ## Colors
 
-### Brand & Accent
-- **Composio Blue** (`{colors.primary}` — #0007cd): Primary CTAs, wordmark, spotlight glow center.
-- **Composio Blue Active** (`{colors.primary-active}` — #0005a3): Press state.
-- **Spotlight Glow Tone** (`{colors.primary-glow}` — #1a26ff): Brighter blue used inside radial atmospheric glows.
-- **Accent Cyan** (`{colors.accent-cyan}` — #00d4ff): Sparingly on data-flow visualizations.
-- **Accent Violet** (`{colors.accent-violet}` — #7b3aed): Inside specific product illustrations only.
+### Brand
+
+`#1111ff` is the only brand hue. It is used for primary buttons, chart fills, focus rings, the caret, and active control states. It is identical in light and dark.
+
+Because `#1111ff` on a dark background fails contrast as text, dark mode substitutes `--brand-secondary: #9dabff` for **text-like** brand usage — links, `.text-primary`, values, and status marks — while fills and charts keep the saturated blue. This split is implemented in `globals.css` and must not be flattened.
+
+In light mode `--brand-secondary` is `#2727a8`, a darker blue used for inline links so body links do not vibrate against white.
 
 ### Surface
-- **Canvas** (`{colors.canvas}` — #0f0f0f): Page floor — near-black.
-- **Canvas Deep** (`{colors.canvas-deep}` — #000000): Pure black for terminal mockup grids and code blocks.
-- **Surface Card** (`{colors.surface-card}` — #181818): Default content card.
-- **Surface Card Elevated** (`{colors.surface-card-elevated}` — #222222): Terminal panes, secondary buttons.
-- **Surface Strong** (`{colors.surface-strong}` — #2a2a2a): Dropdown menus.
 
-### Hairlines
-- **Hairline** (`{colors.hairline}` — #222222): Default 1px divider.
-- **Hairline Soft** (`{colors.hairline-soft}` — #1a1a1a): Lighter divider.
-- **Hairline Strong** (`{colors.hairline-strong}` — #333333): Stronger panel outline.
-
-### Text
-- **Ink** (`{colors.ink}` — #ffffff): Display headlines.
-- **Body** (`{colors.body}` — #a8a8a8): Default running-text — soft gray.
-- **Body Strong** (`{colors.body-strong}` — #ffffff): Same as ink.
-- **Muted** (`{colors.muted}` — #888888): Sub-titles, breadcrumbs.
-- **Muted Soft** (`{colors.muted-soft}` — #666666): Disabled text.
-- **On Primary** (`{colors.on-primary}` — #ffffff): White text on blue CTAs.
+Light mode is the primary theme: white background, white cards, `oklch(0.97 0 0)` muted. Dark mode is a blue-tinted neutral (chroma `0.012–0.02` at hue `265`), not a pure gray — surfaces read as related to the brand without being colored.
 
 ### Semantic
-- **Success** (`{colors.semantic-success}` — #33d17a): "Online", "active" indicators.
-- **Error** (`{colors.semantic-error}` — #ff4d4d): Validation errors.
+
+`--destructive` is the only semantic color. There is deliberately **no green success color and no amber warning color**, because a green cell would imply an editorial verdict on a model the evidence does not support. Pass/fail states use text and badge variants, not hue.
 
 ## Typography
 
-### Font Family
-The system runs **abcDiatype** (Lineto) across every text role. Code blocks switch to **JetBrains Mono**. Fallback: `ui-sans-serif, system-ui, sans-serif`.
+Inter Tight carries display and body. JetBrains Mono carries every measured value.
 
-### Hierarchy
+The mono rule is a correctness rule, not a stylistic one: any number that came from a source must be `font-mono` and `tabular-nums` so columns align and so a reader can distinguish a measured fact from prose. Numbers that are user input echoes or narrative counts stay in the sans face.
 
-| Token | Size | Weight | Line Height | Letter Spacing | Use |
-|---|---|---|---|---|---|
-| `{typography.display-mega}` | 72px | 500 | 1.05 | -2.16px | Homepage hero h1 |
-| `{typography.display-xl}` | 56px | 500 | 1.05 | -1.68px | Subsidiary heroes |
-| `{typography.display-lg}` | 44px | 500 | 1.1 | -1.32px | Section heads |
-| `{typography.display-md}` | 32px | 500 | 1.15 | -0.96px | Sub-section heads |
-| `{typography.display-sm}` | 24px | 500 | 1.25 | -0.5px | Card group titles |
-| `{typography.title-md}` | 18px | 600 | 1.4 | 0 | Component titles |
-| `{typography.title-sm}` | 16px | 600 | 1.4 | 0 | Toolkit card titles |
-| `{typography.body-md}` | 16px | 400 | 1.5 | 0 | Default body |
-| `{typography.body-sm}` | 14px | 400 | 1.5 | 0 | Footer body |
-| `{typography.caption}` | 13px | 400 | 1.4 | 0 | Photo captions |
-| `{typography.caption-uppercase}` | 11px | 600 | 1.4 | 0.88px | Section labels, badge pills |
-| `{typography.code}` | 13px | 400 | 1.5 | 0 | Code blocks — JetBrains Mono |
-| `{typography.button}` | 14px | 500 | 1.0 | 0 | CTA pill labels |
-| `{typography.nav-link}` | 14px | 500 | 1.4 | 0 | Top-nav menu |
-
-### Principles
-- **Display weight stays at 500.** Confident but not display-bold.
-- **abcDiatype across every role.** No display/body family split.
-- **JetBrains Mono on every code surface.**
-
-### Note on Font Substitutes
-abcDiatype is a Lineto licensed typeface. Open-source substitute: **Inter** at weight 500 with letter-spacing -1.5%.
+Hierarchy runs `text-5xl` (one hero per page at most) → `text-4xl` → `text-2xl` → `text-lg` → `text-sm` (default) → `text-xs` (dense). There is intentionally no size between `text-2xl` and `text-lg` in regular use; adding one dilutes the section rhythm.
 
 ## Layout
 
-### Spacing System
-- **Base unit:** 4px.
-- **Tokens:** `{spacing.xxs}` 4px · `{spacing.xs}` 8px · `{spacing.sm}` 12px · `{spacing.base}` 16px · `{spacing.md}` 20px · `{spacing.lg}` 24px · `{spacing.xl}` 32px · `{spacing.xxl}` 48px · `{spacing.section}` 96px.
-- **Section padding:** `{spacing.section}` (96px) for major bands.
+- **Container:** `max-w-7xl` (1280px) for every result surface. Prose columns are `max-w-2xl`/`max-w-3xl`.
+- **Section rhythm:** `py-12` / `py-14` / `py-16`. Dense internal spacing is `gap-2` / `gap-3` / `gap-4`; table cells are `py-3`.
+- **Wide data:** a desktop result table must fit its container. Reach for `table-layout: fixed`, a bounded first column, and `white-space: nowrap` on numeric columns — the pattern already proven for `#subscription-result` at the bottom of `globals.css`. A nested horizontal scrollbar on desktop is a layout failure, not an acceptable fallback.
 
-### Grid & Container
-- Max content width: ~1200px.
-- Editorial body: 12-column grid.
-- Terminal mockup grid: 2×2 equal-size panes.
-- Toolkit grid: 4-up at desktop, 2-up tablet, 1-up mobile.
-- Footer: 5-column at desktop.
+## Shapes & Depth
 
-### Whitespace Philosophy
-The dark canvas creates its own depth — whitespace can stay tight without feeling crowded. 96px between bands; 24px between cards inside a band.
+Radius derives from `--radius: 0.625rem`: `sm` 6px, `md` 8px, `lg` 10px, `xl` 14px. Cards and tables use `rounded-xl`; controls use `rounded-lg`; chips and badges use `pill`.
 
-## Elevation & Depth
-
-The system uses **brightness-step elevation**: surfaces step up in brightness instead of casting drop shadows. Combined with subtle radial blue glows, this creates a focused dark-mode atmosphere.
-
-| Level | Treatment | Use |
-|---|---|---|
-| Flat (canvas) | `{colors.canvas}` (#0f0f0f) | Body bands, footer |
-| Recessed | `{colors.canvas-deep}` (#000000) | Terminal mockup grid background, code blocks |
-| Card | `{colors.surface-card}` (#181818) | Default content cards |
-| Card elevated | `{colors.surface-card-elevated}` (#222222) | Terminal panes, secondary buttons |
-| Atmospheric glow | Radial gradient using `{colors.primary-glow}` | Hero spotlight backdrop |
-
-### Decorative Depth
-- **Spotlight glow backdrops** — radial blue gradient centered behind hero content.
-- **Terminal-pane brightness ladder** — 2×2 mockup uses canvas-deep outer + surface-card-elevated panes.
-
-## Shapes
-
-### Border Radius Scale
-
-| Token | Value | Use |
-|---|---|---|
-| `{rounded.none}` | 0px | Reserved |
-| `{rounded.xs}` | 4px | Inline tags |
-| `{rounded.sm}` | 6px | Compact rows |
-| `{rounded.md}` | 8px | CTA buttons, form inputs |
-| `{rounded.lg}` | 12px | Toolkit cards, code blocks, terminal panes |
-| `{rounded.xl}` | 16px | Feature cards, terminal mockup grids |
-| `{rounded.pill}` | 9999px | Section-label badges |
-| `{rounded.full}` | 9999px | Avatar plates (rare) |
-
-Compact developer-ergonomic radii — 8px CTAs, 12-16px cards. Signals "developer tool" rather than "consumer brand."
+Depth is nearly flat. Light mode separates surfaces with `1px` borders, not shadows. Dark mode has one elevation token, `--shadow-soft`, which combines a tight contact shadow, a wide ambient shadow, and a faint blue-white rim. There is no second elevation level; if something needs to feel higher, it needs a border or a different surface, not a bigger shadow.
 
 ## Components
 
-### Top Navigation
-
-**`top-nav-dark`** — Default top nav. Background `{colors.canvas}`, text `{colors.body-strong}`, height 64px. Layout: Composio wordmark left, primary horizontal menu (Product / Toolkits / Docs / Pricing / Customers / Blog), GitHub stars + Sign In + "Get started" right.
-
 ### Buttons
 
-**`button-primary`** — The signature Composio Blue CTA. Background `{colors.primary}`, text `{colors.on-primary}`, type `{typography.button}` (14px / 500), padding 10px × 18px, height 40px, rounded `{rounded.md}` (8px).
+`default` is the brand fill and marks the single primary action in a group. `outline` is for secondary, reversible actions. `ghost` is tertiary and icon-only. `link` is inline navigation.
 
-**`button-primary-active`** — Press state. Background `{colors.primary-active}`.
+The primary/secondary decision is semantic, not aesthetic: **the action that advances the user's task is `default`**, even when it sits next to another prominent control. An "Add model" control that commits a selection is primary; a control that merely navigates elsewhere is not automatically more important.
 
-**`button-secondary-dark`** — Surface-elevated secondary. Background `{colors.surface-card-elevated}`, text `{colors.body-strong}`.
+Every interactive control inside a dense table or tray carries `min-h-11` (44px) regardless of its visual height.
 
-**`button-outline`** — Transparent with 1px hairline-strong border.
+### Data values
 
-**`button-tertiary-text`** — Inline text link.
+Absent facts have two renderings, and they are not interchangeable:
 
-### Hero & Atmospheric
+- **`-`** for a missing scalar (a price, a latency, a score).
+- **`n/a`** for a missing categorical status (SLA eligibility, pass/fail).
 
-**`hero-band`** — Homepage hero. Background `{colors.canvas}`, full-width display headline in `{typography.display-mega}` (72px / 500), subhead, two CTAs, and a spotlight-glow backdrop emanating from behind the centered terminal-mockup grid.
+Both carry an accessible `title` and screen-reader text naming the reason. Absence is never coerced into `0`, `free`, `pass`, `fail`, or `Outside SLA`. A model with no published TTFT observation has not failed an SLA — it has no observation.
 
-**`terminal-mockup-grid`** — The brand's strongest visual signature. 2×2 grid of dark code/output panels inside a `{rounded.xl}` (16px) container. Background `{colors.canvas-deep}`, padding 32px, gap 16px.
+### Model identity
 
-**`terminal-pane`** — Individual code/output panel inside the mockup grid. Background `{colors.surface-card}`, text `{colors.body}` in `{typography.code}`, rounded `{rounded.lg}` (12px), padding 20px.
+A model name is navigation. Every model name rendered in a result — table header cell, card title, tray chip, comparison column — links to that model's canonical profile through **one shared link component**. Plain-text model names are a defect.
 
-**`spotlight-glow-card`** — Large feature card with centered display headline and a radial blue glow behind it. Background `{colors.surface-card}`, text `{colors.body-strong}` in `{typography.display-md}`, rounded `{rounded.xl}`, padding 48px.
+Provider identity uses the real provider logo. Colored dots are a **fallback for load failure or missing mapping only**, never the intended finished state.
 
-### Cards
+### Evidence receipts
 
-**`feature-card`** — 3-up benefit grid. Background `{colors.surface-card}`, text `{colors.body}`, type `{typography.title-md}`, rounded `{rounded.xl}`, padding 28px.
+Every result surface shows its provenance and freshness. On-page, show the **single newest defensible receipt** by effective/observed revision, labelled as the latest visible receipt. The complete ledger stays available in CSV/PNG export metadata and at `/data-sources/`. Provenance is never deleted from the view model to shorten the page.
 
-**`toolkit-card`** — 4-up toolkit grid (Slack, GitHub, Stripe, Notion, Linear, etc.). Background `{colors.surface-card}`, text `{colors.body-strong}`, type `{typography.title-sm}`, rounded `{rounded.lg}`, padding 20px. 40px square `{component.toolkit-icon}` top, toolkit name, one-line description.
+Stale evidence is labelled stale and still shown; only a cold system with no prior publication is unavailable.
 
-**`toolkit-icon`** — Square icon plate. Background `{colors.surface-card-elevated}`, rounded `{rounded.md}`, 40px size.
+### Loading & transitions
 
-**`testimonial-card`** — Quote card. Background `{colors.surface-card}`, text `{colors.body}`, rounded `{rounded.lg}`, padding 24px.
+Changing a query on a decision surface — adding a model, changing a filter — is a **control action, not a page load**.
 
-### Code
+- The shell, inputs, and current results stay mounted and visible.
+- The user's selection updates optimistically, within 100ms.
+- The result region shows a bounded inline progress or shimmer, scoped to the region that is actually changing.
+- Warm result completion target: 800ms.
 
-**`code-block`** — Inline code/terminal block. Background `{colors.canvas-deep}`, text `{colors.body}` in `{typography.code}`, rounded `{rounded.lg}`, padding 20px.
-
-### Forms
-
-**`text-input`** — Background `{colors.surface-card}`, text `{colors.body-strong}`, rounded `{rounded.md}` (8px), padding 12px × 16px, height 44px.
-
-**`search-input`** — Compact search field. Same surface and radius, smaller padding, 40px height.
-
-### Tags & Badges
-
-**`badge-pill`** — Small uppercase pill. Background `{colors.surface-card-elevated}`, text `{colors.body-strong}`, type `{typography.caption-uppercase}`, rounded `{rounded.pill}`, padding 4px × 10px.
-
-### CTA / Footer
-
-**`cta-band-spotlight`** — Pre-footer band. Background `{colors.canvas}` with centered radial spotlight glow. Display headline + single primary CTA pill. 96px padding.
-
-**`footer-dark`** — Closing footer. Background `{colors.canvas}`, text `{colors.body}`. 5-column link list. 64×48px padding.
-
-**`footer-link`** — Background transparent, text `{colors.body}`, type `{typography.body-sm}`.
+A full-page skeleton that replaces the current page during a query change is prohibited. `app/loading.tsx` is for genuine cold route entry only.
 
 ## Do's and Don'ts
 
 ### Do
-- Reserve `{colors.primary}` for primary CTAs, wordmark, and spotlight glows.
-- Use `{rounded.md}` (8px) for every CTA — not full pills.
-- Use brightness-step ladder for elevation; avoid drop shadows.
-- Pair every hero with a centered radial blue spotlight glow.
-- Render code, CLI commands in JetBrains Mono via `{typography.code}`.
-- Use the 2×2 terminal-mockup grid as the homepage hero anchor.
+
+- Reserve `#1111ff` for action, focus, and measured series.
+- Render every source-derived number in `font-mono tabular-nums`.
+- Make the entire card or row surface respond to hover *and* keyboard focus, not just its text.
+- Keep the full accessible reason behind a compact `-` or `n/a`.
+- Fit desktop tables to the container by bounding columns.
+- Let additive features be additive — new surfaces sit beside existing ones.
 
 ### Don't
-- Don't introduce a secondary brand color. Cyan and violet are illustrative-only.
-- Don't use full pills on CTAs.
-- Don't drop display weight to 400.
-- Don't add drop shadow tiers.
-- Don't use canvas-deep (#000000) outside terminal/code surfaces.
-- Don't extract a CTA color from a third-party widget (cookie consent, OneTrust). The brand's CTA color is what appears on actual page CTAs.
+
+- Don't introduce a color outside the token set, and don't add success-green or warning-amber.
+- Don't use a full-page skeleton for an in-page query change.
+- Don't render a model name as plain text.
+- Don't treat colored provider dots as finished.
+- Don't collapse route families into a generic template. `/subscribe-vs-api/` in particular keeps every existing section, input, result, and action; a generic API calculator may only be added alongside it.
+- Don't show every provenance row inline at the point of decision.
+- Don't mark a surface "final" from automated checks. Human route-family approval is the gate.
 
 ## Responsive Behavior
 
-### Breakpoints
+Breakpoints follow Tailwind defaults. The meaningful transitions are:
 
-| Name | Width | Key Changes |
-|---|---|---|
-| Mobile | < 640px | Hero h1 72→36px; terminal mockup grid collapses to single pane; toolkit grid 1-up; nav hamburger. |
-| Tablet | 640–1024px | Hero h1 56px; terminal mockup grid stays 2×2; toolkit grid 2-up. |
-| Desktop | 1024–1280px | Full hero h1 72px; full 2×2 terminal mockup; toolkit grid 4-up. |
-| Wide | > 1280px | Content caps at 1200px. |
+- **`md`** — dense desktop tables appear; below this, the same facts render as stacked metric cards. Both must carry identical data and identical unavailable-value semantics.
+- **`xl` / `1280px`** — multi-column result layouts and fixed-layout wide tables engage.
 
-### Touch Targets
-- Primary CTA at 40px height — at WCAG AA, padded for AAA.
-- Search input at 40px.
+Verify decision surfaces at 1024, 1280, 1440, and 1691px, in both themes, with the longest realistic model names and the maximum selectable comparison size.
 
-### Collapsing Strategy
-- Top nav switches to hamburger below 768px.
-- Terminal mockup 2×2 grid collapses to a single pane on mobile.
-- Toolkit grid: 4-up → 2-up → 1-up.
-- Hero spotlight glow stays at every breakpoint.
-
-## Iteration Guide
-
-1. Focus on a single component at a time.
-2. CTAs default to `{rounded.md}` (8px). Cards use `{rounded.lg}` or `{rounded.xl}`.
-3. Variants live as separate entries inside `components:`.
-4. Use `{token.refs}` everywhere — never inline hex.
-5. Hover state never documented.
-6. abcDiatype 500 for display, 400/600 for body. JetBrains Mono on every code surface.
-7. Composio Blue stays scarce.
+Touch targets are 44px minimum everywhere, including inside tables.
 
 ## Known Gaps
 
-- abcDiatype is licensed; Inter is the substitute.
-- Animation timings out of scope.
-- In-product surfaces (toolkit dashboards, agent playground) are behind login walls.
-- Form validation states beyond focus not visible on captured surfaces.
+These are open and tracked; they are **not** part of the system to be reproduced.
+
+1. Provider logos are not ported to the Next rebuild. The reviewed mapping exists at `src/frontend/provider-mark.tsx` but reads `import.meta.env`, which is not a valid Next boundary. Colored dots are standing in.
+2. Eight reviewer annotations from 2026-08-21 are unimplemented — Compare latency and full-page placeholder, Compare desktop table overflow, verbose Compare provenance, leaderboard card hover coverage, `Unobserved` → `n/a`, Make It Yours search width, Add button emphasis, and unlinked model names.
+3. No fresh parity baseline exists. The prior "final implementation checkpoint" assessment was rejected by the product owner and should not be cited.
+4. `--chart-1..5` are still the stock shadcn palette and have not been reviewed against the brand or for categorical accessibility.
