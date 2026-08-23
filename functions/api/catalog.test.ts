@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { BOOTSTRAP_CATALOG } from '../../src/catalog/bootstrap';
-import { onRequestGet } from './catalog';
+import { catalogFreshness, evidenceFreshWindowMs, onRequestGet } from './catalog';
+
+// The `freshRevision` fixture pins checked_at far in the future so the revision
+// is always inside its window. The source observation has to be recent for the
+// same reason: a fixed past date would make every "fresh catalog" case actually
+// carry stale evidence, which is the exact masking defect these tests cover.
+const RECENT_OBSERVED_AT = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
 const source = {
   id: 'openai-api', provider_id: 'openai', source_url: 'https://platform.openai.com/docs/pricing',
-  observed_at: '2026-08-03T00:00:00.000Z', source_kind: 'official_json', confidence: 'official', snapshot_key: null, content_hash: 'sha256:abc', parser_version: 'v1', evidence_locator: 'pricing/table', review_status: 'verified',
+  observed_at: RECENT_OBSERVED_AT, source_kind: 'official_json', confidence: 'official', snapshot_key: null, content_hash: 'sha256:abc', parser_version: 'v1', evidence_locator: 'pricing/table', review_status: 'verified',
 };
 const plan = {
   id: 'openai:plus', provider_id: 'openai', display_name: 'Plus', monthly_cost_micro_dollars: 20_000_000,
@@ -237,5 +243,102 @@ describe('GET /api/catalog', () => {
     await expect(response.json()).resolves.toMatchObject({
       freshness: { status: 'bootstrap', message: 'Published catalog unavailable; serving checked-in bootstrap source records.' },
     });
+  });
+});
+
+describe('catalogFreshness', () => {
+  const NOW = Date.parse('2026-08-23T06:13:00.000Z');
+  const at = (hoursAgo: number) => new Date(NOW - hoursAgo * 60 * 60 * 1000).toISOString();
+
+  it('reports fresh only when every source observation is inside the 36-hour evidence window', () => {
+    const result = catalogFreshness(at(1), [
+      { id: 'openrouter-models', observed_at: at(5.9) },
+      { id: 'opencode-zen', observed_at: at(5.9) },
+      { id: 'alibaba-subscription', observed_at: at(35.9) },
+    ], NOW);
+    expect(result.status).toBe('fresh');
+    expect(result.message).toBeUndefined();
+  });
+
+  it('does not report fresh when the revision is recent but its evidence is not', () => {
+    // The exact masking defect: a revision republished minutes ago carrying
+    // subscription facts that are more than ten days old.
+    const result = catalogFreshness(at(0.2), [
+      { id: 'openrouter-models', observed_at: at(5.9) },
+      { id: 'openai-subscription', observed_at: at(53.9) },
+      { id: 'xai-subscription', observed_at: at(258.2) },
+    ], NOW);
+    expect(result.status).toBe('stale');
+    expect(result.message).toContain('2 of 3');
+    expect(result.message).toContain('xai-subscription');
+    expect(result.message).toContain('258 hours ago');
+  });
+
+  it('keeps the revision window as an independent reason and reports it first', () => {
+    const result = catalogFreshness(at(25), [{ id: 'openrouter-models', observed_at: at(1) }], NOW);
+    expect(result.status).toBe('stale');
+    expect(result.message).toContain('within 24 hours');
+  });
+
+  it('treats an unreadable observation timestamp as stale rather than assuming freshness', () => {
+    const result = catalogFreshness(at(1), [{ id: 'broken-source', observed_at: 'not-a-date' }], NOW);
+    expect(result.status).toBe('stale');
+    expect(result.message).toContain('no readable timestamp');
+  });
+
+  it('preserves checkedAt unchanged in every branch', () => {
+    const checkedAt = at(1);
+    expect(catalogFreshness(checkedAt, [{ id: 'a', observed_at: at(1) }], NOW).checkedAt).toBe(checkedAt);
+    expect(catalogFreshness(checkedAt, [{ id: 'a', observed_at: at(99) }], NOW).checkedAt).toBe(checkedAt);
+  });
+});
+
+describe('evidence windows by source kind', () => {
+  const NOW = Date.parse('2026-08-23T06:13:00.000Z');
+  const at = (hoursAgo: number) => new Date(NOW - hoursAgo * 60 * 60 * 1000).toISOString();
+
+  it('holds automated catalog evidence to the documented 36-hour window', () => {
+    expect(evidenceFreshWindowMs('official_json')).toBe(36 * 60 * 60 * 1000);
+    expect(evidenceFreshWindowMs('official_html')).toBe(36 * 60 * 60 * 1000);
+    const result = catalogFreshness(at(1), [
+      { id: 'openrouter-models', observed_at: at(40), source_kind: 'official_json' },
+    ], NOW);
+    expect(result.status).toBe('stale');
+  });
+
+  it('gives a human-verified manifest a window matched to how it is produced', () => {
+    expect(evidenceFreshWindowMs('manual_manifest')).toBe(30 * 24 * 60 * 60 * 1000);
+    // Verified 13 days ago: genuinely current subscription pricing, and the
+    // 36-hour rule would have condemned it purely for being hand-checked.
+    const result = catalogFreshness(at(1), [
+      { id: 'kimi-subscription', observed_at: at(13 * 24), source_kind: 'manual_manifest' },
+    ], NOW);
+    expect(result.status).toBe('fresh');
+  });
+
+  it('still reports a manifest that has drifted past its own window', () => {
+    const result = catalogFreshness(at(1), [
+      { id: 'xai-subscription', observed_at: at(31 * 24), source_kind: 'manual_manifest' },
+    ], NOW);
+    expect(result.status).toBe('stale');
+    expect(result.message).toContain('xai-subscription');
+  });
+
+  it('defaults an unknown source kind to the stricter automated window', () => {
+    expect(evidenceFreshWindowMs(undefined)).toBe(36 * 60 * 60 * 1000);
+    expect(evidenceFreshWindowMs(null)).toBe(36 * 60 * 60 * 1000);
+  });
+
+  it('reports the live production mix as fresh once each kind uses its own window', () => {
+    // The exact 2026-08-23 production state: two automated sources refreshed
+    // this morning, ten manual manifests verified between 2 and 20 days ago.
+    const result = catalogFreshness(at(9.2), [
+      { id: 'openrouter-models', observed_at: at(9.2), source_kind: 'official_json' },
+      { id: 'opencode-zen', observed_at: at(9.2), source_kind: 'official_html' },
+      { id: 'anthropic-subscription', observed_at: at(2 * 24), source_kind: 'manual_manifest' },
+      { id: 'kimi-subscription', observed_at: at(13 * 24), source_kind: 'manual_manifest' },
+      { id: 'deepseek-api', observed_at: at(20 * 24), source_kind: 'manual_manifest' },
+    ], NOW);
+    expect(result.status).toBe('fresh');
   });
 });

@@ -53,6 +53,13 @@ publishes these records. Never deploy the publishing Worker first: an otherwise
 valid benchmark publication must not fail after staging because its durable
 tables are absent.
 
+Migration [../migrations/0015_catalog_model_expiration.sql](../migrations/0015_catalog_model_expiration.sql)
+adds the reviewed endpoint expiration calendar date to revisioned model offers.
+Apply it before deploying catalog-ingest code that retains `expiration_date` or
+Pages code that serves `/api/benchmarks/lifecycle`. The change is additive; a
+missing column is treated as an operational projection failure, never as a cold
+or empty lifecycle source.
+
 For Release 3, first apply the full migration sequence to the isolated local
 preview database and run the deterministic directory/profile gate:
 
@@ -130,9 +137,16 @@ valid and one that is fresh:
 - A published revision is **valid** whenever a complete candidate passed
   validation and moved the pointer. A served response built from it is usable
   even when no newer cycle has finished.
-- Evidence is **fresh** only within its window: 36 hours for catalog evidence
-  and exactly 8 days for every benchmark-derived surface (benchmark,
-  leaderboard, comparison, model-profile, and price-performance evidence).
+- Evidence is **fresh** only within its window, and the window follows how the
+  evidence is produced:
+  - 36 hours for automated catalog evidence (`official_json`, `official_html`).
+  - 30 days for a `manual_manifest`. These are prices a person read off a
+    provider's page; they cannot refresh themselves, and provider subscription
+    pricing moves on the order of months. Their `observedAt` is the date a human
+    verified the price, recorded in `MANUAL_SUBSCRIPTION_VERIFIED_AT` -- never
+    the ingest clock, which would claim an observation that never happened.
+  - Exactly 8 days for every benchmark-derived surface (benchmark, leaderboard,
+    comparison, model-profile, and price-performance evidence).
 - A refresh failure or expiration leaves the last complete revision active and
   serves it as labeled last-good evidence. "Unavailable" is reserved for a cold
   system with no valid revision at all; it is never the response for a refresh
@@ -142,7 +156,7 @@ valid and one that is fresh:
 
 | Worker | Cron | Work performed | Operational constraint |
 | --- | --- | --- | --- |
-| tokenbench-catalog-ingest | `20 0 * * *` | Starts one resumable daily catalog cycle. OpenRouter and OpenCode requests run serially in separate Durable Object alarms; reviewed manual manifests are prepared without external requests. | Only sources named in `AUTOMATED_SOURCE_IDS` may refresh automatically. |
+| tokenbench-catalog-ingest | `20 0 * * *` | Starts one resumable daily catalog cycle. OpenRouter, OpenCode, and the allowlisted subscription pages run serially in separate Durable Object alarms; reviewed manual manifests remain part of the same staged revision. | Model/API sources are controlled by `AUTOMATED_SOURCE_IDS`; subscription pages are controlled independently by `AUTOMATED_SUBSCRIPTION_SOURCE_IDS`. Robots blocks and provider-specific parser failures become crawl receipts and preserve the last-good catalog. |
 | tokenbench-benchmark-ingest | `15 2 * * SUN` | Starts one resumable weekly benchmark cycle. Retrieval, normalization, derivation, D1 facts, 100-model profile windows, cache keys, validation, and publication are checkpointed into separate alarms. | Scheduled-only; fetch returns 405. Last-good remains public until the final guarded transaction. |
 
 This cadence is intentionally spread across the week and day for provider and

@@ -1,6 +1,6 @@
 import { BOOTSTRAP_CATALOG } from '../../src/catalog/bootstrap';
 import { catalogApiCacheKey, catalogApiEmptyProviderCacheKey } from '../../src/catalog/api-response-cache-keys';
-import type { CatalogResponse, ModelOffer, PlanOffer, SourceProvenance } from '../../src/catalog/contracts';
+import type { CatalogFreshness, CatalogResponse, ModelOffer, PlanOffer, SourceProvenance } from '../../src/catalog/contracts';
 import { validateCatalogResponse } from '../../src/catalog/validation';
 import { cachedApiResponse, readApiResponseCache } from '../_shared/api-response-cache';
 
@@ -18,8 +18,8 @@ interface Env {
 
 interface RevisionRow { revision: string; published_at: string; checked_at: string }
 interface SourceRow { id: string; provider_id: string; source_url: string; observed_at: string; source_kind: SourceProvenance['sourceKind']; confidence: SourceProvenance['confidence']; snapshot_key: string | null; content_hash: string | null; parser_version: string | null; evidence_locator: string | null; review_status: SourceProvenance['reviewStatus'] | null }
-interface PlanRow { id: string; provider_id: string; display_name: string; monthly_cost_micro_dollars: number; currency: 'USD'; entitlement_json: string; entitlement_evidence_json: string | null; billing_cycle: PlanOffer['billingCycle'] | null; supported_model_ids_json: string | null; source_id: string }
-interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; output_micro_dollars_per_million: number; context_window_tokens: number | null; max_output_tokens: number | null; availability: ModelOffer['availability'] | null; source_id: string }
+interface PlanRow { id: string; provider_id: string; display_name: string; monthly_cost_micro_dollars: number; currency: 'USD'; entitlement_json: string; entitlement_evidence_json: string | null; billing_cycle: PlanOffer['billingCycle'] | null; annual_cost_micro_dollars?: number | null; annual_effective_monthly_cost_micro_dollars?: number | null; supported_model_ids_json: string | null; source_id: string }
+interface ModelRow { id: string; provider_id: string; display_name: string; model_id: string; pricing_basis: ModelOffer['pricingBasis']; route: ModelOffer['route']; currency: 'USD'; unit: ModelOffer['unit']; input_micro_dollars_per_million: number; cached_input_micro_dollars_per_million: number | null; cache_write_micro_dollars_per_million?: number | null; output_micro_dollars_per_million: number; context_window_tokens: number | null; max_output_tokens: number | null; availability: ModelOffer['availability'] | null; expiration_date: string | null; source_id: string }
 
 /**
  * Revisions published before the entitlement-evidence migration carry no
@@ -70,7 +70,81 @@ export function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogR
   });
 }
 
-export async function readPublishedCatalog(db: D1Database): Promise<CatalogResponse | null> {
+/**
+ * A published revision can be minutes old while the facts inside it are days
+ * old: the daily cycle republishes whatever each source last yielded, and a
+ * source that failed or was not re-crawled keeps its previous `observed_at`.
+ *
+ * `docs/catalog-deployment.md` states the rule this implements -- catalog
+ * *evidence* is fresh only within 36 hours -- so publication recency alone
+ * cannot answer whether the response is fresh. Reporting `fresh` off the
+ * revision timestamp told a reader that ten-day-old subscription pricing had
+ * been verified minutes ago.
+ *
+ * An observation whose timestamp cannot be parsed counts as stale: freshness is
+ * a claim that has to be earned, and an unreadable timestamp cannot earn it.
+ */
+export const CATALOG_REVISION_FRESH_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const CATALOG_EVIDENCE_FRESH_WINDOW_MS = 36 * 60 * 60 * 1000;
+
+/**
+ * A manual manifest is pricing a person read off a provider's page. It cannot
+ * refresh itself, and provider subscription pricing changes on the order of
+ * months, so the 36-hour window written for automated catalog evidence is the
+ * wrong instrument: applied here it would report every human-verified price as
+ * stale forever, which trains a reader to ignore the badge.
+ *
+ * Thirty days keeps the signal meaningful -- a manifest that has drifted a
+ * month past its last verification genuinely warrants re-checking -- while
+ * leaving lead time to re-verify before the badge turns.
+ */
+export const CATALOG_MANUAL_EVIDENCE_FRESH_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function evidenceFreshWindowMs(sourceKind: SourceProvenance['sourceKind'] | null | undefined): number {
+  return sourceKind === 'manual_manifest'
+    ? CATALOG_MANUAL_EVIDENCE_FRESH_WINDOW_MS
+    : CATALOG_EVIDENCE_FRESH_WINDOW_MS;
+}
+
+export function catalogFreshness(
+  checkedAt: string,
+  sources: readonly {
+    readonly id: string;
+    readonly observed_at: string;
+    readonly source_kind?: SourceProvenance['sourceKind'] | null;
+  }[],
+  now: number = Date.now(),
+): CatalogFreshness {
+  if (now - Date.parse(checkedAt) > CATALOG_REVISION_FRESH_WINDOW_MS) {
+    return { status: 'stale', checkedAt, message: 'Published catalog has not refreshed within 24 hours.' };
+  }
+  let oldest: { id: string; ageMs: number } | null = null;
+  let staleCount = 0;
+  for (const source of sources) {
+    const observed = Date.parse(source.observed_at);
+    const ageMs = Number.isFinite(observed) ? now - observed : Number.POSITIVE_INFINITY;
+    if (ageMs <= evidenceFreshWindowMs(source.source_kind)) continue;
+    staleCount += 1;
+    if (oldest === null || ageMs > oldest.ageMs) oldest = { id: source.id, ageMs };
+  }
+  if (staleCount === 0) return { status: 'fresh', checkedAt };
+  const detail = oldest === null || !Number.isFinite(oldest.ageMs)
+    ? 'at least one observation has no readable timestamp'
+    : `the oldest is ${oldest.id}, observed ${Math.floor(oldest.ageMs / (60 * 60 * 1000))} hours ago`;
+  return {
+    status: 'stale',
+    checkedAt,
+    message: `${staleCount} of ${sources.length} catalog sources are outside their evidence window; ${detail}.`,
+  };
+}
+
+/**
+ * `now` exists so freshness is evaluated at the instant the response is built.
+ * When the ingest worker materializes the cache it passes the cycle's own
+ * timestamp, so the stored fresh/stale variants describe the evidence as of
+ * that publication rather than as of whenever the row is later read.
+ */
+export async function readPublishedCatalog(db: D1Database, now: number = Date.now()): Promise<CatalogResponse | null> {
   const revisions = await all<RevisionRow>(db,
     `SELECT revisions.revision, revisions.published_at, revisions.checked_at
       FROM catalog_publication_state AS publication
@@ -88,13 +162,10 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
     all<ModelRow>(db, 'SELECT * FROM model_offers WHERE revision = ?', revision.revision),
   ]);
 
-  const isStale = Date.now() - Date.parse(revision.checked_at) > 24 * 60 * 60 * 1000;
   return validateCatalogResponse({
     revision: revision.revision,
     publishedAt: revision.published_at,
-    freshness: isStale
-      ? { status: 'stale', checkedAt: revision.checked_at, message: 'Published catalog has not refreshed within 24 hours.' }
-      : { status: 'fresh', checkedAt: revision.checked_at },
+    freshness: catalogFreshness(revision.checked_at, sources, now),
     provenance: sources.map((source) => ({
       id: source.id, providerId: source.provider_id, sourceUrl: source.source_url, observedAt: source.observed_at,
       sourceKind: source.source_kind, confidence: source.confidence, ...(source.snapshot_key ? { snapshotKey: source.snapshot_key } : {}), ...(source.content_hash ? { contentHash: source.content_hash } : {}), ...(source.parser_version ? { parserVersion: source.parser_version } : {}), ...(source.evidence_locator ? { evidenceLocator: source.evidence_locator } : {}), ...(source.review_status ? { reviewStatus: source.review_status } : {}),
@@ -102,14 +173,19 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
     plans: plans.map((plan): PlanOffer => ({
       id: plan.id, providerId: plan.provider_id, displayName: plan.display_name,
       monthlyCostMicroDollars: plan.monthly_cost_micro_dollars, currency: plan.currency,
-      pricingBasis: 'subscription', route: 'subscription', entitlement: parseStoredJson<PlanOffer['entitlement']>(plan.entitlement_json, 'entitlement_json'), entitlementEvidence: plan.entitlement_evidence_json === null || plan.entitlement_evidence_json === undefined ? UNMIGRATED_PLAN_EVIDENCE : parseStoredJson<PlanOffer['entitlementEvidence']>(plan.entitlement_evidence_json, 'entitlement_evidence_json'), ...(plan.billing_cycle ? { billingCycle: plan.billing_cycle } : {}), ...(plan.supported_model_ids_json ? { supportedModelIds: parseStoredJson<string[]>(plan.supported_model_ids_json, 'supported_model_ids_json') } : {}), sourceId: plan.source_id,
+      pricingBasis: 'subscription', route: 'subscription', entitlement: parseStoredJson<PlanOffer['entitlement']>(plan.entitlement_json, 'entitlement_json'), entitlementEvidence: plan.entitlement_evidence_json === null || plan.entitlement_evidence_json === undefined ? UNMIGRATED_PLAN_EVIDENCE : parseStoredJson<PlanOffer['entitlementEvidence']>(plan.entitlement_evidence_json, 'entitlement_evidence_json'), ...(plan.billing_cycle ? { billingCycle: plan.billing_cycle } : {}), ...(plan.annual_cost_micro_dollars === null || plan.annual_cost_micro_dollars === undefined ? {} : { annualCostMicroDollars: plan.annual_cost_micro_dollars }), ...(plan.annual_effective_monthly_cost_micro_dollars === null || plan.annual_effective_monthly_cost_micro_dollars === undefined ? {} : { annualEffectiveMonthlyCostMicroDollars: plan.annual_effective_monthly_cost_micro_dollars }), ...(plan.supported_model_ids_json ? { supportedModelIds: parseStoredJson<string[]>(plan.supported_model_ids_json, 'supported_model_ids_json') } : {}), sourceId: plan.source_id,
     })),
     modelOffers: models.map((model): ModelOffer => ({
       id: model.id, providerId: model.provider_id, displayName: model.display_name, modelId: model.model_id,
       pricingBasis: model.pricing_basis, route: model.route, currency: model.currency, unit: model.unit,
       inputMicroDollarsPerMillion: model.input_micro_dollars_per_million,
-      ...(model.cached_input_micro_dollars_per_million === null ? {} : { cachedInputMicroDollarsPerMillion: model.cached_input_micro_dollars_per_million }),
-      outputMicroDollarsPerMillion: model.output_micro_dollars_per_million, ...(model.context_window_tokens === null ? {} : { contextWindowTokens: model.context_window_tokens }), ...(model.max_output_tokens === null ? {} : { maxOutputTokens: model.max_output_tokens }), ...(model.availability ? { availability: model.availability } : {}), sourceId: model.source_id,
+      ...(model.cached_input_micro_dollars_per_million === null || model.cached_input_micro_dollars_per_million === undefined
+        ? {}
+        : { cachedInputMicroDollarsPerMillion: model.cached_input_micro_dollars_per_million }),
+      ...(model.cache_write_micro_dollars_per_million === null || model.cache_write_micro_dollars_per_million === undefined
+        ? {}
+        : { cacheWriteMicroDollarsPerMillion: model.cache_write_micro_dollars_per_million }),
+      outputMicroDollarsPerMillion: model.output_micro_dollars_per_million, ...(model.context_window_tokens === null ? {} : { contextWindowTokens: model.context_window_tokens }), ...(model.max_output_tokens === null ? {} : { maxOutputTokens: model.max_output_tokens }), ...(model.availability ? { availability: model.availability } : {}), ...(model.expiration_date ? { expirationDate: model.expiration_date } : {}), sourceId: model.source_id,
     })),
   });
 }
