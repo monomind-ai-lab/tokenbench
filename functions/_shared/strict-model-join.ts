@@ -498,6 +498,83 @@ async function all<T>(db: StrictModelJoinD1Database, sql: string, ...values: unk
 }
 
 /**
+ * Why the strict join produced no routes.
+ *
+ * The join is an INNER JOIN through `model_configurations` gated on
+ * `identity_review_status = 'verified'`. When identity review has never been
+ * run, it returns zero rows and an empty leaderboard is indistinguishable from
+ * "this source published nothing" -- the failure is real but silent, and it
+ * looks like missing upstream data rather than a missing internal step.
+ *
+ * This reports which link in the chain is empty. It never relaxes the gate:
+ * an unreviewed proposal must not become a published fact, so the remedy is
+ * always to run identity review, never to widen the join.
+ */
+export interface StrictModelJoinIdentityCoverage {
+  /** LiveBench configurations staged for this revision. */
+  readonly stagedConfigurations: number;
+  /** Of those, how many carry a canonical configuration binding. */
+  readonly boundToCanonical: number;
+  /** Of those, how many have cleared identity review and so reach the join. */
+  readonly verified: number;
+  /** Rows the full join actually yields once catalog and directory are applied. */
+  readonly joinedRoutes: number;
+  /**
+   * Machine-readable reason an operator can act on. `ok` means the join is
+   * working; every other value names the step that has not run.
+   */
+  readonly status:
+    | 'ok'
+    | 'no-livebench-configurations-staged'
+    | 'identity-review-never-run'
+    | 'identity-review-produced-no-verified-matches'
+    | 'verified-matches-do-not-reach-catalog';
+}
+
+const IDENTITY_COVERAGE_SQL = `
+  SELECT
+    COUNT(*) AS staged,
+    SUM(CASE WHEN canonical_configuration_id IS NOT NULL THEN 1 ELSE 0 END) AS bound,
+    SUM(CASE WHEN canonical_configuration_id IS NOT NULL
+              AND identity_review_status = 'verified' THEN 1 ELSE 0 END) AS verified
+  FROM livebench_model_configurations
+  WHERE revision = ?
+`;
+
+function count(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : 0;
+}
+
+export async function readStrictModelJoinIdentityCoverage(input: {
+  readonly db: StrictModelJoinD1Database;
+  readonly liveBenchRevision: string;
+  readonly joinedRoutes: number;
+}): Promise<StrictModelJoinIdentityCoverage> {
+  const rows = await all<{ staged: unknown; bound: unknown; verified: unknown }>(
+    input.db,
+    IDENTITY_COVERAGE_SQL,
+    input.liveBenchRevision,
+  );
+  const row = rows[0];
+  const stagedConfigurations = count(row?.staged);
+  const boundToCanonical = count(row?.bound);
+  const verified = count(row?.verified);
+  const joinedRoutes = count(input.joinedRoutes);
+
+  const status: StrictModelJoinIdentityCoverage['status'] = joinedRoutes > 0
+    ? 'ok'
+    : stagedConfigurations === 0
+      ? 'no-livebench-configurations-staged'
+      : boundToCanonical === 0
+        ? 'identity-review-never-run'
+        : verified === 0
+          ? 'identity-review-produced-no-verified-matches'
+          : 'verified-matches-do-not-reach-catalog';
+
+  return { stagedConfigurations, boundToCanonical, verified, joinedRoutes, status };
+}
+
+/**
  * Reads only the active catalog revision and active, exact-reviewed canonical
  * bindings. It deliberately has no bootstrap, historical-profile, alias, or
  * name-matching fallback.

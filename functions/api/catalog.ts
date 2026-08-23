@@ -1,6 +1,6 @@
 import { BOOTSTRAP_CATALOG } from '../../src/catalog/bootstrap';
 import { catalogApiCacheKey, catalogApiEmptyProviderCacheKey } from '../../src/catalog/api-response-cache-keys';
-import type { CatalogResponse, ModelOffer, PlanOffer, SourceProvenance } from '../../src/catalog/contracts';
+import type { CatalogFreshness, CatalogResponse, ModelOffer, PlanOffer, SourceProvenance } from '../../src/catalog/contracts';
 import { validateCatalogResponse } from '../../src/catalog/validation';
 import { cachedApiResponse, readApiResponseCache } from '../_shared/api-response-cache';
 
@@ -70,7 +70,58 @@ export function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogR
   });
 }
 
-export async function readPublishedCatalog(db: D1Database): Promise<CatalogResponse | null> {
+/**
+ * A published revision can be minutes old while the facts inside it are days
+ * old: the daily cycle republishes whatever each source last yielded, and a
+ * source that failed or was not re-crawled keeps its previous `observed_at`.
+ *
+ * `docs/catalog-deployment.md` states the rule this implements -- catalog
+ * *evidence* is fresh only within 36 hours -- so publication recency alone
+ * cannot answer whether the response is fresh. Reporting `fresh` off the
+ * revision timestamp told a reader that ten-day-old subscription pricing had
+ * been verified minutes ago.
+ *
+ * An observation whose timestamp cannot be parsed counts as stale: freshness is
+ * a claim that has to be earned, and an unreadable timestamp cannot earn it.
+ */
+export const CATALOG_REVISION_FRESH_WINDOW_MS = 24 * 60 * 60 * 1000;
+export const CATALOG_EVIDENCE_FRESH_WINDOW_MS = 36 * 60 * 60 * 1000;
+
+export function catalogFreshness(
+  checkedAt: string,
+  sources: readonly { readonly id: string; readonly observed_at: string }[],
+  now: number = Date.now(),
+): CatalogFreshness {
+  if (now - Date.parse(checkedAt) > CATALOG_REVISION_FRESH_WINDOW_MS) {
+    return { status: 'stale', checkedAt, message: 'Published catalog has not refreshed within 24 hours.' };
+  }
+  let oldest: { id: string; ageMs: number } | null = null;
+  let staleCount = 0;
+  for (const source of sources) {
+    const observed = Date.parse(source.observed_at);
+    const ageMs = Number.isFinite(observed) ? now - observed : Number.POSITIVE_INFINITY;
+    if (ageMs <= CATALOG_EVIDENCE_FRESH_WINDOW_MS) continue;
+    staleCount += 1;
+    if (oldest === null || ageMs > oldest.ageMs) oldest = { id: source.id, ageMs };
+  }
+  if (staleCount === 0) return { status: 'fresh', checkedAt };
+  const detail = oldest === null || !Number.isFinite(oldest.ageMs)
+    ? 'at least one observation has no readable timestamp'
+    : `the oldest is ${oldest.id}, observed ${Math.floor(oldest.ageMs / (60 * 60 * 1000))} hours ago`;
+  return {
+    status: 'stale',
+    checkedAt,
+    message: `${staleCount} of ${sources.length} catalog sources are outside the 36-hour evidence window; ${detail}.`,
+  };
+}
+
+/**
+ * `now` exists so freshness is evaluated at the instant the response is built.
+ * When the ingest worker materializes the cache it passes the cycle's own
+ * timestamp, so the stored fresh/stale variants describe the evidence as of
+ * that publication rather than as of whenever the row is later read.
+ */
+export async function readPublishedCatalog(db: D1Database, now: number = Date.now()): Promise<CatalogResponse | null> {
   const revisions = await all<RevisionRow>(db,
     `SELECT revisions.revision, revisions.published_at, revisions.checked_at
       FROM catalog_publication_state AS publication
@@ -88,13 +139,10 @@ export async function readPublishedCatalog(db: D1Database): Promise<CatalogRespo
     all<ModelRow>(db, 'SELECT * FROM model_offers WHERE revision = ?', revision.revision),
   ]);
 
-  const isStale = Date.now() - Date.parse(revision.checked_at) > 24 * 60 * 60 * 1000;
   return validateCatalogResponse({
     revision: revision.revision,
     publishedAt: revision.published_at,
-    freshness: isStale
-      ? { status: 'stale', checkedAt: revision.checked_at, message: 'Published catalog has not refreshed within 24 hours.' }
-      : { status: 'fresh', checkedAt: revision.checked_at },
+    freshness: catalogFreshness(revision.checked_at, sources, now),
     provenance: sources.map((source) => ({
       id: source.id, providerId: source.provider_id, sourceUrl: source.source_url, observedAt: source.observed_at,
       sourceKind: source.source_kind, confidence: source.confidence, ...(source.snapshot_key ? { snapshotKey: source.snapshot_key } : {}), ...(source.content_hash ? { contentHash: source.content_hash } : {}), ...(source.parser_version ? { parserVersion: source.parser_version } : {}), ...(source.evidence_locator ? { evidenceLocator: source.evidence_locator } : {}), ...(source.review_status ? { reviewStatus: source.review_status } : {}),

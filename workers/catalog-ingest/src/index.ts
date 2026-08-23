@@ -400,7 +400,11 @@ export async function publishCatalogApiCache(db: D1Database, now: string): Promi
   // Production D1 always does; migration rollout can therefore remain safe.
   if (!hasAll(probe)) return;
 
-  const catalog = await readPublishedCatalog(db as Parameters<typeof readPublishedCatalog>[0]);
+  const materializedAt = Date.parse(now);
+  const catalog = await readPublishedCatalog(
+    db as Parameters<typeof readPublishedCatalog>[0],
+    Number.isFinite(materializedAt) ? materializedAt : Date.now(),
+  );
   if (!catalog) throw new Error('Cannot materialize catalog API cache without a published catalog');
   const expectedCatalogRevision = catalog.revision;
   const response = mergeManualSubscriptionPlans(catalog);
