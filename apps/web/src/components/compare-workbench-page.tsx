@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 
 import { formatDisplayNumber, roundDisplayValue } from "@tokenbench/frontend/display-format";
 
@@ -135,10 +135,20 @@ export function CompareWorkbenchPage({
 }) {
   const router = useRouter();
   const [candidate, setCandidate] = useState("");
+  // Changing the selection is a control action, not a page load. The navigation
+  // runs inside a transition so React keeps this page mounted -- which also stops
+  // the route-level loading boundary from replacing it -- while the tray updates
+  // immediately from the directory we already hold.
+  const [isPending, startTransition] = useTransition();
+  const [optimisticIds, applyOptimisticIds] = useOptimistic<readonly string[], readonly string[]>(
+    requestedIds,
+    (_current, next) => next,
+  );
   const slots = requestedSlots(requestedIds, comparison);
   const models = slots.filter((model): model is SurfaceModel => model !== null);
+  const candidatesById = new Map(candidates.map((model) => [model.id, model]));
   const available = candidates.filter(
-    (model) => !requestedIds.includes(model.id),
+    (model) => !optimisticIds.includes(model.id),
   );
   const candidateIsAvailable = available.some((model) => model.id === candidate);
   const quickPairs = candidates.slice(0, 4).reduce<string[][]>((pairs, model, index) => {
@@ -147,19 +157,23 @@ export function CompareWorkbenchPage({
     return pairs;
   }, []).filter((pair) => pair.length === 2);
   const labels = requestedIds.map((id, index) => slots[index]?.name ?? id);
-  const navigate = (ids: string[]) =>
-    router.push(
-      ids.length
-        ? `/compare?models=${ids.map(encodeURIComponent).join(",")}`
-        : "/compare",
-    );
+  const navigate = (ids: string[]) => {
+    startTransition(() => {
+      applyOptimisticIds(ids);
+      router.push(
+        ids.length
+          ? `/compare?models=${ids.map(encodeURIComponent).join(",")}`
+          : "/compare",
+      );
+    });
+  };
   const addCandidate = () => {
-    if (!candidateIsAvailable || requestedIds.length >= 4) return;
-    navigate([...requestedIds, candidate]);
+    if (!candidateIsAvailable || optimisticIds.length >= 4) return;
+    navigate([...optimisticIds, candidate]);
     setCandidate("");
   };
   const remove = (id: string) =>
-    navigate(requestedIds.filter((value) => value !== id));
+    navigate(optimisticIds.filter((value) => value !== id));
   const rows: CsvRow[] = [];
   requestedIds.forEach((id, index) => {
     const model = slots[index];
@@ -293,15 +307,24 @@ export function CompareWorkbenchPage({
             </div>
             <Card>
               <CardHeader>
-                <CardTitle>
-                  {requestedIds.length
-                    ? `${requestedIds.length}/4 requested`
-                    : "Start a comparison"}
+                <CardTitle className="flex items-center gap-2">
+                  <span>
+                    {optimisticIds.length
+                      ? `${optimisticIds.length}/4 requested`
+                      : "Start a comparison"}
+                  </span>
+                  {isPending ? (
+                    <>
+                      <span aria-hidden="true" className="size-3 shrink-0 animate-spin rounded-full border-2 border-muted border-t-primary" />
+                      <span className="sr-only">Updating comparison evidence</span>
+                    </>
+                  ) : null}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
-                {requestedIds.map((id, index) => {
-                  const model = slots[index];
+                {optimisticIds.map((id, index) => {
+                  const model = candidatesById.get(id)
+                    ?? (slots[index]?.id === id ? slots[index] : null);
                   return (
                     <div
                       className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3"
@@ -331,7 +354,7 @@ export function CompareWorkbenchPage({
                     </div>
                   );
                 })}
-                {requestedIds.length < 4 ? (
+                {optimisticIds.length < 4 ? (
                   <div className="flex gap-2 pt-2">
                     <label className="min-w-0 flex-1">
                       <span className="sr-only">Add a model</span>
@@ -364,7 +387,7 @@ export function CompareWorkbenchPage({
                 <span className="text-xs text-muted-foreground">
                   Minimum 2 · maximum 4
                 </span>
-                {requestedIds.length ? (
+                {optimisticIds.length ? (
                   <Button
                     onClick={() => navigate([])}
                     size="sm"
@@ -415,7 +438,17 @@ export function CompareWorkbenchPage({
       ) : null}
 
       {!insufficient ? (
-        <div id="comparison-result">
+        // The results stay on screen while the next evidence loads and are only
+        // softened, so the reader keeps their reference point instead of watching
+        // the page be replaced by a skeleton.
+        <div
+          aria-busy={isPending}
+          className={cn(
+            "transition-opacity duration-200 motion-reduce:transition-none",
+            isPending && "opacity-60",
+          )}
+          id="comparison-result"
+        >
           <section className="px-4 py-12 sm:px-6 sm:py-16">
             <div className="mx-auto max-w-7xl">
               <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
+
 import {
   type CompareData,
   type LifecycleData,
@@ -23,6 +25,40 @@ import {
 } from "@/lib/published-compatibility.server";
 
 export type ModelSurfaceDataMode = "evidence" | "production" | "unconfigured";
+
+/**
+ * Published reads are cached and revalidated in the background.
+ *
+ * The whole envelope is cached as one unit -- data together with its revision,
+ * publishedAt and freshness -- so a served response always carries the receipt
+ * that describes those exact bytes. A reader never sees a value attributed to a
+ * revision it did not come from; a revalidation swaps data and receipt together.
+ *
+ * This matters because the directory read is expensive: it walks bounded
+ * pagination sequentially, and it was being repeated uncached on every query
+ * change, which dominated the multi-second Compare transition.
+ */
+const PUBLISHED_REVALIDATE_SECONDS = 300;
+
+const cachedPublishedModelDirectory = unstable_cache(
+  async (limit: number) => loadPublishedModelDirectory(limit),
+  ["published-model-directory"],
+  { revalidate: PUBLISHED_REVALIDATE_SECONDS, tags: ["published-model-directory"] },
+);
+
+const cachedPublishedModelProfile = unstable_cache(
+  async (slug: string) => loadPublishedModelProfile(slug),
+  ["published-model-profile"],
+  { revalidate: PUBLISHED_REVALIDATE_SECONDS, tags: ["published-model-profile"] },
+);
+
+const cachedPublishedModelComparison = unstable_cache(
+  // Keyed on the requested identity set, so returning to a previously viewed
+  // combination -- the common add-then-remove loop -- is served warm.
+  async (modelIds: readonly string[]) => loadPublishedModelComparison(modelIds),
+  ["published-model-comparison"],
+  { revalidate: PUBLISHED_REVALIDATE_SECONDS, tags: ["published-model-comparison"] },
+);
 
 export type ModelSurfaceSnapshot<T> = Readonly<{
   mode: ModelSurfaceDataMode;
@@ -106,7 +142,7 @@ export async function loadModelSurfaceDirectory(): Promise<
       "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading model data.",
     );
   }
-  return loadProductionSnapshot(() => loadPublishedModelDirectory(PRODUCTION_MODEL_DIRECTORY_QUERY.limit));
+  return loadProductionSnapshot(() => cachedPublishedModelDirectory(PRODUCTION_MODEL_DIRECTORY_QUERY.limit));
 }
 
 export async function loadModelSurfaceProfile(
@@ -128,7 +164,7 @@ export async function loadModelSurfaceProfile(
       "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading model data.",
     );
   }
-  return loadProductionSnapshot(() => loadPublishedModelProfile(slug));
+  return loadProductionSnapshot(() => cachedPublishedModelProfile(slug));
 }
 
 export async function loadModelSurfaceLifecycle(
@@ -182,5 +218,5 @@ export async function loadModelSurfaceComparison(
       "Choose TOKENBENCH_UI_DATA_MODE=http or evidence before loading comparison data.",
     );
   }
-  return loadProductionSnapshot(() => loadPublishedModelComparison(modelIds));
+  return loadProductionSnapshot(() => cachedPublishedModelComparison(modelIds));
 }
