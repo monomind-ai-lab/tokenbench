@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BOOTSTRAP_CATALOG } from '../../src/catalog/bootstrap';
-import { catalogFreshness, onRequestGet } from './catalog';
+import { catalogFreshness, evidenceFreshWindowMs, onRequestGet } from './catalog';
 
 // The `freshRevision` fixture pins checked_at far in the future so the revision
 // is always inside its window. The source observation has to be recent for the
@@ -290,5 +290,55 @@ describe('catalogFreshness', () => {
     const checkedAt = at(1);
     expect(catalogFreshness(checkedAt, [{ id: 'a', observed_at: at(1) }], NOW).checkedAt).toBe(checkedAt);
     expect(catalogFreshness(checkedAt, [{ id: 'a', observed_at: at(99) }], NOW).checkedAt).toBe(checkedAt);
+  });
+});
+
+describe('evidence windows by source kind', () => {
+  const NOW = Date.parse('2026-08-23T06:13:00.000Z');
+  const at = (hoursAgo: number) => new Date(NOW - hoursAgo * 60 * 60 * 1000).toISOString();
+
+  it('holds automated catalog evidence to the documented 36-hour window', () => {
+    expect(evidenceFreshWindowMs('official_json')).toBe(36 * 60 * 60 * 1000);
+    expect(evidenceFreshWindowMs('official_html')).toBe(36 * 60 * 60 * 1000);
+    const result = catalogFreshness(at(1), [
+      { id: 'openrouter-models', observed_at: at(40), source_kind: 'official_json' },
+    ], NOW);
+    expect(result.status).toBe('stale');
+  });
+
+  it('gives a human-verified manifest a window matched to how it is produced', () => {
+    expect(evidenceFreshWindowMs('manual_manifest')).toBe(30 * 24 * 60 * 60 * 1000);
+    // Verified 13 days ago: genuinely current subscription pricing, and the
+    // 36-hour rule would have condemned it purely for being hand-checked.
+    const result = catalogFreshness(at(1), [
+      { id: 'kimi-subscription', observed_at: at(13 * 24), source_kind: 'manual_manifest' },
+    ], NOW);
+    expect(result.status).toBe('fresh');
+  });
+
+  it('still reports a manifest that has drifted past its own window', () => {
+    const result = catalogFreshness(at(1), [
+      { id: 'xai-subscription', observed_at: at(31 * 24), source_kind: 'manual_manifest' },
+    ], NOW);
+    expect(result.status).toBe('stale');
+    expect(result.message).toContain('xai-subscription');
+  });
+
+  it('defaults an unknown source kind to the stricter automated window', () => {
+    expect(evidenceFreshWindowMs(undefined)).toBe(36 * 60 * 60 * 1000);
+    expect(evidenceFreshWindowMs(null)).toBe(36 * 60 * 60 * 1000);
+  });
+
+  it('reports the live production mix as fresh once each kind uses its own window', () => {
+    // The exact 2026-08-23 production state: two automated sources refreshed
+    // this morning, ten manual manifests verified between 2 and 20 days ago.
+    const result = catalogFreshness(at(9.2), [
+      { id: 'openrouter-models', observed_at: at(9.2), source_kind: 'official_json' },
+      { id: 'opencode-zen', observed_at: at(9.2), source_kind: 'official_html' },
+      { id: 'anthropic-subscription', observed_at: at(2 * 24), source_kind: 'manual_manifest' },
+      { id: 'kimi-subscription', observed_at: at(13 * 24), source_kind: 'manual_manifest' },
+      { id: 'deepseek-api', observed_at: at(20 * 24), source_kind: 'manual_manifest' },
+    ], NOW);
+    expect(result.status).toBe('fresh');
   });
 });

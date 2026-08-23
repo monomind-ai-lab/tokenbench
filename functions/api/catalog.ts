@@ -87,9 +87,32 @@ export function mergeManualSubscriptionPlans(catalog: CatalogResponse): CatalogR
 export const CATALOG_REVISION_FRESH_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const CATALOG_EVIDENCE_FRESH_WINDOW_MS = 36 * 60 * 60 * 1000;
 
+/**
+ * A manual manifest is pricing a person read off a provider's page. It cannot
+ * refresh itself, and provider subscription pricing changes on the order of
+ * months, so the 36-hour window written for automated catalog evidence is the
+ * wrong instrument: applied here it would report every human-verified price as
+ * stale forever, which trains a reader to ignore the badge.
+ *
+ * Thirty days keeps the signal meaningful -- a manifest that has drifted a
+ * month past its last verification genuinely warrants re-checking -- while
+ * leaving lead time to re-verify before the badge turns.
+ */
+export const CATALOG_MANUAL_EVIDENCE_FRESH_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
+export function evidenceFreshWindowMs(sourceKind: SourceProvenance['sourceKind'] | null | undefined): number {
+  return sourceKind === 'manual_manifest'
+    ? CATALOG_MANUAL_EVIDENCE_FRESH_WINDOW_MS
+    : CATALOG_EVIDENCE_FRESH_WINDOW_MS;
+}
+
 export function catalogFreshness(
   checkedAt: string,
-  sources: readonly { readonly id: string; readonly observed_at: string }[],
+  sources: readonly {
+    readonly id: string;
+    readonly observed_at: string;
+    readonly source_kind?: SourceProvenance['sourceKind'] | null;
+  }[],
   now: number = Date.now(),
 ): CatalogFreshness {
   if (now - Date.parse(checkedAt) > CATALOG_REVISION_FRESH_WINDOW_MS) {
@@ -100,7 +123,7 @@ export function catalogFreshness(
   for (const source of sources) {
     const observed = Date.parse(source.observed_at);
     const ageMs = Number.isFinite(observed) ? now - observed : Number.POSITIVE_INFINITY;
-    if (ageMs <= CATALOG_EVIDENCE_FRESH_WINDOW_MS) continue;
+    if (ageMs <= evidenceFreshWindowMs(source.source_kind)) continue;
     staleCount += 1;
     if (oldest === null || ageMs > oldest.ageMs) oldest = { id: source.id, ageMs };
   }
@@ -111,7 +134,7 @@ export function catalogFreshness(
   return {
     status: 'stale',
     checkedAt,
-    message: `${staleCount} of ${sources.length} catalog sources are outside the 36-hour evidence window; ${detail}.`,
+    message: `${staleCount} of ${sources.length} catalog sources are outside their evidence window; ${detail}.`,
   };
 }
 

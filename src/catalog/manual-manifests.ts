@@ -15,6 +15,33 @@ export const MANUAL_SUBSCRIPTION_SOURCES: Record<ManualProviderId, Omit<SourcePr
 };
 
 /** Alibaba publishes the Token Plan Personal Edition separately from Coding Plan. */
+/**
+ * When a human last verified each manual manifest against the provider's own
+ * page, taken from the verification stamp in each source's `parserVersion`.
+ *
+ * These records are checked-in constants: no cycle can observe them. Stamping
+ * them with the ingest clock claimed an observation that never happened and
+ * made whichever provider the daily rotation happened to touch look freshly
+ * verified while its pricing was weeks old. `observedAt` must be the date the
+ * price was actually read.
+ *
+ * deepseek carries no verification stamp; its date is the last recorded change
+ * to the entry, which is the most defensible value available and is
+ * deliberately the oldest here so it surfaces for re-verification first.
+ */
+export const MANUAL_SUBSCRIPTION_VERIFIED_AT: Record<ManualProviderId, string> = {
+  alibaba: '2026-08-10T00:00:00.000Z',
+  anthropic: '2026-08-21T00:00:00.000Z',
+  deepseek: '2026-08-03T00:00:00.000Z',
+  google: '2026-08-21T00:00:00.000Z',
+  xai: '2026-08-21T00:00:00.000Z',
+  kimi: '2026-08-10T00:00:00.000Z',
+  openai: '2026-08-21T00:00:00.000Z',
+  zai: '2026-08-21T00:00:00.000Z',
+};
+
+export const MANUAL_ALIBABA_TOKEN_VERIFIED_AT = '2026-08-10T00:00:00.000Z';
+
 export const MANUAL_ALIBABA_TOKEN_SOURCE: Omit<SourceProvenance, 'observedAt'> = {
   id: 'alibaba-token-subscription', providerId: 'alibaba',
   sourceUrl: 'https://www.alibabacloud.com/en/campaign/ai-landing-page-token',
@@ -423,16 +450,22 @@ export const MANUAL_BOOTSTRAP_MODEL_OFFERS: ModelOffer[] = [
   { id: 'openai:gpt-5.6-luna:direct', providerId: 'openai', displayName: 'GPT-5.6 Luna', modelId: 'gpt-5.6-luna', pricingBasis: 'direct_provider_api', route: 'direct_provider', currency: 'USD', unit: 'micro_dollars_per_million_tokens', inputMicroDollarsPerMillion: 1_000_000, cachedInputMicroDollarsPerMillion: 100_000, outputMicroDollarsPerMillion: 6_000_000, contextWindowTokens: 1_050_000, maxOutputTokens: 128_000, availability: 'available', sourceId: 'openai-api' },
 ];
 
-export function buildManualSubscriptionSources(providerId: string, observedAt: string): Array<{ source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }> {
+/**
+ * `fallbackObservedAt` is used only for a manifest with no recorded
+ * verification date. Every current manifest has one, so the caller's clock does
+ * not decide how fresh this evidence claims to be.
+ */
+export function buildManualSubscriptionSources(providerId: string, fallbackObservedAt: string): Array<{ source: SourceProvenance; plans: PlanOffer[]; modelOffers: ModelOffer[] }> {
   const source = MANUAL_SUBSCRIPTION_SOURCES[providerId as ManualProviderId];
   if (!source) throw new Error(`No manual manifest for ${providerId}`);
+  const observedAt = MANUAL_SUBSCRIPTION_VERIFIED_AT[providerId as ManualProviderId] ?? fallbackObservedAt;
   const primary = {
     source: { ...source, observedAt },
     plans: MANUAL_SUBSCRIPTION_PLANS.filter((plan) => plan.providerId === providerId && plan.sourceId === source.id),
     modelOffers: MANUAL_BOOTSTRAP_MODEL_OFFERS.filter((offer) => offer.providerId === providerId && offer.sourceId === source.id),
   };
   if (providerId === 'alibaba') return [primary, {
-    source: { ...MANUAL_ALIBABA_TOKEN_SOURCE, observedAt },
+    source: { ...MANUAL_ALIBABA_TOKEN_SOURCE, observedAt: MANUAL_ALIBABA_TOKEN_VERIFIED_AT },
     plans: MANUAL_ALIBABA_TOKEN_PLANS,
     modelOffers: [],
   }];
