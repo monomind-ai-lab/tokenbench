@@ -460,6 +460,28 @@ function mergeModelFacts(directory: PreviewModel, benchmark: PreviewModel): Prev
   };
 }
 
+/**
+ * Effective time of a view merged from two published sources.
+ *
+ * These sources never share a timestamp by construction: a directory carries a
+ * weekly publish date and a LiveBench release carries `{releaseId}T00:00:00Z`.
+ * Requiring equality therefore nulled `effectiveAt` on every merge, so the hero
+ * and snapshot badge rendered `-` structurally rather than from any data gap.
+ *
+ * The merged view is only as current as its stalest input, so the earlier of the
+ * two is the honest answer. It never overstates freshness, and it degrades to
+ * whichever single timestamp exists.
+ */
+export function mergedEffectiveAt(left: string | null, right: string | null): string | null {
+  if (left === null) return right;
+  if (right === null) return left;
+  const leftTime = Date.parse(left);
+  const rightTime = Date.parse(right);
+  if (!Number.isFinite(leftTime)) return Number.isFinite(rightTime) ? right : null;
+  if (!Number.isFinite(rightTime)) return left;
+  return leftTime <= rightTime ? left : right;
+}
+
 export function mergePublishedModelDirectorySources(
   directory: UiDataContractV1<ModelDirectoryData>,
   ranking: UiDataContractV1<RankingData> | null,
@@ -482,7 +504,7 @@ export function mergePublishedModelDirectorySources(
   return {
     ...directory,
     status: directory.status === 'available' && ranking.status === 'available' ? 'available' : 'partial',
-    effectiveAt: directory.effectiveAt === ranking.effectiveAt ? directory.effectiveAt : null,
+    effectiveAt: mergedEffectiveAt(directory.effectiveAt, ranking.effectiveAt),
     data: { models },
     provenance: [...directory.provenance, ...ranking.provenance.filter((source) => !directory.provenance.some((candidate) => candidate.id === source.id))],
   };
@@ -499,7 +521,7 @@ export function mergePublishedProfileSource(
   return {
     ...profile,
     status: profile.status === 'available' && ranking.status === 'available' ? 'available' : 'partial',
-    effectiveAt: profile.effectiveAt === ranking.effectiveAt ? profile.effectiveAt : null,
+    effectiveAt: mergedEffectiveAt(profile.effectiveAt, ranking.effectiveAt),
     data: { model: mergeModelFacts(profile.data.model, benchmark) },
     provenance: [...profile.provenance, ...ranking.provenance.filter((source) => !profile.provenance.some((candidate) => candidate.id === source.id))],
   };
@@ -514,7 +536,7 @@ export function mergePublishedComparisonSource(
   return {
     ...comparison,
     status: comparison.status === 'available' && ranking.status === 'available' ? 'available' : 'partial',
-    effectiveAt: comparison.effectiveAt === ranking.effectiveAt ? comparison.effectiveAt : null,
+    effectiveAt: mergedEffectiveAt(comparison.effectiveAt, ranking.effectiveAt),
     data: {
       ...comparison.data,
       models: comparison.data.models.map((model) => {
@@ -540,7 +562,7 @@ export function mergePublishedRankingDirectorySource(
   }
   return {
     ...ranking,
-    effectiveAt: ranking.effectiveAt === directory.effectiveAt ? ranking.effectiveAt : null,
+    effectiveAt: mergedEffectiveAt(ranking.effectiveAt, directory.effectiveAt),
     data: {
       ...ranking.data,
       models: ranking.data.models.map((entry) => {

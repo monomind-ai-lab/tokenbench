@@ -648,6 +648,64 @@ describe('prepareBenchLm', () => {
     expect(reversedPrepared.models.projectedSha256).toBe(forwardPrepared.models.projectedSha256);
   });
 
+  it('does not publish a BenchLM open-weight zero as a hosted rate', async () => {
+    // BenchLM emits 0 for an open-weight model to mean "no hosted price is
+    // published". Carried through it becomes a verified $0 rate, divides
+    // score-per-dollar by zero, and can win a "lowest verified rate" headline.
+    const source = payloads();
+    const pricing = (source.pricing as { items: Array<Record<string, unknown>> }).items;
+    const openWeight = pricing.find((item) => item.canonicalModelKey === 'model-b');
+    expect(openWeight).toBeDefined();
+    Object.assign(openWeight as Record<string, unknown>, {
+      inputPrice: 0,
+      cachedInputPrice: 0,
+      outputPrice: 0,
+    });
+
+    const batch = await parsePayloads(source);
+
+    expect(batch.priceChecks.find((check) => check.sourceModelId === 'model-b')).toBeUndefined();
+  });
+
+  it('keeps a published open-weight rate when only part of it is the zero sentinel', async () => {
+    const source = payloads();
+    const pricing = (source.pricing as { items: Array<Record<string, unknown>> }).items;
+    const openWeight = pricing.find((item) => item.canonicalModelKey === 'model-b');
+    Object.assign(openWeight as Record<string, unknown>, {
+      inputPrice: 0,
+      cachedInputPrice: null,
+      outputPrice: 4.5,
+    });
+
+    const batch = await parsePayloads(source);
+
+    expect(batch.priceChecks.find((check) => check.sourceModelId === 'model-b')).toMatchObject({
+      inputUsdPerMillion: null,
+      cachedInputUsdPerMillion: null,
+      outputUsdPerMillion: 4.5,
+    });
+  });
+
+  it('leaves a proprietary zero price exactly as the source published it', async () => {
+    // The sentinel is open-weight only; a proprietary $0 would be a real fact.
+    const source = payloads();
+    const pricing = (source.pricing as { items: Array<Record<string, unknown>> }).items;
+    const proprietary = pricing.find((item) => item.canonicalModelKey === 'model-a');
+    Object.assign(proprietary as Record<string, unknown>, {
+      inputPrice: 0,
+      cachedInputPrice: 0,
+      outputPrice: 0,
+    });
+
+    const batch = await parsePayloads(source);
+
+    expect(batch.priceChecks.find((check) => check.sourceModelId === 'model-a')).toMatchObject({
+      inputUsdPerMillion: 0,
+      cachedInputUsdPerMillion: 0,
+      outputUsdPerMillion: 0,
+    });
+  });
+
   it('preserves nullable pricing slugs found in the official export', async () => {
     const source = payloads();
     ((source.pricing as { items: Array<Record<string, unknown>> }).items[0]).slug = null;

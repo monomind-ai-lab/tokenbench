@@ -5,6 +5,7 @@ import type { ModelDirectoryEnvelope } from './model-directory-contracts';
 import { modelProfileViewModelFixture } from './model-profile-test-fixture';
 import { projectSurfaceProfile } from './model-surface-projectors';
 import {
+  mergedEffectiveAt,
   projectPublishedLifecycle,
   projectPublishedModelDirectory,
   projectPublishedModelProfile,
@@ -193,5 +194,34 @@ describe('published model compatibility', () => {
       routes: [{ receipt: { routeId: 'openrouter:openai/gpt-5-6-sol' } }],
       lifecycle: { availability: 'unavailable' },
     });
+  });
+});
+
+describe('mergedEffectiveAt', () => {
+  // A directory publish date and a LiveBench release stamp never match, so the
+  // previous equality rule nulled every merged effectiveAt and the hero rendered
+  // `-` by construction.
+  it('reports the stalest input so merged freshness is never overstated', () => {
+    expect(mergedEffectiveAt('2026-08-21T00:00:00.000Z', '2026-08-17T00:00:00.000Z'))
+      .toBe('2026-08-17T00:00:00.000Z');
+    expect(mergedEffectiveAt('2026-08-17T00:00:00.000Z', '2026-08-21T00:00:00.000Z'))
+      .toBe('2026-08-17T00:00:00.000Z');
+  });
+
+  it('keeps an identical timestamp unchanged', () => {
+    expect(mergedEffectiveAt('2026-08-21T00:00:00.000Z', '2026-08-21T00:00:00.000Z'))
+      .toBe('2026-08-21T00:00:00.000Z');
+  });
+
+  it('degrades to whichever timestamp the sources actually published', () => {
+    expect(mergedEffectiveAt(null, '2026-08-21T00:00:00.000Z')).toBe('2026-08-21T00:00:00.000Z');
+    expect(mergedEffectiveAt('2026-08-21T00:00:00.000Z', null)).toBe('2026-08-21T00:00:00.000Z');
+    expect(mergedEffectiveAt(null, null)).toBeNull();
+  });
+
+  it('does not let an unparsable stamp win over a real one', () => {
+    expect(mergedEffectiveAt('not-a-date', '2026-08-21T00:00:00.000Z')).toBe('2026-08-21T00:00:00.000Z');
+    expect(mergedEffectiveAt('2026-08-21T00:00:00.000Z', 'not-a-date')).toBe('2026-08-21T00:00:00.000Z');
+    expect(mergedEffectiveAt('not-a-date', 'also-bad')).toBeNull();
   });
 });

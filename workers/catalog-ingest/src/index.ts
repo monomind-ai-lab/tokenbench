@@ -59,7 +59,12 @@ const OPENCODE_PRICING_URL = 'https://opencode.ai/docs/zen/';
 const MAX_CATALOG_RESPONSE_BYTES = 8 * 1024 * 1024;
 
 const OPENROUTER_IDENTITY_FIELDS = [
-  'id', 'canonical_slug', 'name', 'created', 'context_length',
+  // `hugging_face_id` is the only source-published structural key that ties an
+  // OpenRouter route to an open-weight model identity without inferring anything
+  // from a display name. LiveBench already captures the matching HuggingFace URL
+  // as `lineageSourceUrl`, so preserving this field is what makes an exact
+  // cross-source join possible instead of a name-similarity guess.
+  'id', 'canonical_slug', 'name', 'created', 'context_length', 'hugging_face_id',
 ] as const;
 const OPENROUTER_TRAILING_FIELDS = [
   'per_request_limits', 'supported_parameters', 'expiration_date', 'knowledge_cutoff',
