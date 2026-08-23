@@ -59,7 +59,30 @@ export interface ModelDirectoryEnvelope {
     readonly week: PopularModelWeek | null;
     readonly models: readonly ModelDirectoryEntry[];
     readonly nextCursor: string | null;
+    /**
+     * Which population this response drew from.
+     *
+     * The unfiltered default joins the weekly popular-model ranks, so it returns
+     * a curated cohort rather than the catalogue. Its `nextCursor` correctly
+     * goes null at the cohort's last row -- but a null cursor at exactly the
+     * requested limit is indistinguishable from "this is everything", and a
+     * client paging to exhaustion silently saw 100 of 4,658 models with no
+     * error. Naming the cohort is what makes the two cases tellable apart; the
+     * cursor semantics are already right and are left alone.
+     */
+    readonly cohort: ModelDirectoryCohort;
   };
+}
+
+export type ModelDirectoryCohortKind = 'weekly-popular' | 'catalogue';
+
+export interface ModelDirectoryCohort {
+  /** `weekly-popular` is the curated default; `catalogue` is the full directory. */
+  readonly kind: ModelDirectoryCohortKind;
+  /** Rows available in this cohort, or null when the weekly cohort is unavailable. */
+  readonly size: number | null;
+  /** How to reach the full catalogue when this response is a curated subset. */
+  readonly catalogueQuery: string | null;
 }
 
 export interface ModelProfileReadResult {
@@ -265,13 +288,39 @@ async function latestWeek(db: D1Database): Promise<PopularModelWeek | null> {
   return week;
 }
 
-function directoryQuery(query: ModelDirectoryQuery, week: PopularModelWeek | null, offset: number) {
-  const isWeeklyDefault = week !== null
+/**
+ * The unfiltered, current-status request is served from the curated weekly
+ * cohort rather than the catalogue. The response has to report the same answer
+ * this predicate gives, so both read it from here.
+ */
+function isWeeklyPopularCohort(query: ModelDirectoryQuery, week: PopularModelWeek | null): boolean {
+  return week !== null
     && query.q.length === 0
     && query.creator === null
     && query.sourceType === null
     && query.evidenceStatus === null
     && query.status === 'current';
+}
+
+async function weeklyCohortSize(db: D1Database, week: PopularModelWeek): Promise<number | null> {
+  const rows = await all(db, `
+    SELECT COUNT(*) AS size
+    FROM benchmark_popular_model_ranks AS ranks
+    INNER JOIN benchmark_model_directory AS directory ON directory.model_key = ranks.model_key
+    WHERE ranks.week_start = ? AND directory.status = 'current'
+  `, week.weekStart);
+  // SQLite drivers return COUNT(*) as a number, a bigint, or a numeric string
+  // depending on the binding; accept all three rather than silently reporting an
+  // unknown cohort size, which a reader cannot distinguish from a real absence.
+  const size = (rows[0] as { size?: unknown } | undefined)?.size;
+  const numeric = typeof size === 'bigint' ? Number(size)
+    : typeof size === 'string' && /^\d+$/.test(size) ? Number(size)
+    : size;
+  return typeof numeric === 'number' && Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : null;
+}
+
+function directoryQuery(query: ModelDirectoryQuery, week: PopularModelWeek | null, offset: number) {
+  const isWeeklyDefault = isWeeklyPopularCohort(query, week);
   if (isWeeklyDefault) {
     return {
       sql: `
@@ -426,6 +475,8 @@ export async function readModelDirectory(
       profileCheckedAt: profile.revision.checkedAt,
     }];
   });
+  const weeklyCohort = isWeeklyPopularCohort(query, week);
+  const cohortSize = weeklyCohort && week !== null ? await weeklyCohortSize(db, week) : null;
   const fallbackDate = entries[0]?.profileCheckedAt ?? new Date(0).toISOString();
   const checkedAt = week?.generatedAt ?? fallbackDate;
   const stale = week === null || Date.now() - Date.parse(checkedAt) > BENCHMARK_FRESHNESS_WINDOW_MS;
@@ -440,6 +491,9 @@ export async function readModelDirectory(
       week,
       models: entries,
       nextCursor: hasMore ? nextCursor(query, offset + query.limit) : null,
+      cohort: weeklyCohort
+        ? { kind: 'weekly-popular', size: cohortSize, catalogueQuery: 'status=all' }
+        : { kind: 'catalogue', size: null, catalogueQuery: null },
     },
   };
 }

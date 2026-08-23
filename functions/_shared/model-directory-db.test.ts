@@ -143,6 +143,9 @@ function database() {
                   generated_at: NOW,
                 }] };
               }
+              if (sql.includes('COUNT(*) AS size')) {
+                return { results: [{ size: currentRows.length }] };
+              }
               if (sql.includes('benchmark_model_slug_aliases')) {
                 const alias = values[0];
                 return { results: alias === 'old-alpha' ? [{ model_key: 'benchlm:alpha' }] : [] };
@@ -185,6 +188,29 @@ const DEFAULT_QUERY: ModelDirectoryQuery = {
 };
 
 describe('durable model directory reads', () => {
+  it('names the cohort it served, so a null cursor is not read as "this is everything"', async () => {
+    const db = database();
+
+    // The unfiltered default is served from the curated weekly ranks. Its cursor
+    // correctly goes null at the cohort's last row, which is indistinguishable
+    // from the end of the catalogue unless the response says which it returned.
+    const weekly = await readModelDirectory(db, DEFAULT_QUERY);
+    expect(weekly.data.cohort).toMatchObject({ kind: 'weekly-popular', catalogueQuery: 'status=all' });
+    expect(weekly.data.cohort.size).toBe(weekly.data.models.length);
+
+    // Any request that leaves the curated cohort must say so, so a client can
+    // tell a curated subset from the full directory without inferring it.
+    for (const query of [
+      { ...DEFAULT_QUERY, status: 'all' as const },
+      { ...DEFAULT_QUERY, q: 'alpha' },
+      { ...DEFAULT_QUERY, sourceType: 'Open Weight' as const },
+    ]) {
+      const result = await readModelDirectory(db, query);
+      expect(result.data.cohort.kind).toBe('catalogue');
+      expect(result.data.cohort.catalogueQuery).toBeNull();
+    }
+  });
+
   it('returns the current weekly top 100 while searching retained archived records', async () => {
     const db = database();
     const weekly = await readModelDirectory(db, DEFAULT_QUERY);

@@ -135,7 +135,7 @@ export const LOCAL_MODEL_DIRECTORY_ENTRIES = [...CURRENT_ENTRIES, RETAINED_ENTRY
 export function localModelDirectoryEnvelope(
   query: ModelDirectoryQueryState,
   limit = 100,
-): ModelDirectoryEnvelope {
+): ModelDirectoryEnvelope & { readonly data: { readonly cohort: NonNullable<ModelDirectoryEnvelope['data']['cohort']> } } {
   const filtered = filterModelDirectoryEntries(LOCAL_MODEL_DIRECTORY_ENTRIES, query);
   return {
     revision: REVISION,
@@ -159,6 +159,8 @@ export function localModelDirectoryEnvelope(
       },
       models: filtered.slice(0, limit),
       nextCursor: filtered.length > limit ? 'local_more_models' : null,
+      // The local fixture serves its whole set, so it is the catalogue cohort.
+      cohort: { kind: 'catalogue' as const, size: null, catalogueQuery: null },
     },
   };
 }

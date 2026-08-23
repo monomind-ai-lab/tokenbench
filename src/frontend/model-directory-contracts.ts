@@ -57,7 +57,28 @@ export interface ModelDirectoryEnvelope {
     readonly week: PopularModelWeek | null;
     readonly models: readonly ModelDirectoryEntry[];
     readonly nextCursor: string | null;
+    /**
+     * Which population the response drew from. Optional because a response
+     * cached before the field existed is still valid evidence; absent means the
+     * cohort is simply unknown, which a reader must not mistake for "catalogue".
+     */
+    readonly cohort?: {
+      readonly kind: 'weekly-popular' | 'catalogue';
+      readonly size: number | null;
+      readonly catalogueQuery: string | null;
+    };
   };
+}
+
+function parseCohort(value: unknown): ModelDirectoryEnvelope['data']['cohort'] | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.kind !== 'weekly-popular' && candidate.kind !== 'catalogue') return null;
+  const size = candidate.size;
+  if (!(size === null || (typeof size === 'number' && Number.isSafeInteger(size) && size >= 0))) return null;
+  const catalogueQuery = candidate.catalogueQuery;
+  if (!(catalogueQuery === null || (typeof catalogueQuery === 'string' && catalogueQuery.length > 0))) return null;
+  return { kind: candidate.kind, size: size as number | null, catalogueQuery: catalogueQuery as string | null };
 }
 
 const SOURCE_IDS = new Set<BenchmarkSourceId>(['benchlm', 'lmarena', 'litellm', 'openrouter']);
@@ -311,6 +332,11 @@ export function parseModelDirectoryEnvelope(value: unknown): ModelDirectoryEnvel
       url: item.url as string,
       updatedAt: item.updatedAt as string,
     })),
-    data: { week, models, nextCursor: value.data.nextCursor as string | null },
+    data: {
+      week,
+      models,
+      nextCursor: value.data.nextCursor as string | null,
+      ...(parseCohort(value.data.cohort) ? { cohort: parseCohort(value.data.cohort)! } : {}),
+    },
   };
 }
