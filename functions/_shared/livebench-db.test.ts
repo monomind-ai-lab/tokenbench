@@ -120,7 +120,7 @@ function stagedRelease(overrides: Record<string, unknown> = {}) {
     checked_at: CHECKED_AT,
     released_at: RELEASED_AT,
     published_at: null,
-    license_id: 'CDLA-Permissive-2.0',
+    license_id: 'Apache-2.0',
     license_verification_state: 'verified',
     license_verification_url: 'https://example.com/license-review',
     license_verified_at: CHECKED_AT,
@@ -289,7 +289,7 @@ function stageInput(db: FakeDatabase) {
     checkedAt: CHECKED_AT,
     releasedAt: RELEASED_AT,
     license: {
-      licenseId: 'CDLA-Permissive-2.0',
+      licenseId: 'Apache-2.0',
       verificationState: 'verified' as const,
       verificationUrl: 'https://example.com/license-review',
       verifiedAt: CHECKED_AT,
@@ -326,7 +326,7 @@ function seedSqliteSourceEvidence(sqlite: DatabaseSync, attemptId: string): stri
     domain, source_id, source_revision, attempt_id, upstream_revision,
     release_id, license_id, r2_manifest_key, content_hash, parser_version,
     observed_at, status
-  ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'CDLA-Permissive-2.0', ?, ?, 'livebench-parser-v1', ?, 'validated')`)
+  ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'Apache-2.0', ?, ?, 'livebench-parser-v1', ?, 'validated')`)
     .run(
       sourceRevision,
       attemptId,
@@ -483,7 +483,7 @@ describe('LiveBench D1 staging and publication', () => {
         domain, source_id, source_revision, attempt_id, upstream_revision,
         release_id, license_id, r2_manifest_key, content_hash, parser_version,
         observed_at, status
-      ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'CDLA-Permissive-2.0', ?, ?, 'livebench-parser-v1', ?, 'validated')`)
+      ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'Apache-2.0', ?, ?, 'livebench-parser-v1', ?, 'validated')`)
         .run(
           sourceRevision,
           ATTEMPT_ID,

@@ -29,7 +29,7 @@ export interface SourceAttribution {
   readonly sourceRevision: string;
   readonly label: string;
   readonly url: string;
-  readonly licenseId: 'CDLA-Permissive-2.0' | 'MIT' | 'CC-BY-4.0' | 'OpenRouter-ToS' | 'provider-terms' | null;
+  readonly licenseId: 'Apache-2.0' | 'CDLA-Permissive-2.0' | 'MIT' | 'CC-BY-4.0' | 'OpenRouter-ToS' | 'provider-terms' | null;
   readonly observedAt: string;
   readonly effectiveAt: string | null;
 }
@@ -92,7 +92,7 @@ const METHODS = new Set<UiDataContractV1Method>([
   'models', 'profile', 'lifecycle', 'rankings', 'comparison', 'subscription',
 ]);
 const LICENSE_IDS = new Set<SourceAttribution['licenseId']>([
-  'CDLA-Permissive-2.0', 'MIT', 'CC-BY-4.0', 'OpenRouter-ToS', 'provider-terms', null,
+  'Apache-2.0', 'CDLA-Permissive-2.0', 'MIT', 'CC-BY-4.0', 'OpenRouter-ToS', 'provider-terms', null,
 ]);
 const WARNING_STATES = new Set<DataWarning['state']>(['unknown', 'stale', 'projected', 'historical']);
 const ENVELOPE_KEYS = [

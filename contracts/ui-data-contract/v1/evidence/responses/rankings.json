@@ -4,7 +4,7 @@
     "nextCursor": null,
     "operation": "leaderboard",
     "release": {
-      "licenseId": "CDLA-Permissive-2.0",
+      "licenseId": "Apache-2.0",
       "releaseId": "fixture-release-2026-08-01",
       "releaseOn": "2026-08-01",
       "sourceRefs": [
@@ -932,7 +932,7 @@
       "effectiveAt": "2026-08-18T00:00:00.000Z",
       "fieldGroup": "/data",
       "label": "Deterministic primary contract fixture",
-      "licenseId": "CDLA-Permissive-2.0",
+      "licenseId": "Apache-2.0",
       "observedAt": "2026-08-18T00:00:00.000Z",
       "sourceId": "fixture-primary",
       "sourceRef": "fixture:primary-2026-08-18",

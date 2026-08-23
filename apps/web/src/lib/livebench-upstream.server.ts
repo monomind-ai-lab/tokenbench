@@ -61,7 +61,7 @@ async function retrieveBundle(descriptor: LiveBenchReleaseDescriptor, observedAt
     sourceCommit: descriptor.commit,
     observedAt,
     licenseEvidence: {
-      licenseId: "CDLA-Permissive-2.0",
+      licenseId: "Apache-2.0",
       verificationUrl: "https://github.com/LiveBench/new-livebench",
       verifiedAt: "2026-08-21T00:00:00.000Z",
     },
@@ -111,7 +111,7 @@ export async function loadCurrentLiveBenchRanking(): Promise<UiDataContractV1<Ra
     sourceRevision: bundle.sourceCommit,
     label: `Benchmark release ${bundle.releaseId}`,
     url: `https://github.com/LiveBench/new-livebench/tree/${bundle.sourceCommit}`,
-    licenseId: "CDLA-Permissive-2.0",
+    licenseId: "Apache-2.0",
     observedAt: bundle.observedAt,
     effectiveAt: `${bundle.releaseId}T00:00:00.000Z`,
   };

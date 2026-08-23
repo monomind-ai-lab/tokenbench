@@ -15,10 +15,23 @@ provenance remain inspectable and they are never converted to zero.
 | [LMArena leaderboard-dataset](https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset) | CC-BY-4.0. | Human-preference and supported modality Arena measurements. | [Arena ratings from LMArena](https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset) |
 | [OpenRouter Models API](https://openrouter.ai/docs/api/api-reference/models/get-models) | OpenRouter terms apply; this is **not** represented as MIT or CC-licensed data. | Attributed catalog, hosted route, price, context, modality, and parameter facts only. | [Catalog and pricing data from OpenRouter](https://openrouter.ai/docs/guides/overview/models) |
 | [LiteLLM model_prices_and_context_window.json](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) | MIT. | Route-price/context corroboration only; it never defines public rankings. | LiteLLM corroboration, linked to the source file |
+| [LiveBench](https://livebench.ai/) — release artifacts from [LiveBench/new-livebench](https://github.com/LiveBench/new-livebench) | Apache-2.0. The benchmark repository carries Apache-2.0 at its root, the paper and datasheet both state it, and the published [HuggingFace dataset](https://huggingface.co/datasets/livebench/livebench) is tagged with it. The dashboard repository we read release CSVs from omits its own LICENSE file; its data is derived from that Apache-2.0 project. TokenBench previously recorded this source as CDLA-Permissive-2.0, a licence LiveBench never adopted. | Contamination-controlled task scores, category taxonomy, and per-task evaluation economics, including the token counts that let us re-price an evaluation at current market rates. | LiveBench, linked to livebench.ai, with a statement that TokenBench re-aggregated and re-priced the evidence |
 
 Attribution is shown wherever a source contributes visible facts. TokenBench
 also labels workload costs, Pareto frontiers, and comparison eligibility as
 TokenBench-derived calculations rather than upstream measurements.
+
+Attribution is collected on a dedicated attributions page rather than repeated
+beside every value. A dense evidence table that restated a licence on each cell
+would bury the numbers it exists to present, and none of the licences above
+require per-value notice. Each surface still names the sources it drew on and
+links to that page.
+
+Apache-2.0 sources carry an obligation beyond attribution: a distributor must
+state that changes were made. TokenBench re-aggregates LiveBench task scores and
+recomputes their economics against current catalog prices, so every LiveBench
+surface must say so rather than presenting a derived figure as an upstream
+measurement.
 
 ## Review-bound identity maps
 

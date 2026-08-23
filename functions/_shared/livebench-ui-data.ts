@@ -390,7 +390,7 @@ export function buildLiveBenchLeaderboardData(input: {
     release: {
       releaseId: bundle.releaseId,
       releaseOn: bundle.releaseId,
-      licenseId: 'CDLA-Permissive-2.0',
+      licenseId: 'Apache-2.0',
       sourceRefs: [sourceRef],
     },
     taxonomy: bundle.categories.map((category) => ({

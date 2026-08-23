@@ -130,7 +130,7 @@ export interface ActiveLiveBenchRelease {
   readonly checkedAt: string;
   readonly releasedAt: string;
   readonly publishedAt: string;
-  readonly licenseId: 'CDLA-Permissive-2.0';
+  readonly licenseId: 'Apache-2.0';
   readonly licenseVerificationUrl: string;
   readonly licenseVerifiedAt: string;
   readonly attributionText: string;
@@ -275,9 +275,9 @@ function validateLicense(value: LiveBenchLicenseVerification): LiveBenchLicenseV
     if (verificationUrl === null || verifiedAt === null || verifiedBy === null) {
       fail('verified license evidence must include URL, timestamp, and reviewer');
     }
-    if (licenseId === 'CDLA-Permissive-2.0') {
+    if (licenseId === 'Apache-2.0') {
       validateLiveBenchLicenseEvidence({
-        licenseId: 'CDLA-Permissive-2.0',
+        licenseId: 'Apache-2.0',
         verificationUrl,
         verifiedAt,
       });
@@ -817,7 +817,7 @@ export async function validateLiveBenchRelease(input: {
               AND models.identity_reviewed_by IS NOT NULL
               AND models.identity_evidence_url LIKE 'https://%')
           )) AS invalid_identity_count,
-      CASE WHEN releases.license_id = 'CDLA-Permissive-2.0'
+      CASE WHEN releases.license_id = 'Apache-2.0'
               AND releases.license_verification_state = 'verified'
               AND releases.license_verification_url LIKE 'https://%'
               AND releases.license_verified_at IS NOT NULL
@@ -887,7 +887,7 @@ export async function publishLiveBenchRelease(input: {
   const candidate = await assertStagedOwnership(input.db, revision, attemptId);
   if (candidate.releaseKind !== 'current') fail('historical LiveBench releases cannot move the active pointer');
   if (candidate.publicationState !== 'validated') fail(`LiveBench revision ${revision} is not validated`);
-  if (candidate.licenseId !== 'CDLA-Permissive-2.0' || candidate.licenseVerificationState !== 'verified') {
+  if (candidate.licenseId !== 'Apache-2.0' || candidate.licenseVerificationState !== 'verified') {
     fail('LiveBench publication requires independently verified CDLA license evidence');
   }
   const results = await input.db.batch([
@@ -898,7 +898,7 @@ export async function publishLiveBenchRelease(input: {
         AND staging_attempt_id = ?
         AND release_kind = 'current'
         AND publication_state = 'validated'
-        AND license_id = 'CDLA-Permissive-2.0'
+        AND license_id = 'Apache-2.0'
         AND license_verification_state = 'verified'
         AND EXISTS (
           SELECT 1 FROM livebench_publication_epochs
@@ -916,7 +916,7 @@ export async function publishLiveBenchRelease(input: {
           AND staging_attempt_id = ?
           AND release_kind = 'current'
           AND publication_state = 'published'
-          AND license_id = 'CDLA-Permissive-2.0'
+          AND license_id = 'Apache-2.0'
           AND license_verification_state = 'verified'
       )
       AND EXISTS (
@@ -973,7 +973,7 @@ export async function readActiveLiveBenchRelease(
     WHERE pointer.singleton = 1
       AND releases.release_kind = 'current'
       AND releases.publication_state = 'published'
-      AND releases.license_id = 'CDLA-Permissive-2.0'
+      AND releases.license_id = 'Apache-2.0'
       AND releases.license_verification_state = 'verified'
     LIMIT 1
   `).bind().first<Record<string, unknown>>();
@@ -982,7 +982,7 @@ export async function readActiveLiveBenchRelease(
   const publicationState = requireNonBlank(row.publication_state ?? 'published', 'active LiveBench publication state');
   if (releaseKind !== 'current' || publicationState !== 'published') return null;
   const licenseId = requireNonBlank(row.license_id, 'active LiveBench license ID');
-  if (licenseId !== 'CDLA-Permissive-2.0') return null;
+  if (licenseId !== 'Apache-2.0') return null;
   const publishedAt = assertLiveBenchTimestamp(row.published_at, 'active LiveBench publishedAt');
   const licenseVerificationUrl = requireNonBlank(row.license_verification_url, 'active LiveBench license verification URL');
   const licenseVerifiedAt = assertLiveBenchTimestamp(row.license_verified_at, 'active LiveBench license verifiedAt');
@@ -998,7 +998,7 @@ export async function readActiveLiveBenchRelease(
     checkedAt: assertLiveBenchTimestamp(row.checked_at, 'active LiveBench checkedAt'),
     releasedAt: assertLiveBenchTimestamp(row.released_at, 'active LiveBench releasedAt'),
     publishedAt,
-    licenseId: 'CDLA-Permissive-2.0',
+    licenseId: 'Apache-2.0',
     licenseVerificationUrl,
     licenseVerifiedAt,
     attributionText: requireNonBlank(row.attribution_text, 'active LiveBench attribution text'),

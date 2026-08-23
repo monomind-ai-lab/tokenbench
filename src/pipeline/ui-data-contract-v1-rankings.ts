@@ -117,7 +117,7 @@ export interface LeaderboardRankingsData {
   readonly release: {
     readonly releaseId: string;
     readonly releaseOn: string;
-    readonly licenseId: 'CDLA-Permissive-2.0';
+    readonly licenseId: 'Apache-2.0';
     readonly sourceRefs: readonly string[];
   };
   readonly taxonomy: readonly LeaderboardTaxonomyCategory[];
@@ -839,12 +839,12 @@ function validateLeaderboardDataIntrinsic(
   }
   const releaseOn = expectString(release.releaseOn, '$/data/release/releaseOn', false, 10);
   if (!isCanonicalCalendarDate(releaseOn)) failResponse('$/data/release/releaseOn', 'must be a canonical calendar date');
-  if (release.licenseId !== 'CDLA-Permissive-2.0') failResponse('$/data/release/licenseId', 'must be CDLA-Permissive-2.0');
+  if (release.licenseId !== 'Apache-2.0') failResponse('$/data/release/licenseId', 'must be Apache-2.0');
   const releaseSourceRefs = expectArray(release.sourceRefs, '$/data/release/sourceRefs', false).map((value, index) => {
     const sourceRef = expectString(value, `$/data/release/sourceRefs/${index}`, false);
     const source = sources.find((candidate) => candidate.sourceRef === sourceRef);
-    if (source === undefined || source.licenseId !== 'CDLA-Permissive-2.0') {
-      failResponse(`$/data/release/sourceRefs/${index}`, 'must cite a declared CDLA-Permissive-2.0 source');
+    if (source === undefined || source.licenseId !== 'Apache-2.0') {
+      failResponse(`$/data/release/sourceRefs/${index}`, 'must cite a declared Apache-2.0 source');
     }
     return sourceRef;
   });
@@ -907,7 +907,7 @@ function validateLeaderboardDataIntrinsic(
   const nextCursor = expectCursor(data.nextCursor, '$/data/nextCursor', false);
   return {
     operation: 'leaderboard',
-    release: { releaseId, releaseOn, licenseId: 'CDLA-Permissive-2.0', sourceRefs: releaseSourceRefs },
+    release: { releaseId, releaseOn, licenseId: 'Apache-2.0', sourceRefs: releaseSourceRefs },
     taxonomy,
     rows,
     total,

@@ -8,7 +8,7 @@
   "effectiveAt": "2026-08-18T07:00:00.000Z",
   "data": {
     "operation": "leaderboard",
-    "release": { "releaseId": "illustrative-release-v1", "releaseOn": "2026-08-17", "licenseId": "CDLA-Permissive-2.0", "sourceRefs": ["illustrative-source"] },
+    "release": { "releaseId": "illustrative-release-v1", "releaseOn": "2026-08-17", "licenseId": "Apache-2.0", "sourceRefs": ["illustrative-source"] },
     "taxonomy": [{ "categoryId": "coding", "label": "Coding", "tasks": [{ "taskId": "coding", "label": "Coding" }] }],
     "rows": [],
     "total": 0,
@@ -16,7 +16,7 @@
   },
   "revisions": { "projection": "illustrative-projection-v1", "catalog": "illustrative-catalog-v1", "benchmark": "illustrative-benchmark-v1", "runtimeObservationSet": "illustrative-runtime-v1", "projectionMethodology": "illustrative-methodology-v1" },
   "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": "2026-08-17T00:00:00.000Z", "benchmarkCheckedAt": "2026-08-18T07:45:00.000Z" },
-  "sources": [{ "sourceRef": "illustrative-source", "fieldGroup": "/data", "sourceId": "illustrative-source", "sourceRevision": "illustrative-revision-v1", "label": "Illustrative prototype data", "url": "https://example.com/tokenbench-ui-data-contract-v1", "licenseId": "CDLA-Permissive-2.0", "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" }],
+  "sources": [{ "sourceRef": "illustrative-source", "fieldGroup": "/data", "sourceId": "illustrative-source", "sourceRevision": "illustrative-revision-v1", "label": "Illustrative prototype data", "url": "https://example.com/tokenbench-ui-data-contract-v1", "licenseId": "Apache-2.0", "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" }],
   "warnings": [],
   "provenance": [{ "sourceRef": "illustrative-source", "label": "Illustrative prototype data", "effectiveAt": "2026-08-18T07:00:00.000Z", "note": "Illustrative prototype data source revision illustrative-revision-v1." }]
 }

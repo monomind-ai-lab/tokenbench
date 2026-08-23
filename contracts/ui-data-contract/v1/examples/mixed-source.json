@@ -20,7 +20,7 @@
   "freshness": { "catalogObservedAt": "2026-08-18T07:00:00.000Z", "runtimeObservedAt": "2026-08-18T07:30:00.000Z", "benchmarkReleasedAt": "2026-08-17T00:00:00.000Z", "benchmarkCheckedAt": "2026-08-18T07:45:00.000Z" },
   "sources": [
     { "sourceRef": "illustrative-catalog", "fieldGroup": "/data", "sourceId": "illustrative-catalog", "sourceRevision": "illustrative-catalog-v1", "label": "Illustrative catalog prototype", "url": "https://example.com/tokenbench-ui-data-contract-v1/catalog", "licenseId": null, "observedAt": "2026-08-18T07:00:00.000Z", "effectiveAt": "2026-08-18T07:00:00.000Z" },
-    { "sourceRef": "illustrative-benchmark", "fieldGroup": "/data", "sourceId": "illustrative-benchmark", "sourceRevision": "illustrative-benchmark-v1", "label": "Illustrative benchmark prototype", "url": "https://example.com/tokenbench-ui-data-contract-v1/benchmark", "licenseId": "CDLA-Permissive-2.0", "observedAt": "2026-08-18T07:30:00.000Z", "effectiveAt": "2026-08-17T00:00:00.000Z" }
+    { "sourceRef": "illustrative-benchmark", "fieldGroup": "/data", "sourceId": "illustrative-benchmark", "sourceRevision": "illustrative-benchmark-v1", "label": "Illustrative benchmark prototype", "url": "https://example.com/tokenbench-ui-data-contract-v1/benchmark", "licenseId": "Apache-2.0", "observedAt": "2026-08-18T07:30:00.000Z", "effectiveAt": "2026-08-17T00:00:00.000Z" }
   ],
   "warnings": [],
   "provenance": [

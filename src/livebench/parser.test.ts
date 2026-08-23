@@ -14,8 +14,8 @@ function fixtureInput() {
     sourceCommit: 'd5fcb08be7088c84616652660666b8621b683ae6',
     observedAt: '2026-08-17T00:17:00.000Z',
     licenseEvidence: {
-      licenseId: 'CDLA-Permissive-2.0' as const,
-      verificationUrl: 'https://cdla.dev/permissive-2-0/',
+      licenseId: 'Apache-2.0' as const,
+      verificationUrl: 'https://github.com/LiveBench/LiveBench/blob/main/LICENSE',
       verifiedAt: '2026-08-17T00:00:00.000Z',
     },
     tableCsv: fixture('table_2026_06_25.csv'),

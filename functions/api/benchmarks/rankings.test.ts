@@ -20,7 +20,7 @@ const releaseRow = {
   checked_at: checkedAt,
   released_at: '2026-06-25T00:00:00.000Z',
   published_at: '2026-08-19T09:05:00.000Z',
-  license_id: 'CDLA-Permissive-2.0',
+  license_id: 'Apache-2.0',
   license_verification_url: 'https://example.com/license-review',
   license_verified_at: checkedAt,
   attribution_text: 'LiveBench source attribution',

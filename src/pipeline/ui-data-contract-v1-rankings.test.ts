@@ -16,7 +16,7 @@ const source: SourceAttribution = {
   sourceRevision: '2026-08-01',
   label: 'LiveBench 2026-08-01',
   url: 'https://example.test/livebench/2026-08-01',
-  licenseId: 'CDLA-Permissive-2.0',
+  licenseId: 'Apache-2.0',
   observedAt: '2026-08-18T00:00:00.000Z',
   effectiveAt: '2026-08-01T00:00:00.000Z',
 };
@@ -214,7 +214,7 @@ function leaderboardData(options: {
     release: {
       releaseId: 'livebench-2026-08-01',
       releaseOn: '2026-08-01',
-      licenseId: 'CDLA-Permissive-2.0' as const,
+      licenseId: 'Apache-2.0' as const,
       sourceRefs: [source.sourceRef],
     },
     taxonomy,
@@ -275,7 +275,7 @@ describe('UI data contract v1 rankings', () => {
     const data = validateRankingsData(request, candidateData, sources, leaderboardAuthority(candidateData));
     expect(data.operation).toBe('leaderboard');
     if (data.operation !== 'leaderboard') throw new Error('Expected leaderboard data.');
-    expect(data.release.licenseId).toBe('CDLA-Permissive-2.0');
+    expect(data.release.licenseId).toBe('Apache-2.0');
     expect(data.rows).toHaveLength(2);
   });
 

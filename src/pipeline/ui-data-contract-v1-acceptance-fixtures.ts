@@ -54,7 +54,7 @@ const PRIMARY_SOURCE: SourceAttribution = {
   sourceRevision: 'fixture-primary-r1',
   label: 'Deterministic primary contract fixture',
   url: 'https://example.com/tokenbench/ui-data-contract-v1/primary',
-  licenseId: 'CDLA-Permissive-2.0',
+  licenseId: 'Apache-2.0',
   observedAt: UI_DATA_CONTRACT_V1_ACCEPTANCE_TIME,
   effectiveAt: UI_DATA_CONTRACT_V1_ACCEPTANCE_TIME,
 };
@@ -348,7 +348,7 @@ function leaderboardData() {
     release: {
       releaseId: 'fixture-release-2026-08-01',
       releaseOn: '2026-08-01',
-      licenseId: 'CDLA-Permissive-2.0' as const,
+      licenseId: 'Apache-2.0' as const,
       sourceRefs: [PRIMARY_SOURCE.sourceRef],
     },
     taxonomy: [{

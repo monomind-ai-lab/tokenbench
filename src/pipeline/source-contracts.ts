@@ -2,7 +2,7 @@ import { isCanonicalIsoTimestamp, isSha256Digest } from '../benchmarks/contracts
 
 export type SourceDomain = 'catalog' | 'benchmark' | 'runtime' | 'lifecycle' | 'subscriptions';
 export type PipelineLicenseId =
-  | 'CDLA-Permissive-2.0' | 'MIT' | 'CC-BY-4.0' | 'OpenRouter-ToS' | 'provider-terms';
+  | 'Apache-2.0' | 'CDLA-Permissive-2.0' | 'MIT' | 'CC-BY-4.0' | 'OpenRouter-ToS' | 'provider-terms';
 
 export interface SourceArtifactManifest {
   readonly artifactId: string;
@@ -37,7 +37,7 @@ export interface PipelineLicenseRegistryRecord {
 
 const SOURCE_DOMAINS: readonly SourceDomain[] = ['catalog', 'benchmark', 'runtime', 'lifecycle', 'subscriptions'];
 const PIPELINE_LICENSE_IDS: readonly PipelineLicenseId[] = [
-  'CDLA-Permissive-2.0', 'MIT', 'CC-BY-4.0', 'OpenRouter-ToS', 'provider-terms',
+  'Apache-2.0', 'CDLA-Permissive-2.0', 'MIT', 'CC-BY-4.0', 'OpenRouter-ToS', 'provider-terms',
 ];
 const PATH_UNSAFE = /[\\/\u0000-\u001f\u007f]/;
 

@@ -18,7 +18,7 @@ function manifest() {
     attemptId: 'attempt-1',
     upstreamRevision: 'livebench-2026-06-25',
     releaseId: '2026-06-25',
-    licenseId: 'CDLA-Permissive-2.0' as const,
+    licenseId: 'Apache-2.0' as const,
     observedAt: '2026-08-17T00:17:00.000Z',
     parserVersion: 'livebench-v1',
     artifacts: [

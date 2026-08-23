@@ -42,7 +42,7 @@ async function descriptor(): Promise<LiveBenchReleaseDescriptor> {
 }
 
 const license = {
-  licenseId: 'CDLA-Permissive-2.0' as const,
+  licenseId: 'Apache-2.0' as const,
   verificationUrl: 'https://example.com/license-review',
   verifiedAt: '2026-08-19T09:00:00.000Z',
   verifiedBy: 'reviewer',

@@ -172,7 +172,7 @@ describe('validated preview data adapter', () => {
     expect(result.data?.release).toMatchObject({
       releaseId: 'fixture-release-2026-08-01',
       releaseOn: '2026-08-01',
-      licenseId: 'CDLA-Permissive-2.0',
+      licenseId: 'Apache-2.0',
       provenance: [expect.objectContaining({ id: 'fixture:primary-2026-08-18' })],
     });
     expect(result.data?.taxonomy).toEqual([{

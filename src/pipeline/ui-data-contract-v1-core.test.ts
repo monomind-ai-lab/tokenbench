@@ -13,7 +13,7 @@ const source = {
   sourceRevision: 'commit-1',
   label: 'LiveBench',
   url: 'https://github.com/LiveBench/new-livebench',
-  licenseId: 'CDLA-Permissive-2.0',
+  licenseId: 'Apache-2.0',
   observedAt: '2026-08-18T00:00:00.000Z',
   effectiveAt: '2026-08-17T00:00:00.000Z',
 } as const;

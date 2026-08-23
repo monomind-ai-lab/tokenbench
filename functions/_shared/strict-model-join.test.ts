@@ -19,7 +19,7 @@ const liveBenchSource: SourceAttribution = {
   sourceRevision: 'release-r1',
   label: 'LiveBench release-r1',
   url: 'https://github.com/LiveBench/new-livebench/tree/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  licenseId: 'CDLA-Permissive-2.0',
+  licenseId: 'Apache-2.0',
   observedAt: '2026-08-20T00:00:00.000Z',
   effectiveAt: '2026-06-25T00:00:00.000Z',
 };

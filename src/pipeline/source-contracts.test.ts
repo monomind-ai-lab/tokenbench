@@ -12,7 +12,7 @@ function validManifest() {
     attemptId: 'attempt-1',
     upstreamRevision: 'livebench-2026-06-25',
     releaseId: '2026-06-25',
-    licenseId: 'CDLA-Permissive-2.0' as const,
+    licenseId: 'Apache-2.0' as const,
     observedAt: '2026-08-17T00:17:00.000Z',
     parserVersion: 'livebench-v1',
     artifacts: [{
@@ -86,6 +86,6 @@ describe('source evidence contracts', () => {
 
   it('hashes the exact immutable manifest JSON', async () => {
     await expect(sourceManifestDigest(validateSourceManifest(validManifest())))
-      .resolves.toBe('sha256:1ca863b5eca3a4db6edd4e723cedb83ab80226414fce5d89390a8bfc7bb2d414');
+      .resolves.toBe('sha256:c2f67f672b2ae01d1469d7ec35df9b50ddcdf8c56d3e003939c99abe9cc88db4');
   });
 });

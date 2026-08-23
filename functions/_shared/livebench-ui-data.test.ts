@@ -20,7 +20,7 @@ const source: SourceAttribution = {
   sourceRevision: '2026-06-25@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
   label: 'LiveBench 2026-06-25',
   url: 'https://github.com/LiveBench/new-livebench',
-  licenseId: 'CDLA-Permissive-2.0',
+  licenseId: 'Apache-2.0',
   observedAt: '2026-08-19T09:00:00.000Z',
   effectiveAt: '2026-06-25T00:00:00.000Z',
 };

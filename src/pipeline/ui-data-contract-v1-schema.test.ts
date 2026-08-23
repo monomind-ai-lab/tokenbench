@@ -94,7 +94,7 @@ const fixtureSource = {
   sourceRevision: 'fixture-revision-v1',
   label: 'Contract fixture source',
   url: 'https://example.com/tokenbench-ui-data-contract-v1/fixture',
-  licenseId: 'CDLA-Permissive-2.0' as const,
+  licenseId: 'Apache-2.0' as const,
   observedAt: '2026-08-18T07:00:00.000Z',
   effectiveAt: '2026-08-18T07:00:00.000Z',
 };
@@ -242,7 +242,7 @@ function leaderboardData() {
     release: {
       releaseId: 'release-v1',
       releaseOn: '2026-08-01',
-      licenseId: 'CDLA-Permissive-2.0' as const,
+      licenseId: 'Apache-2.0' as const,
       sourceRefs: [fixtureSource.sourceRef],
     },
     taxonomy: [{

@@ -57,7 +57,7 @@ export interface LiveBenchReleaseBundle {
  * parsing rejects absent or structurally invalid evidence instead of inferring it.
  */
 export interface LiveBenchLicenseEvidence {
-  readonly licenseId: 'CDLA-Permissive-2.0';
+  readonly licenseId: 'Apache-2.0';
   readonly verificationUrl: string;
   readonly verifiedAt: string;
 }
@@ -215,11 +215,11 @@ export function assertLiveBenchTimestamp(value: unknown, context = 'timestamp'):
 export function validateLiveBenchLicenseEvidence(value: unknown): LiveBenchLicenseEvidence {
   const candidate = record(value, 'license evidence');
   exactKeys(candidate, ['licenseId', 'verificationUrl', 'verifiedAt'], 'license evidence');
-  if (candidate.licenseId !== 'CDLA-Permissive-2.0') {
-    throw new LiveBenchValidationError('license evidence must identify CDLA-Permissive-2.0');
+  if (candidate.licenseId !== 'Apache-2.0') {
+    throw new LiveBenchValidationError('license evidence must identify Apache-2.0');
   }
   return Object.freeze({
-    licenseId: 'CDLA-Permissive-2.0' as const,
+    licenseId: 'Apache-2.0' as const,
     verificationUrl: httpsUrl(nonBlankString(candidate.verificationUrl, 'license evidence verificationUrl', 4_096), 'license evidence verificationUrl'),
     verifiedAt: assertLiveBenchTimestamp(candidate.verifiedAt, 'license evidence verifiedAt'),
   });

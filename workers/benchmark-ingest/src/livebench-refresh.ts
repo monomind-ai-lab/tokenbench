@@ -37,13 +37,27 @@ export interface VerifiedLiveBenchLicenseConfiguration extends LiveBenchLicenseE
   readonly attributionText: string;
 }
 
-/** Project-owner-approved license classification retained by the accepted v1 contract. */
+/**
+ * LiveBench's own license, verified against the upstream project rather than
+ * assumed. An earlier revision recorded CDLA-Permissive-2.0 and pointed its
+ * verification URL at cdla.dev -- at the license text itself, not at any
+ * LiveBench adoption of it. LiveBench never adopted CDLA: the benchmark repo
+ * carries Apache-2.0 at its root, the paper and datasheet both state Apache 2.0,
+ * and the published HuggingFace dataset is tagged Apache-2.0. The dashboard repo
+ * we read release artifacts from omits its own LICENSE file, but its CSVs are
+ * derived from that Apache-2.0 project.
+ *
+ * Apache-2.0 is a permission plus two obligations we owe upstream: retain the
+ * attribution, and state that changes were made. TokenBench re-aggregates and
+ * re-prices LiveBench evidence, so the second obligation applies to us and is
+ * carried in `attributionText`.
+ */
 export const ACCEPTED_LIVEBENCH_LICENSE: VerifiedLiveBenchLicenseConfiguration = {
-  licenseId: 'CDLA-Permissive-2.0',
-  verificationUrl: 'https://cdla.dev/permissive-2-0/',
-  verifiedAt: '2026-08-19T00:00:00.000Z',
+  licenseId: 'Apache-2.0',
+  verificationUrl: 'https://github.com/LiveBench/LiveBench/blob/main/LICENSE',
+  verifiedAt: '2026-08-24T00:00:00.000Z',
   verifiedBy: 'TokenBench project owner',
-  attributionText: 'LiveBench · CDLA-Permissive-2.0',
+  attributionText: 'LiveBench · Apache-2.0 · re-aggregated and re-priced by TokenBench',
 };
 
 export interface LiveBenchRefreshEnvironment {
@@ -224,20 +238,20 @@ export async function retrieveLiveBenchCandidate(input: {
   };
 }
 
-async function requireRegisteredCdlaLicense(db: LiveBenchD1Database): Promise<void> {
+async function requireRegisteredLiveBenchLicense(db: LiveBenchD1Database): Promise<void> {
   const row = await db.prepare(`
     SELECT license_id, canonical_url, license_text_hash
     FROM pipeline_license_registry
-    WHERE license_id = 'CDLA-Permissive-2.0'
+    WHERE license_id = 'Apache-2.0'
     LIMIT 1
   `).bind().first<Record<string, unknown>>();
   if (!row
-    || row.license_id !== 'CDLA-Permissive-2.0'
+    || row.license_id !== 'Apache-2.0'
     || typeof row.canonical_url !== 'string'
     || !row.canonical_url.startsWith('https://')
     || typeof row.license_text_hash !== 'string'
     || !/^sha256:[a-f0-9]{64}$/.test(row.license_text_hash)) {
-    fail('The reviewed CDLA-Permissive-2.0 registry record is missing or invalid');
+    fail('The reviewed Apache-2.0 registry record is missing or invalid');
   }
 }
 
@@ -252,7 +266,7 @@ async function persistSourceEvidence(
         domain, source_id, source_revision, attempt_id, upstream_revision,
         release_id, license_id, r2_manifest_key, content_hash, parser_version,
         observed_at, status
-      ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'CDLA-Permissive-2.0', ?, ?, ?, ?, 'validated')
+      ) VALUES ('benchmark', 'livebench', ?, ?, ?, ?, 'Apache-2.0', ?, ?, ?, ?, 'validated')
     `).bind(
       candidate.sourceRevision,
       candidate.attemptId,
@@ -284,7 +298,7 @@ async function persistSourceEvidence(
 
 function stageLicense(value: VerifiedLiveBenchLicenseConfiguration): LiveBenchLicenseVerification {
   return {
-    licenseId: 'CDLA-Permissive-2.0',
+    licenseId: 'Apache-2.0',
     verificationState: 'verified',
     verificationUrl: value.verificationUrl,
     verifiedAt: value.verifiedAt,
@@ -310,7 +324,7 @@ export async function refreshLiveBenchRelease(input: {
     verificationUrl: acceptedLicense.verificationUrl,
     verifiedAt: acceptedLicense.verifiedAt,
   });
-  await requireRegisteredCdlaLicense(input.env.CATALOG_DB);
+  await requireRegisteredLiveBenchLicense(input.env.CATALOG_DB);
   const discovery = await discoverLiveBenchRelease({
     previous: input.previous,
     checkedAt: input.checkedAt,
