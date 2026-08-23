@@ -21,7 +21,8 @@ export function modelProfileViewModelFixture(overrides: Partial<ModelProfileView
       },
       revision: { revision: 'rev-2', generatedAt: AT, publishedAt: AT, checkedAt: AT },
       summary: {
-        overallScore: 81.48, overallRank: 4, evidenceStatus: 'supported', benchmarkCount: 8,
+        overallScore: 81.48,
+        preferenceRating: null, overallRank: 4, evidenceStatus: 'supported', benchmarkCount: 8,
         coverage: { benchmarkCount: 8, categoryCount: 3, rankedCategoryCount: 2, sourceCount: 2 },
         generatedAt: AT, publishedAt: AT, checkedAt: AT,
         strongestEvidence: 'Public overall score 81.48 at source rank #4.',

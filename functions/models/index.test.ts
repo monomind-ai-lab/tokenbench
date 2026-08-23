@@ -21,7 +21,7 @@ function envelope(): ModelDirectoryEnvelope {
       models: [{
         modelKey: 'benchlm:openai:gpt-5-6-sol', canonicalSlug: 'gpt-5-6-sol', displayName: 'GPT-5.6 Sol', creator: 'OpenAI', sourceType: 'Proprietary', reasoningType: null,
         familyId: null, variantId: null, firstSeenRevision: 'benchlm-r1', firstSeenAt: UPDATED_AT, lastSeenRevision: 'benchlm-r1', lastSeenAt: UPDATED_AT,
-        latestProfileRevision: 'benchlm-r1', status: 'current', sourceId: 'benchlm', sourceModelId: 'gpt-5.6-sol', updatedAt: UPDATED_AT,
+        latestProfileRevision: 'benchlm-r1', status: 'current', sourceId: 'benchlm', sourceModelId: 'gpt-5.6-sol', updatedAt: UPDATED_AT, preferenceRating: null,
         weeklyRank: 1, overallScore: 81.48, overallRank: 1, categories: [], strongestCategory: null, representativePrice: null, evidenceStatus: 'supported',
         profileRevision: 'benchlm-r1', profileFallback: 'none', profilePublishedAt: UPDATED_AT, profileCheckedAt: UPDATED_AT,
       }], nextCursor: null,

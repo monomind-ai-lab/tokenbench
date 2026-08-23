@@ -30,6 +30,7 @@ function profile(slug: string, revision = 'rev-2'): ModelProfileSnapshotData {
     },
     summary: {
       overallScore: 81.48,
+      preferenceRating: null,
       overallRank: 4,
       evidenceStatus: 'supported',
       benchmarkCount: 2,

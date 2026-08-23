@@ -178,6 +178,30 @@ function activeSnapshot(): ModelProfileSourceSnapshot {
   });
 
 describe('model profile contracts', () => {
+  it('keeps a preference rating out of the quality composite column', () => {
+    // A BenchLM composite sits near 49-61 and an LMArena Bradley-Terry rating
+    // near 850-1620. They shared `overallScore` with no unit, so anything that
+    // sorted or charted that column was ranking two different measurements
+    // against each other.
+    const composite = buildModelProfileSnapshot(activeSnapshot(), 'benchlm:openai:gpt-5-6-sol');
+    expect(composite.summary.overallScore).toBe(81.48);
+    expect(composite.summary.preferenceRating).toBeNull();
+
+    const preference = buildModelProfileSnapshot({
+      ...activeSnapshot(),
+      metrics: [metric({ unit: 'arena_score', value: 1349.23 })],
+    }, 'benchlm:openai:gpt-5-6-sol');
+
+    // A rating is not a composite, and Bradley-Terry has no meaningful zero, so
+    // it is never rescaled into the 0-100 column. The model genuinely has no
+    // quality composite and says so.
+    expect(preference.summary.preferenceRating).toBe(1349.23);
+    expect(preference.summary.overallScore).toBeNull();
+
+    // Rank is scale-free, so it stays shared across both.
+    expect(preference.summary.overallRank).toBe(composite.summary.overallRank);
+  });
+
   it('builds a profile with public metrics, route prices, ledger evidence, and null radar axes', () => {
     const profile = buildModelProfileSnapshot(activeSnapshot(), 'benchlm:openai:gpt-5-6-sol');
     expect(profile.identity.slug).toBe('gpt-5-6-sol');

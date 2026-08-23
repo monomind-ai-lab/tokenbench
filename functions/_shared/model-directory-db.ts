@@ -28,7 +28,10 @@ export interface ModelDirectoryQuery {
 
 export interface ModelDirectoryEntry extends ModelDirectoryRecord {
   readonly weeklyRank: number | null;
+  /** 0-100 benchmark composite only; null for a model rated only by preference. */
   readonly overallScore: number | null;
+  /** Bradley-Terry preference rating on its own scale. Never sort it beside overallScore. */
+  readonly preferenceRating: number | null;
   readonly overallRank: number | null;
   /** Exact ordered category facts retained from the selected published profile. */
   readonly categories: readonly ModelProfileCategory[];
@@ -464,6 +467,7 @@ export async function readModelDirectory(
       ...directory,
       weeklyRank: weeklyRank(row),
       overallScore: profile.summary.overallScore,
+      preferenceRating: profile.summary.preferenceRating,
       overallRank: profile.summary.overallRank,
       categories: profile.categories,
       strongestCategory: strongestCategory(profile),

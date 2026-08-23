@@ -44,7 +44,32 @@ export interface ModelProfileCoverage {
 }
 
 export interface ModelProfileSummary {
+  /**
+   * The 0-100 benchmark composite, and only that.
+   *
+   * This field previously carried whatever the overall metric happened to be,
+   * which meant BenchLM composites around 49-61 and LMArena Bradley-Terry
+   * ratings around 850-1620 shared one column with no unit attached. Anything
+   * sorting or charting it was comparing two different measurements, and a
+   * reader had no way to tell which they were looking at.
+   *
+   * A rating is not convertible into a composite: Bradley-Terry is an interval
+   * scale with no meaningful zero, so rescaling it to 0-100 would invent ratios
+   * that do not exist. The two are kept apart instead. A model rated only by
+   * human preference has `overallScore: null` and a populated
+   * `preferenceRating`; it is genuinely missing a quality composite, and `null`
+   * says so honestly.
+   */
   readonly overallScore: number | null;
+  /**
+   * Bradley-Terry rating from human pairwise preference, on its own scale.
+   *
+   * Never mix this with `overallScore` in one column, one sort, or one axis.
+   * Preference measures which answer people picked; a composite measures
+   * performance against fixed tasks. They can legitimately disagree.
+   */
+  readonly preferenceRating: number | null;
+  /** Rank within the model's own source cohort. Scale-free, so it is shared. */
   readonly overallRank: number | null;
   readonly evidenceStatus: EvidenceStatus;
   readonly benchmarkCount: number;
@@ -605,6 +630,13 @@ function validateProfileSnapshot(value: unknown): ModelProfileSnapshotData {
   };
   const summaryResult: ModelProfileSummary = {
     overallScore: finiteOrNull(summary.overallScore, 'summary.overallScore'),
+    // Snapshots persisted before quality and preference were separated carry no
+    // `preferenceRating`. Requiring it would make every stored profile
+    // unreadable at once; absent means the split had not happened yet, which is
+    // the same thing as having no preference rating.
+    preferenceRating: summary.preferenceRating === undefined
+      ? null
+      : finiteOrNull(summary.preferenceRating, 'summary.preferenceRating'),
     overallRank: positiveIntegerOrNull(summary.overallRank, 'summary.overallRank'),
     evidenceStatus: evidenceStatus(summary.evidenceStatus, 'summary.evidenceStatus'),
     benchmarkCount: nonNegativeInteger(summary.benchmarkCount, 'summary.benchmarkCount'),
@@ -877,8 +909,12 @@ export function buildModelProfileSnapshot(
     publishedAt: snapshot.revision.publishedAt,
     checkedAt: snapshot.revision.checkedAt,
   } satisfies ModelProfileRevisionFacts;
+  // The overall category already carries the unit that identifies its scale; the
+  // summary used to drop it and keep only the bare number.
+  const overallIsPreference = overall?.unit === 'arena_score';
   const summary: ModelProfileSummary = {
-    overallScore: overall?.score ?? null,
+    overallScore: overallIsPreference ? null : overall?.score ?? null,
+    preferenceRating: overallIsPreference ? overall?.score ?? null : null,
     overallRank: overall?.rank ?? null,
     evidenceStatus: model.evidenceStatus,
     benchmarkCount: model.benchmarkCount,

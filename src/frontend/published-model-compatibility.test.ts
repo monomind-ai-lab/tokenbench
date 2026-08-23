@@ -43,6 +43,7 @@ function directory(): ModelDirectoryEnvelope {
         updatedAt: timestamp,
         weeklyRank: 3,
         overallScore: 82.5,
+        preferenceRating: null,
         overallRank: 2,
         categories: [
           {

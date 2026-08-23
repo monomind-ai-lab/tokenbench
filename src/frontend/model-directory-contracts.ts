@@ -32,6 +32,12 @@ export interface ModelDirectoryAttribution {
 export interface ModelDirectoryEntry extends ModelDirectoryRecord {
   readonly weeklyRank: number | null;
   readonly overallScore: number | null;
+  /**
+   * Preference rating on its own scale. Required on the parsed entry but
+   * tolerated as absent on the wire, so a response cached before the split
+   * still parses; a missing value reads as null rather than as a score.
+   */
+  readonly preferenceRating: number | null;
   readonly overallRank: number | null;
   /** Exact ordered category facts retained from the selected published profile. */
   readonly categories: readonly ModelProfileCategory[];
@@ -282,6 +288,7 @@ function parseEntry(value: unknown): ModelDirectoryEntry | null {
     ...directory,
     weeklyRank: value.weeklyRank as number | null,
     overallScore: value.overallScore as number | null,
+    preferenceRating: nullableFinite(value.preferenceRating) ? value.preferenceRating as number | null : null,
     overallRank: value.overallRank as number | null,
     categories,
     strongestCategory: value.strongestCategory === null ? null : parseCategory(value.strongestCategory)!,
