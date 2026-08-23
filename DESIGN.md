@@ -1,7 +1,7 @@
 ---
 version: 1
 name: TokenBench-design-authority
-description: An evidence-first decision tool for comparing AI model cost, capability, and runtime facts. The interface is a dense, light-first data product built on neutral surfaces with a single saturated electric blue (`#1111ff`) reserved for primary actions, chart fills, and focus. Inter Tight carries display and body; JetBrains Mono carries every measured value. The defining visual signature is the evidence receipt — a provenance/freshness line attached to every result surface — and the deliberate `-` / `n/a` rendering of facts no approved source publishes.
+description: An evidence-first decision tool for comparing AI model cost, capability, and runtime facts. The interface is a dense, dark-default data product built on neutral surfaces with a single saturated electric blue (`#1111ff`) reserved for primary actions, chart fills, and focus. Inter Tight carries display and body; JetBrains Mono carries every measured value. The defining visual signature is the evidence receipt — a provenance/freshness line attached to every result surface — and the deliberate `-` / `n/a` rendering of facts no approved source publishes.
 
 authority:
   structure: "https://8bf19b96.tokenbench-27t.pages.dev/"
@@ -160,7 +160,9 @@ In light mode `--brand-secondary` is `#2727a8`, a darker blue used for inline li
 
 ### Surface
 
-Light mode is the primary theme: white background, white cards, `oklch(0.97 0 0)` muted. Dark mode is a blue-tinted neutral (chroma `0.012–0.02` at hue `265`), not a pure gray — surfaces read as related to the brand without being colored.
+**Dark is the default theme.** The bootstrap in `site-chrome.tsx` resolves anything other than a stored `light` to dark, so a first-time reader lands in dark mode. Both themes are first-class and every surface must be reviewed in both.
+
+Dark mode is a blue-tinted neutral (chroma `0.012–0.02` at hue `265`), not a pure gray — surfaces read as related to the brand without being colored. Light mode is plain neutral: white background, white cards, `oklch(0.97 0 0)` muted.
 
 ### Semantic
 
