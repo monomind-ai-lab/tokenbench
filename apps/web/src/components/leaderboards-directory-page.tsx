@@ -115,7 +115,7 @@ function LeaderboardRow({ routeKey, index }: { routeKey: LeaderboardKey; index: 
   const Icon = ICON_BY_ROUTE[routeKey];
   return (
     <Link
-      className="group grid gap-4 border-t border-border px-4 py-5 transition-colors first:border-t-0 hover:bg-muted/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[92px_minmax(0,1fr)_auto] sm:items-center sm:px-6"
+      className="group grid gap-4 border-t border-border px-4 py-5 transition-colors first:border-t-0 hover:bg-muted focus-visible:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[92px_minmax(0,1fr)_auto] sm:items-center sm:px-6"
       href={route.pathname}
     >
       <span className="flex items-center gap-3">
@@ -205,7 +205,10 @@ export function LeaderboardsDirectoryPage() {
                     <h2 className="mt-5 text-xl font-semibold" id={`${group.id}-title`}>{group.title}</h2>
                     <p className="mt-3 text-sm leading-6 text-muted-foreground">{group.copy}</p>
                   </div>
-                  <div className="overflow-hidden rounded-2xl border border-border bg-card">
+                  {/* self-start keeps the card exactly as tall as its rows. Without it the
+                      card stretches to the description column and a single-lens group leaves
+                      dead space below the row that no hover or focus state can reach. */}
+                  <div className="self-start overflow-hidden rounded-2xl border border-border bg-card">
                     {group.keys.map((routeKey, index) => <LeaderboardRow index={index} key={routeKey} routeKey={routeKey} />)}
                   </div>
                 </div>

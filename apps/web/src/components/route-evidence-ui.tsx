@@ -78,6 +78,44 @@ export function RouteEvidenceUnavailableState({
   );
 }
 
+/**
+ * Orders receipts newest-first. A receipt whose producer could not establish an
+ * effective time is never treated as the latest — an unknown time cannot
+ * out-rank a known one — so those sort last while remaining in the ledger.
+ */
+function byNewestEffective(sources: readonly Provenance[]): readonly Provenance[] {
+  return [...sources].sort((left, right) => {
+    const leftTime = left.effectiveAt === null ? null : Date.parse(left.effectiveAt);
+    const rightTime = right.effectiveAt === null ? null : Date.parse(right.effectiveAt);
+    const leftValid = leftTime !== null && Number.isFinite(leftTime);
+    const rightValid = rightTime !== null && Number.isFinite(rightTime);
+    if (leftValid && rightValid) return (rightTime as number) - (leftTime as number);
+    if (leftValid) return -1;
+    if (rightValid) return 1;
+    return left.id.localeCompare(right.id);
+  });
+}
+
+function ReceiptLine({ source }: { readonly source: Provenance }) {
+  return (
+    <>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">{source.label}</span>
+        <Badge variant="outline">{source.kind === "illustrative_prototype" ? "Preview-only · not verified" : "Published data"}</Badge>
+      </div>
+      <p className="mt-1 text-xs leading-5 text-muted-foreground">
+        {source.effectiveAt === null ? "Effective time unavailable" : `Effective ${new Date(source.effectiveAt).toLocaleDateString("en-US", { dateStyle: "medium" })}`}
+        {source.url ? (
+          <>
+            {" · "}
+            <a className="underline underline-offset-4 hover:text-foreground" href={source.url} rel="noreferrer" target="_blank">Source</a>
+          </>
+        ) : null}
+      </p>
+    </>
+  );
+}
+
 export function RouteEvidenceSources({
   sources,
   title = "Evidence receipt",
@@ -85,6 +123,11 @@ export function RouteEvidenceSources({
   sources: readonly Provenance[];
   title?: string;
 }) {
+  // The decision surface shows the newest receipt only. The complete ledger is
+  // never dropped from the view model — it stays one disclosure away here, and
+  // whole in exports and /data-sources/.
+  const ordered = byNewestEffective(sources);
+  const [latest, ...earlier] = ordered;
   return (
     <section className="rounded-2xl border border-border bg-card p-5 sm:p-6" aria-labelledby="route-evidence-sources">
       <div className="flex items-start gap-3">
@@ -94,20 +137,24 @@ export function RouteEvidenceSources({
           <p className="mt-1 text-xs leading-5 text-muted-foreground">Source observations stay separate from derived route selection and unavailable fields.</p>
         </div>
       </div>
-      {sources.length ? (
-        <ul className="mt-5 divide-y divide-border text-sm">
-          {sources.map((source, index) => (
-            <li className="py-3 first:pt-0 last:pb-0" key={source.id}>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">Evidence source {index + 1}</span>
-                <Badge variant="outline">{source.kind === "illustrative_prototype" ? "Preview-only · not verified" : "Published data"}</Badge>
-              </div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                {source.effectiveAt === null ? "Effective time unavailable" : `Effective ${new Date(source.effectiveAt).toLocaleDateString("en-US", { dateStyle: "medium" })}`}
-              </p>
-            </li>
-          ))}
-        </ul>
+      {latest ? (
+        <div className="mt-5 text-sm">
+          <ReceiptLine source={latest} />
+          {earlier.length ? (
+            <details className="mt-4 border-t border-border pt-3">
+              <summary className="min-h-11 cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                Latest of {ordered.length} source receipts · show {earlier.length} earlier
+              </summary>
+              <ul className="mt-2 divide-y divide-border">
+                {earlier.map((source) => (
+                  <li className="py-3 last:pb-0" key={source.id}>
+                    <ReceiptLine source={source} />
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </div>
       ) : (
         <p className="mt-5 text-sm text-muted-foreground">No source receipt was supplied for this request.</p>
       )}

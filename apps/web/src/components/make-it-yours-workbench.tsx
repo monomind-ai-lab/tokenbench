@@ -43,6 +43,7 @@ import {
 } from "@/lib/make-it-yours-projector";
 import { cn } from "@/lib/utils";
 
+import { ModelLink } from "./model-link";
 import { ResultActions, ViewModeToggle } from "./result-actions";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -88,6 +89,28 @@ const PROVIDER_COLORS = [
 ] as const;
 
 const MISSING_VALUE = "-";
+
+const UNOBSERVED_TTFT_REASON = "No TTFT observation was published for this model.";
+const UNOBSERVED_THROUGHPUT_REASON = "No throughput observation was published for this model.";
+const UNOBSERVED_SLA_REASON =
+  "No runtime observation was published, so SLA eligibility is unknown. This is not a failed SLA.";
+
+/**
+ * Dense status cells render `n/a` for an absent runtime observation.
+ *
+ * `n/a` means no observation was published. It must never be read as, or
+ * collapse into, "Outside SLA" — failing a threshold is an evidenced outcome
+ * and having no evidence is not. The compact glyph keeps the table scannable
+ * while the full reason stays available to assistive technology and on hover.
+ */
+function UnobservedStatus({ reason }: { readonly reason: string }) {
+  return (
+    <span title={reason}>
+      <span aria-hidden="true">n/a</span>
+      <span className="sr-only">{reason}</span>
+    </span>
+  );
+}
 
 function fallbackChartTheme(dark: boolean, reducedMotion: boolean): MakeItYoursChartTheme {
   const accent = dark ? "#9dabff" : "#1111ff";
@@ -487,14 +510,14 @@ function MakeItYoursRankingTable({
             return (
               <tr className="align-middle hover:bg-muted/45" key={row.id}>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{index + 1}</td>
-                <th className="border-b border-border/70 px-3 py-3 font-medium" scope="row">{row.name}</th>
+                <th className="border-b border-border/70 px-3 py-3 font-medium" scope="row"><ModelLink modelId={row.id} name={row.name} /></th>
                 <td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{row.provider}</td>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</td>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{projected ? `${formatMoney(projected.inputUsdPerMillion)} / ${formatMoney(projected.outputUsdPerMillion)}` : MISSING_VALUE}</td>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatTtft(row.ttft)}</td>
                 <td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatThroughput(row.throughput)}</td>
                 <td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{projected?.lifecycle ?? MISSING_VALUE}</td>
-                <td className="border-b border-border/70 px-3 py-3"><Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? "SLA unobserved" : row.meetsSla ? "Pass" : "Outside SLA"}</Badge></td>
+                <td className="border-b border-border/70 px-3 py-3"><Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? <UnobservedStatus reason={UNOBSERVED_SLA_REASON} /> : row.meetsSla ? "Pass" : "Outside SLA"}</Badge></td>
                 <td className="border-b border-border/70 px-3 py-3"><Button aria-pressed={selected} className={cn("min-h-11", selected && "bg-active-control text-active-control-foreground")} onClick={() => onToggle(row.id)} size="sm" type="button" variant={selected ? "secondary" : "outline"}>{selected ? "Selected" : "Compare"}</Button></td>
               </tr>
             );
@@ -526,9 +549,9 @@ function MakeItYoursRankingCards({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="font-mono text-xs text-muted-foreground">#{index + 1} · {row.provider}</p>
-                <h3 className="mt-1 text-base font-medium">{row.name}</h3>
+                <h3 className="mt-1 text-base font-medium"><ModelLink modelId={row.id} name={row.name} /></h3>
               </div>
-              <Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? "SLA unobserved" : row.meetsSla ? "Pass" : "Outside SLA"}</Badge>
+              <Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? <UnobservedStatus reason={UNOBSERVED_SLA_REASON} /> : row.meetsSla ? "Pass" : "Outside SLA"}</Badge>
             </div>
             <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-border pt-4 text-xs">
               <div><dt className="text-muted-foreground">Weighted</dt><dd className="mt-1 font-mono tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</dd></div>
@@ -551,7 +574,7 @@ function MakeItYoursSlaTable({ rows }: { readonly rows: readonly WeightedRanking
       <table className="w-full min-w-[700px] text-left text-sm">
         <caption className="sr-only">Exact SLA measurements</caption>
         <thead className="text-xs text-muted-foreground"><tr>{["Model", "TTFT", "TTFT result", "Throughput", "Throughput result", "Eligibility"].map((heading) => <th className="border-b border-border px-3 py-3 font-medium" key={heading} scope="col">{heading}</th>)}</tr></thead>
-        <tbody>{rows.map((row) => <tr className="hover:bg-muted/45" key={row.id}><th className="border-b border-border/70 px-3 py-3 font-medium" scope="row">{row.name}</th><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatTtft(row.ttft)}</td><td className="border-b border-border/70 px-3 py-3">{row.ttft === null ? "Unobserved" : row.meetsTtft ? "Pass" : "Outside threshold"}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatThroughput(row.throughput)}</td><td className="border-b border-border/70 px-3 py-3">{row.throughput === null ? "Unobserved" : row.meetsThroughput ? "Pass" : "Outside threshold"}</td><td className="border-b border-border/70 px-3 py-3">{row.ttft === null || row.throughput === null ? "Unobserved" : row.meetsSla ? "Eligible" : "Outside SLA"}</td></tr>)}</tbody>
+        <tbody>{rows.map((row) => <tr className="hover:bg-muted/45" key={row.id}><th className="border-b border-border/70 px-3 py-3 font-medium" scope="row"><ModelLink modelId={row.id} name={row.name} /></th><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatTtft(row.ttft)}</td><td className="border-b border-border/70 px-3 py-3">{row.ttft === null ? <UnobservedStatus reason={UNOBSERVED_TTFT_REASON} /> : row.meetsTtft ? "Pass" : "Outside threshold"}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatThroughput(row.throughput)}</td><td className="border-b border-border/70 px-3 py-3">{row.throughput === null ? <UnobservedStatus reason={UNOBSERVED_THROUGHPUT_REASON} /> : row.meetsThroughput ? "Pass" : "Outside threshold"}</td><td className="border-b border-border/70 px-3 py-3">{row.ttft === null || row.throughput === null ? <UnobservedStatus reason={UNOBSERVED_SLA_REASON} /> : row.meetsSla ? "Eligible" : "Outside SLA"}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -563,7 +586,7 @@ function MakeItYoursCostTable({ rows }: { readonly rows: readonly WeightedRankin
       <table className="w-full min-w-[680px] text-left text-sm">
         <caption className="sr-only">Exact weighted score and cost values</caption>
         <thead className="text-xs text-muted-foreground"><tr>{["Cost rank", "Model", "Provider", "Weighted", "Evaluation cost / success", "Frontier", "SLA"].map((heading) => <th className="border-b border-border px-3 py-3 font-medium" key={heading} scope="col">{heading}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => <tr className="hover:bg-muted/45" key={row.id}><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{index + 1}</td><th className="border-b border-border/70 px-3 py-3 font-medium" scope="row">{row.name}</th><td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{row.provider}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatMoney(row.cost)}</td><td className="border-b border-border/70 px-3 py-3">{row.frontier ? "Weighted frontier" : "Dominated"}</td><td className="border-b border-border/70 px-3 py-3">{row.meetsSla ? "Pass" : "Outside SLA"}</td></tr>)}</tbody>
+        <tbody>{rows.map((row, index) => <tr className="hover:bg-muted/45" key={row.id}><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{index + 1}</td><th className="border-b border-border/70 px-3 py-3 font-medium" scope="row"><ModelLink modelId={row.id} name={row.name} /></th><td className="border-b border-border/70 px-3 py-3 text-muted-foreground">{row.provider}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatDisplayNumber(row.score, { maximumFractionDigits: 1 })}</td><td className="border-b border-border/70 px-3 py-3 font-mono text-xs tabular-nums">{formatMoney(row.cost)}</td><td className="border-b border-border/70 px-3 py-3">{row.frontier ? "Weighted frontier" : "Dominated"}</td><td className="border-b border-border/70 px-3 py-3">{row.meetsSla ? "Pass" : "Outside SLA"}</td></tr>)}</tbody>
       </table>
     </div>
   );
@@ -598,15 +621,21 @@ function MakeItYoursComparisonTray({
         <Button className="min-h-11" onClick={onClear} type="button" variant="outline">Clear selection</Button>
       </div>
       <ol className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        {selectedRows.map((row, index) => <li className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-muted/35 px-3 py-2" key={row.id}><span className="min-w-0"><span className="mr-2 font-mono text-xs text-muted-foreground">{index + 1}</span><span className="text-sm font-medium">{row.name}</span></span><button aria-label={`Remove ${row.name} from comparison`} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onRemove(row.id)} type="button"><X className="size-4" /></button></li>)}
+        {selectedRows.map((row, index) => <li className="flex min-h-11 items-center justify-between gap-3 rounded-lg border border-border bg-muted/35 px-3 py-2" key={row.id}><span className="min-w-0"><span className="mr-2 font-mono text-xs text-muted-foreground">{index + 1}</span><span className="text-sm font-medium"><ModelLink modelId={row.id} name={row.name} /></span></span><button aria-label={`Remove ${row.name} from comparison`} className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onRemove(row.id)} type="button"><X className="size-4" /></button></li>)}
       </ol>
-      <div className="mt-5 flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="grid gap-1.5 text-sm font-medium"><label htmlFor="make-it-yours-model-search">Add a filtered model</label>
-          <input autoComplete="off" className="min-h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={selectedRows.length >= 4 || available.length === 0} id="make-it-yours-model-search" list="make-it-yours-model-options" onChange={(event) => setModelSearch(event.currentTarget.value)} placeholder={selectedRows.length >= 4 ? "Comparison is full" : "Search model or provider"} type="search" value={modelSearch} />
-          <datalist id="make-it-yours-model-options">{filteredAvailable.map((row) => <option key={row.id} label={`${row.name} · ${row.provider}`} value={row.id} />)}</datalist>
-          <Button className="min-h-11" disabled={selectedRows.length >= 4 || !available.some((row) => row.id === modelSearch)} onClick={() => { onSelect(modelSearch); setModelSearch(""); }} type="button" variant="outline">Add model</Button>
+      <div className="mt-5 flex flex-col gap-4 border-t border-border pt-4 sm:flex-row sm:items-end sm:justify-between">
+        {/* The search group fills the remaining tray width so it reads as the same
+            target as the comparison it feeds, rather than an intrinsic-width aside. */}
+        <div className="grid w-full min-w-0 flex-1 gap-1.5 text-sm font-medium"><label htmlFor="make-it-yours-model-search">Add a filtered model</label>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <input autoComplete="off" className="min-h-11 w-full min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring" disabled={selectedRows.length >= 4 || available.length === 0} id="make-it-yours-model-search" list="make-it-yours-model-options" onChange={(event) => setModelSearch(event.currentTarget.value)} placeholder={selectedRows.length >= 4 ? "Comparison is full" : "Search model or provider"} type="search" value={modelSearch} />
+            <datalist id="make-it-yours-model-options">{filteredAvailable.map((row) => <option key={row.id} label={`${row.name} · ${row.provider}`} value={row.id} />)}</datalist>
+            {/* Committing a selection is the primary action in this group, so it
+                carries the brand fill and an unambiguous disabled state. */}
+            <Button className="min-h-11 sm:w-auto sm:shrink-0" disabled={selectedRows.length >= 4 || !available.some((row) => row.id === modelSearch)} onClick={() => { onSelect(modelSearch); setModelSearch(""); }} type="button" variant="default">Add model</Button>
+          </div>
         </div>
-        <Button className="min-h-11" render={<a href={compareHref} />} type="button">Open in-depth comparison</Button>
+        <Button className="min-h-11 sm:shrink-0" render={<a href={compareHref} />} type="button">Open in-depth comparison</Button>
       </div>
     </aside>
   );
@@ -767,7 +796,7 @@ export function MakeItYoursWorkbench({
                   <section aria-labelledby="throughput-title" className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold" id="throughput-title">Output speed (tok/s)</h3><p className="mt-1 text-sm text-muted-foreground">Higher is better. Observed throughput stays separate from the capability score.</p><div className="mt-5"><MakeItYoursSlaChart metric="throughput" rows={throughputRows} /></div></section>
                 </div>
 
-                <section aria-labelledby="sla-evidence-title" className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold" id="sla-evidence-title">Exact SLA measurements</h3><p className="mt-1 text-sm text-muted-foreground">This semantic table records observed runtime values and keeps absent measurements explicitly unobserved.</p><div className="mt-4 hidden lg:block"><MakeItYoursSlaTable rows={ranking.candidates} /></div><div className="mt-4 grid gap-3 lg:hidden">{ranking.candidates.map((row) => <article className="rounded-lg border border-border p-3" key={row.id}><div className="flex justify-between gap-3"><h4 className="text-sm font-medium">{row.name}</h4><Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? "SLA unobserved" : row.meetsSla ? "Eligible" : "Outside SLA"}</Badge></div><p className="mt-3 font-mono text-xs text-muted-foreground">TTFT {formatTtft(row.ttft)} · {row.ttft === null ? "Unobserved" : row.meetsTtft ? "Pass" : "Outside"} · Throughput {formatThroughput(row.throughput)} · {row.throughput === null ? "Unobserved" : row.meetsThroughput ? "Pass" : "Outside"}</p></article>)}</div></section>
+                <section aria-labelledby="sla-evidence-title" className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold" id="sla-evidence-title">Exact SLA measurements</h3><p className="mt-1 text-sm text-muted-foreground">This semantic table records observed runtime values and keeps absent measurements explicitly unobserved.</p><div className="mt-4 hidden lg:block"><MakeItYoursSlaTable rows={ranking.candidates} /></div><div className="mt-4 grid gap-3 lg:hidden">{ranking.candidates.map((row) => <article className="rounded-lg border border-border p-3" key={row.id}><div className="flex justify-between gap-3"><h4 className="text-sm font-medium"><ModelLink modelId={row.id} name={row.name} /></h4><Badge variant={row.meetsSla ? "secondary" : "outline"}>{row.ttft === null || row.throughput === null ? <UnobservedStatus reason={UNOBSERVED_SLA_REASON} /> : row.meetsSla ? "Eligible" : "Outside SLA"}</Badge></div><p className="mt-3 font-mono text-xs text-muted-foreground">TTFT {formatTtft(row.ttft)} · {row.ttft === null ? <UnobservedStatus reason={UNOBSERVED_TTFT_REASON} /> : row.meetsTtft ? "Pass" : "Outside"} · Throughput {formatThroughput(row.throughput)} · {row.throughput === null ? <UnobservedStatus reason={UNOBSERVED_THROUGHPUT_REASON} /> : row.meetsThroughput ? "Pass" : "Outside"}</p></article>)}</div></section>
 
                 <section aria-labelledby="score-cost-title"><div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-2xl font-semibold tracking-tight" id="score-cost-title">Weighted score vs. evaluation cost</h2><p className="mt-1 max-w-3xl text-sm leading-6 text-muted-foreground">The cost view uses published aggregate cost per successful evaluation. Frontier membership is recalculated from the exact visible score/cost pairs.</p></div></div><div className="mt-5 grid gap-5 xl:grid-cols-2"><section className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold">Score frontier</h3><div className="mt-5"><MakeItYoursCostChart rows={ranking.chartRows} /></div></section><section className="rounded-xl border border-border bg-background p-4"><h3 className="text-lg font-semibold">Cheapest-first score ranking</h3><div className="mt-5"><MakeItYoursCostRankingChart rows={costRows} /></div></section></div><div className="mt-5 hidden rounded-xl border border-border bg-background p-4 lg:block"><h3 className="text-lg font-semibold">Exact score and evaluation-cost values</h3><div className="mt-4"><MakeItYoursCostTable rows={costRows} /></div></div></section>
 

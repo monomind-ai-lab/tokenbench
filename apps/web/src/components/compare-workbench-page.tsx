@@ -497,7 +497,7 @@ export function CompareWorkbenchPage({
                 </p>
               </div>
               {models.length ? (
-                <div className="grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+                <div className="grid gap-4">
                   <Card>
                     <CardContent className="pt-6">
                       <RouteEvidenceCapabilityRadar models={models} />
@@ -521,16 +521,18 @@ export function CompareWorkbenchPage({
                     ))}
                   </div>
                   <div aria-label="Exact capability comparison table" className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block" role="region" tabIndex={0}>
-                    <table className="w-full min-w-[560px] border-collapse text-sm">
+                    <table className="w-full table-fixed border-collapse text-sm">
                       <thead className="bg-muted/60 text-xs text-muted-foreground">
                         <tr>
-                          <th className="px-4 py-3 text-left">Capability</th>
+                          <th className="w-[30%] px-4 py-3 text-left">Capability</th>
                           {labels.map((label, index) => (
                             <th
                               className="px-4 py-3 text-right"
                               key={`${label}-${index}`}
                             >
-                              {label}
+                              {/* Long model names are bounded visually; the full name stays in
+                                  the DOM for assistive technology and on hover. */}
+                              <span className="block truncate" title={label}>{label}</span>
                             </th>
                           ))}
                         </tr>
@@ -543,7 +545,7 @@ export function CompareWorkbenchPage({
                             </td>
                             {requestedIds.map((id, index) => (
                               <td
-                                className="px-4 py-3 text-right font-mono"
+                                className="px-4 py-3 text-right font-mono whitespace-nowrap"
                                 key={`${id}-${index}`}
                               >
                                 <DataText
