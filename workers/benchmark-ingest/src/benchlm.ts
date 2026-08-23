@@ -942,6 +942,26 @@ function normalizeProviderId(creator: string): string {
   return normalized || 'benchlm';
 }
 
+/**
+ * BenchLM publishes `0` for an open-weight model to mean "no hosted price is
+ * published", not "this model is free to call". Carrying that through as a rate
+ * produces a verified $0 price, makes any score-per-dollar ratio divide by zero
+ * so the model ranks as infinitely good value, and lets a "lowest verified rate"
+ * headline name a model whose hosted price is unknown.
+ *
+ * Absence is preserved as null so the reader gets the unavailable state and its
+ * reason, which is the contract everywhere else in the product. Proprietary rows
+ * are left exactly as published: no proprietary model has ever carried this
+ * sentinel, and a genuine $0 proprietary rate would be a real fact.
+ */
+function benchlmHostedRate(
+  value: number | null,
+  sourceType: BenchmarkModel['sourceType'],
+): number | null {
+  if (value === 0 && sourceType === 'Open Weight') return null;
+  return value;
+}
+
 function toPriceChecks(items: unknown[], modelsBySourceId: Map<string, SafeModelInput>): BenchmarkPriceCheck[] {
   const priceChecks: BenchmarkPriceCheck[] = [];
   items.forEach((value, index) => {
@@ -950,9 +970,18 @@ function toPriceChecks(items: unknown[], modelsBySourceId: Map<string, SafeModel
     const model = modelsBySourceId.get(sourceModelId);
     if (!model) return;
 
-    const inputUsdPerMillion = requireNullableScore(pricing.inputPrice, `BenchLM pricing.items[${index}].inputPrice`);
-    const cachedInputUsdPerMillion = requireNullableScore(pricing.cachedInputPrice, `BenchLM pricing.items[${index}].cachedInputPrice`);
-    const outputUsdPerMillion = requireNullableScore(pricing.outputPrice, `BenchLM pricing.items[${index}].outputPrice`);
+    const inputUsdPerMillion = benchlmHostedRate(
+      requireNullableScore(pricing.inputPrice, `BenchLM pricing.items[${index}].inputPrice`),
+      model.sourceType,
+    );
+    const cachedInputUsdPerMillion = benchlmHostedRate(
+      requireNullableScore(pricing.cachedInputPrice, `BenchLM pricing.items[${index}].cachedInputPrice`),
+      model.sourceType,
+    );
+    const outputUsdPerMillion = benchlmHostedRate(
+      requireNullableScore(pricing.outputPrice, `BenchLM pricing.items[${index}].outputPrice`),
+      model.sourceType,
+    );
     if (inputUsdPerMillion === null && cachedInputUsdPerMillion === null && outputUsdPerMillion === null) return;
 
     priceChecks.push({

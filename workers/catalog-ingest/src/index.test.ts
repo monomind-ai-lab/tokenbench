@@ -387,6 +387,31 @@ describe('catalog ingestion', () => {
       .toEqual(parsedBeforeStorage.modelOffers);
   });
 
+  it('preserves the source-published hugging_face_id so open-weight identity survives ingest', () => {
+    // The only structural cross-source key OpenRouter publishes. Dropping it at
+    // the projection boundary forces any later join back onto display names.
+    const projected = projectOpenRouterModelsPayload({
+      data: [{
+        id: 'qwen/qwen3-27b',
+        canonical_slug: 'qwen/qwen3-27b',
+        name: 'Qwen3 27B',
+        created: 1_724_065_600,
+        context_length: 262_144,
+        hugging_face_id: 'Qwen/Qwen3-27B',
+      }],
+    });
+
+    expect(projected.data[0].hugging_face_id).toBe('Qwen/Qwen3-27B');
+  });
+
+  it('omits hugging_face_id entirely when the source does not publish one', () => {
+    const projected = projectOpenRouterModelsPayload({
+      data: [{ id: 'openai/gpt-4o', name: 'GPT-4o', created: 1, context_length: 2 }],
+    });
+
+    expect(Object.prototype.hasOwnProperty.call(projected.data[0], 'hugging_face_id')).toBe(false);
+  });
+
   it('records the exact upstream OpenRouter byte hash only as projected-snapshot provenance', async () => {
     const rawText = '{\n  "data": [ { "id": "openai/gpt-4o", "name": "GPT-4o", "pricing": { "prompt": "0.0000025", "completion": "0.00001" }, "benchmarks": { "artificial_analysis": { "score": 99 } } } ]\n}';
     const rawBytes = new TextEncoder().encode(rawText);
