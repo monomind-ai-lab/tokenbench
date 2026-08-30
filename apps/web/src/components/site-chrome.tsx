@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { LEADERBOARD_ROUTES } from "@tokenbench/routing/leaderboard-routes";
+import { applyGoogtransCookie, pickGoogtransLanguage } from "@tokenbench/site/googtrans-cookie";
 
 type ThemeMode = "dark" | "light";
 type NavigationMenuName = "models" | "leaderboards" | "articles";
@@ -157,10 +158,11 @@ const SIMPLE_NAV = [
   ["/subscribe-vs-api/", "Subscribe vs API"],
 ] as const;
 
+const OFFERED_LANGUAGE_CODES = new Set([...PREFERRED_LANGUAGES, ...MORE_LANGUAGES].map((item) => item.code));
+
 function readLanguageCookie() {
   if (typeof document === "undefined") return "en";
-  const match = document.cookie.split("; ").find((item) => item.startsWith("googtrans="));
-  return match?.split("=")[1]?.split("/").at(-1) || "en";
+  return pickGoogtransLanguage(document.cookie, (code) => OFFERED_LANGUAGE_CODES.has(code));
 }
 
 function NavigationMenu({
@@ -528,7 +530,12 @@ export function SiteChrome({ children, topModels, topModelsLabel }: { children: 
   const changeLanguage = (code: string) => {
     setLanguage(code);
     document.documentElement.lang = code;
-    document.cookie = `googtrans=/en/${code}; path=/; SameSite=Lax`;
+    // Clears `googtrans` at every scope before writing it at the host alone.
+    // Google's element.js re-writes this cookie at the registrable domain
+    // (`.monomind.one`), so a bare host-scoped write leaves that copy in place,
+    // two same-named cookies coexist, and the stale one wins the read on every
+    // monomind.one subdomain. See src/site/googtrans-cookie.ts.
+    applyGoogtransCookie(code);
     const translateSelect = document.querySelector<HTMLSelectElement>(".goog-te-combo");
     if (translateSelect) {
       translateSelect.value = code;
