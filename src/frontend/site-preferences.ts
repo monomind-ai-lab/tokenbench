@@ -1,5 +1,7 @@
 import { createContext, createElement, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { SITE_CONFIG } from '../brand/site-config';
+import { applyGoogtransCookie, pickGoogtransLanguage } from '../site/googtrans-cookie';
+import { LANGUAGES } from '../types';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -53,10 +55,11 @@ function persistExplicitTheme(theme: ThemeMode): void {
   }
 }
 
+const OFFERED_LANGUAGE_CODES = new Set(LANGUAGES.map((language) => language.code));
+
 export function readLanguage(): string {
   if (typeof document === 'undefined') return 'en';
-  const match = document.cookie.split('; ').find((cookie) => cookie.startsWith('googtrans='));
-  return match?.split('=')[1]?.split('/').at(-1) || 'en';
+  return pickGoogtransLanguage(document.cookie, (code) => OFFERED_LANGUAGE_CODES.has(code));
 }
 
 const GOOGLE_TRANSLATE_CHROME = [
@@ -94,7 +97,12 @@ function watchGoogleTranslateChrome(): () => void {
 
 export function setTranslatedLanguage(nextLanguage: string): void {
   document.documentElement.lang = nextLanguage;
-  document.cookie = `googtrans=/en/${nextLanguage}; path=/;`;
+  // Clears `googtrans` at every scope before writing it at the host alone.
+  // Google's element.js re-writes this cookie at the registrable domain
+  // (`.monomind.one`), so a bare host-scoped write leaves that copy in place,
+  // two same-named cookies coexist, and the stale one wins the read on every
+  // monomind.one subdomain. See src/site/googtrans-cookie.ts.
+  applyGoogtransCookie(nextLanguage);
   const translateSelect = document.querySelector('.goog-te-combo') as HTMLSelectElement | null;
   if (translateSelect) {
     translateSelect.value = nextLanguage;
